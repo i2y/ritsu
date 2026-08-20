@@ -455,23 +455,45 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     }
 
     // 群がセルに現れていれば、どれを見ればよいかを言う。
-    let used: BTreeSet<String> = t
-        .rows
-        .iter()
-        .flat_map(|r| r.cells.iter())
-        .flat_map(|cell| match cell {
-            Cell::Lit(Lit::Word(w)) => vec![w.clone()],
-            Cell::Set(ls) | Cell::Not(ls) => {
-                ls.iter().filter_map(|l| if let Lit::Word(w) = l { Some(w.clone()) } else { None }).collect()
+    // 群がセルに現れたか、そして `以外:` の形で現れたか。補集合の件数を添えるのは
+    // 後者だけにする（使っていない形の規模感を出しても雑音になる）。
+    let mut used: BTreeMap<String, bool> = BTreeMap::new();
+    for cell in t.rows.iter().flat_map(|r| r.cells.iter()) {
+        let (words, negated): (Vec<&Lit>, bool) = match cell {
+            Cell::Lit(l) => (vec![l], false),
+            Cell::Set(ls) => (ls.iter().collect(), false),
+            Cell::Not(ls) => (ls.iter().collect(), true),
+            _ => (vec![], false),
+        };
+        for l in words {
+            let Lit::Word(w) = l else { continue };
+            if c.groups.contains_key(w) {
+                let e = used.entry(w.clone()).or_insert(false);
+                *e |= negated;
             }
-            _ => vec![],
-        })
-        .filter(|w| c.groups.contains_key(w))
-        .collect();
+        }
+    }
     if !used.is_empty() {
+        // §1.6 条件: `以外: 群` は展開しないが、**件数は添える**。41 県の羅列は
+        // 目視の確認に耐えないので展開しないのが正しいが、「補集合です」だけでは
+        // 承認者の一次の問い（規模感が妥当か）に答えられない。基数は宣言から数えられる。
+        let n = |g: &str| -> Option<(usize, usize)> {
+            let (en, ms) = c.groups.get(g)?;
+            Some((ms.len(), c.enums.get(en)?.len()))
+        };
+        let list: Vec<String> = used
+            .iter()
+            .map(|(g, negated)| match (n(g), negated) {
+                (Some((k, all)), true) => {
+                    format!("**{g}**（{k} 値、`以外: {g}` は残り {} 値）", all - k)
+                }
+                (Some((k, _)), false) => format!("**{g}**（{k} 値）"),
+                _ => format!("**{g}**"),
+            })
+            .collect();
         o.push_str(&format!(
-            "\nこの表のセルに現れる群: {}。中身は「群」の節にあります。`以外: 群` はその補集合です。\n",
-            used.iter().map(|s| format!("**{s}**")).collect::<Vec<_>>().join("、")
+            "\nこの表のセルに現れる群: {}。中身は「群」の節にあります。\n",
+            list.join("、")
         ));
     }
 

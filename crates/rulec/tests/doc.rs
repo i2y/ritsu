@@ -235,3 +235,75 @@ fn readmeの抜粋は実物と一致する() {
         assert!(real.contains(l), "README の抜粋が実物に無い:\n{l}");
     }
 }
+
+/// §1.6 条件 (a): 畳んだ見出しにも門を。
+/// 見出しの畳み込みはセルの字面一致テストの対象外なので、そこが創作の入りうる
+/// 唯一の無防備な場所になる。**見出しに現れてよいのは宣言由来のトークンだけ**
+/// （出力名・型・単位・税区分・丸めのモードと格子）という組成で縛る。
+#[test]
+fn 畳んだ見出しは宣言由来のトークンだけでできている() {
+    for rel in CORPUS {
+        // 型は正準形で描かれる（原本の `金額[円,税込]` は `金額[円, 税込]` になる）。
+        // 空白の有無は綴りの揺れなので、照合の前に落とす。落とすのは空白だけで、
+        // 語そのものは原本に在ることを求める。
+        let src: String =
+            std::fs::read_to_string(root().join(rel)).unwrap().chars().filter(|c| !c.is_whitespace()).collect();
+        let (c, out, e) = run(&["doc", rel]);
+        assert_eq!(c, 0, "{rel}: {e}");
+        let mut n = 0;
+        // データ表の見出し行だけ（`| 列 | 出どころ |` の表は別物）。
+        for l in out.lines().filter(|l| l.starts_with("| # |")) {
+            for cell in l.trim_matches('|').split('|').map(|x| x.trim()) {
+                let Some(body) = cell.strip_prefix("→ ") else { continue };
+                n += 1;
+                // 名前（括弧の前）と、括弧の中を `/` で割ったもの。
+                let (name, rest) = match body.split_once('（') {
+                    Some((a, b)) => (a.trim(), b.trim_end_matches('）')),
+                    None => (body, ""),
+                };
+                let bare = |t: &str| -> String { t.chars().filter(|c| !c.is_whitespace()).collect() };
+                assert!(
+                    src.contains(&bare(name)),
+                    "{rel}: 見出しの出力名が原本に無い: `{name}`"
+                );
+                for tok in rest.split(" / ") {
+                    if tok.is_empty() {
+                        continue;
+                    }
+                    // 丸めは `モード(格子)`。モードと格子をそれぞれ原本に照合する。
+                    let parts: Vec<&str> = match tok.split_once('(') {
+                        Some((m, g)) => vec![m, g.trim_end_matches(')')],
+                        None => vec![tok],
+                    };
+                    for p in parts {
+                        assert!(
+                            src.contains(&bare(p)),
+                            "{rel}: 見出しに原本に無いトークンがある: `{p}`（見出し: {body}）"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(n > 0, "{rel}: 見出しを一つも検査していない");
+    }
+}
+
+/// §1.6 条件 (b): `以外: 群` は展開しないが、件数は添える。
+/// 41 県の羅列は目視の確認に耐えないので展開しないのが正しいが、「補集合です」
+/// だけでは承認者の一次の問い（規模感が妥当か）に答えられない。
+#[test]
+fn 以外の群には件数を添える() {
+    // 送料 の 基本送料 は `以外: 遠隔地` を使う。遠隔地 は 2 値なので残りは 45。
+    let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
+    assert!(
+        d.contains("**遠隔地**（2 値、`以外: 遠隔地` は残り 45 値）"),
+        "補集合の件数が無い:\n{d}"
+    );
+    assert!(!d.contains("北海道 ・ 沖縄県、青森県"), "41 県を展開してしまっている");
+
+    // ゆうパック運賃 の 運賃表 は群を並べるだけで `以外:` を使わない。
+    // 使っていない形の規模感を出しても雑音なので、補集合は書かない。
+    let (_, d, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
+    assert!(d.contains("**近畿圏**（6 値）"), "群の値数は出す:\n{d}");
+    assert!(!d.contains("`以外: 近畿圏` は残り"), "使っていない形の件数を出している");
+}
