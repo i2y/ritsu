@@ -8,7 +8,9 @@ fn usage() -> ExitCode {
         "rulec {}\n\n\
          使い方:\n  \
          rulec check <file.rule>...  [--format json] [--show-shadow] [--diff-base <rev>] [--budget N]\n  \
-         rulec fmt   <file.rule>...  [--check]\n\n\
+         rulec fmt   <file.rule>...  [--check]\n  \
+         rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
+         rulec vectors <file.rule>... [--out DIR]\n\n\
          exit code: 0 注記のみ / 1 エラーあり / 2 内部異常",
         env!("CARGO_PKG_VERSION")
     );
@@ -34,11 +36,13 @@ fn main() -> ExitCode {
         .windows(2)
         .find(|w| w[0] == "--diff-base")
         .map(|w| w[1].clone());
-    let skip: Vec<String> = diff_base
-        .iter()
-        .cloned()
-        .chain(["json".to_string(), budget.to_string()])
-        .collect();
+    // `--x V` の V と、値そのものが引数に見えるものを除いてファイル名を拾う。
+    let mut skip: Vec<String> = vec!["json".into(), budget.to_string()];
+    for k in ["--out", "--diff-base", "--budget", "--format"] {
+        if let Some(w) = args.windows(2).find(|w| w[0] == k) {
+            skip.push(w[1].clone());
+        }
+    }
     let files: Vec<&String> = args
         .iter()
         .filter(|a| !a.starts_with("--") && !skip.contains(a))
@@ -48,6 +52,21 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "check" => check(&files, json, show_shadow, diff_base.as_deref(), budget),
         "fmt" => fmt(&files, args.iter().any(|a| a == "--check")),
+        "vectors" => {
+            let out = args
+                .windows(2)
+                .find(|w| w[0] == "--out")
+                .map(|w| w[1].clone());
+            vectors(&files, out.as_deref())
+        }
+        "gen" => {
+            let out = args
+                .windows(2)
+                .find(|w| w[0] == "--out")
+                .map(|w| w[1].clone())
+                .unwrap_or_else(|| "generated".into());
+            generate(&files, &out, args.iter().any(|a| a == "--check"))
+        }
         _ => usage(),
     }
 }
@@ -154,4 +173,111 @@ fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&st
         }
     }
     ExitCode::from(worst)
+}
+
+/// §8.4: 生成物は git にコミットし、CI の `--check` が再生成との一致を見る。
+fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
+    if files.is_empty() {
+        return usage();
+    }
+    let mut dirty = 0u8;
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        let (f, c) = match rulec::prepare(&src, path) {
+            Ok(v) => v,
+            Err(ds) => {
+                let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+                for d in &ds {
+                    print!("{}", render(d, &lines));
+                    println!();
+                }
+                eprintln!("error: `{path}` は検査を通っていないので生成しません");
+                return ExitCode::from(1);
+            }
+        };
+        let g = rulec::codegen::Gen::new(&f, &c, &src);
+        let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+        let pkg = alias.replace('_', "").to_lowercase();
+        // ベクタと期待値も出す。§9.3 の三つの使い道のうち、言語間一致テストと
+        // golden がこれで回る。
+        let vs = rulec::vectors::generate(&f, &c);
+        let vec_body: String =
+            vs.iter().map(|v| rulec::vectors::to_json(&f, v)).collect::<Vec<_>>().join("\n") + "\n";
+        let exp_body: String =
+            vs.iter().map(|v| rulec::vectors::expected_json(&f, v)).collect::<Vec<_>>().join("\n") + "\n";
+        let targets = [
+            (format!("{out_dir}/python/{alias}.py"), g.python()),
+            (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
+            (format!("{out_dir}/go/{pkg}/{alias}.go"), g.go()),
+            (format!("{out_dir}/go/{pkg}/go.mod"), format!("module {pkg}\n\ngo 1.25\n")),
+            (format!("{out_dir}/go/{pkg}runner/main.go"), g.go_runner()),
+            (
+                format!("{out_dir}/go/{pkg}runner/go.mod"),
+                format!("module {pkg}runner\n\ngo 1.25\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
+            ),
+            (format!("{out_dir}/vectors/{alias}.jsonl"), vec_body),
+            (format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body),
+        ];
+        for (p, body) in targets {
+            let existing = std::fs::read_to_string(&p).ok();
+            if existing.as_deref() == Some(body.as_str()) {
+                continue;
+            }
+            if check_only {
+                println!("生成物が古いか手で編集されています: {p}");
+                dirty = 1;
+                continue;
+            }
+            if let Some(dir) = std::path::Path::new(&p).parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            if std::fs::write(&p, &body).is_err() {
+                eprintln!("error: `{p}` に書けません");
+                return ExitCode::from(2);
+            }
+            println!("生成しました: {p}");
+        }
+    }
+    ExitCode::from(dirty)
+}
+
+/// §9: 境界からベクタを作る。期待値と発火行は参照評価器が付ける。
+fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
+    if files.is_empty() {
+        return usage();
+    }
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("error: `{path}` は検査を通っていないのでベクタを作りません");
+            return ExitCode::from(1);
+        };
+        let vs = rulec::vectors::generate(&f, &c);
+        let body: String = vs
+            .iter()
+            .map(|v| rulec::vectors::to_json(&f, v))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        match out_dir {
+            Some(d) => {
+                let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+                let p = format!("{d}/{alias}.jsonl");
+                let _ = std::fs::create_dir_all(d);
+                if std::fs::write(&p, &body).is_err() {
+                    eprintln!("error: `{p}` に書けません");
+                    return ExitCode::from(2);
+                }
+                println!("ベクタ {} 件: {p}", vs.len());
+            }
+            None => print!("{body}"),
+        }
+    }
+    ExitCode::from(0)
 }

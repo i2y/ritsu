@@ -61,6 +61,10 @@ pub fn lit_to_val(l: &Lit, ty: &Ty) -> Option<Val> {
 
 impl<'a> Env<'a> {
     /// セルが値に当たるか。§3 の七種の単項テストに一対一で対応する。
+    pub fn matches_pub(&self, cell: &Cell, v: &Val, ty: &Ty) -> bool {
+        self.matches(cell, v, ty)
+    }
+
     fn matches(&self, cell: &Cell, v: &Val, ty: &Ty) -> bool {
         let lit_hit = |l: &Lit| -> bool {
             match (l, v) {

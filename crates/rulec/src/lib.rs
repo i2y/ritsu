@@ -11,6 +11,7 @@ pub mod parse;
 pub mod prelude;
 pub mod region;
 pub mod types;
+pub mod vectors;
 
 use diag::{Diag, Severity};
 
@@ -98,4 +99,18 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
             d.notes.push("ヒント: 出力の宣言に丸めを書いてください。例: 丸め 切り上げ(10円)".into());
         }
     }
+}
+
+/// 生成に必要なものを一度に揃える。構文か型で落ちたら生成しない。
+pub fn prepare<'a>(src: &'a str, path: &str) -> Result<(ast::RuleFile, types::Checked), Vec<Diag>> {
+    let parsed = parse::parse(src, path);
+    if !parsed.diags.is_empty() {
+        return Err(parsed.diags);
+    }
+    let Some(f) = parsed.file else { return Err(Vec::new()) };
+    let t = types::check(&f, path);
+    if t.diags.iter().any(|d| d.severity == Severity::Error) {
+        return Err(t.diags);
+    }
+    Ok((f, t))
 }

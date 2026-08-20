@@ -265,6 +265,25 @@ impl P {
                 w,
                 "説明" | "取込" | "型" | "群" | "入力" | "出力" | "導出" | "定義" | "表" | "結果" | "例" | "方式"
             ) {
+                // 宣言の形（`名前(別名) :` か `名前 :`）をしているなら、それは
+                // セクションの始まりではなく、キーワードと同じ名前の宣言である。
+                // 黙って捨てると生成の段で初めて壊れるので、ここで言う。
+                let decl = line
+                    .get(1)
+                    .is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon));
+                if decl {
+                    let sp = line[0].span.clone();
+                    let at = self.at(sp.line);
+                    self.err(
+                        Diag::error("E009", format!("`{w}` はキーワードなので、名前にできません"))
+                            .at(at)
+                            .mark(sp, "")
+                            .note("行指向の構文なので、キーワードと同じ名前は宣言をセクションの始まりに見せてしまいます。")
+                            .note("別の名前を付けてください。"),
+                    );
+                    self.i += 1;
+                    continue;
+                }
                 break;
             }
             if line.first().is_some_and(|t| t.is(&Kind::Pipe)) {

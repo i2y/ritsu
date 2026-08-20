@@ -278,6 +278,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Sym { ty, span: i.name.span.clone(), kind: SymKind::Input, contract_only: i.contract_only },
         );
     }
+    if f.outputs.is_empty() {
+        c.diags.push(
+            Diag::error("E009", "出力がありません")
+                .at(at(f.name.span.line))
+                .mark(f.name.span.clone(), "")
+                .note("規則は値をひとつ以上返します。`出力` の節を書いてください。"),
+        );
+    }
     for o in &f.outputs {
         let ty = c.resolve(&o.ty);
         // §7.2: a numeric output must declare its rounding.
@@ -298,6 +306,56 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             o.name.text.clone(),
             Sym { ty, span: o.name.span.clone(), kind: SymKind::Output, contract_only: false },
         );
+    }
+
+    // §1.1 はキーワードを日本語一種類だけと決めている。名前がキーワードと
+    // 衝突すると、行指向のパーサが宣言をセクションの始まりと読んで黙って捨てる。
+    // 黙って捨てるのが最悪なので、名前の側を拒む。
+    const KEYWORDS: &[&str] = &[
+        "規則", "説明", "取込", "型", "群", "入力", "出力", "導出", "定義", "表", "方式", "結果",
+        "例", "範囲", "丸め", "以外", "無し", "既定扱い", "契約のみ",
+    ];
+    let mut named: Vec<(&str, &Span)> = Vec::new();
+    named.push((f.name.text.as_str(), &f.name.span));
+    for i in &f.inputs {
+        named.push((i.name.text.as_str(), &i.name.span));
+    }
+    for o in &f.outputs {
+        named.push((o.name.text.as_str(), &o.name.span));
+    }
+    for e in &f.enums {
+        named.push((e.name.text.as_str(), &e.name.span));
+        for v in &e.values {
+            named.push((v.text.as_str(), &v.span));
+        }
+    }
+    for g in &f.groups {
+        named.push((g.name.text.as_str(), &g.name.span));
+    }
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => named.push((d.name.text.as_str(), &d.name.span)),
+            Item::Define(d) => named.push((d.name.text.as_str(), &d.name.span)),
+            Item::Table(t) => {
+                if let Some(n) = &t.name {
+                    named.push((n.text.as_str(), &n.span));
+                }
+                for oc in &t.outputs {
+                    named.push((oc.name.text.as_str(), &oc.name.span));
+                }
+            }
+        }
+    }
+    for (n, sp) in named {
+        if KEYWORDS.contains(&n) {
+            c.diags.push(
+                Diag::error("E009", format!("`{n}` はキーワードなので、名前にできません"))
+                    .at(at(sp.line))
+                    .mark(sp.clone(), "")
+                    .note("行指向の構文なので、キーワードと同じ名前は宣言を黙って捨ててしまいます。")
+                    .note("別の名前を付けてください。"),
+            );
+        }
     }
 
     // §1.3: the public face needs ASCII aliases; the inside does not.
