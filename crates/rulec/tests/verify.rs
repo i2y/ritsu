@@ -101,7 +101,7 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
     assert_eq!(code, 1, "不一致があれば 1 で終わる: {out}");
     let total = n_of(&out, "照合 ");
     let agreed = n_of(&out, "一致 ");
-    let bad = n_of(&out, "不一致 ");
+    let bad = n_of(&out, "影響 ");
     assert!(bad > 0 && agreed + bad == total, "内訳が合わない: {out}");
     // §10.4: 発火行でクラスタし、件数・金額・証人を出す。
     assert!(out.contains("表 運賃表 行36"), "発火行でクラスタする: {out}");
@@ -119,7 +119,7 @@ fn 格子未満のずれは丸め差異として括られる() {
     let Some(dir) = setup() else { return };
     let (code, out) = verify(&dir, "2");
     assert_eq!(code, 1, "{out}");
-    assert!(n_of(&out, "不一致 ") > 0, "{out}");
+    assert!(n_of(&out, "影響 ") > 0, "{out}");
     let tagged = out.matches("丸め差異の疑い").count();
     let clusters = out.lines().filter(|l| l.starts_with("  表 ")).count();
     assert!(clusters > 0, "クラスタが出ていない: {out}");

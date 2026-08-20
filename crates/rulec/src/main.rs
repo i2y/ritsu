@@ -12,6 +12,13 @@ fn usage() -> ExitCode {
          rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
          rulec vectors <file.rule>... [--out DIR]\n  \
          rulec coverage <file.rule>...\n  \
+         rulec test  <生成先ディレクトリ>\n  \
+\
+         rulec fixtures lint <file.jsonl> <file.rule> [--manifest m.json] [--fill 欄=値]\n  \
+\
+         rulec replay <file.rule> --fixtures <f.jsonl> [--manifest m.json] [--fill 欄=値] [--format markdown]\n  \
+\
+         rulec diff <旧> <新> --fixtures <f.jsonl> [同上]   # 旧/新 は file.rule か 送料@v3\n  \
          rulec schema  <file.rule>\n  \
          rulec adapter <file.rule> --template python|go\n  \
          rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
@@ -28,6 +35,9 @@ fn main() -> ExitCode {
     }
     let json = args.iter().any(|a| a == "--format=json")
         || args.windows(2).any(|w| w[0] == "--format" && w[1] == "json");
+    // §12: PR に貼る形。整形まで道具が持ち、投稿は CI の一行に任せる。
+    let markdown = args.iter().any(|a| a == "--format=markdown")
+        || args.windows(2).any(|w| w[0] == "--format" && w[1] == "markdown");
     // §4: 上から の部分的な遮蔽は方式の通常の姿なので、既定では数だけ出す。
     let show_shadow = args.iter().any(|a| a == "--show-shadow");
     // §4: 遮蔽の要確認と W114 は、基準リビジョンから新たに生じた分だけ浮かせる。
@@ -41,8 +51,12 @@ fn main() -> ExitCode {
         .find(|w| w[0] == "--diff-base")
         .map(|w| w[1].clone());
     // `--x V` の V と、値そのものが引数に見えるものを除いてファイル名を拾う。
-    let mut skip: Vec<String> = vec!["json".into(), budget.to_string()];
-    for k in ["--out", "--diff-base", "--budget", "--format", "--template"] {
+    let mut skip: Vec<String> = vec!["json".into(), "markdown".into(), budget.to_string()];
+    // --fill は繰り返せるので、値を全部除く。
+    for w in args.windows(2).filter(|w| w[0] == "--fill") {
+        skip.push(w[1].clone());
+    }
+    for k in ["--out", "--diff-base", "--budget", "--format", "--template", "--fixtures", "--manifest"] {
         if let Some(w) = args.windows(2).find(|w| w[0] == k) {
             skip.push(w[1].clone());
         }
@@ -82,6 +96,29 @@ fn main() -> ExitCode {
             verify(&vfiles, &cmd)
         }
         "coverage" => coverage(&files),
+        "fixtures" => {
+            // `rulec fixtures lint <jsonl> <rule>`
+            if files.first().map(|s| s.as_str()) != Some("lint") {
+                eprintln!("error: いまあるのは `rulec fixtures lint` だけです");
+                return ExitCode::from(2);
+            }
+            fixtures_lint(&files[1..], &args)
+        }
+        "replay" => replay_cmd(&files, &args, markdown),
+        "diff" => diff_cmd(&files, &args, markdown),
+        "test" => {
+            let Some(dir) = files.first() else { return usage() };
+            match rulec::runtest::run(std::path::Path::new(dir.as_str())) {
+                Ok(r) => {
+                    print!("{}", rulec::runtest::render(&r));
+                    ExitCode::from(u8::from(!r.ok()))
+                }
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    ExitCode::from(2)
+                }
+            }
+        }
         "vectors" => {
             let out = args
                 .windows(2)
@@ -277,6 +314,165 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
     ExitCode::from(dirty)
 }
 
+// ── M3 過去再生 ────────────────────────────────────────────────────────────
+
+/// 規則を読んで検査を通す。`送料@v3` は git タグ `rules/送料/v3` の糖衣（§1.4）。
+fn load_rule(spec: &str) -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked), String> {
+    let src = match spec.split_once('@') {
+        Some((name, ver)) if !std::path::Path::new(spec).exists() => {
+            let tag = format!("rules/{name}/{ver}");
+            // `git show <tag>:<path>` で拾う。どのパスに在るかは tag の中を引く。
+            // `-z` で NUL 区切りにする。既定の git は非 ASCII のパスを八進数で
+            // クォートするので、和名のファイルが素の文字列一致では見つからない。
+            let ls = std::process::Command::new("git")
+                .args(["ls-tree", "-r", "-z", "--name-only", &tag])
+                .output()
+                .map_err(|e| format!("git を起動できません: {e}"))?;
+            if !ls.status.success() {
+                return Err(format!("git タグ `{tag}` が引けません"));
+            }
+            let listing = String::from_utf8_lossy(&ls.stdout).into_owned();
+            let path = listing
+                .split('\0')
+                .find(|p| p.ends_with(&format!("{name}.rule")))
+                .ok_or_else(|| format!("`{tag}` の中に {name}.rule がありません"))?;
+            let o = std::process::Command::new("git")
+                .arg("show")
+                .arg(format!("{tag}:{path}"))
+                .output()
+                .map_err(|e| format!("git を起動できません: {e}"))?;
+            if !o.status.success() {
+                return Err(format!("`{tag}:{path}` が読めません"));
+            }
+            String::from_utf8_lossy(&o.stdout).into_owned()
+        }
+        _ => std::fs::read_to_string(spec).map_err(|_| format!("`{spec}` を読めません"))?,
+    };
+    let (f, c) = rulec::prepare(&src, spec).map_err(|_| format!("`{spec}` は検査を通っていません"))?;
+    Ok((src, f, c))
+}
+
+/// `--manifest` と `--fill` から補完の既定値を組み立てる（§10.3）。
+/// `--fill` は感度分析の一時上書きなので、マニフェストより後に効く。
+fn build_manifest(
+    args: &[String],
+    f: &rulec::ast::RuleFile,
+    c: &rulec::types::Checked,
+) -> Result<rulec::fixtures::Manifest, String> {
+    let mut m = match args.windows(2).find(|w| w[0] == "--manifest") {
+        Some(w) => {
+            let src = std::fs::read_to_string(&w[1]).map_err(|_| format!("`{}` を読めません", w[1]))?;
+            rulec::fixtures::Manifest::load(&src, f, c)?
+        }
+        None => rulec::fixtures::Manifest::default(),
+    };
+    for w in args.windows(2).filter(|w| w[0] == "--fill") {
+        m.add(&w[1], f, c)?;
+    }
+    Ok(m)
+}
+
+fn fixtures_arg(args: &[String]) -> Result<(String, String), String> {
+    let w = args
+        .windows(2)
+        .find(|w| w[0] == "--fixtures")
+        .ok_or_else(|| "--fixtures <file.jsonl> が要ります".to_string())?;
+    let src = std::fs::read_to_string(&w[1]).map_err(|_| format!("`{}` を読めません", w[1]))?;
+    Ok((w[1].clone(), src))
+}
+
+/// §10.2: 型と範囲の検証だけを引き受ける。ETL は利用者の仕事。
+fn fixtures_lint(files: &[&String], args: &[String]) -> ExitCode {
+    let (Some(jsonl), Some(rule)) = (files.first(), files.get(1)) else {
+        eprintln!("error: `rulec fixtures lint <file.jsonl> <file.rule>`");
+        return ExitCode::from(2);
+    };
+    let (_, f, c) = match load_rule(rule) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let m = match build_manifest(args, &f, &c) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let Ok(src) = std::fs::read_to_string(jsonl.as_str()) else {
+        eprintln!("error: `{jsonl}` を読めません");
+        return ExitCode::from(2);
+    };
+    let l = rulec::fixtures::load(&src, &f, &c, &m);
+    print!("{}", rulec::fixtures::render_lint(&l, jsonl));
+    ExitCode::from(u8::from(!l.problems.is_empty()))
+}
+
+/// §10.3: 規則を過去の記録に当て、そのとき出た値と突き合わせる。
+fn replay_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
+    let Some(rule) = files.first() else { return usage() };
+    let r = (|| -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
+        let (_, f, c) = load_rule(rule)?;
+        let m = build_manifest(args, &f, &c)?;
+        let (path, src) = fixtures_arg(args)?;
+        Ok((String::new(), f, c, m, path, src))
+    })();
+    let (_, f, c, m, path, src) = match r {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let l = rulec::fixtures::load(&src, &f, &c, &m);
+    let rep = rulec::replay::replay(&f, &c, &l, &m, &path);
+    if md {
+        print!("{}", rulec::report::markdown(&rep, &f, &c, "過去再生"));
+    } else {
+        print!("{}", rulec::report::render(&rep, &f, &c));
+    }
+    ExitCode::from(u8::from(!rep.mismatches.is_empty()))
+}
+
+/// §10.4: 二つの版を同じ記録に当てて、何件・いくら動くかを出す。
+fn diff_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
+    let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
+        eprintln!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`");
+        return ExitCode::from(2);
+    };
+    let r = (|| -> Result<_, String> {
+        let (_, of, oc) = load_rule(a)?;
+        let (_, nf, nc) = load_rule(b)?;
+        if of.name.text != nf.name.text {
+            return Err(format!(
+                "別の規則を比べようとしています（`{}` と `{}`）",
+                of.name.text, nf.name.text
+            ));
+        }
+        let m = build_manifest(args, &nf, &nc)?;
+        let (path, src) = fixtures_arg(args)?;
+        Ok((of, oc, nf, nc, m, path, src))
+    })();
+    let (of, oc, nf, nc, m, path, src) = match r {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let l = rulec::fixtures::load(&src, &nf, &nc, &m);
+    let rep = rulec::replay::diff((&of, &oc), (&nf, &nc), &l, &m, (a, b));
+    let _ = path;
+    if md {
+        print!("{}", rulec::report::markdown(&rep, &nf, &nc, "版の差分"));
+    } else {
+        print!("{}", rulec::report::render(&rep, &nf, &nc));
+    }
+    ExitCode::from(u8::from(!rep.mismatches.is_empty()))
+}
+
 /// §9.2: 作ったベクタが三つの被覆基準を満たしているかを判定する。
 /// 生成器と独立に義務を数え、欠けたものを名指しして 1 で終わる。
 fn coverage(files: &[&String]) -> ExitCode {
@@ -383,7 +579,7 @@ fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
         let vs = rulec::vectors::generate(&f, &c);
         match rulec::verify::run(&f, &c, adapter, &vs) {
             Ok(rep) => {
-                print!("{}", rulec::verify::render(&rep, &f, &c));
+                print!("{}", rulec::report::render(&rep, &f, &c));
                 if !rep.mismatches.is_empty() {
                     worst = 1;
                 }

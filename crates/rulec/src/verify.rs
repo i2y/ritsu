@@ -7,57 +7,11 @@
 use crate::ast::RuleFile;
 use crate::eval::Val;
 use crate::types::{Checked, Ty};
+use crate::report::{Mismatch, Report, wire};
 use crate::vectors::{self, Vector};
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
-
-pub struct Mismatch {
-    pub id: usize,
-    pub input: BTreeMap<String, Val>,
-    /// 宣言順に (出力名, 規則の値, 旧実装の値)。複数出力ならここに全部並ぶ。
-    pub outs: Vec<(String, Option<Val>, Option<String>)>,
-    pub err: Option<String>,
-    pub trace: Vec<String>,
-}
-
-impl Mismatch {
-    /// 食い違っている出力だけ。旧実装が答えなかった場合は全部を差分として扱う。
-    pub fn differing(&self) -> Vec<&(String, Option<Val>, Option<String>)> {
-        self.outs.iter().filter(|(_, a, b)| wire(a.as_ref()) != *b).collect()
-    }
-}
-
-/// 値をワイヤの表現へ。JSON の数は正準単位の整数（§10.2）。
-fn wire(v: Option<&Val>) -> Option<String> {
-    v.map(|o| match o {
-        Val::Num(r) => format!("{}", r.num / r.den),
-        Val::Bool(b) => format!("{b}"),
-        other => vectors::show(other),
-    })
-}
-
-pub struct Report {
-    /// 出力が二つ以上あるか。金額差に出力名を添えるかどうかがこれで決まる。
-    pub multi: bool,
-    pub total: usize,
-    pub agreed: usize,
-    pub errored: usize,
-    pub mismatches: Vec<Mismatch>,
-    pub impl_id: String,
-}
-
-impl Report {
-    /// 見出しの一致率は実測系だけから計算する（§10.3）。
-    /// アダプタが「対応していない」と言った件は分母から外す。
-    pub fn rate(&self) -> f64 {
-        let n = self.total - self.errored;
-        if n == 0 {
-            return 0.0;
-        }
-        self.agreed as f64 / n as f64
-    }
-}
 
 /// 素朴な JSON の値取り出し。依存を増やさないために必要な分だけ。
 fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
@@ -129,7 +83,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let impl_id = field(&hello, "impl").map(scalar).unwrap_or_default();
 
     let mut rep =
-        Report { multi: f.outputs.len() > 1, total: 0, agreed: 0, errored: 0, mismatches: Vec::new(), impl_id };
+        Report { impl_id, ..Report::new(f, "旧") };
 
     for (id, v) in vs.iter().enumerate() {
         let body = vectors::to_json(f, v);
@@ -154,6 +108,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             rep.errored += 1;
             rep.mismatches.push(Mismatch {
                 id,
+                tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,
                 err: Some(scalar(e)),
@@ -167,6 +122,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         } else {
             rep.mismatches.push(Mismatch {
                 id,
+                tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,
                 err: None,
@@ -177,121 +133,6 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     drop(si);
     let _ = child.wait();
     Ok(rep)
-}
-
-/// §10.4: 不一致は発火行トレースを鍵にクラスタし、件数と証人例を出す。
-pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
-    let mut o = format!(
-        "照合 {} 件 / 一致 {} ({:.3}%)\n",
-        rep.total,
-        rep.agreed,
-        rep.rate() * 100.0
-    );
-    if !rep.impl_id.is_empty() {
-        o.push_str(&format!("旧実装: {}\n", rep.impl_id));
-    }
-    if rep.errored > 0 {
-        o.push_str(&format!(
-            "アダプタが答えられなかった {} 件は、一致率の分母から外しています（§10.3）\n",
-            rep.errored
-        ));
-    }
-    if rep.mismatches.is_empty() {
-        o.push_str("不一致はありません。\n");
-        return o;
-    }
-    let mut clusters: BTreeMap<String, Vec<&Mismatch>> = BTreeMap::new();
-    for m in &rep.mismatches {
-        let key = match &m.err {
-            Some(e) => format!("アダプタが答えられない: {e}"),
-            None => m.trace.join(" / "),
-        };
-        clusters.entry(key).or_default().push(m);
-    }
-    o.push_str(&format!("\n不一致 {} 件の内訳:\n", rep.mismatches.len()));
-    for (k, ms) in &clusters {
-        let ex = ms[0];
-        let inp: Vec<String> = ex
-            .input
-            .iter()
-            .map(|(n, v)| format!("{n}={}", vectors::show(v)))
-            .collect();
-        // §10.4: 件数だけでなく金額の合計を出す。差が業務に効く大きさかどうかは、
-        // 件数ではなく金額で決まる。複数出力なら、食い違った出力ごとに出す。
-        let mut sums: BTreeMap<&str, i128> = BTreeMap::new();
-        for m in ms {
-            for (n, a, b) in m.differing() {
-                if let (Some(Val::Num(a)), Some(b)) = (a, b) {
-                    if let Ok(b) = b.parse::<i128>() {
-                        *sums.entry(n.as_str()).or_insert(0) += (a.num / a.den) - b;
-                    }
-                }
-            }
-        }
-        let money: String = sums
-            .iter()
-            .filter(|(_, d)| **d != 0)
-            .map(|(n, d)| {
-                let label = if rep.multi { format!(" {n}") } else { String::new() };
-                format!("  差{label} {}{}", if *d > 0 { "+" } else { "" }, d)
-            })
-            .collect();
-        o.push_str(&format!("  {:<48} {:>5} 件{money}\n", k, ms.len()));
-        if let Some(q) = sub_grid(ms, f, c) {
-            // §10.4: 出力格子未満のずれだけで固まっているクラスタは、値そのものの
-            // 食い違いではなく丸めの規約差である見込みが高い。自動で括る。
-            o.push_str(&format!("    丸め差異の疑い（出力格子 {q} 未満の端数のみ）\n"));
-        }
-        let diff: Vec<String> = ex
-            .differing()
-            .iter()
-            .filter_map(|(n, a, b)| {
-                let (a, b) = (a.as_ref()?, b.as_ref()?);
-                Some(format!("規則 {n}={} / 旧 {n}={b}", vectors::show(a)))
-            })
-            .collect();
-        if diff.is_empty() {
-            o.push_str(&format!("    例: {}\n", inp.join(", ")));
-        } else {
-            o.push_str(&format!("    例: {} → {}\n", inp.join(", "), diff.join(", ")));
-        }
-    }
-    o
-}
-
-/// §10.4: クラスタの全件が「出力格子より小さい、ゼロでないずれ」なら丸め差異の疑い。
-/// 返すのは格子の表示（`10円` など）。一件でも格子以上、あるいは数値で比べられない
-/// 件が混ざっていれば括らない。値が本当に違うものを丸めのせいにしないため、
-/// 判定はクラスタ全体の連言にしてある。複数出力なら、食い違っている出力が
-/// すべて格子未満であることを求める。
-fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
-    let mut grids: BTreeMap<String, String> = BTreeMap::new();
-    for m in ms {
-        let diff = m.differing();
-        if diff.is_empty() {
-            return None;
-        }
-        for (n, a, b) in diff {
-            let od = f.outputs.iter().find(|o| o.name.text == *n)?;
-            let rd = od.rounding.as_ref()?;
-            let ty = c.ty_of(n)?;
-            let q = crate::types::lit_value_in_pub(&rd.grid, &ty)?;
-            if q.num <= 0 {
-                return None;
-            }
-            let (Some(Val::Num(a)), Some(b)) = (a, b) else { return None };
-            let d = (a.num / a.den) - b.parse::<i128>().ok()?;
-            // |d| < q を分母を払って整数で比べる。
-            if d == 0 || d.abs() * q.den >= q.num {
-                return None;
-            }
-            grids.insert(n.clone(), rd.grid.raw.clone());
-        }
-    }
-    if grids.is_empty() {
-        return None;
-    }
-    Some(grids.values().cloned().collect::<Vec<_>>().join(" / "))
 }
 
 /// §10.1: アダプタの雛形。20〜30 行で書けることが、この方式の肝。
