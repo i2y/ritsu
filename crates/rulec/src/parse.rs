@@ -503,9 +503,15 @@ impl P {
         let header = split_cells(&raw_rows[0]);
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
+        // `→` は入力と出力の境目を一度だけ示す。以降の列は `→` を書いても書かなくても
+        // 出力である。二本目に `→` を書き忘れた列を黙って入力に化けさせないため
+        // （複数出力の 例 でその素通りを踏んだ）。
+        let mut in_outputs = false;
         for (cell, _) in &header {
-            if cell.first().is_some_and(|t| t.is(&Kind::Arrow)) {
-                let (nm, k) = match self.name_at(cell, 1) {
+            let arrow = cell.first().is_some_and(|t| t.is(&Kind::Arrow));
+            in_outputs |= arrow;
+            if in_outputs {
+                let (nm, k) = match self.name_at(cell, usize::from(arrow)) {
                     Some(v) => v,
                     None => continue,
                 };

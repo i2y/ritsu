@@ -12,6 +12,7 @@ const CORPUS: &[&str] = &[
     "tests/corpus/送料.rule",
     "tests/corpus/期間区分.rule",
     "tests/corpus/適用順序.rule",
+    "tests/corpus/クーポン一枚.rule",
 ];
 
 fn check(rel: &str) -> Vec<(String, String)> {
@@ -253,20 +254,63 @@ fn 刻み隣接の空座標は三つの型で作られない() {
 }
 
 #[test]
-fn 定義列が絡む重なりは未確認だと言う() {
-    // 篩は定義軸を見ない（M1 で検証優先の形で入れる、§8.5）。それまでは、
-    // 証人が定義の中身と突き合わせていないことを黙らずに言う。
+fn 定義が絡む実在の重なりは入力を構成して示す() {
+    // §6.2「定義軸の証人」: 領域解析は定義を自由軸として置くだけなので、
+    // 交差箱の座標が実在するとは限らない。入力を構成して評価器に定義まで
+    // 計算させ、構成できたものだけを実在の矛盾（E105）として扱う。
     let src = "規則 t(t) v1\n\n入力\n  金額(a) : 金額[円, 税込]  範囲 >=0円 <=10000円\n  区分(b) : 真偽\n\n\
                出力\n  r(r) : 真偽\n\n定義 大口(bulk) : 真偽 = 金額 >= 3000円\n\n\
                表 x(x)\n方式 一意\n| 大口 | 区分 | → r(r) : 真偽 |\n\
                | 真   | -    | 真 |\n| -    | 真   | 偽 |\n| 偽   | 偽   | 偽 |\n";
     let ds = rulec::check_source(src, "d.rule");
-    let e105 = ds.iter().find(|d| d.code == "E105").expect("重なりが出るはず");
+    let e105 = ds.iter().find(|d| d.code == "E105").expect("実在する重なりなので E105");
+    let built = e105
+        .notes
+        .iter()
+        .find(|n| n.starts_with("この例を作る入力:"))
+        .expect(&format!("構成した入力を出すはず: {:?}", e105.notes));
+    assert!(built.contains("金額"), "写せる形で入力を出す: {built}");
     assert!(
-        e105.notes.iter().any(|n| n.contains("整合を確認していません")),
-        "定義の中身が未確認であることを言うはず: {:?}",
+        !e105.notes.iter().any(|n| n.contains("整合を確認していません")),
+        "確かめたのに未確認だと言っている: {:?}",
         e105.notes
     );
+}
+
+#[test]
+fn 定義が矛盾する重なりは番人へ降ろす() {
+    // 同じ入力について `>=3万円` と `<=1000円` は同時に成り立たないが、
+    // 領域解析は定義を自由軸として扱うのでこの交差を消せない。証人を
+    // 構成できないので、`一意` でもエラーにせず W114 と番人へ降ろす
+    // （未証明の存在で CI を止めない。§6.2）。**非存在の証明ではない**ので
+    // 生成コードには実行時の番人が入る。
+    let src = "規則 t(t) v1\n\n入力\n  金額(a) : 金額[円, 税込]  範囲 >=0円 <=10万円\n\n\
+               出力\n  r(r) : 真偽\n\n\
+               定義 大口(bulk) : 真偽 = 金額 >= 3万円\n定義 小口(small) : 真偽 = 金額 <= 1000円\n\n\
+               表 x(x)\n方式 一意\n| 大口 | 小口 | → r(r) : 真偽 |\n\
+               | 真   | -    | 真 |\n| -    | 真   | 偽 |\n| 偽   | 偽   | 偽 |\n";
+    let ds = rulec::check_source(src, "d.rule");
+    assert!(
+        !ds.iter().any(|d| d.code == "E105"),
+        "構成できない重なりでエラーにしている: {:?}",
+        ds.iter().map(|d| &d.code).collect::<Vec<_>>()
+    );
+    let w = ds.iter().find(|d| d.code == "W114").expect("W114 に降りるはず");
+    assert!(
+        w.notes.iter().any(|n| n.contains("構成できませんでした")),
+        "構成できなかったことを言う: {:?}",
+        w.notes
+    );
+    assert!(
+        w.notes.iter().any(|n| n.contains("証明ではありません")),
+        "非存在を断定していないことを言う: {:?}",
+        w.notes
+    );
+    // 対になる番人が生成コードに入る（§8.1）。
+    let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
+    let py = rulec::codegen::Gen::new(&f, &c, src).python();
+    assert!(py.contains("番人"), "番人が入っていない");
+    assert!(py.contains("RuleContradictionError"), "番人が例外を投げない");
 }
 
 #[test]

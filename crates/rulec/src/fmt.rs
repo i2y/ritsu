@@ -82,6 +82,20 @@ pub fn format(src: &str) -> String {
                 (cells(&body), com)
             })
             .collect();
+        // §5.1: `→` は入力と出力の境目を一度だけ示す。二列目以降に書かれた印は
+        // 受け取ったうえで、正準形へ畳む。パーサは余分な印も読むので、これは
+        // 「どちらでも通るが、保存すると一つの形になる」という整形器の仕事。
+        let mut block = block;
+        if let Some((head, _)) = block.first_mut() {
+            let mut seen = false;
+            for c in head.iter_mut() {
+                let is_arrow = c.starts_with('→');
+                if is_arrow && seen {
+                    *c = c.trim_start_matches('→').trim_start().to_string();
+                }
+                seen |= is_arrow;
+            }
+        }
         let ncol = block.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
         let mut w = vec![0usize; ncol];
         for (cs, _) in &block {

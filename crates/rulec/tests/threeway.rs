@@ -37,6 +37,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/送料.rule", "shipping_fee"),
     ("tests/corpus/期間区分.rule", "period"),
     ("tests/corpus/適用順序.rule", "apply_order"),
+    ("tests/corpus/クーポン一枚.rule", "coupon_step"),
 ];
 
 #[test]
@@ -160,7 +161,7 @@ fn 生成物は両言語の整形器に素で通る() {
     let listed = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(listed.trim().is_empty(), "gofmt が直したいファイルがある:\n{listed}");
 
-    // Python は少なくとも構文が通ること（black や flake8 は環境に無くてもよい）。
+    // Python は少なくとも構文が通ること。
     for (_, alias) in CORPUS {
         let p = dir.join("python").join(format!("{alias}.py"));
         let o = Command::new("python3")
@@ -170,7 +171,65 @@ fn 生成物は両言語の整形器に素で通る() {
             .expect("python3 を起動できない");
         assert!(o.status.success(), "{alias}.py が構文エラー: {}", String::from_utf8_lossy(&o.stderr));
     }
+
+    // PEP 8 側（gofmt -l 空 に相当するもの）。Go と違って Python には唯一の
+    // 整形器が無いので、主張を二つに割って測る。
+    let Some(ruff) = ruff() else {
+        eprintln!("注意: ruff が無いので PEP 8 の検査を飛ばした");
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    };
+    let py_dir = dir.join("python");
+
+    // (1) pycodestyle 系（E/W）は行長を除いて一件も出ない。
+    let o = Command::new(&ruff[0])
+        .args(&ruff[1..])
+        .args(["check", "--select", "E,W", "--ignore", "E501", "--isolated", "--no-cache"])
+        .arg(&py_dir)
+        .output()
+        .expect("ruff を起動できない");
+    assert!(
+        o.status.success(),
+        "PEP 8（行長を除く）に違反がある:\n{}",
+        String::from_utf8_lossy(&o.stdout)
+    );
+
+    // (2) 整形器が触りたがる行は、すべて 88 桁を超えている行だけ。
+    // §8.1 は「表の一行を一行に、原本のセルを添えて書く」ことを要求していて、
+    // それは 88 桁に収まらない。折り返し以外の指摘が一つでもあれば、
+    // それは生成器が直すべきものなので落とす。
+    let o = Command::new(&ruff[0])
+        .args(&ruff[1..])
+        .args(["format", "--check", "--diff", "--no-cache"])
+        .arg(&py_dir)
+        .output()
+        .expect("ruff を起動できない");
+    let diff = String::from_utf8_lossy(&o.stdout).into_owned();
+    let short: Vec<&str> = diff
+        .lines()
+        .filter(|l| l.starts_with('-') && !l.starts_with("---"))
+        .map(|l| &l[1..])
+        .filter(|l| rulec::diag::width(l) <= 88)
+        .collect();
+    assert!(
+        short.is_empty(),
+        "整形器の指摘のうち、行長で説明できないものがある:\n{}",
+        short.join("\n")
+    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// ruff の起動の仕方。PATH に在ればそれ、無ければ uvx 経由。どちらも無ければ飛ばす。
+fn ruff() -> Option<Vec<String>> {
+    if have("ruff") {
+        return Some(vec!["ruff".into()]);
+    }
+    let ok = Command::new("uvx")
+        .args(["ruff", "--version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    ok.then(|| vec!["uvx".into(), "ruff".into()])
 }
 
 #[test]

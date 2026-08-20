@@ -11,6 +11,7 @@ fn usage() -> ExitCode {
          rulec fmt   <file.rule>...  [--check]\n  \
          rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
          rulec vectors <file.rule>... [--out DIR]\n  \
+         rulec coverage <file.rule>...\n  \
          rulec schema  <file.rule>\n  \
          rulec adapter <file.rule> --template python|go\n  \
          rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
@@ -80,6 +81,7 @@ fn main() -> ExitCode {
                 .collect();
             verify(&vfiles, &cmd)
         }
+        "coverage" => coverage(&files),
         "vectors" => {
             let out = args
                 .windows(2)
@@ -275,6 +277,32 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
     ExitCode::from(dirty)
 }
 
+/// §9.2: 作ったベクタが三つの被覆基準を満たしているかを判定する。
+/// 生成器と独立に義務を数え、欠けたものを名指しして 1 で終わる。
+fn coverage(files: &[&String]) -> ExitCode {
+    if files.is_empty() {
+        return usage();
+    }
+    let mut worst = 0u8;
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("error: `{path}` は検査を通っていません");
+            return ExitCode::from(1);
+        };
+        let (a, vs) = rulec::coverage::audit_file(&f, &c, path);
+        println!("{path}");
+        print!("{}", rulec::coverage::render(&a, &vs));
+        if !a.ok() {
+            worst = 1;
+        }
+    }
+    ExitCode::from(worst)
+}
+
 /// §9: 境界からベクタを作る。期待値と発火行は参照評価器が付ける。
 fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
     if files.is_empty() {
@@ -355,7 +383,7 @@ fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
         let vs = rulec::vectors::generate(&f, &c);
         match rulec::verify::run(&f, &c, adapter, &vs) {
             Ok(rep) => {
-                print!("{}", rulec::verify::render(&rep, &f));
+                print!("{}", rulec::verify::render(&rep, &f, &c));
                 if !rep.mismatches.is_empty() {
                     worst = 1;
                 }

@@ -64,6 +64,7 @@ golden!(e105_重複, "E105", "tests/mutants/m_e105.rule", "E105");
 golden!(e106_格子, "E106", "tests/mutants/m_e106.rule", "E106");
 golden!(e107_例, "E107", "tests/mutants/m_e107.rule", "E107");
 golden!(e108_溢れ, "E108", "tests/mutants/m_e108.rule", "E108");
+golden!(e111_例の出力欠落, "E111", "tests/mutants/m_e111.rule", "E111");
 golden!(e112_導出範囲, "E112", "tests/mutants/m_e112.rule", "E112");
 golden!(e113_原子, "E113", "tests/mutants/m_e113.rule", "E113");
 golden!(w114_未確認の重なり, "W114", "tests/corpus/クーポン併用.rule", "W114");

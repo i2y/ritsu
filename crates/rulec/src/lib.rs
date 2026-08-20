@@ -5,6 +5,7 @@ pub mod diag;
 pub mod eval;
 pub mod fmt;
 pub mod codegen;
+pub mod coverage;
 pub mod lex;
 pub mod num;
 pub mod parse;
@@ -53,7 +54,7 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     }
     for it in &f.items {
         if let ast::Item::Table(tb) = it {
-            let r = region::check_table(tb, &t, &f.inputs, path, budget);
+            let r = region::check_table(tb, &t, f, path, budget);
             diags.extend(r.diags);
             quiet.extend(r.quiet);
             shadow.structural += r.shadow.structural;
@@ -64,6 +65,23 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     }
     diags.extend(eval::check_examples(f, &t, path));
     Report { diags, quiet, shadow, nodes }
+}
+
+/// §9.2 の被覆判定に要る、表ごとの検査結果（遮蔽対と死行）。表の並び順で返す。
+pub fn table_checks(
+    f: &ast::RuleFile,
+    c: &types::Checked,
+    path: &str,
+) -> Vec<region::TableCheck> {
+    f.items
+        .iter()
+        .filter_map(|it| match it {
+            ast::Item::Table(tb) => {
+                Some(region::check_table(tb, c, f, path, region::DEFAULT_BUDGET))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 pub fn has_error(ds: &[Diag]) -> bool {

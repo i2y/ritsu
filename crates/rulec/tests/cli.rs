@@ -164,3 +164,52 @@ fn diff_base_は新たに生じた発見だけを出す() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// §8.4: 生成物は git にコミットし、CI の `--check` が再生成との一致を見る。
+/// 生成物が古い・手で編集された・そもそも無い、の三つとも 1 で落ちないと
+/// CI の門にならない。
+#[test]
+fn gen_check_は生成物のずれを見つける() {
+    let dir = std::env::temp_dir().join(format!("rulec-genchk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let out = dir.to_string_lossy().to_string();
+    let rule = "tests/corpus/送料.rule";
+
+    // 生成物が一つも無い状態。CI に生成物を入れ忘れた場合がこれ。
+    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    assert_eq!(c, 1, "生成物が無ければ 1: {o}");
+    assert!(o.contains("生成物が古いか手で編集されています"), "{o}");
+    assert!(!dir.exists(), "--check が書き込んでいる");
+
+    // 生成してから見れば黙って 0。
+    let (c, _, _) = run(&["gen", rule, "--out", &out]);
+    assert_eq!(c, 0);
+    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    assert_eq!(c, 0, "生成直後は 0: {o}");
+    assert_eq!(o.trim(), "", "一致していれば何も言わない: {o}");
+
+    // 手で一文字足す。中身で比べているので、空白一つでも捕まる。
+    let py = dir.join("python").join("shipping_fee.py");
+    let before = std::fs::read_to_string(&py).unwrap();
+    std::fs::write(&py, format!("{before} ")).unwrap();
+    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    assert_eq!(c, 1, "手で編集したら 1: {o}");
+    assert!(o.contains("shipping_fee.py"), "どのファイルかを言う: {o}");
+    assert_eq!(o.lines().count(), 1, "ずれた一件だけ言う: {o}");
+    assert_eq!(std::fs::read_to_string(&py).unwrap(), format!("{before} "), "--check が直している");
+
+    // 一つ消す。無いものも「ずれ」として数える。
+    std::fs::remove_file(dir.join("go").join("shippingfee").join("shipping_fee.go")).unwrap();
+    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    assert_eq!(c, 1);
+    assert_eq!(o.lines().count(), 2, "編集一件と欠落一件: {o}");
+    assert!(o.contains("shipping_fee.go"), "{o}");
+
+    // 直せば戻る。
+    let (c, _, _) = run(&["gen", rule, "--out", &out]);
+    assert_eq!(c, 0);
+    let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
+    assert_eq!(c, 0, "{o}");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -562,6 +562,11 @@ pub struct TableCheck {
     /// `--show-shadow` のときだけ出す、構造的と同値の一覧。
     pub quiet: Vec<Diag>,
     pub shadow: Shadow,
+    /// `上から` の遮蔽対（0 始まり、i が勝つ側が先）。三分類のどれかによらず全部。
+    /// §9.2 の遮蔽対被覆は、この対ごとに「交差の内側」の点を要求する。
+    pub overlaps: Vec<(usize, usize)>,
+    /// E102 を出した行（0 始まり）。決して当たらないので §9.2 の行被覆から外す。
+    pub dead: Vec<usize>,
 }
 
 /// セルの正規形。`--diff-base` の鍵に使うので、整形にも行番号にも依存しない。
@@ -650,13 +655,24 @@ fn outs_equal(a: &Row, b: &Row) -> bool {
 }
 
 /// E101 / E102 / E105 / W105 / W110 を出す。
-pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budget: i64) -> TableCheck {
+pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
+    let inputs = &f.inputs;
     let mut out = Vec::new();
     let mut quiet = Vec::new();
     let mut shadow = Shadow::default();
     let mut nodes = 0i64;
     let mut w114: Vec<(usize, usize)> = Vec::new();
-    let empty = TableCheck { diags: Vec::new(), w114: Vec::new(), quiet: Vec::new(), shadow, nodes: 0 };
+    let mut overlaps: Vec<(usize, usize)> = Vec::new();
+    let mut dead_rows: Vec<usize> = Vec::new();
+    let empty = TableCheck {
+        diags: Vec::new(),
+        w114: Vec::new(),
+        quiet: Vec::new(),
+        shadow,
+        nodes: 0,
+        overlaps: Vec::new(),
+        dead: Vec::new(),
+    };
     let Some(reg) = TableRegion::build(t, c, inputs) else { return empty };
     if reg.axes.is_empty() || t.rows.is_empty() {
         return empty;
@@ -675,6 +691,8 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
             quiet: Vec::new(),
             shadow: Shadow::default(),
             nodes: 0,
+            overlaps: Vec::new(),
+            dead: Vec::new(),
         };
     }
     let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
@@ -702,6 +720,31 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
             // 実現不能と証明できた重なりは報告しない（§6.2）。
             if feas == Feasible::No {
                 continue;
+            }
+            // §6.2「定義軸の証人」: 交差箱の座標は定義軸を自由に置いているだけで、
+            // その真偽を作る入力が在るかは見ていない。入力を実際に構成して評価器に
+            // 定義まで計算させ、**構成できた重なりだけ**を実在の矛盾として扱う。
+            // 構成できないことは非存在の証明ではないので、断定せず W114 へ降ろす。
+            let touches_define = (0..reg.axes.len()).any(|ai| {
+                reg.is_define[ai]
+                    && (0..reg.axes[ai].len()).any(|cc| reg.masks[i][ai][cc] && reg.masks[j][ai][cc])
+            });
+            let mut feas = feas;
+            let mut built: Option<String> = None;
+            if touches_define && feas != Feasible::No {
+                nodes += (reg.axes.len() * 8) as i64;
+                match crate::vectors::pair_witness(f, c, t, i, j) {
+                    Some(a) => {
+                        feas = Feasible::Yes;
+                        built = Some(
+                            a.iter()
+                                .map(|(n, v)| format!("{n} = {}", crate::vectors::show(v)))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        );
+                    }
+                    None => feas = Feasible::Unknown,
+                }
             }
             match t.policy {
                 Policy::Unique if feas == Feasible::Unknown => {
@@ -734,10 +777,14 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                         .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
                         .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
                         .note(format!("重なる条件: {}", reg.overlap_text(&t.rows[i], &t.rows[j])))
-                        .note(format!(
-                            "導出（{}）が入力を共有しているため、この条件を同時に満たす注文が存在するかどうかを、検査は判定できませんでした。",
-                            dnames.join("、")
-                        ))
+                        .note(if touches_define {
+                            "定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。".to_string()
+                        } else {
+                            format!(
+                                "導出（{}）が入力を共有しているため、この条件を同時に満たす注文が存在するかどうかを、検査は判定できませんでした。",
+                                dnames.join("、")
+                            )
+                        })
                         .note(format!(
                             "存在するなら: 行を直してください。出力が異なる（{} と {}）ので、当たれば矛盾です。",
                             outs(&t.rows[i]),
@@ -770,12 +817,18 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                             .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
                             .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
                             .note(format!("両方に当たる例: {w}"))
+                            .note(match &built {
+                                // §6.2: 定義が絡む証人は、入力を構成して評価器で
+                                // 確かめたときだけ出す。写せる形で置く。
+                                Some(b) => format!("この例を作る入力: {b}"),
+                                None => String::new(),
+                            })
                             .note(if same {
                                 "方式 一意 では重なりは許されません。どちらが正しいか決めるか、順序に意味を持たせるなら 方式 上から を宣言してください。".to_string()
                             } else {
                                 "方式 一意 では重なりは許されません。".to_string()
                             })
-                            .note(if unverified.is_empty() {
+                            .note(if unverified.is_empty() || touches_define {
                                 String::new()
                             } else {
                                 format!(
@@ -787,6 +840,7 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                 }
                 Policy::TopDown => {
                     shadowed[j] = true;
+                    overlaps.push((i, j));
                     // §4 の三分類。包含の判定は領域で行う（軸ごとの射影ではなく、
                     // 行 i の領域から行 j の領域を引いて空かどうか）。篩は掛けない。
                     let contained = reg.contains(j, i);
@@ -800,6 +854,10 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                     .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
                     .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
                     .note(format!("両方に当たる例: {w}"))
+                    .note(match &built {
+                        Some(b) => format!("この例を作る入力: {b}"),
+                        None => String::new(),
+                    })
                     .note(format!("方式 上から のため 行{} が勝ちます。意図通りですか。", i + 1))
                     .key(pair_key(&t.rows[i], &t.rows[j]));
                     if contained {
@@ -846,6 +904,7 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
             false
         };
         if dead {
+            dead_rows.push(i);
             out.push(
                 Diag::error("E102", format!("冗長な行: 行{} は決して当たりません", i + 1))
                     .at(at(t.rows[i].span.line))
@@ -898,7 +957,7 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                 .note("方式 一意 にすると、行の並べ替えが意味を変えないことを検査が保証します。"),
         );
     }
-    TableCheck { diags: out, w114, quiet, shadow, nodes }
+    TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, dead: dead_rows }
 }
 
 impl TableRegion {

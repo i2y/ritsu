@@ -116,7 +116,7 @@ impl<'a> Gen<'a> {
         let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
         for it in &f.items {
             if let Item::Table(t) = it {
-                let r = crate::region::check_table(t, c, &f.inputs, "", crate::region::DEFAULT_BUDGET);
+                let r = crate::region::check_table(t, c, f, "", crate::region::DEFAULT_BUDGET);
                 if !r.w114.is_empty() {
                     w114.insert(t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), r.w114);
                 }
@@ -348,7 +348,9 @@ impl<'a> Gen<'a> {
 
     pub fn python(&self) -> String {
         let mut o = self.header("#");
-        o.push_str("from __future__ import annotations\n\nimport enum\nfrom typing import NewType\n\n");
+        // typing の取り込みは使うものだけ。複数出力のときだけ NamedTuple が要る。
+        let typing = if self.f.outputs.len() > 1 { "NamedTuple, NewType" } else { "NewType" };
+        o.push_str(&format!("from __future__ import annotations\n\nimport enum\nfrom typing import {typing}\n\n"));
 
         // brand。mypy と pyright に効き、実行時コストは無い。
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
@@ -395,7 +397,7 @@ impl<'a> Gen<'a> {
 
         o.push_str(ROUND_PY);
         o.push_str(&self.py_fn());
-        o
+        pep8_blanks(&o)
     }
 }
 
@@ -532,11 +534,11 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # 導出\n", d.name.text, e.text));
+                    o.push_str(&format!("    {} = {}  # 導出\n", d.name.text, unparen(&e.text)));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # 定義\n", d.name.text, e.text));
+                    o.push_str(&format!("    {} = {}  # 定義\n", d.name.text, unparen(&e.text)));
                 }
                 Item::Table(t) => o.push_str(&self.py_table(t, &local)),
             }
@@ -558,7 +560,7 @@ impl<'a> Gen<'a> {
                 // 式を入れ子にせず中間へ束ねる（§8.2 の例と同じ形）。読みやすさが
                 // 基準 1 の要求で、深い入れ子は生成物の目視対応を壊す。
                 if res.scale != os {
-                    o.push_str(&format!("    raw = {}  # 単位: 1/{} {}\n", res.text, res.scale, ty));
+                    o.push_str(&format!("    raw = {}  # 単位: 1/{} {}\n", unparen(&res.text), res.scale, ty));
                     format!("_round_{}(raw, {}) // {}", mode_fn(m), grid_i, res.scale / os)
                 } else {
                     format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
@@ -569,7 +571,18 @@ impl<'a> Gen<'a> {
         if outs.len() == 1 {
             o.push_str(&format!("    return {text}\n"));
         } else {
-            let fields: Vec<String> = outs.iter().map(|od| local(&od.name.text)).collect();
+            // 出力ごとに、その出力の丸めが一度だけ掛かる（§7.2）。
+            let fields: Vec<String> = outs
+                .iter()
+                .map(|od| {
+                    let n = &od.name.text;
+                    let Some(rd) = &od.rounding else { return local(n) };
+                    let ty = self.ty_of(n);
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    format!("_round_{}({}, {})", mode_fn(m), local(n), g.num * self.scale(n) / g.den)
+                })
+                .collect();
             o.push_str(&format!("    return Output({})\n", fields.join(", ")));
         }
         o
@@ -1002,9 +1015,28 @@ impl<'a> Gen<'a> {
         if outs.len() == 1 {
             o.push_str(&format!("\treturn {ret}({text}), nil\n}}\n"));
         } else {
+            // 出力ごとに、その出力の丸めが一度だけ掛かる（§7.2）。
             let fields: Vec<String> = outs
                 .iter()
-                .map(|od| format!("{}: {}", pascal(&pub_name(&od.name)), local(&od.name.text)))
+                .map(|od| {
+                    let n = &od.name.text;
+                    let g = pascal(&pub_name(&od.name));
+                    let ty = self.ty_of(n);
+                    let body = match &od.rounding {
+                        Some(rd) => {
+                            let q = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                            format!(
+                                "round{}({}, {})",
+                                pascal(mode_fn(m)),
+                                local(n),
+                                q.num * self.scale(n) / q.den
+                            )
+                        }
+                        None => local(n),
+                    };
+                    format!("{g}: {}({body})", self.go_ty(&ty))
+                })
                 .collect();
             o.push_str(&format!("\treturn Output{{{}}}, nil\n}}\n", fields.join(", ")));
         }
@@ -1176,6 +1208,79 @@ func roundBankers(x, g int64) int64 {
 const CELL: char = '\u{1f}';
 const IMPORT_MARK: &str = "\u{1e}IMPORTS\u{1e}";
 
+/// 列の幅はルーン数で測る。Go の text/tabwriter がそう数えるので、表示幅
+/// （全角を 2 と数える `diag::width`）で測ると和名の識別子が並んだところで
+/// gofmt と一文字ずれる。§8.5 は「gofmt -l が空」を要求しているので、
+/// 見た目の理屈ではなく gofmt の理屈に合わせる。
+fn cells_wide(s: &str) -> usize {
+    s.chars().count()
+}
+
+/// 式全体を包む丸括弧を落とす。生成側は部分式に一律で括弧を付けているが、
+/// 代入の右辺では最外の一組が余る。Python の整形器はこれを消したがるので、
+/// `ruff format --check` を緑に保つには生成の時点で落としておく（§8.5 の
+/// 「整形を後段に頼らない」を Python 側でも守る）。Go は gofmt が消さないので
+/// そのまま。
+fn unparen(s: &str) -> &str {
+    let t = s.trim();
+    let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) else { return s };
+    // 最外の括弧が本当に対応しているときだけ落とす。`(a) + (b)` は落とさない。
+    let mut depth = 0i32;
+    for ch in inner.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return s;
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth == 0 { inner } else { s }
+}
+
+/// PEP 8 の空行（E301〜E305）を一箇所で整える。出力の組み立ては各所に散っていて、
+/// 足す場所を一つ忘れるだけで整形器が赤くなる。書く側で気を付けるのをやめて、
+/// 最後に一度通す。トップレベルの `class` / `def` / デコレータの前後は空行 2 行、
+/// それ以外のトップレベル文の前は 1 行以下。
+fn pep8_blanks(src: &str) -> String {
+    let lines: Vec<&str> = src.trim_end().split('\n').collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut in_block = false; // 直前のトップレベル構文が def / class の本体だったか
+    for line in lines {
+        let top = !line.is_empty() && !line.starts_with(char::is_whitespace);
+        if line.trim().is_empty() {
+            continue; // 空行は捨てて、必要なところで入れ直す
+        }
+        if top {
+            let starts = line.starts_with("class ")
+                || line.starts_with("def ")
+                || line.starts_with('@');
+            let want = if starts || in_block { 2 } else { 1 };
+            if !out.is_empty() {
+                let have = out.iter().rev().take_while(|l| l.is_empty()).count();
+                for _ in have..want {
+                    out.push(String::new());
+                }
+            }
+            if starts {
+                in_block = true;
+            } else if !line.starts_with('#') {
+                in_block = false;
+            }
+        }
+        out.push(line.to_string());
+    }
+    // ファイル先頭の空行は落とす。
+    while out.first().is_some_and(|l| l.is_empty()) {
+        out.remove(0);
+    }
+    out.push(String::new());
+    out.join("\n")
+}
+
 fn align(src: &str) -> String {
     let lines: Vec<&str> = src.split('\n').collect();
     let mut out: Vec<String> = Vec::with_capacity(lines.len());
@@ -1195,7 +1300,7 @@ fn align(src: &str) -> String {
         let mut w = vec![0usize; n];
         for r in &rows {
             for (k, c) in r.iter().take(n).enumerate() {
-                w[k] = w[k].max(crate::diag::width(c));
+                w[k] = w[k].max(cells_wide(c));
             }
         }
         for r in rows {
@@ -1203,7 +1308,7 @@ fn align(src: &str) -> String {
             for (k, c) in r.iter().enumerate() {
                 line.push_str(c);
                 if k < n && r[k + 1..].iter().any(|x| !x.trim().is_empty()) {
-                    line.push_str(&" ".repeat(w[k] - crate::diag::width(c) + 1));
+                    line.push_str(&" ".repeat(w[k] - cells_wide(c) + 1));
                 }
             }
             out.push(line.trim_end().to_string());
@@ -1235,10 +1340,23 @@ impl<'a> Gen<'a> {
             };
             args.push(conv);
         }
-        let out = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let dump = if self.f.outputs.len() == 1 {
+            let n = &self.f.outputs[0].name.text;
+            format!("{{{n:?}: _wire(r)}}")
+        } else {
+            let fs: Vec<String> = self
+                .f
+                .outputs
+                .iter()
+                .map(|o| format!("{:?}: _wire(r.{})", o.name.text, pub_name(&o.name)))
+                .collect();
+            format!("{{{}}}", fs.join(", "))
+        };
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
-             import json, sys, datetime\n\
+             import datetime\n\
+             import json\n\
+             import sys\n\n\
              import {alias} as m\n\n\
              def _ord(s):\n    \
                  y, mo, d = (int(x) for x in s.split(\"-\"))\n    \
@@ -1251,7 +1369,7 @@ impl<'a> Gen<'a> {
                      continue\n    \
                  d = json.loads(line)[\"in\"]\n    \
                  r = m.{alias}({})\n    \
-                 print(json.dumps({{{out:?}: _wire(r)}}, ensure_ascii=False, separators=(\",\", \":\")))\n",
+                 print(json.dumps({dump}, ensure_ascii=False, separators=(\",\", \":\")))\n",
             env!("CARGO_PKG_VERSION"),
             args.join(", ")
         )
@@ -1278,13 +1396,29 @@ impl<'a> Gen<'a> {
             };
             fields.push(conv);
         }
-        let out = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.f.outputs.first().map(|o| self.ty_of(&o.name.text)).unwrap_or(Ty::Unknown);
         // ワイヤは和名（§10）。列挙は数値ではなく名前で出す。
-        let wire = match &out_ty {
-            Ty::Enum(_) => "got.String()".to_string(),
-            Ty::Bool => "got".to_string(),
-            _ => "int64(got)".to_string(),
+        let one = |expr: &str, ty: &Ty| match ty {
+            Ty::Enum(_) => format!("{expr}.String()"),
+            Ty::Bool => expr.to_string(),
+            _ => format!("int64({expr})"),
+        };
+        let wire = if self.f.outputs.len() == 1 {
+            let o = &self.f.outputs[0];
+            format!("{:?}: {}", o.name.text, one("got", &self.ty_of(&o.name.text)))
+        } else {
+            self.f
+                .outputs
+                .iter()
+                .map(|o| {
+                    let ty = self.ty_of(&o.name.text);
+                    format!(
+                        "{:?}: {}",
+                        o.name.text,
+                        one(&format!("got.{}", pascal(&pub_name(&o.name))), &ty)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -1306,7 +1440,7 @@ impl<'a> Gen<'a> {
                      var in r.Input\n{}\t\t\
                      got, err := r.{fname}(in)\n\t\t\
                      if err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     b, _ := json.Marshal(map[string]any{{{out:?}: {wire}}})\n\t\t\
+                     b, _ := json.Marshal(map[string]any{{{wire}}})\n\t\t\
                      fmt.Println(string(b))\n\t}}\n}}\n",
             env!("CARGO_PKG_VERSION"),
             fields.join("")
@@ -1345,7 +1479,7 @@ pub fn round_tests_python() -> String {
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
     }
-    o.push_str("]\n\nFN = {\"down\": _round_down, \"up\": _round_up, \"half\": _round_half, \"bankers\": _round_bankers}\n\n");
+    o.push_str("]\n\nFN = {\n    \"down\": _round_down,\n    \"up\": _round_up,\n    \"half\": _round_half,\n    \"bankers\": _round_bankers,\n}\n\n");
     o.push_str(
         "bad = 0\nfor mode, x, g, want in CASES:\n    \
          got = FN[mode](x, g)\n    \

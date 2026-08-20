@@ -196,6 +196,28 @@ impl<'a> Env<'a> {
 
 /// 入力の束縛から規則を最後まで走らせ、出力の値を返す。
 pub fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> (Option<Val>, Vec<String>) {
+    let (v, fired, _) = run_bindings(f, c, inputs);
+    (v, fired)
+}
+
+/// §9.2 の被覆判定は「行のセルがその入力で成り立つか」を、導出や定義の列まで含めて
+/// 見る必要がある。走らせ終えた束縛をそのまま返す入口。
+pub fn run_bindings(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Option<Val>, Vec<String>, HashMap<String, Val>) {
+    let (outs, fired, binds) = run_all(f, c, inputs);
+    (outs.into_iter().next().and_then(|(_, v)| v), fired, binds)
+}
+
+/// 出力を全部返す（§8.5 の複数出力）。宣言順で、丸めは出力ごとに一度掛かる。
+/// `結果` は第一出力にだけ効く糖衣なので（§1.2）、二本目以降は同名の束縛から取る。
+pub fn run_all(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<(String, Option<Val>)>, Vec<String>, HashMap<String, Val>) {
     let mut env = Env { vals: inputs, c, fired: Vec::new() };
     for it in &f.items {
         match it {
@@ -214,31 +236,74 @@ pub fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> (Option<V
             }
         }
     }
-    let out_name = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-    let mut v = match &f.result {
-        Some(r) => env.expr(&r.expr),
-        None => env.vals.get(&out_name).cloned(),
-    };
-    // 出力の丸め宣言は最後に効く。§7.2 の「丸めていない値は出力に届かない」。
-    if let (Some(Val::Num(x)), Some(od)) = (&v, f.outputs.first()) {
-        if let Some(rd) = &od.rounding {
-            let ty = c.ty_of(&od.name.text).unwrap_or(Ty::Unknown);
-            if let Some(g) = lit_value_in_pub(&rd.grid, &ty) {
-                if let Some(m) = RoundMode::parse(&rd.mode) {
-                    v = Some(Val::Num(x.round_to(m, g)));
+    let mut outs: Vec<(String, Option<Val>)> = Vec::new();
+    for (oi, od) in f.outputs.iter().enumerate() {
+        let name = od.name.text.clone();
+        let mut v = match (&f.result, oi) {
+            (Some(r), 0) => env.expr(&r.expr),
+            _ => env.vals.get(&name).cloned(),
+        };
+        // 出力の丸め宣言は最後に効く。§7.2 の「丸めていない値は出力に届かない」。
+        if let Some(Val::Num(x)) = &v {
+            if let Some(rd) = &od.rounding {
+                let ty = c.ty_of(&name).unwrap_or(Ty::Unknown);
+                if let Some(g) = lit_value_in_pub(&rd.grid, &ty) {
+                    if let Some(m) = RoundMode::parse(&rd.mode) {
+                        v = Some(Val::Num(x.round_to(m, g)));
+                    }
                 }
             }
         }
+        outs.push((name, v));
     }
-    (v, env.fired)
+    (outs, env.fired, env.vals)
+}
+
+/// セル一つの当たり判定。表の外（§9.2 の被覆判定）から使う。
+pub fn cell_matches(c: &Checked, cell: &Cell, v: &Val, ty: &Ty) -> bool {
+    Env { vals: HashMap::new(), c, fired: Vec::new() }.matches(cell, v, ty)
 }
 
 /// `例` は実行される仕様である（§1.2）。外れたら発火行つきで E107。
 pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     let Some(ex) = &f.examples else { return out };
-    let Some(od) = f.outputs.first() else { return out };
-    let out_ty = c.ty_of(&od.name.text).unwrap_or(Ty::Unknown);
+    if f.outputs.is_empty() {
+        return out;
+    }
+
+    // §1.2: 例は三者一致の盲点を破る楔である。三者が同じ誤りを共有すると
+    // 一致は緑のままで、それを破れるのは人の書いた期待値しかない。だから
+    // 出力は全部書かせる。列の欠けはエラー（E111）。
+    let head = ex.rows.first().map(|r| r.span.clone());
+    for od in &f.outputs {
+        if !ex.outputs.iter().any(|o| o.name.text == od.name.text) {
+            let Some(sp) = head.clone() else { continue };
+            out.push(
+                Diag::error("E111", format!("例に出力 {} の列がありません", od.name.text))
+                    .at(format!("{path}:{} 例", sp.line))
+                    .mark(sp, format!("{} の期待値がありません", od.name.text))
+                    .note("例は三者一致では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。")
+                    .note(format!("ヒント: 見出しに `{}` の列を足してください。", od.name.text)),
+            );
+        }
+    }
+    for row in &ex.rows {
+        if row.outs.len() < ex.outputs.len() {
+            out.push(
+                Diag::error(
+                    "E111",
+                    format!("例の期待値が {} 列足りません", ex.outputs.len() - row.outs.len()),
+                )
+                .at(format!("{path}:{} 例", row.span.line))
+                .mark(row.span.clone(), "")
+                .note("宣言した出力の数だけ期待値を書いてください。"),
+            );
+        }
+    }
+    if out.iter().any(|d| d.code == "E111") {
+        return out;
+    }
 
     for row in &ex.rows {
         let mut env: HashMap<String, Val> = HashMap::new();
@@ -250,25 +315,38 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 }
             }
         }
-        let want = row.outs.first().and_then(|o| match o {
-            OutCell::Lit(l) => lit_to_val(l, &out_ty),
-            OutCell::Name(w) => lit_to_val(&Lit::Word(w.clone()), &out_ty),
-        });
-        let (got, fired) = run(f, c, env);
-        match (&want, &got) {
-            (Some(w), Some(g)) if w == g => {}
-            (Some(w), Some(g)) => out.push(
-                Diag::error(
-                    "E107",
-                    format!("例が合いません: {} は {} のはずが {} になりました", od.name.text, w.show(&out_ty), g.show(&out_ty)),
-                )
-                .at(format!("{path}:{} 例", row.span.line))
-                .mark(row.span.clone(), "")
-                .note(format!("発火した行: {}", fired.join(" / ")))
-                .note("例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。"),
-            ),
-            (Some(w), None) => out.push(
-                Diag::error("E107", format!("例が合いません: {} は {} のはずが、値が出ませんでした", od.name.text, w.show(&out_ty)))
+        let (got, fired, _) = run_all(f, c, env);
+        // 出力は全部見る。第一出力しか見ないと、二本目の期待値をいくら間違えても
+        // 例が黙って通る（型が解析できない列を黙って飛ばした E110 と同じ形）。
+        for (oi, od) in f.outputs.iter().enumerate() {
+            let oty = c.ty_of(&od.name.text).unwrap_or(Ty::Unknown);
+            let want = row.outs.get(oi).and_then(|o| match o {
+                OutCell::Lit(l) => lit_to_val(l, &oty),
+                OutCell::Name(w) => lit_to_val(&Lit::Word(w.clone()), &oty),
+            });
+            let g = got.get(oi).and_then(|(_, v)| v.clone());
+            match (&want, &g) {
+                (Some(w), Some(g)) if w == g => {}
+                (Some(w), Some(g)) => out.push(
+                    Diag::error(
+                        "E107",
+                        format!(
+                            "例が合いません: {} は {} のはずが {} になりました",
+                            od.name.text,
+                            w.show(&oty),
+                            g.show(&oty)
+                        ),
+                    )
+                    .at(format!("{path}:{} 例", row.span.line))
+                    .mark(row.span.clone(), "")
+                    .note(format!("発火した行: {}", fired.join(" / ")))
+                    .note("例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。"),
+                ),
+                (Some(w), None) => out.push(
+                    Diag::error(
+                        "E107",
+                        format!("例が合いません: {} は {} のはずが、値が出ませんでした", od.name.text, w.show(&oty)),
+                    )
                     .at(format!("{path}:{} 例", row.span.line))
                     .mark(row.span.clone(), "")
                     .note(if fired.is_empty() {
@@ -276,8 +354,9 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     } else {
                         format!("発火した行: {}", fired.join(" / "))
                     }),
-            ),
-            _ => {}
+                ),
+                _ => {}
+            }
         }
     }
     out
