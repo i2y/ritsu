@@ -555,6 +555,8 @@ pub const DEFAULT_BUDGET: i64 = 50_000_000;
 
 pub struct TableCheck {
     pub diags: Vec<Diag>,
+    /// W114 の行対（0 始まり）。生成コードの番人はこの対にだけ入る（§8.1）。
+    pub w114: Vec<(usize, usize)>,
     /// この表の検査で訪問したノード数。予算を決めるための実測値。
     pub nodes: i64,
     /// `--show-shadow` のときだけ出す、構造的と同値の一覧。
@@ -653,7 +655,8 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
     let mut quiet = Vec::new();
     let mut shadow = Shadow::default();
     let mut nodes = 0i64;
-    let empty = TableCheck { diags: Vec::new(), quiet: Vec::new(), shadow, nodes: 0 };
+    let mut w114: Vec<(usize, usize)> = Vec::new();
+    let empty = TableCheck { diags: Vec::new(), w114: Vec::new(), quiet: Vec::new(), shadow, nodes: 0 };
     let Some(reg) = TableRegion::build(t, c, inputs) else { return empty };
     if reg.axes.is_empty() || t.rows.is_empty() {
         return empty;
@@ -661,6 +664,7 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
     if let Some((col, ty)) = &reg.unanalyzable {
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         return TableCheck {
+            w114: Vec::new(),
             diags: vec![
                 Diag::error("E110", format!("列 {col} の型 {ty} は、まだ検査できません"))
                     .at(format!("{path}:{} 表 {tname}", t.span.line))
@@ -701,6 +705,11 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
             }
             match t.policy {
                 Policy::Unique if feas == Feasible::Unknown => {
+                    // §8.1: 出力が構文的に同一の対は、どちらが勝っても値が変わらない
+                    // ので番人を置かない。
+                    if !outs_equal(&t.rows[i], &t.rows[j]) {
+                        w114.push((i, j));
+                    }
                     // 証人を構成できなかった重なり。証明していないことを
                     // 証明済みの顔で出さない（§6.2）。生成コードの番人が対になる。
                     let dnames: Vec<String> = reg.derived_names();
@@ -889,7 +898,7 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
                 .note("方式 一意 にすると、行の並べ替えが意味を変えないことを検査が保証します。"),
         );
     }
-    TableCheck { diags: out, quiet, shadow, nodes }
+    TableCheck { diags: out, w114, quiet, shadow, nodes }
 }
 
 impl TableRegion {

@@ -132,3 +132,71 @@ fn collect(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         }
     }
 }
+
+#[test]
+fn 生成物は両言語の整形器に素で通る() {
+    // §8.1 基準 5。gofmt を後段で走らせずに、生成の時点で整形済みにする
+    // （後段で走らせると生成物が環境依存になり、§8.5 の決定性が壊れる）。
+    if !have("go") {
+        eprintln!("注意: go が無いので gofmt の検査を飛ばした");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rulec-fmt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let out = dir.to_string_lossy().to_string();
+    let mut args = vec!["gen"];
+    let files: Vec<&str> = CORPUS.iter().map(|(f, _)| *f).collect();
+    args.extend(files.iter().copied());
+    args.push("--out");
+    args.push(&out);
+    rulec(&args);
+
+    let go_dir = dir.join("go");
+    let o = Command::new("gofmt")
+        .arg("-l")
+        .arg(&go_dir)
+        .output()
+        .expect("gofmt を起動できない");
+    let listed = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(listed.trim().is_empty(), "gofmt が直したいファイルがある:\n{listed}");
+
+    // Python は少なくとも構文が通ること（black や flake8 は環境に無くてもよい）。
+    for (_, alias) in CORPUS {
+        let p = dir.join("python").join(format!("{alias}.py"));
+        let o = Command::new("python3")
+            .args(["-c", "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())"])
+            .arg(&p)
+            .output()
+            .expect("python3 を起動できない");
+        assert!(o.status.success(), "{alias}.py が構文エラー: {}", String::from_utf8_lossy(&o.stderr));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn 丸めヘルパは両言語で参照実装と一致する() {
+    // §8.5: 表レベルの一致だけでは、端数の出ない表でヘルパの誤りが隠れる。
+    let dir = std::env::temp_dir().join(format!("rulec-round-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let out = dir.to_string_lossy().to_string();
+    rulec(&["gen", CORPUS[0].0, "--out", &out]);
+
+    if have("python3") {
+        let o = Command::new("python3")
+            .current_dir(dir.join("python"))
+            .arg("_round_test.py")
+            .output()
+            .expect("python3 を起動できない");
+        assert!(o.status.success(), "Python の丸めが合わない: {}", String::from_utf8_lossy(&o.stdout));
+    }
+    if have("go") {
+        let pkg = CORPUS[0].1.replace('_', "");
+        let o = Command::new("go")
+            .current_dir(dir.join("go").join(&pkg))
+            .args(["test", "./..."])
+            .output()
+            .expect("go を起動できない");
+        assert!(o.status.success(), "Go の丸めが合わない: {}", String::from_utf8_lossy(&o.stdout));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

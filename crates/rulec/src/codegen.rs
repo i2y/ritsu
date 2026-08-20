@@ -64,6 +64,8 @@ fn pub_name(n: &Name) -> String {
 pub struct Gen<'a> {
     f: &'a RuleFile,
     c: &'a Checked,
+    /// 表名 → W114 の行対。番人はここにだけ入る。
+    w114: BTreeMap<String, Vec<(usize, usize)>>,
     /// 表の出力列 → 格納スケール。率の列は刻みを宣言しないので、その列の
     /// リテラルの分母の最小公倍数で決める。列ごとに一つに固定しないと、
     /// 同じ列の 50% と 100% が別のスケールで出て値が壊れる。
@@ -111,7 +113,16 @@ impl<'a> Gen<'a> {
                 col_scales.insert(oc.name.text.clone(), sc);
             }
         }
-        Gen { f, c, col_scales, enum_names, value_names, src_hash: hash(src) }
+        let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
+        for it in &f.items {
+            if let Item::Table(t) = it {
+                let r = crate::region::check_table(t, c, &f.inputs, "", crate::region::DEFAULT_BUDGET);
+                if !r.w114.is_empty() {
+                    w114.insert(t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), r.w114);
+                }
+            }
+        }
+        Gen { f, c, w114, col_scales, enum_names, value_names, src_hash: hash(src) }
     }
 
     fn ty_of(&self, n: &str) -> Ty {
@@ -544,8 +555,14 @@ impl<'a> Gen<'a> {
                 let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                 let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                 let grid_i = g.num * res.scale / g.den;
-                let rounded = format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i);
-                if res.scale == os { rounded } else { format!("{rounded} // {}", res.scale / os) }
+                // 式を入れ子にせず中間へ束ねる（§8.2 の例と同じ形）。読みやすさが
+                // 基準 1 の要求で、深い入れ子は生成物の目視対応を壊す。
+                if res.scale != os {
+                    o.push_str(&format!("    raw = {}  # 単位: 1/{} {}\n", res.text, res.scale, ty));
+                    format!("_round_{}(raw, {}) // {}", mode_fn(m), grid_i, res.scale / os)
+                } else {
+                    format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
+                }
             }
             None => res.text.clone(),
         };
@@ -612,6 +629,68 @@ impl<'a> Gen<'a> {
             }
         }
         o.push_str("    else:\n        raise AssertionError(\"到達不能: 完全性は rulec が静的に検査済み\")\n");
+        o.push_str(&self.guards(t, local, "    ", |name, i, j| {
+            format!("        raise RuleContradictionError(\"表 {name}: 行{i} と 行{j} が同時に当たりました\")\n")
+        }));
+        o
+    }
+
+    /// 番人（§8.1）。排他を静的に証明できなかった行対にだけ入る。
+    /// この分岐を踏む入力はベクタに存在しない（構成できたなら E105 になっている）。
+    fn guards(
+        &self,
+        t: &Table,
+        local: &dyn Fn(&str) -> String,
+        indent: &str,
+        raise: impl Fn(&str, usize, usize) -> String,
+    ) -> String {
+        let Some(pairs) = self.w114.get(&t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()) else {
+            return String::new();
+        };
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let mut o = String::new();
+        for (i, j) in pairs {
+            let go = indent.starts_with('\t');
+            let mut conds: Vec<String> = Vec::new();
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                let ty = self.ty_of(col);
+                let sc = self.scale(col);
+                for r in [*i, *j] {
+                    let Some(cell) = t.rows[r].cells.get(ci) else { continue };
+                    let c = if go {
+                        self.go_cell(cell, &local(col), &ty, sc)
+                    } else {
+                        self.py_cell(cell, &local(col), &ty, sc)
+                    };
+                    if let Some(c) = c {
+                        if !conds.contains(&c) {
+                            conds.push(c);
+                        }
+                    }
+                }
+            }
+            if conds.is_empty() {
+                continue;
+            }
+            let joined = conds.join(if go { " && " } else { " and " });
+            o.push_str(&format!(
+                "{indent}// 番人: W114（表 {name} 行{} × 行{}）。排他を静的に証明できなかった行対\n",
+                i + 1,
+                j + 1
+            ));
+            if go {
+                o.push_str(&format!("{indent}if {joined} {{\n"));
+            } else {
+                o.push_str(&format!("{indent}if {joined}:\n"));
+            }
+            o.push_str(&raise(&name, i + 1, j + 1));
+            if go {
+                o.push_str(&format!("{indent}}}\n"));
+            }
+        }
+        if !go_comment_ok(indent) {
+            o = o.replace("// 番人", "# 番人");
+        }
         o
     }
 }
@@ -889,11 +968,11 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {} // 導出\n", d.name.text, go_expr(&e.text)));
+                    o.push_str(&format!("\t{} := {}{CELL}// 導出\n", d.name.text, go_expr(&e.text)));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {} // 定義\n", d.name.text, go_expr(&e.text)));
+                    o.push_str(&format!("\t{} := {}{CELL}// 定義\n", d.name.text, go_expr(&e.text)));
                 }
                 Item::Table(t) => o.push_str(&self.go_table(t, &local)),
             }
@@ -911,8 +990,12 @@ impl<'a> Gen<'a> {
                 let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                 let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                 let grid_i = g.num * res.scale / g.den;
-                let rounded = format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i);
-                if res.scale == os { rounded } else { format!("{rounded} / {}", res.scale / os) }
+                if res.scale != os {
+                    o.push_str(&format!("\traw := int64{}{CELL}// 単位: 1/{} {}\n", go_expr(&res.text), res.scale, ty));
+                    format!("round{}(raw, {}) / {}", pascal(mode_fn(m)), grid_i, res.scale / os)
+                } else {
+                    format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i)
+                }
             }
             None => format!("int64({})", go_expr(&res.text)),
         };
@@ -990,6 +1073,12 @@ impl<'a> Gen<'a> {
             }
         }
         o.push_str("\t} else {\n\t\tpanic(\"到達不能: 完全性は rulec が静的に検査済み\")\n\t}\n");
+        o.push_str(&self.guards(t, local, "\t", |name, i, j| {
+            format!(
+                "\t\treturn {}, fmt.Errorf(\"表 {name}: 行{i} と 行{j} が同時に当たりました\")\n",
+                if self.f.outputs.len() == 1 { "0" } else { "Output{}" }
+            )
+        }));
         o
     }
 }
@@ -1211,7 +1300,7 @@ impl<'a> Gen<'a> {
                  sc.Buffer(make([]byte, 1<<20), 1<<20)\n\t\
                  for sc.Scan() {{\n\t\t\
                      if len(sc.Bytes()) == 0 {{\n\t\t\tcontinue\n\t\t}}\n\t\t\
-                     var rec struct{{ In map[string]any `json:\"in\"` }}\n\t\t\
+                     var rec struct {{\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
                      if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
                      d := rec.In\n\t\t\
                      var in r.Input\n{}\t\t\
@@ -1223,4 +1312,73 @@ impl<'a> Gen<'a> {
             fields.join("")
         )
     }
+}
+
+// ---------------------------------------------------------------------------
+// 丸めヘルパの単体ベクタ（§8.5）
+// ---------------------------------------------------------------------------
+
+/// 四モード × 格子 × 値。負値と半分ちょうどを必ず含む。
+/// 表レベルの一致だけでは、端数の出ない表でヘルパの誤りが隠れる。
+fn round_cases() -> Vec<(RoundMode, i128, i128, i128)> {
+    let mut out = Vec::new();
+    for m in [RoundMode::Down, RoundMode::Up, RoundMode::Half, RoundMode::Bankers] {
+        for g in [1i128, 10, 100] {
+            for x in [-25i128, -20, -15, -11, -10, -5, -1, 0, 1, 5, 10, 11, 15, 20, 25, 105, 150, 250] {
+                let want = Rat::int(x).round_to(m, Rat::int(g));
+                out.push((m, x, g, want.num / want.den));
+            }
+        }
+    }
+    out
+}
+
+pub fn round_tests_python() -> String {
+    let mut o = format!(
+        "# Code generated by rulec {}. DO NOT EDIT.\n\
+         # §7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。\n\
+         import sys\n\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    o.push_str(ROUND_PY.trim_start_matches('\n'));
+    o.push_str("\nCASES = [\n");
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
+    }
+    o.push_str("]\n\nFN = {\"down\": _round_down, \"up\": _round_up, \"half\": _round_half, \"bankers\": _round_bankers}\n\n");
+    o.push_str(
+        "bad = 0\nfor mode, x, g, want in CASES:\n    \
+         got = FN[mode](x, g)\n    \
+         if got != want:\n        \
+             print(f\"NG {mode}({x}, {g}) = {got}, want {want}\")\n        \
+             bad += 1\nif bad:\n    sys.exit(1)\nprint(f\"ok {len(CASES)} 件\")\n",
+    );
+    o
+}
+
+pub fn round_tests_go(pkg: &str) -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n\
+         // §7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。\n\
+         package {pkg}\n\nimport \"testing\"\n\n\
+         func TestRoundingModes(t *testing.T) {{\n\t\
+         cases := []struct {{\n\t\tmode{CELL}string\n\t\tx, g, want{CELL}int64\n\t}}{{\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("\t\t{{{:?}, {x}, {g}, {want}}},\n", mode_fn(m)));
+    }
+    o.push_str(
+        "\t}\n\tfor _, c := range cases {\n\t\tvar got int64\n\t\tswitch c.mode {\n\t\t\
+         case \"down\":\n\t\t\tgot = roundDown(c.x, c.g)\n\t\t\
+         case \"up\":\n\t\t\tgot = roundUp(c.x, c.g)\n\t\t\
+         case \"half\":\n\t\t\tgot = roundHalf(c.x, c.g)\n\t\t\
+         case \"bankers\":\n\t\t\tgot = roundBankers(c.x, c.g)\n\t\t}\n\t\t\
+         if got != c.want {\n\t\t\tt.Errorf(\"%s(%d, %d) = %d, want %d\", c.mode, c.x, c.g, got, c.want)\n\t\t}\n\t}\n}\n",
+    );
+    align(&o)
+}
+
+fn go_comment_ok(indent: &str) -> bool {
+    indent.starts_with('\t')
 }

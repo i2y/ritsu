@@ -220,6 +220,9 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
             ),
             (format!("{out_dir}/vectors/{alias}.jsonl"), vec_body),
             (format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body),
+            // 丸めヘルパの単体ベクタ（§8.5）。表の一致だけでは隠れる誤りを踏む。
+            (format!("{out_dir}/python/_round_test.py"), rulec::codegen::round_tests_python()),
+            (format!("{out_dir}/go/{pkg}/round_test.go"), rulec::codegen::round_tests_go(&pkg)),
         ];
         for (p, body) in targets {
             let existing = std::fs::read_to_string(&p).ok();
