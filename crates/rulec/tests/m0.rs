@@ -287,3 +287,36 @@ fn readmeの例は通る() {
         ds.iter().map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn 解析できない型の列は黙って飛ばさない() {
+    // 型が解析できないと `TableRegion::build` が諦め、その表の完全性も重複も
+    // 検査されないまま ok が出ていた。日付と optional で二度踏んだ形なので、
+    // 一般の防波堤として E110 で止める（§6.3）。
+    let src = "規則 t(t) v1\n\n入力\n  s(s) : 文字列\n\n出力\n  r(r) : 真偽\n\n\
+               表 x(x)\n方式 一意\n| s | → r(r) : 真偽 |\n| \"a\" | 真 |\n";
+    let ds = rulec::check_source(src, "s.rule");
+    assert!(ds.iter().any(|d| d.code == "E110"), "解析できない列は E110: {:?}",
+            ds.iter().map(|d| d.code).collect::<Vec<_>>());
+}
+
+#[test]
+fn optionalの列も検査される() {
+    // `T?` は「無し」を一つ足した列挙として扱う。穴を開ければ E101 が出る。
+    let base = "規則 t(t) v1\n\n型 区分(k) = 甲(a) | 乙(b)\n\n\
+                入力\n  金額(amt) : 金額[円, 税込]  範囲 >=0円 <=100万円\n  任意値(opt) : 区分?\n\n\
+                出力\n  r(r) : 真偽\n\n表 x(x)\n方式 一意\n\
+                | 金額      | 任意値   | → r(r) : 真偽 |\n\
+                | <1000円   | 無し     | 真 |\n\
+                | <1000円   | 甲 ・ 乙 | 偽 |\n\
+                | >=1000円  | -        | 偽 |\n";
+    let ds = rulec::check_source(base, "o.rule");
+    assert!(!rulec::has_error(&ds), "完全な表は通る: {:?}",
+            ds.iter().map(|d| format!("{}:{}", d.code, d.title)).collect::<Vec<_>>());
+
+    // 「無し」の行を落とすと穴が開く。飛ばしていたら気づけない。
+    let holed = base.replace("| <1000円   | 無し     | 真 |\n", "");
+    let ds = rulec::check_source(&holed, "o.rule");
+    assert!(ds.iter().any(|d| d.code == "E101"), "無し の穴を捕まえるはず: {:?}",
+            ds.iter().map(|d| d.code).collect::<Vec<_>>());
+}

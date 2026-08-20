@@ -39,6 +39,8 @@ pub enum TypeArg {
 pub struct TypeRef {
     pub base: String,
     pub args: Vec<TypeArg>,
+    /// `区分?` の `?`。セルの `無し` でだけ消費できる（§2.1）。
+    pub optional: bool,
     pub span: Span,
 }
 

@@ -20,6 +20,7 @@ enum Coord {
 
 #[derive(Debug, Clone)]
 enum Axis {
+    /// `values` の先頭が `無し` になることがある（optional の軸）。
     Enum { values: Vec<String> },
     /// 数値と日付。日付は順序数（y*10000+m*100+d）で持つので、区間の機構が
     /// そのまま使える。`unit` が空なら日付として書き戻す。
@@ -93,6 +94,8 @@ pub struct TableRegion {
     col_names: Vec<String>,
     /// 軸 → 上流が出しうる値の座標。None なら制限なし（入力や導出の軸）。
     reachable: Vec<Option<Vec<bool>>>,
+    /// 解析できない型の列があれば、その名前と型。検査を飛ばさず E110 で止める。
+    unanalyzable: Option<(String, Ty)>,
     /// 行 → 上流の到達不能な値だけを名指ししているか（E102 の変種）。
     unreachable_row: Vec<bool>,
     /// 軸 → 表での元の列位置。探索は細い軸から見るが、証人は表の見た目の順で出す。
@@ -209,11 +212,25 @@ impl TableRegion {
     pub fn build(t: &Table, c: &Checked, inputs: &[VarDecl]) -> Option<TableRegion> {
         let mut axes = Vec::new();
         let mut col_names = Vec::new();
+        let mut unanalyzable: Option<(String, Ty)> = None;
         for (ci, (name, _)) in t.inputs.iter().enumerate() {
             let ty = c.ty_of(name)?;
             col_names.push(name.clone());
+            // optional は「無し」を一つ足した列挙として扱う。§2.1 が
+            // 「セルの `無し` でだけ消費でき、式には現れない」と決めているので、
+            // 軸としては値がひとつ増えるだけで済む。
+            let (ty, opt) = match &ty {
+                Ty::Opt(inner) => ((**inner).clone(), true),
+                other => (other.clone(), false),
+            };
             let axis = match &ty {
-                Ty::Enum(en) => Axis::Enum { values: c.enums.get(en)?.clone() },
+                Ty::Enum(en) => {
+                    let mut vs = c.enums.get(en)?.clone();
+                    if opt {
+                        vs.insert(0, "無し".into());
+                    }
+                    Axis::Enum { values: vs }
+                }
                 Ty::Bool => Axis::Bool,
                 Ty::Date => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
@@ -237,7 +254,12 @@ impl TableRegion {
                     };
                     Axis::Num { unit, coords: num_coords(&b, lo, hi, q) }
                 }
-                _ => return None,
+                _ => {
+                    // 解析できない型を黙って飛ばすと、その表の完全性も重複も
+                    // 検査されないまま ok が出る。日付と optional で二度踏んだ形。
+                    unanalyzable = Some((name.clone(), ty.clone()));
+                    Axis::Bool
+                }
             };
             axes.push(axis);
         }
@@ -282,7 +304,13 @@ impl TableRegion {
                 let mut v = vec![false; n];
                 let ty = c.ty_of(&col_names[ai])?;
                 match cell {
-                    None | Some(Cell::DontCare) | Some(Cell::Nothing) => v.iter_mut().for_each(|x| *x = true),
+                    None | Some(Cell::DontCare) => v.iter_mut().for_each(|x| *x = true),
+                    // `無し` は optional 軸の先頭座標だけに当たる。
+                    Some(Cell::Nothing) => {
+                        if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some("無し")) {
+                            v[0] = true;
+                        }
+                    }
                     Some(Cell::Lit(l)) => match (axis, l) {
                         (Axis::Enum { values }, Lit::Word(w)) => {
                             for (i, val) in values.iter().enumerate() {
@@ -367,7 +395,7 @@ impl TableRegion {
             unreachable_row.push(only_unreachable);
             masks.push(m);
         }
-        Some(TableRegion { axes, col_names, reachable, unreachable_row, display_of: cell_of, is_define, derived, masks })
+        Some(TableRegion { axes, col_names, reachable, unreachable_row, display_of: cell_of, is_define, derived, masks, unanalyzable })
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
@@ -629,6 +657,21 @@ pub fn check_table(t: &Table, c: &Checked, inputs: &[VarDecl], path: &str, budge
     let Some(reg) = TableRegion::build(t, c, inputs) else { return empty };
     if reg.axes.is_empty() || t.rows.is_empty() {
         return empty;
+    }
+    if let Some((col, ty)) = &reg.unanalyzable {
+        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        return TableCheck {
+            diags: vec![
+                Diag::error("E110", format!("列 {col} の型 {ty} は、まだ検査できません"))
+                    .at(format!("{path}:{} 表 {tname}", t.span.line))
+                    .mark(t.span.clone(), "")
+                    .note("この表の完全性も重複も検査していません。黙って通すより止めます。")
+                    .note("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。"),
+            ],
+            quiet: Vec::new(),
+            shadow: Shadow::default(),
+            nodes: 0,
+        };
     }
     let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
     let at = |line: usize| format!("{path}:{line} 表 {tname}");

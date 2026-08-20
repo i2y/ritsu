@@ -327,10 +327,14 @@ impl P {
             }
             k += 1; // ]
         }
+        let optional = ts.get(k).is_some_and(|t| t.is(&Kind::Question));
+        if optional {
+            k += 1;
+        }
         // 位置は `]` まで伸ばす。§11 の E104 は型の全体に下線を引く。
         let end = ts.get(k.saturating_sub(1)).map(|t| t.span.col + t.span.len).unwrap_or(start.col + start.len);
         let span = Span::new(start.line, start.col, end.saturating_sub(start.col).max(start.len));
-        Some((TypeRef { base, args, span }, k))
+        Some((TypeRef { base, args, optional, span }, k))
     }
 
     /// `範囲 >=1g <=40kg` and the `契約のみ` marker (§11 W111).

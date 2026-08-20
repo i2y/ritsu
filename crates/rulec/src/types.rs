@@ -18,6 +18,8 @@ pub enum Ty {
     Bool,
     Str,
     Date,
+    /// `T?`。セルの `無し` でだけ消費でき、式には現れない（§2.1）。
+    Opt(Box<Ty>),
     Unknown,
 }
 
@@ -32,6 +34,7 @@ impl std::fmt::Display for Ty {
             Ty::Bool => write!(f, "真偽"),
             Ty::Str => write!(f, "文字列"),
             Ty::Date => write!(f, "日付"),
+            Ty::Opt(t) => write!(f, "{t}?"),
             Ty::Unknown => write!(f, "?"),
         }
     }
@@ -443,7 +446,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 
 impl Checked {
     fn resolve(&mut self, t: &TypeRef) -> Ty {
-        match t.base.as_str() {
+        let base = match t.base.as_str() {
             "金額" => {
                 let mut it = t.args.iter().filter_map(|a| match a {
                     TypeArg::Word(w) => Some(w.clone()),
@@ -467,7 +470,8 @@ impl Checked {
             "文字列" => Ty::Str,
             "日付" => Ty::Date,
             other => Ty::Enum(other.to_string()),
-        }
+        };
+        if t.optional { Ty::Opt(Box::new(base)) } else { base }
     }
 
     fn check_same(&mut self, want: &Ty, got: &Ty, span: &Span, path: &str, what: &str) {
@@ -723,6 +727,11 @@ impl Checked {
     }
 
     fn cell(&mut self, cell: &Cell, want: &Ty, span: &Span, at: &str) {
+        // optional の列に在る側の値を書くのは正しい。`無し` は Cell::Nothing で来る。
+        let want = match want {
+            Ty::Opt(inner) => inner.as_ref(),
+            other => other,
+        };
         let mut check_lit = |s: &mut Self, l: &Lit| match l {
             Lit::Num(n) => {
                 if lit_value_in(n, want).is_none() {
@@ -804,6 +813,10 @@ impl Checked {
     pub fn ty_of(&self, name: &str) -> Option<Ty> {
         self.syms.get(name).map(|s| s.ty.clone())
     }
+}
+
+pub fn lit_ty_pub(n: &crate::lex::Num) -> Ty {
+    lit_ty(n)
 }
 
 /// region が同じ換算を使うための入口。

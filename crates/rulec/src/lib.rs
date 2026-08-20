@@ -4,6 +4,7 @@ pub mod ast;
 pub mod diag;
 pub mod eval;
 pub mod fmt;
+pub mod codegen;
 pub mod lex;
 pub mod num;
 pub mod parse;

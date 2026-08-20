@@ -44,6 +44,8 @@ pub enum Kind {
     Minus,
     Star,
     Slash,
+    /// `?` — optional の印（`区分?`）。
+    Question,
     /// `..` — always an error (§3.1 forbids range notation), lexed so E010 can point at it.
     DotDot,
 }
@@ -98,6 +100,7 @@ fn is_delim(c: char) -> bool {
                 | '＜'
                 | '＞'
                 | '.'
+                | '?'
         )
 }
 
@@ -162,6 +165,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             ']' => Some(Kind::RBracket),
             ',' | '、' => Some(Kind::Comma),
             '・' => Some(Kind::Sep),
+            '?' | '？' => Some(Kind::Question),
             '<' | '＜' => Some(Kind::Lt),
             '>' | '＞' => Some(Kind::Gt),
             '≦' => Some(Kind::Le),
