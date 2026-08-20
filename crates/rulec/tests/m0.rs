@@ -38,30 +38,51 @@ fn コーパスは全部通る() {
 }
 
 #[test]
-fn 変異は決めたコードを出す() {
-    // (変異ファイル, 出るべきコード, 何を壊したか)
-    let cases: &[(&str, &str, &str)] = &[
-        ("tests/mutants/m_e101.rule", "E101", "群から 山梨県 を落とした"),
-        ("tests/mutants/m_e102.rule", "E102", "catch-all の後ろに行を足した"),
-        ("tests/mutants/m_e103.rule", "E103", "長さの列に金額を書いた"),
-        ("tests/mutants/m_e104.rule", "E104", "出力の丸め宣言を消した"),
-        ("tests/mutants/m_e105.rule", "E105", "一意の表で行を重ねた"),
-        ("tests/mutants/m_e008.rule", "E008", "セルを空にした"),
-        ("tests/mutants/m_e010.rule", "E010", "`..` を書いた"),
-        ("tests/mutants/m_e107.rule", "E107", "例の期待値をずらした"),
-        ("tests/mutants/m_e106.rule", "E106", "丸めの格子に載らない額を書いた"),
-        ("tests/mutants/m_e112.rule", "E112", "導出の範囲を到達区間より狭くした"),
-        ("tests/mutants/m_e108.rule", "E108", "入力の範囲を int64 に収まらないほど広げた"),
-        ("tests/mutants/m_e113.rule", "E113", "表の出力どうしを比べる真偽定義を書いた"),
-        ("tests/mutants/m_e102b.rule", "E102", "上流が出さない値を下流が名指しした"),
-        ("tests/mutants/m_e101d.rule", "E101", "日付の境界に穴を開けた"),
+fn 変異は決めたコードだけを出す() {
+    // 変異ファイルが出す診断の**全集合**を、件数まで固定する。
+    //
+    // 以前は「E112 を含む」しか見ていなかった。そのせいで、コーパスの改名
+    // （`型 範囲` → `型 適用範囲`、E009 で見つけたもの）に追随せず古いままだった
+    // 変異が E009 を一緒に出していても、golden は E112 だけを拾って緑を返していた。
+    // 余分な一件が赤になる形にしておかないと、材料が腐っても誰も気づかない。
+    //
+    // (変異ファイル, 出る診断の全部, 何を壊したか)
+    let cases: &[(&str, &[(&str, usize)], &str)] = &[
+        ("m_e008.rule", &[("E008", 7)], "セルを空にした"),
+        ("m_e010.rule", &[("E010", 1)], "`..` を書いた"),
+        ("m_e011.rule", &[("E011", 1)], "公開面の別名を消した"),
+        ("m_e101.rule", &[("E101", 1)], "群から 山梨県 を落とした"),
+        ("m_e101d.rule", &[("E101", 1), ("E107", 1)], "日付の境界に穴を開けた"),
+        ("m_e102.rule", &[("E102", 1), ("W105", 6)], "catch-all の後ろに行を足した"),
+        ("m_e102b.rule", &[("E101", 1), ("E102", 3), ("E107", 2)], "上流が出さない値を下流が名指しした"),
+        ("m_e103.rule", &[("E103", 1)], "長さの列に金額を書いた"),
+        ("m_e104.rule", &[("E104", 1)], "出力の丸め宣言を消した"),
+        ("m_e104b.rule", &[("E104", 1)], "端数の出る式から丸めを消した"),
+        ("m_e105.rule", &[("E101", 1), ("E105", 1)], "一意の表で行を重ねた"),
+        ("m_e106.rule", &[("E106", 2)], "丸めの格子に載らない額を書いた"),
+        ("m_e107.rule", &[("E107", 1)], "例の期待値をずらした"),
+        ("m_e108.rule", &[("E108", 1)], "入力の範囲を int64 に収まらないほど広げた"),
+        ("m_e111.rule", &[("E111", 1)], "例から出力の列を落とした"),
+        ("m_e112.rule", &[("E112", 1)], "導出の範囲を到達区間より狭くした"),
+        ("m_e113.rule", &[("E113", 1)], "表の出力どうしを比べる真偽定義を書いた"),
+        ("m_w105.rule", &[("W105", 3)], "上からの表で出力の食い違う重なりを作った"),
+        ("m_w111.rule", &[("W111", 1)], "契約のみ の印を消した"),
     ];
+
+    // 材料が増えたのに表に足し忘れる、という抜けも塞ぐ。
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants");
+    let on_disk = std::fs::read_dir(&dir).expect("変異の置き場が無い").count();
+    assert_eq!(on_disk, cases.len(), "変異ファイルの数と、固定した数が合わない");
+
     for (f, want, what) in cases {
-        let got = codes(f);
-        assert!(
-            got.iter().any(|c| c == want),
-            "{f}（{what}）は {want} を出すはずが {got:?} だった"
-        );
+        let rel = format!("tests/mutants/{f}");
+        let mut got: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for c in codes(&rel) {
+            *got.entry(c).or_insert(0) += 1;
+        }
+        let want: std::collections::BTreeMap<String, usize> =
+            want.iter().map(|(c, n)| (c.to_string(), *n)).collect();
+        assert_eq!(got, want, "{f}（{what}）が出す診断が変わった");
     }
 }
 
