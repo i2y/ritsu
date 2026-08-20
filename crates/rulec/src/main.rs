@@ -61,11 +61,20 @@ fn main() -> ExitCode {
             skip.push(w[1].clone());
         }
     }
-    let files: Vec<&String> = args
+    let raw: Vec<&String> = args
         .iter()
         .filter(|a| !a.starts_with("--") && !skip.contains(a))
         .skip(1)
         .collect();
+    // §12 の CI は `rulec check rules/` と書く。ディレクトリは中の `.rule` に
+    // 展開する。並び順は決定的（パス順）にして、報告の順が環境で変わらないようにする。
+    // `test` だけは引数が生成先ディレクトリそのものなので展開しない。
+    let expanded: Vec<String> = if args[0] == "test" {
+        raw.iter().map(|a| (*a).clone()).collect()
+    } else {
+        raw.iter().flat_map(|a| expand(a)).collect()
+    };
+    let files: Vec<&String> = expanded.iter().collect();
 
     match args[0].as_str() {
         "check" => check(&files, json, show_shadow, diff_base.as_deref(), budget),
@@ -312,6 +321,35 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
         }
     }
     ExitCode::from(dirty)
+}
+
+/// 引数がディレクトリなら、その下の `.rule` を集める。ファイルならそのまま。
+/// 見つからないディレクトリは空を返さず、そのままの名前を返して
+/// 「読めません」で止める（黙って 0 件成功にしない）。
+fn expand(arg: &str) -> Vec<String> {
+    let p = std::path::Path::new(arg);
+    if !p.is_dir() {
+        return vec![arg.to_string()];
+    }
+    let mut out = Vec::new();
+    collect_rules(p, &mut out);
+    out.sort();
+    if out.is_empty() {
+        eprintln!("注意: `{arg}` の下に .rule がありません");
+    }
+    out
+}
+
+fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_rules(&p, out);
+        } else if p.extension().is_some_and(|x| x == "rule") {
+            out.push(p.to_string_lossy().into_owned());
+        }
+    }
 }
 
 // ── M3 過去再生 ────────────────────────────────────────────────────────────

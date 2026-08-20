@@ -213,3 +213,30 @@ fn gen_check_は生成物のずれを見つける() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// §12: CI は `rulec check rules/` と書く。ディレクトリは中の `.rule` に展開する。
+#[test]
+fn ディレクトリを渡すと中の規則を全部見る() {
+    let (c, out, _) = run(&["check", "tests/corpus"]);
+    assert_eq!(c, 0, "{out}");
+    let ok = out.lines().filter(|l| l.starts_with("ok ")).count();
+    let n = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"))
+        .unwrap()
+        .count();
+    assert_eq!(ok, n, "コーパス {n} 本のはずが {ok} 本しか見ていない:\n{out}");
+
+    // 並びは決定的。報告の順が環境で変わると diff が読めない。
+    let (_, again, _) = run(&["check", "tests/corpus"]);
+    assert_eq!(out, again, "二度目で並びが変わった");
+
+    // `test` の引数は生成先ディレクトリそのものなので、展開してはいけない。
+    let dir = std::env::temp_dir().join(format!("rulec-dir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let d = dir.to_string_lossy().to_string();
+    let (c, _, _) = run(&["gen", "tests/corpus/期間区分.rule", "--out", &d]);
+    assert_eq!(c, 0);
+    let (c, r, _) = run(&["test", &d]);
+    assert_eq!(c, 0, "test がディレクトリを展開してしまった:\n{r}");
+    assert!(r.contains("period"), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

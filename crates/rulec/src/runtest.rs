@@ -29,6 +29,13 @@ impl Run {
     }
 }
 
+/// 生成物は外部の依存を持たない（`go.mod` は自分の二つだけ）。それを**仮定ではなく
+/// 検査された性質**にするため、Go の取得口を閉じて走らせる。取りに行こうとしたら
+/// 落ちるので、依存がいつの間にか混ざったらここで分かる。
+fn closed() -> [(&'static str, &'static str); 2] {
+    [("GOPROXY", "off"), ("GOFLAGS", "-mod=mod")]
+}
+
 fn have(cmd: &str) -> bool {
     ["--version", "version"]
         .iter()
@@ -85,7 +92,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
 
         let mut one = |lang: &'static str, cmd: &str, cwd: PathBuf, args: &[&str]| {
             let Ok(stdin) = std::fs::File::open(&vec_path) else { return };
-            let o = Command::new(cmd).current_dir(&cwd).args(args).stdin(stdin).output();
+            let o = Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).stdin(stdin).output();
             let diff = match o {
                 Err(e) => Some(format!("起動できません: {e}")),
                 Ok(o) if !o.status.success() => {
@@ -124,6 +131,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let o = Command::new("go")
             .current_dir(dir.join("go").join(&pkg0))
             .args(["test", "./..."])
+            .envs(closed())
             .output();
         let diff = match o {
             Ok(o) if o.status.success() => None,
