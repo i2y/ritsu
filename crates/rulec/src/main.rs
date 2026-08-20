@@ -10,7 +10,10 @@ fn usage() -> ExitCode {
          rulec check <file.rule>...  [--format json] [--show-shadow] [--diff-base <rev>] [--budget N]\n  \
          rulec fmt   <file.rule>...  [--check]\n  \
          rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
-         rulec vectors <file.rule>... [--out DIR]\n\n\
+         rulec vectors <file.rule>... [--out DIR]\n  \
+         rulec schema  <file.rule>\n  \
+         rulec adapter <file.rule> --template python|go\n  \
+         rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
          exit code: 0 注記のみ / 1 エラーあり / 2 内部異常",
         env!("CARGO_PKG_VERSION")
     );
@@ -38,7 +41,7 @@ fn main() -> ExitCode {
         .map(|w| w[1].clone());
     // `--x V` の V と、値そのものが引数に見えるものを除いてファイル名を拾う。
     let mut skip: Vec<String> = vec!["json".into(), budget.to_string()];
-    for k in ["--out", "--diff-base", "--budget", "--format"] {
+    for k in ["--out", "--diff-base", "--budget", "--format", "--template"] {
         if let Some(w) = args.windows(2).find(|w| w[0] == k) {
             skip.push(w[1].clone());
         }
@@ -52,6 +55,31 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "check" => check(&files, json, show_shadow, diff_base.as_deref(), budget),
         "fmt" => fmt(&files, args.iter().any(|a| a == "--check")),
+        "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
+        "adapter" => {
+            let lang = args
+                .windows(2)
+                .find(|w| w[0] == "--template")
+                .map(|w| w[1].clone())
+                .unwrap_or_else(|| "python".into());
+            one(&files, move |f, _, _| Some(rulec::verify::template(&lang, f)))
+        }
+        "verify" => {
+            let i = args.iter().position(|a| a == "--adapter");
+            let Some(i) = i else {
+                eprintln!("error: --adapter <cmd> が要ります");
+                return ExitCode::from(2);
+            };
+            let cmd: Vec<String> = args[i + 1..].to_vec();
+            // --adapter の後ろはコマンドなので、ファイル名の候補から外す。
+            let before: Vec<String> = args[..i].to_vec();
+            let vfiles: Vec<&String> = before
+                .iter()
+                .filter(|a| !a.starts_with("--") && !skip.contains(a))
+                .skip(1)
+                .collect();
+            verify(&vfiles, &cmd)
+        }
         "vectors" => {
             let out = args
                 .windows(2)
@@ -283,4 +311,60 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
         }
     }
     ExitCode::from(0)
+}
+
+/// 一本の規則に対して文字列を吐くだけの下位コマンド。
+fn one(
+    files: &[&String],
+    f: impl Fn(&rulec::ast::RuleFile, &rulec::types::Checked, &str) -> Option<String>,
+) -> ExitCode {
+    if files.is_empty() {
+        return usage();
+    }
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        let Ok((rf, c)) = rulec::prepare(&src, path) else {
+            eprintln!("error: `{path}` は検査を通っていません");
+            return ExitCode::from(1);
+        };
+        if let Some(s) = f(&rf, &c, path) {
+            print!("{s}");
+        }
+    }
+    ExitCode::from(0)
+}
+
+/// §10: 旧実装のアダプタにベクタを流し、突き合わせる。
+fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
+    if files.is_empty() || adapter.is_empty() {
+        return usage();
+    }
+    let mut worst = 0u8;
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("error: `{path}` は検査を通っていません");
+            return ExitCode::from(1);
+        };
+        let vs = rulec::vectors::generate(&f, &c);
+        match rulec::verify::run(&f, &c, adapter, &vs) {
+            Ok(rep) => {
+                print!("{}", rulec::verify::render(&rep, &f));
+                if !rep.mismatches.is_empty() {
+                    worst = 1;
+                }
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    ExitCode::from(worst)
 }

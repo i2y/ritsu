@@ -12,6 +12,7 @@ pub mod prelude;
 pub mod region;
 pub mod types;
 pub mod vectors;
+pub mod verify;
 
 use diag::{Diag, Severity};
 
