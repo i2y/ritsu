@@ -351,6 +351,28 @@ fn readmeの例は通る() {
         "README の例が通らない: {:?}",
         ds.iter().map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>()
     );
+
+    // 「生成されるコード」に貼った抜粋が、実際の生成物と食い違わないこと。
+    // 抜粋は `...` で端折ってあるので全体は比べられないが、載せた行が
+    // 一行残らず生成物に在ることは確かめられる。README の中の生成物は
+    // 手で書き写したもので、手で書き写したものは腐る。
+    let (f, c) = rulec::prepare(src, "README.md").expect("README の例は検査を通る");
+    let g = rulec::codegen::Gen::new(&f, &c, src);
+    let py = g.python();
+    let go = g.go();
+    let sec = md.find("## 生成されるコード").expect("## 生成されるコード の節が無い");
+    let end = md[sec..].find("## 何を検査するか").expect("節の終わりが無い") + sec;
+    for (lang, body) in [("python", &py), ("go", &go)] {
+        let fence = format!("```{lang}\n");
+        let open = md[sec..end].find(&fence).unwrap_or_else(|| panic!("{lang} の抜粋が無い")) + sec + fence.len();
+        let close = md[open..end].find("```").expect("抜粋が閉じていない") + open;
+        for line in md[open..close].lines() {
+            if line.trim() == "..." || line.trim().is_empty() {
+                continue;
+            }
+            assert!(body.contains(line), "README の {lang} 抜粋が生成物に無い:\n{line}");
+        }
+    }
 }
 
 #[test]

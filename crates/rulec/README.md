@@ -108,6 +108,14 @@ error[E101]: 完全性の欠落: どの行にも当たらない入力があり�
   送料(fee) : 金額[円, 税込]  丸め 切り上げ(10円)
 ```
 
+出力は複数書けます。生成物は Python の `NamedTuple` と Go の構造体になり、**丸めは出力ごとに一度ずつ**掛かります。
+
+```
+出力
+  可否(ok)    : 真偽
+  素割引(raw) : 金額[円, 税込]  丸め 切り捨て(1円)
+```
+
 型は **列挙・数量・金額・率・真偽・日付・文字列**と、それらの optional（`T?`）です。
 
 - **金額は通貨と税区分の二重の brand** です。`金額[円, 税込]` と `金額[円, 税抜]` は足せません
@@ -208,6 +216,60 @@ DMN の Any / Priority / Collect は採りませんでした。**完全性は宣
 - 日付の加減算 — 比較と範囲だけです
 
 この三つを許すと、完全性と重複の検査が有限で終わらなくなります。**書けなさは、検査が終わることの代金です。**
+
+## 生成されるコード
+
+`rulec gen` が出すのは、**ランタイムに依存しない普通の関数**です。表の一行が分岐の一本になり、原本のセルがそのままコメントで添えてあります。上の「書き方」の例から出たものです。
+
+```python
+def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
+    """規則 送料例 v1。分岐は原本の行と 1:1 に対応する。"""
+    if not _isinstance(dest, Prefecture):
+        raise RuleInputError(f"あて先 が列挙 Prefecture の値ではありません: {dest!r}")
+    if not 1 <= girth <= 100:
+        raise RuleInputError(f"三辺合計 が範囲の外です: {girth}")
+    # 表 サイズ判定（方式 上から）
+    if girth <= 60:  # 行1: <=60cm | S60
+        サイズ = SizeClass.S60
+    elif girth <= 80:  # 行2: <=80cm | S80
+        サイズ = SizeClass.S80
+    elif True:  # 行3: - | S100
+        サイズ = SizeClass.S100
+    else:
+        raise AssertionError("到達不能: 完全性は rulec が静的に検査済み")
+    ...
+    return _round_up(運賃, 10)
+```
+
+```go
+func FeeDemo(in Input) (YenInclTax, error) {
+	if !in.Dest.Valid() {
+		return 0, fmt.Errorf("あて先 が列挙の値ではありません: %d", in.Dest)
+	}
+	// 表 サイズ判定（方式 上から）
+	var サイズ SizeClass
+	if int64(in.Girth) <= 60 { // 行1: <=60cm | S60
+		サイズ = SizeClassS60
+	} else if int64(in.Girth) <= 80 { // 行2: <=80cm | S80
+		サイズ = SizeClassS80
+	} else if true { // 行3: - | S100
+		サイズ = SizeClassS100
+	} else {
+		panic("到達不能: 完全性は rulec が静的に検査済み")
+	}
+	...
+	return YenInclTax(roundUp(int64(運賃), 10)), nil
+}
+```
+
+読める形であることを、生成器は次の四つで守っています。
+
+- **セルを省略しません。** 先行分岐で真とわかる条件も書きます（`elif True:` はそのため）。原本の行と目で突き合わせられることが、生成物の唯一の読み方です
+- **単位は型に載せます。** Python は `NewType`、Go は defined type。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります
+- **丸めは自前のヘルパで行います。** Python の `//` は −∞ 方向、Go の整数除算は 0 方向で食い違うので、言語の素の除算には任せません
+- **組み込みを裸で呼びません。** 入力の別名が `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています
+
+三つの実装（参照評価器・Python・Go）が同じ答えを返すことは、境界から自動で作ったテストケースを三方に流して、**正準 JSON のバイト一致**で確かめています。
 
 ## 何を検査するか
 
