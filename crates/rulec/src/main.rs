@@ -12,6 +12,7 @@ fn usage() -> ExitCode {
          rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
          rulec vectors <file.rule>... [--out DIR]\n  \
          rulec coverage <file.rule>...\n  \
+         rulec doc   <file.rule>...  [--out DIR]\n  \
          rulec test  <生成先ディレクトリ>\n  \
 \
          rulec fixtures lint <file.jsonl> <file.rule> [--manifest m.json] [--fill 欄=値]\n  \
@@ -105,6 +106,10 @@ fn main() -> ExitCode {
             verify(&vfiles, &cmd)
         }
         "coverage" => coverage(&files),
+        "doc" => {
+            let out = args.windows(2).find(|w| w[0] == "--out").map(|w| w[1].clone());
+            doc(&files, out.as_deref())
+        }
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {
@@ -350,6 +355,53 @@ fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
             out.push(p.to_string_lossy().into_owned());
         }
     }
+}
+
+/// §1.6: check を通った規則を markdown に描画する。読み取り専用で、逆方向は無い。
+/// **生成物としては扱わない** — コミットさせず、CI が生成して PR に貼る。
+/// 古い描画が正の顔をして残るのが最大の危険なので、長生きする成果物を作らない。
+fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
+    if files.is_empty() {
+        return usage();
+    }
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("error: `{path}` を読めません");
+            return ExitCode::from(2);
+        };
+        // 壊れた規則の綺麗な描画は嘘になる。検査を通っていなければ描かない（§1.6）。
+        let rep = rulec::report(&src, path);
+        if rulec::has_error(&rep.diags) {
+            let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+            for d in rep.diags.iter().filter(|d| d.severity == rulec::diag::Severity::Error) {
+                print!("{}", render(d, &lines));
+                println!();
+            }
+            eprintln!("error: `{path}` は検査を通っていないので描画しません（§1.6）");
+            return ExitCode::from(1);
+        }
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("error: `{path}` は検査を通っていません");
+            return ExitCode::from(1);
+        };
+        let body = rulec::doc::render(&f, &c, &src, path);
+        match out_dir {
+            Some(d) => {
+                let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+                let p = format!("{d}/{alias}.md");
+                if let Some(dir) = std::path::Path::new(&p).parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                if std::fs::write(&p, &body).is_err() {
+                    eprintln!("error: `{p}` に書けません");
+                    return ExitCode::from(2);
+                }
+                println!("描画しました: {p}");
+            }
+            None => print!("{body}"),
+        }
+    }
+    ExitCode::from(0)
 }
 
 // ── M3 過去再生 ────────────────────────────────────────────────────────────

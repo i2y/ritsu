@@ -882,6 +882,12 @@ pub fn lit_value_in_pub(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     lit_value_in(n, want)
 }
 
+/// §1.6 の描画も同じ書き戻しを使う。承認者に `1000000円` と見せると、
+/// 原本の `100万円` と突き合わせる前に読み替えが要る。
+pub fn fmt_big_pub(v: Rat) -> String {
+    fmt_big(v)
+}
+
 /// 大きい金額は 万・億 で書き戻す。書き手が `100万円` と書いたものに
 /// `1000000円` と返すと、直す前に読み替えが要る。
 fn fmt_big(v: Rat) -> String {

@@ -2,6 +2,7 @@
 
 pub mod ast;
 pub mod diag;
+pub mod doc;
 pub mod eval;
 pub mod fixtures;
 pub mod fmt;

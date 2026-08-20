@@ -157,7 +157,7 @@ impl<'a> Gen<'a> {
 }
 
 /// 依存を増やしたくないので、決定的な短いハッシュを自前で持つ（FNV-1a 128）。
-fn hash(s: &str) -> String {
+pub fn hash(s: &str) -> String {
     let mut h: u128 = 0x6c62272e07bb014262b821756295c58d;
     for b in s.as_bytes() {
         h ^= *b as u128;
