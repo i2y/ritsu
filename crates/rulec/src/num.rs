@@ -195,3 +195,32 @@ mod tests {
         assert_eq!(Rat::int(705).round_to(RoundMode::Half, ten), Rat::int(710));
     }
 }
+
+#[cfg(test)]
+mod readme_tests {
+    use super::*;
+
+    /// README の「範囲と丸め」に載せた例が、実装と一致すること。
+    /// 手で書いた表は腐る（生成コードと描画の抜粋と同じ理屈）。
+    #[test]
+    fn readmeの丸めの例は実装と一致する() {
+        let cases: &[(RoundMode, i128, i128, i128, i128)] = &[
+            // (モード, 値の分子, 分母, 格子, 期待)
+            (RoundMode::Up, -42, 10, 1, -5),
+            (RoundMode::Down, -48, 10, 1, -4),
+            (RoundMode::Half, -45, 10, 1, -5),
+            (RoundMode::Bankers, 25, 10, 1, 2),
+            (RoundMode::Bankers, 35, 10, 1, 4),
+            // 括弧の中が格子。切り上げ(10円) なら −4.2 円 は −10 円。
+            (RoundMode::Up, -42, 10, 10, -10),
+        ];
+        for (m, num, den, grid, want) in cases {
+            let got = Rat { num: *num, den: *den }.round_to(*m, Rat::int(*grid));
+            assert_eq!(
+                got.num / got.den,
+                *want,
+                "{m:?} の {num}/{den} を格子 {grid} で丸めると {want} のはず"
+            );
+        }
+    }
+}

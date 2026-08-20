@@ -407,3 +407,41 @@ fn optionalの列も検査される() {
     assert!(ds.iter().any(|d| d.code == "E101"), "無し の穴を捕まえるはず: {:?}",
             ds.iter().map(|d| d.code).collect::<Vec<_>>());
 }
+
+/// README のキーワード表が、パーサが実際に受理する語と一致すること。
+/// 語を足したのに表に書き忘れる、表に無い語を書く、のどちらも赤にする。
+#[test]
+fn readmeのキーワード表はパーサと一致する() {
+    let md = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"),
+    )
+    .unwrap();
+    let i = md.find("行頭に書けるのは次の語だけで").expect("キーワード表の前書きが無い");
+    let j = md[i..].find("\n\n### ").expect("表の終わりが無い") + i;
+    let mut listed: Vec<String> = Vec::new();
+    for l in md[i..j].lines().filter(|l| l.starts_with("| `")) {
+        for part in l.split('|').next_or_all() {
+            for w in part.split('`').skip(1).step_by(2) {
+                listed.push(w.to_string());
+            }
+        }
+    }
+    listed.sort();
+    listed.dedup();
+    // `規則` はヘッダ専用でパーサの一覧には無いので、こちらで足して比べる。
+    let mut want: Vec<String> =
+        rulec::parse::KEYWORDS.iter().map(|s| s.to_string()).chain(["規則".to_string()]).collect();
+    want.sort();
+    assert_eq!(listed, want, "README のキーワード表とパーサが食い違う");
+}
+
+/// `| `語` | 説明 |` の最初のセルだけを見るための小道具。
+trait FirstCell {
+    fn next_or_all(self) -> Vec<String>;
+}
+impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
+    fn next_or_all(mut self) -> Vec<String> {
+        let _ = self.next(); // 行頭の `|` の前の空文字
+        self.next().map(|s| vec![s.to_string()]).unwrap_or_default()
+    }
+}

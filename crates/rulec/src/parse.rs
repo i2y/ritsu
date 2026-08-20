@@ -7,6 +7,13 @@ use crate::ast::*;
 use crate::diag::{Diag, Span};
 use crate::lex::{Kind, Num, Token, lex_line};
 
+/// 行頭に書けるキーワード。E009（予約語と同じ名前の宣言）の判定と、
+/// README のキーワード表がこの一覧と一致することの検査に使う。
+/// `規則` はヘッダ専用なのでここには入らない。
+pub const KEYWORDS: &[&str] = &[
+    "説明", "取込", "型", "群", "入力", "出力", "導出", "定義", "表", "結果", "例", "方式",
+];
+
 pub struct Parsed {
     pub file: Option<RuleFile>,
     pub diags: Vec<Diag>,
@@ -261,10 +268,7 @@ impl P {
                 break;
             }
             let w = line.first().and_then(|t| t.ident()).unwrap_or("");
-            if matches!(
-                w,
-                "説明" | "取込" | "型" | "群" | "入力" | "出力" | "導出" | "定義" | "表" | "結果" | "例" | "方式"
-            ) {
+            if KEYWORDS.contains(&w) {
                 // 宣言の形（`名前(別名) :` か `名前 :`）をしているなら、それは
                 // セクションの始まりではなく、キーワードと同じ名前の宣言である。
                 // 黙って捨てると生成の段で初めて壊れるので、ここで言う。
