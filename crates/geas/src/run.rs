@@ -13,7 +13,14 @@ const STEP_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub enum Obs {
     Proc { stdout: String, stderr: String, exit: i32 },
-    Http { status: u16, body: String },
+    Http { status: u16, headers: Vec<(String, String)>, body: String },
+}
+
+pub struct ObsRec {
+    pub idx: usize,
+    pub target: String,
+    pub call: String,
+    pub obs: Obs,
 }
 
 pub struct CheckResult {
@@ -35,6 +42,7 @@ pub struct ClaimResult {
     pub line: usize,
     pub status: ClaimStatus,
     pub checks: Vec<CheckResult>,
+    pub observations: Vec<ObsRec>,
 }
 
 struct Server {
@@ -54,6 +62,8 @@ fn run_claim(spec: &Spec, claim: &Claim, dir: &Path, journal: &mut Vec<String>) 
     let mut checks: Vec<CheckResult> = Vec::new();
     let mut error: Option<(String, usize)> = None;
     let mut obs: Option<Obs> = None;
+    let mut observations: Vec<ObsRec> = Vec::new();
+    let mut when_idx = 0usize;
 
     for step in &claim.steps {
         match step {
@@ -78,6 +88,13 @@ fn run_claim(spec: &Spec, claim: &Claim, dir: &Path, journal: &mut Vec<String>) 
                 match result {
                     Ok(o) => {
                         journal.push(journal_when(&claim.name, target, call, &o));
+                        observations.push(ObsRec {
+                            idx: when_idx,
+                            target: target.clone(),
+                            call: call_display(call),
+                            obs: clone_obs(&o),
+                        });
+                        when_idx += 1;
                         obs = Some(o);
                     }
                     Err(e) => {
@@ -122,21 +139,40 @@ fn run_claim(spec: &Spec, claim: &Claim, dir: &Path, journal: &mut Vec<String>) 
     } else {
         ClaimStatus::Ok
     };
-    ClaimResult { name: claim.name.clone(), line: claim.line, status, checks }
+    ClaimResult { name: claim.name.clone(), line: claim.line, status, checks, observations }
+}
+
+fn clone_obs(o: &Obs) -> Obs {
+    match o {
+        Obs::Proc { stdout, stderr, exit } => Obs::Proc {
+            stdout: stdout.clone(),
+            stderr: stderr.clone(),
+            exit: *exit,
+        },
+        Obs::Http { status, headers, body } => Obs::Http {
+            status: *status,
+            headers: headers.clone(),
+            body: body.clone(),
+        },
+    }
+}
+
+pub fn call_display(call: &Call) -> String {
+    match call {
+        Call::Run(args) => {
+            let a: Vec<String> = args.iter().map(|s| format!("\"{}\"", s)).collect();
+            format!("run({})", a.join(", "))
+        }
+        Call::Get(p) => format!("get(\"{}\")", p),
+        Call::Post { path, body } => match body {
+            Some(b) => format!("post(\"{}\", body: \"{}\")", path, b),
+            None => format!("post(\"{}\")", path),
+        },
+    }
 }
 
 fn journal_when(claim: &str, target: &str, call: &Call, obs: &Obs) -> String {
-    let call_s = match call {
-        Call::Run(args) => {
-            let a: Vec<String> = args.iter().map(|s| format!("\"{}\"", json::esc(s))).collect();
-            format!("run({})", a.join(", "))
-        }
-        Call::Get(p) => format!("get(\"{}\")", json::esc(p)),
-        Call::Post { path, body } => match body {
-            Some(b) => format!("post(\"{}\", body: \"{}\")", json::esc(path), json::esc(b)),
-            None => format!("post(\"{}\")", json::esc(path)),
-        },
-    };
+    let call_s = call_display(call);
     let obs_s = match obs {
         Obs::Proc { stdout, stderr, exit } => format!(
             "{{\"stdout\":\"{}\",\"stderr\":\"{}\",\"exit\":{}}}",
@@ -144,7 +180,7 @@ fn journal_when(claim: &str, target: &str, call: &Call, obs: &Obs) -> String {
             json::esc(stderr),
             exit
         ),
-        Obs::Http { status, body } => format!(
+        Obs::Http { status, body, .. } => format!(
             "{{\"status\":{},\"body\":\"{}\"}}",
             status,
             json::esc(body)
@@ -302,7 +338,14 @@ fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> Result<Obs, 
         .nth(1)
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| format!("bad status line `{}`", status_line))?;
-    Ok(Obs::Http { status, body })
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for line in head.lines().skip(1) {
+        if let Some((name, value)) = line.split_once(':') {
+            headers.push((name.trim().to_lowercase(), value.trim().to_string()));
+        }
+    }
+    headers.sort();
+    Ok(Obs::Http { status, headers, body })
 }
 
 // ---------- checks ----------

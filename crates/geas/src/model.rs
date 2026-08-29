@@ -76,9 +76,16 @@ pub struct Claim {
 }
 
 #[derive(Debug, Clone)]
+pub enum Mask {
+    Header(String),
+    BodyJson(String),
+}
+
+#[derive(Debug, Clone)]
 pub struct Spec {
     pub targets: Vec<Target>,
     pub claims: Vec<Claim>,
+    pub masks: Vec<Mask>,
 }
 
 impl Spec {

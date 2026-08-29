@@ -114,17 +114,43 @@ internals; everything is observed at a boundary a user could also observe.
 Planned adapters keep that rule: GUI via the accessibility-tree dump
 (donor: pixie's `PIXIE_SCRIPT`/a11y machinery), library via FFI harness.
 
+## 3.5 Drift — the second layer (built later the same day)
+
+`geas snap` records every interaction's **full** observation (status,
+headers, body / stdout, stderr, exit) to `.geas/baseline.jsonl`;
+`geas drift` replays the same interactions against the current
+implementation and classifies each divergence:
+
+- **claimed** — some check in that claim covers the diverged field
+  (subject-level for status/exit/text, segment-wise path-level for
+  JSON bodies), so `geas check` is the authority on it;
+- **unclaimed** — observable behavior changed where no claim promises
+  anything. This is the information a test runner structurally cannot
+  produce, and the reason the journal records more than the checks
+  assert.
+
+Noise is handled by declaration, not heuristics: `mask header "date"` /
+`mask body json ".request_id"` name volatility in the audited file and
+apply at compare time (changing masks needs no re-snapshot);
+`content-length` is auto-ignored as derived. JSON bodies diff
+structurally, so a claim pinning `.message` does not silence a new
+`.debug` sibling. Exit: 0 quiet · 1 drift · 2 baseline missing or a
+replay error. Golden/snapshot testing fails toward noise (every change
+is a failure); assertion testing fails toward silence (unasserted
+change is invisible); the claims/journal split is the midpoint, priced
+at one `mask` line per genuinely volatile field.
+
 ## 4. Non-goals in v0 (deliberate)
 
-Diff-to-claim coverage ("this PR touches claims 3 and 7; claim 12 is now
-unverifiable") — the roadmap's centerpiece, not spike material. Matchers
+Static diff-to-claim binding ("this PR touches claims 3 and 7" read
+from the code diff alone; the runtime half exists as `drift`). Matchers
 beyond `is`/`contains`. Parallel claims. Quoting in command strings.
 Env/clock/seed pinning knobs. Claim dependencies. Windows.
 
 ## 5. Next, in order
 
-1. **Coverage of claims vs a diff** — the feature that turns the runner
-   into a gate for agent PRs.
+1. **Static diff-to-claim binding** — complete the gate for agent PRs
+   (drift covers the runtime half; this reads the diff).
 2. **GUI adapter** over an accessibility dump, which makes desktop apps
    claimable with the same five subjects.
 3. **Distribution through the agent channel**: ship the CLI with a skill

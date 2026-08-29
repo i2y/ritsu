@@ -164,6 +164,22 @@ impl P {
         Ok(Step::When { target: target.text, call, line })
     }
 
+    fn mask(&mut self) -> Result<Mask, String> {
+        self.next(); // `mask`
+        let what = self.ident()?;
+        match what.text.as_str() {
+            "header" => Ok(Mask::Header(self.string()?.text.to_lowercase())),
+            "body" => {
+                let j = self.ident()?;
+                if j.text != "json" {
+                    return Err(self.err(&j, "expected `mask body json \"<path>\"`"));
+                }
+                Ok(Mask::BodyJson(self.string()?.text))
+            }
+            _ => Err(self.err(&what, "expected `mask header \"...\"` or `mask body json \"...\"`")),
+        }
+    }
+
     fn check(&mut self) -> Result<Check, String> {
         let subj = self.ident()?;
         let subject = match subj.text.as_str() {
@@ -220,16 +236,20 @@ pub fn parse(src: &str) -> Result<Spec, String> {
     let mut p = P { toks, pos: 0 };
     let mut targets = Vec::new();
     let mut claims = Vec::new();
+    let mut masks = Vec::new();
     loop {
         let t = p.peek().clone();
         match t.kind {
             Kind::Eof => break,
             Kind::Ident if t.text == "target" => targets.push(p.target()?),
             Kind::Ident if t.text == "claim" => claims.push(p.claim()?),
-            _ => return Err(p.err(&t, "expected `target` or `claim` at top level")),
+            Kind::Ident if t.text == "mask" => masks.push(p.mask()?),
+            _ => {
+                return Err(p.err(&t, "expected `target`, `claim` or `mask` at top level"));
+            }
         }
     }
-    let spec = Spec { targets, claims };
+    let spec = Spec { targets, claims, masks };
     validate(&spec)?;
     Ok(spec)
 }

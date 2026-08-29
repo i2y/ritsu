@@ -6,6 +6,10 @@ target api {
   port 8123
 }
 
+# Declared volatility: these fields are noise by nature, not behavior.
+mask header "date"
+mask header "server"
+
 claim "greets by name" {
   when api.get("/greet?name=Alice")
   then status is 200
