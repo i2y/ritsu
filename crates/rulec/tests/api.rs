@@ -82,7 +82,11 @@ fn 署名とガードが生成物と一致する() {
         )
         .unwrap();
 
+        let ts_j = j.get("typescript").unwrap();
+        let ts = std::fs::read_to_string(dir.join("typescript").join(s(ts_j, "module"))).unwrap();
+
         assert!(py.contains(&s(py_j, "signature")), "python の署名が違う: {}", s(py_j, "signature"));
+        assert!(ts.contains(&s(ts_j, "signature")), "typescript の署名が違う: {}", s(ts_j, "signature"));
         assert!(go.contains(&s(go_j, "signature")), "go の署名が違う: {}", s(go_j, "signature"));
 
         // The entry guards. A range in the inventory that the guard does not enforce would
@@ -108,7 +112,28 @@ fn 署名とガードが生成物と一致する() {
             }
         }
 
+        for p in arr(ts_j, "params") {
+            if let Some(r) = p.get("range") {
+                let (lo, hi) = (r.get("min").unwrap(), r.get("max").unwrap());
+                let alias = s(p, "alias");
+                assert!(
+                    ts.contains(&format!("if ({alias} < {lo}n || {alias} > {hi}n) {{")),
+                    "typescript のガードが範囲と食い違う: {alias} {lo}..{hi}\n{ts}"
+                );
+            }
+        }
+
         // Enum members, under the spelling each language gives them.
+        for e in arr(ts_j, "enums") {
+            assert!(ts.contains(&format!("export const {} = {{", s(e, "alias"))), "{}", s(e, "alias"));
+            for v in arr(e, "values") {
+                assert!(
+                    ts.contains(&format!("  {}: \"{}\",", s(v, "alias"), s(v, "name"))),
+                    "typescript の列挙値が違う: {}",
+                    s(v, "alias")
+                );
+            }
+        }
         for e in arr(py_j, "enums") {
             assert!(py.contains(&format!("class {}(enum.Enum):", s(e, "alias"))), "{}", s(e, "alias"));
             for v in arr(e, "values") {
@@ -283,4 +308,74 @@ fn 生成物の文書が実物の名前を使っている() {
         assert!(doc.contains(&want), "docs/generated-code.md に `{want}` が無い");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The inventory has to be enough to *call* the TypeScript without opening the generated
+/// file: assemble a caller from the inventory alone and let node run it. A name the
+/// inventory gets wrong fails here, the same way `go vet` catches it on the Go side.
+#[test]
+fn typescriptは目録から組んだ呼び出しが動く() {
+    if !have("node") {
+        eprintln!("注意: node が無いので飛ばした");
+        return;
+    }
+    for (tag, rule) in RULES {
+        let (dir, j) = setup(&format!("ts{tag}"), rule);
+        let ts_j = j.get("typescript").unwrap();
+        let func = s(ts_j, "function");
+        let module = s(ts_j, "module");
+        // One argument per parameter, built from what the inventory says about it: an enum
+        // member by its own spelling, a boolean, a number at the bottom of its range.
+        let mut args: Vec<String> = Vec::new();
+        let mut names: Vec<String> = vec![func.clone()];
+        for p in arr(ts_j, "params") {
+            let ty = s(p, "type");
+            let lo = p.get("range").and_then(|r| r.get("min")).map(|v| format!("{v:?}"));
+            let lo = lo.unwrap_or_else(|| "0".into());
+            let lo = lo.trim_start_matches("Int(").trim_end_matches(')').to_string();
+            args.push(match ty.as_str() {
+                "boolean" => "true".to_string(),
+                "bigint" => format!("{lo}n"),
+                t if t.chars().next().is_some_and(|c| c.is_uppercase()) && !arr(ts_j, "enums").is_empty()
+                    && arr(ts_j, "enums").iter().any(|e| s(e, "alias") == t) =>
+                {
+                    let e = arr(ts_j, "enums").iter().find(|e| s(e, "alias") == t).unwrap();
+                    if !names.contains(&t.to_string()) {
+                        names.push(t.to_string());
+                    }
+                    format!("{t}.{}", s(&arr(e, "values")[0], "alias"))
+                }
+                t => {
+                    // A branded bigint: the brand is a type, so it goes in an `import type`.
+                    let _ = t;
+                    format!("{lo}n as never")
+                }
+            });
+        }
+        let outs: Vec<String> = arr(ts_j, "outputs").iter().map(|p| s(p, "alias")).collect();
+        let script = format!(
+            "import {{ {} }} from \"./{module}\";\n\
+             const r = {func}({});\n\
+             const outs = {outs:?};\n\
+             if (outs.length > 1) {{\n  \
+                 for (const o of outs) {{\n    \
+                     if (!(o in (r as object))) {{ throw new Error(`missing ${{o}}`); }}\n  }}\n}}\n\
+             console.log(\"ok\");\n",
+            names.join(", "),
+            args.join(", ")
+        );
+        let p = dir.join("typescript").join("_api_call.ts");
+        std::fs::write(&p, script).unwrap();
+        let o = std::process::Command::new("node")
+            .current_dir(dir.join("typescript"))
+            .args(["--no-warnings", "_api_call.ts"])
+            .output()
+            .expect("node を起動できない");
+        assert!(
+            o.status.success(),
+            "{tag}: 目録から組んだ TypeScript の呼び出しが動かない:\n{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

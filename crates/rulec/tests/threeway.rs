@@ -1,10 +1,12 @@
-//! Three-way agreement (§8.5, §9.3).
+//! Agreement across every implementation (§8.5, §9.3).
 //!
-//! Feed the same vectors to all three — the reference evaluator, the generated Python, and the
-//! generated Go — and check that the canonical JSON matches byte for byte. It needs neither data
-//! nor a legacy implementation, which makes it the main guarantee of M1.
+//! Feed the same vectors to all of them — the reference evaluator, the generated Python, the
+//! generated TypeScript and the generated Go — and check that the canonical JSON matches byte
+//! for byte. It needs neither data nor a legacy implementation, which makes it the main
+//! guarantee of M1.
 //!
-//! Where python3 or go is missing, only that language is skipped (and the skip is always reported).
+//! Where a toolchain is missing, only that language is skipped, and the skip is always
+//! reported — a silent skip would be a green run that proved nothing.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -45,7 +47,7 @@ const CORPUS: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn 評価器と生成コードが三者一致する() {
+fn 評価器と生成コードが全言語で一致する() {
     let dir = std::env::temp_dir().join(format!("rulec-3way-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out = dir.to_string_lossy().to_string();
@@ -59,12 +61,12 @@ fn 評価器と生成コードが三者一致する() {
 
     let py = have("python3");
     let go = have("go");
-    assert!(py || go, "python3 も go も無いので三者一致を確かめられない");
-    if !py {
-        eprintln!("注意: python3 が無いので Python 側を飛ばした");
-    }
-    if !go {
-        eprintln!("注意: go が無いので Go 側を飛ばした");
+    let ts = have("node");
+    assert!(py || go || ts, "python3 も go も node も無いので一致を確かめられない");
+    for (ok, name) in [(py, "python3"), (ts, "node"), (go, "go")] {
+        if !ok {
+            eprintln!("注意: {name} が無いのでその言語を飛ばした");
+        }
     }
 
     let mut total = 0usize;
@@ -87,6 +89,17 @@ fn 評価器と生成コードが三者一致する() {
             assert!(o.status.success(), "{alias}: Python が落ちた: {}", String::from_utf8_lossy(&o.stderr));
             assert_eq!(got, exp, "{alias}: 評価器と生成 Python が食い違う");
         }
+        if ts {
+            let o = Command::new("node")
+                .current_dir(dir.join("typescript"))
+                .args(["--no-warnings", &format!("{alias}_runner.ts")])
+                .stdin(std::fs::File::open(&vec_path).unwrap())
+                .output()
+                .expect("node を起動できない");
+            let got = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(o.status.success(), "{alias}: TypeScript が落ちた: {}", String::from_utf8_lossy(&o.stderr));
+            assert_eq!(got, exp, "{alias}: 評価器と生成 TypeScript が食い違う");
+        }
         if go {
             let pkg = alias.replace('_', "");
             let o = Command::new("go")
@@ -100,7 +113,7 @@ fn 評価器と生成コードが三者一致する() {
             assert_eq!(got, exp, "{alias}: 評価器と生成 Go が食い違う");
         }
     }
-    eprintln!("三者一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / Go {go}）", CORPUS.len());
+    eprintln!("一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Go {go}）", CORPUS.len());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

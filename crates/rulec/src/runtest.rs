@@ -115,7 +115,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
 
-    let (py, go) = (have("python3"), have("go"));
+    let (py, go, ts) = (have("python3"), have("go"), have("node"));
     // Python is run with `-B` and any bytecode cache in the output directory is removed
     // first. A `.pyc` is considered fresh when the source has the same size and the same
     // mtime in whole seconds, so a same-length edit made within a second of the previous
@@ -126,10 +126,13 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     if !py {
         out.skipped.push(tr!("python3 が無いので Python 側を飛ばしました", "python3 not found; skipped the Python side"));
     }
+    if !ts {
+        out.skipped.push(tr!("node が無いので TypeScript 側を飛ばしました", "node not found; skipped the TypeScript side"));
+    }
     if !go {
         out.skipped.push(tr!("go が無いので Go 側を飛ばしました", "go not found; skipped the Go side"));
     }
-    if !py && !go {
+    if !py && !go && !ts {
         return Err(tr!(
             "python3 も go も無いので、生成物を走らせられません",
             "neither python3 nor go is available, so the generated code cannot be run"
@@ -163,6 +166,14 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         if py {
             one("Python", "python3", dir.join("python"), &["-B", &format!("{alias}_runner.py")]);
         }
+        if ts {
+            one(
+                "TypeScript",
+                "node",
+                dir.join("typescript"),
+                &["--no-warnings", &format!("{alias}_runner.ts")],
+            );
+        }
         if go {
             one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."]);
         }
@@ -181,6 +192,18 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
         };
         out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Python", vectors: 0, diff });
+    }
+    if ts {
+        let o = Command::new("node")
+            .current_dir(dir.join("typescript"))
+            .args(["--no-warnings", "_round_test.ts"])
+            .output();
+        let diff = match o {
+            Ok(o) if o.status.success() => None,
+            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
+            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+        };
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "TypeScript", vectors: 0, diff });
     }
     if go {
         let o = Command::new("go")

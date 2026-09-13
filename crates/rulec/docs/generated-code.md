@@ -1,8 +1,8 @@
 # The generated code
 
-`rulec gen` writes an ordinary Python module and an ordinary Go package. There is no runtime
-to install and nothing to configure: a function takes the declared inputs and returns the
-declared outputs. This file says what shape that code has, what it guarantees, and how to
+`rulec gen` writes an ordinary Python module, an ordinary TypeScript module and an ordinary
+Go package. There is no runtime to install and nothing to configure: a function takes the
+declared inputs and returns the declared outputs. This file says what shape that code has, what it guarantees, and how to
 call it.
 
 To get the calling convention without reading the code at all, ask for it:
@@ -20,9 +20,10 @@ spelling each language gives them, and the errors the code can raise. The shape 
 
 ## What it guarantees
 
-**No dependencies.** The generated Python imports `enum` and `typing`; the generated Go
-imports `fmt`. The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side
-with `GOPROXY=off`, so "no dependencies" is a checked property rather than a claim.
+**No dependencies.** The generated Python imports `enum` and `typing`; the generated
+TypeScript imports nothing at all; the generated Go imports `fmt`. The `go.mod` lists nothing
+but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
+is a checked property rather than a claim.
 
 **Deterministic.** The same `.rule` and the same rulec version produce the same bytes. The
 formatter is built in — no `gofmt` or `black` runs afterwards, because that would make the
@@ -83,6 +84,43 @@ Two exceptions can come out, and the difference between them matters:
   declared range, or something that is not a member of the enum. Fix the call site.
 - **`RuleContradictionError`** (an `AssertionError`) — the *rule* contradicted itself. This
   is the guard described below. It is never the caller's fault.
+
+### TypeScript
+
+```ts
+export function coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: boolean): Output
+```
+
+**Every number is a `bigint`.** The overflow proof (E108) is against int64, and a JavaScript
+`number` is exact only to 2^53, so using one would put a silently wrong answer above nine
+quadrillion into the one place this tool exists to keep honest.
+
+Each unit is a *branded* bigint — `type YenInclTax = bigint & { readonly __rulec: "YenInclTax" }`
+— which costs nothing at run time and still refuses a tax-inclusive amount where a
+tax-exclusive one was meant. Construct one with `as`.
+
+```ts
+import { coupon_step, CouponKind } from "./coupon_step.ts";
+import type { YenInclTax, Rate } from "./coupon_step.ts";
+
+const out = coupon_step(
+  10000n as YenInclTax,
+  0n as YenInclTax,
+  CouponKind.PERCENT,
+  10n as Rate,
+  0n as YenInclTax,
+  false,
+);
+console.log(out.ok, out.raw);
+```
+
+An enum is a frozen object plus a union type, not a TypeScript `enum`. That keeps the whole
+file to **erasable syntax**, so `node file.ts` runs it with no build step and no `tsconfig`;
+a `tsc` build works just as well. The member spelling is the alias in upper case
+(`CouponKind.PERCENT`), and its value is the Japanese name, the same as in Python.
+
+The two error classes are `RuleInputError` and `RuleContradictionError`, with the same
+meanings as in Python.
 
 ### Go
 

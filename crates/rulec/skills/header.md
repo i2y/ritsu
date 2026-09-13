@@ -26,7 +26,7 @@ Bundled with this skill, read on demand — do not read them all up front:
 | [reference.md](reference.md) | the complete grammar |
 | [examples.md](examples.md) | ten complete rules, smallest first, each with what it demonstrates |
 | [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
-| [generated-code.md](generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
+| [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 
 Every diagnostic is `rulec explain <CODE>`, which is always current, so there is no bundled
 copy of the ledger.

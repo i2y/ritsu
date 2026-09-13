@@ -737,7 +737,7 @@ impl<'a> Gen<'a> {
             "    else:\n        raise AssertionError(\"{}\")\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
-        o.push_str(&self.guards(t, local, "    ", |name, i, j| {
+        o.push_str(&self.guards(t, local, Lang::Py, "    ", |name, i, j| {
             format!(
                 "        raise RuleContradictionError(\"{}\")\n",
                 tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
@@ -753,6 +753,7 @@ impl<'a> Gen<'a> {
         &self,
         t: &Table,
         local: &dyn Fn(&str) -> String,
+        lang: Lang,
         indent: &str,
         raise: impl Fn(&str, usize, usize) -> String,
     ) -> String {
@@ -763,17 +764,16 @@ impl<'a> Gen<'a> {
         let guard = tr!("ガード", "guard");
         let mut o = String::new();
         for (i, j) in pairs {
-            let go = indent.starts_with('\t');
             let mut conds: Vec<String> = Vec::new();
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 let ty = self.ty_of(col);
                 let sc = self.scale(col);
                 for r in [*i, *j] {
                     let Some(cell) = t.rows[r].cells.get(ci) else { continue };
-                    let c = if go {
-                        self.go_cell(cell, &local(col), &ty, sc)
-                    } else {
-                        self.py_cell(cell, &local(col), &ty, sc)
+                    let c = match lang {
+                        Lang::Py => self.py_cell(cell, &local(col), &ty, sc),
+                        Lang::Go => self.go_cell(cell, &local(col), &ty, sc),
+                        Lang::Ts => self.ts_cell(cell, &local(col), &ty, sc),
                     };
                     if let Some(c) = c {
                         if !conds.contains(&c) {
@@ -785,9 +785,10 @@ impl<'a> Gen<'a> {
             if conds.is_empty() {
                 continue;
             }
-            let joined = conds.join(if go { " && " } else { " and " });
+            let joined = conds.join(if lang == Lang::Py { " and " } else { " && " });
             o.push_str(&format!(
-                "{indent}// {guard}: {}\n",
+                "{indent}{} {guard}: {}\n",
+                if lang == Lang::Py { "#" } else { "//" },
                 tr!(
                     "W114（表 {name} 行{} × 行{}）。重ならないことを静的に証明できなかった行の対",
                     "W114 (table {name}, row {} × row {}): a pair of rows whose exclusivity could not be proven statically",
@@ -795,18 +796,15 @@ impl<'a> Gen<'a> {
                     j + 1
                 )
             ));
-            if go {
-                o.push_str(&format!("{indent}if {joined} {{\n"));
-            } else {
-                o.push_str(&format!("{indent}if {joined}:\n"));
+            match lang {
+                Lang::Py => o.push_str(&format!("{indent}if {joined}:\n")),
+                Lang::Go => o.push_str(&format!("{indent}if {joined} {{\n")),
+                Lang::Ts => o.push_str(&format!("{indent}if ({joined}) {{\n")),
             }
             o.push_str(&raise(&name, i + 1, j + 1));
-            if go {
+            if lang != Lang::Py {
                 o.push_str(&format!("{indent}}}\n"));
             }
-        }
-        if !go_comment_ok(indent) {
-            o = o.replace(&format!("// {guard}"), &format!("# {guard}"));
         }
         o
     }
@@ -1272,7 +1270,7 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("\t_ = {}\n", oc.name.text));
             }
         }
-        o.push_str(&self.guards(t, local, "\t", |name, i, j| {
+        o.push_str(&self.guards(t, local, Lang::Go, "\t", |name, i, j| {
             format!(
                 "\t\treturn {}, fmt.Errorf(\"{}\")\n",
                 if self.f.outputs.len() == 1 {
@@ -1669,6 +1667,601 @@ impl<'a> Gen<'a> {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// TypeScript (§8.3)
+// ---------------------------------------------------------------------------
+
+/// Turn the shared expression text into TypeScript. The same post-processing shape as
+/// `go_expr`: one grammar is emitted once and each language adjusts the spellings it does
+/// not share.
+///
+/// Every integer becomes a `bigint` literal. The overflow proof (E108) is against int64, and
+/// a JavaScript `number` is exact only to 2^53, so using one would put a silent wrong answer
+/// above nine quadrillion into a tool whose whole claim is that it does not do that.
+fn ts_expr(s: &str) -> String {
+    let t = s
+        .replace(" // ", " / ")
+        .replace("True", "true")
+        .replace("False", "false")
+        .replace("_round_down(", "_roundDown(")
+        .replace("_round_up(", "_roundUp(")
+        .replace("_round_half(", "_roundHalf(")
+        .replace("_round_bankers(", "_roundBankers(")
+        .replace("_min(", "_min(")
+        .replace("_max(", "_max(");
+    bigint_literals(&t)
+}
+
+/// Append `n` to every integer literal, and only to those. A run of digits that touches a
+/// letter, `_` or `.` on either side belongs to a name (`SizeClass.S60`, `項目1`) and is left
+/// alone.
+fn bigint_literals(s: &str) -> String {
+    let b: Vec<char> = s.chars().collect();
+    let part = |c: char| c.is_alphanumeric() || c == '_' || c == '.';
+    let mut out = String::with_capacity(s.len() + 8);
+    let mut i = 0;
+    while i < b.len() {
+        if b[i].is_ascii_digit() && (i == 0 || !part(b[i - 1])) {
+            let start = i;
+            while i < b.len() && b[i].is_ascii_digit() {
+                i += 1;
+            }
+            let touches_name = i < b.len() && part(b[i]);
+            out.extend(&b[start..i]);
+            if !touches_name {
+                out.push('n');
+            }
+            continue;
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    out
+}
+
+/// The four modes of §7.3 on `bigint`. `/` on a bigint truncates toward zero, the same as
+/// Go's integer division, so these mirror the Go helpers rather than the Python ones.
+fn round_ts() -> String {
+    format!(
+        r#"
+export class RuleInputError extends Error {{
+  constructor(message: string) {{
+    super(message);
+    this.name = "RuleInputError";
+  }}
+}}
+
+export class RuleContradictionError extends Error {{
+  constructor(message: string) {{
+    super(message);
+    this.name = "RuleContradictionError";
+  }}
+}}
+
+function _min(a: bigint, b: bigint): bigint {{
+  return a < b ? a : b;
+}}
+
+function _max(a: bigint, b: bigint): bigint {{
+  return a > b ? a : b;
+}}
+
+/** {down} */
+function _roundDown(x: bigint, g: bigint): bigint {{
+  const a = x < 0n ? -x : x;
+  const v = (a / g) * g;
+  return x < 0n ? -v : v;
+}}
+
+/** {up} */
+function _roundUp(x: bigint, g: bigint): bigint {{
+  const a = x < 0n ? -x : x;
+  const v = a % g === 0n ? (a / g) * g : (a / g + 1n) * g;
+  return x < 0n ? -v : v;
+}}
+
+/** {half} */
+function _roundHalf(x: bigint, g: bigint): bigint {{
+  const a = x < 0n ? -x : x;
+  const v = 2n * (a % g) >= g ? (a / g + 1n) * g : (a / g) * g;
+  return x < 0n ? -v : v;
+}}
+
+/** {bankers} */
+function _roundBankers(x: bigint, g: bigint): bigint {{
+  const a = x < 0n ? -x : x;
+  let q = a / g;
+  const r = a % g;
+  if (2n * r > g || (2n * r === g && q % 2n === 1n)) {{
+    q += 1n;
+  }}
+  const v = q * g;
+  return x < 0n ? -v : v;
+}}
+"#,
+        down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen → -4 yen."),
+        up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen → -5 yen."),
+        half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
+        bankers = tr!("半分ちょうどは偶数へ。", "An exact half goes to the even neighbor."),
+    )
+}
+
+/// Which language a shared emitter is writing for. `guards` is the one body three languages
+/// share, and it used to tell Python from Go by whether the indent was a tab — which quietly
+/// handed TypeScript the Python spelling.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Lang {
+    Py,
+    Go,
+    Ts,
+}
+
+impl<'a> Gen<'a> {
+    /// The TypeScript type for a value. Numbers are branded `bigint`s: a brand costs nothing
+    /// at runtime and still refuses `YenInclTax` where `YenExclTax` was meant.
+    fn ts_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "string".into()),
+            Ty::Bool => "boolean".into(),
+            Ty::Str => "string".into(),
+            Ty::Number | Ty::Date => "bigint".into(),
+            Ty::Opt(t) => format!("{} | null", self.ts_ty(t)),
+            _ => brand_of(ty),
+        }
+    }
+
+    fn ts_value(&self, v: &str) -> String {
+        match self.value_names.get(v) {
+            Some((ty, alias)) => format!("{ty}.{}", alias.to_uppercase()),
+            None => format!("{v:?}"),
+        }
+    }
+
+    /// Render a cell as a TypeScript condition. A don't-care yields None (no condition).
+    fn ts_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
+        let inner = match ty {
+            Ty::Opt(t) => t.as_ref(),
+            other => other,
+        };
+        let numeric = inner.is_numeric() || matches!(inner, Ty::Date);
+        let lit = |l: &Lit| -> String {
+            match l {
+                Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                Lit::Word(w) => self.ts_value(w),
+                Lit::Num(n) => format!("{}n", self.int_lit(n, inner, col_scale)),
+                Lit::Date(y, m, d) => format!("{}n", crate::types::date_ord(*y, *m, *d).num),
+                Lit::Str(s) => format!("{s:?}"),
+            }
+        };
+        let members = |ls: &Vec<Lit>| -> String {
+            let mut out: Vec<String> = Vec::new();
+            for l in ls {
+                if let Lit::Word(w) = l {
+                    if let Some((_, ms)) = self.c.groups.get(w) {
+                        out.extend(ms.iter().map(|m| self.ts_value(m)));
+                        continue;
+                    }
+                }
+                out.push(lit(l));
+            }
+            format!("[{}]", out.join(", "))
+        };
+        // `===` on a bigint and on a string are both value comparisons, so one spelling does
+        // for every type here.
+        Some(match cell {
+            Cell::DontCare => return None,
+            Cell::Nothing => format!("{var} === null"),
+            Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
+                format!("_{w}.has({var})")
+            }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
+            Cell::Lit(l) => format!("{var} === {}", lit(l)),
+            Cell::Set(ls) => format!("{}.includes({var})", members(ls)),
+            Cell::Not(ls) => format!("!{}.includes({var})", members(ls)),
+            Cell::Cmp(cs) => cs
+                .iter()
+                .map(|(o, l)| {
+                    let op = match o {
+                        CmpOp::Le => "<=",
+                        CmpOp::Ge => ">=",
+                        CmpOp::Lt => "<",
+                        CmpOp::Gt => ">",
+                    };
+                    let _ = numeric;
+                    format!("{var} {op} {}", lit(l))
+                })
+                .collect::<Vec<_>>()
+                .join(" && "),
+        })
+    }
+
+    pub fn typescript(&self) -> String {
+        let mut o = self.header("//");
+        o.push('\n');
+
+        // Brands. A branded bigint is still a bigint at runtime; the brand exists only for
+        // the type checker, exactly as `NewType` does on the Python side.
+        let mut brands: BTreeMap<String, String> = BTreeMap::new();
+        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+            let ty = self.ty_of(v);
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                brands.insert(brand_of(&ty), format!("{ty}"));
+            }
+        }
+        for (b, doc) in &brands {
+            o.push_str(&format!("export type {b} = bigint & {{ readonly __rulec: \"{b}\" }}; // {doc}\n"));
+        }
+        if !brands.is_empty() {
+            o.push('\n');
+        }
+
+        // The error classes come first: the enum parsers below throw them.
+        o.push_str(&round_ts());
+        o.push('\n');
+
+        // Enums. A frozen object plus a union type, not `enum`: that keeps the file to
+        // erasable syntax, so `node file.ts` runs it with no build step at all.
+        let mut emitted: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if emitted.contains(ascii) {
+                continue;
+            }
+            emitted.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            o.push_str(&format!("export const {ascii} = {{\n"));
+            for v in vals {
+                let name = self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
+                o.push_str(&format!("  {name}: {v:?},\n"));
+            }
+            o.push_str("} as const;\n");
+            o.push_str(&format!(
+                "export type {ascii} = (typeof {ascii})[keyof typeof {ascii}];\n\n"
+            ));
+            o.push_str(&format!(
+                "export function parse{ascii}(s: string): {ascii} {{\n  \
+                 const v = Object.values({ascii}).find((x) => x === s);\n  \
+                 if (v === undefined) {{\n    \
+                 throw new RuleInputError(`{}`);\n  }}\n  \
+                 return v;\n}}\n\n",
+                tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
+            ));
+        }
+
+        for g in &self.f.groups {
+            let ms: Vec<String> = g.members.iter().map(|m| self.ts_value(&m.text)).collect();
+            o.push_str(&format!(
+                "const _{}: ReadonlySet<string> = new Set([{}]);\n",
+                g.name.text,
+                ms.join(", ")
+            ));
+        }
+        if !self.f.groups.is_empty() {
+            o.push('\n');
+        }
+
+        o.push_str(&self.ts_fn());
+        o
+    }
+
+    fn ts_fn(&self) -> String {
+        let fname = pub_name(&self.f.name);
+        let params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
+            .collect();
+        let outs = &self.f.outputs;
+        let ret = if outs.len() == 1 {
+            self.ts_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let mut o = String::new();
+
+        if outs.len() > 1 {
+            o.push_str("export interface Output {\n");
+            for od in outs {
+                o.push_str(&format!(
+                    "  {}: {};\n",
+                    pub_name(&od.name),
+                    self.ts_ty(&self.ty_of(&od.name.text))
+                ));
+            }
+            o.push_str("}\n\n");
+        }
+
+        o.push_str(&tr!(
+            "/** 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。 */\n",
+            "/** Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source. */\n",
+            self.f.name.text,
+            self.f.version
+        ));
+        o.push_str(&format!("export function {fname}({}): {ret} {{\n", params.join(", ")));
+
+        let local = |n: &str| -> String {
+            match self.f.inputs.iter().find(|i| i.name.text == n) {
+                Some(i) => pub_name(&i.name),
+                None => n.to_string(),
+            }
+        };
+        for i in &self.f.inputs {
+            let v = pub_name(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            match &ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    o.push_str(&format!(
+                        "  if (!Object.values({cls}).includes({v})) {{\n    \
+                         throw new RuleInputError(`{}`);\n  }}\n",
+                        tr!(
+                            "{} が列挙 {cls} の値ではありません: ${{{v}}}",
+                            "{} is not a value of enum {cls}: ${{{v}}}",
+                            i.name.text
+                        )
+                    ));
+                }
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                        let sc = self.c.wire_scale(&i.name.text);
+                        o.push_str(&format!(
+                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                            crate::types::wire_int(lo, sc),
+                            crate::types::wire_int(hi, sc),
+                            tr!("{} が範囲の外です: ${{{v}}}", "{} is out of range: ${{{v}}}", i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, &local);
+                    o.push_str(&format!(
+                        "  const {} = {}; // {}\n",
+                        d.name.text,
+                        ts_expr(unparen(&e.text)),
+                        tr!("導出", "derived value")
+                    ));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, &local);
+                    o.push_str(&format!(
+                        "  const {} = {}; // {}\n",
+                        d.name.text,
+                        ts_expr(unparen(&e.text)),
+                        tr!("定義", "definition")
+                    ));
+                }
+                Item::Table(t) => o.push_str(&self.ts_table(t, &local)),
+            }
+        }
+
+        let out_name = &outs[0].name.text;
+        let res = match &self.f.result {
+            Some(r) => self.expr(&r.expr, &local),
+            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+        };
+        let os = self.out_scale(out_name);
+        let cast = |ty: &Ty, body: String| -> String {
+            match ty {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("({body}) as {}", self.ts_ty(ty)),
+                _ => body,
+            }
+        };
+        let ty = self.ty_of(out_name);
+        let text = match &outs[0].rounding {
+            Some(rd) => {
+                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                let grid_i = g.num * res.scale / g.den;
+                if res.scale != os {
+                    o.push_str(&format!(
+                        "  const raw = {}; // {}\n",
+                        ts_expr(unparen(&res.text)),
+                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                    ));
+                    format!("_round{}(raw, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
+                } else {
+                    format!("_round{}({}, {grid_i}n)", pascal(mode_fn(m)), ts_expr(&res.text))
+                }
+            }
+            None => ts_expr(&res.text),
+        };
+        if outs.len() == 1 {
+            o.push_str(&format!("  return {};\n}}\n", cast(&ty, text)));
+        } else {
+            let fields: Vec<String> = outs
+                .iter()
+                .map(|od| {
+                    let n = &od.name.text;
+                    let oty = self.ty_of(n);
+                    let body = match &od.rounding {
+                        Some(rd) => {
+                            let q = crate::types::lit_value_in_pub(&rd.grid, &oty).unwrap_or(Rat::int(1));
+                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                            format!(
+                                "_round{}({}, {}n)",
+                                pascal(mode_fn(m)),
+                                local(n),
+                                q.num * self.scale(n) / q.den
+                            )
+                        }
+                        None => local(n),
+                    };
+                    format!("{}: {}", pub_name(&od.name), cast(&oty, body))
+                })
+                .collect();
+            o.push_str(&format!("  return {{ {} }};\n}}\n", fields.join(", ")));
+        }
+        o
+    }
+
+    fn ts_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+        let mut o = format!("  // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        // `let` up front: a binding made inside a branch does not leave it.
+        for oc in &t.outputs {
+            let ty = self.ty_of(&oc.name.text);
+            let decl = match ty {
+                Ty::Bool => "boolean".to_string(),
+                Ty::Str => "string".to_string(),
+                Ty::Enum(_) => self.ts_ty(&ty),
+                _ => "bigint".to_string(),
+            };
+            o.push_str(&format!("  let {}: {decl};\n", oc.name.text));
+        }
+        for (ri, row) in t.rows.iter().enumerate() {
+            let conds: Vec<String> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, (col, _))| {
+                    let ty = self.ty_of(col);
+                    self.ts_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                })
+                .collect();
+            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            let head = if ri == 0 { "  if" } else { " else if" };
+            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            if ri == 0 {
+                o.push_str(&format!("{head} ({cond}) {{ // {line}\n"));
+            } else {
+                o.push_str(&format!("  }}{head} ({cond}) {{ // {line}\n"));
+            }
+            for (oi, oc) in t.outputs.iter().enumerate() {
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => {
+                        let oty = self.ty_of(&oc.name.text);
+                        format!("{}n", self.int_lit(n, &oty, self.scale(&oc.name.text)))
+                    }
+                    Some(OutCell::Lit(l)) => match l {
+                        Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                        Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                        Lit::Word(w) => self.ts_value(w),
+                        Lit::Date(y, m, d) => format!("{}n", crate::types::date_ord(*y, *m, *d).num),
+                        _ => "0n".into(),
+                    },
+                    Some(OutCell::Name(w)) => {
+                        if w == crate::kw::TRUE {
+                            "true".into()
+                        } else if w == crate::kw::FALSE {
+                            "false".into()
+                        } else if self.value_names.contains_key(w) {
+                            self.ts_value(w)
+                        } else {
+                            ts_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                        }
+                    }
+                    None => "0n".into(),
+                };
+                o.push_str(&format!("    {} = {v};\n", oc.name.text));
+            }
+        }
+        o.push_str(&format!(
+            "  }} else {{\n    throw new Error(\"{}\");\n  }}\n",
+            tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
+        ));
+        o.push_str(&self.guards(t, local, Lang::Ts, "  ", |name, i, j| {
+            format!(
+                "      throw new RuleContradictionError(\"{}\");\n",
+                tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
+            )
+        }));
+        o
+    }
+
+    pub fn ts_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let mut args: Vec<String> = Vec::new();
+        let mut imports: Vec<String> = vec![alias.clone()];
+        // A brand is a type, and node's type stripping can only erase a whole `import type`
+        // statement — a type name mixed into a value import is a syntax error there.
+        let mut type_imports: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            let jp = &i.name.text;
+            args.push(match &ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    if !imports.contains(&format!("parse{cls}")) {
+                        imports.push(format!("parse{cls}"));
+                    }
+                    format!("parse{cls}(String(d[{jp:?}]))")
+                }
+                Ty::Bool => format!("d[{jp:?}] === true"),
+                Ty::Date => format!("_ord(String(d[{jp:?}]))"),
+                Ty::Number => format!("BigInt(d[{jp:?}] as number)"),
+                _ => {
+                    let brand = self.ts_ty(&ty);
+                    if !type_imports.contains(&brand) {
+                        type_imports.push(brand.clone());
+                    }
+                    format!("BigInt(d[{jp:?}] as number) as {brand}")
+                }
+            });
+        }
+        // The wire format of §10.2, written out by hand: `JSON.stringify` refuses a bigint,
+        // and turning one into a `number` first would round it above 2^53.
+        let one = |expr: &str, ty: &Ty| match ty {
+            Ty::Enum(_) | Ty::Str => format!("JSON.stringify({expr})"),
+            Ty::Bool => format!("String({expr})"),
+            _ => format!("String({expr})"),
+        };
+        let fields: Vec<String> = if self.f.outputs.len() == 1 {
+            let od = &self.f.outputs[0];
+            vec![format!(
+                "{} + \":\" + {}",
+                format!("{:?}", format!("{:?}", od.name.text)).replace("\\\"", "\\\""),
+                one("r", &self.ty_of(&od.name.text))
+            )]
+        } else {
+            self.f
+                .outputs
+                .iter()
+                .map(|od| {
+                    format!(
+                        "{} + \":\" + {}",
+                        format!("{:?}", format!("{:?}", od.name.text)).replace("\\\"", "\\\""),
+                        one(&format!("r.{}", pub_name(&od.name)), &self.ty_of(&od.name.text))
+                    )
+                })
+                .collect()
+        };
+        format!(
+            "// Code generated by rulec {}. DO NOT EDIT.\n\
+             import {{ readFileSync }} from \"node:fs\";\n\
+             import {{ {} }} from \"./{alias}.ts\";\n{}\n\
+             function _ord(s: string): bigint {{\n  \
+                 const [y, m, d] = s.split(\"-\").map(Number);\n  \
+                 return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));\n}}\n\n\
+             const lines = readFileSync(0, \"utf8\").split(\"\\n\");\n\
+             for (const line of lines) {{\n  \
+                 if (line.trim() === \"\") {{\n    continue;\n  }}\n  \
+                 const d = JSON.parse(line).in as Record<string, unknown>;\n  \
+                 const r = {alias}({});\n  \
+                 console.log(\"{{\" + [{}].join(\",\") + \"}}\");\n}}\n",
+            env!("CARGO_PKG_VERSION"),
+            imports.join(", "),
+            if type_imports.is_empty() {
+                String::new()
+            } else {
+                format!("import type {{ {} }} from \"./{alias}.ts\";\n", type_imports.join(", "))
+            },
+            args.join(", "),
+            fields.join(", ")
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Unit vectors for the rounding helpers (§8.5)
 // ---------------------------------------------------------------------------
@@ -1717,6 +2310,35 @@ pub fn round_tests_python() -> String {
     o
 }
 
+pub fn round_tests_typescript() -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The four modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    o.push_str(round_ts().trim_start_matches('\n'));
+    o.push_str("\nconst CASES: [string, bigint, bigint, bigint][] = [\n");
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("  [\"{}\", {x}n, {g}n, {want}n],\n", mode_fn(m)));
+    }
+    o.push_str(
+        "];\n\nconst FN: Record<string, (x: bigint, g: bigint) => bigint> = {\n  \
+         down: _roundDown,\n  up: _roundUp,\n  half: _roundHalf,\n  bankers: _roundBankers,\n};\n\n\
+         let bad = 0;\n\
+         for (const [mode, x, g, want] of CASES) {\n  \
+             const got = FN[mode](x, g);\n  \
+             if (got !== want) {\n    \
+                 console.log(`NG ${mode}(${x}, ${g}) = ${got}, want ${want}`);\n    \
+                 bad += 1;\n  }\n}\n\
+         if (bad > 0) {\n  process.exit(1);\n}\n",
+    );
+    o.push_str(&format!("console.log(`{}`);\n", tr!("ok ${{CASES.length}} 件", "ok ${{CASES.length}} cases")));
+    o
+}
+
 pub fn round_tests_go(pkg: &str) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -1744,9 +2366,6 @@ pub fn round_tests_go(pkg: &str) -> String {
     align(&o)
 }
 
-fn go_comment_ok(indent: &str) -> bool {
-    indent.starts_with('\t')
-}
 
 // ── The API inventory (`rulec api`) ──────────────────────────────────────
 //
@@ -1902,6 +2521,54 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
+        // --- TypeScript
+        let ts_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &self.ts_ty(&ty), &ty)
+            })
+            .collect();
+        let ts_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.ts_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let ts_ret = if outs.len() == 1 {
+            self.ts_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let ts_sig = format!(
+            "export function {alias}({}): {ts_ret}",
+            self.f
+                .inputs
+                .iter()
+                .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let typescript = crate::json::Obj::new()
+            .str("module", &format!("{alias}.ts"))
+            .str("function", &alias)
+            .str("signature", &ts_sig)
+            .raw("params", crate::json::arr(&ts_in))
+            .str("returns", &ts_ret)
+            .raw("outputs", crate::json::arr(&ts_outs))
+            // A TypeScript enum member is the alias in upper case on a frozen object
+            // (`CouponKind.PERCENT`), the same spelling Python uses.
+            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .finish();
+
         // --- Go
         let go_in: Vec<String> = self
             .f
@@ -1953,6 +2620,7 @@ impl Gen<'_> {
             .str("version", &self.f.version)
             .str("source_sha256", &self.src_hash)
             .raw("python", python)
+            .raw("typescript", typescript)
             .raw("go", go)
             .finish()
     }

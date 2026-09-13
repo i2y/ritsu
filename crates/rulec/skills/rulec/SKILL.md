@@ -26,7 +26,7 @@ Bundled with this skill, read on demand — do not read them all up front:
 | [reference.md](reference.md) | the complete grammar |
 | [examples.md](examples.md) | ten complete rules, smallest first, each with what it demonstrates |
 | [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
-| [generated-code.md](generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
+| [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 
 Every diagnostic is `rulec explain <CODE>`, which is always current, so there is no bundled
 copy of the ledger.
@@ -37,7 +37,7 @@ copy of the ledger.
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python and Go.
+anyone runs it, and turned into ordinary Python, TypeScript and Go.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the
@@ -299,6 +299,6 @@ by the person who can overrule it.
 | [reference.md](reference.md) | the complete grammar |
 | [examples.md](examples.md) | ten complete rules that all pass `check`, generate, and agree across three implementations |
 | [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
-| [generated-code.md](generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
+| [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | `rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
 | <https://github.com/i2y/rulec> | the source, the design document, and the tour written for a person |

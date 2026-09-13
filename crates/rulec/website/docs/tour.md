@@ -71,7 +71,7 @@ examples
 ## Names and ASCII aliases
 
 What is in the parentheses is the **ASCII alias**, and it becomes the
-public name in the generated Python and Go — a kanji cannot be an
+public name in the generated code — a kanji cannot be an
 exported Go identifier.
 
 ```

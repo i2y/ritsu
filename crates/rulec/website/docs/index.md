@@ -17,7 +17,7 @@ hide:
 A business rule — a shipping tariff, a coupon policy, an eligibility
 test — written as one table a domain expert can read. rulec proves the
 table has no gaps, no contradictions and no dead rows, and then
-generates ordinary Python and Go with no runtime to install.
+generates ordinary Python, TypeScript and Go with no runtime to install.
 <strong>The proof happens before the code exists</strong>: a rule that
 cannot be proved does not generate.
 </p>
@@ -88,7 +88,7 @@ it. It has four sides.
 |---|---|
 | **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
 | **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
-| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python and Go that nobody edits by hand |
+| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go that nobody edits by hand |
 | **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
 The agent's own instructions are in [For agents](agents.md), and the
@@ -288,9 +288,9 @@ makes it or takes it. Every arrow runs card → sheet or sheet → card, so
 **who produces what, and who consumes it** is the geometry itself rather
 than a caption.
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved Python and Go, and the impact known before you deploy](images/flow.svg#only-dark)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow.svg#only-dark)
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved Python and Go, and the impact known before you deploy](images/flow-light.svg#only-light)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow-light.svg#only-light)
 
 Three colours, three paths: **grey** for what enters and leaves the whole
 system, **indigo** for the loop between the agent and rulec, **amber** for

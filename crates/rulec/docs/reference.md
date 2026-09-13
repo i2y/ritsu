@@ -60,7 +60,7 @@ Latin letters are all identifier characters; `-` never is (it is always an opera
 don't-care cell). Anything else at the start of a name is E002.
 
 **ASCII aliases** are written in parentheses after the name: `届け先(dest)`. They become the
-public names of the generated Python and Go. An alias is **required** on
+public names of the generated code. An alias is **required** on
 
 - the rule name,
 - every input and every output,

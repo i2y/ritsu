@@ -32,9 +32,10 @@ Nothing, for the checks. `rulec check`, `fmt`, `gen`, `vectors`,
 
 Two steps reach outside:
 
-- **`rulec test`** runs the generated Python and Go and compares them
-  with the reference evaluator. It needs a `python3` and a `go` on the
-  path; without them it says which side it skipped and does not fail.
+- **`rulec test`** runs the generated Python, TypeScript and Go and
+  compares them with the reference evaluator. It needs `python3`, `node`
+  and `go` on the path; without one it says which side it skipped and
+  does not fail.
 - **`rulec verify`** starts your adapter as a child process, so it needs
   whatever that adapter is written in.
 

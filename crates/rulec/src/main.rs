@@ -1059,6 +1059,8 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         let targets = [
             (format!("{out_dir}/python/{alias}.py"), g.python()),
             (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
+            (format!("{out_dir}/typescript/{alias}.ts"), g.typescript()),
+            (format!("{out_dir}/typescript/{alias}_runner.ts"), g.ts_runner()),
             (format!("{out_dir}/go/{pkg}/{alias}.go"), g.go()),
             (format!("{out_dir}/go/{pkg}/go.mod"), format!("module {pkg}\n\ngo 1.25\n")),
             (format!("{out_dir}/go/{pkg}runner/main.go"), g.go_runner()),
@@ -1071,6 +1073,7 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             // Unit vectors for the rounding helpers (§8.5). They catch errors that table
             // agreement alone would hide.
             (format!("{out_dir}/python/_round_test.py"), rulec::codegen::round_tests_python()),
+            (format!("{out_dir}/typescript/_round_test.ts"), rulec::codegen::round_tests_typescript()),
             (format!("{out_dir}/go/{pkg}/round_test.go"), rulec::codegen::round_tests_go(&pkg)),
         ];
         for (p, body) in targets {
