@@ -41,7 +41,7 @@ impl std::fmt::Display for Ty {
 }
 
 impl Ty {
-    fn is_numeric(&self) -> bool {
+    pub fn is_numeric(&self) -> bool {
         matches!(self, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate)
     }
     /// Do two types describe the same quantity? Money literals carry no tax brand,
@@ -511,6 +511,24 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .mark(e.name.span.clone(), "")
                     .note(tr!("現れない値: {}", "Values that never appear: {}", names.join(" / ")))
                     .note(tr!("完全性検査は通っていても、その値に当たる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
+            );
+        }
+    }
+    // A table's output column may introduce a name of its own. Nothing downstream reading it
+    // means the column computes a value that never leaves the table — and Go will not compile
+    // a local that is never read, so this has to be said here rather than discovered there.
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        for oc in &t.outputs {
+            let n = &oc.name.text;
+            if c.used.contains(n) || f.outputs.iter().any(|o| o.name.text == *n) {
+                continue;
+            }
+            c.diags.push(
+                Diag::warning("W111", tr!("表の列 {n} はどこでも使われていません", "Table column {n} is never used"))
+                    .at(at(oc.name.span.line))
+                    .mark(oc.name.span.clone(), tr!("この列の値は表から出ていきません", "this column's value never leaves the table"))
+                    .note(tr!("規則の出力にするか、後ろの表か `result` で使うか、消してください。", "Make it an output of the rule, use it in a later table or in `result`, or remove it.")),
             );
         }
     }

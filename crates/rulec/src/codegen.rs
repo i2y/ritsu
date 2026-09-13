@@ -849,6 +849,24 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// Go's zero value for a return type, for the early return of a guard. `return 0` does
+    /// not compile when the rule answers with a boolean or a string.
+    fn go_zero(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Bool => "false".into(),
+            Ty::Str => "\"\"".into(),
+            Ty::Opt(_) => "nil".into(),
+            _ => "0".into(),
+        }
+    }
+
+    /// Whether anything downstream reads a table's output column. A column nothing reads is
+    /// still assigned, so that the branch and the row stay 1:1 (§8.2), but Go refuses to
+    /// compile a local that is never read. W111 reports the column itself.
+    fn is_read(&self, name: &str) -> bool {
+        self.c.used.contains(name) || self.f.outputs.iter().any(|o| o.name.text == name)
+    }
+
     fn go_ty(&self, ty: &Ty) -> String {
         match ty {
             Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "string".into()),
@@ -1037,7 +1055,11 @@ impl<'a> Gen<'a> {
             o.push_str("}\n\n");
             "Output".into()
         };
-        let zero = if outs.len() == 1 { "0".to_string() } else { "Output{}".to_string() };
+        let zero = if outs.len() == 1 {
+            self.go_zero(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output{}".to_string()
+        };
 
         // Go's defined types cannot be mixed in arithmetic. Brands are enforced on the public
         // surface (Input and the return value) while internal arithmetic runs on plain int64 (the
@@ -1125,6 +1147,8 @@ impl<'a> Gen<'a> {
                     format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i)
                 }
             }
+            // Only a number needs the widening cast; `int64(可否)` does not compile.
+            None if !self.ty_of(out_name).is_numeric() => go_expr(&res.text),
             None => format!("int64({})", go_expr(&res.text)),
         };
         if outs.len() == 1 {
@@ -1223,10 +1247,22 @@ impl<'a> Gen<'a> {
             "\t}} else {{\n\t\tpanic(\"{}\")\n\t}}\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
+        // A column nothing downstream reads is still assigned above, so that the branch and
+        // the row stay 1:1. Go will not compile a local that is never read, so say out loud
+        // that it is on purpose. W111 has already named the column.
+        for oc in &t.outputs {
+            if !self.is_read(&oc.name.text) {
+                o.push_str(&format!("\t_ = {}\n", oc.name.text));
+            }
+        }
         o.push_str(&self.guards(t, local, "\t", |name, i, j| {
             format!(
                 "\t\treturn {}, fmt.Errorf(\"{}\")\n",
-                if self.f.outputs.len() == 1 { "0" } else { "Output{}" },
+                if self.f.outputs.len() == 1 {
+                    self.go_zero(&self.ty_of(&self.f.outputs[0].name.text))
+                } else {
+                    "Output{}".into()
+                },
                 tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
             )
         }));
