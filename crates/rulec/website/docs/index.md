@@ -15,7 +15,7 @@ hide:
 
 <p class="rc-hero__lede">
 <strong>A harness for an agent turning table-shaped business rules into
-code</strong> — a workbench, and a safety rail.
+code</strong>.
 </p>
 
 <p class="rc-hero__lede">
@@ -58,8 +58,7 @@ already in one.
 Today that rule is in a spreadsheet, a published policy, a wiki page, or somebody's head, and
 an engineer rewrites it as a chain of `if`s. That is the normal way it goes.
 
-rulec is **a harness for handing that rewrite to an AI agent** — a workbench, with guards on
-it. It has four sides.
+rulec is **a harness for handing that rewrite to an AI agent**. It has four sides.
 
 | | |
 |---|---|
