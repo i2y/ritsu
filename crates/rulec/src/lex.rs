@@ -32,9 +32,10 @@ pub enum Kind {
     RParen,
     LBracket,
     RBracket,
+    /// `,` — the set separator in a cell (§3, third unary test), and the separator of
+    /// type attributes and call arguments elsewhere. `・` `、` `，` are read as the same
+    /// token; `rulec fmt` writes `,`.
     Comma,
-    /// `・` — set separator (§3, third unary test).
-    Sep,
     Le,
     Ge,
     Lt,
@@ -101,6 +102,8 @@ fn is_delim(c: char) -> bool {
                 | '＞'
                 | '.'
                 | '?'
+                | '、'
+                | '，'
         )
 }
 
@@ -144,6 +147,13 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             i += 2;
             continue;
         }
+        // `->` marks the first output column (§5.1). `→` is read as the same token and
+        // `rulec fmt` writes `->`.
+        if text[i..].starts_with("->") {
+            push(Kind::Arrow, 2, &mut out);
+            i += 2;
+            continue;
+        }
         if text[i..].starts_with("..") {
             let mut n = 2;
             while text[i + n..].starts_with('.') {
@@ -163,8 +173,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             ')' => Some(Kind::RParen),
             '[' => Some(Kind::LBracket),
             ']' => Some(Kind::RBracket),
-            ',' | '、' => Some(Kind::Comma),
-            '・' => Some(Kind::Sep),
+            ',' | '、' | '，' | '・' => Some(Kind::Comma),
             '?' | '？' => Some(Kind::Question),
             '<' | '＜' => Some(Kind::Lt),
             '>' | '＞' => Some(Kind::Gt),

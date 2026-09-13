@@ -18,7 +18,7 @@ awk '/\| S80 /  { sub(/S80/, "   ") } { print }'                       "$y" > "$
 awk '/あて先\(dest\)/ { sub(/\(dest\)/, "      ") } { print }'          "$y" > "$M/m_e011.rule"
 
 # --- Table checks
-awk '{ sub(/ ・ 山梨県/, ""); print }'                                 "$y" > "$M/m_e101.rule"
+awk '{ sub(/, 山梨県/, ""); print }'                                 "$y" > "$M/m_e101.rule"
 awk '{ print } /^\| *- *\| *S170 /{ print "| <=60cm | S60 |" }'        "$y" > "$M/m_e102.rule"
 awk '/<=60cm/ { sub(/<=60cm/, "<=1200円") } { print }'                 "$y" > "$M/m_e103.rule"
 awk '/運賃\(fee\)/ { sub(/  round up\(10円\)/, "") } { print }'    "$y" > "$M/m_e104.rule"

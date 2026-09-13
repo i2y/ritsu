@@ -42,7 +42,7 @@ fn groups_rule(g1: &str, g2: &str) -> String {
         "rule t(t) v1\n\nenum 色(color) = 赤(r) | 青(b) | 緑(g)\n\
          group 暖色(warm) = {g1}\ngroup 寒色(cool) = {g2}\n\n\
          inputs\n  c(c) : 色\n  b(b) : bool\n\noutputs\n  r(r) : bool\n\n\
-         table x(x)\npolicy first\n| c | b | → r(r) : bool |\n\
+         table x(x)\npolicy first\n| c | b | -> r(r) : bool |\n\
          | 暖色 | true | true |\n| 寒色 | true | false |\n| - | - | false |\n"
     )
 }
@@ -63,11 +63,11 @@ fn doc_of(src: &str, name: &str) -> String {
 #[test]
 fn 群の被覆は事実のとおりに言う() {
     // A partition.
-    let d = doc_of(&groups_rule("赤", "青 ・ 緑"), "part");
+    let d = doc_of(&groups_rule("赤", "青, 緑"), "part");
     assert!(d.contains("この 2 群は 色 の 3 値を過不足なく分割しています"), "{d}");
 
     // Covers, but overlaps. It must not say "partition".
-    let d = doc_of(&groups_rule("赤 ・ 緑", "青 ・ 緑"), "dup");
+    let d = doc_of(&groups_rule("赤, 緑", "青, 緑"), "dup");
     assert!(!d.contains("過不足なく分割"), "重なっているのに分割だと言っている:\n{d}");
     assert!(d.contains("すべて覆いますが、緑 が二つ以上の群に属します"), "{d}");
 

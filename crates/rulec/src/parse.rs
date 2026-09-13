@@ -243,7 +243,7 @@ impl P {
         k += 1;
         let mut members = Vec::new();
         while k < line.len() {
-            if line[k].is(&Kind::Sep) {
+            if line[k].is(&Kind::Comma) {
                 k += 1;
                 continue;
             }
@@ -607,7 +607,7 @@ impl P {
             }
             return Some(Cell::Cmp(v));
         }
-        if ts.iter().any(|t| t.is(&Kind::Sep)) {
+        if ts.iter().any(|t| t.is(&Kind::Comma)) {
             return Some(Cell::Set(lits(ts)));
         }
         lit_of(&ts[0]).map(Cell::Lit)
@@ -704,7 +704,7 @@ fn lit_of(t: &Token) -> Option<Lit> {
 }
 
 fn lits(ts: &[Token]) -> Vec<Lit> {
-    ts.iter().filter(|t| !t.is(&Kind::Sep)).filter_map(lit_of).collect()
+    ts.iter().filter(|t| !t.is(&Kind::Comma)).filter_map(lit_of).collect()
 }
 
 /// Cells of a `|`-delimited row, without the bars. An empty cell keeps the gap

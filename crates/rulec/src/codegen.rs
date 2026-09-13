@@ -767,8 +767,8 @@ fn cell_src(c: &Cell) -> String {
         Cell::DontCare => "-".into(),
         Cell::Nothing => crate::kw::NONE.into(),
         Cell::Lit(l) => lit_src(l),
-        Cell::Set(ls) => ls.iter().map(lit_src).collect::<Vec<_>>().join(" ・ "),
-        Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit_src).collect::<Vec<_>>().join(" ・ ")),
+        Cell::Set(ls) => ls.iter().map(lit_src).collect::<Vec<_>>().join(", "),
+        Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit_src).collect::<Vec<_>>().join(", ")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {

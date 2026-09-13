@@ -144,9 +144,9 @@ pub enum Cell {
     /// `-`
     DontCare,
     Lit(Lit),
-    /// `北海道 ・ 沖縄`
+    /// `北海道, 沖縄`
     Set(Vec<Lit>),
-    /// `not: 北海道 ・ 沖縄`
+    /// `not: 北海道, 沖縄`
     Not(Vec<Lit>),
     /// `<=2000g` or `>=1000円 <20000円`
     Cmp(Vec<(CmpOp, Lit)>),

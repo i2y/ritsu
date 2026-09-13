@@ -7,20 +7,36 @@
 
 use crate::diag::width;
 
-/// Normalizes full-width digits and full-width comparison signs. String literals are left alone.
+/// Normalizes the spellings that need an IME or a full-width keyboard: full-width digits,
+/// `≦ ≧ ＜ ＞ ＋`, the output marker `→` (written `->`), and the set separators `・ 、 ，`
+/// (written `, `). String literals and `#` comments are left alone.
 fn normalize(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut in_str = false;
-    for c in line.chars() {
-        if c == '"' {
-            in_str = !in_str;
-            out.push(c);
-            continue;
-        }
+    let mut skip_ws = false;
+    for (i, c) in line.char_indices() {
         if in_str {
             out.push(c);
+            if c == '"' {
+                in_str = false;
+            }
             continue;
         }
+        if c == '"' {
+            in_str = true;
+            skip_ws = false;
+            out.push(c);
+            continue;
+        }
+        if c == '#' {
+            // A comment keeps its prose arrows and punctuation as written.
+            out.push_str(&line[i..]);
+            break;
+        }
+        if skip_ws && c.is_whitespace() {
+            continue;
+        }
+        skip_ws = false;
         match c {
             '０'..='９' => out.push((b'0' + (c as u32 - '０' as u32) as u8) as char),
             '≦' => out.push_str("<="),
@@ -29,6 +45,13 @@ fn normalize(line: &str) -> String {
             '＞' => out.push('>'),
             '＋' => out.push('+'),
             '　' => out.push(' '),
+            '→' => out.push_str("->"),
+            '・' | '、' | '，' => {
+                let kept = out.trim_end().len();
+                out.truncate(kept);
+                out.push_str(", ");
+                skip_ws = true;
+            }
             _ => out.push(c),
         }
     }
@@ -83,7 +106,7 @@ pub fn format(src: &str) -> String {
                 (cells(&body), com)
             })
             .collect();
-        // §5.1: `→` marks the boundary between inputs and outputs once. Marks written on the
+        // §5.1: `->` marks the boundary between inputs and outputs once. Marks written on the
         // second column onward are accepted, then folded into the canonical form. The parser
         // reads the extra marks too, so this is the formatter's job: "either form is accepted,
         // but saving yields one form".
@@ -91,9 +114,9 @@ pub fn format(src: &str) -> String {
         if let Some((head, _)) = block.first_mut() {
             let mut seen = false;
             for c in head.iter_mut() {
-                let is_arrow = c.starts_with('→');
+                let is_arrow = c.starts_with("->");
                 if is_arrow && seen {
-                    *c = c.trim_start_matches('→').trim_start().to_string();
+                    *c = c.trim_start_matches("->").trim_start().to_string();
                 }
                 seen |= is_arrow;
             }

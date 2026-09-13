@@ -1,10 +1,10 @@
 warning[W114]: Unconfirmed overlap: an input may match both row 1 and row 2
   --> tests/corpus/クーポン併用.rule:25 table 適用判定
    |
-24 | | <=1000円 | -        | 対象外                     |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
-25 | | -        | >=3980円 | 対象                       |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+24 | | <=1000円 | -        | 対象外                      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+25 | | -        | >=3980円 | 対象                        |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
    |
  Overlapping condition: 残高A <= 1000円 and 残高B >= 3980円
  Because the derived values (残高A, 残高B) share inputs, the check could not decide whether an order satisfying this condition exists.

@@ -1,7 +1,7 @@
 error[E106]: `1451円` is not on the rounding grid
   --> tests/mutants/m_e106.rule:39 table 運賃表
    |
-39 | | 都内       | S100   | 1451円                            |
+39 | | 都内       | S100   | 1451円                             |
    |                         ^^^^^^
    |
  The rounding of output 運賃 is up(10円).
@@ -11,7 +11,7 @@ error[E106]: `1451円` is not on the rounding grid
 error[E106]: `1451円` is not on the rounding grid
   --> tests/mutants/m_e106.rule:72 table 運賃表
    |
-72 | | 沖縄       | S60    | 1451円                            |
+72 | | 沖縄       | S60    | 1451円                             |
    |                         ^^^^^^
    |
  The rounding of output 運賃 is up(10円).

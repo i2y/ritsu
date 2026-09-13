@@ -617,8 +617,8 @@ fn cell_key(c: &Cell) -> String {
         Cell::DontCare => "-".into(),
         Cell::Nothing => crate::kw::NONE.into(),
         Cell::Lit(l) => lit(l),
-        Cell::Set(ls) => ls.iter().map(lit).collect::<Vec<_>>().join("・"),
-        Cell::Not(ls) => format!("{}:{}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join("・")),
+        Cell::Set(ls) => ls.iter().map(lit).collect::<Vec<_>>().join(","),
+        Cell::Not(ls) => format!("{}:{}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join(",")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {

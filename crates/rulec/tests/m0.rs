@@ -152,7 +152,7 @@ fn 構文側の台帳も全部鳴る() {
         ("E003", "description \"規則で始まらない\"\n", "rule の行で始まらない"),
         ("E005", "rule 試し(t) v1\n知らない語 x\n", "この位置で知らない語"),
         ("E006", "rule 試し(t) v1\nenum 区分(k) 甲(a)\n", "宣言に = がない"),
-        ("E007", "rule 試し(t) v1\n\ntable t(t)\npolicy なんとか\n| x | → r(r) : bool |\n| - | true |\n", "知らない方式"),
+        ("E007", "rule 試し(t) v1\n\ntable t(t)\npolicy なんとか\n| x | -> r(r) : bool |\n| - | true |\n", "知らない方式"),
         ("E012", &format!("{HEAD}result r = 知らない名前\n"), "宣言されていない名前"),
         ("E013", "rule 試し(t) v1\nimport std/ありません\n", "取込先が無い"),
         ("E004", "rule 試し(t) v1\n= 語で始まらない\n", "行頭に語がない"),
@@ -169,7 +169,7 @@ fn 重なりのない上からは一意を勧める() {
     // W110: if the order carries no meaning, `unique` can guarantee that reordering does not
     // change the meaning.
     let src = format!(
-        "{HEAD}table t(t)\npolicy first\n| x  | → r(r) : bool |\n| true | true |\n| false | false |\n"
+        "{HEAD}table t(t)\npolicy first\n| x  | -> r(r) : bool |\n| true | true |\n| false | false |\n"
     );
     assert!(inline(&src).iter().any(|c| c == "W110"), "{:?}", inline(&src));
 }
@@ -253,7 +253,7 @@ fn 刻み隣接の空座標は三つの型で作られない() {
     // yen).
     let money = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円\n\n\
                  outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
-                 | a        | → r(r) : bool |\n| <=1000円 | true |\n| >=1001円 | false |\n";
+                 | a        | -> r(r) : bool |\n| <=1000円 | true |\n| >=1001円 | false |\n";
     let ds = rulec::check_source(money, "money.rule");
     assert!(
         !ds.iter().any(|d| d.code == "E101"),
@@ -264,7 +264,7 @@ fn 刻み隣接の空座標は三つの型で作られない() {
     // Rate: with a step of 1%, <=10% and >=11% are adjacent.
     let rate = "rule t(t) v1\n\ninputs\n  a(a) : rate[step 1%]  range >=0% <=100%\n\n\
                 outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
-                | a      | → r(r) : bool |\n| <=10%  | true |\n| >=11%  | false |\n";
+                | a      | -> r(r) : bool |\n| <=10%  | true |\n| >=11%  | false |\n";
     let ds = rulec::check_source(rate, "rate.rule");
     assert!(
         !ds.iter().any(|d| d.code == "E101"),
@@ -288,7 +288,7 @@ fn 定義が絡む実在の重なりは入力を構成して示す() {
     // real contradiction (E105).
     let src = "rule t(t) v1\n\ninputs\n  金額(a) : money[円, incl_tax]  range >=0円 <=10000円\n  区分(b) : bool\n\n\
                outputs\n  r(r) : bool\n\ndefine 大口(bulk) : bool = 金額 >= 3000円\n\n\
-               table x(x)\npolicy unique\n| 大口 | 区分 | → r(r) : bool |\n\
+               table x(x)\npolicy unique\n| 大口 | 区分 | -> r(r) : bool |\n\
                | true   | -    | true |\n| -    | true   | false |\n| false   | false   | false |\n";
     let ds = rulec::check_source(src, "d.rule");
     let e105 = ds.iter().find(|d| d.code == "E105").expect("実在する重なりなので E105");
@@ -315,7 +315,7 @@ fn 定義が矛盾する重なりは番人へ降ろす() {
     let src = "rule t(t) v1\n\ninputs\n  金額(a) : money[円, incl_tax]  range >=0円 <=10万円\n\n\
                outputs\n  r(r) : bool\n\n\
                define 大口(bulk) : bool = 金額 >= 3万円\ndefine 小口(small) : bool = 金額 <= 1000円\n\n\
-               table x(x)\npolicy unique\n| 大口 | 小口 | → r(r) : bool |\n\
+               table x(x)\npolicy unique\n| 大口 | 小口 | -> r(r) : bool |\n\
                | true   | -    | true |\n| -    | true   | false |\n| false   | false   | false |\n";
     let ds = rulec::check_source(src, "d.rule");
     assert!(
@@ -388,7 +388,7 @@ fn 解析できない型の列は黙って飛ばさない() {
     // neither the completeness nor the duplication of that table checked. Having stepped on this
     // twice, with dates and with optional, we stop with E110 as a general breakwater (§6.3).
     let src = "rule t(t) v1\n\ninputs\n  s(s) : string\n\noutputs\n  r(r) : bool\n\n\
-               table x(x)\npolicy unique\n| s | → r(r) : bool |\n| \"a\" | true |\n";
+               table x(x)\npolicy unique\n| s | -> r(r) : bool |\n| \"a\" | true |\n";
     let ds = rulec::check_source(src, "s.rule");
     assert!(ds.iter().any(|d| d.code == "E110"), "解析できない列は E110: {:?}",
             ds.iter().map(|d| d.code).collect::<Vec<_>>());
@@ -400,9 +400,9 @@ fn optionalの列も検査される() {
     let base = "rule t(t) v1\n\nenum 区分(k) = 甲(a) | 乙(b)\n\n\
                 inputs\n  金額(amt) : money[円, incl_tax]  range >=0円 <=100万円\n  任意値(opt) : 区分?\n\n\
                 outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
-                | 金額      | 任意値   | → r(r) : bool |\n\
+                | 金額      | 任意値   | -> r(r) : bool |\n\
                 | <1000円   | none     | true |\n\
-                | <1000円   | 甲 ・ 乙 | false |\n\
+                | <1000円   | 甲, 乙 | false |\n\
                 | >=1000円  | -        | false |\n";
     let ds = rulec::check_source(base, "o.rule");
     assert!(!rulec::has_error(&ds), "完全な表は通る: {:?}",

@@ -97,11 +97,34 @@ fn fmt_は冪等で_check_は直すべきものを言う() {
 
 #[test]
 fn fmt_は全角の比較記号と数字を正規化する() {
-    let src = "rule 試し(t) v1\n\ntable x(x)\npolicy first\n| ａ | → ｂ(b) : bool |\n| ≦１０ | true |\n";
+    let src = "rule 試し(t) v1\n\ntable x(x)\npolicy first\n| ａ | -> ｂ(b) : bool |\n| ≦１０ | true |\n";
     let got = rulec::fmt::format(src);
     assert!(got.contains("<=10"), "≦１０ が <=10 にならない: {got}");
     assert!(!got.contains('≦'));
     assert!(!got.contains('１'));
+}
+
+/// §1.5: the two symbols that used to need an IME. `→` and `・`/`、` are still read, and
+/// `fmt` writes the ASCII forms `->` and `,`; a file written in ASCII from the start
+/// checks clean.
+#[test]
+fn fmt_は矢印と集合区切りをasciiに正準化する() {
+    let ime = "rule t(t) v1\n\nenum 色(c) = 赤(r) | 青(b) | 緑(g) | 黄(y)\n\ninputs\n  色(color) : 色\n\noutputs\n  r(r) : bool\n\n\
+               table x(x)\npolicy unique\n| 色 | → r(r) : bool |\n| 赤 ・ 青 | true |\n| 緑、黄 | false |\n";
+    let got = rulec::fmt::format(ime);
+    assert!(got.contains("| -> r(r) : bool |"), "→ が -> にならない: {got}");
+    assert!(got.contains("| 赤, 青 "), "・ が , にならない: {got}");
+    assert!(got.contains("| 緑, 黄 "), "、 が , にならない: {got}");
+    assert!(!got.contains('→') && !got.contains('・') && !got.contains('、'), "{got}");
+    assert_eq!(rulec::fmt::format(&got), got, "fmt が冪等でない");
+    // Both spellings parse to the same rule: no diagnostics in either, and the ASCII one
+    // is what the corpus is written in.
+    let ascii = got.clone();
+    assert!(!rulec::has_error(&rulec::check_source(ime, "ime.rule")));
+    assert!(!rulec::has_error(&rulec::check_source(&ascii, "ascii.rule")));
+    // A comment keeps its prose arrow; the normalization stops at `#`.
+    let commented = "rule t(t) v1  # 行1→行2 ・ そのまま\n";
+    assert_eq!(rulec::fmt::format(commented), commented, "コメントの中を触っている");
 }
 
 fn run_in(dir: &std::path::Path, args: &[&str]) -> (i32, String) {
@@ -128,7 +151,7 @@ enum 判定(v) = 甲(a) | 乙(b) | 丙(c) default\n\n\
 inputs\n  x(x) : bool\n  y(y) : bool\n\n\
 outputs\n  判定結果(r) : 判定\n\n\
 table t(t)\npolicy first\n\
-| x  | y  | → 判定結果(r) : 判定 |\n\
+| x  | y  | -> 判定結果(r) : 判定 |\n\
 | true | -  | 甲              |\n\
 | -  | true | 乙              |\n\
 | -  | -  | 甲              |\n";

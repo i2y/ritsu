@@ -1,7 +1,7 @@
 error[E010]: `..` is not allowed
   --> tests/mutants/m_e010.rule:26 table サイズ判定
    |
-26 | | ..60cm   | S60                         |
+26 | | ..60cm   | S60                          |
    |   ^^
    |
  It is unclear whether `<=2000g` or `>2000g` is meant (§3.1). Use a comparison operator instead

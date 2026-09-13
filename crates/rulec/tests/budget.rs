@@ -34,7 +34,7 @@ fn synth(enum_cols: usize, num_cols: usize, rows: usize) -> String {
     for i in 0..num_cols {
         s.push_str(&format!(" n{i} |"));
     }
-    s.push_str(" → 結果(r) : 区分 |\n");
+    s.push_str(" -> 結果(r) : 区分 |\n");
 
     for r in 0..rows.saturating_sub(1) {
         s.push('|');

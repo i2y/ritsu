@@ -1,8 +1,8 @@
 error[E107]: Example does not hold: 運賃 should be 2170円 but came out as 2160円
   --> tests/mutants/m_e107.rule:83 examples
    |
-83 | | 沖縄県 | 100cm    | 3kg  | 2170円 |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+83 | | 沖縄県 | 100cm    | 3kg  | 2170円  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
  Fired rows: table サイズ判定 row 3 / table 運賃表 row 38
  Examples are executable specification. Fix the table, or fix the example if the example is what is wrong.

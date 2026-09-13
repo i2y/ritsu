@@ -61,7 +61,7 @@ fn source_cells(lines: &[&str], line: usize) -> Vec<String> {
 fn header_line(lines: &[&str], from: usize) -> Option<usize> {
     (from..=lines.len()).find(|&n| {
         let l = lines.get(n - 1).map(|s| s.trim()).unwrap_or("");
-        l.starts_with('|') && l.contains('→')
+        l.starts_with('|') && (l.contains("->") || l.contains('→'))
     })
 }
 
@@ -412,7 +412,10 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     if let Some(ex) = &f.examples {
         o.push_str(&tr!("\n## 例（検証済み）\n\n", "\n## Examples (verified)\n\n"));
         if let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) {
-            o.push_str(&md_table(&source_cells(&lines, h), &ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect::<Vec<_>>(), false));
+            // The source spells the output marker `->`; the rendering shows it as `→`, like
+            // every other arrow in this document.
+            let head: Vec<String> = source_cells(&lines, h).into_iter().map(|c| c.replacen("->", "→", 1)).collect();
+            o.push_str(&md_table(&head, &ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect::<Vec<_>>(), false));
         }
         o.push_str(&tr!(
             "\nこの {} 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。\n",
