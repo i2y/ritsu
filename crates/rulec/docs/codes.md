@@ -37,9 +37,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W111](#w111) | warning | A declaration is never used |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 
-## E001 — error
+## E001
 
-**Unterminated string**
+`error` — **Unterminated string**
 
 **When.** A string opened with `"` is not closed on the same line. Neither a cell nor a `description` may contain a line break.
 
@@ -54,9 +54,9 @@ description "unterminated
 
 Related codes: [E002](#e002)
 
-## E002 — error
+## E002
 
-**Unreadable character**
+`error` — **Unreadable character**
 
 **When.** A character that is neither a letter nor `_` appears where a name is expected. The check exists so that a typo does not quietly become a name.
 
@@ -73,9 +73,9 @@ inputs
 
 Related codes: [E001](#e001), [E009](#e009)
 
-## E003 — error
+## E003
 
-**The file does not start with a `rule` line**
+`error` — **The file does not start with a `rule` line**
 
 **When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it.
 
@@ -90,9 +90,9 @@ inputs
 
 Related codes: [E004](#e004), [E011](#e011)
 
-## E004 — error
+## E004
 
-**The line does not start with a word**
+`error` — **The line does not start with a word**
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
@@ -108,9 +108,9 @@ rule t(t) v1
 
 Related codes: [E003](#e003), [E005](#e005)
 
-## E005 — error
+## E005
 
-**Not a known word at this position**
+`error` — **Not a known word at this position**
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
@@ -126,9 +126,9 @@ foo bar
 
 Related codes: [E004](#e004), [E009](#e009)
 
-## E006 — error
+## E006
 
-**The declaration has no `=`**
+`error` — **The declaration has no `=`**
 
 **When.** `enum`, `group`, `derive`, `define` and `result` separate the name from the body with `=`. It is missing.
 
@@ -144,9 +144,9 @@ enum k(k) a(a) | b(b)
 
 Related codes: [E005](#e005)
 
-## E007 — error
+## E007
 
-**Unknown policy**
+`error` — **Unknown policy**
 
 **When.** The word after `policy` is not unique or first. DMN's Any, Priority and Collect are not adopted (§4).
 
@@ -171,9 +171,9 @@ policy any
 
 Related codes: [W110](#w110), [E105](#e105), [W105](#w105)
 
-## E008 — error
+## E008
 
-**Empty cell**
+`error` — **Empty cell**
 
 **When.** A cell of a table holds only whitespace. **A blank is indistinguishable from a forgotten entry**, so it is a syntax error (§3).
 
@@ -198,9 +198,9 @@ policy unique
 
 Related codes: [E101](#e101)
 
-## E009 — error
+## E009
 
-**A declared name collides with a reserved word**
+`error` — **A declared name collides with a reserved word**
 
 **When.** A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently.
 
@@ -216,9 +216,9 @@ enum range(kind) = a(a) | b(b)
 
 Related codes: [E005](#e005), [E011](#e011)
 
-## E010 — error
+## E010
 
-**The `..` range notation is not allowed**
+`error` — **The `..` range notation is not allowed**
 
 **When.** A cell contains `..`, as in `0g..1000g`. Whether "up to 1000g" includes the endpoint cannot be read off the text (§3.1).
 
@@ -244,9 +244,9 @@ policy unique
 
 Related codes: [E105](#e105), [E101](#e101)
 
-## E011 — error
+## E011
 
-**A public name has no ASCII alias**
+`error` — **A public name has no ASCII alias**
 
 **When.** The rule name, an input, an output or one of their types has no ASCII alias in parentheses. The alias becomes the public name in the generated Python and Go (a kanji cannot be an exported Go identifier).
 
@@ -271,9 +271,9 @@ policy unique
 
 Related codes: [E009](#e009), [E012](#e012)
 
-## E012 — error
+## E012
 
-**The name is not declared**
+`error` — **The name is not declared**
 
 **When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it.
 
@@ -298,9 +298,9 @@ policy unique
 
 Related codes: [E011](#e011), [E013](#e013)
 
-## E013 — error
+## E013
 
-**No such import**
+`error` — **No such import**
 
 **When.** The target of `import` is not in the built-in namespace. The only one for now is `std/都道府県` (47 values).
 
@@ -316,9 +316,9 @@ import std/nope
 
 Related codes: [E012](#e012)
 
-## E101 — error
+## E101
 
-**Completeness gap: some input matches no row**
+`error` — **Completeness gap: some input matches no row**
 
 **When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required (§4). A concrete input that matches no row is always attached.
 
@@ -346,9 +346,9 @@ policy unique
 
 Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
 
-## E102 — error
+## E102
 
-**Unreachable row: the row never matches**
+`error` — **Unreachable row: the row never matches**
 
 **When.** Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording.
 
@@ -374,9 +374,9 @@ policy first
 
 Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
 
-## E103 — error
+## E103
 
-**Unit mismatch: values of different types are being mixed**
+`error` — **Unit mismatch: values of different types are being mixed**
 
 **When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3).
 
@@ -404,9 +404,9 @@ result r = p + w
 
 Related codes: [E108](#e108), [E112](#e112)
 
-## E104 — error
+## E104
 
-**A numeric output declares no rounding**
+`error` — **A numeric output declares no rounding**
 
 **When.** A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
 
@@ -432,9 +432,9 @@ policy unique
 
 Related codes: [E106](#e106), [E103](#e103)
 
-## E105 — error
+## E105
 
-**Overlapping rows: the same input matches two or more rows**
+`error` — **Overlapping rows: the same input matches two or more rows**
 
 **When.** In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead.
 
@@ -464,9 +464,9 @@ policy unique
 
 Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
 
-## E106 — error
+## E106
 
-**An output literal is not on the rounding grid**
+`error` — **An output literal is not on the rounding grid**
 
 **When.** A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451円` in a table rounded `up(10円)` — is stopped (§7.2).
 
@@ -492,9 +492,9 @@ policy unique
 
 Related codes: [E104](#e104)
 
-## E107 — error
+## E107
 
-**An example does not match**
+`error` — **An example does not match**
 
 **When.** Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification.
 
@@ -524,9 +524,9 @@ examples
 
 Related codes: [E111](#e111), [E105](#e105)
 
-## E108 — error
+## E108
 
-**Cannot prove an intermediate value fits in int64**
+`error` — **Cannot prove an intermediate value fits in int64**
 
 **When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value.
 
@@ -554,9 +554,9 @@ policy unique
 
 Related codes: [E112](#e112), [E103](#e103)
 
-## E109 — error
+## E109
 
-**The check exceeded its budget, so completeness could not be proven**
+`error` — **The check exceeded its budget, so completeness could not be proven**
 
 **When.** The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning.
 
@@ -585,9 +585,9 @@ policy unique
 
 Related codes: [E101](#e101), [W114](#w114)
 
-## E110 — error
+## E110
 
-**A column has a type the check cannot handle**
+`error` — **A column has a type the check cannot handle**
 
 **When.** The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional (§6.3).
 
@@ -612,9 +612,9 @@ policy unique
 
 Related codes: [E101](#e101), [E105](#e105)
 
-## E111 — error
+## E111
 
-**The examples have no column for an output**
+`error` — **The examples have no column for an output**
 
 **When.** `examples` writes only some of the declared outputs. Three-way agreement (evaluator, Python, Go) stays green when all three share the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in all three at once.
 
@@ -645,9 +645,9 @@ examples
 
 Related codes: [E107](#e107)
 
-## E112 — error
+## E112
 
-**The range of a derived value does not contain the values it can reach**
+`error` — **The range of a derived value does not contain the values it can reach**
 
 **When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur.
 
@@ -676,9 +676,9 @@ policy unique
 
 Related codes: [E108](#e108), [E101](#e101)
 
-## E113 — error
+## E113
 
-**The condition of a boolean definition is neither of the two allowed forms**
+`error` — **The condition of a boolean definition is neither of the two allowed forms**
 
 **When.** The condition of `define … : bool` is neither a unary test on an input or derived value, nor a comparison of two values of a type whose difference cannot be derived. A direct comparison of two numbers is the usual case (§5.3).
 
@@ -707,9 +707,9 @@ policy unique
 
 Related codes: [E112](#e112), [E103](#e103)
 
-## W105 — warning
+## W105
 
-**Shadowing that needs review: an earlier row hides part of a later one**
+`warning` — **Shadowing that needs review: an earlier row hides part of a later one**
 
 **When.** In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed (§4).
 
@@ -739,9 +739,9 @@ policy first
 
 Related codes: [E105](#e105), [W110](#w110), [E102](#e102)
 
-## W110 — warning
+## W110
 
-**A `first` table with no overlaps**
+`warning` — **A `first` table with no overlaps**
 
 **When.** The table is `policy first`, yet no two rows overlap. The order carries no meaning, and `unique` is the stronger guarantee.
 
@@ -769,9 +769,9 @@ policy first
 
 Related codes: [W105](#w105), [E105](#e105)
 
-## W111 — warning
+## W111
 
-**A declaration is never used**
+`warning` — **A declaration is never used**
 
 **When.** An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way.
 
@@ -798,9 +798,9 @@ policy unique
 
 Related codes: [E101](#e101), [E012](#e012)
 
-## W114 — warning
+## W114
 
-**Unconfirmed overlap: an input may match both rows**
+`warning` — **Unconfirmed overlap: an input may match both rows**
 
 **When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency.
 

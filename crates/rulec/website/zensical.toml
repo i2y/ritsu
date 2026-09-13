@@ -1,0 +1,110 @@
+[project]
+site_name = "rulec"
+site_url = "https://i2y.github.io/rulec/"
+site_description = "Write a business rule as one table. The Python and Go it becomes are proved before they exist."
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+# Two sites, one repository. `edit_uri` therefore has to name this site's
+# own docs directory: the default reads as if the site were the root of
+# the repository.
+repo_url = "https://github.com/i2y/rulec"
+repo_name = "i2y/rulec"
+edit_uri = "edit/main/website/docs"
+
+docs_dir = "docs"
+site_dir = "build"
+use_directory_urls = true
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { Home = "index.md" },
+  { Install = "install.md" },
+  { "Write a table" = "tour.md" },
+  { "What it proves" = "checks.md" },
+  { "Generate and call" = "generate.md" },
+  { "Compare and replay" = "compare.md" },
+  { "For agents" = "agents.md" },
+  { Reference = [
+    { Grammar = "reference.md" },
+    { Diagnostics = "codes.md" },
+    { "Generated code" = "generated-code.md" },
+    { Formats = "formats.md" },
+  ] },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/rulec/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/rulec/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page, so the
+#                       site reads in order without the sidebar
+# navigation.top        a back-to-top button on long pages
+# navigation.tracking   the address bar follows the section being read
+# content.code.copy     a copy button on every code block — every command
+#                       on this site is meant to be run
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
+# ---- Palette --------------------------------------------------------------
+
+# Ink and a proof mark. The tool's subject is a table someone signs off,
+# so the accent is the colour of a check in the margin, and the same pair
+# holds on both schemes.
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+# ---- Markdown extensions ---------------------------------------------------
+
+# Unicode-preserving heading anchors, so a Japanese heading slugs the way
+# GitHub slugs it and a link written against the repository still lands.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

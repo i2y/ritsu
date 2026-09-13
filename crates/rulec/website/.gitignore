@@ -1,0 +1,19 @@
+build/
+.venv/
+.cache/
+.serve/
+
+# Copied in by sync.sh from the repository's canonical documents. One
+# source of truth: edit ../AGENTS.md or ../docs/, not these.
+docs/agents.md
+docs/reference.md
+docs/formats.md
+docs/generated-code.md
+docs/codes.md
+docs-ja/agents.md
+docs-ja/reference.md
+docs-ja/formats.md
+docs-ja/generated-code.md
+docs-ja/codes.md
+docs-ja/stylesheets/
+docs-ja/images/

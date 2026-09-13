@@ -656,8 +656,10 @@ pub fn render_text(e: &Entry) -> String {
 
 /// `rulec explain <CODE> --format markdown`.
 pub fn render_markdown(e: &Entry) -> String {
-    let mut o = format!("## {} — {}\n\n", e.code, severity_word(e.severity));
-    o.push_str(&format!("**{}**\n\n", e.title));
+    // The heading is the code alone, so that its anchor is `#e101` both on
+    // GitHub and on the rendered site — the `related` links below point at it.
+    let mut o = format!("## {}\n\n", e.code);
+    o.push_str(&format!("`{}` — **{}**\n\n", severity_word(e.severity), e.title));
     o.push_str(&tr!("**いつ出るか。** {}\n\n", "**When.** {}\n\n", e.when));
     o.push_str(&tr!("**直し方。** {}\n\n", "**Fix.** {}\n\n", e.fix));
     o.push_str(&match e.budget {

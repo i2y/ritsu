@@ -611,6 +611,7 @@ docs/codes.ja.md  同じ台帳の日本語
 docs/formats.md   機械可読な出力の定義（--format json、ベクタ、fixtures）
 docs/generated-code.md 生成物の形と保証、呼び方（英語）
 docs/reference.md 文法の完全な定義（英語）
+website/          ドキュメントサイト（zensical。docs/ が英語、docs-ja/ が日本語）
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
@@ -630,6 +631,7 @@ tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
 tests/formats.rs  全コマンドの --format json の鍵が言語で動かないこと
 tests/api.rs      rulec api の目録が生成物と一致すること（実際に呼んで確かめる）
 tests/docs.rs     文書が名指しするコマンドとリンクと実演が実物と合うこと
+tests/website.rs  サイトの nav とリンクとコマンドが実物と合うこと
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```
@@ -661,6 +663,8 @@ tests/docs.rs     文書が名指しするコマンドとリンクと実演が�
 | [`docs/formats.md`](docs/formats.md) | 機械可読な形式の全部 — `--format json`、ベクタ、fixtures、マニフェスト、アダプタの手順（英語） |
 | [`docs/generated-code.md`](docs/generated-code.md) | 生成物の形と保証、呼び方（英語） |
 | `DESIGN.md` | なぜそう決めたか、そのとき何を捨てたか（日本語） |
+
+ドキュメントサイト（同じ内容を読みやすく、日英）は [i2y.github.io/rulec](https://i2y.github.io/rulec/) にあります。中身は `website/` で、リファレンスの四つはこのリポジトリの文書をそのまま持ち込んでいます（二重に持つと必ず片方が腐るので）。
 
 ## 設計について
 

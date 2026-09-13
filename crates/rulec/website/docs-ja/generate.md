@@ -1,0 +1,131 @@
+# 生成して呼ぶ
+
+```console
+$ rulec gen rules/ --out generated/
+```
+
+出るのは普通の Python モジュールと普通の Go パッケージです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
+
+検査を通らない規則からは、何も生成されません。
+
+## 出るものの形
+
+表の一行が分岐の一本になり、原本のセルがそのままコメントで添えてあります。
+
+```python
+def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
+    """Rule 送料例 v1. Each branch corresponds 1:1 to a row of the rule source."""
+    if not _isinstance(dest, Prefecture):
+        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+    if not 1 <= girth <= 100:
+        raise RuleInputError(f"三辺合計 is out of range: {girth}")
+    # table サイズ判定 (policy first)
+    if girth <= 60:  # row 1: <=60cm | S60
+        サイズ = SizeClass.S60
+    elif girth <= 80:  # row 2: <=80cm | S80
+        サイズ = SizeClass.S80
+    elif True:  # row 3: - | S100
+        サイズ = SizeClass.S100
+    else:
+        raise AssertionError("unreachable: completeness was statically checked by rulec")
+    ...
+    return _round_up(運賃, 10)
+```
+
+```go
+func FeeDemo(in Input) (YenInclTax, error) {
+	if !in.Dest.Valid() {
+		return 0, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
+	}
+	// table サイズ判定 (policy first)
+	var サイズ SizeClass
+	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
+		サイズ = SizeClassS60
+	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
+		サイズ = SizeClassS80
+	} else if true { // row 3: - | S100
+		サイズ = SizeClassS100
+	} else {
+		panic("unreachable: completeness was statically checked by rulec")
+	}
+	...
+	return YenInclTax(roundUp(int64(運賃), 10)), nil
+}
+```
+
+読める形であることを、生成器は四つで守っています。
+
+- **セルを省略しません。** 先行分岐で真とわかる条件も書きます（`elif True:` はそのため）。原本の行と目で突き合わせられることが、生成物の唯一の読み方です。
+- **単位は型に載せます。** Python は `NewType`、Go は defined type。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。
+- **丸めは自前のヘルパで行います。** Python の `//` は −∞ 方向、Go の整数除算は 0 方向で食い違うので、言語の素の除算には任せません。
+- **組み込みを裸で呼びません。** 入力の別名が `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています。
+
+参照評価器と生成した二言語が同じ答えを返すことは、境界から自動で作ったテストケースを三方に流して、**正準 JSON のバイト一致**で確かめています。
+
+## 呼び方は、読まなくても分かる
+
+```console
+$ rulec api rules/クーポン一枚.rule | jq -r .python.signature
+def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Output:
+```
+
+一つの JSON に、module と関数名、引数（和名・別名・型・単位・範囲）、出力（丸めつき）、列挙の値の**その言語での綴り**（Python は `CouponKind.PERCENT`、Go は `couponstep.CouponKindPercent`）、送出しうる例外が入っています。
+
+手で書いた呼び出し規約は、生成器が名前を変えた日から静かに嘘になります。だからこの目録は生成器の隣で組み立て、テストが生成物そのものに縛ります — 目録が言う名前が生成ファイルの字面にあること、Python は import して `inspect.signature` と比べること、Go は**目録だけから呼び出しプログラムを組み立てて** `go vet` に通すこと（名前が一つでも違えばコンパイルが通りません）。
+
+[生成物の詳しい説明](generated-code.md){ .md-button }
+
+## 二つの番人
+
+**入口の番人**は、証明が仮定したことを実行時に守らせます。数値入力は宣言範囲に、列挙入力はその値の集合に照らされます。無ければ、宣言域の外から呼ばれた側が静かに間違った数字を受け取ります — 完全性の証明は、宣言されていない入力については何も言っていません。
+
+**矛盾の番人**は W114 の片割れです。`unique` の表の二行が重なりうるかを検査器が決められなかったところでは、生成コードは黙って一方を選ばずに止まります。
+
+```python
+# guard: W114 (table 適用判定, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
+if 残高A <= 1000 and 残高B >= 3980:
+    raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
+```
+
+## 生成物を走らせる
+
+```console
+$ rulec test generated/ --lang ja
+ok    shipping_fee (Python) ベクタ 68 件
+ok    shipping_fee (Go) ベクタ 68 件
+ok    丸めヘルパ (Python) 単体ベクタ
+ok    丸めヘルパ (Go) 単体ベクタ
+
+4 件すべて一致しました。
+```
+
+ベクタは生成コードからではなく**規則の境界から**作ります。丸めヘルパには別の単体ベクタが付きます — 表レベルの一致だけでは、端数の出ない表でヘルパの誤りが隠れるからです。
+
+## ベクタ套件そのものは完全か
+
+```console
+$ rulec coverage rules/送料.rule
+68 vectors
+  row coverage              7 / 7     satisfied
+  boundary-pair coverage    4 / 4     satisfied
+  shadow-pair coverage      3 / 3     satisfied
+```
+
+`coverage` は**テスト套件に対する完全性検査**です。三つの義務は生成されたベクタからではなく**規則から先に**導かれ、欠けていればどの行・どの境界・どの遮蔽対かを名指しして 1 で落ちます。
+
+## 原本とずれないように
+
+生成物はコミットし、CI が derive し直します。
+
+```console
+$ rulec gen rules/ --out generated/ --check
+```
+
+`--check` は何も書かず、生成物が新しい生成と違うか欠けていれば 1 で落ちます。**生成コードを手で直さないでください** — ヘッダに `DO NOT EDIT` と書いてあり、次の `gen` が上書きします。
+
+整形は生成器が内蔵しています。後段で `gofmt` や `black` を走らせません — 環境に入っている道具の版に出力が依存した瞬間、生成が決定的でなくなるからです。代わりに `gofmt -l` が空であることと、`ruff check --select E,W` が行長を除いて無指摘であることをテストが確かめています。
+
+---
+
+[突き合わせと再生](compare.md){ .md-button .md-button--primary }
+[形式](formats.md){ .md-button }

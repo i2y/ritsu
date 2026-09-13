@@ -1,0 +1,129 @@
+---
+title: "表を書く。証明つきで出る。"
+hide:
+  - navigation
+  - toc
+---
+
+<div class="rc-hero" markdown>
+<img class="rc-hero__mark" src="images/mark.svg#only-dark" alt="">
+<img class="rc-hero__mark" src="images/mark-light.svg#only-light" alt="">
+
+# rulec
+
+<p class="rc-hero__tag">表を書く。証明つきで出る。</p>
+
+<p class="rc-hero__lede">
+送料、クーポン、返品可否 — 条件が絡み合った業務の判断を、業務担当者が読める<strong>一枚の表</strong>として書きます。rulec はその表に穴も矛盾も死に行も無いことを証明してから、依存ゼロの普通の Python と Go を生成します。
+<strong>証明はコードが存在する前に済みます</strong> — 証明できない規則は、そもそも生成されません。
+</p>
+
+<div class="rc-hero__cta" markdown>
+[インストール](install.md){ .md-button .md-button--primary }
+[表を書く](tour.md){ .md-button }
+[エージェント向け](agents.md){ .md-button }
+[GitHub](https://github.com/i2y/rulec){ .md-button }
+</div>
+</div>
+
+## 表が入って、関数が出る
+
+<div class="rc-flow" markdown>
+<div markdown>
+<p class="rc-flow__label">書くもの</p>
+
+```
+table 運賃表(fee_table)
+policy unique
+| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
+| 近畿圏      | S60    | 990円                              |
+| 近畿圏      | S80    | 1310円                             |
+| not: 近畿圏 | S60    | 880円                              |
+| not: 近畿圏 | S80    | 1200円                             |
+```
+</div>
+<div class="rc-flow__arrow">→</div>
+<div markdown>
+<p class="rc-flow__label">出るもの</p>
+
+```python
+def fee_demo(dest: Prefecture, girth: Cm) -> YenInclTax:
+    """Rule 送料例 v1. Each branch corresponds 1:1 to a row."""
+    if not _isinstance(dest, Prefecture):
+        raise RuleInputError(...)
+    ...
+    if dest in KINKI and サイズ == SizeClass.S60:  # row 1
+        運賃 = 990
+    ...
+    return _round_up(運賃, 10)
+```
+</div>
+</div>
+
+同じ表から Go のパッケージも出ます。どちらも**普通の関数**です — エンジンも設定も、標準ライブラリ以外の依存もありません。
+
+---
+
+## 転記した瞬間に、穴が出ます
+
+これが最初の実用価値です。日本郵便のゆうパック運賃表を転記して、47 都道府県を 6 つの群にまとめたとき、県をひとつ書き落とすと:
+
+```
+error[E101]: Completeness gap: some input matches no row
+  --> rules/ゆうパック運賃.rule:34 table 運賃表
+   |
+34 | table 運賃表(fee_table)
+   |       ^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: あて先 = 山梨県, サイズ = S60
+ hint: add a row that matches this input.
+```
+
+**旧実装も過去データも要りません。** 手元の Excel を転記して `rulec check` に掛けるだけで、穴と重なりが出はじめます。しかもそのすべてに、**それを起こす具体的な入力**が付きます。
+
+---
+
+## 何が証明されるか
+
+| | |
+|---|---|
+| **完全性** | どの入力にも当たる行がある。無ければ、当たらない入力そのものが出る |
+| **重なり** | `policy unique` では二行が同じ入力に当たらない。`policy first` では、階段の構造的な遮蔽と、人の判断が要る対とを区別する |
+| **死に行** | 決して当たらない行。先行行に覆われている場合と、上流の表が決して出さない値を名指ししている場合を書き分ける |
+| **単位** | 円と g は足せない。税込と税抜も別の型 |
+| **丸め** | 数値出力は端数の決め方を宣言しなければならない。文面は**丸め方で円がいくら動くか**を数字で見せる |
+| **溢れ** | 中間値が int64 に収まることを、宣言範囲から証明する |
+| **例** | 全部の例を実行する。外れたら発火行つき。出力の列が欠けていたら止まる |
+
+近似はしません。証明できないときは、通さずにそう言います。
+
+[何を証明するか（詳しく）](checks.md){ .md-button }
+
+---
+
+## そして「いま動いているものと同じか」
+
+二つのコマンドが、**入れてみて後から数字を見る**を**入れる前に見る**に変えます。
+
+```console
+$ rulec verify rules/送料.rule --adapter python3 adapter.py --lang ja
+照合 207 件 / 一致 182 (87.923%)
+
+影響 25 件 (12.077%)  金額 -250
+  表 サイズ判定 行1 / 表 運賃表 行36                 7 件  差 -10 一様  合計 -70
+    例: あて先=沖縄県, 三辺合計=1, 重量=1 → 規則 運賃=1450 / 旧 運賃=1460
+```
+
+`verify` は旧実装と、`diff` は規則の二つの版を過去の記録に当てて、**何件がいくら動くか**を出します。不一致は発火行でクラスタされ、件数・金額差・証人が付きます。ずれが全部その出力の丸め格子より小さいクラスタには「丸め差異の疑い」の札が付きます。
+
+[突き合わせと再生](compare.md){ .md-button }
+
+---
+
+## 誰のための道具か
+
+**第一の利用者は AI エージェントです。** 規約の文書や Excel や旧実装から `.rule` を書き、検査の言うことを直し、生成物を組み込み、影響を見せる — その一連を、`--help` と診断とその JSON だけで、人に訊かずに回せるように作ってあります。
+
+人は二つの役で残ります。**表を承認する人** — 金額も、丸めの向きも、食い違う二つの読みのどちらが正しいかも業務の判断で、検査はそこを決めません。決められないことを、**具体的な例の入った質問**に変えるのが検査の仕事です。そして**生成物を組み込むアプリの持ち主**。
+
+[エージェントの手順](agents.md){ .md-button .md-button--primary }

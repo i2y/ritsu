@@ -1,0 +1,252 @@
+/* rulec site styling.
+
+   Two jobs. A hero that is real text rather than a picture of text, and
+   a way of showing the one thing this tool is about: a table on the
+   left, the code it became on the right, with the proof in between. */
+
+:root {
+  --rc-ink: #10131a;
+  --rc-ink-2: #080a0f;
+  --rc-mark: #4457d8;
+  --rc-mark-light: #8e9cff;
+  --rc-mark-dark: #2f3fae;
+}
+
+/* ---- hero ------------------------------------------------------- */
+
+.rc-hero {
+  position: relative;
+  margin: 0 0 2.4rem;
+  padding: 2.6rem 2.4rem 2.4rem;
+  border-radius: 1rem;
+  background:
+    radial-gradient(120% 140% at 14% 0%, #1e2331 0%, var(--rc-ink) 46%, var(--rc-ink-2) 100%);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* The faint ruling of a table, kept as CSS so it scales with the block. */
+.rc-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: radial-gradient(110% 100% at 50% 0%, #000 25%, transparent 78%);
+  pointer-events: none;
+}
+
+.rc-hero > * { position: relative; z-index: 1; }
+
+.rc-hero__mark {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: 0 0 1.1rem;
+  display: block;
+}
+
+.rc-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 3.1rem;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 700;
+}
+
+.rc-hero__tag {
+  margin: .5rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--rc-mark-light);
+}
+
+.rc-hero__lede {
+  margin: 1.15rem 0 0;
+  max-width: 44rem;
+  font-size: .82rem;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, .82);
+}
+
+.rc-hero__lede strong { color: #fff; }
+
+.md-typeset .rc-hero__lede code,
+.md-typeset .rc-hero code {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .16);
+  padding: .1em .4em;
+}
+
+.rc-hero__cta {
+  margin: 1.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.rc-hero__cta .md-button {
+  margin: 0;
+  border-radius: 2rem;
+  border-color: rgba(255, 255, 255, .28);
+  color: #fff;
+  padding: .42rem 1.15rem;
+  font-size: .72rem;
+}
+
+.rc-hero__cta .md-button:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .45);
+  color: #fff;
+}
+
+.rc-hero__cta .md-button--primary {
+  background: var(--rc-mark);
+  border-color: var(--rc-mark);
+  color: #fff;
+}
+
+.rc-hero__cta .md-button--primary:hover {
+  background: var(--rc-mark-light);
+  border-color: var(--rc-mark-light);
+  color: var(--rc-ink);
+}
+
+@media screen and (max-width: 44.9em) {
+  .rc-hero { padding: 2rem 1.4rem 1.8rem; }
+  .rc-hero h1 { font-size: 2.3rem; }
+  .rc-hero__tag { font-size: 1.1rem; }
+}
+
+/* ---- the hero on a light page ------------------------------------ */
+/* A dark slab at the top of an otherwise white page reads as a picture
+   someone forgot to redraw. On the light scheme the same block is drawn
+   in paper and ink instead: the ruling stays, the accent stays. */
+
+[data-md-color-scheme="default"] .rc-hero {
+  background:
+    radial-gradient(120% 140% at 14% 0%, #fff 0%, #f7f8fc 45%, #eef0f8 100%);
+  color: var(--rc-ink);
+  border: 1px solid #e2e6f2;
+}
+
+[data-md-color-scheme="default"] .rc-hero::after {
+  background-image:
+    linear-gradient(rgba(16, 19, 26, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 19, 26, .055) 1px, transparent 1px);
+}
+
+[data-md-color-scheme="default"] .rc-hero h1 { color: var(--rc-ink); }
+[data-md-color-scheme="default"] .rc-hero__tag { color: var(--rc-mark-dark); }
+
+[data-md-color-scheme="default"] .rc-hero__lede { color: rgba(16, 19, 26, .78); }
+[data-md-color-scheme="default"] .rc-hero__lede strong { color: var(--rc-ink); }
+
+[data-md-color-scheme="default"] .md-typeset .rc-hero__lede code,
+[data-md-color-scheme="default"] .md-typeset .rc-hero code {
+  background: rgba(16, 19, 26, .06);
+  color: var(--rc-ink);
+  border: 1px solid rgba(16, 19, 26, .12);
+}
+
+[data-md-color-scheme="default"] .rc-hero__cta .md-button {
+  border-color: rgba(16, 19, 26, .22);
+  color: var(--rc-ink);
+}
+
+[data-md-color-scheme="default"] .rc-hero__cta .md-button:hover {
+  background: rgba(16, 19, 26, .06);
+  border-color: rgba(16, 19, 26, .4);
+  color: var(--rc-ink);
+}
+
+[data-md-color-scheme="default"] .rc-hero__cta .md-button--primary,
+[data-md-color-scheme="default"] .rc-hero__cta .md-button--primary:hover {
+  color: #fff;
+}
+
+[data-md-color-scheme="default"] .rc-hero__cta .md-button--primary:hover {
+  background: var(--rc-mark-dark);
+  border-color: var(--rc-mark-dark);
+}
+
+/* ---- table in, code out ------------------------------------------- */
+/* The one picture this tool needs: what you write beside what you get.
+   Two code blocks side by side on a wide screen, stacked on a narrow
+   one, with an arrow between them that turns with the flow. */
+
+.rc-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: .9rem;
+  margin: 1.4rem 0 2rem;
+}
+
+.rc-flow__arrow {
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--rc-mark);
+  text-align: center;
+  user-select: none;
+}
+
+.md-typeset .rc-flow > div > .highlight,
+.md-typeset .rc-flow > div > pre { margin: 0; }
+
+.rc-flow__label {
+  margin: 0 0 .35rem;
+  font-size: .62rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+}
+
+@media screen and (max-width: 59.9em) {
+  .rc-flow { grid-template-columns: 1fr; }
+  .rc-flow__arrow { transform: rotate(90deg); margin: .1rem 0; }
+}
+
+/* ---- a diagnostic, shown as itself --------------------------------- */
+/* Terminal output on this site is quoted verbatim, frame and carets and
+   all, so it gets a terminal's colours rather than the page's. */
+
+.md-typeset .rc-term > .highlight > pre > code,
+.md-typeset pre.rc-term > code {
+  background: var(--rc-ink);
+  color: #dfe3ee;
+}
+
+/* ---- rhythm -------------------------------------------------------- */
+
+.md-typeset h2 {
+  margin-top: 2.6rem;
+  letter-spacing: -.01em;
+}
+
+.md-typeset hr { margin: 2.6rem 0; }
+
+.md-typeset .grid.cards > ul > li {
+  border-radius: .6rem;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--rc-mark);
+  box-shadow: 0 8px 24px -14px rgba(0, 0, 0, .4);
+}
+
+/* A picture drawn for one colour scheme names it in the fragment. The
+   theme ships only half of that pair, so the other half is written
+   here. */
+[data-md-color-scheme="slate"] .md-typeset img[src$="#only-light"] {
+  display: none;
+}
+
+/* The mark in the hero carries its own background, so it is exempt from
+   any framing the page applies to pictures. */
+.rc-hero__mark { border: 0; padding: 0; background: none; box-shadow: none; }
