@@ -174,18 +174,14 @@
   border-color: var(--rc-mark-dark);
 }
 
-/* ---- table in, code out ------------------------------------------- */
-/* The one picture this tool needs: what you write beside what you get.
-   Two code blocks side by side on a wide screen, stacked on a narrow
-   one, with an arrow between them that turns with the flow. */
-
-}
-
 /* ---- the opening diagram ------------------------------------------- */
-/* Three panels side by side become a thumbnail on a phone. Below the width
-   where the labels stop being legible, let it scroll sideways in its own box
-   rather than shrink — the page itself never scrolls sideways. */
+/* Three panels side by side become a thumbnail on a phone. Below the width where the
+   labels stop being legible, let it scroll sideways in its own box rather than shrink —
+   the page itself never scrolls sideways.
 
+   Nothing else: pulling the figure outside the prose column with a
+   `left: 50%; transform: translateX(-50%)` full-bleed did widen it in Chrome, and broke
+   the layout in Safari. A sixth of a scale factor is not worth a browser. */
 .rc-overview { overflow-x: auto; }
 .md-typeset .rc-overview img { min-width: 44rem; }
 

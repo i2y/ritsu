@@ -80,14 +80,14 @@ JA = dict(
     code=("Python · TypeScript · Rust · Go",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",
            "    ...",
-           "    if dest == Zone.KINKI and weight <= 2000:  # 行1: 近畿圏 | <=2kg | 800円",
            "        fee = 800",
            "    ...",
-           "    elif dest == Zone.KINKI and weight > 5000:  # 行3: 近畿圏 | >5kg | 1300円",
+           "        fee = 1000",
+           "    ...",
            "        fee = 1300",
            "    ...",
            "    return _round_up(fee, 10)"],
-          ["依存ゼロ・エンジンなし・どれも同じ答え"], ".py"),
+          ["依存ゼロ・エンジンなし", "どれも同じ答え"], ".py"),
     check="rulec check", gen="rulec gen", proved="証明できたら",
     falls="それを起こす入力", again="行を足して、もう一度",
 )
@@ -114,14 +114,14 @@ EN = dict(
     code=("Python · TypeScript · Rust · Go",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",
            "    ...",
-           "    if dest == Zone.KINKI and weight <= 2000:  # row 1: Kinki | <=2kg | 800円",
            "        fee = 800",
            "    ...",
-           "    elif dest == Zone.KINKI and weight > 5000:  # row 3: Kinki | >5kg | 1300円",
+           "        fee = 1000",
+           "    ...",
            "        fee = 1300",
            "    ...",
            "    return _round_up(fee, 10)"],
-          ["zero dependencies, no engine, the same answer from every one"], ".py"),
+          ["zero dependencies, no engine,", "the same answer from every one"], ".py"),
     check="rulec check", gen="rulec gen", proved="once proved",
     falls="the input that causes it", again="add the row, run again",
 )
@@ -133,19 +133,25 @@ FILES = [("overview", EN, "en"), ("overview-ja", JA, "ja")]   # (name, words, --
 # One horizontal line carries the pipeline - table, rulec, code - at Y_IN, so
 # it reads left to right as one sentence. The witness drops out of the hole,
 # through the bottom of the card, onto a sheet; from there the amber path
-# turns left and climbs back into the table it came from. The canvas is as
-# wide as it is because the code sheet holds a real generated line, row
-# comment and all, at a size that can still be read.
+# turns left and climbs back into the table it came from.
+#
+# The page scales the picture to its column, so the canvas width sets the
+# size of every letter on screen: 1260 units read too small there, 900 too
+# big, and this layout lands near 1090. That is why the code sheet shows
+# only the short lines of the generated function - a branch with its row
+# comment is 460 units wide on its own and would push the canvas back past
+# 1150 - and lets the three fees, straight from the file, carry the
+# correspondence with the table and the plane.
 
-W = 1260
 TOP = 20
 Y_IN = 72                            # the pipeline's one horizontal line
 
 TABLE = (20, TOP, 236, 204)
-CARD = (340, TOP, 314, 236)
-CODE = (732, TOP, 490, 190)          # wide enough for a branch and its row comment
+CARD = (TABLE[0] + TABLE[2] + 82, TOP, 314, 236)   # 82: room for "rulec check"
+CODE = (CARD[0] + CARD[2] + 76, TOP, 328, 200)     # 76: room for "once proved"
 STACK = 8                            # the two sheets behind the code, offset
 Y_NOTES = 179                        # where the quiet line under the code sits
+W = CODE[0] + CODE[2] + 2 * STACK + 20
 
 COLS = (TABLE[0] + PAD, TABLE[0] + PAD + 72, TABLE[0] + TABLE[2] - PAD)
 Y_HEAD, Y_ROW, ROW_H, Y_GHOST = 62, 84, 19, 184   # baselines, from the sheet's top

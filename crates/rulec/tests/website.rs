@@ -165,7 +165,8 @@ fn サイトの相対リンクは実在する() {
             if target.starts_with("http") || target.starts_with('#') {
                 continue;
             }
-            let path = target.split('#').next().unwrap();
+            // `?v=…` is a cache-busting stamp, not part of the path on disk.
+            let path = target.split('#').next().unwrap().split('?').next().unwrap();
             if path.is_empty() || SYNCED.contains(&path) {
                 continue; // copied in by sync.sh
             }
@@ -266,4 +267,44 @@ fn 図が見せている出力は本物と一致する() {
         stale.is_empty(),
         "図が古いままです。`python3 tools/make_overview.py` で作り直してください: {stale:?}"
     );
+}
+
+/// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader
+/// who has been to the site before keeps seeing the previous picture — the filename never
+/// changes, so nothing tells their browser to fetch again. This is not a preview nicety: it
+/// is how a redeploy reaches somebody who already has the page cached.
+#[test]
+fn 図のurlは中身のハッシュを持っている() {
+    let want = diagram_version();
+    for lang in ["docs", "docs-ja"] {
+        let page = read(&format!("website/{lang}/index.md"));
+        let refs: Vec<&str> = page
+            .match_indices("images/overview")
+            .map(|(i, _)| {
+                let rest = &page[i..];
+                &rest[..rest.find(')').unwrap_or(rest.len())]
+            })
+            .collect();
+        assert_eq!(refs.len(), 2, "{lang}: 図の参照が 2 つでない: {refs:?}");
+        for r in refs {
+            assert!(
+                r.contains(&format!("?v={want}")),
+                "{lang}: 図の URL のハッシュが中身と違う。`?v={want}` にしてください: {r}"
+            );
+        }
+    }
+}
+
+/// The eight hex characters stamped into those URLs: a hash over the two dark SVGs, which
+/// change together with their light twins.
+fn diagram_version() -> String {
+    let mut bytes = read("website/docs/images/overview-ja.svg").into_bytes();
+    bytes.extend(read("website/docs/images/overview.svg").into_bytes());
+    // A small, dependency-free digest. It only has to change when the files do.
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    format!("{h:016x}")[..8].to_string()
 }
