@@ -88,7 +88,7 @@ it. It has four sides.
 |---|---|
 | **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
 | **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
-| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go that nobody edits by hand |
+| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go that nobody edits by hand — with Java, Kotlin, Swift and SQL on the way |
 | **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
 The agent's own instructions are in [For agents](agents.md), and the

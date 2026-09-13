@@ -19,6 +19,10 @@ collection ("any line is refrigerated", "three or more items"), to pattern match
 strings, or to scoring and optimisation. Flatten collection facts at the boundary and pass
 the scalar in; keep iteration in the caller.
 
+`rulec gen` writes Python, TypeScript and Go today; Java, Kotlin, Swift and SQL are planned.
+A language only goes in once its output can be held against the reference evaluator byte for
+byte, so whatever `rulec gen` writes is covered by `rulec test`.
+
 Bundled with this skill, read on demand — do not read them all up front:
 
 | | |

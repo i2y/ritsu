@@ -4,12 +4,36 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary Python module and an ordinary Go package. No
-runtime to install, no configuration, and no dependency beyond the
-standard library — that last one is a **checked** property, not a claim:
-`rulec test` runs the Go side with `GOPROXY=off`.
+Out comes an ordinary Python module, an ordinary TypeScript module and
+an ordinary Go package. No runtime to install, no configuration, and no
+dependency beyond the standard library — that last one is a **checked**
+property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
 
 A rule that does not pass `check` generates nothing.
+
+## Output languages
+
+Three are supported today — Python, TypeScript and Go — and **Java,
+Kotlin, Swift and SQL are planned**. The point is that one table should be able to give the
+front end, the back end, the mobile app and the database the same answer,
+and that this is *provable* through the agreement check that already
+exists.
+
+| | status | needs |
+|---|---|---|
+| Python | supported | `python3` |
+| TypeScript | supported | just `node` — no build step, no tsconfig |
+| Go | supported | `go` |
+| Java | planned | a JDK; single-file execution means the runner needs no build tool |
+| Kotlin | planned | kotlinc |
+| Swift | planned | swiftc |
+| SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, so the dialect and the shape get settled first |
+
+One rule governs all of them: **a language that cannot join the
+byte-for-byte agreement check does not go in.** Generated code that
+cannot be held against the reference evaluator sits outside the claim
+this tool makes. Adding the third, TypeScript, cost about 700 lines in
+the generator.
 
 ## What the output looks like
 
