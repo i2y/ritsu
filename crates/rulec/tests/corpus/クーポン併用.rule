@@ -1,5 +1,5 @@
 rule クーポン併用(coupon_stack) v1
-description "二つの導出が入力を共有する 一意 の表。W114 と生成コードの番人の題材（§6.2、§11）"
+description "二つの導出が入力を共有する 一意 の表。W114 と生成コードのガードの題材（§6.2、§11）"
 
 enum 判定(verdict) = 対象外(no) default | 対象(yes)
 

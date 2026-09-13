@@ -25,6 +25,7 @@ nav = [
   { "What it proves" = "checks.md" },
   { "Generate and call" = "generate.md" },
   { "Compare and replay" = "compare.md" },
+  { Examples = "examples.md" },
   { "For agents" = "agents.md" },
   { Reference = [
     { Grammar = "reference.md" },

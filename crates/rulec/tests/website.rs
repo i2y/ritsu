@@ -22,7 +22,7 @@ const SYNCED: &[&str] = &["agents.md", "reference.md", "formats.md", "generated-
 
 /// The pages written for the site itself, in both languages.
 const AUTHORED: &[&str] =
-    &["index.md", "install.md", "tour.md", "checks.md", "generate.md", "compare.md"];
+    &["index.md", "install.md", "tour.md", "checks.md", "generate.md", "compare.md", "examples.md"];
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
@@ -172,4 +172,51 @@ fn サイトの相対リンクは実在する() {
             assert!(root().join(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
         }
     }
+}
+
+/// The examples page shows ten corpus rules in full. They are the rules the rest of the
+/// suite runs — `check` passes, the examples execute, and the three implementations agree —
+/// so the value of the page is entirely in the sources on it being *those* sources. A page
+/// that drifts by one cell is worse than no page: it shows a rule nothing has ever run.
+#[test]
+fn 例のページの規則はコーパスと一字一句同じ() {
+    for lang in ["docs", "docs-ja"] {
+        let page = read(&format!("website/{lang}/examples.md"));
+        let blocks: Vec<&str> = page
+            .split("\n```\n")
+            .skip(1)
+            .step_by(2)
+            .collect();
+        assert!(blocks.len() >= 10, "{lang}: 例が少なすぎる ({} 本)", blocks.len());
+        for b in &blocks {
+            // The first line is `rule 名前(alias) v1`; the corpus file is named after it.
+            let name = b
+                .lines()
+                .next()
+                .and_then(|l| l.strip_prefix("rule "))
+                .and_then(|l| l.split('(').next())
+                .unwrap_or_else(|| panic!("{lang}: 規則の行で始まっていない: {b}"));
+            let want = read(&format!("tests/corpus/{name}.rule"));
+            assert_eq!(
+                b.trim_end(),
+                want.trim_end(),
+                "{lang}: 例のページの {name} がコーパスと違う。`python3 website/tools/make_examples.py` で作り直してください"
+            );
+        }
+    }
+}
+
+/// Both languages show the same rules in the same order. The language switcher only swaps a
+/// path prefix, so a reader who switches mid-page should land on the same example.
+#[test]
+fn 例のページは両言語で同じ規則を同じ順に並べる() {
+    let names = |lang: &str| -> Vec<String> {
+        read(&format!("website/{lang}/examples.md"))
+            .split("\n```\n")
+            .skip(1)
+            .step_by(2)
+            .filter_map(|b| b.lines().next()?.strip_prefix("rule ")?.split('(').next().map(String::from))
+            .collect()
+    };
+    assert_eq!(names("docs"), names("docs-ja"), "例の並びが言語で違う");
 }

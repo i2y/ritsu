@@ -69,6 +69,34 @@ engine, no configuration, no dependency beyond the standard library.
 
 ---
 
+## What this is — a harness for an agent turning table-shaped rules into code
+
+A great many business rules **are already written as tables**. A shipping tariff, a fee
+schedule, which discounts apply, whether a return is accepted, which period a date falls in.
+The table lives in a spreadsheet, a published policy, or a wiki page, and an engineer rewrites
+it as a chain of `if`s. That is the normal way it goes.
+
+rulec is **a harness for handing that rewrite to an AI agent** — a workbench, with guards on
+it. It has four sides.
+
+| | |
+|---|---|
+| **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
+| **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
+| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python and Go that nobody edits by hand |
+| **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
+
+The agent's own instructions are in [For agents](agents.md). They are written to be handed to
+an agent as a skill, and every rulec command has `--format json`, so an agent never parses
+prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
+the JSON shape do not**.
+
+In one line: **for business rules that can be written as a table, a tool that lets an agent
+run the whole loop itself — write it, prove it, fix it, generate it, and show a person what
+changed.**
+
+---
+
 ## What kind of rule is this language for
 
 **A rule that decides one transaction, in one shot, from a fixed number of flat

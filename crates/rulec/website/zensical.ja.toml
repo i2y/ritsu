@@ -25,6 +25,7 @@ nav = [
   { "何を証明するか" = "checks.md" },
   { "生成して呼ぶ" = "generate.md" },
   { "突き合わせと再生" = "compare.md" },
+  { "例で見る" = "examples.md" },
   { "エージェント向け" = "agents.md" },
   { "リファレンス" = [
     { "文法" = "reference.md" },

@@ -18,9 +18,15 @@ website/
 
 ## One source of truth
 
-Six pages are **authored here**, in both languages: `index`, `install`,
-`tour`, `checks`, `generate`, `compare`. They are the tour, written for
-a reader arriving at the site.
+Seven pages are **authored here**, in both languages: `index`, `install`,
+`tour`, `checks`, `generate`, `compare`, `examples`. They are the tour,
+written for a reader arriving at the site.
+
+`examples.md` is **generated** by `tools/make_examples.py` from
+`tests/corpus/*.rule`, so the sources on it cannot drift from the rules
+the test suite actually runs; `tests/website.rs` holds it to them. Edit
+the prose at the top of the script and re-run it. The output is
+committed, so building the site needs no Python.
 
 Five pages are **copied in by `sync.sh`** and are not committed — they
 are the repository's own documents, and they are tested there:
