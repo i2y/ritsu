@@ -1,0 +1,8 @@
+error[E111]: The examples have no column for output 素割引
+  --> tests/mutants/m_e111.rule:40 examples
+   |
+40 | | 10000円  | 0円        | 率引き   | 10%    | 0円   | false        | true   | 1000円 |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no expected value for 素割引
+   |
+ The examples are the only wedge that catches errors the three-way agreement misses, so every output is written.
+ Hint: add a `素割引` column to the header.

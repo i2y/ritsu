@@ -1,7 +1,7 @@
 error[E011]: 公開面の名前に ASCII 別名がありません
   --> tests/mutants/m_e011.rule:1
   |
-1 | 規則 ゆうパック運賃(yupack_fee) v1
+1 | rule ゆうパック運賃(yupack_fee) v1
   |      ^^^^^^^^^^^^^^
   |
  不足: 入力 あて先

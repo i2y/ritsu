@@ -1,41 +1,41 @@
-規則 送料(shipping_fee) v4
-説明 "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、既定扱い、上から の要確認 1 対を行使する"
+rule 送料(shipping_fee) v4
+description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対を行使する"
 
-取込 標準/都道府県
+import std/都道府県
 
-型 会員区分(member_kind) = 一般(basic) 既定扱い | ゴールド(gold) 既定扱い | プラチナ(platinum)
-群 遠隔地(remote) = 北海道 ・ 沖縄県
+enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
+group 遠隔地(remote) = 北海道 ・ 沖縄県
 
-入力
+inputs
   届け先(dest)    : 都道府県
-  重量(weight)    : 質量[g]        範囲 >=1g <=40kg
-  注文金額(total) : 金額[円, 税込]  範囲 >=0円 <=1000万円
+  重量(weight)    : mass[g]        range >=1g <=40kg
+  注文金額(total) : money[円, incl_tax]  range >=0円 <=1000万円
   会員(member)    : 会員区分
 
-出力
-  送料(fee) : 金額[円, 税込]  丸め 切り上げ(10円)
+outputs
+  送料(fee) : money[円, incl_tax]  round up(10円)
 
 # 真偽の定義。原子は入力への単項テストなので、DNF 展開で箱和に落ちる（§5.3、§6.2）
-定義 大口(bulk) : 真偽 = 注文金額 >= 3万円
+define 大口(bulk) : bool = 注文金額 >= 3万円
 
-表 基本送料(base_fee)
-方式 一意
-| 届け先       | 重量    | → 基本送料(base) : 金額[円, 税込] |
-| 遠隔地       | <=2000g | 1200円                            |
-| 遠隔地       | >2000g  | 1800円                            |
-| 以外: 遠隔地 | <=2000g | 800円                             |
-| 以外: 遠隔地 | >2000g  | 1100円                            |
+table 基本送料(base_fee)
+policy unique
+| 届け先      | 重量    | → 基本送料(base) : money[円, incl_tax] |
+| 遠隔地      | <=2000g | 1200円                                 |
+| 遠隔地      | >2000g  | 1800円                                 |
+| not: 遠隔地 | <=2000g | 800円                                  |
+| not: 遠隔地 | >2000g  | 1100円                                 |
 
-表 負担判定(payer)
-方式 上から
-| 大口 | 会員     | → 負担率(pay_rate) : 率 |
-| 真   | -        | 0%                      |
-| -    | プラチナ | 50%                     |
-| -    | -        | 100%                    |
+table 負担判定(payer)
+policy first
+| 大口 | 会員     | → 負担率(pay_rate) : rate |
+| true | -        | 0%                        |
+| -    | プラチナ | 50%                       |
+| -    | -        | 100%                      |
 
-結果 送料 = 基本送料 × 負担率
+result 送料 = 基本送料 × 負担率
 
-例
+examples
 | 届け先 | 重量  | 注文金額 | 会員     | → 送料 |
 | 沖縄県 | 2500g | 40000円  | 一般     | 0円    |
 | 東京都 | 1999g | 12000円  | プラチナ | 400円  |

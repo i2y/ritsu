@@ -1,0 +1,8 @@
+error[E113]: The condition of definition 得か is not a unary test on an input or derived value
+  --> tests/mutants/m_e113.rule:47
+   |
+47 | define 得か(is_good) : bool = 素割引 >= 上限額
+   |                               ^^^^^^^^^^^^^^^^
+   |
+ A linear combination of inputs must be declared with `derive` before it is compared. To compare with a table output, the right way is to add a boolean output column to that table.
+ This restriction is what makes the completeness and overlap checks finite (§5.3, §6.2).

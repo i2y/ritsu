@@ -1,0 +1,8 @@
+error[E112]: The range of the derived value does not contain the values it can actually reach
+  --> tests/mutants/m_e112.rule:24 derived value 最低差
+   |
+24 | derive 最低差(min_gap) : money[円,incl_tax] = 現在残額 − 最低購入額  range >=0円 <=1000万円
+   |                                                                      ^^^^^^^^^^^^^^^^^^^^^^ the reachable interval is >=-100万円 <=1000万円
+   |
+ With a range that is too narrow, the completeness check answers "complete" without ever seeing the values that actually occur.
+ Hint: widen the range to >=-100万円 <=1000万円. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.

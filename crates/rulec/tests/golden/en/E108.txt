@@ -1,0 +1,9 @@
+error[E108]: Cannot prove that 率割引 fits in int64
+  --> tests/mutants/m_e108.rule:37
+   |
+37 | define 率割引(rate_off) : money[円,incl_tax] = 元価 × 割引率
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The reachable interval is 0円 to 100000兆円 and the step is 1/100, so the stored integer reaches 10000000000000000000.
+ Hint: narrow the input ranges, or insert one rounding step along the way.
+ Where to round is a business decision that moves yen, so the tool does not decide it on its own (§7.1).

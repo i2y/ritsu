@@ -1,0 +1,7 @@
+error[E103]: This column is length[cm], but `1200円` is written here
+  --> tests/mutants/m_e103.rule:26 table サイズ判定
+   |
+26 | | <=1200円   | S60                         |
+   |   ^^^^^^^^
+   |
+ `1200円` is not a unit of length[cm].

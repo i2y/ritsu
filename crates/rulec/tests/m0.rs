@@ -1,7 +1,7 @@
-//! M0 の受け入れ条件（§13）。
+//! Acceptance conditions for M0 (§13).
 //!
-//! 1. コーパス全部が check を通ること。
-//! 2. 誤りを一つずつ仕込んだ変異ファイルが、決めたコードをそのまま出すこと。
+//! 1. The whole corpus passes check.
+//! 2. Mutant files, each seeded with a single error, emit exactly the code decided for them.
 
 use std::path::Path;
 
@@ -39,14 +39,14 @@ fn コーパスは全部通る() {
 
 #[test]
 fn 変異は決めたコードだけを出す() {
-    // 変異ファイルが出す診断の**全集合**を、件数まで固定する。
+    // Pin the **full set** of diagnostics each mutant file emits, down to the counts.
     //
-    // 以前は「E112 を含む」しか見ていなかった。そのせいで、コーパスの改名
-    // （`型 範囲` → `型 適用範囲`、E009 で見つけたもの）に追随せず古いままだった
-    // 変異が E009 を一緒に出していても、golden は E112 だけを拾って緑を返していた。
-    // 余分な一件が赤になる形にしておかないと、材料が腐っても誰も気づかない。
+    // Previously only "contains E112" was checked. Because of that, a mutant that had not followed
+    // a rename in the corpus (`enum 範囲` → `enum 適用範囲`, found through E009) and was emitting E009
+    // as well still passed: golden picked out only E112 and returned green. Unless an extra
+    // diagnostic turns the test red, nobody notices when the material rots.
     //
-    // (変異ファイル, 出る診断の全部, 何を壊したか)
+    // (mutant file, every diagnostic it emits, what was broken)
     let cases: &[(&str, &[(&str, usize)], &str)] = &[
         ("m_e008.rule", &[("E008", 7)], "セルを空にした"),
         ("m_e010.rule", &[("E010", 1)], "`..` を書いた"),
@@ -66,10 +66,10 @@ fn 変異は決めたコードだけを出す() {
         ("m_e112.rule", &[("E112", 1)], "導出の範囲を到達区間より狭くした"),
         ("m_e113.rule", &[("E113", 1)], "表の出力どうしを比べる真偽定義を書いた"),
         ("m_w105.rule", &[("W105", 3)], "上からの表で出力の食い違う重なりを作った"),
-        ("m_w111.rule", &[("W111", 1)], "契約のみ の印を消した"),
+        ("m_w111.rule", &[("W111", 1)], "contract_only の印を消した"),
     ];
 
-    // 材料が増えたのに表に足し忘れる、という抜けも塞ぐ。
+    // Also close the gap of adding material but forgetting to add it to the table.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants");
     let on_disk = std::fs::read_dir(&dir).expect("変異の置き場が無い").count();
     assert_eq!(on_disk, cases.len(), "変異ファイルの数と、固定した数が合わない");
@@ -88,7 +88,7 @@ fn 変異は決めたコードだけを出す() {
 
 #[test]
 fn 遮蔽は三分類される() {
-    // §4: 構造的と同値は件数だけ、要確認だけが一覧に出る。
+    // §4: structural and equivalent get counts only; only needs-confirmation pairs are listed.
     let r = |rel: &str| {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
         let src = std::fs::read_to_string(&p).unwrap();
@@ -101,7 +101,7 @@ fn 遮蔽は三分類される() {
     let k = r("tests/corpus/クーポン割引.rule").shadow;
     assert_eq!((k.structural, k.equivalent, k.confirm), (4, 6, 0), "守り行は同値");
 
-    // 出力を食い違わせると要確認が立つ。
+    // Making the outputs disagree raises needs-confirmation.
     let m = r("tests/mutants/m_w105.rule");
     assert!(m.shadow.confirm > 0, "出力が違う部分交差は要確認になるはず");
     assert!(
@@ -112,14 +112,14 @@ fn 遮蔽は三分類される() {
 
 #[test]
 fn 遮蔽は上からの表でだけ出る() {
-    // 一意 の表に W105 は出ない（重なりはエラーになる）。
+    // W105 does not appear in a `unique` table (an overlap there is an error).
     let ds = codes("tests/corpus/ゆうパック運賃.rule");
     assert!(!ds.iter().any(|c| c == "E105"), "上から の重なりがエラーになってはいけない");
 }
 
 #[test]
 fn 例は実行される仕様である() {
-    // コーパスの例が全部当たること。当たらなければ E107 が出る。
+    // Every example in the corpus must hit. A miss emits E107.
     for f in CORPUS {
         assert!(!codes(f).iter().any(|c| c == "E107"), "{f} の例が外れた");
     }
@@ -127,15 +127,15 @@ fn 例は実行される仕様である() {
 
 #[test]
 fn 篩が判定できない重なりは警告に落ちる() {
-    // §6.2: 二つの導出が入力を共有すると、独立な区間の篩は従属を見られない。
-    // 証明していないことを証明済みの顔で出さないので、E105 ではなく W114。
+    // §6.2: when two derivations share an input, the sieve of independent intervals cannot see the
+    // dependency. Nothing unproven is presented as proven, so it is W114, not E105.
     let ds = codes("tests/corpus/クーポン併用.rule");
     assert_eq!(ds.iter().filter(|c| *c == "W114").count(), 1, "W114 が一件出るはず");
     assert!(!ds.iter().any(|c| c == "E105"), "判定できない重なりをエラーにしてはいけない");
     assert!(!ds.iter().any(|c| c == "E101"), "この表は完全なはず");
 }
 
-/// 直書きのソースを検査して、出たコードを返す。
+/// Check an inline source and return the codes it emitted.
 fn inline(src: &str) -> Vec<String> {
     rulec::check_source(src, "inline.rule")
         .iter()
@@ -143,20 +143,20 @@ fn inline(src: &str) -> Vec<String> {
         .collect()
 }
 
-const HEAD: &str = "規則 試し(t) v1\n\n入力\n  x(x) : 真偽\n\n出力\n  r(r) : 真偽\n\n";
+const HEAD: &str = "rule 試し(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n";
 
 #[test]
 fn 構文側の台帳も全部鳴る() {
     let cases: &[(&str, &str, &str)] = &[
-        ("E001", "規則 試し(t) v1\n説明 \"閉じない\n", "文字列が閉じていない"),
-        ("E003", "説明 \"規則で始まらない\"\n", "規則 の行で始まらない"),
-        ("E005", "規則 試し(t) v1\n知らない語 x\n", "この位置で知らない語"),
-        ("E006", "規則 試し(t) v1\n型 区分(k) 甲(a)\n", "宣言に = がない"),
-        ("E007", "規則 試し(t) v1\n\n表 t(t)\n方式 なんとか\n| x | → r(r) : 真偽 |\n| - | 真 |\n", "知らない方式"),
-        ("E012", &format!("{HEAD}結果 r = 知らない名前\n"), "宣言されていない名前"),
-        ("E013", "規則 試し(t) v1\n取込 標準/ありません\n", "取込先が無い"),
-        ("E004", "規則 試し(t) v1\n= 語で始まらない\n", "行頭に語がない"),
-        ("E002", "規則 試し(t) v1\n\u{7}\n", "制御文字は名前になれない"),
+        ("E001", "rule 試し(t) v1\ndescription \"閉じない\n", "文字列が閉じていない"),
+        ("E003", "description \"規則で始まらない\"\n", "rule の行で始まらない"),
+        ("E005", "rule 試し(t) v1\n知らない語 x\n", "この位置で知らない語"),
+        ("E006", "rule 試し(t) v1\nenum 区分(k) 甲(a)\n", "宣言に = がない"),
+        ("E007", "rule 試し(t) v1\n\ntable t(t)\npolicy なんとか\n| x | → r(r) : bool |\n| - | true |\n", "知らない方式"),
+        ("E012", &format!("{HEAD}result r = 知らない名前\n"), "宣言されていない名前"),
+        ("E013", "rule 試し(t) v1\nimport std/ありません\n", "取込先が無い"),
+        ("E004", "rule 試し(t) v1\n= 語で始まらない\n", "行頭に語がない"),
+        ("E002", "rule 試し(t) v1\n\u{7}\n", "制御文字は名前になれない"),
     ];
     for (want, src, what) in cases {
         let got = inline(src);
@@ -166,17 +166,19 @@ fn 構文側の台帳も全部鳴る() {
 
 #[test]
 fn 重なりのない上からは一意を勧める() {
-    // W110: 順序に意味が無いなら 一意 のほうが、並べ替えが意味を変えないことを保証できる。
+    // W110: if the order carries no meaning, `unique` can guarantee that reordering does not
+    // change the meaning.
     let src = format!(
-        "{HEAD}表 t(t)\n方式 上から\n| x  | → r(r) : 真偽 |\n| 真 | 真 |\n| 偽 | 偽 |\n"
+        "{HEAD}table t(t)\npolicy first\n| x  | → r(r) : bool |\n| true | true |\n| false | false |\n"
     );
     assert!(inline(&src).iter().any(|c| c == "W110"), "{:?}", inline(&src));
 }
 
 #[test]
 fn 真偽定義の列が解析される() {
-    // §1.2 のスケッチ。真偽の 定義 を列に置く正常系。
-    // 負担判定は 上から で、行1（大口）と行2（プラチナ）が部分交差して出力が違う。
+    // The sketch from §1.2. The happy path of putting a boolean definition in a column.
+    // 負担判定 is `first`, and row 1 (大口) and row 2 (プラチナ) partially intersect with
+    // differing outputs.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/送料.rule");
     let src = std::fs::read_to_string(&p).unwrap();
     let r = rulec::report(&src, "送料.rule");
@@ -190,8 +192,8 @@ fn 真偽定義の列が解析される() {
 
 #[test]
 fn 日付の列が解析される() {
-    // 日付は順序数で持ち、比較と範囲の機構をそのまま使う（§2.1）。
-    // 境界に穴を開けると、その暦日が証人として出る。
+    // Dates are held as ordinals and reuse the comparison and range machinery as is (§2.1).
+    // Opening a hole at a boundary makes that calendar day appear as the witness.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants/m_e101d.rule");
     let src = std::fs::read_to_string(&p).unwrap();
     let ds = rulec::check_source(&src, "m.rule");
@@ -206,9 +208,10 @@ fn 日付の列が解析される() {
 
 #[test]
 fn 両端含みの敷き詰めは穴を作らない() {
-    // 日付を y*10000+m*100+d で持つと、月末と翌月初のあいだに実在しない整数の
-    // 隙間ができ、`<=2026-03-31` と `>=2026-04-01` の敷き詰めが偽の E101 を出す。
-    // 通算日で持ち、隣接する境界のあいだの開区間を作らないことで消える（§2.1）。
+    // Holding dates as y*10000+m*100+d leaves a gap of nonexistent integers between the end of a
+    // month and the start of the next, so a tiling of `<=2026-03-31` and `>=2026-04-01` emits a
+    // false E101. It goes away by holding dates as day counts and never creating an open interval
+    // between adjacent boundaries (§2.1).
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/期間区分.rule");
     let src = std::fs::read_to_string(&p).unwrap();
     let ds = rulec::check_source(&src, "期間区分.rule");
@@ -221,17 +224,18 @@ fn 両端含みの敷き詰めは穴を作らない() {
 
 #[test]
 fn 日付どうしの比較が原子として通る() {
-    // §5.3 の第二の原子。導出にできない型（日付・列挙）どうしは直接比べられる。
+    // The second atom of §5.3. Types that cannot be made into derivations (dates, enums) may be
+    // compared with each other directly.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/適用順序.rule");
     let src = std::fs::read_to_string(&p).unwrap();
     let ds = rulec::check_source(&src, "適用順序.rule");
     assert!(!ds.iter().any(|d| d.code == "E113"), "日付どうしの比較は通る");
     assert!(!ds.iter().any(|d| d.code == "E107"), "例が全部当たる");
 
-    // 数値どうしを直接比べるのは、導出にすれば厳密に解析できるので E113 のまま。
+    // Comparing numbers directly stays E113, since as a derivation it can be analyzed exactly.
     let bad = src.replace("A期限 <= B期限", "A期限 <= B期限");
     let _ = bad;
-    let num = "規則 t(t) v1\n\n入力\n  a(a) : 金額[円, 税込] 範囲 >=0円 <=100円\n  b(b) : 金額[円, 税込] 範囲 >=0円 <=100円\n\n出力\n  r(r) : 真偽\n\n定義 x(x) : 真偽 = a <= b\n";
+    let num = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax] range >=0円 <=100円\n  b(b) : money[円, incl_tax] range >=0円 <=100円\n\noutputs\n  r(r) : bool\n\ndefine x(x) : bool = a <= b\n";
     assert!(
         rulec::check_source(num, "n.rule").iter().any(|d| d.code == "E113"),
         "金額どうしの直接比較は E113 のまま"
@@ -240,14 +244,16 @@ fn 日付どうしの比較が原子として通る() {
 
 #[test]
 fn 刻み隣接の空座標は三つの型で作られない() {
-    // 隣り合う境界の差が刻みちょうどなら、そのあいだに値は無い。空の座標を作ると
-    // 両端含みの敷き詰めが偽の E101 を出す（§6.3）。日付だけでなく、金額も率も
-    // 同じ腕を通るので、三本とも固定する。日付以前から潜んでいたバグだった。
+    // If adjacent boundaries differ by exactly one step, there is no value between them. Creating
+    // an empty coordinate makes a closed-interval tiling emit a false E101 (§6.3). Not only dates
+    // but money and rates go through the same arm, so all three are pinned. The bug had been
+    // lurking since before dates existed.
 
-    // 金額: <=1000円 と >=1001円 は隣接する（実行時表現は円の整数一本）。
-    let money = "規則 t(t) v1\n\n入力\n  a(a) : 金額[円, 税込]  範囲 >=0円 <=10000円\n\n\
-                 出力\n  r(r) : 真偽\n\n表 x(x)\n方式 一意\n\
-                 | a        | → r(r) : 真偽 |\n| <=1000円 | 真 |\n| >=1001円 | 偽 |\n";
+    // Money: <=1000円 and >=1001円 are adjacent (the runtime representation is a single integer in
+    // yen).
+    let money = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円\n\n\
+                 outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
+                 | a        | → r(r) : bool |\n| <=1000円 | true |\n| >=1001円 | false |\n";
     let ds = rulec::check_source(money, "money.rule");
     assert!(
         !ds.iter().any(|d| d.code == "E101"),
@@ -255,10 +261,10 @@ fn 刻み隣接の空座標は三つの型で作られない() {
         ds.iter().map(|d| d.code).collect::<Vec<_>>()
     );
 
-    // 率: 刻み 1% なら <=10% と >=11% が隣接する。
-    let rate = "規則 t(t) v1\n\n入力\n  a(a) : 率[刻み 1%]  範囲 >=0% <=100%\n\n\
-                出力\n  r(r) : 真偽\n\n表 x(x)\n方式 一意\n\
-                | a      | → r(r) : 真偽 |\n| <=10%  | 真 |\n| >=11%  | 偽 |\n";
+    // Rate: with a step of 1%, <=10% and >=11% are adjacent.
+    let rate = "rule t(t) v1\n\ninputs\n  a(a) : rate[step 1%]  range >=0% <=100%\n\n\
+                outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
+                | a      | → r(r) : bool |\n| <=10%  | true |\n| >=11%  | false |\n";
     let ds = rulec::check_source(rate, "rate.rule");
     assert!(
         !ds.iter().any(|d| d.code == "E101"),
@@ -266,7 +272,7 @@ fn 刻み隣接の空座標は三つの型で作られない() {
         ds.iter().map(|d| d.code).collect::<Vec<_>>()
     );
 
-    // 逆に、刻みより広く空けたら穴として出る（検査が効いていることの対照）。
+    // Conversely, a gap wider than the step shows up as a hole (the control that the check works).
     let hole = money.replace(">=1001円", ">=1002円");
     assert!(
         rulec::check_source(&hole, "hole.rule").iter().any(|d| d.code == "E101"),
@@ -276,13 +282,14 @@ fn 刻み隣接の空座標は三つの型で作られない() {
 
 #[test]
 fn 定義が絡む実在の重なりは入力を構成して示す() {
-    // §6.2「定義軸の証人」: 領域解析は定義を自由軸として置くだけなので、
-    // 交差箱の座標が実在するとは限らない。入力を構成して評価器に定義まで
-    // 計算させ、構成できたものだけを実在の矛盾（E105）として扱う。
-    let src = "規則 t(t) v1\n\n入力\n  金額(a) : 金額[円, 税込]  範囲 >=0円 <=10000円\n  区分(b) : 真偽\n\n\
-               出力\n  r(r) : 真偽\n\n定義 大口(bulk) : 真偽 = 金額 >= 3000円\n\n\
-               表 x(x)\n方式 一意\n| 大口 | 区分 | → r(r) : 真偽 |\n\
-               | 真   | -    | 真 |\n| -    | 真   | 偽 |\n| 偽   | 偽   | 偽 |\n";
+    // §6.2 "witness on a definition axis": region analysis merely places definitions as free axes,
+    // so the coordinates of an intersection box need not actually exist. Construct an input, let
+    // the evaluator compute the definitions too, and treat only what could be constructed as a
+    // real contradiction (E105).
+    let src = "rule t(t) v1\n\ninputs\n  金額(a) : money[円, incl_tax]  range >=0円 <=10000円\n  区分(b) : bool\n\n\
+               outputs\n  r(r) : bool\n\ndefine 大口(bulk) : bool = 金額 >= 3000円\n\n\
+               table x(x)\npolicy unique\n| 大口 | 区分 | → r(r) : bool |\n\
+               | true   | -    | true |\n| -    | true   | false |\n| false   | false   | false |\n";
     let ds = rulec::check_source(src, "d.rule");
     let e105 = ds.iter().find(|d| d.code == "E105").expect("実在する重なりなので E105");
     let built = e105
@@ -300,16 +307,16 @@ fn 定義が絡む実在の重なりは入力を構成して示す() {
 
 #[test]
 fn 定義が矛盾する重なりは番人へ降ろす() {
-    // 同じ入力について `>=3万円` と `<=1000円` は同時に成り立たないが、
-    // 領域解析は定義を自由軸として扱うのでこの交差を消せない。証人を
-    // 構成できないので、`一意` でもエラーにせず W114 と番人へ降ろす
-    // （未証明の存在で CI を止めない。§6.2）。**非存在の証明ではない**ので
-    // 生成コードには実行時の番人が入る。
-    let src = "規則 t(t) v1\n\n入力\n  金額(a) : 金額[円, 税込]  範囲 >=0円 <=10万円\n\n\
-               出力\n  r(r) : 真偽\n\n\
-               定義 大口(bulk) : 真偽 = 金額 >= 3万円\n定義 小口(small) : 真偽 = 金額 <= 1000円\n\n\
-               表 x(x)\n方式 一意\n| 大口 | 小口 | → r(r) : 真偽 |\n\
-               | 真   | -    | 真 |\n| -    | 真   | 偽 |\n| 偽   | 偽   | 偽 |\n";
+    // For the same input, `>=3万円` and `<=1000円` cannot both hold, but region analysis treats
+    // definitions as free axes and so cannot eliminate this intersection. Since no witness can be
+    // constructed, even under `unique` it is not an error; it is demoted to W114 and a guard (an
+    // unproven existence must not stop CI; §6.2). It is **not a proof of nonexistence**, so the
+    // generated code gets a runtime guard.
+    let src = "rule t(t) v1\n\ninputs\n  金額(a) : money[円, incl_tax]  range >=0円 <=10万円\n\n\
+               outputs\n  r(r) : bool\n\n\
+               define 大口(bulk) : bool = 金額 >= 3万円\ndefine 小口(small) : bool = 金額 <= 1000円\n\n\
+               table x(x)\npolicy unique\n| 大口 | 小口 | → r(r) : bool |\n\
+               | true   | -    | true |\n| -    | true   | false |\n| false   | false   | false |\n";
     let ds = rulec::check_source(src, "d.rule");
     assert!(
         !ds.iter().any(|d| d.code == "E105"),
@@ -327,7 +334,7 @@ fn 定義が矛盾する重なりは番人へ降ろす() {
         "非存在を断定していないことを言う: {:?}",
         w.notes
     );
-    // 対になる番人が生成コードに入る（§8.1）。
+    // The matching guard goes into the generated code (§8.1).
     let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
     let py = rulec::codegen::Gen::new(&f, &c, src).python();
     assert!(py.contains("番人"), "番人が入っていない");
@@ -336,8 +343,8 @@ fn 定義が矛盾する重なりは番人へ降ろす() {
 
 #[test]
 fn readmeの例は通る() {
-    // README に載せた例が腐らないように、毎回検査する。
-    // 通らない例を README に載せるのは、この道具の趣旨に反する。
+    // Check the example in the README every time so it does not rot.
+    // Putting an example that does not pass into the README goes against the point of this tool.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md");
     let md = std::fs::read_to_string(&p).expect("README.md が読めない");
     let head = md.find("## 書き方").expect("## 書き方 の節が無い");
@@ -352,10 +359,10 @@ fn readmeの例は通る() {
         ds.iter().map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>()
     );
 
-    // 「生成されるコード」に貼った抜粋が、実際の生成物と食い違わないこと。
-    // 抜粋は `...` で端折ってあるので全体は比べられないが、載せた行が
-    // 一行残らず生成物に在ることは確かめられる。README の中の生成物は
-    // 手で書き写したもので、手で書き写したものは腐る。
+    // The excerpts pasted under "generated code" must not diverge from the actual output.
+    // The excerpts are abridged with `...`, so the whole cannot be compared, but it can be verified
+    // that every line shown is in the output. The generated code in the README was copied by hand,
+    // and hand-copied text rots.
     let (f, c) = rulec::prepare(src, "README.md").expect("README の例は検査を通る");
     let g = rulec::codegen::Gen::new(&f, &c, src);
     let py = g.python();
@@ -377,11 +384,11 @@ fn readmeの例は通る() {
 
 #[test]
 fn 解析できない型の列は黙って飛ばさない() {
-    // 型が解析できないと `TableRegion::build` が諦め、その表の完全性も重複も
-    // 検査されないまま ok が出ていた。日付と optional で二度踏んだ形なので、
-    // 一般の防波堤として E110 で止める（§6.3）。
-    let src = "規則 t(t) v1\n\n入力\n  s(s) : 文字列\n\n出力\n  r(r) : 真偽\n\n\
-               表 x(x)\n方式 一意\n| s | → r(r) : 真偽 |\n| \"a\" | 真 |\n";
+    // When a type could not be analyzed, `TableRegion::build` gave up and ok was printed with
+    // neither the completeness nor the duplication of that table checked. Having stepped on this
+    // twice, with dates and with optional, we stop with E110 as a general breakwater (§6.3).
+    let src = "rule t(t) v1\n\ninputs\n  s(s) : string\n\noutputs\n  r(r) : bool\n\n\
+               table x(x)\npolicy unique\n| s | → r(r) : bool |\n| \"a\" | true |\n";
     let ds = rulec::check_source(src, "s.rule");
     assert!(ds.iter().any(|d| d.code == "E110"), "解析できない列は E110: {:?}",
             ds.iter().map(|d| d.code).collect::<Vec<_>>());
@@ -389,27 +396,27 @@ fn 解析できない型の列は黙って飛ばさない() {
 
 #[test]
 fn optionalの列も検査される() {
-    // `T?` は「無し」を一つ足した列挙として扱う。穴を開ければ E101 が出る。
-    let base = "規則 t(t) v1\n\n型 区分(k) = 甲(a) | 乙(b)\n\n\
-                入力\n  金額(amt) : 金額[円, 税込]  範囲 >=0円 <=100万円\n  任意値(opt) : 区分?\n\n\
-                出力\n  r(r) : 真偽\n\n表 x(x)\n方式 一意\n\
-                | 金額      | 任意値   | → r(r) : 真偽 |\n\
-                | <1000円   | 無し     | 真 |\n\
-                | <1000円   | 甲 ・ 乙 | 偽 |\n\
-                | >=1000円  | -        | 偽 |\n";
+    // `T?` is treated as an enum with one extra value, "none". Opening a hole emits E101.
+    let base = "rule t(t) v1\n\nenum 区分(k) = 甲(a) | 乙(b)\n\n\
+                inputs\n  金額(amt) : money[円, incl_tax]  range >=0円 <=100万円\n  任意値(opt) : 区分?\n\n\
+                outputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n\
+                | 金額      | 任意値   | → r(r) : bool |\n\
+                | <1000円   | none     | true |\n\
+                | <1000円   | 甲 ・ 乙 | false |\n\
+                | >=1000円  | -        | false |\n";
     let ds = rulec::check_source(base, "o.rule");
     assert!(!rulec::has_error(&ds), "完全な表は通る: {:?}",
             ds.iter().map(|d| format!("{}:{}", d.code, d.title)).collect::<Vec<_>>());
 
-    // 「無し」の行を落とすと穴が開く。飛ばしていたら気づけない。
-    let holed = base.replace("| <1000円   | 無し     | 真 |\n", "");
+    // Dropping the "none" row opens a hole. Had the column been skipped, nobody would notice.
+    let holed = base.replace("| <1000円   | none     | true |\n", "");
     let ds = rulec::check_source(&holed, "o.rule");
-    assert!(ds.iter().any(|d| d.code == "E101"), "無し の穴を捕まえるはず: {:?}",
+    assert!(ds.iter().any(|d| d.code == "E101"), "none の穴を捕まえるはず: {:?}",
             ds.iter().map(|d| d.code).collect::<Vec<_>>());
 }
 
-/// README のキーワード表が、パーサが実際に受理する語と一致すること。
-/// 語を足したのに表に書き忘れる、表に無い語を書く、のどちらも赤にする。
+/// The keyword table in the README must match the words the parser actually accepts.
+/// Both adding a word without writing it in the table, and listing a word the parser lacks, go red.
 #[test]
 fn readmeのキーワード表はパーサと一致する() {
     let md = std::fs::read_to_string(
@@ -428,20 +435,20 @@ fn readmeのキーワード表はパーサと一致する() {
     }
     listed.sort();
     listed.dedup();
-    // `規則` はヘッダ専用でパーサの一覧には無いので、こちらで足して比べる。
+    // `rule` is header-only and not in the parser's list, so add it here before comparing.
     let mut want: Vec<String> =
-        rulec::parse::KEYWORDS.iter().map(|s| s.to_string()).chain(["規則".to_string()]).collect();
+        rulec::parse::KEYWORDS.iter().map(|s| s.to_string()).chain([rulec::kw::RULE.to_string()]).collect();
     want.sort();
     assert_eq!(listed, want, "README のキーワード表とパーサが食い違う");
 }
 
-/// `| `語` | 説明 |` の最初のセルだけを見るための小道具。
+/// A small helper for looking at only the first cell of a `| `語` | 説明 |` row.
 trait FirstCell {
     fn next_or_all(self) -> Vec<String>;
 }
 impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
     fn next_or_all(mut self) -> Vec<String> {
-        let _ = self.next(); // 行頭の `|` の前の空文字
+        let _ = self.next(); // the empty string before the leading `|`
         self.next().map(|s| vec![s.to_string()]).unwrap_or_default()
     }
 }

@@ -1,9 +1,10 @@
-//! 三者一致（§8.5、§9.3）。
+//! Three-way agreement (§8.5, §9.3).
 //!
-//! 参照評価器・生成 Python・生成 Go の三つに同じベクタを流し、正準 JSON の
-//! バイト一致を見る。データも旧実装も要らないので、これが M1 の主力の保証になる。
+//! Feed the same vectors to all three — the reference evaluator, the generated Python, and the
+//! generated Go — and check that the canonical JSON matches byte for byte. It needs neither data
+//! nor a legacy implementation, which makes it the main guarantee of M1.
 //!
-//! python3 と go が無い環境では、その言語だけ飛ばす（飛ばしたことは必ず言う）。
+//! Where python3 or go is missing, only that language is skipped (and the skip is always reported).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -13,8 +14,8 @@ fn root() -> PathBuf {
 }
 
 fn have(cmd: &str) -> bool {
-    // go は `go version`、python3 は `python3 --version`。両方試す。
-    // 片方だけ試して黙って飛ばすと、動いていないのに緑になる。
+    // go takes `go version`, python3 takes `python3 --version`. Try both.
+    // Trying only one and skipping silently would go green without anything having run.
     ["--version", "version"]
         .iter()
         .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
@@ -102,7 +103,8 @@ fn 評価器と生成コードが三者一致する() {
 
 #[test]
 fn 生成物は決定的である() {
-    // §8.5: 同じ .rule と同じ rulec からはバイト同一。ハッシュ順の混入は不合格。
+    // §8.5: the same .rule and the same rulec give byte-identical output. Any leakage of hash order
+    // is a failure.
     let mk = |tag: &str| -> Vec<(String, String)> {
         let dir = std::env::temp_dir().join(format!("rulec-det-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -136,8 +138,9 @@ fn collect(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
 
 #[test]
 fn 生成物は両言語の整形器に素で通る() {
-    // §8.1 基準 5。gofmt を後段で走らせずに、生成の時点で整形済みにする
-    // （後段で走らせると生成物が環境依存になり、§8.5 の決定性が壊れる）。
+    // §8.1 criterion 5. The output is formatted at generation time rather than by running gofmt
+    // afterwards (running it afterwards makes the output environment-dependent and breaks the
+    // determinism of §8.5).
     if !have("go") {
         eprintln!("注意: go が無いので gofmt の検査を飛ばした");
         return;
@@ -161,7 +164,7 @@ fn 生成物は両言語の整形器に素で通る() {
     let listed = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(listed.trim().is_empty(), "gofmt が直したいファイルがある:\n{listed}");
 
-    // Python は少なくとも構文が通ること。
+    // Python must at least parse.
     for (_, alias) in CORPUS {
         let p = dir.join("python").join(format!("{alias}.py"));
         let o = Command::new("python3")
@@ -172,8 +175,8 @@ fn 生成物は両言語の整形器に素で通る() {
         assert!(o.status.success(), "{alias}.py が構文エラー: {}", String::from_utf8_lossy(&o.stderr));
     }
 
-    // PEP 8 側（gofmt -l 空 に相当するもの）。Go と違って Python には唯一の
-    // 整形器が無いので、主張を二つに割って測る。
+    // The PEP 8 side (the counterpart of an empty `gofmt -l`). Unlike Go, Python has no single
+    // formatter, so the claim is split in two and measured separately.
     let Some(ruff) = ruff() else {
         eprintln!("注意: ruff が無いので PEP 8 の検査を飛ばした");
         let _ = std::fs::remove_dir_all(&dir);
@@ -181,7 +184,7 @@ fn 生成物は両言語の整形器に素で通る() {
     };
     let py_dir = dir.join("python");
 
-    // (1) pycodestyle 系（E/W）は行長を除いて一件も出ない。
+    // (1) The pycodestyle family (E/W) reports nothing, line length aside.
     let o = Command::new(&ruff[0])
         .args(&ruff[1..])
         .args(["check", "--select", "E,W", "--ignore", "E501", "--isolated", "--no-cache"])
@@ -194,10 +197,10 @@ fn 生成物は両言語の整形器に素で通る() {
         String::from_utf8_lossy(&o.stdout)
     );
 
-    // (2) 整形器が触りたがる行は、すべて 88 桁を超えている行だけ。
-    // §8.1 は「表の一行を一行に、原本のセルを添えて書く」ことを要求していて、
-    // それは 88 桁に収まらない。折り返し以外の指摘が一つでもあれば、
-    // それは生成器が直すべきものなので落とす。
+    // (2) The only lines the formatter wants to touch are lines longer than 88 columns.
+    // §8.1 demands "one table row per line, with the source cells attached", and that does not fit
+    // in 88 columns. A single complaint that is not about wrapping is something the generator
+    // should fix, so it fails.
     let o = Command::new(&ruff[0])
         .args(&ruff[1..])
         .args(["format", "--check", "--diff", "--no-cache"])
@@ -219,7 +222,7 @@ fn 生成物は両言語の整形器に素で通る() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// ruff の起動の仕方。PATH に在ればそれ、無ければ uvx 経由。どちらも無ければ飛ばす。
+/// How to launch ruff. Use it if it is on PATH, otherwise go through uvx. If neither exists, skip.
 fn ruff() -> Option<Vec<String>> {
     if have("ruff") {
         return Some(vec!["ruff".into()]);
@@ -234,7 +237,7 @@ fn ruff() -> Option<Vec<String>> {
 
 #[test]
 fn 丸めヘルパは両言語で参照実装と一致する() {
-    // §8.5: 表レベルの一致だけでは、端数の出ない表でヘルパの誤りが隠れる。
+    // §8.5: table-level agreement alone lets a helper bug hide in a table that yields no fractions.
     let dir = std::env::temp_dir().join(format!("rulec-round-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out = dir.to_string_lossy().to_string();

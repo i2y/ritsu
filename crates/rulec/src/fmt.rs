@@ -1,12 +1,13 @@
-//! `rulec fmt` — 唯一の整形器（§1.5）。
+//! `rulec fmt` — the one and only formatter (§1.5).
 //!
-//! 列は表ごとに内容最大幅へ揃え、East Asian Width の W と F を 2 桁として数える。
-//! 全角数字は半角へ、比較記号 ≦ ≧ ＜ ＞ は ASCII へ正規化する。
-//! 整形は表の中に閉じるので、再整列の diff も表の中に閉じる。
+//! Columns are aligned to the widest content of each table, counting East Asian Width W and F
+//! as two columns. Full-width digits are normalized to ASCII, and the comparison signs
+//! ≦ ≧ ＜ ＞ to their ASCII forms. Formatting is confined to the table, so the diff of a
+//! realignment is confined to the table too.
 
 use crate::diag::width;
 
-/// 全角数字と全角の比較記号を正規化する。文字列リテラルの中は触らない。
+/// Normalizes full-width digits and full-width comparison signs. String literals are left alone.
 fn normalize(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut in_str = false;
@@ -38,7 +39,7 @@ fn is_row(line: &str) -> bool {
     line.trim_start().starts_with('|')
 }
 
-/// 行末コメントを切り離す。表の行では最後の `|` より後ろが対象。
+/// Splits off the trailing comment. In a table row, only what follows the last `|` counts.
 fn split_comment(line: &str) -> (String, Option<String>) {
     let Some(bar) = line.rfind('|') else {
         return (line.to_string(), None);
@@ -70,7 +71,7 @@ pub fn format(src: &str) -> String {
             i += 1;
             continue;
         }
-        // 連なった `|` 行がひとつの表。幅はこの塊の中だけで決める。
+        // A run of consecutive `|` lines is one table. Widths are decided within this block only.
         let start = i;
         while i < lines.len() && is_row(&lines[i]) {
             i += 1;
@@ -82,9 +83,10 @@ pub fn format(src: &str) -> String {
                 (cells(&body), com)
             })
             .collect();
-        // §5.1: `→` は入力と出力の境目を一度だけ示す。二列目以降に書かれた印は
-        // 受け取ったうえで、正準形へ畳む。パーサは余分な印も読むので、これは
-        // 「どちらでも通るが、保存すると一つの形になる」という整形器の仕事。
+        // §5.1: `→` marks the boundary between inputs and outputs once. Marks written on the
+        // second column onward are accepted, then folded into the canonical form. The parser
+        // reads the extra marks too, so this is the formatter's job: "either form is accepted,
+        // but saving yields one form".
         let mut block = block;
         if let Some((head, _)) = block.first_mut() {
             let mut seen = false;

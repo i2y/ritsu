@@ -1,11 +1,13 @@
-//! `rulec test <生成先>` — 生成物を、利用者の CI でも回せるようにする（§9.3-3、§12）。
+//! `rulec test <output directory>` — lets the generated code be run in the user's CI as well
+//! (§9.3-3, §12).
 //!
-//! 生成物には規則ごとのベクタと期待値が埋めてある。ここでやるのは、それを
-//! 生成 Python と生成 Go に流して、参照評価器が付けた期待値とバイト一致するか
-//! を見ることだけ。**python3 と go の toolchain を使う唯一の段**である（§12）。
+//! The generated files carry the vectors and expected values of each rule. All that happens
+//! here is feeding them through the generated Python and the generated Go and checking that
+//! the output is byte-identical to the expected values attached by the reference evaluator.
+//! **This is the only stage that uses the python3 and go toolchains** (§12).
 //!
-//! 丸めヘルパの単体ベクタ（§8.5）も同じ場で回す。表の一致だけでは、端数の
-//! 出ない表でヘルパの誤りが隠れる。
+//! The unit vectors of the rounding helpers (§8.5) run in the same place. Table agreement
+//! alone would hide a helper bug in a table that never produces fractions.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +16,7 @@ pub struct Outcome {
     pub rule: String,
     pub lang: &'static str,
     pub vectors: usize,
-    /// 何行目で食い違ったか。合っていれば None。
+    /// Which line disagreed. None when everything matched.
     pub diff: Option<String>,
 }
 
@@ -29,9 +31,9 @@ impl Run {
     }
 }
 
-/// 生成物は外部の依存を持たない（`go.mod` は自分の二つだけ）。それを**仮定ではなく
-/// 検査された性質**にするため、Go の取得口を閉じて走らせる。取りに行こうとしたら
-/// 落ちるので、依存がいつの間にか混ざったらここで分かる。
+/// The generated code has no external dependencies (`go.mod` lists only our own two modules).
+/// To make that a **checked property rather than an assumption**, Go runs with its download
+/// path shut. Any attempt to fetch fails, so a dependency that sneaks in shows up here.
 fn closed() -> [(&'static str, &'static str); 2] {
     [("GOPROXY", "off"), ("GOFLAGS", "-mod=mod")]
 }
@@ -42,20 +44,34 @@ fn have(cmd: &str) -> bool {
         .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
 }
 
-/// 最初に食い違った行を、行番号つきで言う。何千行の diff を貼らない。
+/// Report the first line that disagrees, with its line number. No thousand-line diffs.
 fn first_diff(got: &str, want: &str) -> String {
     for (i, (g, w)) in got.lines().zip(want.lines()).enumerate() {
         if g != w {
-            return format!("{} 行目\n      生成: {g}\n      期待: {w}", i + 1);
+            return tr!(
+                "{} 行目\n      生成: {g}\n      期待: {w}",
+                "line {}\n      generated: {g}\n      expected: {w}",
+                i + 1
+            );
         }
     }
-    format!("行数が違います（生成 {} 行 / 期待 {} 行）", got.lines().count(), want.lines().count())
+    tr!(
+        "行数が違います（生成 {} 行 / 期待 {} 行）",
+        "line counts differ (generated {} lines / expected {} lines)",
+        got.lines().count(),
+        want.lines().count()
+    )
 }
 
 pub fn run(dir: &Path) -> Result<Run, String> {
     let vdir = dir.join("vectors");
     let rd = std::fs::read_dir(&vdir).map_err(|_| {
-        format!("`{}` にベクタがありません。先に `rulec gen --out {}` を実行してください", vdir.display(), dir.display())
+        tr!(
+            "`{}` にベクタがありません。先に `rulec gen --out {}` を実行してください",
+            "no vectors in `{}`; run `rulec gen --out {}` first",
+            vdir.display(),
+            dir.display()
+        )
     })?;
     let mut aliases: Vec<String> = Vec::new();
     for e in rd.flatten() {
@@ -68,25 +84,28 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     }
     aliases.sort();
     if aliases.is_empty() {
-        return Err(format!("`{}` にベクタがありません", vdir.display()));
+        return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
 
     let (py, go) = (have("python3"), have("go"));
     let mut out = Run { results: Vec::new(), skipped: Vec::new() };
     if !py {
-        out.skipped.push("python3 が無いので Python 側を飛ばしました".into());
+        out.skipped.push(tr!("python3 が無いので Python 側を飛ばしました", "python3 not found; skipped the Python side"));
     }
     if !go {
-        out.skipped.push("go が無いので Go 側を飛ばしました".into());
+        out.skipped.push(tr!("go が無いので Go 側を飛ばしました", "go not found; skipped the Go side"));
     }
     if !py && !go {
-        return Err("python3 も go も無いので、生成物を走らせられません".into());
+        return Err(tr!(
+            "python3 も go も無いので、生成物を走らせられません",
+            "neither python3 nor go is available, so the generated code cannot be run"
+        ));
     }
 
     for alias in &aliases {
         let vec_path = vdir.join(format!("{alias}.jsonl"));
         let want = std::fs::read_to_string(vdir.join(format!("{alias}.expected.jsonl")))
-            .map_err(|_| format!("{alias}: 期待値がありません"))?;
+            .map_err(|_| tr!("{alias}: 期待値がありません", "{alias}: no expected values"))?;
         let n = std::fs::read_to_string(&vec_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
 
@@ -94,9 +113,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             let Ok(stdin) = std::fs::File::open(&vec_path) else { return };
             let o = Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).stdin(stdin).output();
             let diff = match o {
-                Err(e) => Some(format!("起動できません: {e}")),
+                Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
                 Ok(o) if !o.status.success() => {
-                    Some(format!("落ちました:\n{}", String::from_utf8_lossy(&o.stderr).trim()))
+                    Some(tr!("落ちました:\n{}", "failed:\n{}", String::from_utf8_lossy(&o.stderr).trim()))
                 }
                 Ok(o) => {
                     let got = String::from_utf8_lossy(&o.stdout).into_owned();
@@ -113,7 +132,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         }
     }
 
-    // 丸めヘルパの単体ベクタ。規則ごとに同じものが出ているので、一本だけ回す。
+    // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one.
     let pkg0 = aliases[0].replace('_', "");
     if py {
         let o = Command::new("python3")
@@ -123,9 +142,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let diff = match o {
             Ok(o) if o.status.success() => None,
             Ok(o) => Some(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-            Err(e) => Some(format!("起動できません: {e}")),
+            Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
         };
-        out.results.push(Outcome { rule: "丸めヘルパ".into(), lang: "Python", vectors: 0, diff });
+        out.results.push(Outcome { rule: tr!("丸めヘルパ", "rounding helper"), lang: "Python", vectors: 0, diff });
     }
     if go {
         let o = Command::new("go")
@@ -136,9 +155,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let diff = match o {
             Ok(o) if o.status.success() => None,
             Ok(o) => Some(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-            Err(e) => Some(format!("起動できません: {e}")),
+            Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
         };
-        out.results.push(Outcome { rule: "丸めヘルパ".into(), lang: "Go", vectors: 0, diff });
+        out.results.push(Outcome { rule: tr!("丸めヘルパ", "rounding helper"), lang: "Go", vectors: 0, diff });
     }
     Ok(out)
 }
@@ -146,25 +165,34 @@ pub fn run(dir: &Path) -> Result<Run, String> {
 pub fn render(r: &Run) -> String {
     let mut o = String::new();
     for s in &r.skipped {
-        o.push_str(&format!("注意: {s}\n"));
+        o.push_str(&tr!("注意: {s}\n", "warning: {s}\n"));
     }
     let mut bad = 0;
     for x in &r.results {
         match &x.diff {
             None => {
-                let n = if x.vectors > 0 { format!("ベクタ {} 件", x.vectors) } else { "単体ベクタ".into() };
+                let n = if x.vectors > 0 {
+                    tr!("ベクタ {} 件", "{} vectors", x.vectors)
+                } else {
+                    tr!("単体ベクタ", "unit vectors")
+                };
                 o.push_str(&format!("ok    {} ({}) {n}\n", x.rule, x.lang));
             }
             Some(d) => {
                 bad += 1;
-                o.push_str(&format!("FAIL  {} ({}) 参照評価器と食い違います\n    {d}\n", x.rule, x.lang));
+                o.push_str(&tr!(
+                    "FAIL  {} ({}) 参照評価器と食い違います\n    {d}\n",
+                    "FAIL  {} ({}) disagrees with the reference evaluator\n    {d}\n",
+                    x.rule,
+                    x.lang
+                ));
             }
         }
     }
     if bad == 0 {
-        o.push_str(&format!("\n{} 件すべて一致しました。\n", r.results.len()));
+        o.push_str(&tr!("\n{} 件すべて一致しました。\n", "\nAll {} matched.\n", r.results.len()));
     } else {
-        o.push_str(&format!("\n{bad} 件が食い違いました。\n"));
+        o.push_str(&tr!("\n{bad} 件が食い違いました。\n", "\n{bad} disagreed.\n"));
     }
     o
 }

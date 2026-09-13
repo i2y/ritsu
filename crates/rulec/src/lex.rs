@@ -44,7 +44,7 @@ pub enum Kind {
     Minus,
     Star,
     Slash,
-    /// `?` — optional の印（`区分?`）。
+    /// `?` — the optional marker (`区分?`).
     Question,
     /// `..` — always an error (§3.1 forbids range notation), lexed so E010 can point at it.
     DotDot,
@@ -199,8 +199,8 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
         if c == '"' {
             let rest = &text[i + 1..];
             let Some(end) = rest.find('"') else {
-                return Err(Diag::error("E001", "文字列が閉じていません")
-                    .mark(Span::new(line_no, start, 1), "ここで始まった \" が閉じていません"));
+                return Err(Diag::error("E001", tr!("文字列が閉じていません", "Unterminated string"))
+                    .mark(Span::new(line_no, start, 1), tr!("ここで始まった \" が閉じていません", "the \" opened here is never closed")));
             };
             let s = rest[..end].to_string();
             push(Kind::Str(s), end + 2, &mut out);
@@ -221,15 +221,15 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             continue;
         }
 
-        // 識別子は文字か `_` で始まる。制御文字や記号を識別子に吸わせると、
-        // 打ち間違いが名前として通ってしまう（静かに間違う形）。
+        // An identifier starts with a letter or `_`. Letting control characters or
+        // symbols into identifiers would turn a typo into a name (a silent failure).
         if !(c.is_alphabetic() || c == '_') {
             return Err(Diag::error(
                 "E002",
-                format!("読めない文字 U+{:04X} があります", c as u32),
+                tr!("読めない文字 U+{:04X} があります", "Unreadable character U+{:04X}", c as u32),
             )
             .mark(Span::new(line_no, start, clen), "")
-            .note("識別子は文字か `_` で始まります。制御文字や記号は名前になれません。"));
+            .note(tr!("識別子は文字か `_` で始まります。制御文字や記号は名前になれません。", "An identifier starts with a letter or `_`. Control characters and symbols cannot be names.")));
         }
 
         // Identifier: run to the next delimiter.
@@ -241,7 +241,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             n += ch.len_utf8();
         }
         if n == 0 {
-            return Err(Diag::error("E002", format!("読めない文字 `{c}` があります"))
+            return Err(Diag::error("E002", tr!("読めない文字 `{c}` があります", "Unreadable character `{c}`"))
                 .mark(Span::new(line_no, start, clen), ""));
         }
         let word = text[i..i + n].to_string();

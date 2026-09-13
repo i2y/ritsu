@@ -1,9 +1,10 @@
-//! 過去再生（§10.2〜§10.4）。M3 の受け入れ。
+//! Replay of the past (§10.2–§10.4). Acceptance for M3.
 //!
-//! 実データは要らない。ベクタから合成 fixtures を作り、欠陥を仕込んだ版と
-//! 突き合わせれば、実測系と補完系の分離、発火行クラスタ、丸め差異タグ、
-//! git タグ糖衣まで一通り行使できる。実データに残るのは切り分けの「有効性」だけで、
-//! それは §16 第二の危うさとして最初から記録を持つ側に残る設計である。
+//! No real data is needed. Building synthetic fixtures from the vectors and matching them against
+//! a version with a seeded defect exercises the whole range: the separation of measured and
+//! filled-in series, firing-row clusters, the rounding-difference tag, and the git-tag sugar. All
+//! that stays with real data is the "validity" of the triage, which by design remains with
+//! whoever holds the records, as the second danger in §16 says.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -31,8 +32,8 @@ fn rulec(args: &[&str]) -> (i32, String, String) {
     rulec_in(&root(), args)
 }
 
-/// 生成した正準ベクタから合成 fixtures を作る。ベクタの JSON はこちらが
-/// 決めた形（`{"in":…,"out":…,"trace":…`）なので、位置で切り出してよい。
+/// Build synthetic fixtures from the generated canonical vectors. The vector JSON has a shape we
+/// decided ourselves (`{"in":…,"out":…,"trace":…`), so slicing by position is fine.
 fn fixtures_from_vectors(vectors: &str) -> String {
     let mut out = String::new();
     for (i, l) in vectors.lines().filter(|l| !l.trim().is_empty()).enumerate() {
@@ -45,7 +46,7 @@ fn fixtures_from_vectors(vectors: &str) -> String {
     out
 }
 
-/// 作業場を用意し、ベクタと合成 fixtures を置く。
+/// Prepare a workspace and put the vectors and synthetic fixtures in it.
 fn setup(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rulec-m3-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -58,7 +59,7 @@ fn setup(tag: &str) -> PathBuf {
     dir
 }
 
-/// 内容で当てる書き換え。当たらなかったら黙って通さない。
+/// A rewrite matched by content. If it does not match, it does not pass silently.
 fn tweak(src: &str, from: &str, to: &str, want: usize) -> String {
     let n = src.matches(from).count();
     assert_eq!(n, want, "書き換えが当たっていない: `{from}` が {n} 箇所");
@@ -76,8 +77,9 @@ fn 忠実な記録とは完全に一致する() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.2: 型と範囲の検証だけを引き受ける。壊れた記録は**捨てずに報告する**。
-/// 黙って落とすと、分母が縮んだ分だけ一致率が上がって見える。
+/// §10.2: only type and range validation is taken on. Broken records are **reported, not
+/// discarded**. Dropping them silently makes the match rate look higher by however much the
+/// denominator shrank.
 #[test]
 fn 汚れた記録は種類ごとに数えて報告する() {
     let dir = setup("lint");
@@ -94,7 +96,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
     for b in bad {
         lines.push(b.into());
     }
-    // 欄が欠けている記録（既定値が無ければ丸ごと外す）。
+    // Records with a missing field (excluded entirely when there is no default value).
     for k in 0..5 {
         lines.push(format!(
             r#"{{"tag":"order:m{k}","in":{{"あて先":"東京都","三辺合計":50}},"observed":{{"運賃":820}}}}"#
@@ -116,13 +118,14 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         assert!(out.contains(want), "`{want}` を言っていない:\n{out}");
     }
     assert!(out.contains("欄が欠けていたので外した記録: 5 件"), "{out}");
-    // 証人（何行目の、どの記録か）が要る。
+    // A witness (which line, which record) is required.
     assert!(out.contains("order:b3"), "証人を出す: {out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.3: 見出しの一致率は実測系だけから。補完は二次集計にしか効かない。
-/// そして**使った既定値と欄ごとの補完件数をレポート自身が刻む**。
+/// §10.3: the headline match rate comes from the measured series alone. Filling only affects the
+/// secondary tally. And **the report itself records the defaults used and the fill count per
+/// field**.
 #[test]
 fn 補完系は分けて数え_使った既定値を刻む() {
     let dir = setup("fill");
@@ -138,12 +141,13 @@ fn 補完系は分けて数え_使った既定値を刻む() {
     std::fs::write(&p, lines.join("\n") + "\n").unwrap();
     let fx = p.to_str().unwrap();
 
-    // 既定値が無ければ、欄の欠けた記録は丸ごと外れる。
+    // Without a default value, a record with a missing field is excluded entirely.
     let (_, plain, _) = rulec(&["replay", RULE, "--fixtures", fx]);
     assert!(plain.contains(&format!("照合 {base} 件")), "実測系だけを数える: {plain}");
     assert!(plain.contains("欄が欠けていて既定値も無い記録を 4 件外しました"), "{plain}");
 
-    // マニフェストで補うと、補完系として別に数え、既定値が刻まれる。
+    // Filling through the manifest counts them separately as the filled-in series, and the default
+    // value is recorded.
     let m = dir.join("m.json");
     std::fs::write(&m, r#"{"rulec":"replay/1","rule":"ゆうパック運賃","fills":{"重量":1000}}"#).unwrap();
     let (_, filled, _) =
@@ -152,13 +156,14 @@ fn 補完系は分けて数え_使った既定値を刻む() {
     assert!(filled.contains("補完系 4 件（重量 4 件）"), "欄ごとの件数を刻む: {filled}");
     assert!(filled.contains("使った既定値: 重量 = 1000"), "既定値を刻む: {filled}");
 
-    // --fill は感度分析の一時上書き。マニフェストより後に効く。
+    // --fill is a temporary override for sensitivity analysis. It applies after the manifest.
     let (_, over, _) = rulec(&["replay", RULE, "--fixtures", fx, "--manifest", m.to_str().unwrap(), "--fill", "重量=2000"]);
     assert!(over.contains("使った既定値: 重量 = 2000"), "上書きが効いていない: {over}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.4: 値だけが動いた版は、発火行が同じまま金額だけが動く。
+/// §10.4: in a version where only a value changed, the firing rows stay the same and only the
+/// amount moves.
 #[test]
 fn 値の変更は発火行を動かさない() {
     let dir = setup("value");
@@ -181,7 +186,7 @@ fn 値の変更は発火行を動かさない() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.4: 境界が動いた版は、発火行の遷移として出る。
+/// §10.4: a version where a boundary moved shows up as a transition of firing rows.
 #[test]
 fn 境界の変更は発火行の遷移として出る() {
     let dir = setup("shift");
@@ -199,18 +204,21 @@ fn 境界の変更は発火行の遷移として出る() {
     assert_eq!(c, 1);
     assert!(out.contains("表 サイズ判定 行1→行2"), "遷移を出す: {out}");
     assert!(out.contains("表 運賃表 行1→行2"), "下流の遷移も出す: {out}");
-    // 鍵は発火行の組だけ（§10.4）。旧の額が違っても、同じ遷移は同じクラスタ。
+    // The key is only the pair of firing rows (§10.4). Even when the old amounts differ, the same
+    // transition is the same cluster.
     let clusters = out.lines().filter(|l| l.starts_with("  表 ")).count();
     let rows = out.lines().filter(|l| l.contains("行1→行2")).count();
     assert!(rows >= 5 && clusters == rows, "遷移ごとに一クラスタのはず: {out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.4: 出力格子より小さいずれだけのクラスタには丸め差異の疑いが付く。
+/// §10.4: a cluster made only of deviations smaller than the output grid gets tagged as a
+/// suspected rounding difference.
 #[test]
 fn 格子未満のずれは丸め差異として括られる() {
     let dir = setup("round");
-    // 記録側を 3 円だけずらす。出力格子は 10円 なので、これは丸めの規約差の形。
+    // Shift the recorded side by just 3 yen. The output grid is 10円, so this has the shape of a
+    // difference in rounding convention.
     let src = std::fs::read_to_string(dir.join("fx.jsonl")).unwrap();
     let mut out = String::new();
     for l in src.lines() {
@@ -234,7 +242,7 @@ fn 格子未満のずれは丸め差異として括られる() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §1.4: `送料@v3` は git タグ `rules/送料/v3` を引く糖衣。
+/// §1.4: `送料@v3` is sugar for looking up the git tag `rules/送料/v3`.
 #[test]
 fn 版の参照はgitタグを引く() {
     let Some(_) = which("git") else {
@@ -274,7 +282,7 @@ fn 版の参照はgitタグを引く() {
     assert!(out.contains("ゆうパック運賃@v1 → ゆうパック運賃@v2"), "{out}");
     assert!(out.contains("影響 7 件"), "{out}");
 
-    // 別の規則どうしを比べようとしたら止める。
+    // Trying to compare two different rules is stopped.
     std::fs::write(repo.join("other.rule"), std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap()).unwrap();
     let (c, _, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@v1", "other.rule", "--fixtures", "fx.jsonl"]);
     assert_eq!(c, 2, "別の規則を通している");
@@ -282,7 +290,8 @@ fn 版の参照はgitタグを引く() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §12: PR に貼る形。整形まで道具が持ち、投稿は CI の一行に任せる。
+/// §12: the form to paste into a PR. The tool takes care of the formatting; posting is left to a
+/// single line in CI.
 #[test]
 fn markdownで貼れる形が出る() {
     let dir = setup("md");
@@ -301,14 +310,14 @@ fn markdownで貼れる形が出る() {
     assert!(out.starts_with("### 規則 ゆうパック運賃 v1 — 版の差分"), "{out}");
     assert!(out.contains("| 照合（実測系） |"), "{out}");
     assert!(out.contains("#### 不一致の内訳"), "{out}");
-    // 表がセル区切りで壊れないこと。
+    // The table must not break at cell separators.
     for l in out.lines().filter(|l| l.starts_with("| 表 ")) {
         assert_eq!(l.matches(" | ").count(), 3, "列がずれている: {l}");
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §9.3-3、§12: 生成物を利用者の CI でも回せること。
+/// §9.3-3, §12: the generated code can also be run in the user's CI.
 #[test]
 fn rulec_testが生成物を走らせる() {
     if which("python3").is_none() && which("go").is_none() {
@@ -326,7 +335,7 @@ fn rulec_testが生成物を走らせる() {
     assert!(r.contains("ok    yupack_fee"), "{r}");
     assert!(r.contains("丸めヘルパ"), "丸めの単体ベクタも回す: {r}");
 
-    // 生成物を手で壊したら赤になる。
+    // Breaking the generated code by hand turns it red.
     if which("python3").is_some() {
         let p = dir.join("python").join("yupack_fee.py");
         let src = std::fs::read_to_string(&p).unwrap();

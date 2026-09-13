@@ -1,7 +1,7 @@
-//! ベクタ套件の完全性検査（§9.2）。M1 の受け入れ。
+//! Completeness audit of the vector suite (§9.2). Acceptance for M1.
 //!
-//! 判定器そのものを変異で試す。ベクタを抜けば赤くなり、抜かなければ緑になる、
-//! という両方を見ないと「いつも緑を返す判定器」と区別が付かない。
+//! The auditor itself is tested by mutation. Unless both are seen — red when vectors are removed,
+//! green when they are not — it cannot be told apart from "an auditor that always returns green".
 
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
@@ -34,13 +34,14 @@ fn コーパスは三基準を全部満たす() {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(met, req, "{rel} の {k}");
         }
-        // 目安は規則あたり数百件（§9.2）。桁が違えば候補の畳み方が壊れている。
+        // The guideline is a few hundred per rule (§9.2). An order of magnitude more means the
+        // folding of candidates is broken.
         assert!(vs.len() < 600, "{rel}: ベクタが {} 件と多すぎる", vs.len());
     }
 }
 
-/// 義務の一覧が、ベクタ集合ではなく規則から来ていること。空集合に対して
-/// 「全部満たした」と言う判定器は、緑を返しても何も言っていない。
+/// The list of obligations must come from the rule, not from the vector set. An auditor that says
+/// "all satisfied" of the empty set says nothing when it returns green.
 #[test]
 fn 空集合はすべての義務が欠ける() {
     for rel in CORPUS {
@@ -57,12 +58,12 @@ fn 空集合はすべての義務が欠ける() {
     }
 }
 
-/// 行を勝たせているベクタを全部抜けば、その行の行被覆だけが欠ける。
+/// Removing every vector that lets a row win leaves exactly that row's row coverage missing.
 #[test]
 fn 行を勝たせる例を抜くと行被覆が欠ける() {
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
-    let tag = "表 運賃表 行42"; // 沖縄 × S170
+    let tag = "表 運賃表 行42"; // the 沖縄 × S170 cell
     let kept: Vec<Vector> = vs.iter().filter(|v| !v.trace.iter().any(|t| t == tag)).cloned().collect();
     assert!(kept.len() < vs.len(), "抜く対象がない");
     let a = coverage::audit(&f, &c, rel, &kept);
@@ -71,13 +72,13 @@ fn 行を勝たせる例を抜くと行被覆が欠ける() {
     assert_eq!(rows, vec![tag], "欠けた行を名指ししていない: {rows:?}");
 }
 
-/// 境界の外側を踏むベクタを抜けば、境界両側被覆が欠ける。
-/// 内側だけで緑になる判定器は、境界の ±1 を捕まえられない。
+/// Removing the vectors that step on the outside of a boundary leaves both-sides boundary coverage
+/// missing. An auditor that goes green on the inside alone cannot catch a boundary's ±1.
 #[test]
 fn 境界の片側を抜くと境界両側被覆が欠ける() {
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
-    // 三辺合計 = 61cm（<=60cm の外側）を踏む例を全部落とす。
+    // Drop every example that steps on 三辺合計 = 61cm (just outside <=60cm).
     let kept: Vec<Vector> = vs
         .iter()
         .filter(|v| vectors::show(&v.input["三辺合計"]) != "61")
@@ -90,7 +91,8 @@ fn 境界の片側を抜くと境界両側被覆が欠ける() {
     assert!(b.iter().any(|w| w.contains("境界 60")), "どの境界かを名指ししていない: {b:?}");
 }
 
-/// 遮蔽対は「交差の内側」を要求する。行 j が当たるだけの点では足りない。
+/// A shadow pair demands a point "inside the intersection". A point that merely hits row j is not
+/// enough.
 #[test]
 fn 交差の内側を抜くと遮蔽対被覆が欠ける() {
     let rel = "tests/corpus/送料.rule";
@@ -100,7 +102,7 @@ fn 交差の内側を抜くと遮蔽対被覆が欠ける() {
     assert!(pairs > 0, "遮蔽対のある規則を選んでいない");
     let a = coverage::audit(&f, &c, rel, &vs);
     assert_eq!(a.tally[SHADOW].1, pairs, "遮蔽対の数が検査と食い違う");
-    // 内側の点を落とす。残るのは行 j 単独で当たる点だけ。
+    // Drop the inside points. What remains are only the points that hit row j alone.
     let inside: Vec<usize> = (0..vs.len())
         .filter(|&i| vs[i].why.starts_with("遮蔽対"))
         .collect();
@@ -111,14 +113,15 @@ fn 交差の内側を抜くと遮蔽対被覆が欠ける() {
     assert!(b.tally[SHADOW].0 <= a.tally[SHADOW].0, "抜いて増えている");
 }
 
-/// §9.2 の網 その二。境界の義務の数を、**式の木から境界リテラルを数えるだけの
-/// 素朴な収集器**と照合する。義務の列挙は判定器と生成器で一箇所を共有しているので、
-/// 将来ここに新しい列の種類や原子の形を足したとき、列挙器がそれを見落とすと
-/// 両方が揃って黙る。この照合だけが、その沈黙を破る。
+/// §9.2 net, part two. Cross-check the number of boundary obligations against a **naive collector
+/// that merely counts boundary literals in the expression tree**. The enumeration of obligations is
+/// shared in one place by the auditor and the generator, so when a new column kind or atom shape is
+/// added here later and the enumerator overlooks it, both fall silent together. Only this
+/// cross-check breaks that silence.
 #[test]
 fn 境界の義務は素朴な数え上げと一致する() {
     use rulec::ast::*;
-    // 収集器は coverage.rs を一切参照しない。セルの形だけを見て数える。
+    // The collector never consults coverage.rs. It counts by looking at the shape of cells alone.
     fn naive(f: &rulec::ast::RuleFile, c: &rulec::types::Checked, dead: &[Vec<usize>]) -> usize {
         let mut n = 0;
         let mut ti = 0;
@@ -140,8 +143,8 @@ fn 境界の義務は素朴な数え上げと一致する() {
                         continue;
                     }
                     n += match row.cells.get(ci) {
-                        Some(Cell::Cmp(cs)) => cs.len(), // 比較記号ひとつが境界ひとつ
-                        Some(Cell::Lit(_)) => 2,         // 点は上下二つの境界
+                        Some(Cell::Cmp(cs)) => cs.len(), // one comparison operator, one boundary
+                        Some(Cell::Lit(_)) => 2,         // a point is a lower and an upper boundary
                         _ => 0,
                     };
                 }
@@ -164,12 +167,13 @@ fn 境界の義務は素朴な数え上げと一致する() {
     }
 }
 
-/// §9.2 の網 その三。規則ごとの義務件数を回帰に固定する。
-/// **列の種類や原子の形を言語に足すときは、該当カテゴリの件数が増えることが
-/// 受け入れ条件**である。増えなければ、列挙器がその機能を見ていない。
+/// §9.2 net, part three. Pin the per-rule obligation counts as a regression.
+/// **When a column kind or atom shape is added to the language, the acceptance condition is that
+/// the count in the matching category goes up.** If it does not, the enumerator is not seeing the
+/// feature.
 #[test]
 fn 義務の件数を固定する() {
-    // (規則, 行被覆, 境界両側被覆, 遮蔽対被覆)
+    // (rule, row coverage, both-sides boundary coverage, shadow-pair coverage)
     const PINNED: &[(&str, usize, usize, usize)] = &[
         ("tests/corpus/ゆうパック運賃.rule", 49, 6, 21),
         ("tests/corpus/クーポン割引.rule", 9, 2, 10),

@@ -43,8 +43,9 @@ pub struct Marked {
 
 #[derive(Debug, Clone)]
 pub struct Diag {
-    /// `--diff-base` が「同じ発見か」を照合するための鍵。行番号ではなく
-    /// セルの正規形から作るので、`rulec fmt` の再整列で変わらない。表示はしない。
+    /// Key that `--diff-base` uses to decide whether two findings are the same. Built from
+    /// the canonical form of the cell rather than the line number, so a realignment by
+    /// `rulec fmt` does not change it. Never displayed.
     pub key: Option<String>,
     pub severity: Severity,
     /// Stable code, e.g. "E101".

@@ -1,8 +1,9 @@
-//! 領域 IR と箱代数（§6）。
+//! The region IR and box algebra (§6).
 //!
-//! 各入力列を独立の軸に取り、列に現れる境界値で座標を圧縮する。§3 がセルを
-//! 自列への単項テストに限っているので、行は「軸ごとの部分集合の直積」＝箱になり、
-//! 完全性・冗長・重複がすべて有限の集合演算に落ちる。
+//! Each input column becomes an independent axis, and its coordinates are compressed to the
+//! boundary values that appear in the column. Because §3 restricts a cell to a unary test on
+//! its own column, a row is "the product of one subset per axis", that is, a box, and
+//! completeness, unreachable rows, and overlaps all reduce to finite set operations.
 
 use crate::ast::*;
 use crate::diag::{Diag, Span};
@@ -12,18 +13,19 @@ use std::collections::BTreeSet;
 
 #[derive(Debug, Clone)]
 enum Coord {
-    /// ちょうどこの値。
+    /// Exactly this value.
     Point(Rat),
-    /// 二つの境界の間（両端を含まない）。端が None なら宣言範囲の外側。
+    /// Strictly between two boundaries (neither end included). A `None` end means the interval
+    /// runs on past the last boundary, where the declared range has no limit.
     Open(Option<Rat>, Option<Rat>),
 }
 
 #[derive(Debug, Clone)]
 enum Axis {
-    /// `values` の先頭が `無し` になることがある（optional の軸）。
+    /// `values` may start with `none` (the axis of an optional column).
     Enum { values: Vec<String> },
-    /// 数値と日付。日付は順序数（y*10000+m*100+d）で持つので、区間の機構が
-    /// そのまま使える。`unit` が空なら日付として書き戻す。
+    /// Numbers and dates. A date is held as an ordinal (its serial day number), so the interval
+    /// machinery applies unchanged. An empty `unit` means "write it back as a date".
     Num { unit: String, coords: Vec<Coord> },
     Bool,
 }
@@ -36,20 +38,22 @@ impl Axis {
             Axis::Bool => 2,
         }
     }
-    /// 証人にする具体値。§11 原則 2 は列挙なら宣言順、数値なら境界値を優先する。
+    /// The concrete value used as a witness. §11 principle 2 prefers declaration order for
+    /// enums and boundary values for numbers.
     fn witness(&self, i: usize) -> String {
         match self {
             Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
-            Axis::Bool => if i == 0 { "真".into() } else { "偽".into() },
+            Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
             Axis::Num { unit, coords } if unit.is_empty() => match coords.get(i) {
-                // 日付は境界（実在する暦日）を優先する。区間の中点は暦日とは限らない。
+                // For dates, prefer a boundary (an actual calendar day). The midpoint of an
+                // interval need not be one.
                 Some(Coord::Point(v)) => {
                     let (y, m, d) = crate::types::ord_to_date(*v);
                     format!("{y:04}-{m:02}-{d:02}")
                 }
                 Some(Coord::Open(a, b)) => {
-                    // 通算日なので、開区間の中に必ず実在する暦日がある。
-                    // 「前後」と濁さずに、その日を出す。
+                    // Dates are serial day numbers, so an open interval always contains a real
+                    // calendar day. Print that day instead of hedging with "around".
                     let v = match (a, b) {
                         (Some(a), _) => a.add(Rat::int(1)),
                         (None, Some(b)) => b.sub(Rat::int(1)),
@@ -77,35 +81,42 @@ impl Axis {
     }
 }
 
-/// §6.2 の実現可能性。導出を独立軸にしたぶん、空間には実在しない点が混ざる。
-/// 篩はそれを報告段で落とすが、従属が絡むと判定しきれない。
+/// Feasibility per §6.2. Because derived values get independent axes, the space contains points
+/// that cannot actually occur. The sieve drops those at reporting time, but once dependencies
+/// are involved it cannot always decide.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Feasible {
-    /// 実現不能と証明できた。報告しない。
+    /// Proven infeasible. Not reported.
     No,
-    /// 証人を構成できた。エラーとして出す。
+    /// A witness could be constructed. Reported as an error.
     Yes,
-    /// 判定できなかった。証明していないことを証明済みの顔で出さない（W114）。
+    /// Undecided. What has not been proven must not be presented as proven (W114).
     Unknown,
 }
 
 pub struct TableRegion {
     axes: Vec<Axis>,
     col_names: Vec<String>,
-    /// 軸 → 上流が出しうる値の座標。None なら制限なし（入力や導出の軸）。
+    /// Axis → the coordinates of the values an upstream table can produce. `None` means
+    /// unrestricted (an input or derived axis).
     reachable: Vec<Option<Vec<bool>>>,
-    /// 解析できない型の列があれば、その名前と型。検査を飛ばさず E110 で止める。
+    /// The name and type of a column whose type cannot be analyzed, if there is one. Rather
+    /// than skipping the check, we stop with E110.
     unanalyzable: Option<(String, Ty)>,
-    /// 行 → 上流の到達不能な値だけを名指ししているか（E102 の変種）。
+    /// Row → whether it names only values the upstream table can never reach (a variant of
+    /// E102).
     unreachable_row: Vec<bool>,
-    /// 軸 → 表での元の列位置。探索は細い軸から見るが、証人は表の見た目の順で出す。
+    /// Axis → its original column position in the table. The search walks the narrow axes
+    /// first, but witnesses are printed in the table's visible order.
     display_of: Vec<usize>,
-    /// 軸が真偽の定義かどうか。篩は定義軸を見ないので（M1 で検証優先の形で入れる）、
-    /// 定義列が絡む重なりの証人は「定義の中身との整合が未確認」であることを言う。
+    /// Whether the axis is a boolean definition. The sieve does not look at definition axes
+    /// (M1 adds that, verification first), so a witness for an overlap that involves a
+    /// definition column says that "consistency with the definition's body is unconfirmed".
     is_define: Vec<bool>,
-    /// 軸が導出なら、その到達区間と依存する入力名。
+    /// If the axis is a derived value, its reachable interval and the names of the inputs it
+    /// depends on.
     derived: Vec<Option<((Option<Rat>, Option<Rat>), Vec<String>)>>,
-    /// 行 → 軸 → 座標の採否。
+    /// Row → axis → whether each coordinate is selected.
     masks: Vec<Vec<Vec<bool>>>,
 }
 
@@ -117,7 +128,8 @@ fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {
     }
 }
 
-/// 数値軸の境界を集める。宣言範囲の両端も境界に入れて、宇宙を有限に閉じる。
+/// Collect the boundaries of a numeric axis. Both ends of the declared range count as
+/// boundaries too, which closes the universe into a finite one.
 fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec<Rat>, Option<Rat>, Option<Rat>) {
     let mut set: BTreeSet<(i128, i128)> = BTreeSet::new();
     let mut push = |r: Rat, s: &mut BTreeSet<(i128, i128)>| {
@@ -154,19 +166,20 @@ fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec
     (v, lo, hi)
 }
 
-/// 座標を作る。`quantum` は値が取りうる最小の刻み（金額[円] なら 1、日付なら 1 日、
-/// 率[刻み 0.1%] なら 1/1000）。
+/// Build the coordinates. `quantum` is the smallest step a value can take (1 for `money[円]`,
+/// one day for a date, 1/1000 for `rate[step 0.1%]`).
 ///
-/// 隣り合う境界の差が刻みちょうどなら、そのあいだの開区間には**値が一つも無い**。
-/// 空の座標を作ると、`<=2026-03-31` と `>=2026-04-01` で敷き詰めた表が
-/// 覆いきれていないことになり、偽の E101 が出る。両端含みの敷き詰めは業務の
-/// 自然な書き方なので、この判定は必ず要る。
+/// When two adjacent boundaries differ by exactly one step, the open interval between them
+/// holds **no value at all**. Creating an empty coordinate there would make a table tiled with
+/// `<=2026-03-31` and `>=2026-04-01` look incompletely covered and raise a false E101. Tiling
+/// with inclusive ends is the natural way to write business rules, so this test is essential.
 fn num_coords(bounds: &[Rat], lo: Option<Rat>, hi: Option<Rat>, quantum: Rat) -> Vec<Coord> {
     let mut out = Vec::new();
     if bounds.is_empty() {
         return vec![Coord::Open(lo, hi)];
     }
-    // 宣言下限より下は宇宙の外。下限が無いときだけ開区間を先頭に置く。
+    // Below the declared lower bound is outside the universe. Only when there is no lower
+    // bound does an open interval go first.
     if lo.is_none() {
         out.push(Coord::Open(None, Some(bounds[0])));
     }
@@ -196,8 +209,9 @@ fn cmp_holds(op: CmpOp, v: Rat, bound: Rat) -> bool {
     }
 }
 
-/// この座標のすべての値が比較を満たすか。境界はすべて座標に取ってあるので、
-/// 開区間は必ずどちらか一方に丸ごと入る（これが圧縮座標の効き目）。
+/// Whether every value of this coordinate satisfies the comparison. Since every boundary is a
+/// coordinate, an open interval always falls entirely on one side (that is what the compressed
+/// coordinates buy us).
 fn coord_satisfies(c: &Coord, op: CmpOp, bound: Rat) -> bool {
     match c {
         Coord::Point(v) => cmp_holds(op, *v, bound),
@@ -216,9 +230,9 @@ impl TableRegion {
         for (ci, (name, _)) in t.inputs.iter().enumerate() {
             let ty = c.ty_of(name)?;
             col_names.push(name.clone());
-            // optional は「無し」を一つ足した列挙として扱う。§2.1 が
-            // 「セルの `無し` でだけ消費でき、式には現れない」と決めているので、
-            // 軸としては値がひとつ増えるだけで済む。
+            // An optional column is treated as an enum with one extra value, `none`. Since
+            // §2.1 rules that it "can only be consumed by a `none` cell and never appears in
+            // an expression", the axis merely gains one value.
             let (ty, opt) = match &ty {
                 Ty::Opt(inner) => ((**inner).clone(), true),
                 other => (other.clone(), false),
@@ -227,7 +241,7 @@ impl TableRegion {
                 Ty::Enum(en) => {
                     let mut vs = c.enums.get(en)?.clone();
                     if opt {
-                        vs.insert(0, "無し".into());
+                        vs.insert(0, crate::kw::NONE.into());
                     }
                     Axis::Enum { values: vs }
                 }
@@ -235,7 +249,8 @@ impl TableRegion {
                 Ty::Date => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
                     let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
-                    // 日付の刻みは 1 日。通算日で持っているので、隣接は差が 1。
+                    // A date's step is one day. Dates are serial day numbers, so adjacent days
+                    // differ by 1.
                     Axis::Num { unit: String::new(), coords: num_coords(&b, lo, hi, Rat::int(1)) }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
@@ -246,8 +261,9 @@ impl TableRegion {
                         Ty::Qty { unit, .. } => unit.clone(),
                         _ => "%".into(),
                     };
-                    // 実行時表現は宣言単位の整数一本（§7.1）なので、刻みは
-                    // 金額・数量なら 1、率なら宣言された刻み。
+                    // The runtime representation is a single integer in the declared unit
+                    // (§7.1), so the step is 1 for money and quantities and the declared step
+                    // for rates.
                     let q = match &ty {
                         Ty::Rate => Rat::new(1, *c.scales.get(name).unwrap_or(&100)),
                         _ => Rat::int(1),
@@ -255,8 +271,9 @@ impl TableRegion {
                     Axis::Num { unit, coords: num_coords(&b, lo, hi, q) }
                 }
                 _ => {
-                    // 解析できない型を黙って飛ばすと、その表の完全性も重複も
-                    // 検査されないまま ok が出る。日付と optional で二度踏んだ形。
+                    // Silently skipping a type we cannot analyze would report ok without ever
+                    // checking the table's completeness or overlaps. We stepped on that twice,
+                    // with dates and with optional.
                     unanalyzable = Some((name.clone(), ty.clone()));
                     Axis::Bool
                 }
@@ -264,14 +281,16 @@ impl TableRegion {
             axes.push(axis);
         }
 
-        // §6.3: 圧縮座標数の昇順に軸を並べる。細い軸から割ると枝刈りが早く効く。
+        // §6.3: order the axes by ascending number of compressed coordinates. Splitting on the
+        // narrow axes first makes pruning kick in early.
         let mut order: Vec<usize> = (0..axes.len()).collect();
         order.sort_by_key(|&i| axes[i].len());
         let axes: Vec<Axis> = order.iter().map(|&i| axes[i].clone()).collect();
         let col_names: Vec<String> = order.iter().map(|i| col_names[*i].clone()).collect();
         let cell_of: Vec<usize> = order.clone();
 
-        // 軸の並べ替えの**後**で作る。前で作ると、マスクの添字とずれる。
+        // Build these **after** reordering the axes. Built before, their indices would not
+        // line up with the masks.
         let is_define: Vec<bool> = col_names.iter().map(|n| c.define_deps.contains_key(n)).collect();
         let derived: Vec<Option<((Option<Rat>, Option<Rat>), Vec<String>)>> = col_names
             .iter()
@@ -279,16 +298,16 @@ impl TableRegion {
             .collect();
 
 
-        // 上流が出しうる値の座標。列挙軸だけが持つ。
+        // The coordinates of the values an upstream table can produce. Only enum axes have them.
         let reachable: Vec<Option<Vec<bool>>> = (0..axes.len())
             .map(|ai| match (&axes[ai], c.out_values.get(&col_names[ai])) {
                 (Axis::Enum { values }, Some(vs)) => {
                     Some(values.iter().map(|v| vs.contains(v)).collect())
                 }
-                // 真偽も上流の出力になりうる。座標は 0=真、1=偽。
+                // A boolean can be an upstream output too. Coordinate 0 is true, 1 is false.
                 (Axis::Bool, Some(vs)) => Some(vec![
-                    vs.iter().any(|v| v == "真"),
-                    vs.iter().any(|v| v == "偽"),
+                    vs.iter().any(|v| v == crate::kw::TRUE),
+                    vs.iter().any(|v| v == crate::kw::FALSE),
                 ]),
                 _ => None,
             })
@@ -305,9 +324,9 @@ impl TableRegion {
                 let ty = c.ty_of(&col_names[ai])?;
                 match cell {
                     None | Some(Cell::DontCare) => v.iter_mut().for_each(|x| *x = true),
-                    // `無し` は optional 軸の先頭座標だけに当たる。
+                    // `none` matches only the first coordinate of an optional axis.
                     Some(Cell::Nothing) => {
-                        if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some("無し")) {
+                        if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some(crate::kw::NONE)) {
                             v[0] = true;
                         }
                     }
@@ -326,7 +345,7 @@ impl TableRegion {
                                 }
                             }
                         }
-                        (Axis::Bool, Lit::Word(w)) => v[if w == "真" { 0 } else { 1 }] = true,
+                        (Axis::Bool, Lit::Word(w)) => v[if w == crate::kw::TRUE { 0 } else { 1 }] = true,
                         (Axis::Num { coords, .. }, l) => {
                             if let Some(x) = lit_rat(l, &ty) {
                                 for (i, cd) in coords.iter().enumerate() {
@@ -378,7 +397,8 @@ impl TableRegion {
                 }
                 m.push(v);
             }
-            // 上流が出さない値だけを名指ししている行は、下流では死ぬ。
+            // A row that names only values the upstream table never produces is dead
+            // downstream.
             let mut only_unreachable = false;
             for (ai, r) in reachable.iter().enumerate() {
                 let Some(r) = r else { continue };
@@ -405,12 +425,13 @@ impl TableRegion {
             .all(|(a, b)| a.iter().zip(b).any(|(x, y)| *x && *y))
     }
 
-    /// 行 `inner` の領域が行 `outer` に丸ごと含まれるか。
+    /// Whether the region of row `inner` lies entirely within row `outer`.
     ///
-    /// 行は「軸ごとの部分集合の直積」＝単一の箱なので、包含は軸ごとの部分集合と
-    /// **厳密に一致する**（射影による近似ではない）。領域の減算に落とす必要が
-    /// あるのは行が箱の和になったときで、いまの表現ではそうならない。
-    /// 減算に落とすと軸数に対して指数的に効くので、ここは直積の性質を使う。
+    /// A row is "the product of one subset per axis", a single box, so containment is
+    /// **exactly** the per-axis subset test (not an approximation by projection). Falling back
+    /// to region subtraction would only be needed if a row were a union of boxes, which the
+    /// current representation never produces. Subtraction is exponential in the number of
+    /// axes, so we rely on the product structure here.
     fn contains(&self, outer: usize, inner: usize) -> bool {
         self.masks[inner]
             .iter()
@@ -422,8 +443,8 @@ impl TableRegion {
         self.masks[i].iter().any(|m| m.iter().all(|x| !*x))
     }
 
-    /// 未被覆の座標をひとつ返す。§6.3 の再帰分割で、残り軸が全部 don't-care の行が
-    /// 生き残っている枝は被覆確定として刈る。
+    /// Return one uncovered coordinate. In the recursive split of §6.3, a branch in which some
+    /// surviving row is don't-care on all remaining axes is pruned as certainly covered.
     fn find_hole(&self, rows: &[usize], budget: &mut i64) -> Option<Vec<usize>> {
         self.hole_rec(rows, 0, budget, &mut Vec::new())
     }
@@ -444,8 +465,8 @@ impl TableRegion {
             while p.len() < self.axes.len() {
                 p.push(0);
             }
-            // 実現不能と証明できた穴は報告しない。判定できない穴は残す
-            // （過剰報告の向きにだけ外す。§6.1）。
+            // A gap proven infeasible is not reported. An undecidable gap is kept (we only ever
+            // drop in the direction of over-reporting; §6.1).
             if self.feasible(&p) == Feasible::No {
                 return None;
             }
@@ -454,7 +475,7 @@ impl TableRegion {
         if ai == self.axes.len() {
             return None;
         }
-        // 残りの軸がすべて全域の行があれば、この部分木は覆われている。
+        // If some row spans the whole of every remaining axis, this subtree is covered.
         if rows
             .iter()
             .any(|&r| self.masks[r][ai..].iter().all(|m| m.iter().all(|x| *x)))
@@ -473,11 +494,12 @@ impl TableRegion {
         None
     }
 
-    /// 二つの行が重なる領域を、業務の言葉の連言で書く。
+    /// Describe the region where two rows overlap as a conjunction in business terms.
     ///
-    /// W114 では点を出してはいけない。導出軸上の一点は実現されていない座標なので、
-    /// 具体値の顔をすると読み手が「その注文」を探しに行く。未検証のものを
-    /// 証人の顔で出さない、という原則の適用箇所（§11 原則 2）。
+    /// W114 must not print a point. A single point on a derived axis is a coordinate that is
+    /// not realized, and if it wore the face of a concrete value the reader would go looking
+    /// for "that order". This is where the principle of not presenting the unverified as a
+    /// witness applies (§11 principle 2).
     fn overlap_text(&self, a: &Row, b: &Row) -> String {
         let mut items: Vec<(usize, String)> = Vec::new();
         for ai in 0..self.axes.len() {
@@ -496,16 +518,17 @@ impl TableRegion {
             if parts.is_empty() {
                 continue;
             }
-            items.push((ci, format!("{} {}", self.col_names[ai], parts.join(" かつ "))));
+            items.push((ci, format!("{} {}", self.col_names[ai], parts.join(if crate::i18n::ja() { " かつ " } else { " and " }))));
         }
         items.sort_by_key(|(d, _)| *d);
         if items.is_empty() {
-            return "（どの列も制約していません）".into();
+            return tr!("（どの列も制約していません）", "(no column is constrained)");
         }
-        items.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join(" かつ ")
+        items.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join(if crate::i18n::ja() { " かつ " } else { " and " })
     }
 
-    /// 証人は表の列順で書く。探索の都合（細い軸から見る）を読み手に見せない。
+    /// Witnesses are written in the table's column order. The search's convenience (narrow
+    /// axes first) is not shown to the reader.
     fn witness_text(&self, path: &[usize]) -> String {
         let mut items: Vec<(usize, String)> = (0..self.axes.len())
             .map(|ai| {
@@ -520,14 +543,17 @@ impl TableRegion {
     }
 }
 
-/// 遮蔽の三分類（§4）。構造的と同値は件数だけ、要確認だけが一覧に出る。
+/// The three kinds of shadowing (§4). Structural and equivalent ones are only counted; only
+/// those that need review are listed.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Shadow {
-    /// 後の行が前の行の領域を包含する。階段の通常の姿。
+    /// A later row's region contains the earlier row's. The normal shape of a staircase.
     pub structural: usize,
-    /// 包含でない部分交差だが、出力が同じ。どちらが勝っても値は変わらない。
+    /// A partial intersection, not containment, but with the same output. Whichever row wins,
+    /// the value does not change.
     pub equivalent: usize,
-    /// 包含でない部分交差で、出力が異なる。ここだけが「意図通りですか」に値する。
+    /// A partial intersection, not containment, with different outputs. Only this kind deserves
+    /// an "is this intended?".
     pub confirm: usize,
 }
 
@@ -537,39 +563,47 @@ impl Shadow {
     }
 }
 
-/// §6.3 の訪問ノード予算。超えたら「未証明」として止める。近似検査へ静かに縮退はしない。
+/// The visited-node budget of §6.3. When it is exceeded we stop with "not proven"; there is no
+/// quiet degradation to an approximate check.
 ///
-/// 既定値は §15-2 の合成ベンチの実測から決めた（`tests/budget.rs`）。
+/// The default was set from measurements of the synthetic benchmark in §15-2
+/// (`tests/budget.rs`).
 ///
-/// | 列（列挙+数値） | 行 | ノード | ms(release) |
+/// | columns (enum+num) | rows | nodes | ms (release) |
 /// |---|---|---|---|
-/// | 8+4（設計目標の 12 列） | 500 | 10,042,885 | 164 |
+/// | 8+4 (the 12-column design target) | 500 | 10,042,885 | 164 |
 /// | 6+6 | 500 | 10,821,337 | 197 |
 /// | 6+6 | 1000 | 41,530,393 | 680 |
 ///
-/// 速度は約 6 万ノード/ms（release）で、行数に対して二乗で伸びる。設計目標
-/// （列 12、行 500）は 10M で収まるので、外れていたのは仮置きの 10⁶ のほうだった。
-/// 5,000 万は目標に 5 倍の余裕を持たせつつ、使い切っても 1 秒弱で止まる値。
-/// 実表のコーパスは 522 / 267 / 7 ノードで、五桁下にいる。
+/// The speed is about 60,000 nodes/ms (release) and grows quadratically with the row count.
+/// The design target (12 columns, 500 rows) fits in 10M, so it was the provisional 10⁶ that was
+/// off. Fifty million gives the target a 5x margin while still stopping in just under a second
+/// when fully spent. The corpus of real tables sits at 522 / 267 / 7 nodes, five orders of
+/// magnitude below.
 pub const DEFAULT_BUDGET: i64 = 50_000_000;
 
 pub struct TableCheck {
     pub diags: Vec<Diag>,
-    /// W114 の行対（0 始まり）。生成コードの番人はこの対にだけ入る（§8.1）。
+    /// The row pairs of W114 (0-based). The guards in generated code go on exactly these pairs
+    /// (§8.1).
     pub w114: Vec<(usize, usize)>,
-    /// この表の検査で訪問したノード数。予算を決めるための実測値。
+    /// The number of nodes visited while checking this table. A measurement for setting the
+    /// budget.
     pub nodes: i64,
-    /// `--show-shadow` のときだけ出す、構造的と同値の一覧。
+    /// The structural and equivalent shadowings, listed only under `--show-shadow`.
     pub quiet: Vec<Diag>,
     pub shadow: Shadow,
-    /// `上から` の遮蔽対（0 始まり、i が勝つ側が先）。三分類のどれかによらず全部。
-    /// §9.2 の遮蔽対被覆は、この対ごとに「交差の内側」の点を要求する。
+    /// The shadowing pairs under `policy first` (0-based, the winning row i first). All of them,
+    /// whichever of the three kinds they are. The shadow-pair coverage of §9.2 demands a point
+    /// "inside the intersection" for each of these pairs.
     pub overlaps: Vec<(usize, usize)>,
-    /// E102 を出した行（0 始まり）。決して当たらないので §9.2 の行被覆から外す。
+    /// The rows that got E102 (0-based). They never match, so §9.2's row coverage leaves them
+    /// out.
     pub dead: Vec<usize>,
 }
 
-/// セルの正規形。`--diff-base` の鍵に使うので、整形にも行番号にも依存しない。
+/// The canonical form of a cell. It is the key for `--diff-base`, so it depends on neither
+/// formatting nor line numbers.
 fn cell_key(c: &Cell) -> String {
     fn lit(l: &Lit) -> String {
         match l {
@@ -581,10 +615,10 @@ fn cell_key(c: &Cell) -> String {
     }
     match c {
         Cell::DontCare => "-".into(),
-        Cell::Nothing => "無し".into(),
+        Cell::Nothing => crate::kw::NONE.into(),
         Cell::Lit(l) => lit(l),
         Cell::Set(ls) => ls.iter().map(lit).collect::<Vec<_>>().join("・"),
-        Cell::Not(ls) => format!("以外:{}", ls.iter().map(lit).collect::<Vec<_>>().join("・")),
+        Cell::Not(ls) => format!("{}:{}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join("・")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -601,7 +635,8 @@ fn cell_key(c: &Cell) -> String {
     }
 }
 
-/// セルを業務の言葉で書く。W114 は点ではなく領域で出すので、条件の字面が要る。
+/// Write a cell in business terms. W114 reports a region rather than a point, so the text of
+/// the condition is needed.
 fn cell_text(c: &Cell) -> String {
     fn lit(l: &Lit) -> String {
         match l {
@@ -613,7 +648,7 @@ fn cell_text(c: &Cell) -> String {
     }
     match c {
         Cell::DontCare => "-".into(),
-        Cell::Nothing => "無し".into(),
+        Cell::Nothing => crate::kw::NONE.into(),
         Cell::Lit(l) => format!("= {}", lit(l)),
         Cell::Set(ls) => format!("∈ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Not(ls) => format!("∉ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
@@ -629,7 +664,7 @@ fn cell_text(c: &Cell) -> String {
                 format!("{op} {}", lit(l))
             })
             .collect::<Vec<_>>()
-            .join(" かつ "),
+            .join(if crate::i18n::ja() { " かつ " } else { " and " }),
     }
 }
 
@@ -641,7 +676,8 @@ fn pair_key(a: &Row, b: &Row) -> String {
     format!("{}\u{1}{}", row_key(a), row_key(b))
 }
 
-/// 出力セルが構文的に同一か。§4 の「同値」の判定に使う。
+/// Whether the output cells are syntactically identical. Used for the "equivalent" verdict of
+/// §4.
 fn outs_equal(a: &Row, b: &Row) -> bool {
     if a.outs.len() != b.outs.len() {
         return false;
@@ -654,7 +690,7 @@ fn outs_equal(a: &Row, b: &Row) -> bool {
     })
 }
 
-/// E101 / E102 / E105 / W105 / W110 を出す。
+/// Emits E101 / E102 / E105 / W105 / W110.
 pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
     let inputs = &f.inputs;
     let mut out = Vec::new();
@@ -682,11 +718,11 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         return TableCheck {
             w114: Vec::new(),
             diags: vec![
-                Diag::error("E110", format!("列 {col} の型 {ty} は、まだ検査できません"))
-                    .at(format!("{path}:{} 表 {tname}", t.span.line))
+                Diag::error("E110", tr!("列 {col} の型 {ty} は、まだ検査できません", "Column {col} has type {ty}, which cannot be checked yet"))
+                    .at(tr!("{path}:{} 表 {tname}", "{path}:{} table {tname}", t.span.line))
                     .mark(t.span.clone(), "")
-                    .note("この表の完全性も重複も検査していません。黙って通すより止めます。")
-                    .note("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。"),
+                    .note(tr!("この表の完全性も重複も検査していません。黙って通すより止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
+                    .note(tr!("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。", "Give the column one of these types: an enum, boolean, quantity, money, rate, date, or an optional of one of those.")),
             ],
             quiet: Vec::new(),
             shadow: Shadow::default(),
@@ -696,10 +732,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         };
     }
     let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-    let at = |line: usize| format!("{path}:{line} 表 {tname}");
+    let at = |line: usize| tr!("{path}:{line} 表 {tname}", "{path}:{line} table {tname}");
     let head_span: Span = t.name.as_ref().map(|n| n.span.clone()).unwrap_or(t.span.clone());
 
-    // --- 重複と遮蔽
+    // --- Overlaps and shadowing
     let mut shadowed = vec![false; t.rows.len()];
     for i in 0..t.rows.len() {
         for j in (i + 1)..t.rows.len() {
@@ -717,14 +753,16 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             }
             let w = reg.witness_text(&wpath);
             let feas = reg.feasible(&wpath);
-            // 実現不能と証明できた重なりは報告しない（§6.2）。
+            // An overlap proven infeasible is not reported (§6.2).
             if feas == Feasible::No {
                 continue;
             }
-            // §6.2「定義軸の証人」: 交差箱の座標は定義軸を自由に置いているだけで、
-            // その真偽を作る入力が在るかは見ていない。入力を実際に構成して評価器に
-            // 定義まで計算させ、**構成できた重なりだけ**を実在の矛盾として扱う。
-            // 構成できないことは非存在の証明ではないので、断定せず W114 へ降ろす。
+            // §6.2 "witnesses on definition axes": the intersection box merely places its
+            // coordinate on a definition axis freely, without checking that some input
+            // actually produces that truth value. So we construct a real input, let the
+            // evaluator compute the definitions too, and treat **only the overlaps we could
+            // construct** as real contradictions. Failing to construct one is not a proof of
+            // non-existence, so instead of asserting anything we demote to W114.
             let touches_define = (0..reg.axes.len()).any(|ai| {
                 reg.is_define[ai]
                     && (0..reg.axes[ai].len()).any(|cc| reg.masks[i][ai][cc] && reg.masks[j][ai][cc])
@@ -748,13 +786,14 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             }
             match t.policy {
                 Policy::Unique if feas == Feasible::Unknown => {
-                    // §8.1: 出力が構文的に同一の対は、どちらが勝っても値が変わらない
-                    // ので番人を置かない。
+                    // §8.1: a pair whose outputs are syntactically identical yields the same
+                    // value whichever row wins, so it gets no guard.
                     if !outs_equal(&t.rows[i], &t.rows[j]) {
                         w114.push((i, j));
                     }
-                    // 証人を構成できなかった重なり。証明していないことを
-                    // 証明済みの顔で出さない（§6.2）。生成コードの番人が対になる。
+                    // An overlap for which no witness could be constructed. What has not been
+                    // proven must not be presented as proven (§6.2). The guard in generated
+                    // code is its counterpart.
                     let dnames: Vec<String> = reg.derived_names();
                     let outs = |r: &Row| -> String {
                         r.outs
@@ -771,37 +810,41 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     out.push(
                         Diag::warning(
                             "W114",
-                            format!("未確認の重なり: 行{} と 行{} の両方に当たる入力が有り得ます", i + 1, j + 1),
+                            tr!("未確認の重なり: 行{} と 行{} の両方に当たる入力が有り得ます", "Unconfirmed overlap: an input may match both row {} and row {}", i + 1, j + 1),
                         )
                         .at(at(t.rows[j].span.line))
-                        .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
-                        .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
-                        .note(format!("重なる条件: {}", reg.overlap_text(&t.rows[i], &t.rows[j])))
+                        .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
+                        .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
+                        .note(tr!("重なる条件: {}", "Overlapping condition: {}", reg.overlap_text(&t.rows[i], &t.rows[j])))
                         .note(if touches_define {
-                            "定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。".to_string()
+                            tr!("定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。", "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.")
                         } else {
-                            format!(
+                            tr!(
                                 "導出（{}）が入力を共有しているため、この条件を同時に満たす注文が存在するかどうかを、検査は判定できませんでした。",
-                                dnames.join("、")
+                                "Because the derived values ({}) share inputs, the check could not decide whether an order satisfying this condition exists.",
+                                dnames.join(if crate::i18n::ja() { "、" } else { ", " })
                             )
                         })
-                        .note(format!(
+                        .note(tr!(
                             "存在するなら: 行を直してください。出力が異なる（{} と {}）ので、当たれば矛盾です。",
+                            "If one exists: fix the rows. The outputs differ ({} vs {}), so a match would be a contradiction.",
                             outs(&t.rows[i]),
                             outs(&t.rows[j])
                         ))
-                        .note(format!(
+                        .note(tr!(
                             "存在しないなら: このままで構いません。生成コードには、万一この条件に当たる入力が来たとき黙って 行{} を選ばずエラーを返す番人が入ります。",
+                            "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row {}.",
                             i + 1
                         ))
-                        .note("この警告は check --diff-base では新規分だけ表示されます。")
+                        .note(tr!("この警告は check --diff-base では新規分だけ表示されます。", "Under check --diff-base, only new instances of this warning are shown."))
                         .key(pair_key(&t.rows[i], &t.rows[j])),
                     );
                 }
                 Policy::Unique => {
                     let same = t.rows[i].outs.len() == t.rows[j].outs.len();
-                    // 定義列が交差に絡むなら、証人は定義の中身と突き合わせていない。
-                    // 篩が定義軸を見るのは M1（§8.5）。それまでは黙らずに言う。
+                    // If a definition column takes part in the intersection, the witness has
+                    // not been checked against the definition's body. The sieve will look at
+                    // definition axes in M1 (§8.5). Until then, say so rather than stay silent.
                     let unverified: Vec<String> = (0..reg.axes.len())
                         .filter(|&ai| {
                             reg.is_define[ai]
@@ -812,28 +855,30 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         .map(|ai| reg.col_names[ai].clone())
                         .collect();
                     out.push(
-                        Diag::error("E105", format!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", i + 1, j + 1))
+                        Diag::error("E105", tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1))
                             .at(at(t.rows[j].span.line))
-                            .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
-                            .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
-                            .note(format!("両方に当たる例: {w}"))
+                            .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
+                            .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
+                            .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
                             .note(match &built {
-                                // §6.2: 定義が絡む証人は、入力を構成して評価器で
-                                // 確かめたときだけ出す。写せる形で置く。
-                                Some(b) => format!("この例を作る入力: {b}"),
+                                // §6.2: a witness that involves definitions is shown only after
+                                // an input has been constructed and confirmed by the evaluator.
+                                // Present it in a form that can be copied.
+                                Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
                                 None => String::new(),
                             })
                             .note(if same {
-                                "方式 一意 では重なりは許されません。どちらが正しいか決めるか、順序に意味を持たせるなら 方式 上から を宣言してください。".to_string()
+                                tr!("`{p} {u}` では重なりは許されません。どちらが正しいか決めるか、順序に意味を持たせるなら `{p} {f}` を宣言してください。", "`{p} {u}` does not allow overlapping rows. Decide which row is right, or declare `{p} {f}` if the order is meant to matter.", p = crate::kw::POLICY, u = crate::kw::UNIQUE, f = crate::kw::FIRST)
                             } else {
-                                "方式 一意 では重なりは許されません。".to_string()
+                                tr!("`{} {}` では重なりは許されません。", "`{} {}` does not allow overlapping rows.", crate::kw::POLICY, crate::kw::UNIQUE)
                             })
                             .note(if unverified.is_empty() || touches_define {
                                 String::new()
                             } else {
-                                format!(
+                                tr!(
                                     "なお、この例は定義（{}）の中身との整合を確認していません。",
-                                    unverified.join("、")
+                                    "Note that this example has not been checked for consistency with the body of the definitions ({}).",
+                                    unverified.join(if crate::i18n::ja() { "、" } else { ", " })
                                 )
                             }),
                     );
@@ -841,35 +886,36 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                 Policy::TopDown => {
                     shadowed[j] = true;
                     overlaps.push((i, j));
-                    // §4 の三分類。包含の判定は領域で行う（軸ごとの射影ではなく、
-                    // 行 i の領域から行 j の領域を引いて空かどうか）。篩は掛けない。
+                    // The three kinds of §4. Containment is decided on regions (whether row i's
+                    // region minus row j's region is empty, not per-axis projections). The sieve
+                    // is not applied.
                     let contained = reg.contains(j, i);
                     nodes += (reg.axes.len() * 4) as i64;
                     let same_out = outs_equal(&t.rows[i], &t.rows[j]);
                     let d = Diag::warning(
                         "W105",
-                        format!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", i + 1, j + 1),
+                        tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1),
                     )
                     .at(at(t.rows[j].span.line))
-                    .mark(t.rows[i].span.clone(), format!("行{}", i + 1))
-                    .mark(t.rows[j].span.clone(), format!("行{}", j + 1))
-                    .note(format!("両方に当たる例: {w}"))
+                    .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
+                    .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
+                    .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
                     .note(match &built {
-                        Some(b) => format!("この例を作る入力: {b}"),
+                        Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
                         None => String::new(),
                     })
-                    .note(format!("方式 上から のため 行{} が勝ちます。意図通りですか。", i + 1))
+                    .note(tr!("`{} {}` のため 行{} が勝ちます。意図通りですか。", "Because of `{} {}`, row {} wins. Is this intended?", crate::kw::POLICY, crate::kw::FIRST, i + 1))
                     .key(pair_key(&t.rows[i], &t.rows[j]));
                     if contained {
                         shadow.structural += 1;
-                        quiet.push(d.note("行の領域が後の行に丸ごと含まれています（階段の通常の姿）。"));
+                        quiet.push(d.note(tr!("行の領域が後の行に丸ごと含まれています（階段の通常の姿）。", "The row's region is entirely contained in the later row (the normal shape of a staircase).")));
                     } else if same_out {
                         shadow.equivalent += 1;
-                        quiet.push(d.note("出力が同じなので、どちらが勝っても値は変わりません。"));
+                        quiet.push(d.note(tr!("出力が同じなので、どちらが勝っても値は変わりません。", "The outputs are the same, so the value does not change whichever row wins.")));
                     } else {
                         shadow.confirm += 1;
                         out.push(d.note(
-                            "意図通りならこのままで構いません。CI の check --diff-base は新たに生じた分だけを報告します。",
+                            tr!("意図通りならこのままで構いません。CI の check --diff-base は新たに生じた分だけを報告します。", "If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances."),
                         ));
                     }
                 }
@@ -877,19 +923,20 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         }
     }
 
-    // --- 死行
+    // --- Unreachable rows
     for i in 0..t.rows.len() {
         let dead = if reg.empty(i) {
             true
         } else if t.policy == Policy::TopDown && i > 0 {
-            // まず単独の先行行に含まれるかを見る。階段の死行はここで全部落ちるし、
-            // 判定は軸ごとの部分集合なので安い。和との包含が要るのは、
-            // 複数行が寄り集まって初めて覆う場合だけ。
+            // First check containment in a single earlier row. Every dead row of a staircase
+            // is caught here, and the test is cheap, being a per-axis subset test. Containment
+            // in a union is needed only when several rows cover the row just together.
             if (0..i).any(|e| reg.contains(e, i)) {
                 nodes += (i * reg.axes.len() * 4) as i64;
                 true
             } else {
-                // 交わらない先行行は和に寄与しないので落とす。
+                // Earlier rows that do not intersect contribute nothing to the union, so drop
+                // them.
                 let earlier: Vec<usize> = (0..i).filter(|&e| reg.intersects(e, i)).collect();
                 if earlier.is_empty() {
                     false
@@ -906,62 +953,62 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         if dead {
             dead_rows.push(i);
             out.push(
-                Diag::error("E102", format!("冗長な行: 行{} は決して当たりません", i + 1))
+                Diag::error("E102", tr!("冗長な行: 行{} は決して当たりません", "Unreachable row: row {} never matches", i + 1))
                     .at(at(t.rows[i].span.line))
-                    .mark(t.rows[i].span.clone(), format!("行{}: ここに到達する入力はありません", i + 1))
+                    .mark(t.rows[i].span.clone(), tr!("行{}: ここに到達する入力はありません", "row {}: no input reaches here", i + 1))
                     .note(if reg.unreachable_row[i] {
-                        "この行が名指ししている値を、上流の表は決して出しません。".to_string()
+                        tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
                     } else if t.policy == Policy::TopDown {
-                        "方式 上から のため、この行の範囲は先行する行がすべて先に取ります。".to_string()
+                        tr!("`{} {}` のため、この行の範囲は先行する行がすべて先に取ります。", "Because of `{} {}`, the earlier rows take all of this row's range first.", crate::kw::POLICY, crate::kw::FIRST)
                     } else {
-                        "この行の条件を同時に満たす入力がありません。".to_string()
+                        tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once.")
                     })
                     .note(if reg.unreachable_row[i] {
-                        "ヒント: 上流の表がこの値を出すようにするか、この行を削除してください。".to_string()
+                        tr!("ヒント: 上流の表がこの値を出すようにするか、この行を削除してください。", "hint: make the upstream table produce this value, or delete this row.")
                     } else {
-                        "ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。".to_string()
+                        tr!("ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。", "hint: if this is a new specification, move it up; if it is not needed, delete it.")
                     }),
             );
         }
     }
 
-    // --- 完全性
+    // --- Completeness
     let mut left = budget;
     let all: Vec<usize> = (0..t.rows.len()).collect();
     let hole = reg.find_hole(&all, &mut left);
     nodes += budget - left;
     if let Some(hole) = hole {
         out.push(
-            Diag::error("E101", "完全性の欠落: どの行にも当たらない入力があります")
+            Diag::error("E101", tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"))
                 .at(at(head_span.line))
-                .mark(head_span.clone(), "入力空間を覆いきっていません")
-                .note(format!("当たらない例: {}", reg.witness_text(&hole)))
-                .note("ヒント: この入力に当たる行を足してください。"),
+                .mark(head_span.clone(), tr!("入力空間を覆いきっていません", "the input space is not fully covered"))
+                .note(tr!("当たらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
+                .note(tr!("ヒント: この入力に当たる行を足してください。", "hint: add a row that matches this input.")),
         );
     } else if left < 0 {
         out.push(
-            Diag::error("E109", "検査の予算を超えたので、完全性を証明できませんでした")
+            Diag::error("E109", tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"))
                 .at(at(head_span.line))
                 .mark(head_span.clone(), "")
-                .note(format!("支配的なのは {}。", reg.dominant_axes()))
-                .note("列を群でまとめるか、表を分けてください（§6.3）。近似では通しません。"),
+                .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
+                .note(tr!("列を群でまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
         );
     }
 
-    // --- W110: 重なりのない 上から
+    // --- W110: a `policy first` table with no overlaps
     if t.policy == Policy::TopDown && !shadowed.iter().any(|x| *x) && t.rows.len() > 1 {
         out.push(
-            Diag::warning("W110", "この表には重なりがありません")
+            Diag::warning("W110", tr!("この表には重なりがありません", "This table has no overlapping rows"))
                 .at(at(head_span.line))
                 .mark(head_span.clone(), "")
-                .note("方式 一意 にすると、行の並べ替えが意味を変えないことを検査が保証します。"),
+                .note(tr!("`{} {}` にすると、行の並べ替えが意味を変えないことを検査が保証します。", "With `{} {}`, the checker guarantees that reordering the rows does not change the meaning.", crate::kw::POLICY, crate::kw::UNIQUE)),
         );
     }
     TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, dead: dead_rows }
 }
 
 impl TableRegion {
-    /// 行 `target` の領域のうち、`rows` に覆われていない座標を探す。
+    /// Find a coordinate in the region of row `target` that `rows` do not cover.
     fn hole_within(&self, rows: &[usize], target: usize, budget: &mut i64) -> Option<Vec<usize>> {
         let mut path = Vec::new();
         self.within_rec(rows, target, 0, budget, &mut path)
@@ -1022,8 +1069,9 @@ impl TableRegion {
         }
     }
 
-    /// §6.2 の篩。導出軸ごとに到達区間と座標の区間が交わるかを見る。交わらなければ
-    /// 実現不能。制約された導出が二本以上あって入力を共有していれば従属を見られない。
+    /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
+    /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
+    /// more constrained derived values share an input, their dependency cannot be examined.
     pub fn feasible(&self, path: &[usize]) -> Feasible {
         let mut constrained: Vec<(usize, Vec<String>)> = Vec::new();
         for (ai, d) in self.derived.iter().enumerate() {
@@ -1062,15 +1110,15 @@ impl TableRegion {
 }
 
 impl TableRegion {
-    /// §6.3: 予算を使い切ったとき、どの列の境界数が支配的かを添える。
-    /// 「群でまとめる」「表を分ける」のどちらを狙うかが、これで決まる。
+    /// §6.3: when the budget runs out, name the columns whose boundary counts dominate. This
+    /// decides whether to aim for "combine into groups" or "split the table".
     pub fn dominant_axes(&self) -> String {
         let mut v: Vec<(usize, usize)> = (0..self.axes.len()).map(|i| (self.axes[i].len(), i)).collect();
         v.sort_by(|a, b| b.0.cmp(&a.0));
         v.iter()
             .take(3)
-            .map(|(n, i)| format!("{}（{n} 区分）", self.col_names[*i]))
+            .map(|(n, i)| tr!("{}（{n} 区分）", "{} ({n} segments)", self.col_names[*i]))
             .collect::<Vec<_>>()
-            .join("、")
+            .join(if crate::i18n::ja() { "、" } else { ", " })
     }
 }

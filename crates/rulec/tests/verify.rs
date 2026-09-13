@@ -1,7 +1,8 @@
-//! 等価検証（§10）。M2 の受け入れ。
+//! Equivalence verification (§10). Acceptance for M2.
 //!
-//! 旧実装の代わりに「生成 Python を呼ぶだけ」のアダプタを立てる。完全に一致するのが
-//! 正しい姿で、そこにわざと欠陥を入れると、rulec が件数・クラスタ・証人を出す。
+//! In place of a legacy implementation, stand up an adapter that "just calls the generated Python".
+//! Complete agreement is the correct picture; when a defect is deliberately put in, rulec reports
+//! counts, clusters, and witnesses.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -10,8 +11,8 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// 出力から `見出し 123` の数を拾う。件数は生成器の都合で動くので、
-/// テストは絶対値ではなく内訳の整合を見る。
+/// Pick the number out of `heading 123` in the output. Counts move with the generator's
+/// circumstances, so the tests check the consistency of the breakdown rather than absolute values.
 fn n_of(out: &str, head: &str) -> usize {
     out.split(head)
         .nth(1)
@@ -88,7 +89,8 @@ fn 忠実なアダプタとは完全に一致する() {
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("(100.000%)"), "{out}");
     assert!(out.contains("不一致はありません"), "{out}");
-    // 件数そのものは生成器の都合で動くので刻まない。空でないことだけ見る。
+    // The count itself moves with the generator, so it is not pinned. Only check that it is not
+    // empty.
     assert!(n_of(&out, "照合 ") > 50, "ベクタが少なすぎる: {out}");
     assert!(out.contains("legacy@fake-1"), "旧実装の識別子を出す: {out}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -103,17 +105,19 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
     let agreed = n_of(&out, "一致 ");
     let bad = n_of(&out, "影響 ");
     assert!(bad > 0 && agreed + bad == total, "内訳が合わない: {out}");
-    // §10.4: 発火行でクラスタし、件数・金額・証人を出す。
+    // §10.4: cluster by firing row, and report counts, amounts, and witnesses.
     assert!(out.contains("表 運賃表 行36"), "発火行でクラスタする: {out}");
-    // 金額はクラスタの合計なので件数で動く。符号と、証人の一件分の差を見る。
+    // The amount is the cluster total, so it moves with the count. Check the sign, and the
+    // difference of the witness's single record.
     assert!(out.contains("差 -"), "金額の差を出す: {out}");
     assert!(out.contains("運賃=1450 / 旧 運賃=1460"), "証人を出す: {out}");
-    // ちょうど格子一つ分のずれは値の食い違いであって丸めではない。括ってはいけない。
+    // A deviation of exactly one grid step is a value mismatch, not rounding. Do not tag it.
     assert!(!out.contains("丸め差異"), "格子ちょうどの差を丸めのせいにしている: {out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// §10.4: 出力格子より小さいずれだけで固まったクラスタには「丸め差異の疑い」が付く。
+/// §10.4: a cluster made up solely of deviations smaller than the output grid gets tagged
+/// "suspected rounding difference".
 #[test]
 fn 格子未満のずれは丸め差異として括られる() {
     let Some(dir) = setup() else { return };
@@ -139,14 +143,14 @@ fn 雛形とスキーマが出る() {
         assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
         String::from_utf8_lossy(&o.stdout).into_owned()
     };
-    // 雛形はそのまま動く形であること（握手を返し、行ごとに答える）。
+    // The template must work as is (return the handshake, answer line by line).
     let py = run(&["adapter", RULE, "--template", "python"]);
     assert!(py.contains("\"ok\": True"), "握手を返す: {py}");
     assert!(py.contains("あて先"), "入力の名前を案内する: {py}");
     let go = run(&["adapter", RULE, "--template", "go"]);
     assert!(go.contains("package main") && go.contains("bufio"), "{go}");
 
-    // スキーマはワイヤの形（正準名と正準単位の整数）。
+    // The schema is the wire shape (canonical names, integers in canonical units).
     let sc = run(&["schema", RULE]);
     assert!(sc.contains("\"単位: cm\""), "単位を書く: {sc}");
     assert!(sc.contains("\"minimum\":1"), "範囲を書く: {sc}");

@@ -1,13 +1,16 @@
-//! 突き合わせの結果と、その読ませ方（§10.3、§10.4）。
+//! Comparison results and how they are presented (§10.3, §10.4).
 //!
-//! 「規則 vs 旧実装」（verify）と「規則 vs 過去の観測」（replay）と
-//! 「規則の版どうし」（diff）は、比べる相手が違うだけで、**発火行でクラスタして
-//! 件数・金額・証人を出す**という形は同じである。ここに一度だけ置いて三者で使う。
+//! "Rule vs legacy implementation" (verify), "rule vs past observations" (replay) and
+//! "one version of a rule vs another" (diff) differ only in what the rule is compared
+//! against; the shape — **cluster by fired row and report counts, amounts and witnesses**
+//! — is the same. It lives here once and all three use it.
 //!
-//! 一致率の分母は必ず実測系だけから取る（§10.3）。補完を混ぜて大きく見せる誘惑を、
-//! 形式のレベルで断つのがこの設計の眼目なので、加算する場所を一箇所に閉じてある。
-//! そのうえで、**使った既定値と欄ごとの補完件数はレポート自身が必ず刻む**。
-//! PR に貼られたレポートが、補完の根拠の記録になる。
+//! The denominator of the match rate is always taken from the observed records alone
+//! (§10.3). The whole point of this design is to cut off, at the level of the format, the
+//! temptation to inflate the rate by mixing in filled records, so the place that adds to
+//! the denominator is confined to one spot. On top of that, **the report itself always
+//! records the default values used and the number of filled records per field**. A report
+//! pasted into a PR becomes the record of what justified the fill.
 
 use crate::ast::RuleFile;
 use crate::eval::Val;
@@ -17,24 +20,27 @@ use std::collections::BTreeMap;
 
 pub struct Mismatch {
     pub id: usize,
-    /// 記録の見出し（`order:1234567` など）。無ければ空。
+    /// The record's label (e.g. `order:1234567`). Empty when there is none.
     pub tag: String,
     pub input: BTreeMap<String, Val>,
-    /// 宣言順に (出力名, こちらの値, 相手の値)。複数出力ならここに全部並ぶ。
+    /// (output name, our value, the counterpart's value) in declaration order. With several
+    /// outputs, all of them are listed here.
     pub outs: Vec<(String, Option<Val>, Option<String>)>,
     pub err: Option<String>,
-    /// クラスタの鍵になる発火行。diff は「旧 → 新」を一本の文字列にして入れる。
+    /// The fired rows that form the cluster key. diff stores "old → new" as one string.
     pub trace: Vec<String>,
 }
 
 impl Mismatch {
-    /// 食い違っている出力だけ。相手が答えなかった場合は全部を差分として扱う。
+    /// Only the outputs that differ. When the counterpart gave no answer, all of them count
+    /// as differing.
     pub fn differing(&self) -> Vec<&(String, Option<Val>, Option<String>)> {
         self.outs.iter().filter(|(_, a, b)| wire(a.as_ref()) != *b).collect()
     }
 }
 
-/// 値をワイヤの表現へ。JSON の数は正準単位の整数（§10.2）。
+/// A value in its wire representation. JSON numbers are integers in the canonical unit
+/// (§10.2).
 pub fn wire(v: Option<&Val>) -> Option<String> {
     v.map(|o| match o {
         Val::Num(r) => format!("{}", r.num / r.den),
@@ -44,24 +50,28 @@ pub fn wire(v: Option<&Val>) -> Option<String> {
 }
 
 pub struct Report {
-    /// 出力が二つ以上あるか。金額差に出力名を添えるかどうかがこれで決まる。
+    /// Whether there are two or more outputs. Decides whether amount differences carry the
+    /// output name.
     pub multi: bool,
-    /// 実測系の照合件数。補完系はここに入れない（§10.3）。
+    /// Number of observed records compared. Filled records are not counted here (§10.3).
     pub total: usize,
     pub agreed: usize,
-    /// 相手が答えられなかった件数。分母から外し、理由つきで報告する。
+    /// Number of records the counterpart could not answer. Excluded from the denominator and
+    /// reported with the reason.
     pub errored: usize,
     pub mismatches: Vec<Mismatch>,
-    /// 相手の識別（`legacy/shipping.py@a1b2c3d`、`replay/2025-08.jsonl`、`送料@v3`）。
+    /// Identity of the counterpart (`legacy/shipping.py@a1b2c3d`, `replay/2025-08.jsonl`,
+    /// `送料@v3`).
     pub impl_id: String,
-    /// 見出しの語。verify は「旧」、replay は「観測」、diff は「旧版」。
+    /// The word that names the counterpart in a witness: verify uses "旧" (legacy), replay
+    /// "観測" (observed), diff "旧版" (old version).
     pub theirs: String,
-    /// 補完系の欄ごとの件数と、使った既定値（§10.3）。
+    /// Filled records: the count per field, and the default values used (§10.3).
     pub filled: BTreeMap<String, usize>,
     pub fills_used: BTreeMap<String, String>,
     pub filled_total: usize,
     pub filled_agreed: usize,
-    /// 形式が壊れていて外した件数と、その理由。
+    /// Number of records excluded for a broken format, with the reason.
     pub excluded: Vec<(String, usize)>,
 }
 
@@ -82,8 +92,8 @@ impl Report {
             excluded: Vec::new(),
         }
     }
-    /// 見出しの一致率は実測系だけから計算する（§10.3）。
-    /// 相手が「対応していない」と言った件は分母から外す。
+    /// The headline match rate is computed from observed records only (§10.3).
+    /// Records the counterpart declared unsupported are excluded from the denominator.
     pub fn rate(&self) -> f64 {
         let n = self.total - self.errored;
         if n == 0 {
@@ -93,8 +103,8 @@ impl Report {
     }
 }
 
-/// 三桁区切り。金額は読み手が桁を数えられないと意味を持たない。
-/// 符号は必ず付ける（差は向きが本体なので）。
+/// Thousands separators. An amount means nothing if the reader cannot count its digits.
+/// The sign is always written (for a difference, the direction is the substance).
 fn group(n: i128) -> String {
     let d = n.unsigned_abs().to_string();
     let mut out = String::new();
@@ -107,7 +117,13 @@ fn group(n: i128) -> String {
     format!("{}{out}", if n < 0 { "-" } else { "+" })
 }
 
-/// クラスタ内の Δ の統計（§10.4）。件数・合計・最小最大を必ず持つ。
+/// The word after a record count: `件` in Japanese, `record`/`records` in English.
+fn records(n: usize) -> &'static str {
+    if crate::i18n::ja() { "件" } else if n == 1 { "record" } else { "records" }
+}
+
+/// Statistics of Δ within a cluster (§10.4). Always carries the count, the total and the
+/// min/max.
 struct Delta {
     n: usize,
     sum: i128,
@@ -130,18 +146,30 @@ impl Delta {
     fn uniform(&self) -> bool {
         self.lo == self.hi
     }
-    /// 全件同値なら一行に畳む。一様でなければ最小最大を出して、割れているという
-    /// 事実そのものを見せる（鍵を金額で割らない代わりの回収。§10.4）。
+    /// Folded into one line when every record has the same value. Otherwise the min/max are
+    /// shown, so that the very fact of the spread is visible (this recovers what is given up
+    /// by not splitting the key on the amount; §10.4).
     fn text(&self) -> String {
         if self.uniform() {
-            format!("差 {} 一様  合計 {}", group(self.lo), group(self.sum))
+            tr!(
+                "差 {} 一様  合計 {}",
+                "difference {} uniform  total {}",
+                group(self.lo),
+                group(self.sum)
+            )
         } else {
-            format!("合計 {}  Δ {}..{}", group(self.sum), group(self.lo), group(self.hi))
+            tr!(
+                "合計 {}  Δ {}..{}",
+                "total {}  Δ {}..{}",
+                group(self.sum),
+                group(self.lo),
+                group(self.hi)
+            )
         }
     }
 }
 
-/// クラスタごとの、出力名 → Δ 統計。
+/// Per cluster: output name → Δ statistics.
 fn deltas(ms: &[&Mismatch]) -> BTreeMap<String, Delta> {
     let mut out: BTreeMap<String, Delta> = BTreeMap::new();
     for m in ms {
@@ -174,7 +202,11 @@ fn witness(ex: &Mismatch, theirs: &str) -> String {
         .iter()
         .filter_map(|(n, a, b)| {
             let (a, b) = (a.as_ref()?, b.as_ref()?);
-            Some(format!("規則 {n}={} / {theirs} {n}={b}", vectors::show(a)))
+            Some(tr!(
+                "規則 {n}={} / {theirs} {n}={b}",
+                "rule {n}={} / {theirs} {n}={b}",
+                vectors::show(a)
+            ))
         })
         .collect();
     if diff.is_empty() {
@@ -187,11 +219,13 @@ fn witness(ex: &Mismatch, theirs: &str) -> String {
 fn cluster<'a>(rep: &'a Report) -> BTreeMap<String, Vec<&'a Mismatch>> {
     let mut out: BTreeMap<String, Vec<&Mismatch>> = BTreeMap::new();
     for m in &rep.mismatches {
-        // §10.4: 鍵は発火行の組だけ。旧出力は入れない。表引きの行なら行の組が
-        // 金額の組を一意に決めるので情報が増えず、計算出力では値の数だけ
-        // クラスタが割れて要約が死ぬ。割れの利益は Δ の最小最大で回収する。
+        // §10.4: the key is the set of fired rows only; the legacy output is not part of it.
+        // For table-lookup rows the set of rows already fixes the set of amounts, so nothing
+        // would be gained, and for computed outputs the clusters would split once per distinct
+        // value and the summary would die. What the split would show is recovered by the
+        // min/max of Δ.
         let key = match &m.err {
-            Some(e) => format!("答えられない: {e}"),
+            Some(e) => tr!("答えられない: {e}", "could not answer: {e}"),
             None => m.trace.join(" / "),
         };
         out.entry(key).or_default().push(m);
@@ -199,38 +233,43 @@ fn cluster<'a>(rep: &'a Report) -> BTreeMap<String, Vec<&'a Mismatch>> {
     out
 }
 
-/// 補完と除外の刻印（§10.3）。数字の出る場所に根拠を必ず出す。
+/// The record of fills and exclusions (§10.3). Wherever a number appears, its basis is
+/// shown next to it.
 fn provenance(rep: &Report) -> Vec<String> {
     let mut o = Vec::new();
     if rep.errored > 0 {
-        o.push(format!(
+        o.push(tr!(
             "相手が答えられなかった {} 件は、一致率の分母から外しています（§10.3）",
+            "The counterpart could not answer {} of the records; those are excluded from the match-rate denominator (§10.3)",
             rep.errored
         ));
     }
     for (why, n) in &rep.excluded {
-        o.push(format!("{why}記録を {n} 件外しました"));
+        let unit = records(*n);
+        o.push(tr!("{why}記録を {n} {unit}外しました", "Excluded {n} {unit} ({why})"));
     }
     if rep.filled_total > 0 {
         let by: Vec<String> =
-            rep.filled.iter().map(|(n, k)| format!("{n} {k} 件")).collect();
-        o.push(format!(
+            rep.filled.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
+        o.push(tr!(
             "補完系 {} 件（{}）。一致 {} 件。見出しの一致率には入れていません",
+            "Filled records: {} ({}); matched {}. Not included in the headline match rate",
             rep.filled_total,
-            by.join("、"),
+            by.join(if crate::i18n::ja() { "、" } else { ", " }),
             rep.filled_agreed
         ));
         let used: Vec<String> =
             rep.fills_used.iter().map(|(n, v)| format!("{n} = {v}")).collect();
         if !used.is_empty() {
-            o.push(format!("使った既定値: {}", used.join(", ")));
+            o.push(tr!("使った既定値: {}", "Default values used: {}", used.join(", ")));
         }
     }
     o
 }
 
-/// §10.4 の見出し。件数だけでなく、動く金額の合計を必ず添える。
-/// 「何件動くか」と「いくら動くか」は別の問いで、決裁に効くのは後者である。
+/// The §10.4 headline. Not just the count: the total amount that moves is always attached.
+/// "How many records move" and "how much money moves" are different questions, and it is
+/// the latter that sways an approval.
 fn impact(rep: &Report) -> String {
     let n = rep.total - rep.errored;
     let pct = if n == 0 { 0.0 } else { rep.mismatches.len() as f64 * 100.0 / n as f64 };
@@ -239,54 +278,79 @@ fn impact(rep: &Report) -> String {
         .iter()
         .map(|(name, d)| {
             let label = if rep.multi { format!("{name} ") } else { String::new() };
-            format!("  金額 {label}{}", group(d.sum))
+            tr!("  金額 {label}{}", "  amount {label}{}", group(d.sum))
         })
         .collect();
-    format!("影響 {} 件 ({pct:.3}%){}", rep.mismatches.len(), money.join(""))
+    tr!(
+        "影響 {} 件 ({pct:.3}%){}",
+        "Affected {} ({pct:.3}%){}",
+        rep.mismatches.len(),
+        money.join("")
+    )
 }
 
 pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
-    let mut o = format!(
+    let mut o = tr!(
         "照合 {} 件 / 一致 {} ({:.3}%)\n",
+        "Compared {} / matched {} ({:.3}%)\n",
         rep.total,
         rep.agreed,
         rep.rate() * 100.0
     );
     if !rep.impl_id.is_empty() {
-        o.push_str(&format!("相手: {}\n", rep.impl_id));
+        o.push_str(&tr!("相手: {}\n", "Counterpart: {}\n", rep.impl_id));
     }
     for l in provenance(rep) {
         o.push_str(&l);
         o.push('\n');
     }
     if rep.mismatches.is_empty() {
-        o.push_str("不一致はありません。\n");
+        o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
         return o;
     }
     o.push_str(&format!("\n{}\n", impact(rep)));
     for (k, ms) in &cluster(rep) {
         let money = money_text(&deltas(ms), rep.multi);
-        o.push_str(&format!("  {:<48} {:>5} 件{money}\n", k, ms.len()));
+        o.push_str(&format!("  {:<48} {:>5} {}{money}\n", k, ms.len(), records(ms.len())));
         if let Some(q) = sub_grid(ms, f, c) {
-            // §10.4: 出力格子未満のずれだけで固まっているクラスタは、値そのものの
-            // 食い違いではなく丸めの規約差である見込みが高い。自動で括る。
-            o.push_str(&format!("    丸め差異の疑い（出力格子 {q} 未満の端数のみ）\n"));
+            // §10.4: a cluster made up solely of differences below the output grid is most
+            // likely a difference in rounding convention, not in the values themselves. Flag
+            // it automatically.
+            o.push_str(&tr!(
+                "    丸め差異の疑い（出力格子 {q} 未満の端数のみ）\n",
+                "    Suspected rounding difference (only fractions below the output grid {q})\n"
+            ));
         }
-        o.push_str(&format!("    例: {}\n", witness(ms[0], &rep.theirs)));
+        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(ms[0], &rep.theirs)));
     }
     o
 }
 
-/// PR に貼るための Markdown（§12）。投稿は CI の一行に任せ、整形だけ道具が持つ。
+/// Markdown to paste into a PR (§12). Posting is left to one line of CI; the tool owns only
+/// the formatting.
 pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String {
     let esc = |s: &str| s.replace('|', "\\|");
-    let mut o = format!("### 規則 {} v{} — {title}\n\n", f.name.text, f.version);
+    let mut o = tr!(
+        "### 規則 {} v{} — {title}\n\n",
+        "### Rule {} v{} — {title}\n\n",
+        f.name.text,
+        f.version
+    );
     o.push_str("| | |\n|---|---:|\n");
-    o.push_str(&format!("| 照合（実測系） | {} 件 |\n", rep.total - rep.errored));
-    o.push_str(&format!("| 一致 | {} 件 ({:.3}%) |\n", rep.agreed, rep.rate() * 100.0));
-    o.push_str(&format!("| 不一致 | {} 件 |\n", rep.mismatches.len()));
+    o.push_str(&tr!(
+        "| 照合（実測系） | {} 件 |\n",
+        "| Compared (observed records) | {} |\n",
+        rep.total - rep.errored
+    ));
+    o.push_str(&tr!(
+        "| 一致 | {} 件 ({:.3}%) |\n",
+        "| Matched | {} ({:.3}%) |\n",
+        rep.agreed,
+        rep.rate() * 100.0
+    ));
+    o.push_str(&tr!("| 不一致 | {} 件 |\n", "| Mismatches | {} |\n", rep.mismatches.len()));
     if !rep.impl_id.is_empty() {
-        o.push_str(&format!("| 相手 | `{}` |\n", esc(&rep.impl_id)));
+        o.push_str(&tr!("| 相手 | `{}` |\n", "| Counterpart | `{}` |\n", esc(&rep.impl_id)));
     }
     let prov = provenance(rep);
     if !prov.is_empty() {
@@ -296,15 +360,21 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         }
     }
     if rep.mismatches.is_empty() {
-        o.push_str("\n不一致はありません。\n");
+        o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
         return o;
     }
     o.push_str(&format!("\n**{}**\n", impact(rep)));
-    o.push_str("\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 証人 |\n|---|---:|---|---|\n");
+    o.push_str(&tr!(
+        "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 証人 |\n|---|---:|---|---|\n",
+        "\n#### Mismatch breakdown\n\n| Fired rows | Count | Difference | Witness |\n|---|---:|---|---|\n"
+    ));
     for (k, ms) in &cluster(rep) {
         let mut money = money_text(&deltas(ms), rep.multi).trim().to_string();
         if let Some(q) = sub_grid(ms, f, c) {
-            money.push_str(&format!("<br>丸め差異の疑い（格子 {q} 未満）"));
+            money.push_str(&tr!(
+                "<br>丸め差異の疑い（格子 {q} 未満）",
+                "<br>suspected rounding difference (below grid {q})"
+            ));
         }
         o.push_str(&format!(
             "| {} | {} | {} | {} |\n",
@@ -317,11 +387,12 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
     o
 }
 
-/// §10.4: クラスタの全件が「出力格子より小さい、ゼロでないずれ」なら丸め差異の疑い。
-/// 返すのは格子の表示（`10円` など）。一件でも格子以上、あるいは数値で比べられない
-/// 件が混ざっていれば括らない。値が本当に違うものを丸めのせいにしないため、
-/// 判定はクラスタ全体の連言にしてある。複数出力なら、食い違っている出力が
-/// すべて格子未満であることを求める。
+/// §10.4: a suspected rounding difference is when every record in the cluster shows a
+/// "non-zero difference smaller than the output grid". Returns the grid as displayed
+/// (e.g. `10円`). If even one record is at or above the grid, or cannot be compared
+/// numerically, the cluster is not flagged. The decision is a conjunction over the whole
+/// cluster so that values that really differ are never blamed on rounding. With several
+/// outputs, every differing output must be below its grid.
 fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
     let mut grids: BTreeMap<String, String> = BTreeMap::new();
     for m in ms {
@@ -339,7 +410,7 @@ fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
             }
             let (Some(Val::Num(a)), Some(b)) = (a, b) else { return None };
             let d = (a.num / a.den) - b.parse::<i128>().ok()?;
-            // |d| < q を分母を払って整数で比べる。
+            // Compare |d| < q in integers by clearing the denominator.
             if d == 0 || d.abs() * q.den >= q.num {
                 return None;
             }

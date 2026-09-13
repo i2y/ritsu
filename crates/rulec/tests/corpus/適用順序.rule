@@ -1,31 +1,31 @@
-規則 適用順序(apply_order) v1
-説明 "クーポン二枚のどちらを先に適用するか（§5.4）。反復と並べ替えは呼び出し側で、比較だけが規則になる"
+rule 適用順序(apply_order) v1
+description "クーポン二枚のどちらを先に適用するか（§5.4）。反復と並べ替えは呼び出し側で、比較だけが規則になる"
 # 楽天の規約は「率引きを先に、次に額引き、額引きどうしは有効期限が近い順」
 
-型 種別(kind)  = 率引き(rate) | 額引き(amount)
-型 先後(order) = 先(first) | 後(second)
+enum 種別(kind)  = 率引き(rate) | 額引き(amount)
+enum 先後(order) = 先(first) | 後(second)
 
-入力
+inputs
   A種別(a_kind) : 種別
   B種別(b_kind) : 種別
-  A期限(a_due)  : 日付
-  B期限(b_due)  : 日付
+  A期限(a_due)  : date
+  B期限(b_due)  : date
 
-出力
+outputs
   A順序(a_order) : 先後
 
 # 日付どうしの比較。導出にできない型なので、名前どうしを直接比べる第二の原子（§5.3）。
-定義 Aが早いか同じ(a_earlier) : 真偽 = A期限 <= B期限
+define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 
-表 順序判定(decide)
-方式 上から
+table 順序判定(decide)
+policy first
 | A種別  | B種別  | Aが早いか同じ | → A順序(a_order) : 先後 |
 | 率引き | 額引き | -             | 先                      |
 | 額引き | 率引き | -             | 後                      |
-| -      | -      | 真            | 先                      |
+| -      | -      | true          | 先                      |
 | -      | -      | -             | 後                      |
 
-例
+examples
 | A種別  | B種別  | A期限      | B期限      | → A順序 |
 | 率引き | 額引き | 2026-12-31 | 2026-01-01 | 先      |
 | 額引き | 率引き | 2026-01-01 | 2026-12-31 | 後      |

@@ -1,32 +1,33 @@
-//! 検査予算の既定値を決めるための合成ベンチ（§15-2）。
+//! Synthetic benchmark for choosing the default check budget (§15-2).
 //!
-//! 設計目標は「列 12、行 500、数値列 4 で予算内」。これは見込みであって実測では
-//! なかったので、ここで測って既定を決める。人間の書く表はほぼ敷き詰めなので、
-//! 訪問数は行数×列数のオーダーに収まる、というのが §6.3 の見込み。
+//! The design target is "12 columns, 500 rows, 4 numeric columns, within budget". That was an
+//! estimate, not a measurement, so we measure here and set the default from it. Tables written by
+//! people are almost always tilings, so the visit count should stay on the order of rows × columns
+//! — that is the expectation in §6.3.
 
 use std::time::Instant;
 
-/// 列と行を指定して、敷き詰めの表を持つ規則を作る。
-/// 実際の表と同じく、最後に全部 `-` の既定行を置いて完全にする。
+/// Build a rule whose table is a tiling with the given numbers of columns and rows.
+/// As in real tables, an all-`-` default row at the end makes it complete.
 fn synth(enum_cols: usize, num_cols: usize, rows: usize) -> String {
     const VALUES: &[&str] = &["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛"];
-    let mut s = String::from("規則 合成(synth) v1\n\n型 区分(k) = ");
+    let mut s = String::from("rule 合成(synth) v1\n\nenum 区分(k) = ");
     s.push_str(
         &VALUES
             .iter()
             .enumerate()
-            .map(|(i, v)| format!("{v}(v{i}) 既定扱い"))
+            .map(|(i, v)| format!("{v}(v{i}) default"))
             .collect::<Vec<_>>()
             .join(" | "),
     );
-    s.push_str("\n\n入力\n");
+    s.push_str("\n\ninputs\n");
     for i in 0..enum_cols {
         s.push_str(&format!("  e{i}(e{i}) : 区分\n"));
     }
     for i in 0..num_cols {
-        s.push_str(&format!("  n{i}(n{i}) : 金額[円, 税込]  範囲 >=0円 <=100000円\n"));
+        s.push_str(&format!("  n{i}(n{i}) : money[円, incl_tax]  range >=0円 <=100000円\n"));
     }
-    s.push_str("\n出力\n  結果(r) : 区分\n\n表 t(t)\n方式 上から\n|");
+    s.push_str("\noutputs\n  結果(r) : 区分\n\ntable t(t)\npolicy first\n|");
     for i in 0..enum_cols {
         s.push_str(&format!(" e{i} |"));
     }
@@ -38,7 +39,7 @@ fn synth(enum_cols: usize, num_cols: usize, rows: usize) -> String {
     for r in 0..rows.saturating_sub(1) {
         s.push('|');
         for c in 0..enum_cols {
-            // 列ごとに周期をずらして、座標の圧縮が効く形にする。
+            // Shift the period per column, into a shape where coordinate compression pays off.
             if (r + c) % 3 == 0 {
                 s.push_str(&format!(" {} |", VALUES[(r + c) % VALUES.len()]));
             } else {
@@ -54,7 +55,7 @@ fn synth(enum_cols: usize, num_cols: usize, rows: usize) -> String {
         }
         s.push_str(&format!(" {} |\n", VALUES[r % VALUES.len()]));
     }
-    // 既定行
+    // The default row
     s.push('|');
     for _ in 0..(enum_cols + num_cols) {
         s.push_str(" - |");
@@ -72,12 +73,12 @@ fn measure(enum_cols: usize, num_cols: usize, rows: usize) -> (i64, u128) {
     (r.nodes, ms)
 }
 
-// 既定予算を決めたときの実測。回すと十数秒かかるので既定では走らせない。
-// `cargo test --release -- --ignored --nocapture` で再現できる。
+// The measurement that fixed the default budget. It takes ten-odd seconds to run, so it is off by
+// default. Reproduce with `cargo test --release -- --ignored --nocapture`.
 #[test]
 #[ignore]
 fn 予算の分布を測る() {
-    // §15-2 の格子。既定予算はここで決める。
+    // The §15-2 grid. The default budget is decided here.
     println!("\n 列(列挙+数値) |   行 |      ノード |   ms | ノード/ms");
     let mut rows_out: Vec<(i64, u128, String)> = Vec::new();
     for &(e, n) in &[(2usize, 0usize), (4, 2), (6, 2), (8, 4), (6, 6)] {
@@ -97,7 +98,7 @@ fn 予算の分布を測る() {
 
 #[test]
 fn 実表は桁違いに軽い() {
-    // 回帰コーパスの実測。合成の格子と比べて、実際の表がどのあたりにいるかを見る。
+    // Measure the regression corpus, to see where real tables sit relative to the synthetic grid.
     for f in [
         "tests/corpus/ゆうパック運賃.rule",
         "tests/corpus/クーポン割引.rule",
@@ -113,8 +114,8 @@ fn 実表は桁違いに軽い() {
 
 #[test]
 fn 設計目標は既定予算に収まる() {
-    // §6.3 の設計目標「列 12、行 500、数値列 4」。ここが外れたら、既定予算を
-    // 上げるのではなく §6.3 の枝刈りを増強する側を検討する。
+    // The §6.3 design target: "12 columns, 500 rows, 4 numeric columns". If this fails, consider
+    // strengthening the §6.3 pruning rather than raising the default budget.
     let (nodes, ms) = measure(8, 4, 500);
     println!("設計目標: {nodes} ノード / {ms} ms");
     assert!(
@@ -122,7 +123,7 @@ fn 設計目標は既定予算に収まる() {
         "設計目標が既定予算 {} を超えた: {nodes} ノード",
         rulec::region::DEFAULT_BUDGET
     );
-    // 余裕が二倍を切ったら、予算か枝刈りかを決め直す合図。
+    // Headroom dropping below 2x is the signal to decide again between budget and pruning.
     assert!(
         nodes * 2 < rulec::region::DEFAULT_BUDGET,
         "設計目標と既定予算の余裕が二倍を切った: {nodes} / {}",
@@ -132,12 +133,12 @@ fn 設計目標は既定予算に収まる() {
 
 #[test]
 fn 予算を使い切ったら未証明で止まる() {
-    // §6.3: サンプリングによる近似検査へ静かに縮退はしない。不健全な緑は
-    // この道具が存在する理由の否定なので、証明できなければエラーで止める。
+    // §6.3: no quiet degradation into approximate checking by sampling. An unsound green negates
+    // the reason this tool exists, so if it cannot prove, it stops with an error.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/ゆうパック運賃.rule");
     let src = std::fs::read_to_string(&p).unwrap();
     let r = rulec::report_with(&src, "t.rule", 50);
     assert!(r.diags.iter().any(|d| d.code == "E109"), "予算超過は E109 で止まる");
-    // 通ったふりをしない。
+    // Never pretend it passed.
     assert!(rulec::has_error(&r.diags));
 }

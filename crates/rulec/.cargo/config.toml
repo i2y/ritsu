@@ -1,0 +1,6 @@
+# The test suite asserts Japanese output (golden snapshots, message substrings).
+# Pin the language for everything cargo launches so an exported RULEC_LANG=en in
+# a developer's shell cannot turn the suite red. `--lang` on the command line
+# still wins for `cargo run`.
+[env]
+RULEC_LANG = { value = "ja", force = true }

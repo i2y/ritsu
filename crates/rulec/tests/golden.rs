@@ -1,9 +1,9 @@
-//! 文面のスナップショット（§13 の受け入れ条件）。
+//! Snapshots of the wording (the §13 acceptance condition).
 //!
-//! コードの一致と文面の一致は別物である。§11 が「そのまま出す」と決めた文面を、
-//! CJK 幅の桁合わせも含めた描画結果ごと固定する。
+//! Matching codes and matching wording are different things. The wording that §11 decided to
+//! "print as is" is pinned together with its rendered result, CJK-width column alignment included.
 //!
-//! 文面を意図して変えたときは `RULEC_BLESS=1 cargo test --test golden` で焼き直す。
+//! When the wording is changed on purpose, re-bake with `RULEC_BLESS=1 cargo test --test golden`.
 
 use std::path::{Path, PathBuf};
 
@@ -11,7 +11,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// `rel` を検査し、`code` の診断だけを描画して連結する。
+/// Check `rel`, render only the diagnostics with `code`, and concatenate them.
 fn rendered(rel: &str, code: &str) -> String {
     let src = std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"));
     let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
@@ -50,7 +50,7 @@ macro_rules! golden {
     };
 }
 
-// §13 が「そのまま出す」と決めた五つ。
+// The five that §13 decided to "print as is".
 golden!(e101_完全性, "E101", "tests/mutants/m_e101.rule", "E101");
 golden!(e101_日付の穴, "E101-date", "tests/mutants/m_e101d.rule", "E101");
 golden!(e102_冗長, "E102", "tests/mutants/m_e102.rule", "E102");
@@ -60,7 +60,7 @@ golden!(e104_丸め_表引き, "E104-b", "tests/mutants/m_e104.rule", "E104");
 golden!(e104_丸め_端数あり, "E104-a", "tests/mutants/m_e104b.rule", "E104");
 golden!(e105_重複, "E105", "tests/mutants/m_e105.rule", "E105");
 
-// §11 が文面まで書いている残り。
+// The rest, for which §11 spells out the wording as well.
 golden!(e106_格子, "E106", "tests/mutants/m_e106.rule", "E106");
 golden!(e107_例, "E107", "tests/mutants/m_e107.rule", "E107");
 golden!(e108_溢れ, "E108", "tests/mutants/m_e108.rule", "E108");

@@ -1,0 +1,10 @@
+error[E104]: An unrounded value reaches the output
+  --> tests/mutants/m_e104b.rule:21
+   |
+21 |   割引額(discount) : money[円,incl_tax]
+   |                      ^^^^^^^^^^^^^^^^^^ no rounding is declared
+   |
+ Output 割引額 has type money[円, incl_tax].
+ Unless you declare how the fraction is settled, the generated code decides silently.
+ Example: some input computes to 0.12 yen. down(1円) gives 0 yen, half_up(1円) gives 0 yen and up(10円) gives 10 yen, so the rounding mode moves the result by up to 10 yen.
+ Hint: add rounding to the output declaration, e.g. round up(10円)

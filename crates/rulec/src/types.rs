@@ -12,13 +12,13 @@ pub enum Ty {
     /// §2.1: currency and tax are a double brand. `tax: None` is a bare literal,
     /// which unifies with either brand.
     Money { cur: String, tax: Option<String> },
-    /// 質量[g] / 長さ[cm] — a dimension plus the declared unit.
+    /// `mass[g]` / `length[cm]` — a dimension plus the declared unit.
     Qty { dim: String, unit: String },
     Rate,
     Bool,
     Str,
     Date,
-    /// `T?`。セルの `無し` でだけ消費でき、式には現れない（§2.1）。
+    /// `T?`. Consumed only by `none` in a cell; it never appears in an expression (§2.1).
     Opt(Box<Ty>),
     Unknown,
 }
@@ -27,13 +27,13 @@ impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Ty::Enum(n) => write!(f, "{n}"),
-            Ty::Money { cur, tax: Some(t) } => write!(f, "金額[{cur}, {t}]"),
-            Ty::Money { cur, tax: None } => write!(f, "金額[{cur}]"),
+            Ty::Money { cur, tax: Some(t) } => write!(f, "{}[{cur}, {t}]", crate::kw::MONEY),
+            Ty::Money { cur, tax: None } => write!(f, "{}[{cur}]", crate::kw::MONEY),
             Ty::Qty { dim, unit } => write!(f, "{dim}[{unit}]"),
-            Ty::Rate => write!(f, "率"),
-            Ty::Bool => write!(f, "真偽"),
-            Ty::Str => write!(f, "文字列"),
-            Ty::Date => write!(f, "日付"),
+            Ty::Rate => write!(f, "{}", crate::kw::RATE),
+            Ty::Bool => write!(f, "{}", crate::kw::BOOL),
+            Ty::Str => write!(f, "{}", crate::kw::STRING),
+            Ty::Date => write!(f, "{}", crate::kw::DATE),
             Ty::Opt(t) => write!(f, "{t}?"),
             Ty::Unknown => write!(f, "?"),
         }
@@ -60,26 +60,29 @@ impl Ty {
 /// (dimension, factor to the dimension's base unit)
 fn unit_info(u: &str) -> Option<(&'static str, Rat)> {
     Some(match u {
-        "g" => ("質量", Rat::int(1)),
-        "kg" => ("質量", Rat::int(1000)),
-        "cm" => ("長さ", Rat::int(1)),
-        "m" => ("長さ", Rat::int(100)),
-        "円" => ("金額", Rat::int(1)),
-        "銭" => ("金額", Rat::new(1, 100)),
-        "%" => ("率", Rat::new(1, 100)),
+        "g" => (crate::kw::MASS, Rat::int(1)),
+        "kg" => (crate::kw::MASS, Rat::int(1000)),
+        "cm" => (crate::kw::LENGTH, Rat::int(1)),
+        "m" => (crate::kw::LENGTH, Rat::int(100)),
+        "円" => (crate::kw::MONEY, Rat::int(1)),
+        "銭" => (crate::kw::MONEY, Rat::new(1, 100)),
+        "%" => (crate::kw::RATE, Rat::new(1, 100)),
         _ => return None,
     })
 }
 
-/// 日付は**元期からの通算日**で持つ（先発グレゴリオ暦、1970-01-01 = 0）。
+/// A date is held as the **day count since the epoch** (proleptic Gregorian calendar,
+/// 1970-01-01 = 0).
 ///
-/// `y*10000 + m*100 + d` でも順序は保たれるが、月末に実在しない整数の隙間
-/// （20260332〜20260400）ができる。`<=2026-03-31` と `>=2026-04-01` で敷き詰めた
-/// 表は実際には完全なのに、幻の整数が覆われていないとして**偽の E101** が出る。
-/// 両端含みの敷き詰めは業務の自然な書き方（§3.1）なので、必ず踏まれる。
+/// `y*10000 + m*100 + d` would preserve the ordering too, but it leaves gaps of integers
+/// that are not real dates at every month end (20260332..20260400). A table tiled with
+/// `<=2026-03-31` and `>=2026-04-01` is actually complete, yet it would get a **false
+/// E101** because the phantom integers are not covered. Tiling with inclusive bounds is
+/// the natural way to write business rules (§3.1), so this would be hit every time.
 ///
-/// 通算日なら隣接が +1 で一致するので、境界の ±1、空判定、隣接の合流、
-/// 証人の書き戻しが、全部そのまま既存の整数の機構で正しくなる。
+/// With day counts, adjacency is exactly +1, so the ±1 at boundaries, the emptiness test,
+/// the merging of neighbors, and the write-back of witnesses all stay correct with the
+/// existing integer machinery, unchanged.
 pub fn date_ord(y: i32, m: u32, d: u32) -> Rat {
     Rat::int(days_from_civil(y, m as i64, d as i64))
 }
@@ -89,7 +92,7 @@ pub fn ord_to_date(v: Rat) -> (i32, u32, u32) {
     (y as i32, m as u32, d as u32)
 }
 
-/// Howard Hinnant の days_from_civil。先発グレゴリオ暦。
+/// Howard Hinnant's days_from_civil. Proleptic Gregorian calendar.
 fn days_from_civil(y: i32, m: i64, d: i64) -> i128 {
     let y = y as i64 - if m <= 2 { 1 } else { 0 };
     let era = if y >= 0 { y } else { y - 399 } / 400;
@@ -120,17 +123,18 @@ mod date_tests {
     fn 通算日は往復して隣接が一になる() {
         for (y, m, d) in [(2026, 4, 1), (2026, 3, 31), (2024, 2, 29), (1970, 1, 1), (1999, 12, 31)] {
             let o = date_ord(y, m, d);
-            assert_eq!(ord_to_date(o), (y, m, d), "{y}-{m}-{d} の往復");
+            assert_eq!(ord_to_date(o), (y, m, d), "{y}-{m}-{d} round trip");
         }
-        // 月末と翌月初が隣接する。ここが幻の整数の隙間を作らない根拠。
+        // The last day of a month and the first day of the next are adjacent. This is why
+        // no phantom integer gap appears.
         let a = date_ord(2026, 3, 31);
         let b = date_ord(2026, 4, 1);
-        assert_eq!(b.sub(a), Rat::int(1), "3/31 と 4/1 は隣り合う");
-        // 閏日
+        assert_eq!(b.sub(a), Rat::int(1), "3/31 and 4/1 are adjacent");
+        // Leap day
         let c = date_ord(2024, 2, 28);
         assert_eq!(date_ord(2024, 2, 29).sub(c), Rat::int(1));
         assert_eq!(date_ord(2024, 3, 1).sub(date_ord(2024, 2, 29)), Rat::int(1));
-        // 平年の 2/28 の翌日は 3/1
+        // In a common year the day after 2/28 is 3/1
         assert_eq!(date_ord(2025, 3, 1).sub(date_ord(2025, 2, 28)), Rat::int(1));
     }
 }
@@ -146,12 +150,12 @@ fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     let unit = n.unit.as_deref()?;
     let (dim, f) = unit_info(unit)?;
     match want {
-        Ty::Money { .. } if dim == "金額" => Some(v.mul(f)),
+        Ty::Money { .. } if dim == crate::kw::MONEY => Some(v.mul(f)),
         Ty::Qty { dim: d, unit: du } if dim == *d => {
             let (_, fd) = unit_info(du)?;
             Some(v.mul(f).div(fd))
         }
-        Ty::Rate if dim == "率" => Some(v.mul(f)),
+        Ty::Rate if dim == crate::kw::RATE => Some(v.mul(f)),
         _ => None,
     }
 }
@@ -159,8 +163,8 @@ fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
 /// Type of a numeric literal read on its own, before any expectation.
 fn lit_ty(n: &crate::lex::Num) -> Ty {
     match n.unit.as_deref().and_then(unit_info) {
-        Some(("金額", _)) => Ty::Money { cur: n.unit.clone().unwrap(), tax: None },
-        Some(("率", _)) => Ty::Rate,
+        Some((crate::kw::MONEY, _)) => Ty::Money { cur: n.unit.clone().unwrap(), tax: None },
+        Some((crate::kw::RATE, _)) => Ty::Rate,
         Some((d, _)) => Ty::Qty { dim: d.to_string(), unit: n.unit.clone().unwrap() },
         None => Ty::Unknown,
     }
@@ -185,27 +189,31 @@ pub enum SymKind {
 
 pub struct Checked {
     pub syms: HashMap<String, Sym>,
-    /// 出力名 → 丸め（モードと格子）。E106 はリテラルがこの格子に載るかを見る。
+    /// Output name → rounding (mode and grid). E106 checks that literals sit on this grid.
     pub roundings: HashMap<String, (RoundMode, Rat)>,
-    /// 入力名 → 宣言範囲。E112 が到達区間の包含を見るのに使う。
+    /// Input name → declared range. E112 uses it to check that the reachable interval is
+    /// contained.
     pub ranges: HashMap<String, (Option<Rat>, Option<Rat>)>,
-    /// 表の出力名 → その表が実際に出しうる値。上流が決して出さない値を名指しする
-    /// 行は、下流では到達不能になる（§11 E102 の変種）。
+    /// Table output name → the values that table can actually produce. A downstream row that
+    /// names a value the upstream table never produces is unreachable (a variant of §11 E102).
     pub out_values: HashMap<String, Vec<String>>,
-    /// 真偽の定義名 → その式が名指しする名前。証人を構成できるかの判定に使う。
+    /// Boolean definition name → the names its expression mentions. Used to decide whether
+    /// a witness can be constructed.
     pub define_deps: HashMap<String, Vec<String>>,
-    /// 導出名 → 依存する入力名。二つの導出が入力を共有するかを見るのに使う。
-    /// 共有していると、導出ごとに独立な区間の篩は従属を見られない（§6.2）。
+    /// Derived name → the inputs it depends on. Used to see whether two derived values share
+    /// an input: when they do, a sieve of independent intervals per derived value cannot see
+    /// the dependency (§6.2).
     pub derived_deps: HashMap<String, Vec<String>>,
-    /// 名前 → 刻みの逆数。値が 1/k の倍数であることを表す。§7.1 の
-    /// 「int64 一本＋静的有理スケール」で、格納される整数は 値×k になる。
+    /// Name → reciprocal of the step: the value is a multiple of 1/k. Under §7.1's
+    /// "a single int64 plus a static rational scale", the stored integer is value×k.
     pub scales: HashMap<String, i128>,
     /// Enum name -> values, in declaration order (§6.3 picks the first as a witness).
     pub enums: HashMap<String, Vec<String>>,
     /// Group name -> the enum it belongs to and its members.
     pub groups: HashMap<String, (String, Vec<String>)>,
     pub used: HashSet<String>,
-    /// セルや式で名指しされた列挙値。W111 が「どの行にも現れない値」を出すのに使う。
+    /// Enum values named in a cell or expression. W111 uses it to report "values that appear
+    /// in no row".
     pub used_values: HashSet<String>,
     pub diags: Vec<Diag>,
 }
@@ -227,7 +235,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     };
     let at = |line: usize| format!("{path}:{line}");
 
-    // 標準/都道府県 is the only import the corpus needs; its 47 values come from the
+    // std/都道府県 is the only import the corpus needs; its 47 values come from the
     // prelude (§2.2). Until the prelude is a real file, accept any value for it.
     for (p, sp) in &f.imports {
         match crate::prelude::lookup(p) {
@@ -235,10 +243,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.enums.insert(name, values);
             }
             None => c.diags.push(
-                Diag::error("E013", format!("`{p}` という取込先はありません"))
+                Diag::error("E013", tr!("`{p}` という取込先はありません", "There is no import named `{p}`"))
                     .at(at(sp.line))
                     .mark(sp.clone(), "")
-                    .note("組み込みは 標準/都道府県 だけです（§2.2）。"),
+                    .note(tr!("組み込みは 標準/都道府県 だけです（§2.2）。", "The only built-in module is std/都道府県 (§2.2).")),
             ),
         }
     }
@@ -280,10 +288,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
     if f.outputs.is_empty() {
         c.diags.push(
-            Diag::error("E009", "出力がありません")
+            Diag::error("E009", tr!("出力がありません", "No outputs are declared"))
                 .at(at(f.name.span.line))
                 .mark(f.name.span.clone(), "")
-                .note("規則は値をひとつ以上返します。`出力` の節を書いてください。"),
+                .note(tr!("規則は値をひとつ以上返します。`{}` の節を書いてください。", "A rule returns at least one value. Write an `{}` section.", crate::kw::OUTPUTS)),
         );
     }
     for o in &f.outputs {
@@ -291,10 +299,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // §7.2: a numeric output must declare its rounding.
         if ty.is_numeric() && o.rounding.is_none() {
             c.diags.push(
-                Diag::error("E104", "出力に丸めの宣言がありません")
+                Diag::error("E104", tr!("出力に丸めの宣言がありません", "The output declares no rounding"))
                     .at(at(o.span.line))
-                    .mark(o.ty.span.clone(), "丸め の宣言がありません")
-                    .note(format!("出力 {} は {} です。", o.name.text, ty)),
+                    .mark(o.ty.span.clone(), tr!("丸め の宣言がありません", "no rounding is declared"))
+                    .note(tr!("出力 {} は {} です。", "Output {} has type {}.", o.name.text, ty)),
             );
         }
         if let Some(rd) = &o.rounding {
@@ -308,13 +316,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         );
     }
 
-    // §1.1 はキーワードを日本語一種類だけと決めている。名前がキーワードと
-    // 衝突すると、行指向のパーサが宣言をセクションの始まりと読んで黙って捨てる。
-    // 黙って捨てるのが最悪なので、名前の側を拒む。
-    const KEYWORDS: &[&str] = &[
-        "規則", "説明", "取込", "型", "群", "入力", "出力", "導出", "定義", "表", "方式", "結果",
-        "例", "範囲", "丸め", "以外", "無し", "既定扱い", "契約のみ",
-    ];
+    // §1.1 fixes each keyword to a single spelling. When a name collides with a keyword,
+    // the line-oriented parser reads the declaration as the start of a section and silently
+    // drops it. Silent dropping is the worst outcome, so it is the name that gets rejected.
+    const KEYWORDS: &[&str] = crate::kw::RESERVED;
     let mut named: Vec<(&str, &Span)> = Vec::new();
     named.push((f.name.text.as_str(), &f.name.span));
     for i in &f.inputs {
@@ -349,11 +354,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for (n, sp) in named {
         if KEYWORDS.contains(&n) {
             c.diags.push(
-                Diag::error("E009", format!("`{n}` はキーワードなので、名前にできません"))
+                Diag::error("E009", tr!("`{n}` はキーワードなので、名前にできません", "`{n}` is a keyword and cannot be used as a name"))
                     .at(at(sp.line))
                     .mark(sp.clone(), "")
-                    .note("行指向の構文なので、キーワードと同じ名前は宣言を黙って捨ててしまいます。")
-                    .note("別の名前を付けてください。"),
+                    .note(tr!("行指向の構文なので、キーワードと同じ名前は宣言を黙って捨ててしまいます。", "The syntax is line-oriented, so a declaration named like a keyword is silently dropped."))
+                    .note(tr!("別の名前を付けてください。", "Choose a different name.")),
             );
         }
     }
@@ -361,26 +366,26 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // §1.3: the public face needs ASCII aliases; the inside does not.
     let mut missing: Vec<String> = Vec::new();
     if f.name.ascii.is_none() {
-        missing.push(format!("規則 {}", f.name.text));
+        missing.push(tr!("規則 {}", "rule {}", f.name.text));
     }
     for i in &f.inputs {
         if i.name.ascii.is_none() {
-            missing.push(format!("入力 {}", i.name.text));
+            missing.push(tr!("入力 {}", "input {}", i.name.text));
         }
     }
     for o in &f.outputs {
         if o.name.ascii.is_none() {
-            missing.push(format!("出力 {}", o.name.text));
+            missing.push(tr!("出力 {}", "output {}", o.name.text));
         }
     }
     if !missing.is_empty() {
         c.diags.push(
-            Diag::error("E011", "公開面の名前に ASCII 別名がありません")
+            Diag::error("E011", tr!("公開面の名前に ASCII 別名がありません", "A public name has no ASCII alias"))
                 .at(at(f.name.span.line))
                 .mark(f.name.span.clone(), "")
-                .note(format!("不足: {}", missing.join(" / ")))
-                .note("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。")
-                .note("宣言の位置に丸括弧で書いてください。例: 届け先(dest)"),
+                .note(tr!("不足: {}", "Missing: {}", missing.join(" / ")))
+                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3)."))
+                .note(tr!("宣言の位置に丸括弧で書いてください。例: 届け先(dest)", "Write it in parentheses at the declaration, e.g. 届け先(dest)")),
         );
     }
 
@@ -390,7 +395,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Derived(d) => {
                 let ty = c.resolve(&d.ty);
                 let got = c.expr_ty(&d.expr, path);
-                c.check_same(&ty, &got, &d.span, path, "導出");
+                c.check_same(&ty, &got, &d.span, path, &tr!("導出", "derived value"));
                 c.derived_range(d, &ty, path);
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 if let (Some(iv), Some(sc)) = (c.interval(&d.expr, &ty), c.scale(&d.expr)) {
@@ -408,7 +413,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Define(d) => {
                 let ty = c.resolve(&d.ty);
                 let got = c.expr_ty(&d.expr, path);
-                c.check_same(&ty, &got, &d.span, path, "定義");
+                c.check_same(&ty, &got, &d.span, path, &tr!("定義", "definition"));
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 if let (Some(iv), Some(sc)) = (c.interval(&d.expr, &ty), c.scale(&d.expr)) {
                     c.ranges.insert(d.name.text.clone(), (Some(iv.0), Some(iv.1)));
@@ -423,8 +428,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
-    // §5.3 E113: 真偽定義の原子は、入力か導出への単項テストに限る。
-    // ここを緩めると `x − y >= c` の半空間が列に入り、§6.2 の箱代数が崩れる。
+    // §5.3 E113: the atoms of a boolean definition are limited to unary tests on an input or
+    // a derived value. Relaxing this lets half-spaces like `x − y >= c` into the columns, and
+    // the box algebra of §6.2 falls apart.
     for it in &f.items {
         if let Item::Define(d) = it {
             if c.resolve(&d.ty) == Ty::Bool {
@@ -440,19 +446,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         c.used.insert(r.name.clone());
         let got = c.expr_ty(&r.expr, path);
         if let Some(s) = c.syms.get(&r.name).cloned() {
-            c.check_same(&s.ty, &got, &r.span, path, "結果");
+            c.check_same(&s.ty, &got, &r.span, path, &tr!("結果", "result"));
         }
     }
 
-    // §11 W111: declarations nothing names. `契約のみ` silences a range-guard-only input.
+    // §11 W111: declarations nothing names. `contract_only` silences a range-guard-only input.
     for i in &f.inputs {
         if !c.used.contains(&i.name.text) && !i.contract_only {
             c.diags.push(
-                Diag::warning("W111", format!("入力 {} はどの表でも使われていません", i.name.text))
+                Diag::warning("W111", tr!("入力 {} はどの表でも使われていません", "Input {} is not used by any table", i.name.text))
                     .at(at(i.span.line))
-                    .mark(i.name.span.clone(), "どの列にも現れません")
-                    .note("本来使うべき列の書き忘れかもしれません。")
-                    .note("範囲の入口検査としてだけ効かせるつもりなら、宣言に `契約のみ` を付けてください（§11 W111）。"),
+                    .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
+                    .note(tr!("本来使うべき列の書き忘れかもしれません。", "A column that should use it may have been left out."))
+                    .note(tr!("範囲の入口検査としてだけ効かせるつもりなら、宣言に `{}` を付けてください（§11 W111）。", "If it is meant only as an entry check on its range, add `{}` to the declaration (§11 W111).", crate::kw::CONTRACT_ONLY)),
             );
         }
     }
@@ -460,17 +466,17 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if let Item::Derived(d) = it {
             if !c.used.contains(&d.name.text) {
                 c.diags.push(
-                    Diag::warning("W111", format!("導出 {} はどこでも使われていません", d.name.text))
+                    Diag::warning("W111", tr!("導出 {} はどこでも使われていません", "Derived value {} is never used", d.name.text))
                         .at(at(d.span.line))
-                        .mark(d.name.span.clone(), "どの列にも式にも現れません")
-                        .note("使わない導出は、検査の軸を一本増やすだけです。消すか、使ってください。"),
+                        .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
+                        .note(tr!("使わない導出は、検査の軸を一本増やすだけです。消すか、使ってください。", "An unused derived value only adds one more axis to the checks. Remove it, or use it.")),
                 );
             }
         }
     }
-    // 対象は「このファイルで宣言された型」に限る。取込した型（都道府県 47 値）は
-    // `以外: 沖縄` のような書き方で 45 値が名指しされないのが正常なので、
-    // 値ごとの印を書かせると警告チャンネルごと壊れる。
+    // Only types declared in this file are checked. For an imported type (the 47 prefectures)
+    // it is normal that a cell like `not: 沖縄` leaves 45 values unnamed; demanding a mark on
+    // each of them would wreck the whole warning channel.
     for e in &f.enums {
         let unused: Vec<&Name> = e
             .values
@@ -482,18 +488,18 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if !unused.is_empty() {
             let names: Vec<String> = unused.iter().map(|v| v.text.clone()).collect();
             c.diags.push(
-                Diag::warning("W111", format!("型 {} の値がどの行にも現れません", e.name.text))
+                Diag::warning("W111", tr!("型 {} の値がどの行にも現れません", "Values of type {} appear in no row", e.name.text))
                     .at(at(e.span.line))
                     .mark(e.name.span.clone(), "")
-                    .note(format!("現れない値: {}", names.join(" / ")))
-                    .note("完全性検査は通っていても、その値に当たる行が `-` に吸われているだけかもしれません。"),
+                    .note(tr!("現れない値: {}", "Values that never appear: {}", names.join(" / ")))
+                    .note(tr!("完全性検査は通っていても、その値に当たる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
             );
         }
     }
     for g in &f.groups {
         if !c.used.contains(&g.name.text) {
             c.diags.push(
-                Diag::warning("W111", format!("群 {} はどのセルでも使われていません", g.name.text))
+                Diag::warning("W111", tr!("群 {} はどのセルでも使われていません", "Group {} is not used in any cell", g.name.text))
                     .at(at(g.span.line))
                     .mark(g.name.span.clone(), ""),
             );
@@ -505,14 +511,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 impl Checked {
     fn resolve(&mut self, t: &TypeRef) -> Ty {
         let base = match t.base.as_str() {
-            "金額" => {
+            crate::kw::MONEY => {
                 let mut it = t.args.iter().filter_map(|a| match a {
                     TypeArg::Word(w) => Some(w.clone()),
                     _ => None,
                 });
                 Ty::Money { cur: it.next().unwrap_or_else(|| "円".into()), tax: it.next() }
             }
-            "質量" | "長さ" => {
+            crate::kw::MASS | crate::kw::LENGTH => {
                 let unit = t
                     .args
                     .iter()
@@ -523,10 +529,10 @@ impl Checked {
                     .unwrap_or_default();
                 Ty::Qty { dim: t.base.clone(), unit }
             }
-            "率" => Ty::Rate,
-            "真偽" => Ty::Bool,
-            "文字列" => Ty::Str,
-            "日付" => Ty::Date,
+            crate::kw::RATE => Ty::Rate,
+            crate::kw::BOOL => Ty::Bool,
+            crate::kw::STRING => Ty::Str,
+            crate::kw::DATE => Ty::Date,
             other => Ty::Enum(other.to_string()),
         };
         if t.optional { Ty::Opt(Box::new(base)) } else { base }
@@ -535,7 +541,7 @@ impl Checked {
     fn check_same(&mut self, want: &Ty, got: &Ty, span: &Span, path: &str, what: &str) {
         if !want.unifies(got) && *got != Ty::Unknown {
             self.diags.push(
-                Diag::error("E103", format!("型が合いません: {want} に {got} を入れています"))
+                Diag::error("E103", tr!("型が合いません: {want} に {got} を入れています", "Type mismatch: {want} is given {got}"))
                     .at(format!("{path}:{} {what}", span.line))
                     .mark(span.clone(), ""),
             );
@@ -550,10 +556,10 @@ impl Checked {
                     Some(s) => s.ty.clone(),
                     None => {
                         self.diags.push(
-                            Diag::error("E012", format!("`{n}` という名前は宣言されていません"))
+                            Diag::error("E012", tr!("`{n}` という名前は宣言されていません", "The name `{n}` is not declared"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
-                                .note("上の行までに 入力 / 導出 / 定義 / 表の出力 として宣言されている必要があります（§5.1）。"),
+                                .note(tr!("上の行までに 入力 / 導出 / 定義 / 表の出力 として宣言されている必要があります（§5.1）。", "It must be declared on an earlier line as an input, a derived value, a definition, or a table output (§5.1).")),
                         );
                         Ty::Unknown
                     }
@@ -564,7 +570,7 @@ impl Checked {
                 Lit::Str(_) => Ty::Str,
                 Lit::Date(..) => Ty::Date,
                 Lit::Word(w) => {
-                    if w == "真" || w == "偽" {
+                    if w == crate::kw::TRUE || w == crate::kw::FALSE {
                         Ty::Bool
                     } else {
                         self.enum_of_value(w).map(Ty::Enum).unwrap_or(Ty::Unknown)
@@ -574,15 +580,15 @@ impl Checked {
             Expr::Call(name, args, sp) => {
                 let ats: Vec<Ty> = args.iter().map(|a| self.expr_ty(a, path)).collect();
                 match name.as_str() {
-                    "切り捨て" | "切り上げ" | "四捨五入" | "銀行家丸め" => {
+                    crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN => {
                         ats.first().cloned().unwrap_or(Ty::Unknown)
                     }
-                    "最小" | "最大" => {
+                    crate::kw::MIN | crate::kw::MAX => {
                         if ats.len() == 2 && !ats[0].unifies(&ats[1]) {
                             self.diags.push(
                                 Diag::error(
                                     "E103",
-                                    format!("{name} の二つの引数の型が違います: {} と {}", ats[0], ats[1]),
+                                    tr!("{name} の二つの引数の型が違います: {} と {}", "The two arguments of {name} have different types: {} and {}", ats[0], ats[1]),
                                 )
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), ""),
@@ -612,7 +618,7 @@ impl Checked {
                         if matches!(lt, Ty::Money { tax: None, .. }) { rt } else { lt }
                     }
                     Mul => match (&lt, &rt) {
-                        // §2.3: 金額 × 率 は未丸め金額。金額 × 金額 は禁止。
+                        // §2.3: money × rate is unrounded money. money × money is forbidden.
                         (Ty::Money { .. }, Ty::Rate) => lt.clone(),
                         (Ty::Rate, Ty::Money { .. }) => rt.clone(),
                         (Ty::Qty { .. }, Ty::Rate) | (Ty::Rate, Ty::Qty { .. }) => {
@@ -620,10 +626,10 @@ impl Checked {
                         }
                         (Ty::Money { .. }, Ty::Money { .. }) => {
                             self.diags.push(
-                                Diag::error("E103", "金額どうしを掛けています")
+                                Diag::error("E103", tr!("金額どうしを掛けています", "Multiplying money by money"))
                                     .at(format!("{path}:{}", sp.line))
                                     .mark(sp.clone(), "")
-                                    .note("合成次元は業務ルールに現れないので、モデリングの誤りとして止めます（§2.1）。"),
+                                    .note(tr!("合成次元は業務ルールに現れないので、モデリングの誤りとして止めます（§2.1）。", "Compound dimensions do not occur in business rules, so this is stopped as a modeling error (§2.1).")),
                             );
                             Ty::Unknown
                         }
@@ -639,15 +645,15 @@ impl Checked {
     fn mix(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
         let note = match (a, b) {
             (Ty::Money { tax: Some(x), .. }, Ty::Money { tax: Some(y), .. }) if x != y => {
-                "税の変換は変換式ではなく表として書いてください（§2.1）。".to_string()
+                tr!("税の変換は変換式ではなく表として書いてください（§2.1）。", "Write a tax conversion as a table, not as a conversion formula (§2.1).")
             }
-            _ => "次元の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。".to_string(),
+            _ => tr!("次元の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
         };
         self.diags.push(
-            Diag::error("E103", format!("単位の混同: {a} に {b} を足しています"))
+            Diag::error("E103", tr!("単位の混同: {a} に {b} を足しています", "Mixed units: adding {b} to {a}"))
                 .at(format!("{path}:{}", sp.line))
                 .mark(sp.clone(), "")
-                .note(format!("ヒント: {note}")),
+                .note(tr!("ヒント: {note}", "Hint: {note}")),
         );
     }
 
@@ -660,8 +666,8 @@ impl Checked {
 
     fn table(&mut self, t: &Table, path: &str) {
         let at = |line: usize| match &t.name {
-            Some(n) => format!("{path}:{line} 表 {}", n.text),
-            None => format!("{path}:{line} 例"),
+            Some(n) => tr!("{path}:{line} 表 {}", "{path}:{line} table {}", n.text),
+            None => tr!("{path}:{line} 例", "{path}:{line} examples"),
         };
 
         // Column headers must name something already in scope (§5.1).
@@ -675,10 +681,10 @@ impl Checked {
                         col_ty.push(Ty::Unknown);
                     } else {
                         self.diags.push(
-                            Diag::error("E012", format!("列 `{name}` という名前は宣言されていません"))
+                            Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
                                 .at(at(sp.line))
                                 .mark(sp.clone(), "")
-                                .note("列に書けるのは 入力・導出・真偽/列挙の中間値です（§5.3）。"),
+                                .note(tr!("列に書けるのは 入力・導出・真偽/列挙の中間値です（§5.3）。", "A column can only be an input, a derived value, or a boolean/enum intermediate value (§5.3).")),
                         );
                         col_ty.push(Ty::Unknown);
                     }
@@ -686,7 +692,7 @@ impl Checked {
             }
         }
 
-        // Output columns enter scope for later tables and for 結果.
+        // Output columns enter scope for later tables and for `result`.
         let mut out_ty: Vec<Ty> = Vec::new();
         for oc in &t.outputs {
             let ty = match &oc.ty {
@@ -702,7 +708,8 @@ impl Checked {
             }
         }
 
-        // 上流が出しうる値を集めておく。列挙と真偽だけが下流の列に来る（§5.3）。
+        // Collect the values the upstream table can produce. Only enums and booleans reach a
+        // downstream column (§5.3).
         if t.name.is_some() {
             for (oi, oc) in t.outputs.iter().enumerate() {
                 if !matches!(out_ty.get(oi), Some(Ty::Enum(_)) | Some(Ty::Bool)) {
@@ -735,23 +742,24 @@ impl Checked {
                 match oc {
                     OutCell::Lit(Lit::Num(n)) => match lit_value_in(n, want) {
                         None => self.diags.push(
-                            Diag::error("E103", format!("この列は {want} ですが `{}` が書かれています", n.raw))
+                            Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                                 .at(at(row.span.line))
                                 .mark(osp.clone(), ""),
                         ),
                         Some(v) => {
-                            // §2.4: 宣言された丸めに黙って寄せる道具は、差分を見る道具として自殺である。
-                            // 格子に載っていなければ、書いた人に決めさせる。
+                            // §2.4: a tool that silently snaps to the declared rounding defeats
+                            // itself as a tool for reviewing diffs. If the value is off the grid,
+                            // let the author decide.
                             if let Some((m, g)) = self.roundings.get(&ocol).copied() {
                                 if !v.on_grid(g) {
                                     let near = v.round_to(m, g);
                                     self.diags.push(
-                                        Diag::error("E106", format!("`{}` は丸めの格子に載っていません", n.raw))
+                                        Diag::error("E106", tr!("`{}` は丸めの格子に載っていません", "`{}` is not on the rounding grid", n.raw))
                                             .at(at(row.span.line))
                                             .mark(osp.clone(), "")
-                                            .note(format!("出力 {ocol} の丸めは {}({}) です。", m.name(), fmt_val(g, want)))
-                                            .note(format!("ヒント: {} と書くか、丸めの宣言のほうを直してください。", fmt_val(near, want)))
-                                            .note("黙って寄せることはしません。どちらが正しいかは業務の判断です（§2.4）。"),
+                                            .note(tr!("出力 {ocol} の丸めは {}({}) です。", "The rounding of output {ocol} is {}({}).", m.name(), fmt_val(g, want)))
+                                            .note(tr!("ヒント: {} と書くか、丸めの宣言のほうを直してください。", "Hint: write {} instead, or fix the rounding declaration.", fmt_val(near, want)))
+                                            .note(tr!("黙って寄せることはしません。どちらが正しいかは業務の判断です（§2.4）。", "Nothing is snapped silently. Which one is right is a business decision (§2.4).")),
                                     );
                                 }
                             }
@@ -764,17 +772,17 @@ impl Checked {
                             self.used.insert(w.clone());
                             if !s.ty.unifies(want) {
                                 self.diags.push(
-                                    Diag::error("E103", format!("この列は {want} ですが `{w}` は {} です", s.ty))
+                                    Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
                                         .at(at(row.span.line))
                                         .mark(osp.clone(), ""),
                                 );
                             }
-                        } else if self.enum_of_value(w).is_none() && w != "真" && w != "偽" {
+                        } else if self.enum_of_value(w).is_none() && w != crate::kw::TRUE && w != crate::kw::FALSE {
                             self.diags.push(
-                                Diag::error("E012", format!("`{w}` は値の名前としても、宣言された名前としても見つかりません"))
+                                Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
                                     .mark(osp.clone(), "")
-                                    .note("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです（§3.2）。式は書けません。"),
+                                    .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです（§3.2）。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition) (§3.2). Expressions are not allowed.")),
                             );
                         }
                     }
@@ -785,22 +793,23 @@ impl Checked {
     }
 
     fn cell(&mut self, cell: &Cell, want: &Ty, span: &Span, at: &str) {
-        // optional の列に在る側の値を書くのは正しい。`無し` は Cell::Nothing で来る。
+        // Writing a present-side value in an optional column is correct. `none` arrives as
+        // Cell::Nothing.
         let want = match want {
             Ty::Opt(inner) => inner.as_ref(),
             other => other,
         };
-        let mut check_lit = |s: &mut Self, l: &Lit| match l {
+        let check_lit = |s: &mut Self, l: &Lit| match l {
             Lit::Num(n) => {
                 if lit_value_in(n, want).is_none() {
                     s.diags.push(
-                        Diag::error("E103", format!("この列は {want} ですが `{}` が書かれています", n.raw))
+                        Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                             .at(at.to_string())
                             .mark(span.clone(), "")
                             .note(if n.unit.is_none() {
-                                "単位が要ります。裸の数は書けません（§3）。".to_string()
+                                tr!("単位が要ります。裸の数は書けません（§3）。", "A unit is required. A bare number cannot be written (§3).")
                             } else {
-                                format!("`{}` は {want} の単位ではありません。", n.raw)
+                                tr!("`{}` は {want} の単位ではありません。", "`{}` is not a unit of {want}.", n.raw)
                             }),
                     );
                 }
@@ -808,17 +817,17 @@ impl Checked {
             Lit::Date(..) => {
                 if *want != Ty::Date && *want != Ty::Unknown {
                     s.diags.push(
-                        Diag::error("E103", format!("この列は {want} ですが 日付 が書かれています"))
+                        Diag::error("E103", tr!("この列は {want} ですが 日付 が書かれています", "This column is {want}, but a date is written here"))
                             .at(at.to_string())
                             .mark(span.clone(), ""),
                     );
                 }
             }
             Lit::Word(w) => {
-                if w == "真" || w == "偽" {
+                if w == crate::kw::TRUE || w == crate::kw::FALSE {
                     if *want != Ty::Bool && *want != Ty::Unknown {
                         s.diags.push(
-                            Diag::error("E103", format!("この列は {want} ですが 真偽 が書かれています"))
+                            Diag::error("E103", tr!("この列は {want} ですが 真偽 が書かれています", "This column is {want}, but a boolean is written here"))
                                 .at(at.to_string())
                                 .mark(span.clone(), ""),
                         );
@@ -837,12 +846,12 @@ impl Checked {
                     (Some(e), Ty::Enum(w2)) if e == w2 => {}
                     (_, Ty::Unknown) => {}
                     (None, _) => s.diags.push(
-                        Diag::error("E012", format!("`{w}` は値としても群としても見つかりません"))
+                        Diag::error("E012", tr!("`{w}` は値としても群としても見つかりません", "`{w}` is found neither as a value nor as a group"))
                             .at(at.to_string())
                             .mark(span.clone(), ""),
                     ),
                     (Some(e), _) => s.diags.push(
-                        Diag::error("E103", format!("この列は {want} ですが `{w}`（{e} の値）が書かれています"))
+                        Diag::error("E103", tr!("この列は {want} ですが `{w}`（{e} の値）が書かれています", "This column is {want}, but `{w}` (a value of {e}) is written here"))
                             .at(at.to_string())
                             .mark(span.clone(), ""),
                     ),
@@ -877,19 +886,19 @@ pub fn lit_ty_pub(n: &crate::lex::Num) -> Ty {
     lit_ty(n)
 }
 
-/// region が同じ換算を使うための入口。
+/// Entry point so that `region` uses the same conversion.
 pub fn lit_value_in_pub(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     lit_value_in(n, want)
 }
 
-/// §1.6 の描画も同じ書き戻しを使う。承認者に `1000000円` と見せると、
-/// 原本の `100万円` と突き合わせる前に読み替えが要る。
+/// The §1.6 rendering uses the same write-back. Showing an approver `1000000円` forces a
+/// mental conversion before it can be matched against the `100万円` in the rule source.
 pub fn fmt_big_pub(v: Rat) -> String {
     fmt_big(v)
 }
 
-/// 大きい金額は 万・億 で書き戻す。書き手が `100万円` と書いたものに
-/// `1000000円` と返すと、直す前に読み替えが要る。
+/// Large amounts are written back with 万 and 億. Answering `1000000円` to an author who
+/// wrote `100万円` forces a mental conversion before they can fix anything.
 fn fmt_big(v: Rat) -> String {
     if !v.is_int() {
         return format!("{v}");
@@ -916,7 +925,8 @@ fn fmt_val(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// `範囲 >=a <=b` を区間に落とす。開閉は閉じ側に寄せる（広く見積もるほうが安全側）。
+/// Lower `range >=a <=b` to an interval. Open bounds are treated as closed (overestimating
+/// is the safe side).
 fn bounds_of(r: &Range, ty: &Ty) -> (Option<Rat>, Option<Rat>) {
     let (mut lo, mut hi) = (None, None);
     for (op, l) in &r.bounds {
@@ -937,8 +947,9 @@ fn bounds_of(r: &Range, ty: &Ty) -> (Option<Rat>, Option<Rat>) {
 }
 
 impl Checked {
-    /// E112: 宣言範囲は、入力範囲から区間演算で得た到達区間を含まねばならない。
-    /// 含まないと、網羅性検査が実際に起きる値を見ないまま「完全」と答える。
+    /// E112: the declared range must contain the reachable interval obtained by interval
+    /// arithmetic over the input ranges. Otherwise the completeness check answers "complete"
+    /// without ever seeing the values that actually occur.
     fn derived_range(&mut self, d: &DerivedDecl, ty: &Ty, path: &str) {
         let Some((rl, rh)) = self.interval(&d.expr, ty) else { return };
         let Some(rg) = &d.range else { return };
@@ -947,12 +958,13 @@ impl Checked {
         let too_high = matches!((dh, Some(rh)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater);
         if too_low || too_high {
             self.diags.push(
-                Diag::error("E112", "導出の範囲が、実際に到達しうる値を含んでいません")
-                    .at(format!("{path}:{} 導出 {}", rg.span.line, d.name.text))
-                    .mark(rg.span.clone(), format!("到達区間は >={} <={} です", fmt_val(rl, ty), fmt_val(rh, ty)))
-                    .note("範囲が狭いと、網羅性検査が実際に起きる値を見ないまま「完全」と答えます。")
-                    .note(format!(
+                Diag::error("E112", tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of the derived value does not contain the values it can actually reach"))
+                    .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text))
+                    .mark(rg.span.clone(), tr!("到達区間は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
+                    .note(tr!("範囲が狭いと、網羅性検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
+                    .note(tr!(
                         "ヒント: 範囲 >={} <={} に広げてください。到達しない分まで広げても、実現不能な領域として検査が篩うので害はありません。",
+                        "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
                         fmt_val(rl, ty),
                         fmt_val(rh, ty)
                     )),
@@ -960,15 +972,17 @@ impl Checked {
         }
     }
 
-    /// 入力の宣言範囲からの区間演算。導出の右辺は入力だけの線形結合なので、
-    /// 加減と定数倍で閉じる（§5.2）。
+    /// Interval arithmetic from the declared input ranges. The right-hand side of a derived
+    /// value is a linear combination of inputs only, so addition, subtraction, and constant
+    /// multiples are all that is needed (§5.2).
     fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
         match e {
             Expr::Name(n, _) => {
                 if let Some((lo, hi)) = self.ranges.get(n) {
                     return Some(((*lo)?, (*hi)?));
                 }
-                // 率は 0〜100% を上限とみなす。範囲宣言を要求しないぶん保守的に見る。
+                // A rate is taken to lie within 0..100%. No range declaration is required for
+                // it, so this is the conservative view.
                 match self.syms.get(n).map(|s| s.ty.clone()) {
                     Some(Ty::Rate) => Some((Rat::zero(), Rat::int(1))),
                     _ => None,
@@ -985,7 +999,8 @@ impl Checked {
                     BinOp::Add => Some((al.add(bl), ah.add(bh))),
                     BinOp::Sub => Some((al.sub(bh), ah.sub(bl))),
                     BinOp::Mul | BinOp::Div => {
-                        // 端の組合せの最小と最大。率は非負とは限らないので四通り見る。
+                        // Minimum and maximum over the endpoint combinations. A rate is not
+                        // necessarily non-negative, so all four are examined.
                         let f = |x: Rat, y: Rat| if *op == BinOp::Mul { x.mul(y) } else { x.div(y) };
                         let mut vs = [f(al, bl), f(al, bh), f(ah, bl), f(ah, bh)];
                         vs.sort_by(|a, b| a.cmp_to(*b));
@@ -999,11 +1014,11 @@ impl Checked {
     }
 }
 
-/// 宣言から刻みの逆数を取る。`率[刻み 0.1%]` なら 1000。
+/// The reciprocal of the step from the declaration: 1000 for `rate[step 0.1%]`.
 fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
     for a in &tr.args {
         if let TypeArg::Scaled(w, n) = a {
-            if w == "刻み" {
+            if w == crate::kw::STEP {
                 if let Some(v) = lit_value_in(n, ty) {
                     if v.num != 0 {
                         return v.den * (1 / v.num.max(1)).max(1);
@@ -1016,7 +1031,8 @@ fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
 }
 
 impl Checked {
-    /// 式のスケール。加減は最小公倍数、乗算は積、定数除算は割る数の分子倍。
+    /// The scale of an expression: the lcm for addition and subtraction, the product for
+    /// multiplication, and the divisor's numerator times for division by a constant.
     fn scale(&self, e: &Expr) -> Option<i128> {
         fn lcm(a: i128, b: i128) -> i128 {
             fn g(mut a: i128, mut b: i128) -> i128 {
@@ -1052,7 +1068,7 @@ impl Checked {
             }
             Expr::Call(name, args, _) => {
                 if crate::num::RoundMode::parse(name).is_some() {
-                    // 丸めたあとは格子の刻みに戻る。
+                    // After rounding, the scale is back to the grid's step.
                     return args.get(1).and_then(|g| self.scale(g));
                 }
                 args.first().and_then(|a| self.scale(a))
@@ -1061,35 +1077,39 @@ impl Checked {
         }
     }
 
-    /// E108: 中間値が int64 に収まることを、宣言範囲とスケールから証明する。
-    /// 証明できなければ止める。黙って溢れるより、業務に「どこで丸めるか」を訊く。
+    /// E108: prove from the declared ranges and scales that an intermediate value fits in
+    /// int64. If it cannot be proved, stop: rather than overflowing silently, ask the business
+    /// where to round.
     fn overflow(&mut self, e: &Expr, ty: &Ty, span: &Span, path: &str, name: &str) {
         let (Some((lo, hi)), Some(sc)) = (self.interval(e, ty), self.scale(e)) else { return };
-        // 格納される整数は 値×刻みの逆数。区間の両端の絶対値の大きいほうで見る。
+        // The stored integer is value × reciprocal of the step. Use whichever endpoint of the
+        // interval has the larger absolute value.
         let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
         let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
         let stored_r = mag.mul(Rat::int(sc));
         let stored = stored_r.num / stored_r.den;
         if stored > i64::MAX as i128 {
             self.diags.push(
-                Diag::error("E108", format!("{name} が int64 に収まることを証明できません"))
+                Diag::error("E108", tr!("{name} が int64 に収まることを証明できません", "Cannot prove that {name} fits in int64"))
                     .at(format!("{path}:{}", span.line))
                     .mark(span.clone(), "")
-                    .note(format!(
+                    .note(tr!(
                         "到達区間は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
+                        "The reachable interval is {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}.",
                         fmt_val(lo, ty),
                         fmt_val(hi, ty)
                     ))
-                    .note("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。")
-                    .note("どこで丸めるかは円が動く業務の判断なので、道具が勝手に決めません（§7.1）。"),
+                    .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."))
+                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、道具が勝手に決めません（§7.1）。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own (§7.1).")),
             );
         }
     }
 }
 
 impl Checked {
-    /// 真偽定義の原子を歩く。連言・選言・否定は許し、比較の片側が
-    /// 入力か導出の名前、もう片側が定数であることを要求する。
+    /// Walk the atoms of a boolean definition. Conjunction, disjunction, and negation are
+    /// allowed; a comparison must have the name of an input or derived value on one side and
+    /// a constant on the other.
     fn atoms(&mut self, e: &Expr, owner: &str, path: &str) {
         match e {
             Expr::Bin(l, op, r, sp) => {
@@ -1104,13 +1124,14 @@ impl Checked {
                             _ => None,
                         }
                     };
-                    // 第一形: 軸への単項テスト（名前 と リテラル）。
+                    // First form: a unary test on an axis (a name and a literal).
                     let ok = |x: &Expr, y: &Expr, s: &Checked| -> bool {
                         axis_of(x, s).is_some() && matches!(y, Expr::Lit(..))
                     };
-                    // 第二形: 同型の軸どうしの比較。ただし数値どうしは E113 のまま。
-                    // 導出にすれば厳密に解析できるものを、怠けて不透明にさせないため
-                    // （健全性の話ではなく精度の規律。§5.3）。
+                    // Second form: a comparison between two axes of the same type. Numeric pairs
+                    // stay E113, though: what could be analyzed exactly as a derived value must
+                    // not be left opaque out of laziness (a discipline of precision, not a matter
+                    // of soundness; §5.3).
                     let pair = match (axis_of(l, self), axis_of(r, self)) {
                         (Some(a), Some(b)) if a.unifies(&b) => Some(a),
                         _ => None,
@@ -1120,26 +1141,26 @@ impl Checked {
                             return;
                         }
                         self.diags.push(
-                            Diag::error("E113", format!("定義 {owner} が {t} どうしを直接比べています"))
+                            Diag::error("E113", tr!("定義 {owner} が {t} どうしを直接比べています", "Definition {owner} compares two {t} values directly"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
-                                .note("数値どうしの比較は、差を `導出` として宣言してから定数と比べてください。そのほうが厳密に解析できます。")
-                                .note("導出にできない型（日付、列挙）どうしなら、そのまま比べられます（§5.3）。"),
+                                .note(tr!("数値どうしの比較は、差を `{}` として宣言してから定数と比べてください。そのほうが厳密に解析できます。", "To compare two numbers, declare their difference with `{}` and compare that with a constant. It can then be analyzed exactly.", crate::kw::DERIVE))
+                                .note(tr!("導出にできない型（日付、列挙）どうしなら、そのまま比べられます（§5.3）。", "Two values of a type that cannot be derived (a date, an enum) may be compared directly (§5.3).")),
                         );
                         return;
                     }
                     if !ok(l, r, self) && !ok(r, l, self) {
                         let hint = if matches!(**l, Expr::Name(..)) && matches!(**r, Expr::Name(..)) {
-                            "入力の線形結合なら `導出` として宣言してから比べてください。表の出力と比べたいなら、その表に真偽の出力列を足すのが正しい書き方です。"
+                            tr!("入力の線形結合なら `{}` として宣言してから比べてください。表の出力と比べたいなら、その表に真偽の出力列を足すのが正しい書き方です。", "A linear combination of inputs must be declared with `{}` before it is compared. To compare with a table output, the right way is to add a boolean output column to that table.", crate::kw::DERIVE)
                         } else {
-                            "比較の片側は入力か導出の名前、もう片側は定数である必要があります。"
+                            tr!("比較の片側は入力か導出の名前、もう片側は定数である必要があります。", "One side of the comparison must be the name of an input or derived value, and the other side a constant.")
                         };
                         self.diags.push(
-                            Diag::error("E113", format!("定義 {owner} の条件が、入力か導出への単項テストになっていません"))
+                            Diag::error("E113", tr!("定義 {owner} の条件が、入力か導出への単項テストになっていません", "The condition of definition {owner} is not a unary test on an input or derived value"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(hint.to_string())
-                                .note("この制限が、完全性と重複の検査が有限で終わることの土台です（§5.3、§6.2）。"),
+                                .note(tr!("この制限が、完全性と重複の検査が有限で終わることの土台です（§5.3、§6.2）。", "This restriction is what makes the completeness and overlap checks finite (§5.3, §6.2).")),
                         );
                     }
                     return;

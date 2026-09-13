@@ -1,0 +1,8 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/mutants/m_e101d.rule:13 table 期間判定
+   |
+13 | table 期間判定(pick)
+   |       ^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: 注文日 = 2026-04-01
+ hint: add a row that matches this input.

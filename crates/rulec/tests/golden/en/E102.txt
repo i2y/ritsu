@@ -1,0 +1,8 @@
+error[E102]: Unreachable row: row 8 never matches
+  --> tests/mutants/m_e102.rule:33 table サイズ判定
+   |
+33 | | <=60cm | S60 |
+   | ^^^^^^^^^^^^^^^^ row 8: no input reaches here
+   |
+ Because of `policy first`, the earlier rows take all of this row's range first.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.

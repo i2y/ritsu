@@ -31,7 +31,7 @@ pub enum Lit {
 #[derive(Debug, Clone)]
 pub enum TypeArg {
     Word(String),
-    /// `率[刻み 0.1%]` — a word followed by a number.
+    /// `rate[step 0.1%]` — a word followed by a number.
     Scaled(String, Num),
 }
 
@@ -39,14 +39,14 @@ pub enum TypeArg {
 pub struct TypeRef {
     pub base: String,
     pub args: Vec<TypeArg>,
-    /// `区分?` の `?`。セルの `無し` でだけ消費できる（§2.1）。
+    /// The `?` in `区分?`. Only a `none` cell can consume it (§2.1).
     pub optional: bool,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct Range {
-    /// A conjunction, e.g. `範囲 >=1g <=40kg`.
+    /// A conjunction, e.g. `range >=1g <=40kg`.
     pub bounds: Vec<(CmpOp, Lit)>,
     pub span: Span,
 }
@@ -62,7 +62,8 @@ pub struct Rounding {
 pub struct EnumDecl {
     pub name: Name,
     pub values: Vec<Name>,
-    /// 値ごとの `既定扱い` 印（§11 W111）。意図して `-` に落としている値を黙らせる。
+    /// The per-value `default` mark (§11 W111). Silences a value that intentionally falls
+    /// through to `-`.
     pub default_marks: Vec<bool>,
     pub span: Span,
 }
@@ -132,9 +133,9 @@ pub struct DefineDecl {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Policy {
-    /// `方式 一意` — DMN Unique. The default (§4).
+    /// `policy unique` — DMN Unique. The default (§4).
     Unique,
-    /// `方式 上から` — DMN First.
+    /// `policy first` — DMN First.
     TopDown,
 }
 
@@ -145,11 +146,11 @@ pub enum Cell {
     Lit(Lit),
     /// `北海道 ・ 沖縄`
     Set(Vec<Lit>),
-    /// `以外: 北海道 ・ 沖縄`
+    /// `not: 北海道 ・ 沖縄`
     Not(Vec<Lit>),
     /// `<=2000g` or `>=1000円 <20000円`
     Cmp(Vec<(CmpOp, Lit)>),
-    /// `無し`
+    /// `none`
     Nothing,
 }
 
@@ -163,12 +164,13 @@ pub enum OutCell {
 #[derive(Debug, Clone)]
 pub struct Row {
     pub cells: Vec<Cell>,
-    /// セルごとの位置。§11 原則 4 の「列で示す」を満たすために行とは別に持つ。
+    /// Per-cell positions, kept apart from the row's span so that §11 principle 4 ("point at
+    /// the column") can be met.
     pub cell_spans: Vec<Span>,
     pub outs: Vec<OutCell>,
     pub out_spans: Vec<Span>,
     pub span: Span,
-    /// 1-based, as printed in diagnostics ("行3").
+    /// 1-based, as printed in diagnostics ("行3" / "row 3").
     pub index: usize,
 }
 
@@ -214,9 +216,9 @@ pub struct RuleFile {
     pub groups: Vec<GroupDecl>,
     pub inputs: Vec<VarDecl>,
     pub outputs: Vec<OutDecl>,
-    /// 導出 / 定義 / 表 in source order — §5.1's define-before-use pipeline.
+    /// derive / define / table in source order — §5.1's define-before-use pipeline.
     pub items: Vec<Item>,
     pub result: Option<ResultDecl>,
-    /// `例` — an executable specification (§1.2), shaped like a table.
+    /// `examples` — an executable specification (§1.2), shaped like a table.
     pub examples: Option<Table>,
 }

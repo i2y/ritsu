@@ -1,0 +1,8 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/mutants/m_e101.rule:34 table 運賃表
+   |
+34 | table 運賃表(fee_table)
+   |       ^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: あて先 = 山梨県, サイズ = S60
+ hint: add a row that matches this input.

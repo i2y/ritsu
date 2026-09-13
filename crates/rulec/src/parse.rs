@@ -5,14 +5,12 @@
 
 use crate::ast::*;
 use crate::diag::{Diag, Span};
-use crate::lex::{Kind, Num, Token, lex_line};
+use crate::lex::{Kind, Token, lex_line};
 
-/// 行頭に書けるキーワード。E009（予約語と同じ名前の宣言）の判定と、
-/// README のキーワード表がこの一覧と一致することの検査に使う。
-/// `規則` はヘッダ専用なのでここには入らない。
-pub const KEYWORDS: &[&str] = &[
-    "説明", "取込", "型", "群", "入力", "出力", "導出", "定義", "表", "結果", "例", "方式",
-];
+/// The keywords that can start a line. Used to detect E009 (a declaration named like a
+/// reserved word) and to check that the README's keyword table matches this list.
+/// `rule` is header-only, so it is not included.
+pub const KEYWORDS: &[&str] = crate::kw::LINE_HEAD;
 
 pub struct Parsed {
     pub file: Option<RuleFile>,
@@ -24,7 +22,7 @@ struct P {
     i: usize,
     diags: Vec<Diag>,
     path: String,
-    /// §11 原則 4: 位置は ファイル:行 に加えて表名で示す。
+    /// §11 principle 4: a location is file:line plus the table name.
     ctx: String,
 }
 
@@ -62,14 +60,11 @@ impl P {
             self.i += 1;
         }
     }
-    fn head(&self) -> Option<&str> {
-        self.cur()?.first()?.ident()
-    }
     fn err(&mut self, d: Diag) {
         self.diags.push(d);
     }
 
-    /// `path:line 表 名前` — §11 原則 4。
+    /// `path:line 表 名前` (`path:line table name` in English) — §11 principle 4.
     fn at(&self, line: usize) -> String {
         if self.ctx.is_empty() {
             format!("{}:{}", self.path, line)
@@ -81,10 +76,10 @@ impl P {
     fn rule_file(&mut self) -> Option<RuleFile> {
         self.skip_blank();
         let head = self.cur()?.clone();
-        if head.first().and_then(|t| t.ident()) != Some("規則") {
+        if head.first().and_then(|t| t.ident()) != Some(crate::kw::RULE) {
             self.err(
-                Diag::error("E003", "ファイルは `規則` の行で始まらなければなりません")
-                    .mark(span_of(&head), "ここに `規則 <名前>(<ascii>) v<版>` が要ります"),
+                Diag::error("E003", tr!("ファイルは `{}` の行で始まらなければなりません", "The file must start with a `{}` line", crate::kw::RULE))
+                    .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE)),
             );
             return None;
         }
@@ -117,20 +112,20 @@ impl P {
             let Some(line) = self.cur().cloned() else { break };
             let Some(word) = line.first().and_then(|t| t.ident()).map(|s| s.to_string()) else {
                 self.err(
-                    Diag::error("E004", "行の先頭に語がありません")
+                    Diag::error("E004", tr!("行の先頭に語がありません", "The line does not start with a word"))
                         .mark(span_of(&line), ""),
                 );
                 self.i += 1;
                 continue;
             };
             match word.as_str() {
-                "説明" => {
+                crate::kw::DESCRIPTION => {
                     if let Some(Kind::Str(s)) = line.get(1).map(|t| t.kind.clone()) {
                         f.description = Some(s);
                     }
                     self.i += 1;
                 }
-                "取込" => {
+                crate::kw::IMPORT => {
                     let path: String = line[1..]
                         .iter()
                         .filter_map(|t| t.ident())
@@ -139,57 +134,57 @@ impl P {
                     f.imports.push((path, span_of(&line)));
                     self.i += 1;
                 }
-                "型" => {
+                crate::kw::ENUM => {
                     if let Some(e) = self.enum_decl(&line) {
                         f.enums.push(e);
                     }
                     self.i += 1;
                 }
-                "群" => {
+                crate::kw::GROUP => {
                     if let Some(g) = self.group_decl(&line) {
                         f.groups.push(g);
                     }
                     self.i += 1;
                 }
-                "入力" => {
+                crate::kw::INPUTS => {
                     self.i += 1;
                     f.inputs.extend(self.var_block());
                 }
-                "出力" => {
+                crate::kw::OUTPUTS => {
                     self.i += 1;
                     f.outputs.extend(self.out_block());
                 }
-                "導出" => {
+                crate::kw::DERIVE => {
                     if let Some(d) = self.derived(&line) {
                         f.items.push(Item::Derived(d));
                     }
                 }
-                "定義" => {
+                crate::kw::DEFINE => {
                     if let Some(d) = self.define(&line) {
                         f.items.push(Item::Define(d));
                     }
                     self.i += 1;
                 }
-                "表" => {
+                crate::kw::TABLE => {
                     if let Some(t) = self.table(&line) {
                         f.items.push(Item::Table(t));
                     }
                 }
-                "結果" => {
+                crate::kw::RESULT => {
                     if let Some(r) = self.result(&line) {
                         f.result = Some(r);
                     }
                     self.i += 1;
                 }
-                "例" => {
+                crate::kw::EXAMPLES => {
                     self.i += 1;
                     f.examples = self.example_table();
                 }
                 other => {
                     self.err(
-                        Diag::error("E005", format!("`{other}` はこの位置で知らない語です"))
+                        Diag::error("E005", tr!("`{other}` はこの位置で知らない語です", "`{other}` is not a known word at this position"))
                             .mark(line[0].span.clone(), "")
-                            .note("書けるのは 説明 / 取込 / 型 / 群 / 入力 / 出力 / 導出 / 定義 / 表 / 結果 / 例 です"),
+                            .note(tr!("書けるのは {} です", "The words allowed at this position are {}", crate::kw::line_heads())),
                     );
                     self.i += 1;
                 }
@@ -216,7 +211,7 @@ impl P {
     fn enum_decl(&mut self, line: &[Token]) -> Option<EnumDecl> {
         let (name, mut k) = self.name_at(line, 1)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
-            self.err(Diag::error("E006", "型の宣言に `=` がありません").mark(span_of(line), ""));
+            self.err(Diag::error("E006", tr!("型の宣言に `=` がありません", "Missing `=` in the type declaration")).mark(span_of(line), ""));
             return None;
         }
         k += 1;
@@ -230,7 +225,7 @@ impl P {
             let (v, nk) = self.name_at(line, k)?;
             values.push(v);
             k = nk;
-            let marked = line.get(k).and_then(|t| t.ident()) == Some("既定扱い");
+            let marked = line.get(k).and_then(|t| t.ident()) == Some(crate::kw::DEFAULT);
             default_marks.push(marked);
             if marked {
                 k += 1;
@@ -242,7 +237,7 @@ impl P {
     fn group_decl(&mut self, line: &[Token]) -> Option<GroupDecl> {
         let (name, mut k) = self.name_at(line, 1)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
-            self.err(Diag::error("E006", "群の宣言に `=` がありません").mark(span_of(line), ""));
+            self.err(Diag::error("E006", tr!("群の宣言に `=` がありません", "Missing `=` in the group declaration")).mark(span_of(line), ""));
             return None;
         }
         k += 1;
@@ -259,7 +254,7 @@ impl P {
         Some(GroupDecl { name, members, span: span_of(line) })
     }
 
-    /// An indented run of declarations under `入力` / `出力`.
+    /// An indented run of declarations under `inputs` / `outputs`.
     fn block_lines(&mut self) -> Vec<Vec<Token>> {
         let mut out = Vec::new();
         loop {
@@ -269,9 +264,9 @@ impl P {
             }
             let w = line.first().and_then(|t| t.ident()).unwrap_or("");
             if KEYWORDS.contains(&w) {
-                // 宣言の形（`名前(別名) :` か `名前 :`）をしているなら、それは
-                // セクションの始まりではなく、キーワードと同じ名前の宣言である。
-                // 黙って捨てると生成の段で初めて壊れるので、ここで言う。
+                // If the line has the shape of a declaration (`name(alias) :` or `name :`), it is
+                // not the start of a section but a declaration named like a keyword. Dropping it
+                // silently would only break at code generation, so say so here.
                 let decl = line
                     .get(1)
                     .is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon));
@@ -279,11 +274,11 @@ impl P {
                     let sp = line[0].span.clone();
                     let at = self.at(sp.line);
                     self.err(
-                        Diag::error("E009", format!("`{w}` はキーワードなので、名前にできません"))
+                        Diag::error("E009", tr!("`{w}` はキーワードなので、名前にできません", "`{w}` is a keyword and cannot be used as a name"))
                             .at(at)
                             .mark(sp, "")
-                            .note("行指向の構文なので、キーワードと同じ名前は宣言をセクションの始まりに見せてしまいます。")
-                            .note("別の名前を付けてください。"),
+                            .note(tr!("行指向の構文なので、キーワードと同じ名前は宣言をセクションの始まりに見せてしまいます。", "The syntax is line-oriented, so a declaration named like a keyword looks like the start of a section."))
+                            .note(tr!("別の名前を付けてください。", "Choose a different name.")),
                     );
                     self.i += 1;
                     continue;
@@ -321,7 +316,7 @@ impl P {
         v
     }
 
-    /// `: 金額[円, 税込]` / `: 質量[g]` / `: 率[刻み 0.1%]` / `: 都道府県`
+    /// `: money[円, incl_tax]` / `: mass[g]` / `: rate[step 0.1%]` / `: 都道府県`
     fn type_ref(&mut self, ts: &[Token], mut k: usize) -> Option<(TypeRef, usize)> {
         if ts.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
             k += 1;
@@ -354,19 +349,19 @@ impl P {
         if optional {
             k += 1;
         }
-        // 位置は `]` まで伸ばす。§11 の E104 は型の全体に下線を引く。
+        // Extend the span to the `]`: §11's E104 underlines the whole type.
         let end = ts.get(k.saturating_sub(1)).map(|t| t.span.col + t.span.len).unwrap_or(start.col + start.len);
         let span = Span::new(start.line, start.col, end.saturating_sub(start.col).max(start.len));
         Some((TypeRef { base, args, optional, span }, k))
     }
 
-    /// `範囲 >=1g <=40kg` and the `契約のみ` marker (§11 W111).
+    /// `range >=1g <=40kg` and the `contract_only` marker (§11 W111).
     fn tail_range(&mut self, ts: &[Token], mut k: usize) -> (Option<Range>, bool) {
         let mut range = None;
         let mut contract_only = false;
         while k < ts.len() {
             match ts[k].ident() {
-                Some("範囲") => {
+                Some(crate::kw::RANGE) => {
                     let start = k;
                     k += 1;
                     let mut bounds = Vec::new();
@@ -384,7 +379,7 @@ impl P {
                     }
                     range = Some(Range { bounds, span: span_of(&ts[start..k.min(ts.len())]) });
                 }
-                Some("契約のみ") => {
+                Some(crate::kw::CONTRACT_ONLY) => {
                     contract_only = true;
                     k += 1;
                 }
@@ -394,10 +389,10 @@ impl P {
         (range, contract_only)
     }
 
-    /// `丸め 切り上げ(10円)`
+    /// `round up(10円)`
     fn tail_rounding(&mut self, ts: &[Token], mut k: usize) -> Option<Rounding> {
         while k < ts.len() {
-            if ts[k].ident() == Some("丸め") {
+            if ts[k].ident() == Some(crate::kw::ROUND) {
                 let mode = ts.get(k + 1)?.ident()?.to_string();
                 let grid = match ts.get(k + 3)?.kind.clone() {
                     Kind::Num(n) => n,
@@ -414,18 +409,18 @@ impl P {
         let (name, k) = self.name_at(line, 1)?;
         let (ty, k) = self.type_ref(line, k)?;
         let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
-        // The expression runs to `範囲` on the same line, if present.
+        // The expression runs to `range` on the same line, if present.
         let stop = line[eq + 1..]
             .iter()
-            .position(|t| t.ident() == Some("範囲"))
+            .position(|t| t.ident() == Some(crate::kw::RANGE))
             .map(|p| eq + 1 + p)
             .unwrap_or(line.len());
         let expr = self.expr(&line[eq + 1..stop])?;
         let (mut range, _) = self.tail_range(line, k.max(eq));
         self.i += 1;
-        // §11's E112 example puts `範囲` on the next line; accept both.
+        // §11's E112 example puts `range` on the next line; accept both.
         if range.is_none()
-            && self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some("範囲"))
+            && self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some(crate::kw::RANGE))
         {
             let cont = self.cur().cloned().unwrap();
             let (r, _) = self.tail_range(&cont, 0);
@@ -454,22 +449,22 @@ impl P {
         let name = self.name_at(head, 1).map(|(n, _)| n);
         let span = span_of(head);
         self.i += 1;
-        let mut policy = Policy::Unique; // §4: the default is 一意.
-        if self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some("方式")) {
+        let mut policy = Policy::Unique; // §4: the default is unique.
+        if self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some(crate::kw::POLICY)) {
             let l = self.cur().cloned().unwrap();
             match l.get(1).and_then(|t| t.ident()) {
-                Some("一意") => policy = Policy::Unique,
-                Some("上から") => policy = Policy::TopDown,
+                Some(crate::kw::UNIQUE) => policy = Policy::Unique,
+                Some(crate::kw::FIRST) => policy = Policy::TopDown,
                 other => self.err(
-                    Diag::error("E007", format!("知らない方式 `{}` です", other.unwrap_or("")))
+                    Diag::error("E007", tr!("知らない方式 `{}` です", "Unknown policy `{}`", other.unwrap_or("")))
                         .mark(span_of(&l), "")
-                        .note("書けるのは 一意 と 上から です（§4）"),
+                        .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
                 ),
             }
             self.i += 1;
         }
         self.ctx = match &name {
-            Some(n) => format!("表 {}", n.text),
+            Some(n) => tr!("表 {}", "table {}", n.text),
             None => String::new(),
         };
         let (inputs, outputs, rows) = self.grid()?;
@@ -478,7 +473,7 @@ impl P {
     }
 
     fn example_table(&mut self) -> Option<Table> {
-        self.ctx = "例".into();
+        self.ctx = tr!("例", "examples");
         let (inputs, outputs, rows) = self.grid()?;
         self.ctx.clear();
         Some(Table {
@@ -507,9 +502,9 @@ impl P {
         let header = split_cells(&raw_rows[0]);
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
-        // `→` は入力と出力の境目を一度だけ示す。以降の列は `→` を書いても書かなくても
-        // 出力である。二本目に `→` を書き忘れた列を黙って入力に化けさせないため
-        // （複数出力の 例 でその素通りを踏んだ）。
+        // `→` marks the boundary between inputs and outputs once. Every column after it is an
+        // output whether or not it carries a `→`, so a column whose second `→` was left out does
+        // not silently turn into an input (the examples of a multi-output rule hit exactly that).
         let mut in_outputs = false;
         for (cell, _) in &header {
             let arrow = cell.first().is_some_and(|t| t.is(&Kind::Arrow));
@@ -537,14 +532,14 @@ impl P {
                 if ct.is_empty() {
                     let col = self
                         .colname(&inputs, &outputs, ci)
-                        .map(|n| format!("列 {n} が空です"))
-                        .unwrap_or_else(|| "空です".into());
+                        .map(|n| tr!("列 {n} が空です", "column {n} is empty"))
+                        .unwrap_or_else(|| tr!("空です", "empty"));
                     let at = self.at(rt[0].span.line);
                     self.err(
-                        Diag::error("E008", "空のセルがあります")
+                        Diag::error("E008", tr!("空のセルがあります", "Empty cell"))
                             .at(at)
                             .mark(cspan.clone(), col)
-                            .note("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません。§3）"),
+                            .note(tr!("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません。§3）", "Write `-` to match any value (an empty cell cannot be told apart from an omission; §3)")),
                     );
                     continue;
                 }
@@ -578,20 +573,20 @@ impl P {
         if let Some(t) = ts.iter().find(|t| t.is(&Kind::DotDot)) {
             let at = self.at(t.span.line);
             self.err(
-                Diag::error("E010", "`..` は書けません")
+                Diag::error("E010", tr!("`..` は書けません", "`..` is not allowed"))
                     .at(at)
                     .mark(t.span.clone(), "")
-                    .note("`<=2000g` と `>2000g` のどちらの意味かが読めないためです（§3.1）。比較演算子で書いてください"),
+                    .note(tr!("`<=2000g` と `>2000g` のどちらの意味かが読めないためです（§3.1）。比較演算子で書いてください", "It is unclear whether `<=2000g` or `>2000g` is meant (§3.1). Use a comparison operator instead")),
             );
             return None;
         }
         if ts.len() == 1 && ts[0].is(&Kind::Minus) {
             return Some(Cell::DontCare);
         }
-        if ts[0].ident() == Some("無し") {
+        if ts[0].ident() == Some(crate::kw::NONE) {
             return Some(Cell::Nothing);
         }
-        if ts[0].ident() == Some("以外") {
+        if ts[0].ident() == Some(crate::kw::NOT) {
             let rest = if ts.get(1).is_some_and(|t| t.is(&Kind::Colon)) { &ts[2..] } else { &ts[1..] };
             return Some(Cell::Not(lits(rest)));
         }

@@ -1,0 +1,10 @@
+error[E105]: Overlapping rows: the same input matches row 8 and row 22
+  --> tests/mutants/m_e105.rule:58 table 運賃表
+   |
+44 | | 近距離圏   | S60    | 880円                             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 8
+58 | | 近距離圏   | S60    | 1150円                            |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 22
+   |
+ Both rows match: あて先 = 青森県, サイズ = S60
+ `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.

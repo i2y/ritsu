@@ -20,7 +20,7 @@ fn gcd(a: i128, b: i128) -> i128 {
 
 impl Rat {
     pub fn new(num: i128, den: i128) -> Self {
-        assert!(den != 0, "零除算");
+        assert!(den != 0, "division by zero");
         let s = if den < 0 { -1 } else { 1 };
         let g = gcd(num, den);
         Rat { num: s * num / g, den: s * den / g }
@@ -89,49 +89,50 @@ impl std::fmt::Display for Rat {
     }
 }
 
-/// §7.3 の四モード。負の向きまで仕様で固定されている（Python の `//` は −∞ 方向、
-/// Go の整数除算は 0 方向で食い違うので、言語の素の除算には任せない）。
+/// The four modes of §7.3. The spec fixes the direction for negative values too (Python's `//`
+/// goes toward −∞ while Go's integer division goes toward 0, so the target language's bare
+/// division is not trusted with it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoundMode {
-    /// 0 から遠ざける（-4.2 → -5）
+    /// Away from 0 (-4.2 → -5)
     Up,
-    /// 0 へ寄せる（-4.8 → -4）
+    /// Toward 0 (-4.8 → -4)
     Down,
-    /// 半分ちょうどは 0 から遠ざける
+    /// Exactly half goes away from 0
     Half,
-    /// 半分ちょうどは偶数へ
+    /// Exactly half goes to the even neighbor
     Bankers,
 }
 
 impl RoundMode {
     pub fn parse(s: &str) -> Option<RoundMode> {
         Some(match s {
-            "切り上げ" => RoundMode::Up,
-            "切り捨て" => RoundMode::Down,
-            "四捨五入" => RoundMode::Half,
-            "銀行家丸め" => RoundMode::Bankers,
+            crate::kw::UP => RoundMode::Up,
+            crate::kw::DOWN => RoundMode::Down,
+            crate::kw::HALF_UP => RoundMode::Half,
+            crate::kw::HALF_EVEN => RoundMode::Bankers,
             _ => return None,
         })
     }
     pub fn name(self) -> &'static str {
         match self {
-            RoundMode::Up => "切り上げ",
-            RoundMode::Down => "切り捨て",
-            RoundMode::Half => "四捨五入",
-            RoundMode::Bankers => "銀行家丸め",
+            RoundMode::Up => crate::kw::UP,
+            RoundMode::Down => crate::kw::DOWN,
+            RoundMode::Half => crate::kw::HALF_UP,
+            RoundMode::Bankers => crate::kw::HALF_EVEN,
         }
     }
 }
 
 impl Rat {
-    /// 0 方向へ切った整数部と、残りの絶対値（分子・分母）。
+    /// The integer part truncated toward 0, and the absolute remainder (numerator, denominator).
     fn split(self) -> (i128, i128, i128) {
         let q = self.num / self.den;
         let r = self.num - q * self.den;
         (q, r.abs(), self.den)
     }
 
-    /// `grid` の倍数へ丸める。grid が 0 なら素通し。
+    /// Rounds to a multiple of `grid`. A grid of 0 passes the value through unchanged.
     pub fn round_to(self, mode: RoundMode, grid: Rat) -> Rat {
         if grid.num == 0 {
             return self;
@@ -176,10 +177,10 @@ mod tests {
     #[test]
     fn 負の向きが仕様どおり() {
         let one = Rat::int(1);
-        // §7.3 の例をそのまま
+        // The examples of §7.3, as written there
         assert_eq!(r(-42, 10).round_to(RoundMode::Up, one), Rat::int(-5));
         assert_eq!(r(-48, 10).round_to(RoundMode::Down, one), Rat::int(-4));
-        // 半分ちょうど
+        // Exactly half
         assert_eq!(r(5, 10).round_to(RoundMode::Half, one), Rat::int(1));
         assert_eq!(r(-5, 10).round_to(RoundMode::Half, one), Rat::int(-1));
         assert_eq!(r(5, 10).round_to(RoundMode::Bankers, one), Rat::int(0));
@@ -200,18 +201,20 @@ mod tests {
 mod readme_tests {
     use super::*;
 
-    /// README の「範囲と丸め」に載せた例が、実装と一致すること。
-    /// 手で書いた表は腐る（生成コードと描画の抜粋と同じ理屈）。
+    /// The examples shown in the README's "範囲と丸め" (ranges and rounding) section must match
+    /// the implementation. Hand-written tables rot (the same reasoning as for the excerpts of
+    /// generated code and rendered output).
     #[test]
     fn readmeの丸めの例は実装と一致する() {
         let cases: &[(RoundMode, i128, i128, i128, i128)] = &[
-            // (モード, 値の分子, 分母, 格子, 期待)
+            // (mode, value numerator, denominator, grid, expected)
             (RoundMode::Up, -42, 10, 1, -5),
             (RoundMode::Down, -48, 10, 1, -4),
             (RoundMode::Half, -45, 10, 1, -5),
             (RoundMode::Bankers, 25, 10, 1, 2),
             (RoundMode::Bankers, 35, 10, 1, 4),
-            // 括弧の中が格子。切り上げ(10円) なら −4.2 円 は −10 円。
+            // The grid is what is in the parentheses: with `round up(10円)`, −4.2 yen becomes
+            // −10 yen.
             (RoundMode::Up, -42, 10, 10, -10),
         ];
         for (m, num, den, grid, want) in cases {
@@ -219,7 +222,7 @@ mod readme_tests {
             assert_eq!(
                 got.num / got.den,
                 *want,
-                "{m:?} の {num}/{den} を格子 {grid} で丸めると {want} のはず"
+                "{m:?}: {num}/{den} rounded to grid {grid} should give {want}"
             );
         }
     }

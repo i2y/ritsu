@@ -1,8 +1,9 @@
-//! 境界からのテストケース生成（§9）。
+//! Test-case generation from boundaries (§9).
 //!
-//! 候補値を列ごとに決め、そこから作った母集団を参照評価器に通して、
-//! 行被覆・境界両側被覆・遮蔽対被覆を満たす部分集合を決定的に選ぶ。
-//! 期待値と発火行は評価器が付ける。
+//! Candidate values are chosen per column, the candidate population built from them is run
+//! through the reference evaluator, and a subset satisfying row coverage, boundary-pair
+//! coverage and shadow-pair coverage is selected deterministically. The evaluator attaches
+//! the expected values and the fired rows.
 
 use crate::ast::*;
 use crate::eval::{self, Val};
@@ -13,13 +14,14 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone)]
 pub struct Vector {
     pub input: BTreeMap<String, Val>,
-    /// 宣言順の全出力（§8.5 の複数出力）。ワイヤも golden もこの順で並ぶ。
+    /// All outputs in declaration order (the multiple outputs of §8.5). The wire format and the
+    /// golden files follow this order too.
     pub outputs: Vec<(String, Option<Val>)>,
     pub trace: Vec<String>,
     pub why: String,
 }
 
-/// 列ごとの候補値（§9.1）。
+/// Candidate values per column (§9.1).
 fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
     let mut out: BTreeMap<String, Vec<Val>> = BTreeMap::new();
     for i in &f.inputs {
@@ -31,16 +33,16 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
         };
         let mut vs: Vec<Val> = Vec::new();
         if matches!(ty, Ty::Opt(_)) {
-            // optional は「無し」と、在る側の候補（§9.1）。
-            vs.push(Val::Enum("無し".into()));
+            // An optional column gets `none` plus the candidates of the present side (§9.1).
+            vs.push(Val::Enum(crate::kw::NONE.into()));
         }
         match &inner {
             Ty::Enum(en) => {
-                // §9.1: セル群が誘導する同値類ごとに代表 1 値。47 都道府県を全部
-                // 舐めるのではなく、表が区別している区分だけを踏む。同値類は
-                // 「どのセルに当たるか」の並びで決まるので、群の重なりや `以外` も
-                // 自動で正しく畳まれる。どのセルも名指ししない値は一つの類に落ち、
-                // これが `以外` の側の代表になる。
+                // §9.1: one representative per equivalence class induced by the cells. Rather
+                // than sweeping all 47 prefectures, only the partitions the table distinguishes
+                // are visited. A class is determined by the sequence of "which cells match", so
+                // overlapping groups and `not:` fold correctly on their own. Values no cell names
+                // fall into one class, which becomes the representative of the `not:` side.
                 let all = c.enums.get(en).cloned().unwrap_or_default();
                 let cells = enum_cells(f, name);
                 let mut seen: BTreeSet<Vec<bool>> = BTreeSet::new();
@@ -80,7 +82,8 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
             }
             _ => {}
         }
-        // 宣言範囲の外は落とす。入口ガードが弾くので、域内だけが三者比較の対象（§8.5）。
+        // Drop values outside the declared range. The entry guard rejects them, so only in-range
+        // values take part in the three-way comparison (§8.5).
         if let Some((lo, hi)) = c.ranges.get(name) {
             vs.retain(|v| match v {
                 Val::Num(x) => {
@@ -113,10 +116,11 @@ fn default_val(ty: &Ty, c: &Checked) -> Val {
     }
 }
 
-/// その列のセルが名指ししている列挙値（群は展開する）。
-/// 列 `col` に現れるセルを全部集める。同値類の署名はこの並びで決まる。
-/// 定義や導出の中で列挙値と比べている箇所も、セル一つとして数える
-/// （`種別 = 率引き` のような原子は表に現れないが、値を区別している）。
+/// The enum values named by the cells of a column (groups are expanded).
+/// Collects every cell that appears in column `col`; the equivalence-class signature is
+/// determined by this sequence. A comparison against an enum value inside a definition or a
+/// derived value counts as a cell too (an atom such as `種別 = 率引き` never appears in a
+/// table, yet it distinguishes values).
 fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
     fn atoms(e: &Expr, col: &str, out: &mut Vec<Cell>) {
         match e {
@@ -183,10 +187,10 @@ fn named_values(f: &RuleFile, col: &str, c: &Checked) -> BTreeSet<String> {
     out
 }
 
-/// その列のセルと宣言範囲に現れる境界値。
+/// The boundary values that appear in the column's cells and in its declared range.
 fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
     let mut set: BTreeSet<(i128, i128)> = BTreeSet::new();
-    let mut push = |r: Rat, s: &mut BTreeSet<(i128, i128)>| {
+    let push = |r: Rat, s: &mut BTreeSet<(i128, i128)>| {
         s.insert((r.num, r.den));
     };
     if let Some((lo, hi)) = c.ranges.get(col) {
@@ -224,8 +228,9 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
                     }
                 }
             }
-            // §9.1: 解析は真偽定義を自由軸として見るので、原子の境界はここで拾う。
-            // 解析に見えない境界こそ、ベクタが踏まないと誰も踏まない。
+            // §9.1: the analysis treats boolean definitions as free axes, so the boundaries of
+            // their atoms are picked up here. A boundary the analysis cannot see is exactly the
+            // one nobody steps on unless the vectors do.
             Item::Define(d) => atom_bounds(&d.expr, col, ty, &mut set),
             Item::Derived(_) => {}
         }
@@ -263,25 +268,27 @@ fn atom_bounds(e: &Expr, col: &str, ty: &Ty, set: &mut BTreeSet<(i128, i128)>) {
     }
 }
 
-/// セルを満たす最初の候補値。§9.2 の行被覆は、これで行を狙い撃つ。
+/// The first candidate value that satisfies the cell. Row coverage (§9.2) targets a row with it.
 fn satisfying(cell: &Cell, cands: &[Val], ty: &Ty, c: &Checked) -> Option<Val> {
     let env = eval::Env { vals: BTreeMap::new().into_iter().collect(), c, fired: Vec::new() };
     cands.iter().find(|v| env.matches_pub(cell, v, ty)).cloned()
 }
 
-/// 母集団を作る。狙い撃ち → 一列ずつの振り → 二列の組合せ、の順に足す。
+/// Build the candidate population: row targeting, then one column at a time, then pairs of
+/// columns, added in that order.
 fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let base: BTreeMap<String, Val> = names
         .iter()
         .map(|n| (n.clone(), cands[n].first().cloned().unwrap()))
         .collect();
-    let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), "基準".into())];
+    let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
 
-    // 行被覆：各行を勝たせる割り当てを作る。導出や中間値の列は入力へ写す（§9.1）。
-    // 素朴に「入力のセルを満たす値を置く」だけでは、導出が決める列に一切触れず、
-    // `上から` の先行行に負けたままになる。それが被覆判定器に行被覆の欠けとして
-    // 出ていた（クーポン併用 行3、適用順序 行4、素の割引 行3）。
+    // Row coverage: build an assignment that makes each row win. Columns holding derived or
+    // intermediate values are mapped back onto the inputs (§9.1). Naively "putting a value that
+    // satisfies the input cell" never touches a column a derived value decides, and the row
+    // stays beaten by an earlier row under `first`. That showed up in the coverage auditor as
+    // missing row coverage (クーポン併用 row 3, 適用順序 row 4, 素の割引 row 3).
     for it in &f.items {
         let Item::Table(t) = it else { continue };
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
@@ -298,10 +305,11 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                 }
             }
             let seed = win_row(f, c, cands, &a, t, ri).unwrap_or(a);
-            out.push((seed.clone(), format!("行狙い: 表 {tname} 行{}", ri + 1)));
+            out.push((seed.clone(), tr!("行狙い: 表 {tname} 行{}", "row target: table {tname} row {}", ri + 1)));
 
-            // 境界両側被覆：行の他列を固定したまま、境界の両側を踏む**対**を作る。
-            // 内側と外側で動く入力が同じになるよう、place は入力を宣言順に選ぶ。
+            // Boundary-pair coverage: build a **pair** that steps on both sides of a boundary
+            // with the row's other columns held fixed. `place` picks inputs in declaration order
+            // so that the same input moves for the inside and the outside point.
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 let Some(ty) = c.ty_of(col) else { continue };
                 if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
@@ -315,29 +323,37 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                     else {
                         continue;
                     };
-                    let why = format!("境界両側: 表 {tname} 行{} {col} {b} の", ri + 1);
-                    out.push((ain, format!("{why}内側")));
-                    out.push((aout, format!("{why}外側")));
+                    let why = tr!(
+                        "境界両側: 表 {tname} 行{} {col} {b} の",
+                        "boundary pair: table {tname} row {} {col} {b}",
+                        ri + 1
+                    );
+                    out.push((ain, tr!("{why}内側", "{why} inside")));
+                    out.push((aout, tr!("{why}外側", "{why} outside")));
                 }
             }
         }
 
-        // 遮蔽対被覆：交差の内側（行 i が勝ち、行 j の条件も成り立つ点）。
+        // Shadow-pair coverage: the inside of the intersection (a point where row i wins while
+        // row j's conditions hold too).
         if t.policy == Policy::TopDown {
             for j in 1..t.rows.len() {
                 for i in 0..j {
                     let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j]) else { continue };
                     let Some(a) = win_row(f, c, cands, &a, t, i) else { continue };
                     if row_holds(f, c, t, &t.rows[j], &a) {
-                        out.push((a, format!("遮蔽対: 表 {tname} 行{}∩行{}", i + 1, j + 1)));
+                        out.push((
+                            a,
+                            tr!("遮蔽対: 表 {tname} 行{}∩行{}", "shadow pair: table {tname} row {} ∩ row {}", i + 1, j + 1),
+                        ));
                     }
                 }
             }
         }
     }
 
-    // §9.1: 名前どうしの比較（`A期限 <= B期限`）は、同着とその両側を直接踏む。
-    // リテラルの境界を持たないので、候補値の側からは決して現れない。
+    // §9.1: a comparison between two names (`A期限 <= B期限`) steps directly on the tie and on
+    // both sides of it. It has no literal boundary, so it never shows up among the candidates.
     for (x, y) in name_pairs(f) {
         let (Some(xty), Some(_)) = (c.ty_of(&x), c.ty_of(&y)) else { continue };
         let q = crate::coverage::quantum(c, &x, &xty);
@@ -345,21 +361,22 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
             let Some(xv) = base.get(&x).and_then(as_rat) else { continue };
             let t = xv.add(q.mul(Rat::int(d)));
             if let Some(a) = place(f, c, &base, &y, t) {
-                out.push((a, format!("同着: {x} と {y} の {d:+}")));
+                out.push((a, tr!("同着: {x} と {y} の {d:+}", "tie: {x} and {y}, offset {d:+}")));
             }
         }
     }
 
-    // 境界両側：一列ずつ、全候補へ振る。候補は境界の ±刻み で作ってある。
+    // Both sides of a boundary: sweep one column at a time over all its candidates, which were
+    // built at ±one step around each boundary.
     for n in &names {
         for v in &cands[n] {
             let mut a = base.clone();
             a.insert(n.clone(), v.clone());
-            out.push((a, format!("境界: {n}")));
+            out.push((a, tr!("境界: {n}", "boundary: {n}")));
         }
     }
 
-    // ペアワイズ：二列の組合せを貪欲に足す（§9.2 の保険）。
+    // Pairwise: greedily add combinations of two columns (the safety net of §9.2).
     let mut seen: BTreeSet<(String, String, String, String)> = BTreeSet::new();
     for (a, _) in &out {
         for i in 0..names.len() {
@@ -384,7 +401,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                             seen.insert(key2(&names[x], &a[&names[x]], &names[y], &a[&names[y]]));
                         }
                     }
-                    out.push((a, format!("ペアワイズ: {} × {}", names[i], names[j])));
+                    out.push((a, tr!("ペアワイズ: {} × {}", "pairwise: {} × {}", names[i], names[j])));
                 }
             }
         }
@@ -399,13 +416,14 @@ fn key2(a: &str, va: &Val, b: &str, vb: &Val) -> (String, String, String, String
 pub fn show(v: &Val) -> String {
     match v {
         Val::Enum(s) | Val::Str(s) => s.clone(),
-        Val::Bool(b) => if *b { "真" } else { "偽" }.into(),
+        Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
         Val::Num(r) => format!("{}", r.num / r.den),
         Val::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
     }
 }
 
-/// 母集団を評価し、被覆を満たす部分集合を決定的に選ぶ。
+/// Evaluate the candidate population and deterministically select a subset that satisfies
+/// coverage.
 pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     let cands = candidates(f, c);
     let raw = pool(f, c, &cands);
@@ -421,14 +439,15 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         evaluated.push(Vector { input: a, outputs: outs, trace, why });
     }
 
-    // §9.2 の三基準を実際に片づけたベクタを残す。狙いを付けた側の言い分ではなく、
-    // 判定器が「これで義務が片づいた」と認めたものだけを鍵にする。対の義務は
-    // 二本まとめて入るので、点数付けの貪欲では落ちるところ。
+    // Keep the vectors that actually discharged one of the three §9.2 criteria. The key is not
+    // what the targeting side claims, but only what the auditor accepted as "this discharges
+    // the obligation". A pair obligation admits both vectors together, which is where greedy
+    // scoring would drop one.
     let audit = crate::coverage::audit(f, c, "", &evaluated);
     let mut keep: BTreeSet<usize> = audit.witness.clone();
 
-    // 保険のペアワイズ（§9.2）。三基準を満たしたうえで、二列の組合せのうち
-    // まだ現れていないものを貪欲に足す。
+    // The pairwise safety net (§9.2): with the three criteria satisfied, greedily add the
+    // two-column combinations that have not appeared yet.
     let mut seen2: BTreeSet<(String, String, String, String)> = BTreeSet::new();
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let pairs_of = |v: &Vector, out: &mut BTreeSet<(String, String, String, String)>| {
@@ -470,7 +489,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         .collect()
 }
 
-/// 正準 JSON。三者一致はこのバイト列で判定する（§8.5）。
+/// Canonical JSON. Three-way agreement is judged on these bytes (§8.5).
 pub fn to_json(f: &RuleFile, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let mut ins: Vec<String> = Vec::new();
@@ -492,8 +511,8 @@ pub fn to_json(f: &RuleFile, v: &Vector) -> String {
     )
 }
 
-/// 出力の JSON オブジェクト。宣言順に並べる（BTreeMap の名前順ではない）ので、
-/// 読み手が原本の `出力` と目で対応できる。
+/// The JSON object of the outputs, in declaration order (not the name order of a BTreeMap),
+/// so a reader can match it by eye against the `outputs` lines of the rule source.
 fn out_object(v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let one = |o: &Option<Val>| match o {
@@ -507,21 +526,25 @@ fn out_object(v: &Vector) -> String {
     format!("{{{}}}", body.join(","))
 }
 
-/// 期待値だけを、ランナーと同じ形で出す。三者一致はこのバイト列で判定する。
+/// Only the expected values, in the same shape the runner emits. Three-way agreement is judged
+/// on these bytes.
 pub fn expected_json(_f: &RuleFile, v: &Vector) -> String {
     out_object(v)
 }
 
-// ── §9.1 の写像 ────────────────────────────────────────────────────────────
+// ── The mapping of §9.1 ─────────────────────────────────────────────────────
 //
-// 導出・定義・上流の表が決める列は入力ではないので、値を直接置けない。
-// 設計は「線形式を一つの入力について解いて入力ベクタへ写す」と言っている。
-// ここでは記号を解かず、数値微分で傾きを取ってから解き、**必ず評価し直して
-// 確かめる**。式が一次でなければ解が合わないので、そのとき捨てる。
-// 記号を解く実装は一次式にしか使えないが、この形は上流の表や定義が挟まっても
-// 「効いたかどうか」を評価器が答えるので、同じ一つの機構で足りる。
+// A column decided by a derived value, a definition or an upstream table is not an input, so
+// its value cannot be set directly. The design says "solve the linear expression for one input
+// and map it onto the input vector". Here nothing is solved symbolically: the slope is taken by
+// numeric differentiation, the solution is computed from it, and then **always re-evaluated to
+// confirm**. If the expression is not linear the solution will not match, and it is discarded
+// then. A symbolic solver would only work for linear expressions, whereas in this form the
+// evaluator answers "did it take effect" even with an upstream table or definition in between,
+// so this one mechanism suffices.
 
-/// 割り当てを走らせて、導出・定義・中間出力まで含めた束縛を得る。
+/// Run an assignment and get the bindings, including derived values, definitions and
+/// intermediate outputs.
 fn bind(f: &RuleFile, c: &Checked, a: &BTreeMap<String, Val>) -> BTreeMap<String, Val> {
     let (_, _, b) = eval::run_bindings(f, c, a.clone().into_iter().collect());
     b.into_iter().collect()
@@ -550,10 +573,11 @@ fn within(c: &Checked, col: &str, v: Rat) -> bool {
         && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
 }
 
-/// 列 `col` を値 `target` にする割り当てを、seed から作る。入力ならそのまま置く。
-/// 導出なら入力を一つ選んで解く。**変える入力はちょうど一つ**で、選び方は
-/// 入力の宣言順に固定してあるので、内側と外側で同じ入力が動く。
-/// §9.2 の「境界両側被覆」はベクタ対を要求するので、これが要る。
+/// Build from `seed` an assignment that sets column `col` to `target`. An input is set directly;
+/// a derived value is solved through one chosen input. **Exactly one input changes**, and the
+/// choice is fixed to the declaration order of the inputs, so the same input moves for the
+/// inside and the outside point. The "boundary-pair coverage" of §9.2 demands a vector pair,
+/// which is why this is needed.
 fn place(
     f: &RuleFile,
     c: &Checked,
@@ -583,13 +607,14 @@ fn place(
             continue;
         }
         let xn = x0.add(target.sub(e0).div(slope));
-        // 入力の格子に載らない解は捨てる（1円 単位の入力に 0.5円 を置かない）。
+        // Discard a solution that is off the input's grid (an input in whole yen never gets
+        // 0.5 yen).
         if !xn.div(q).is_int() || !within(c, &x, xn) {
             continue;
         }
         let mut a = seed.clone();
         a.insert(x.clone(), to_val(xn, &xty));
-        // 一次でなければここで外れる。推測ではなく評価で確かめる。
+        // A non-linear expression fails here: confirmed by evaluation, not by guessing.
         if bind(f, c, &a).get(col).and_then(as_rat).is_some_and(|v| v.cmp_to(target) == std::cmp::Ordering::Equal) {
             return Some(a);
         }
@@ -597,7 +622,8 @@ fn place(
     None
 }
 
-/// セル一つを満たす方へ一手動かす。数値は解いて当て、それ以外は入力を振る。
+/// Move one step toward satisfying a single cell. Numbers are solved for and hit exactly;
+/// anything else sweeps the inputs.
 fn satisfy_cell(
     f: &RuleFile,
     c: &Checked,
@@ -613,7 +639,7 @@ fn satisfy_cell(
             return Some(seed.clone());
         }
     }
-    // 数値・日付：セルの内側の点へ解く。
+    // Number or date: solve for a point inside the cell.
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
         let q = crate::coverage::quantum(c, col, &ty);
         for (_, inside, _) in crate::coverage::thresholds_pub(cell, &ty, q) {
@@ -623,7 +649,8 @@ fn satisfy_cell(
         }
         return None;
     }
-    // 列挙・真偽：入力を一つずつ振って、当たるものを探す（決定的な順で先着）。
+    // Enum or boolean: sweep the inputs one at a time and take the first that matches (in a
+    // deterministic order).
     if let Some(vs) = cands.get(col) {
         for v in vs {
             if eval::cell_matches(c, cell, v, &ty) {
@@ -646,7 +673,7 @@ fn satisfy_cell(
     None
 }
 
-/// 行のセルを全部満たす割り当て。既に満たしている列は動かさない。
+/// An assignment that satisfies every cell of the row. Columns already satisfied are left alone.
 fn reach_row(
     f: &RuleFile,
     c: &Checked,
@@ -656,8 +683,8 @@ fn reach_row(
     row: &Row,
 ) -> Option<BTreeMap<String, Val>> {
     let mut a = seed.clone();
-    // 二周する。前の列を直したせいで後ろの列が崩れることがあるので、
-    // 一周で足りたかを確かめてから返す。
+    // Two passes: fixing an earlier column can break a later one, so confirm that one pass was
+    // enough before returning.
     for _ in 0..2 {
         for (ci, (col, _)) in t.inputs.iter().enumerate() {
             let Some(cell) = row.cells.get(ci) else { continue };
@@ -685,9 +712,9 @@ fn row_holds(f: &RuleFile, c: &Checked, t: &Table, row: &Row, a: &BTreeMap<Strin
     })
 }
 
-/// 行 ri を**勝たせる**割り当て。`上から` ではセルを満たすだけでは足りず、
-/// 先行行を外さなければならない。外すのは、その行が `-` にしていて先行行が
-/// 名指ししている列に限る（行 ri が名指ししている列を動かすと ri 自身が崩れる）。
+/// An assignment that makes row `ri` **win**. Under `first` satisfying its cells is not enough:
+/// the earlier rows must be knocked out, and only through columns this row leaves as `-` while
+/// the earlier row names them (moving a column row `ri` names would break `ri` itself).
 fn win_row(
     f: &RuleFile,
     c: &Checked,
@@ -696,14 +723,14 @@ fn win_row(
     t: &Table,
     ri: usize,
 ) -> Option<BTreeMap<String, Val>> {
-    let tag = format!("表 {} 行{}", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), ri + 1);
+    let tag = eval::row_tag(&t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), ri + 1);
     let mut a = reach_row(f, c, cands, seed, t, &t.rows[ri])?;
     for _ in 0..t.rows.len() + 1 {
         let (_, fired, _) = eval::run_bindings(f, c, a.clone().into_iter().collect());
         if fired.contains(&tag) {
             return Some(a);
         }
-        // 先に勝っている行を一つ外す。
+        // Knock out one row that currently wins ahead of it.
         let mut moved = false;
         for e in 0..ri {
             if !row_holds(f, c, t, &t.rows[e], &a) {
@@ -735,7 +762,8 @@ fn win_row(
     None
 }
 
-/// セルを**外す**方へ一手動かす。境界の外側へ解くか、当たらない候補を置く。
+/// Move one step toward **violating** a cell: solve for the outside of a boundary, or put in a
+/// candidate that does not match.
 fn violate_cell(
     f: &RuleFile,
     c: &Checked,
@@ -778,9 +806,9 @@ fn violate_cell(
     None
 }
 
-/// §9.1 の「名前どうしの比較なら同着 A = B とその両側」。
-/// 定義の中の `A期限 <= B期限` のような原子は、リテラルの境界を持たないので
-/// `numeric_bounds` に何も現れない。ここで入力の組として直接踏む。
+/// The "for a comparison between names, the tie A = B and both sides of it" of §9.1.
+/// An atom such as `A期限 <= B期限` inside a definition has no literal boundary, so nothing of
+/// it reaches `numeric_bounds`; here it is stepped on directly as a pair of inputs.
 fn name_pairs(f: &RuleFile) -> Vec<(String, String)> {
     fn walk(e: &Expr, out: &mut Vec<(String, String)>) {
         match e {
@@ -812,15 +840,17 @@ fn name_pairs(f: &RuleFile) -> Vec<(String, String)> {
     out
 }
 
-// ── §6.2「定義軸の証人」 ────────────────────────────────────────────────────
+// ── §6.2 "witness on a definition axis" ─────────────────────────────────────
 //
-// 領域解析は真偽定義を自由軸として扱うので、交差箱の座標は「定義が真」と
-// 言っているだけで、その真を作る入力が在るかは見ていない。ここで実際に入力を
-// 構成し、評価器に定義まで計算させて確かめる。構成できた重なりだけが実在の
-// 確認された矛盾（`一意` では E105）で、構成できなければ W114 と番人へ降ろす。
-// 依存の共有だけを見て機械的に Unknown へ落とす形は採らない（§8.5）。
+// The region analysis treats boolean definitions as free axes, so a coordinate of an
+// intersection box only says "the definition is true" without checking that an input making
+// it true exists. Here an input is actually constructed, and the evaluator computes the
+// definitions to confirm it. Only an overlap that could be constructed is a confirmed, real
+// contradiction (E105 under `unique`); one that could not is demoted to W114 and the runtime
+// guard. Mechanically dropping to Unknown on shared dependencies alone is not done (§8.5).
 
-/// 列が取りうる値の下限と上限。`None` は制限なし。解析できないセルは `None` を返す。
+/// The lower and upper bound of the values a column may take; `None` means unbounded. A cell
+/// that cannot be analysed returns `None`.
 fn cell_span(cell: &Cell, ty: &Ty, q: Rat) -> Option<(Option<Rat>, Option<Rat>)> {
     let lit = |l: &Lit| -> Option<Rat> {
         match l {
@@ -855,7 +885,7 @@ fn cell_span(cell: &Cell, ty: &Ty, q: Rat) -> Option<(Option<Rat>, Option<Rat>)>
     }
 }
 
-/// 列 `col` について、渡されたセルを**全部**満たす値へ一手動かす。
+/// Move column `col` one step toward a value that satisfies **all** of the given cells.
 fn satisfy_all(
     f: &RuleFile,
     c: &Checked,
@@ -870,7 +900,7 @@ fn satisfy_all(
         return Some(seed.clone());
     }
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
-        // 区間の交わりを取る。空なら、この対はこの列で同時に成り立たない。
+        // Intersect the intervals. If it is empty, the pair cannot hold at once on this column.
         let (mut lo, mut hi): (Option<Rat>, Option<Rat>) = match c.ranges.get(col) {
             Some((l, h)) => (*l, *h),
             None => (None, None),
@@ -905,7 +935,8 @@ fn satisfy_all(
         a.insert(col.into(), v.clone());
         return Some(a);
     }
-    // 上流の表や定義が決める列。入力を一つずつ振って寄せる（決定的な順で先着）。
+    // A column decided by an upstream table or definition: sweep the inputs one at a time and
+    // take the first that gets there (in a deterministic order).
     for x in f.inputs.iter().map(|i| i.name.text.clone()) {
         for v in cands.get(&x).into_iter().flatten() {
             let mut a = seed.clone();
@@ -918,10 +949,10 @@ fn satisfy_all(
     None
 }
 
-/// 行 i と行 j の**両方**に当たる入力を実際に構成する（§6.2「定義軸の証人」）。
-/// 見つかれば重なりは実在で、`一意` なら E105。見つからなければ未確認のまま
-/// W114 と番人へ降ろす。**見つからないことは非存在の証明ではない**ので、
-/// 呼ぶ側はそれを断定しない。
+/// Actually construct an input that matches **both** row i and row j (§6.2, "witness on a
+/// definition axis"). If one is found the overlap is real, and E105 under `unique`. If none is
+/// found it stays unconfirmed and is demoted to W114 and the runtime guard. **Not finding one
+/// is no proof of non-existence**, so the caller does not assert that.
 pub fn pair_witness(
     f: &RuleFile,
     c: &Checked,
@@ -938,7 +969,8 @@ pub fn pair_witness(
     let hold = |a: &BTreeMap<String, Val>| {
         row_holds(f, c, t, &t.rows[i], a) && row_holds(f, c, t, &t.rows[j], a)
     };
-    // 列を順に寄せる。一つ直すと前の列が崩れることがあるので、崩れなくなるまで回す。
+    // Bring the columns in one by one. Fixing one can break an earlier one, so loop until
+    // nothing breaks any more.
     for _ in 0..3 {
         if hold(&a) {
             return Some(a);

@@ -1,9 +1,10 @@
-//! ベクタ套件の完全性検査（§9.2）。
+//! Completeness audit of the vector suite (§9.2).
 //!
-//! 三つの被覆基準を、生成されたベクタ集合からではなく**規則から先に**導く。
-//! 母集団が踏めなかった義務を「そもそも必要なかった」ことにしないためで、
-//! 義務の一覧は生成器と独立に作る。生成器が変われば判定器が赤くなる、という
-//! 一方向の関係を保つのがこの分離の目的。
+//! The three coverage criteria are derived **from the rule first**, not from the generated
+//! vector set. The list of obligations is built independently of the generator, so that an
+//! obligation the candidate population failed to reach cannot be written off as "never
+//! needed in the first place". The point of the separation is the one-way relation: when the
+//! generator changes, the auditor turns red.
 
 use crate::ast::*;
 use crate::eval::{self, Val};
@@ -16,6 +17,21 @@ pub const ROW: &str = "行被覆";
 pub const BOUND: &str = "境界両側被覆";
 pub const SHADOW: &str = "遮蔽対被覆";
 
+/// The name of a criterion in the output language. The constants above stay Japanese: they
+/// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
+fn label(k: &'static str) -> &'static str {
+    if crate::i18n::ja() {
+        k
+    } else {
+        match k {
+            ROW => "row coverage",
+            BOUND => "boundary-pair coverage",
+            SHADOW => "shadow-pair coverage",
+            other => other,
+        }
+    }
+}
+
 pub struct Missing {
     pub kind: &'static str,
     pub what: String,
@@ -23,15 +39,17 @@ pub struct Missing {
 }
 
 pub struct Audit {
-    /// 基準ごとの (満たした, 要求された)。
+    /// Per criterion: (satisfied, required).
     pub tally: BTreeMap<&'static str, (usize, usize)>,
     pub missing: Vec<Missing>,
-    /// 義務を実際に片づけたベクタの番号。§9.2 を満たす部分集合はこの和集合で、
-    /// 対の義務は二本まとめて入る。貪欲な点数付けでは対が落ちる。
+    /// Indices of the vectors that actually discharged an obligation. Their union is the
+    /// subset that satisfies §9.2; a pair obligation admits both of its vectors together, which
+    /// greedy scoring would drop.
     pub witness: BTreeSet<usize>,
-    /// 実現不能として境界の義務から外した数（§9.1 の「解が入力範囲の外になる側」）。
-    /// §9.2 の網の一つは、これを足し戻した数が素朴な収集器の数と一致することを
-    /// 見る。列挙器が新しい列の種類を見落としたら、その差として出る。
+    /// Boundary obligations dropped as unrealizable (§9.1, "the side whose solution falls
+    /// outside the input range"). One of the §9.2 safety nets checks that adding this back
+    /// matches the count of a naive collector; an enumerator that overlooks a new kind of
+    /// column shows up as the difference.
     pub pruned_bounds: usize,
 }
 
@@ -41,7 +59,7 @@ impl Audit {
     }
 }
 
-/// 数値・日付の最小刻み。率だけは列の格納尺度で決まる。
+/// The smallest step of a number or date. Only a rate takes it from the column's storage scale.
 pub fn quantum(c: &Checked, col: &str, ty: &Ty) -> Rat {
     match ty {
         Ty::Rate => Rat::new(1, *c.scales.get(col).unwrap_or(&100)),
@@ -61,7 +79,7 @@ fn is_numeric(ty: &Ty) -> bool {
     matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date)
 }
 
-/// 行 r のうち `skip` 列以外のセルが、この束縛で全部成り立つか。
+/// Whether every cell of the row except the `skip` column holds under these bindings.
 fn others_hold(
     t: &Table,
     row: &Row,
@@ -82,15 +100,15 @@ fn others_hold(
     })
 }
 
-/// 二つの割り当てが、ちょうど一つの入力でだけ違うか（§9.2 の「ベクタ対」）。
+/// Whether two assignments differ in exactly one input (the "vector pair" of §9.2).
 fn differ_in_one(a: &BTreeMap<String, Val>, b: &BTreeMap<String, Val>, col: &str) -> bool {
     let mut diff = 0;
     let derived = !a.contains_key(col);
     for (k, v) in a {
         if b.get(k) != Some(v) {
             diff += 1;
-            // 入力の列なら動くのはその列自身。導出の列は入力ではないので、
-            // どれか一つの入力が動いていればよい（§9.1 の写像）。
+            // For an input column, the column that moves must be that column itself. A derived
+            // column is not an input, so any single moving input will do (the mapping of §9.1).
             if !derived && k != col {
                 return false;
             }
@@ -99,7 +117,7 @@ fn differ_in_one(a: &BTreeMap<String, Val>, b: &BTreeMap<String, Val>, col: &str
     diff == 1 && a.len() == b.len()
 }
 
-/// 一つのセルが持つ境界を (敷居, 内側, 外側) に展開する。
+/// Expand the boundaries of one cell into (threshold, inside, outside) triples.
 pub fn thresholds_pub(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
     thresholds(cell, ty, q)
 }
@@ -126,7 +144,7 @@ fn thresholds(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
                 out.push((b, inside, outside));
             }
         }
-        // 点の指定も境界二つ。リテラルの打ち間違いはこの対で死ぬ。
+        // A point literal is two boundaries as well; a mistyped literal dies on this pair.
         Cell::Lit(l) => {
             if let Some(b) = lit(l) {
                 out.push((b, b, b.sub(q)));
@@ -153,10 +171,10 @@ fn show_rat(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// ベクタ集合が §9.2 の三基準を満たしているかを判定する。
+/// Judge whether a vector set satisfies the three criteria of §9.2.
 pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
     let checks = crate::table_checks(f, c, path);
-    // 各ベクタを走らせ直して、導出や定義まで含めた束縛を持つ。
+    // Re-run every vector to get bindings that include the derived values and definitions.
     let binds: Vec<BTreeMap<String, Val>> = vs
         .iter()
         .map(|v| {
@@ -166,14 +184,14 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
         .collect();
     let fired: Vec<BTreeSet<String>> = vs.iter().map(|v| v.trace.iter().cloned().collect()).collect();
 
-    // 三基準は常に報告する。義務が一つも無い基準を「表に出さない」と、
-    // 数え上げ側からは「その基準を見ていない」と区別が付かない。
+    // All three criteria are always reported. If a criterion with no obligations were left
+    // out, the tallying side could not tell that apart from "the criterion was not checked".
     let mut tally: BTreeMap<&'static str, (usize, usize)> =
         [ROW, BOUND, SHADOW].into_iter().map(|k| (k, (0, 0))).collect();
     let mut missing: Vec<Missing> = Vec::new();
     let mut witness: BTreeSet<usize> = BTreeSet::new();
     let mut pruned_bounds = 0usize;
-    let mut bump = |k: &'static str, met: bool, t: &mut BTreeMap<&'static str, (usize, usize)>| {
+    let bump = |k: &'static str, met: bool, t: &mut BTreeMap<&'static str, (usize, usize)>| {
         let e = t.entry(k).or_insert((0, 0));
         e.1 += 1;
         if met {
@@ -192,12 +210,12 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
         let chk = checks.get(ti);
         let dead: BTreeSet<usize> = chk.map(|k| k.dead.iter().copied().collect()).unwrap_or_default();
 
-        // --- 行被覆
+        // --- row coverage
         for (ri, _) in t.rows.iter().enumerate() {
             if dead.contains(&ri) {
-                continue; // E102 が既に「決して当たらない」と言っている行
+                continue; // a row E102 already reports as never matching
             }
-            let tag = format!("表 {tname} 行{}", ri + 1);
+            let tag = eval::row_tag(&tname, ri + 1);
             let met = match fired.iter().position(|s| s.contains(&tag)) {
                 Some(k) => {
                     witness.insert(k);
@@ -210,12 +228,15 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
                 missing.push(Missing {
                     kind: ROW,
                     what: tag.clone(),
-                    hint: "この行が勝つ入力をベクタが一つも作れていません。".into(),
+                    hint: tr!(
+                        "この行が勝つ入力をベクタが一つも作れていません。",
+                        "No vector produces an input on which this row wins."
+                    ),
                 });
             }
         }
 
-        // --- 境界両側被覆
+        // --- boundary-pair coverage
         for (ri, row) in t.rows.iter().enumerate() {
             if dead.contains(&ri) {
                 continue;
@@ -228,7 +249,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
                 let Some(cell) = row.cells.get(ci) else { continue };
                 let q = quantum(c, col, &ty);
                 for (b, inside, outside) in thresholds(cell, &ty, q) {
-                    // §9.1: 実現不能な側は義務にしない。
+                    // §9.1: an unrealizable side is not an obligation.
                     if !in_range(c, col, inside) || !in_range(c, col, outside) {
                         pruned_bounds += 1;
                         continue;
@@ -243,8 +264,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
                     };
                     let ins = hit(inside);
                     let outs = hit(outside);
-                    // 対であること。他列を固定したまま境界をまたぐ二点でなければ、
-                    // 境界の ±1 が期待値を変えることを示せない。
+                    // It must be a pair: unless the two points cross the boundary with the other
+                    // columns held fixed, they cannot show that ±1 at the boundary changes the
+                    // expected value.
                     let pair = ins.iter().find_map(|&a| {
                         outs.iter().find(|&&z| differ_in_one(&vs[a].input, &vs[z].input, col)).map(|&z| (a, z))
                     });
@@ -256,32 +278,37 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
                     bump(BOUND, met, &mut tally);
                     if !met {
                         let side = if ins.is_empty() {
-                            "内側"
+                            tr!("内側", "the inside point")
                         } else if outs.is_empty() {
-                            "外側"
+                            tr!("外側", "the outside point")
                         } else {
-                            "対（他列が揃っていない）"
+                            tr!(
+                                "対（他列が揃っていない）",
+                                "the pair (the other columns are not held equal)"
+                            )
                         };
                         missing.push(Missing {
                             kind: BOUND,
-                            what: format!(
+                            what: tr!(
                                 "表 {tname} 行{} 列 {col} の境界 {}（{} / {} を踏む対）",
+                                "table {tname} row {} column {col} boundary {} (pair at {} / {})",
                                 ri + 1,
                                 show_rat(b, &ty),
                                 show_rat(inside, &ty),
                                 show_rat(outside, &ty)
                             ),
-                            hint: format!("欠けているのは {side} です。"),
+                            hint: tr!("欠けているのは {side} です。", "Missing: {side}."),
                         });
                     }
                 }
             }
         }
 
-        // --- 遮蔽対被覆
+        // --- shadow-pair coverage
         for &(i, j) in chk.map(|k| k.overlaps.as_slice()).unwrap_or(&[]) {
-            let tag = format!("表 {tname} 行{}", i + 1);
-            // 交差の内側: 行 j の条件も成り立つのに、行 i が勝つ点。
+            let tag = eval::row_tag(&tname, i + 1);
+            // The inside of the intersection: a point where row j's conditions hold too, yet row
+            // i wins.
             let met = match (0..vs.len())
                 .find(|&k| fired[k].contains(&tag) && others_hold(t, &t.rows[j], None, &binds[k], c))
             {
@@ -295,8 +322,17 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
             if !met {
                 missing.push(Missing {
                     kind: SHADOW,
-                    what: format!("表 {tname} 行{} ∩ 行{}（行{} が勝つ点）", i + 1, j + 1, i + 1),
-                    hint: "この点が無いと、隣接行を入れ替えても期待値が変わりません。".into(),
+                    what: tr!(
+                        "表 {tname} 行{} ∩ 行{}（行{} が勝つ点）",
+                        "table {tname} row {} ∩ row {} (a point where row {} wins)",
+                        i + 1,
+                        j + 1,
+                        i + 1
+                    ),
+                    hint: tr!(
+                        "この点が無いと、隣接行を入れ替えても期待値が変わりません。",
+                        "Without this point, swapping the adjacent rows changes no expected value."
+                    ),
                 });
             }
         }
@@ -305,23 +341,31 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
 }
 
 pub fn render(a: &Audit, vs: &[Vector]) -> String {
-    let mut o = format!("ベクタ {} 件\n", vs.len());
+    let mut o = tr!("ベクタ {} 件\n", "{} vectors\n", vs.len());
+    // The Japanese column is 12 characters wide (the tests pin that output); the English
+    // labels are longer, so the column widens to the longest of them.
+    let w = if crate::i18n::ja() { 12 } else { 22 };
     for k in [ROW, BOUND, SHADOW] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
-        let mark = if met == req { "満たす" } else { "欠け" };
-        o.push_str(&format!("  {k:<12} {met:>4} / {req:<4}  {mark}\n"));
+        let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
+        let k = label(k);
+        o.push_str(&format!("  {k:<w$} {met:>4} / {req:<4}  {mark}\n"));
     }
     if a.missing.is_empty() {
         return o;
     }
-    o.push_str(&format!("\n満たせなかった義務 {} 件:\n", a.missing.len()));
+    o.push_str(&tr!(
+        "\n満たせなかった義務 {} 件:\n",
+        "\nunsatisfied obligations: {}\n",
+        a.missing.len()
+    ));
     for m in &a.missing {
-        o.push_str(&format!("  [{}] {}\n    {}\n", m.kind, m.what, m.hint));
+        o.push_str(&format!("  [{}] {}\n    {}\n", label(m.kind), m.what, m.hint));
     }
     o
 }
 
-/// `rulec coverage` の本体。生成したベクタをそのまま判定する。
+/// The body of `rulec coverage`: audit the generated vectors as they are.
 pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>) {
     let vs = vectors::generate(f, c);
     let a = audit(f, c, path, &vs);

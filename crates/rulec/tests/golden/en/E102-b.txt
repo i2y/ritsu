@@ -1,0 +1,26 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/mutants/m_e102b.rule:43 table 素の割引
+   |
+43 | | true  | 率引き       | 率割引                             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ The upstream table never produces the values this row names.
+ hint: make the upstream table produce this value, or delete this row.
+
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/mutants/m_e102b.rule:44 table 素の割引
+   |
+44 | | true  | 額引き       | 割引額面                           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+   |
+ The upstream table never produces the values this row names.
+ hint: make the upstream table produce this value, or delete this row.
+
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/mutants/m_e102b.rule:45 table 素の割引
+   |
+45 | | true  | 送料無料     | 0円                                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+   |
+ The upstream table never produces the values this row names.
+ hint: make the upstream table produce this value, or delete this row.

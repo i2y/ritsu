@@ -1,8 +1,8 @@
-//! 組み込みの `標準/` 名前空間（§2.2）。
+//! The built-in `std/` namespace (§2.2).
 //!
-//! 都道府県はコード生成の公開面に出るので、ASCII 別名はここで凍結する（未決 9）。
-//! 方式は訓令式ではなくヘボン式（`Hyogo` `Oita`）で、長音は落とす。地方自治体の
-//! 英語表記の慣行に合わせるため。
+//! Prefectures appear on the public surface of the generated code, so their ASCII aliases are
+//! frozen here (open question 9). The romanization is Hepburn, not Kunrei (`Hyogo`, `Oita`),
+//! with long vowels dropped, to match the English spellings local governments use.
 
 pub const PREFECTURES: &[(&str, &str)] = &[
     ("北海道", "Hokkaido"),

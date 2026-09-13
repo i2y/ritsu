@@ -1,7 +1,8 @@
-//! 過去データの記録（§10.2）と、その検証。
+//! Records of past data (§10.2) and their validation.
 //!
-//! 本番ログからこの形への抽出（ETL）は利用者の仕事と割り切り、rulec が引き受けるのは
-//! 型と範囲の検証だけである。1 件 1 行の JSONL に固定する。
+//! Extracting production logs into this shape (ETL) is deliberately the user's job; what
+//! rulec takes on is only the validation of types and ranges. The format is fixed to JSONL,
+//! one record per line.
 //!
 //! ```text
 //! {"ts":"2025-08-14T09:12:33+09:00","tag":"order:1234567",
@@ -9,8 +10,8 @@
 //!  "observed":{"送料":800}}
 //! ```
 //!
-//! **fixtures はリポジトリに入れない。** 注文金額を含むので、CI にはアーティファクトか
-//! 保護ストレージで渡す（§10.2）。
+//! **Fixtures do not go into the repository.** They contain order amounts, so hand them to CI
+//! as an artifact or through protected storage (§10.2).
 
 use crate::ast::RuleFile;
 use crate::eval::Val;
@@ -19,15 +20,17 @@ use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use std::collections::BTreeMap;
 
-/// 一件の記録。`in` は評価器に渡せる形まで解いてある。
+/// One record. `in` has been resolved into the form the evaluator accepts.
 pub struct Record {
     pub line: usize,
     pub tag: String,
     pub ts: String,
     pub input: BTreeMap<String, Val>,
-    /// 観測された出力。宣言順ではなく名前で引く（記録の側の順序に頼らない）。
+    /// The observed outputs, looked up by name rather than by declaration order (the order
+    /// on the record's side is not relied on).
     pub observed: BTreeMap<String, Val>,
-    /// 既定値で補った欄。空でなければこの記録は「補完系」（§10.3）。
+    /// The fields filled in with default values. If non-empty, this record is a "filled
+    /// record" (§10.3).
     pub filled: Vec<String>,
 }
 
@@ -41,12 +44,14 @@ pub struct Problem {
 pub struct Load {
     pub records: Vec<Record>,
     pub problems: Vec<Problem>,
-    /// 欄が欠けていたので丸ごと外した件数（§10.3 のモード 1）。
+    /// How many records were excluded outright because a field was missing (mode 1 of
+    /// §10.3).
     pub dropped: usize,
 }
 
 impl Load {
-    /// 実測系（補完のない記録）の件数。見出しの一致率はここからだけ計算する。
+    /// The number of observed records (records with nothing filled in). The headline
+    /// agreement rate is computed from these alone.
     pub fn measured(&self) -> usize {
         self.records.iter().filter(|r| r.filled.is_empty()).count()
     }
@@ -55,12 +60,13 @@ impl Load {
     }
 }
 
-/// JSON の値を、宣言された型の `Val` に直す。ワイヤは正準単位の整数（§10.1）。
+/// Convert a JSON value into the `Val` of the declared type. On the wire, numbers are
+/// integers in the canonical unit (§10.1).
 pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String> {
     let inner = match ty {
         Ty::Opt(t) => {
             if *j == Json::Null {
-                return Ok(Val::Enum("無し".into()));
+                return Ok(Val::Enum(crate::kw::NONE.into()));
             }
             (**t).clone()
         }
@@ -72,7 +78,7 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
             if vs.iter().any(|v| v == s) {
                 Ok(Val::Enum(s.clone()))
             } else {
-                Err(format!("`{s}` は列挙 {en} の値ではありません"))
+                Err(tr!("`{s}` は列挙 {en} の値ではありません", "`{s}` is not a value of enum {en}"))
             }
         }
         (Ty::Bool, Json::Bool(b)) => Ok(Val::Bool(*b)),
@@ -85,7 +91,7 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
                 (true, Some(v)) if (1..=12).contains(&v[1]) && (1..=31).contains(&v[2]) => {
                     Ok(Val::Date(v[0] as i32, v[1] as u32, v[2] as u32))
                 }
-                _ => Err(format!("`{s}` は YYYY-MM-DD の日付ではありません")),
+                _ => Err(tr!("`{s}` は YYYY-MM-DD の日付ではありません", "`{s}` is not a YYYY-MM-DD date")),
             }
         }
         (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate, Json::Int(n)) => {
@@ -95,8 +101,9 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
                     || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater)
                 {
                     let show = |b: &Option<Rat>| b.map(|x| x.to_string()).unwrap_or_else(|| "…".into());
-                    return Err(format!(
+                    return Err(tr!(
                         "{n} は宣言範囲 {}..{} の外です",
+                        "{n} is outside the declared range {}..{}",
                         show(&lo.map(|x| x)),
                         show(&hi.map(|x| x))
                     ));
@@ -104,65 +111,69 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
             }
             Ok(Val::Num(v))
         }
-        (_, got) => Err(format!("{} を期待しましたが {} でした", ty_word(&inner), got.kind())),
+        (_, got) => Err(tr!("{} を期待しましたが {} でした", "expected {}, found {}", ty_word(&inner), got.kind())),
     }
 }
 
 fn ty_word(ty: &Ty) -> String {
     match ty {
-        Ty::Enum(e) => format!("列挙 {e} の値（文字列）"),
-        Ty::Bool => "真偽".into(),
-        Ty::Date => "日付（YYYY-MM-DD の文字列）".into(),
-        Ty::Str => "文字列".into(),
-        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => "正準単位の整数".into(),
+        Ty::Enum(e) => tr!("列挙 {e} の値（文字列）", "value of enum {e} (string)"),
+        Ty::Bool => crate::kw::BOOL.into(),
+        Ty::Date => tr!("日付（YYYY-MM-DD の文字列）", "date (YYYY-MM-DD string)"),
+        Ty::Str => tr!("文字列", "string"),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => tr!("正準単位の整数", "integer in the canonical unit"),
         _ => format!("{ty}"),
     }
 }
 
-/// 再生マニフェスト（§10.3）。fixtures の隣に置く小さな JSON で、
-/// **既定値と対象欄しか持たないので機微を含まず、リポジトリに入る**。
+/// The replay manifest (§10.3): a small JSON file placed next to the fixtures. **It holds
+/// nothing but default values and the fields they apply to, so it contains nothing sensitive
+/// and goes into the repository.**
 ///
 /// ```json
 /// {"rulec":"replay/1","rule":"送料","fills":{"会員":"一般"}}
 /// ```
 ///
-/// 既定値を規則そのものに焼き込まないのは、規則が純関数で、補完は**特定の
-/// 再生実験の判断**だからである。「会員は一般で埋める」と「ゴールドで埋めて
-/// 影響の上限を見る」を同じ規則に対して別々に走らせるのは正当な使い方で、
-/// 規則に一つ焼くとそれができない。意味に関与しない注記が規則のハッシュを変えて
-/// `gen --check` に無駄な再生成を要求する害もある。
+/// Default values are not baked into the rule itself because the rule is a pure function and
+/// filling in is **a decision of one particular replay experiment**. Running "fill 会員 with
+/// 一般" and "fill it with ゴールド to see the upper bound of the impact" separately against
+/// the same rule is a legitimate use, and baking one value into the rule makes that
+/// impossible. There is also the harm that an annotation with no bearing on the semantics
+/// changes the rule's hash and makes `gen --check` demand a pointless regeneration.
 ///
-/// 正直さの担保は「根拠がどこに書かれたか」ではなく「**数字の出る場所に根拠が
-/// 現れるか**」に置く。レポートは使った既定値と欄ごとの補完件数を必ず刻む。
+/// Honesty is guaranteed not by "where the justification is written" but by "**whether the
+/// justification appears where the numbers appear**": the report always stamps the default
+/// values used and the number of records filled in per field.
 #[derive(Default)]
 pub struct Manifest {
-    /// 欄 → 既定値。ここに無い欄が欠けている記録は、補完せず丸ごと外す。
+    /// Field → default value. A record missing a field that is not listed here is excluded
+    /// outright rather than filled in.
     pub fills: BTreeMap<String, Val>,
-    /// 刻印に出すための、書かれたままの表記。
+    /// The spelling exactly as written, for the stamp in the report.
     pub shown: BTreeMap<String, String>,
 }
 
 impl Manifest {
-    /// `会員=一般` の形を読む（感度分析の一時上書き。§10.3）。
+    /// Read the `会員=一般` form (a one-off override for sensitivity analysis, §10.3).
     pub fn add(&mut self, spec: &str, f: &RuleFile, c: &Checked) -> Result<(), String> {
         let (name, text) = spec.split_once('=').ok_or_else(|| {
-            format!("`{spec}` は `欄=値` の形ではありません")
+            tr!("`{spec}` は `欄=値` の形ではありません", "`{spec}` is not of the form `field=value`")
         })?;
         let (name, text) = (name.trim(), text.trim());
         if !f.inputs.iter().any(|i| i.name.text == name) {
-            return Err(format!("`{name}` は規則の入力ではありません"));
+            return Err(tr!("`{name}` は規則の入力ではありません", "`{name}` is not an input of the rule"));
         }
         let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-        // 数量・金額・率は整数、それ以外は文字列として読む。
+        // Quantities, money, and rates are read as integers; everything else as a string.
         let j = match &ty {
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => text
                 .parse::<i128>()
                 .map(Json::Int)
-                .map_err(|_| format!("`{name}` は正準単位の整数で書いてください"))?,
+                .map_err(|_| tr!("`{name}` は正準単位の整数で書いてください", "`{name}` must be written as an integer in the canonical unit"))?,
             Ty::Bool => match text {
-                "真" | "true" => Json::Bool(true),
-                "偽" | "false" => Json::Bool(false),
-                _ => return Err(format!("`{name}` は 真 か 偽 です")),
+                crate::kw::TRUE => Json::Bool(true),
+                crate::kw::FALSE => Json::Bool(false),
+                _ => return Err(tr!("`{name}` は {} か {} です", "`{name}` is either {} or {}", crate::kw::TRUE, crate::kw::FALSE)),
             },
             _ => Json::Str(text.into()),
         };
@@ -172,13 +183,14 @@ impl Manifest {
         Ok(())
     }
 
-    /// マニフェストの JSON を読む。
+    /// Read the manifest JSON.
     pub fn load(src: &str, f: &RuleFile, c: &Checked) -> Result<Manifest, String> {
-        let j = crate::json::parse(src.trim()).map_err(|e| format!("マニフェストが読めません: {e}"))?;
+        let j = crate::json::parse(src.trim()).map_err(|e| tr!("マニフェストが読めません: {e}", "Cannot read the manifest: {e}"))?;
         if let Some(r) = j.get("rule").and_then(|x| x.as_str()) {
             if r != f.name.text {
-                return Err(format!(
+                return Err(tr!(
                     "マニフェストは規則 `{r}` のものです（いま見ているのは `{}`）",
+                    "The manifest belongs to rule `{r}` (the current rule is `{}`)",
                     f.name.text
                 ));
             }
@@ -189,10 +201,10 @@ impl Manifest {
         };
         for (name, v) in fills {
             if !f.inputs.iter().any(|i| i.name.text == *name) {
-                return Err(format!("`{name}` は規則の入力ではありません"));
+                return Err(tr!("`{name}` は規則の入力ではありません", "`{name}` is not an input of the rule"));
             }
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-            let val = to_val(v, &ty, c, name).map_err(|e| format!("既定値 `{name}`: {e}"))?;
+            let val = to_val(v, &ty, c, name).map_err(|e| tr!("既定値 `{name}`: {e}", "default value `{name}`: {e}"))?;
             m.shown.insert(name.clone(), format!("{v}"));
             m.fills.insert(name.clone(), val);
         }
@@ -200,8 +212,8 @@ impl Manifest {
     }
 }
 
-/// JSONL を読んで検証する。**壊れた記録は捨てずに報告する。**
-/// 黙って落とすと、分母が縮んだ分だけ一致率が上がって見える（§10.3）。
+/// Read and validate the JSONL. **Broken records are reported, not discarded.** Dropping
+/// them silently shrinks the denominator, which makes the agreement rate look higher (§10.3).
 pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
     let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0 };
     for (li, raw) in src.lines().enumerate() {
@@ -215,8 +227,8 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                 out.problems.push(Problem {
                     line,
                     tag: String::new(),
-                    what: format!("JSON として読めません: {e}"),
-                    hint: "1 件 1 行の JSON Lines です（§10.2）。".into(),
+                    what: tr!("JSON として読めません: {e}", "Not readable as JSON: {e}"),
+                    hint: tr!("1 件 1 行の JSON Lines です（§10.2）。", "The format is JSON Lines, one record per line (§10.2)."),
                 });
                 continue;
             }
@@ -228,23 +240,24 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
         };
 
         let Some(ins) = j.get("in").and_then(|x| x.as_obj()) else {
-            bad("`in` がありません".into(), "入力は `in` の下に、規則の和名で置きます。");
+            bad(tr!("`in` がありません", "`in` is missing"), &tr!("入力は `in` の下に、規則の和名で置きます。", "Inputs go under `in`, keyed by the names used in the rule."));
             continue;
         };
         let Some(obs) = j.get("observed").and_then(|x| x.as_obj()) else {
-            bad("`observed` がありません".into(), "そのとき実際に出た値を `observed` に置きます。");
+            bad(tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置きます。", "Put the values that actually came out at the time under `observed`."));
             continue;
         };
 
-        // 規則が知らない欄は誤りとして言う。黙って捨てると、綴りの間違いが
-        // 「既定値で補完された」に化けて一致率だけが動く。
+        // A field the rule does not know is reported as an error. Discarding it silently turns
+        // a spelling mistake into "filled in with the default value", and only the agreement
+        // rate moves.
         let known: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
         let mut extra: Vec<&String> = ins.keys().filter(|k| !known.contains(&k.as_str())).collect();
         extra.sort();
         if !extra.is_empty() {
             bad(
-                format!("`in` に規則が知らない欄があります: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
-                "規則の入力の和名と綴りを合わせてください。",
+                tr!("`in` に規則が知らない欄があります: {}", "`in` has fields the rule does not know: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
+                &tr!("規則の入力の和名と綴りを合わせてください。", "Match the spelling of the rule's input names."),
             );
             continue;
         }
@@ -261,14 +274,15 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         input.insert(name.clone(), v);
                     }
                     Err(e) => {
-                        bad(format!("`in.{name}`: {e}"), "型か範囲が宣言と食い違っています。");
+                        bad(format!("`in.{name}`: {e}"), &tr!("型か範囲が宣言と食い違っています。", "The type or range disagrees with the declaration."));
                         broken = true;
                     }
                 },
-                // §10.3: 欄ごとに二つのモードしかない。既定値が宣言されていれば
-                // 補って「補完系」の札を付け、無ければ**その記録を丸ごと外す**。
-                // 逆推定はしない。欄の欠けは鍵の不在で、optional の `無し` は
-                // `null` である（「無いと分かっている」は補完の対象ではない）。
+                // §10.3: there are only two modes per field. If a default value is declared,
+                // fill it in and label the record "filled"; if not, **exclude the whole
+                // record**. No inference backwards. A missing field is an absent key, while
+                // the `none` of an optional is `null` ("known to be absent" is not something
+                // to fill in).
                 None => match m.fills.get(name) {
                     Some(v) => {
                         input.insert(name.clone(), v.clone());
@@ -296,14 +310,14 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         observed.insert(name.clone(), v);
                     }
                     Err(e) => {
-                        bad(format!("`observed.{name}`: {e}"), "そのとき出た値を、正準単位で書いてください。");
+                        bad(format!("`observed.{name}`: {e}"), &tr!("そのとき出た値を、正準単位で書いてください。", "Write the value that came out at the time, in the canonical unit."));
                         broken = true;
                     }
                 },
                 None => {
                     bad(
-                        format!("`observed.{name}` がありません"),
-                        "出力は全部要ります。片方だけ比べると、比べなかった側の食い違いが緑になります。",
+                        tr!("`observed.{name}` がありません", "`observed.{name}` is missing"),
+                        &tr!("出力は全部要ります。片方だけ比べると、比べなかった側の食い違いが緑になります。", "Every output is required. Comparing only one side turns a mismatch on the other side green."),
                     );
                     broken = true;
                 }
@@ -317,23 +331,25 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
     out
 }
 
-/// `rulec fixtures lint` の報告。
+/// The report of `rulec fixtures lint`.
 pub fn render_lint(l: &Load, path: &str) -> String {
-    let mut o = format!(
+    let mut o = tr!(
         "{path}: 記録 {} 件（実測系 {}、補完系 {}）\n",
+        "{path}: {} records ({} observed, {} filled)\n",
         l.records.len(),
         l.measured(),
         l.filled()
     );
     if l.dropped > 0 {
-        o.push_str(&format!("欄が欠けていたので外した記録: {} 件\n", l.dropped));
+        o.push_str(&tr!("欄が欠けていたので外した記録: {} 件\n", "Records excluded because a field was missing: {}\n", l.dropped));
     }
     if l.problems.is_empty() {
-        o.push_str("形式の問題はありません。\n");
+        o.push_str(&tr!("形式の問題はありません。\n", "No format problems.\n"));
         return o;
     }
-    o.push_str(&format!("\n問題 {} 件:\n", l.problems.len()));
-    // 同じ形の問題は括る。1 万行の抽出で同じ綴り間違いが 1 万回並ぶと読めない。
+    o.push_str(&tr!("\n問題 {} 件:\n", "\n{} problems:\n", l.problems.len()));
+    // Problems of the same shape are grouped. In a 10,000-line extract, the same misspelling
+    // listed 10,000 times is unreadable.
     let mut by: BTreeMap<&str, Vec<&Problem>> = BTreeMap::new();
     for p in &l.problems {
         by.entry(p.what.as_str()).or_default().push(p);
@@ -341,11 +357,11 @@ pub fn render_lint(l: &Load, path: &str) -> String {
     for (what, ps) in &by {
         let ex = ps[0];
         let where_ = if ex.tag.is_empty() {
-            format!("{} 行目", ex.line)
+            tr!("{} 行目", "line {}", ex.line)
         } else {
-            format!("{} 行目 ({})", ex.line, ex.tag)
+            tr!("{} 行目 ({})", "line {} ({})", ex.line, ex.tag)
         };
-        o.push_str(&format!("  {what}\n    {} 件。例: {where_}\n    {}\n", ps.len(), ex.hint));
+        o.push_str(&tr!("  {what}\n    {} 件。例: {where_}\n    {}\n", "  {what}\n    {} record(s). Example: {where_}\n    {}\n", ps.len(), ex.hint));
     }
     o
 }

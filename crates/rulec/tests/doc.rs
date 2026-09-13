@@ -1,9 +1,9 @@
-//! 検査済みの描画（§1.6）。承認者のための面。
+//! Rendering of a checked rule (§1.6). The surface for the people who approve it.
 //!
-//! この面の危険は「証明していないことを言い始めること」なので、テストの主眼は
-//! 見た目ではなく**言っていることの正しさ**に置く。群が分割になっていない規則を
-//! 与えて「過不足なく分割しています」と言わないこと、原本に無い字面を表に
-//! 出さないこと、検査を通らない規則を綺麗に描かないこと。
+//! The danger of this surface is that it "starts saying things it has not proven", so the tests
+//! focus not on appearance but on **the correctness of what it says**. Given a rule whose groups do
+//! not form a partition, it must not say "partitions exactly"; it must not put text that is not in
+//! the source into a table; and it must not render a rule that fails the check prettily.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -35,14 +35,15 @@ const CORPUS: &[&str] = &[
     "tests/corpus/クーポン一枚.rule",
 ];
 
-/// 群を三通りに崩した規則。どれも `check` は通る（完全性は `-` の行が担う）。
+/// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
+/// carries completeness).
 fn groups_rule(g1: &str, g2: &str) -> String {
     format!(
-        "規則 t(t) v1\n\n型 色(color) = 赤(r) | 青(b) | 緑(g)\n\
-         群 暖色(warm) = {g1}\n群 寒色(cool) = {g2}\n\n\
-         入力\n  c(c) : 色\n  b(b) : 真偽\n\n出力\n  r(r) : 真偽\n\n\
-         表 x(x)\n方式 上から\n| c | b | → r(r) : 真偽 |\n\
-         | 暖色 | 真 | 真 |\n| 寒色 | 真 | 偽 |\n| - | - | 偽 |\n"
+        "rule t(t) v1\n\nenum 色(color) = 赤(r) | 青(b) | 緑(g)\n\
+         group 暖色(warm) = {g1}\ngroup 寒色(cool) = {g2}\n\n\
+         inputs\n  c(c) : 色\n  b(b) : bool\n\noutputs\n  r(r) : bool\n\n\
+         table x(x)\npolicy first\n| c | b | → r(r) : bool |\n\
+         | 暖色 | true | true |\n| 寒色 | true | false |\n| - | - | false |\n"
     )
 }
 
@@ -58,36 +59,37 @@ fn doc_of(src: &str, name: &str) -> String {
     out
 }
 
-/// §1.6 の中心。群の一語が隠しているものを、**言えることだけ**言う。
+/// The heart of §1.6. Of what a single group name hides, say **only what can be said**.
 #[test]
 fn 群の被覆は事実のとおりに言う() {
-    // 分割になっている。
+    // A partition.
     let d = doc_of(&groups_rule("赤", "青 ・ 緑"), "part");
     assert!(d.contains("この 2 群は 色 の 3 値を過不足なく分割しています"), "{d}");
 
-    // 覆うが重なる。「分割」と言ってはいけない。
+    // Covers, but overlaps. It must not say "partition".
     let d = doc_of(&groups_rule("赤 ・ 緑", "青 ・ 緑"), "dup");
     assert!(!d.contains("過不足なく分割"), "重なっているのに分割だと言っている:\n{d}");
     assert!(d.contains("すべて覆いますが、緑 が二つ以上の群に属します"), "{d}");
 
-    // 覆いきらない。承認者が「緑 はどうなるのか」と問えるように名指しする。
+    // Does not cover everything. Name the gap so the approver can ask "what happens to 緑?".
     let d = doc_of(&groups_rule("赤", "青"), "gap");
     assert!(!d.contains("過不足なく分割"), "覆えていないのに分割だと言っている:\n{d}");
     assert!(d.contains("覆うのは 色 の 3 値のうち 2 値で、緑 はどの群にも属しません"), "{d}");
 
-    // 事実の出どころを名乗る（検査器が確かめたのか、描画が数えたのか）。
+    // State where the fact comes from (whether the checker verified it or the renderer counted it).
     assert!(d.contains("この描画が宣言から数えました"), "{d}");
 }
 
-/// 禁則: 検査器の出力に無い文章は書かない。表のセルは原本の字面のまま。
+/// Prohibition: never write prose that is not in the checker's output. Table cells keep the exact
+/// text of the source.
 #[test]
 fn 表のセルは原本に遡れる() {
     for rel in CORPUS {
         let src = std::fs::read_to_string(root().join(rel)).unwrap();
         let (c, out, e) = run(&["doc", rel]);
         assert_eq!(c, 0, "{rel}: {e}");
-        // 節ごとに区切り行を数える。`## 表` は「列 | 出どころ」が一つ目なので
-        // データ表は二つ目、`## 例` は一つしかないので一つ目。
+        // Count separator lines per section. Under `## 表` the "column | origin" table comes first,
+        // so the data table is the second one; `## 例` has only one, so it is the first.
         let mut want: Option<usize> = None;
         let mut seen = 0usize;
         let mut checked = 0;
@@ -111,7 +113,7 @@ fn 表のセルは原本に遡れる() {
                 continue;
             }
             let cells: Vec<&str> = l.trim_matches('|').split('|').map(|c| c.trim()).collect();
-            // 先頭は行番号なので飛ばす（例の表には無い）。
+            // Skip the first cell, the row number (the examples table has none).
             for cell in cells.iter().skip(1) {
                 if cell.is_empty() || cell.chars().all(|c| c.is_ascii_digit()) {
                     continue;
@@ -128,7 +130,7 @@ fn 表のセルは原本に遡れる() {
     }
 }
 
-/// §1.6: 壊れた規則の綺麗な描画は嘘になる。検査を通らなければ描かない。
+/// §1.6: a pretty rendering of a broken rule is a lie. If it fails the check, do not render.
 #[test]
 fn 検査を通らない規則は描かない() {
     let (c, out, e) = run(&["doc", "tests/mutants/m_e101.rule"]);
@@ -138,7 +140,8 @@ fn 検査を通らない規則は描かない() {
     assert!(!out.contains("# 規則"), "描画が始まってしまっている: {out}");
 }
 
-/// 古い描画が正の顔をして残るのが最大の危険（§1.6）。刻印で古さを検査できること。
+/// The greatest danger is a stale rendering that lingers looking authoritative (§1.6). The stamp
+/// must make staleness checkable.
 #[test]
 fn 原本の刻印が入る() {
     let rel = "tests/corpus/送料.rule";
@@ -149,7 +152,7 @@ fn 原本の刻印が入る() {
     assert!(first.contains("sha256:"), "原本のハッシュを刻む: {first}");
     assert!(first.contains("正本は .rule のほう"), "一方向であることを言う: {first}");
 
-    // 原本を一文字変えたら刻印が変わる。
+    // Changing one character of the source changes the stamp.
     let dir = std::env::temp_dir().join(format!("rulec-doc-stamp-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -164,7 +167,8 @@ fn 原本の刻印が入る() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 決定的であること。PR に貼るものが実行ごとに揺れると diff が読めない。
+/// Must be deterministic. If what gets pasted into a PR wobbled from run to run, the diff would be
+/// unreadable.
 #[test]
 fn 描画は決定的である() {
     for rel in CORPUS {
@@ -174,15 +178,15 @@ fn 描画は決定的である() {
     }
 }
 
-/// 承認者が知るべきことが落ちていないこと（§1.6 の一覧）。
+/// Nothing an approver needs to know is dropped (the list in §1.6).
 #[test]
 fn 承認者が知るべきことが載る() {
-    // W114 と番人の存在。
+    // W114 and the presence of the guard.
     let (_, d, _) = run(&["doc", "tests/corpus/クーポン併用.rule"]);
     assert!(d.contains("証明できていません**（W114）"), "{d}");
     assert!(d.contains("番人"), "番人の存在を言う: {d}");
 
-    // 遮蔽の三分類と、要確認の行対＋証人。
+    // The three shadowing classes, and the needs-confirmation row pair plus its witness.
     let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
     assert!(d.contains("**構造的** 2") && d.contains("**要確認** 1"), "{d}");
     assert!(d.contains("要確認: 同じ入力が 行1 と 行2"), "どの行対かを言う: {d}");
@@ -190,20 +194,21 @@ fn 承認者が知るべきことが載る() {
     assert!(d.contains("既定行"), "既定行を指す: {d}");
     assert!(d.contains("| 大口 | 定義 |"), "定義の式を出す: {d}");
 
-    // 表の依存。
+    // Table dependencies.
     let (_, d, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
     assert!(d.contains("→ 表 運賃表 の入力列"), "出力の行き先を言う: {d}");
-    assert!(d.contains("`契約のみ`"), "宣言意図を言う: {d}");
+    assert!(d.contains("`contract_only`"), "宣言意図を言う: {d}");
     assert!(d.contains("この 3 件は `rulec check` が参照評価器で実行し"), "例が検証済みだと言う: {d}");
 
-    // 既定扱い と 導出の範囲。
+    // default, and the range of a derivation.
     let (_, d, _) = run(&["doc", "tests/corpus/クーポン割引.rule"]);
-    assert!(d.contains("店内全商品（既定扱い）"), "{d}");
+    assert!(d.contains("店内全商品（default）"), "{d}");
     assert!(d.contains("E112"), "導出範囲が検査済みだと言う: {d}");
 
-    // 丸めの仮置きの出典が浮上すること（§7.2 の慣行、§16 第三への防波堤）。
+    // The origin of a provisionally placed rounding must surface (the §7.2 practice, a breakwater
+    // against the third danger in §16).
     let (_, d, _) = run(&["doc", "tests/corpus/クーポン一枚.rule"]);
-    assert!(d.contains("切り捨て(1円)"), "丸めを列に畳む: {d}");
+    assert!(d.contains("down(1円)"), "丸めを列に畳む: {d}");
 }
 
 #[test]
@@ -220,8 +225,8 @@ fn out_で書き出せる() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// README に貼った描画の抜粋が、実物と食い違わないこと。
-/// 手で書き写したものは腐る（生成コードの抜粋と同じ理屈）。
+/// The rendering excerpt pasted into the README must not diverge from the real thing.
+/// Hand-copied text rots (the same reasoning as for the generated-code excerpts).
 #[test]
 fn readmeの抜粋は実物と一致する() {
     let md = std::fs::read_to_string(root().join("README.md")).unwrap();
@@ -236,27 +241,28 @@ fn readmeの抜粋は実物と一致する() {
     }
 }
 
-/// §1.6 条件 (a): 畳んだ見出しにも門を。
-/// 見出しの畳み込みはセルの字面一致テストの対象外なので、そこが創作の入りうる
-/// 唯一の無防備な場所になる。**見出しに現れてよいのは宣言由来のトークンだけ**
-/// （出力名・型・単位・税区分・丸めのモードと格子）という組成で縛る。
+/// §1.6 condition (a): a gate for the folded headers too.
+/// Header folding is outside the cell text-match test, which makes it the only unguarded place
+/// where invention could creep in. Constrain it by composition: **only tokens that come from
+/// declarations may appear in a header** (output name, type, unit, tax class, rounding mode and
+/// grid).
 #[test]
 fn 畳んだ見出しは宣言由来のトークンだけでできている() {
     for rel in CORPUS {
-        // 型は正準形で描かれる（原本の `金額[円,税込]` は `金額[円, 税込]` になる）。
-        // 空白の有無は綴りの揺れなので、照合の前に落とす。落とすのは空白だけで、
-        // 語そのものは原本に在ることを求める。
+        // Types are rendered in canonical form (`money[円,incl_tax]` in the source becomes
+        // `money[円, incl_tax]`). Whitespace differences are spelling variation, so strip them before
+        // matching. Only whitespace is stripped; the words themselves must be in the source.
         let src: String =
             std::fs::read_to_string(root().join(rel)).unwrap().chars().filter(|c| !c.is_whitespace()).collect();
         let (c, out, e) = run(&["doc", rel]);
         assert_eq!(c, 0, "{rel}: {e}");
         let mut n = 0;
-        // データ表の見出し行だけ（`| 列 | 出どころ |` の表は別物）。
+        // Only the header rows of data tables (the `| 列 | 出どころ |` table is a different thing).
         for l in out.lines().filter(|l| l.starts_with("| # |")) {
             for cell in l.trim_matches('|').split('|').map(|x| x.trim()) {
                 let Some(body) = cell.strip_prefix("→ ") else { continue };
                 n += 1;
-                // 名前（括弧の前）と、括弧の中を `/` で割ったもの。
+                // The name (before the parenthesis), and the parenthesized part split on `/`.
                 let (name, rest) = match body.split_once('（') {
                     Some((a, b)) => (a.trim(), b.trim_end_matches('）')),
                     None => (body, ""),
@@ -270,7 +276,8 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
                     if tok.is_empty() {
                         continue;
                     }
-                    // 丸めは `モード(格子)`。モードと格子をそれぞれ原本に照合する。
+                    // Rounding is `mode(grid)`. Match the mode and the grid against the source
+                    // separately.
                     let parts: Vec<&str> = match tok.split_once('(') {
                         Some((m, g)) => vec![m, g.trim_end_matches(')')],
                         None => vec![tok],
@@ -288,22 +295,23 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
     }
 }
 
-/// §1.6 条件 (b): `以外: 群` は展開しないが、件数は添える。
-/// 41 県の羅列は目視の確認に耐えないので展開しないのが正しいが、「補集合です」
-/// だけでは承認者の一次の問い（規模感が妥当か）に答えられない。
+/// §1.6 condition (b): `not: 群` is not expanded, but the count is attached.
+/// A list of 41 prefectures does not survive visual inspection, so not expanding is right, but
+/// "it is the complement" alone cannot answer the approver's first question (is the scale
+/// plausible?).
 #[test]
 fn 以外の群には件数を添える() {
-    // 送料 の 基本送料 は `以外: 遠隔地` を使う。遠隔地 は 2 値なので残りは 45。
+    // 基本送料 in 送料 uses `not: 遠隔地`. 遠隔地 has 2 values, so 45 remain.
     let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
     assert!(
-        d.contains("**遠隔地**（2 値、`以外: 遠隔地` は残り 45 値）"),
+        d.contains("**遠隔地**（2 値、`not: 遠隔地` は残り 45 値）"),
         "補集合の件数が無い:\n{d}"
     );
     assert!(!d.contains("北海道 ・ 沖縄県、青森県"), "41 県を展開してしまっている");
 
-    // ゆうパック運賃 の 運賃表 は群を並べるだけで `以外:` を使わない。
-    // 使っていない形の規模感を出しても雑音なので、補集合は書かない。
+    // 運賃表 in ゆうパック運賃 only lists groups and never uses `not:`.
+    // Giving the scale of a form that is not used would be noise, so no complement is written.
     let (_, d, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
     assert!(d.contains("**近畿圏**（6 値）"), "群の値数は出す:\n{d}");
-    assert!(!d.contains("`以外: 近畿圏` は残り"), "使っていない形の件数を出している");
+    assert!(!d.contains("`not: 近畿圏` は残り"), "使っていない形の件数を出している");
 }
