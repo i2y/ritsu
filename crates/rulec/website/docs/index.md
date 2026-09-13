@@ -71,17 +71,21 @@ engine, no configuration, no dependency beyond the standard library.
 
 ## A person, an agent, and the tool
 
-The agent writes the table. rulec proves it and hands back **what to fix,
-with an input that shows the problem**. Only **what the tool cannot
-decide** reaches a person — the amounts and the rounding directions, which
-is to say the business decisions and nothing else.
+The **in / out** rows inside each box are what that actor takes and what it
+gives; each arrow is labelled with **the thing that moves** rather than with
+a verb. The `rulec check` and `rulec gen` above two of them are the commands
+that cause them — rulec never acts on its own, the agent runs it.
 
 ![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved Python and Go, and the impact known before you deploy](images/flow.svg#only-dark)
 
 ![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved Python and Go, and the impact known before you deploy](images/flow-light.svg#only-light)
 
-**Arrow ③ is the one that matters.** Most tools pass "could not tell" off
-as a pass, or fill it with a plausible default. rulec stops there and
+① → ② → ④ is the **loop**: the agent fixes what the diagnosis names and
+goes back to ①, over and over until it is green. A person is pulled in
+only at ③.
+
+And **arrow ③ is the one that matters.** Most tools pass "could not tell"
+off as a pass, or fill it with a plausible default. rulec stops there and
 hands a person one concrete input — *"what is the fee to 山梨県 at size
 S60?"* Phrased that way, the question comes back answered in one round
 trip.

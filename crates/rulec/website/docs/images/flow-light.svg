@@ -1,46 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" width="1000" height="500" role="img" aria-label="Who does what: the agent writes the table, rulec proves it and hands back what to fix with a witness, and only what cannot be decided goes to a person. Out come proved Python and Go, and the impact known before you deploy." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" role="img" aria-label="The agent reads documents and writes the table, then runs rulec check. rulec returns the diagnosis — where, how to fix it, and an input that shows the problem. What the tool cannot decide goes to a person as a question with a concrete case; the person decides only amounts and rounding. Once the table passes, rulec gen emits Python and Go with no dependencies." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9aa3ba"/></marker><marker id="headA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#3d55d4"/></marker></defs>
-<rect x="24" y="72" width="146" height="92" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
-<text x="97.0" y="105" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">Policy documents</text>
-<text x="97.0" y="124" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">Spreadsheets</text>
-<text x="97.0" y="143" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">Legacy code</text>
-<rect x="256" y="72" width="200" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
-<text x="356.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Agent</text>
-<text x="356.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">reads them, writes the table</text>
-<text x="356.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">fixes what is reported</text>
-<rect x="542" y="72" width="200" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
-<text x="642.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
-<text x="642.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">gaps, overlaps, dead rows,</text>
-<text x="642.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">units, rounding, overflow,</text>
-<text x="642.0" y="158" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">examples — proves them</text>
-<rect x="828" y="72" width="148" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
-<text x="902.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Python &amp; Go</text>
-<text x="902.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">plain functions,</text>
-<text x="902.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">zero dependencies</text>
-<rect x="560" y="268" width="240" height="84" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
-<text x="680.0" y="298" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Person</text>
-<text x="680.0" y="320" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">decides amounts and rounding</text>
-<text x="680.0" y="337" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">approves the table</text>
-<line x1="176" y1="118" x2="250" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="213.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">read</text>
-<line x1="462" y1="118" x2="536" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="499.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">① check</text>
-<line x1="748" y1="118" x2="822" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="785.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">⑤ generate</text>
-<path d="M 592 164 V 214 H 352 V 170" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="472.0" y="205" font-size="11.5" font-weight="400" text-anchor="middle" fill="#3d55d4">② what to fix, with an example</text>
-<path d="M 692 164 V 262" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="706" y="220.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#3d55d4">③ what the tool cannot decide</text>
-<path d="M 560 310 H 308 V 170" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="434.0" y="301" font-size="11.5" font-weight="400" text-anchor="middle" fill="#3d55d4">④ the answer (amount, rounding)</text>
-<text x="24" y="380" font-size="12" font-weight="400" text-anchor="start" fill="#5b6478">What you end up with</text>
-<rect x="24" y="392" width="952" height="84" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
-<text x="182.66666666666666" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">A table with no gaps</text>
-<text x="182.66666666666666" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">and no contradictions</text>
-<text x="500.0" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">Proved Python and Go</text>
-<text x="500.0" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">zero deps, same answer in both</text>
-<line x1="341.3333333333333" y1="408" x2="341.3333333333333" y2="460" stroke="#e2e6f2" stroke-width="1"/>
-<text x="817.3333333333333" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">The impact, before you deploy</text>
-<text x="817.3333333333333" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">how many change, and by how much</text>
-<line x1="658.6666666666666" y1="408" x2="658.6666666666666" y2="460" stroke="#e2e6f2" stroke-width="1"/>
+<rect x="24" y="64" width="126" height="132" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
+<text x="87.0" y="116" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">Policy documents</text>
+<text x="87.0" y="131" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">Spreadsheets</text>
+<text x="87.0" y="146" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">Legacy code</text>
+<rect x="238" y="64" width="210" height="132" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="343.0" y="91" font-size="16.5" font-weight="700" text-anchor="middle" fill="#10131a">Agent</text>
+<text x="343.0" y="111" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">reads, writes, fixes</text>
+<line x1="252" y1="124" x2="434" y2="124" stroke="#e6e9f3" stroke-width="1"/>
+<text x="252" y="144" font-size="10.5" text-anchor="start" fill="#3d55d4">in<tspan dx="7" font-size="11" fill="#5b6478">docs, diagnosis, answers</tspan></text>
+<text x="252" y="165" font-size="10.5" text-anchor="start" fill="#3d55d4">out<tspan dx="7" font-size="11" fill="#5b6478">the table (.rule)</tspan></text>
+<rect x="536" y="64" width="210" height="132" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="641.0" y="91" font-size="16.5" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="641.0" y="111" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">proves the seven</text>
+<line x1="550" y1="124" x2="732" y2="124" stroke="#e6e9f3" stroke-width="1"/>
+<text x="550" y="144" font-size="10.5" text-anchor="start" fill="#3d55d4">in<tspan dx="7" font-size="11" fill="#5b6478">the table (.rule)</tspan></text>
+<text x="550" y="165" font-size="10.5" text-anchor="start" fill="#3d55d4">out<tspan dx="7" font-size="11" fill="#5b6478">diagnosis, code</tspan></text>
+<rect x="550" y="300" width="240" height="132" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="670.0" y="327" font-size="16.5" font-weight="700" text-anchor="middle" fill="#10131a">Person</text>
+<text x="670.0" y="347" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">only business decisions</text>
+<line x1="564" y1="360" x2="776" y2="360" stroke="#e6e9f3" stroke-width="1"/>
+<text x="564" y="380" font-size="10.5" text-anchor="start" fill="#3d55d4">in<tspan dx="7" font-size="11" fill="#5b6478">a concrete question</tspan></text>
+<text x="564" y="401" font-size="10.5" text-anchor="start" fill="#3d55d4">out<tspan dx="7" font-size="11" fill="#5b6478">the answer, approval</tspan></text>
+<rect x="834" y="64" width="142" height="132" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="905.0" y="112" font-size="15" font-weight="700" text-anchor="middle" fill="#10131a">Python &amp; Go</text>
+<text x="905.0" y="136" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">plain functions</text>
+<text x="905.0" y="151" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">zero dependencies</text>
+<text x="905.0" y="166" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">same answer in both</text>
+<line x1="156" y1="130" x2="232" y2="130" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="194.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">read</text>
+<line x1="454" y1="130" x2="530" y2="130" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="492.0" y="104" font-size="10" font-weight="400" text-anchor="middle" fill="#404a60" font-family='ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'>rulec check</text>
+<text x="492.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">① the table</text>
+<line x1="752" y1="130" x2="828" y2="130" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="790.0" y="104" font-size="10" font-weight="400" text-anchor="middle" fill="#404a60" font-family='ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'>rulec gen</text>
+<text x="790.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">⑤ the code</text>
+<path d="M 580 196 V 242 H 340 V 202" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="460.0" y="218" font-size="11" font-weight="400" text-anchor="middle" fill="#3d55d4">② the diagnosis — where, how to fix,</text>
+<text x="460.0" y="233" font-size="11" font-weight="400" text-anchor="middle" fill="#3d55d4">an input that shows it → fix, then ①</text>
+<path d="M 680 196 V 294" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="694" y="230" font-size="11" font-weight="400" text-anchor="start" fill="#3d55d4">③ what the tool cannot decide</text>
+<text x="694" y="245" font-size="11" font-weight="400" text-anchor="start" fill="#3d55d4">= a question with a real case</text>
+<path d="M 550 366 H 300 V 202" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="425.0" y="342" font-size="11" font-weight="400" text-anchor="middle" fill="#3d55d4">④ the answer (amount, rounding)</text>
+<text x="425.0" y="357" font-size="11" font-weight="400" text-anchor="middle" fill="#3d55d4">→ into the table, then ①</text>
+<text x="24" y="470" font-size="12" font-weight="400" text-anchor="start" fill="#5b6478">What you have when the loop ends</text>
+<rect x="24" y="482" width="952" height="88" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
+<text x="182.66666666666666" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">A table with no gaps</text>
+<text x="182.66666666666666" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#5b6478">in a shape a person can approve</text>
+<text x="500.0" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">Proved Python and Go</text>
+<text x="500.0" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#5b6478">zero deps, same answer in both</text>
+<line x1="341.3333333333333" y1="500" x2="341.3333333333333" y2="552" stroke="#e2e6f2" stroke-width="1"/>
+<text x="817.3333333333333" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">The impact, before you deploy</text>
+<text x="817.3333333333333" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#5b6478">how many change, and by how much</text>
+<line x1="658.6666666666666" y1="500" x2="658.6666666666666" y2="552" stroke="#e2e6f2" stroke-width="1"/>
 </svg>
