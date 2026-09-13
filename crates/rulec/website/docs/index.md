@@ -69,6 +69,74 @@ engine, no configuration, no dependency beyond the standard library.
 
 ---
 
+## What kind of rule is this language for
+
+rulec is aimed at decisions where **money moves, the source of truth is a document
+outside the code, the rule is revised on a date, and a person signs it off**.
+
+- **Tariffs and shipping fees** — an amount decided by a combination of destination,
+  size and weight
+- **Discounts and coupons** — whether one applies, how much it takes off, which of two
+  is applied first
+- **Rates and charges** — a percentage that changes with membership tier, payment
+  method or contract type
+- **Eligibility and classification** — may this be returned, which period does this date
+  fall in, which band does this land in
+
+All seven rules in the corpus are of that kind, transcribed from Japan Post's tariff
+table, Yamato's size bands and Rakuten's and Yahoo's coupon terms. Their inputs are one
+to ten flat values; their outputs are one of four things — **an amount, a yes/no, a
+class, an order** — and every one of them decides a single transaction in a single shot.
+
+### Why those four
+
+Because five properties hold at once, and every feature of the tool is paid for by one
+of them.
+
+| the property | what the tool spends on it |
+|---|---|
+| **Money moves** | units (円 / g / cm) and the tax flag (incl./excl.) are part of the type, and a numeric output that declares no `round` does not compile. When one is missing, the message shows the gap **in yen** — "the rounding mode moves this by up to 9 yen" — before it asks |
+| **The source is outside** | the work is not designing something from nothing, it is **transcribing** a tariff or a set of terms. That is why the first thing the tool is worth is "the gap shows up the moment you transcribe it", and why `doc` writes no sentence that does not trace back to the source or to a check |
+| **Conditions interlock** | destination × size × weight, kind × period × tier. It does not fit in one `if`, and no one can confirm by eye that the combinations are covered. Hence a decision table, and hence a completeness check that means something |
+| **It is revised on a date** | a tariff revision, a campaign window, a change of terms. Hence versions (`送料@v3`), hence `--diff-base` showing only what is newly reported, hence `diff` putting a number on the impact using real past records |
+| **The writer is not the decider** | the amount and the rounding direction are business decisions. Hence `doc`, and hence a checker that turns what it cannot decide into a question with a real case in it |
+
+### What the language is trying to be
+
+**One file doing three jobs.** The same `.rule` is the **specification** a person
+approves, the **subject** the checker proves things about, and the **source** the
+generated code comes from. The moment those become three files, one of them rots — and
+it is almost always the specification.
+
+### Does your rule fit
+
+If all five are **yes**, it fits.
+
+1. Is the **number of inputs fixed** (not a list of variable length)?
+2. Are the inputs **flat values** (you can pass the prefecture itself, not
+   `order.destination.prefecture`)?
+3. Is it **one decision** (iteration and ordering can live in the caller)?
+4. Does the **same input always give the same answer** ("today" and the stock level are
+   arguments too)?
+5. Does **a person approve** the answer, or is the rule **revised on a date**?
+
+If any of 1–4 is no, it does not fit structurally. If only 5 is no, it will work, but
+the tool is more than you need.
+
+### What it is not for
+
+- **Workflows** — several steps, carrying state
+- **Judgements about a collection** — "any line item is refrigerated", "three or more
+  items in the cart". Flatten those at the boundary and pass the scalar in
+- **Pattern matching on strings** — `string` has equality and set membership, no prefix
+  match and no regular expressions
+- **Scoring, optimisation, machine learning** — what can be proved here is which row
+  fires, not whether a weight is right
+- **Proration** — it has not once come up in a transcription, so whether this choice of
+  granularity survives it is **untested** (DESIGN §15-7)
+
+---
+
 ## A person, an agent, and the tool
 
 There are two kinds of shape and nothing else. A **sheet** with a folded
