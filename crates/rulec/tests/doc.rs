@@ -153,7 +153,7 @@ fn もとの規則の刻印が入る() {
     assert!(first.contains(rel), "もとの規則のパスを刻む: {first}");
     assert!(first.contains(&format!("rulec {}", env!("CARGO_PKG_VERSION"))), "道具の版を刻む: {first}");
     assert!(first.contains("sha256:"), "もとの規則のハッシュを刻む: {first}");
-    assert!(first.contains("正本は .rule のほう"), "一方向であることを言う: {first}");
+    assert!(first.contains("本物は .rule のほう"), "一方向であることを言う: {first}");
 
     // Changing one character of the source changes the stamp.
     let dir = std::env::temp_dir().join(format!("rulec-doc-stamp-{}", std::process::id()));

@@ -1095,7 +1095,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .at(at(head_span.line))
                     .table(tname.clone())
                     .wit(pairs_to_witness(reg.witness_pairs(&hole)))
-                    .mark(head_span.clone(), tr!("入力空間を覆いきっていません", "the input space is not fully covered"))
+                    .mark(head_span.clone(), tr!("起こりうる入力を覆いきっていません", "the input space is not fully covered"))
                     .note(tr!("当たらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
                     .note(tr!("ヒント: この入力に当たる行を足してください。", "hint: add a row that matches this input."));
                 // The rewritten form (§11 principle 3) as data: the row's input cells are the

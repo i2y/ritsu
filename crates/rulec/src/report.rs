@@ -344,7 +344,7 @@ fn provenance(rep: &Report) -> Vec<String> {
         let by: Vec<String> =
             rep.filled.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
         o.push(tr!(
-            "補完系 {} 件（{}）。一致 {} 件。見出しの一致率には入れていません",
+            "補った記録 {} 件（{}）。一致 {} 件。見出しの一致率には入れていません",
             "Filled records: {} ({}); matched {}. Not included in the headline match rate",
             rep.filled_total,
             by.join(if crate::i18n::ja() { "、" } else { ", " }),
@@ -430,7 +430,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
     );
     o.push_str("| | |\n|---|---:|\n");
     o.push_str(&tr!(
-        "| 照合（実測系） | {} 件 |\n",
+        "| 照合（そのままの記録） | {} 件 |\n",
         "| Compared (observed records) | {} |\n",
         rep.total - rep.errored
     ));

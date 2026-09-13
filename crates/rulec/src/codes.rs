@@ -404,7 +404,7 @@ pub fn ledger() -> Vec<Entry> {
             "E101",
             tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "表の行の和が、宣言した入力空間を覆いきっていないとき。完全性は宣言で外せず、常に必須です（§4）。当たらない入力の具体例が必ず付きます。",
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です（§4）。当たらない入力の具体例が必ず付きます。",
                 "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required (§4). A concrete input that matches no row is always attached."
             ),
             tr!(
@@ -601,7 +601,7 @@ pub fn ledger() -> Vec<Entry> {
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
             tr!(
-                "`policy first` の表で、部分交差していて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです（§4）。",
+                "`policy first` の表で、一部だけ重なっていて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです（§4）。",
                 "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed (§4)."
             ),
             tr!(
@@ -629,7 +629,7 @@ pub fn ledger() -> Vec<Entry> {
             "W111",
             tr!("使われていない宣言があります", "A declaration is never used"),
             tr!(
-                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れの徴候であることも、正当な契約であることもあります。取込した型の値は対象外です。",
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。取込した型の値は対象外です。",
                 "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way."
             ),
             tr!(

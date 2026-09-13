@@ -354,7 +354,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
 /// The report of `rulec fixtures lint`.
 pub fn render_lint(l: &Load, path: &str) -> String {
     let mut o = tr!(
-        "{path}: 記録 {} 件（実測系 {}、補完系 {}）\n",
+        "{path}: 記録 {} 件（そのまま {}、補った分 {}）\n",
         "{path}: {} records ({} observed, {} filled)\n",
         l.records.len(),
         l.measured(),

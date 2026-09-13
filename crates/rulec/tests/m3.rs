@@ -129,7 +129,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
 /// secondary tally. And **the report itself records the defaults used and the fill count per
 /// field**.
 #[test]
-fn 補完系は分けて数え_使った既定値を刻む() {
+fn 補った記録は分けて数え_使った既定値を書き残す() {
     let dir = setup("fill");
     let mut lines: Vec<String> =
         std::fs::read_to_string(dir.join("fx.jsonl")).unwrap().lines().map(String::from).collect();
@@ -145,7 +145,7 @@ fn 補完系は分けて数え_使った既定値を刻む() {
 
     // Without a default value, a record with a missing field is excluded entirely.
     let (_, plain, _) = rulec(&["replay", RULE, "--fixtures", fx]);
-    assert!(plain.contains(&format!("照合 {base} 件")), "実測系だけを数える: {plain}");
+    assert!(plain.contains(&format!("照合 {base} 件")), "そのままの記録だけを数える: {plain}");
     assert!(plain.contains("欄が欠けていて既定値も無い記録を 4 件外しました"), "{plain}");
 
     // Filling through the manifest counts them separately as the filled-in series, and the default
@@ -155,7 +155,7 @@ fn 補完系は分けて数え_使った既定値を刻む() {
     let (_, filled, _) =
         rulec(&["replay", RULE, "--fixtures", fx, "--manifest", m.to_str().unwrap()]);
     assert!(filled.contains(&format!("照合 {base} 件")), "補完を見出しに混ぜている: {filled}");
-    assert!(filled.contains("補完系 4 件（重量 4 件）"), "欄ごとの件数を刻む: {filled}");
+    assert!(filled.contains("補った記録 4 件（重量 4 件）"), "欄ごとの件数を刻む: {filled}");
     assert!(filled.contains("使った既定値: 重量 = 1000"), "既定値を刻む: {filled}");
 
     // --fill is a temporary override for sensitivity analysis. It applies after the manifest.
@@ -310,7 +310,7 @@ fn markdownで貼れる形が出る() {
         "markdown",
     ]);
     assert!(out.starts_with("### 規則 ゆうパック運賃 v1 — 版の差分"), "{out}");
-    assert!(out.contains("| 照合（実測系） |"), "{out}");
+    assert!(out.contains("| 照合（そのままの記録） |"), "{out}");
     assert!(out.contains("#### 不一致の内訳"), "{out}");
     // The table must not break at cell separators.
     for l in out.lines().filter(|l| l.starts_with("| 表 ")) {

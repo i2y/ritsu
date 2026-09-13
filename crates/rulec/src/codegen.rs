@@ -789,7 +789,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "{indent}// {guard}: {}\n",
                 tr!(
-                    "W114（表 {name} 行{} × 行{}）。排他を静的に証明できなかった行対",
+                    "W114（表 {name} 行{} × 行{}）。重ならないことを静的に証明できなかった行の対",
                     "W114 (table {name}, row {} × row {}): a pair of rows whose exclusivity could not be proven statically",
                     i + 1,
                     j + 1
