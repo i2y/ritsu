@@ -479,6 +479,35 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if let Some(s) = c.syms.get(&r.name).cloned() {
             c.check_same(&s.ty, &got, &r.span, path, &tr!("結果", "result"));
         }
+        // E015: `result` is sugar for the first output and nothing else — the evaluator and
+        // the generated code both apply it there. Naming a later output used to type-check
+        // against that output while the value went to the first one, so a `number` landed in
+        // a `money` slot without a word (§15.16).
+        if let Some(first) = f.outputs.first() {
+            if first.name.text != r.name {
+                c.diags.push(
+                    Diag::error(
+                        "E015",
+                        tr!(
+                            "`result` が書けるのは最初の出力 {} だけです",
+                            "`result` can only assemble the first output, {}",
+                            first.name.text
+                        ),
+                    )
+                    .at(tr!("{path}:{} 結果", "{path}:{} result", r.span.line))
+                    .mark(r.span.clone(), tr!("{} は最初の出力ではありません", "{} is not the first output", r.name))
+                    .note(tr!(
+                        "二つ目以降の出力は、同じ名前の `define` から取ります: `define {}(…) : … = …`。",
+                        "The second and later outputs are taken from a `define` of the same name: `define {}(…) : … = …`.",
+                        r.name
+                    ))
+                    .note(tr!(
+                        "この出力を `result` で組み立てたいなら、`outputs` の先頭へ移してください。",
+                        "To assemble this output with `result`, move it to the top of `outputs`."
+                    )),
+                );
+            }
+        }
     }
 
     // §11 W111: declarations nothing names. `contract_only` silences a range-guard-only input.
@@ -791,13 +820,35 @@ impl Checked {
 
         // Output columns enter scope for later tables and for `result`.
         let mut out_ty: Vec<Ty> = Vec::new();
-        for oc in &t.outputs {
+        for (oi, oc) in t.outputs.iter().enumerate() {
             let ty = match &oc.ty {
                 Some(tr) => self.resolve(tr),
                 None => self.syms.get(&oc.name.text).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown),
             };
             out_ty.push(ty.clone());
             if t.name.is_some() {
+                // A column's storage scale, which is fixed by what its cells hold: the
+                // coarsest grid every literal sits on, and the scale of anything a cell
+                // names. Without this a later `define` that multiplies by a rate column
+                // read that rate as if it were whole units, and the generated code came
+                // back a factor of the rate's step too large (§15.16).
+                if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+                    let mut sc: i128 = 1;
+                    for row in &t.rows {
+                        match row.outs.get(oi) {
+                            Some(OutCell::Lit(Lit::Num(n))) => {
+                                if let Some(v) = lit_value_in_pub(n, &ty) {
+                                    sc = lcm_i128(sc, v.den);
+                                }
+                            }
+                            Some(OutCell::Name(w)) => {
+                                sc = lcm_i128(sc, *self.scales.get(w).unwrap_or(&1));
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.scales.insert(oc.name.text.clone(), sc);
+                }
                 self.syms.insert(
                     oc.name.text.clone(),
                     Sym { ty, span: oc.name.span.clone(), kind: SymKind::TableOut, contract_only: false },
@@ -1043,6 +1094,19 @@ pub fn lit_ty_pub(n: &crate::lex::Num) -> Ty {
 }
 
 /// Entry point so that `region` uses the same conversion.
+/// Least common multiple, on the scales of §7.1 (all positive).
+pub fn lcm_i128(a: i128, b: i128) -> i128 {
+    fn gcd(mut a: i128, mut b: i128) -> i128 {
+        while b != 0 {
+            let t = a % b;
+            a = b;
+            b = t;
+        }
+        a.max(1)
+    }
+    a / gcd(a, b) * b
+}
+
 pub fn lit_value_in_pub(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     lit_value_in(n, want)
 }

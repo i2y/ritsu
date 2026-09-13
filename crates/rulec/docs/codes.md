@@ -20,6 +20,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E012](#e012) | error | The name is not declared |
 | [E013](#e013) | error | No such import |
 | [E014](#e014) | error | An output cell cannot hold an expression |
+| [E015](#e015) | error | `result` can only assemble the first output |
+| [E016](#e016) | error | There can be only one `result` |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -347,6 +349,66 @@ policy first
 ```
 
 Related codes: [E008](#e008), [E012](#e012)
+
+## E015
+
+`error` — **`result` can only assemble the first output**
+
+**When.** A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103.
+
+**Fix.** Write a `define` of the same name as that output (`define 付与点(pts) : number = 基本点 × 倍率`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`.
+
+**Smallest reproduction**:
+
+```
+rule t(t) v1
+
+inputs
+  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+
+outputs
+  a(a) : money[円, incl_tax]  round down(1円)
+  b(b) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| p | -> a(a) : money[円, incl_tax] |
+| - | 100円 |
+
+result b = p
+```
+
+Related codes: [E016](#e016), [E103](#e103)
+
+## E016
+
+`error` — **There can be only one `result`**
+
+**When.** A file has more than one `result` line. Only the first output can be assembled, so a second `result` merely replaces the first — which it used to do in silence.
+
+**Fix.** Keep one. The other outputs are taken from a `define` of the same name as the output.
+
+**Smallest reproduction**:
+
+```
+rule t(t) v1
+
+inputs
+  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+
+outputs
+  a(a) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| p | -> a(a) : money[円, incl_tax] |
+| - | 100円 |
+
+result a = p
+result a = p + 100円
+```
+
+Related codes: [E015](#e015)
 
 ## E101
 

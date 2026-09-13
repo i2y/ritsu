@@ -75,7 +75,6 @@ pub struct Gen<'a> {
     /// least common multiple of the denominators of that column's literals. Unless it is fixed
     /// once per column, 50% and 100% in the same column would come out at different scales and
     /// the values would be corrupted.
-    col_scales: BTreeMap<String, i128>,
     /// Declared name → the identifier the generated code uses for it (§1.3).
     idents: BTreeMap<String, String>,
     /// Type name → the ASCII alias of that enum (PascalCase).
@@ -100,33 +99,6 @@ impl<'a> Gen<'a> {
             enum_names.insert("都道府県".into(), "Prefecture".into());
             for (j, r) in crate::prelude::PREFECTURES {
                 value_names.insert((*j).into(), ("Prefecture".into(), (*r).into()));
-            }
-        }
-        let mut col_scales: BTreeMap<String, i128> = BTreeMap::new();
-        for it in &f.items {
-            let Item::Table(t) = it else { continue };
-            for (oi, oc) in t.outputs.iter().enumerate() {
-                let ty = c.ty_of(&oc.name.text).unwrap_or(Ty::Unknown);
-                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
-                    continue;
-                }
-                let mut sc: i128 = 1;
-                for row in &t.rows {
-                    match row.outs.get(oi) {
-                        Some(OutCell::Lit(Lit::Num(n))) => {
-                            if let Some(v) = crate::types::lit_value_in_pub(n, &ty) {
-                                sc = lcm(sc, v.den);
-                            }
-                        }
-                        // A cell that names a value writes that value's scale into the
-                        // column. Sizing the column only by its literals is how a rate-valued
-                        // definition ended up assigned into a column a hundred times coarser
-                        // than itself, and silently multiplied.
-                        Some(OutCell::Name(w)) => sc = lcm(sc, *c.scales.get(w).unwrap_or(&1)),
-                        _ => {}
-                    }
-                }
-                col_scales.insert(oc.name.text.clone(), sc);
             }
         }
         let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
@@ -159,7 +131,7 @@ impl<'a> Gen<'a> {
                 idents.insert(n.text.clone(), pub_name(n));
             }
         }
-        Gen { f, c, w114, col_scales, enum_names, value_names, idents, src_hash: hash(src) }
+        Gen { f, c, w114, enum_names, value_names, idents, src_hash: hash(src) }
     }
 
     fn ty_of(&self, n: &str) -> Ty {
@@ -188,9 +160,6 @@ impl<'a> Gen<'a> {
 
     /// Storage scale of a value (values are held as multiples of 1/k; this is that k). §7.1.
     fn scale(&self, n: &str) -> i128 {
-        if let Some(s) = self.col_scales.get(n) {
-            return *s;
-        }
         *self.c.scales.get(n).unwrap_or(&1)
     }
 
@@ -333,6 +302,17 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+}
+
+/// The name of the intermediate that holds one output's value before rounding. One output
+/// keeps the plain `raw` of the example in §8.2; a second needs a name of its own, or the
+/// two assignments would land on the same variable.
+fn raw_base(oi: usize) -> String {
+    if oi == 0 {
+        "raw".into()
+    } else {
+        format!("raw{}", oi + 1)
     }
 }
 
@@ -673,52 +653,49 @@ impl<'a> Gen<'a> {
             }
         }
 
-        // The result and the final rounding.
-        let out_name = &outs[0].name.text;
-        let res = match &self.f.result {
-            Some(r) => self.expr(&r.expr, &local),
-            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
-        };
-        let os = self.out_scale(out_name);
-        let text = match &outs[0].rounding {
-            Some(rd) => {
-                let ty = self.ty_of(out_name);
-                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
-                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                let grid_i = g.num * res.scale / g.den;
-                // Bind the expression to an intermediate instead of nesting it (the same shape as
-                // the example in §8.2). Criterion 1 demands readability, and deep nesting breaks
-                // the visual correspondence with the generated code.
-                if res.scale != os {
-                    let raw = self.temp("raw");
-                    o.push_str(&format!(
-                        "    {raw} = {}  # {}\n",
-                        unparen(&res.text),
-                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
-                    ));
-                    format!("_round_{}({raw}, {}) // {}", mode_fn(m), grid_i, res.scale / os)
-                } else {
-                    format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
-                }
-            }
-            None => res.text.clone(),
-        };
-        if outs.len() == 1 {
-            o.push_str(&format!("    return {text}\n"));
-        } else {
-            // Each output gets its own rounding, applied exactly once (§7.2).
-            let fields: Vec<String> = outs
-                .iter()
-                .map(|od| {
-                    let n = &od.name.text;
-                    let Some(rd) = &od.rounding else { return local(n) };
-                    let ty = self.ty_of(n);
+        // Every output takes the same three steps: its source — the `result` expression for
+        // the first output, the binding of its own name otherwise — brought to the wire
+        // scale, then its declared rounding applied exactly once. The one-output and the
+        // many-output returns each used to compute this, and the second copy had neither
+        // step: a `result` was dropped from any rule with two outputs, and a value held in
+        // hundredths came back a hundred times too large (§15.16).
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            finals.push(match &od.rounding {
+                Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                    format!("_round_{}({}, {})", mode_fn(m), local(n), g.num * self.scale(n) / g.den)
-                })
-                .collect();
-            o.push_str(&format!("    return Output({})\n", fields.join(", ")));
+                    let grid_i = g.num * res.scale / g.den;
+                    // Bind the expression to an intermediate instead of nesting it (the same shape as
+                    // the example in §8.2). Criterion 1 demands readability, and deep nesting breaks
+                    // the visual correspondence with the generated code.
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            "    {raw} = {}  # {}\n",
+                            unparen(&res.text),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("_round_{}({raw}, {}) // {}", mode_fn(m), grid_i, res.scale / os)
+                    } else {
+                        format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
+                    }
+                }
+                None => res.text.clone(),
+            });
+        }
+        if outs.len() == 1 {
+            o.push_str(&format!("    return {}\n", finals[0]));
+        } else {
+            // Multiple outputs are a NamedTuple (§8.5); each carries its own rounding.
+            o.push_str(&format!("    return Output({})\n", finals.join(", ")));
         }
         o
     }
@@ -1206,60 +1183,51 @@ impl<'a> Gen<'a> {
             }
         }
 
-        let out_name = &outs[0].name.text;
-        let res = match &self.f.result {
-            Some(r) => self.expr(&r.expr, &local),
-            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
-        };
-        let os = self.out_scale(out_name);
-        let text = match &outs[0].rounding {
-            Some(rd) => {
-                let ty = self.ty_of(out_name);
-                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
-                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                let grid_i = g.num * res.scale / g.den;
-                if res.scale != os {
-                    let raw = self.temp("raw");
-                    o.push_str(&format!(
-                        // The cast needs its own parentheses: an expression that begins with
-                        // a call rather than a `(` glued itself to the type name.
-                        "\t{raw} := int64({}){CELL}// {}\n",
-                        go_expr(&res.text),
-                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
-                    ));
-                    format!("round{}({raw}, {}) / {}", pascal(mode_fn(m)), grid_i, res.scale / os)
-                } else {
-                    format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i)
+        // Every output takes the same three steps: its source — the `result` expression for
+        // the first output, the binding of its own name otherwise — brought to the wire
+        // scale, then its declared rounding applied exactly once (§15.16).
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            finals.push(match &od.rounding {
+                Some(rd) => {
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    let grid_i = g.num * res.scale / g.den;
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            // The cast needs its own parentheses: an expression that begins with
+                            // a call rather than a `(` glued itself to the type name.
+                            "\t{raw} := int64({}){CELL}// {}\n",
+                            go_expr(&res.text),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("round{}({raw}, {}) / {}", pascal(mode_fn(m)), grid_i, res.scale / os)
+                    } else {
+                        format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i)
+                    }
                 }
-            }
-            // Only a number needs the widening cast; `int64(可否)` does not compile.
-            None if !self.ty_of(out_name).is_numeric() => go_expr(&res.text),
-            None => format!("int64({})", go_expr(&res.text)),
-        };
+                // Only a number needs the widening cast; `int64(可否)` does not compile.
+                None if !ty.is_numeric() => go_expr(&res.text),
+                None => format!("int64({})", go_expr(&res.text)),
+            });
+        }
         if outs.len() == 1 {
-            o.push_str(&format!("\treturn {ret}({text}), nil\n}}\n"));
+            o.push_str(&format!("\treturn {ret}({}), nil\n}}\n", finals[0]));
         } else {
             // Each output gets its own rounding, applied exactly once (§7.2).
             let fields: Vec<String> = outs
                 .iter()
-                .map(|od| {
-                    let n = &od.name.text;
-                    let g = pascal(&pub_name(&od.name));
-                    let ty = self.ty_of(n);
-                    let body = match &od.rounding {
-                        Some(rd) => {
-                            let q = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
-                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                            format!(
-                                "round{}({}, {})",
-                                pascal(mode_fn(m)),
-                                local(n),
-                                q.num * self.scale(n) / q.den
-                            )
-                        }
-                        None => local(n),
-                    };
-                    format!("{g}: {}({body})", self.go_ty(&ty))
+                .zip(&finals)
+                .map(|(od, body)| {
+                    format!("{}: {}({body})", pascal(&pub_name(&od.name)), self.go_ty(&self.ty_of(&od.name.text)))
                 })
                 .collect();
             o.push_str(&format!("\treturn Output{{{}}}, nil\n}}\n", fields.join(", ")));
@@ -1688,7 +1656,7 @@ impl<'a> Gen<'a> {
         };
         let wire = if self.f.outputs.len() == 1 {
             let o = &self.f.outputs[0];
-            format!("{:?}: {}", o.name.text, one("got", &self.ty_of(&o.name.text)))
+            format!("{:?}, {}", o.name.text, one("got", &self.ty_of(&o.name.text)))
         } else {
             self.f
                 .outputs
@@ -1696,7 +1664,7 @@ impl<'a> Gen<'a> {
                 .map(|o| {
                     let ty = self.ty_of(&o.name.text);
                     format!(
-                        "{:?}: {}",
+                        "{:?}, {}",
                         o.name.text,
                         one(&format!("got.{}", pascal(&pub_name(&o.name))), &ty)
                     )
@@ -1713,6 +1681,17 @@ impl<'a> Gen<'a> {
              func ord(s string) int64 {{\n\t\
                  t, _ := time.Parse(\"2006-01-02\", s)\n\t\
                  return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)\n}}\n\n\
+             // The outputs in the order they are declared. encoding/json sorts the keys of a\n\
+             // map, so a rule whose output names do not happen to sort that way disagreed\n\
+             // with the other three languages on key order alone.\n\
+             func obj(kv ...any) string {{\n\t\
+                 s := \"{{\"\n\t\
+                 for i := 0; i < len(kv); i += 2 {{\n\t\t\
+                     if i > 0 {{\n\t\t\ts += \",\"\n\t\t}}\n\t\t\
+                     k, _ := json.Marshal(kv[i])\n\t\t\
+                     v, _ := json.Marshal(kv[i+1])\n\t\t\
+                     s += string(k) + \":\" + string(v)\n\t}}\n\t\
+                 return s + \"}}\"\n}}\n\n\
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
                  sc.Buffer(make([]byte, 1<<20), 1<<20)\n\t\
@@ -1724,8 +1703,7 @@ impl<'a> Gen<'a> {
                      var in r.Input\n{}\t\t\
                      got, err := r.{fname}(in)\n\t\t\
                      if err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     b, _ := json.Marshal(map[string]any{{{wire}}})\n\t\t\
-                     fmt.Println(string(b))\n\t}}\n}}\n",
+                     fmt.Println(obj({wire}))\n\t}}\n}}\n",
             env!("CARGO_PKG_VERSION"),
             fields.join("")
         )
@@ -2108,61 +2086,52 @@ impl<'a> Gen<'a> {
             }
         }
 
-        let out_name = &outs[0].name.text;
-        let res = match &self.f.result {
-            Some(r) => self.expr(&r.expr, &local),
-            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
-        };
-        let os = self.out_scale(out_name);
         let cast = |ty: &Ty, body: String| -> String {
             match ty {
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("({body}) as {}", self.ts_ty(ty)),
                 _ => body,
             }
         };
-        let ty = self.ty_of(out_name);
-        let text = match &outs[0].rounding {
-            Some(rd) => {
-                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
-                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                let grid_i = g.num * res.scale / g.den;
-                if res.scale != os {
-                    let raw = self.temp("raw");
-                    o.push_str(&format!(
-                        "  const {raw} = {}; // {}\n",
-                        ts_expr(unparen(&res.text)),
-                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
-                    ));
-                    format!("_round{}({raw}, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
-                } else {
-                    format!("_round{}({}, {grid_i}n)", pascal(mode_fn(m)), ts_expr(&res.text))
+        // Every output takes the same three steps: its source — the `result` expression for
+        // the first output, the binding of its own name otherwise — brought to the wire
+        // scale, then its declared rounding applied exactly once (§15.16).
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            let body = match &od.rounding {
+                Some(rd) => {
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    let grid_i = g.num * res.scale / g.den;
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            "  const {raw} = {}; // {}\n",
+                            ts_expr(unparen(&res.text)),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("_round{}({raw}, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
+                    } else {
+                        format!("_round{}({}, {grid_i}n)", pascal(mode_fn(m)), ts_expr(&res.text))
+                    }
                 }
-            }
-            None => ts_expr(&res.text),
-        };
+                None => ts_expr(&res.text),
+            };
+            finals.push(cast(&ty, body));
+        }
         if outs.len() == 1 {
-            o.push_str(&format!("  return {};\n}}\n", cast(&ty, text)));
+            o.push_str(&format!("  return {};\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
-                .map(|od| {
-                    let n = &od.name.text;
-                    let oty = self.ty_of(n);
-                    let body = match &od.rounding {
-                        Some(rd) => {
-                            let q = crate::types::lit_value_in_pub(&rd.grid, &oty).unwrap_or(Rat::int(1));
-                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                            format!(
-                                "_round{}({}, {}n)",
-                                pascal(mode_fn(m)),
-                                local(n),
-                                q.num * self.scale(n) / q.den
-                            )
-                        }
-                        None => local(n),
-                    };
-                    format!("{}: {}", pub_name(&od.name), cast(&oty, body))
-                })
+                .zip(&finals)
+                .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
             o.push_str(&format!("  return {{ {} }};\n}}\n", fields.join(", ")));
         }
@@ -2667,61 +2636,52 @@ impl<'a> Gen<'a> {
             }
         }
 
-        let out_name = &outs[0].name.text;
-        let res = match &self.f.result {
-            Some(r) => self.expr(&r.expr, &local),
-            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
-        };
-        let os = self.out_scale(out_name);
-        let ty = self.ty_of(out_name);
         let wrap = |ty: &Ty, body: String| -> String {
             match ty {
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}({body})", self.rs_ty(ty)),
                 _ => body,
             }
         };
-        let text = match &outs[0].rounding {
-            Some(rd) => {
-                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
-                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                let grid_i = g.num * res.scale / g.den;
-                if res.scale != os {
-                    let raw = self.temp("raw");
-                    o.push_str(&format!(
-                        "    let {raw} = {}; // {}\n",
-                        rs_expr(unparen(&res.text)),
-                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
-                    ));
-                    format!("round_{}({raw}, {grid_i}) / {}", mode_fn(m), res.scale / os)
-                } else {
-                    format!("round_{}({}, {grid_i})", mode_fn(m), rs_expr(&res.text))
+        // Every output takes the same three steps: its source — the `result` expression for
+        // the first output, the binding of its own name otherwise — brought to the wire
+        // scale, then its declared rounding applied exactly once (§15.16).
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            let body = match &od.rounding {
+                Some(rd) => {
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    let grid_i = g.num * res.scale / g.den;
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            "    let {raw} = {}; // {}\n",
+                            rs_expr(unparen(&res.text)),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("round_{}({raw}, {grid_i}) / {}", mode_fn(m), res.scale / os)
+                    } else {
+                        format!("round_{}({}, {grid_i})", mode_fn(m), rs_expr(&res.text))
+                    }
                 }
-            }
-            None => rs_expr(&res.text),
-        };
+                None => rs_expr(&res.text),
+            };
+            finals.push(wrap(&ty, body));
+        }
         if outs.len() == 1 {
-            o.push_str(&format!("    Ok({})\n}}\n", wrap(&ty, text)));
+            o.push_str(&format!("    Ok({})\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
-                .map(|od| {
-                    let n = &od.name.text;
-                    let oty = self.ty_of(n);
-                    let body = match &od.rounding {
-                        Some(rd) => {
-                            let q = crate::types::lit_value_in_pub(&rd.grid, &oty).unwrap_or(Rat::int(1));
-                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
-                            format!(
-                                "round_{}({}, {})",
-                                mode_fn(m),
-                                self.ident(n),
-                                q.num * self.scale(n) / q.den
-                            )
-                        }
-                        None => self.ident(n),
-                    };
-                    format!("{}: {}", pub_name(&od.name), wrap(&oty, body))
-                })
+                .zip(&finals)
+                .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
             o.push_str(&format!("    Ok(Output {{ {} }})\n}}\n", fields.join(", ")));
         }

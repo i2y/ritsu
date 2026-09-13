@@ -104,6 +104,16 @@ const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  ran
                       table j(j)\npolicy first\n| r | -> o(o) : money[円, incl_tax] |\n\
                       | <=5% | 0円 |\n| - | p × r |\n";
 
+const X_E015: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
+                      outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n  \
+                      b(b) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円 |\n\n\
+                      result b = p\n";
+const X_E016: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
+                      outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円 |\n\n\
+                      result a = p\nresult a = p + 100円\n";
+
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -404,6 +414,34 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E014,
             &["E008", "E012"],
+        ),
+        err(
+            "E015",
+            tr!("`result` が書けるのは最初の出力だけです", "`result` can only assemble the first output"),
+            tr!(
+                "`result` が二つ目以降の出力を名指ししたとき。`result` は最初の出力のための糖衣で、評価器も生成コードもそこにしか当てません（§1.2）。名指しが効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
+                "A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103."
+            ),
+            tr!(
+                "その出力と同じ名前の `define` を書いてください（`define 付与点(pts) : number = 基本点 × 倍率`）。出力は宣言順に、同じ名前の束縛から取られます。`result` で組み立てたいなら、その出力を `outputs` の先頭へ移します。",
+                "Write a `define` of the same name as that output (`define 付与点(pts) : number = 基本点 × 倍率`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`."
+            ),
+            X_E015,
+            &["E016", "E103"],
+        ),
+        err(
+            "E016",
+            tr!("`result` は一つしか書けません", "There can be only one `result`"),
+            tr!(
+                "一つのファイルに `result` の行が二本以上あるとき。組み立てられるのは最初の出力だけなので、二本目は一本目を置き換えるだけになります。以前はそれが黙って起きていました。",
+                "A file has more than one `result` line. Only the first output can be assembled, so a second `result` merely replaces the first — which it used to do in silence."
+            ),
+            tr!(
+                "一本だけ残してください。ほかの出力は、その出力と同じ名前の `define` から取ります。",
+                "Keep one. The other outputs are taken from a `define` of the same name as the output."
+            ),
+            X_E016,
+            &["E015"],
         ),
         err(
             "E101",

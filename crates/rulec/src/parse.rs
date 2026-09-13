@@ -172,7 +172,27 @@ impl P {
                 }
                 crate::kw::RESULT => {
                     if let Some(r) = self.result(&line) {
-                        f.result = Some(r);
+                        // E016: `result` affects the first output only, so a second one
+                        // simply replaced the first — silently, until this said so.
+                        match &f.result {
+                            Some(first) => {
+                                let line_no = first.span.line;
+                                self.err(
+                                    Diag::error("E016", tr!("`result` は一つしか書けません", "There can be only one `result`"))
+                                        .at(self.at(r.span.line))
+                                        .mark(r.span.clone(), tr!("{} 行目の `result` と二本目です", "this is a second one, after the `result` on line {}", line_no))
+                                        .note(tr!(
+                                            "`result` が組み立てるのは最初の出力だけなので、二本目は一本目を置き換えるだけになります。",
+                                            "`result` assembles the first output and nothing else, so a second one only replaces the first."
+                                        ))
+                                        .note(tr!(
+                                            "一本だけ残して、ほかの出力はその名前の `define` にしてください。",
+                                            "Keep one, and take the other outputs from a `define` of the same name."
+                                        )),
+                                );
+                            }
+                            None => f.result = Some(r),
+                        }
                     }
                     self.i += 1;
                 }

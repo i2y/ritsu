@@ -33,6 +33,10 @@ fn rulec(args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+/// Every rule in the corpus, with the name its generated files take. Hand-written lists rot:
+/// two rules had fallen out of this one, and one of them was returning a number a hundred
+/// times too large in all four languages while the suite stayed green. `コーパスは全部載っている`
+/// keeps the list honest.
 const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/ゆうパック運賃.rule", "yupack_fee"),
     ("tests/corpus/クーポン割引.rule", "coupon_discount"),
@@ -44,7 +48,28 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/決済手数料.rule", "payment_fee"),
     ("tests/corpus/ポイント付与.rule", "points"),
     ("tests/corpus/評価ランク.rule", "rank"),
+    ("tests/corpus/値引の充当.rule", "allocate"),
+    ("tests/corpus/会員特典.rule", "member_perk"),
 ];
+
+#[test]
+fn コーパスは全部載っている() {
+    let dir = root().join("tests/corpus");
+    let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "rule"))
+        .map(|p| format!("tests/corpus/{}", p.file_name().unwrap().to_string_lossy()))
+        .collect();
+    on_disk.sort();
+    let mut listed: Vec<String> = CORPUS.iter().map(|(f, _)| (*f).to_string()).collect();
+    listed.sort();
+    assert_eq!(
+        on_disk, listed,
+        "コーパスに足した規則が一致検査の一覧に載っていません。tests/threeway.rs の CORPUS に足してください"
+    );
+}
 
 #[test]
 fn 評価器と生成コードが全言語で一致する() {
