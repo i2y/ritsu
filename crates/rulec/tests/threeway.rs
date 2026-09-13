@@ -39,6 +39,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/期間区分.rule", "period"),
     ("tests/corpus/適用順序.rule", "apply_order"),
     ("tests/corpus/クーポン一枚.rule", "coupon_step"),
+    ("tests/corpus/決済手数料.rule", "payment_fee"),
 ];
 
 #[test]

@@ -325,6 +325,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                     else {
                         continue;
                     };
+                    let b = crate::coverage::show_rat(b, &ty);
                     let why = tr!(
                         "境界両側: 表 {tname} 行{} {col} {b} の",
                         "boundary pair: table {tname} row {} {col} {b}",
@@ -415,12 +416,25 @@ fn key2(a: &str, va: &Val, b: &str, vb: &Val) -> (String, String, String, String
     (a.into(), show(va), b.into(), show(vb))
 }
 
+/// A value as one short string. It is also used as a deduplication key, so it has to tell
+/// two different values apart: a rate is a fraction, and truncating it to an integer made
+/// every rate under 100% look like 0, which silently collapsed a whole axis to one point.
 pub fn show(v: &Val) -> String {
     match v {
         Val::Enum(s) | Val::Str(s) => s.clone(),
         Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
-        Val::Num(r) => format!("{}", r.num / r.den),
+        Val::Num(r) => format!("{r}"),
         Val::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+    }
+}
+
+/// The same, for a value that is about to be read by a person. Money and quantities are
+/// already whole numbers of their own unit, so only a rate needs its `%` back: `0.1` on its
+/// own reads as either a tenth or ten percent.
+pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
+    match (v, c.ty_of(name)) {
+        (Val::Num(r), Some(crate::types::Ty::Rate)) => format!("{}%", r.mul(Rat::int(100))),
+        _ => show(v),
     }
 }
 

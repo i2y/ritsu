@@ -98,6 +98,11 @@ const X_E011: &str = "rule t(t) v1\n\ninputs\n  x : bool\n\noutputs\n  r(r) : bo
 const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true |\n";
 const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
+const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n  \
+                      r(r) : rate[step 1%]  range >=0% <=100%\n\n\
+                      outputs\n  o(o) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy first\n| r | -> o(o) : money[円, incl_tax] |\n\
+                      | <=5% | 0円 |\n| - | p × r |\n";
 
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
@@ -161,6 +166,10 @@ const X_E113: &str = "rule t(t) v1\n\n\
                       define bigger(bigger) : bool = a >= b\n\n\
                       table j(j)\npolicy unique\n| bigger | -> r(r) : bool |\n\
                       | true | true |\n| false | false |\n";
+const X_E114: &str = "rule t(t) v1\n\ninputs\n  r(r) : rate[step 1%]  range >=0% <=100%\n\n\
+                      outputs\n  o(o) : bool\n\n\
+                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n\
+                      | <=0.5% | true |\n| - | false |\n";
 
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
@@ -378,6 +387,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E012"],
         ),
         err(
+            "E014",
+            tr!("出力のセルに式は書けません", "An output cell cannot hold an expression"),
+            tr!(
+                "表の `->` から右のセルに語が二つ以上あるとき。書けるのは値一つか名前一つだけです（§3.2）。読み飛ばして最初の語だけを採ると、かけ算が黙って消えた生成コードが出ます。",
+                "A cell to the right of `->` holds two or more words. Only one value or one name may be written there (§3.2). Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped."
+            ),
+            tr!(
+                "計算に名前を付けて `define` の行へ出し、表にはその名前だけを書いてください（`| - | 率割引 |`）。表は分岐だけを持ちます。",
+                "Give the calculation a name on a `define` line and leave only that name in the table (`| - | 率割引 |`). A table holds the branching and nothing else."
+            ),
+            X_E014,
+            &["E008", "E012"],
+        ),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -559,6 +582,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E113,
             &["E112", "E103"],
+        ),
+        err(
+            "E114",
+            tr!("セルの値が列の刻みに載っていません", "A cell value does not sit on the column's step"),
+            tr!(
+                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので（§2.1）、この値には表し方がありません。",
+                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation."
+            ),
+            tr!(
+                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。",
+                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code."
+            ),
+            X_E114,
+            &["E103", "E106"],
         ),
         warn(
             "W105",

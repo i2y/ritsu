@@ -139,21 +139,32 @@ mod date_tests {
     }
 }
 
+/// The number a literal writes, before its unit: `100万` is 1000000 and `1.5` is 3/2. Exact,
+/// because §2.1 asks for `0.5%` to be the rational 1/200 rather than a rounded decimal.
+fn magnitude(n: &crate::lex::Num) -> Option<Rat> {
+    let whole: i128 = n.digits.parse().ok()?;
+    let den = 10i128.checked_pow(u32::try_from(n.frac.len()).ok()?)?;
+    let frac: i128 = if n.frac.is_empty() { 0 } else { n.frac.parse().ok()? };
+    let v = Rat::new(whole.checked_mul(den)?.checked_add(frac)?, den).mul(Rat::int(n.mult as i128));
+    Some(if n.neg { Rat::zero().sub(v) } else { v })
+}
+
 /// Value of a numeric literal, expressed in `want`'s declared unit.
-/// `None` means the literal's unit does not belong to `want`'s dimension.
+/// `None` means the literal's unit does not belong to `want`'s dimension, or that a decimal
+/// was written where the declared unit only has whole values.
 fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
-    let digits: i128 = n.digits.parse().ok()?;
-    let mut v = Rat::int(digits * n.mult as i128);
-    if n.neg {
-        v = Rat::zero().sub(v);
-    }
+    let v = magnitude(n)?;
     let unit = n.unit.as_deref()?;
     let (dim, f) = unit_info(unit)?;
+    // §2.1: money and quantities are integers in their declared unit, and only a rate is an
+    // exact rational. `1.5kg` is fine in a `mass[g]` column because it lands on 1500g; `0.5円`
+    // is not a value of `money[円]` at all.
+    let whole = |v: Rat| if v.is_int() { Some(v) } else { None };
     match want {
-        Ty::Money { .. } if dim == crate::kw::MONEY => Some(v.mul(f)),
+        Ty::Money { .. } if dim == crate::kw::MONEY => whole(v.mul(f)),
         Ty::Qty { dim: d, unit: du } if dim == *d => {
             let (_, fd) = unit_info(du)?;
-            Some(v.mul(f).div(fd))
+            whole(v.mul(f).div(fd))
         }
         Ty::Rate if dim == crate::kw::RATE => Some(v.mul(f)),
         _ => None,
@@ -740,7 +751,12 @@ impl Checked {
             for (ci, cell) in row.cells.iter().enumerate() {
                 let Some(want) = col_ty.get(ci) else { continue };
                 let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
-                self.cell(cell, want, &sp, &at(row.span.line));
+                let sc = t
+                    .inputs
+                    .get(ci)
+                    .map(|(n, _)| *self.scales.get(n).unwrap_or(&1))
+                    .unwrap_or(1);
+                self.cell(cell, want, sc, &sp, &at(row.span.line));
             }
             for (oi, oc) in row.outs.iter().enumerate() {
                 let Some(want) = out_ty.get(oi) else { continue };
@@ -799,7 +815,7 @@ impl Checked {
         }
     }
 
-    fn cell(&mut self, cell: &Cell, want: &Ty, span: &Span, at: &str) {
+    fn cell(&mut self, cell: &Cell, want: &Ty, scale: i128, span: &Span, at: &str) {
         // Writing a present-side value in an optional column is correct. `none` arrives as
         // Cell::Nothing.
         let want = match want {
@@ -808,7 +824,7 @@ impl Checked {
         };
         let check_lit = |s: &mut Self, l: &Lit| match l {
             Lit::Num(n) => {
-                if lit_value_in(n, want).is_none() {
+                let Some(v) = lit_value_in(n, want) else {
                     s.diags.push(
                         Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                             .at(at.to_string())
@@ -818,6 +834,30 @@ impl Checked {
                             } else {
                                 tr!("`{}` は {want} の単位ではありません。", "`{}` is not a unit of {want}.", n.raw)
                             }),
+                    );
+                    return;
+                };
+                // The runtime value is an integer count of the declared step (§2.1), so a
+                // value between two steps has no representation. Rounding it silently would
+                // move a boundary the reader can read on the page.
+                if scale > 1 && !v.mul(Rat::int(scale)).is_int() {
+                    let step = fmt_val(Rat::new(1, scale), want);
+                    // The nearest value that is on the step, rounded half away from zero.
+                    let k = v.mul(Rat::int(scale));
+                    let half = if k.num < 0 { -k.den } else { k.den };
+                    let near = fmt_val(Rat::new((k.num * 2 + half) / (k.den * 2), scale), want);
+                    s.diags.push(
+                        Diag::error("E114", tr!("`{}` はこの列の刻みに載っていません", "`{}` does not sit on this column's step", n.raw))
+                            .at(at.to_string())
+                            .mark(span.clone(), tr!("刻みは {step} です", "the step is {step}"))
+                            .note(tr!(
+                                "この列の型は刻みを {step} と宣言しているので、実行時の値はその整数倍だけです（§2.1）。",
+                                "The column's type declares a step of {step}, so at runtime the value is a whole number of them (§2.1)."
+                            ))
+                            .note(tr!(
+                                "`{near}` のように刻みに載る値に直すか、型の刻みを細かくしてください。黙って寄せると、読める境界と動く境界が食い違います。",
+                                "Write a value on the step, such as `{near}`, or declare a finer step. Rounding it quietly would make the boundary on the page differ from the boundary in the code."
+                            )),
                     );
                 }
             }
@@ -1102,9 +1142,10 @@ impl Checked {
         match e {
             Expr::Name(n, _) => Some(*self.scales.get(n).unwrap_or(&1)),
             Expr::Lit(Lit::Num(n), _) => {
-                let digits: i128 = n.digits.parse().ok()?;
-                let _ = digits;
-                Some(match n.unit.as_deref() {
+                // The scale has to be one at which the literal is a whole number. A decimal
+                // moves it by a power of ten: `0.5%` is 1/200, so 100 would not clear it.
+                let d = 10i128.checked_pow(u32::try_from(n.frac.len()).ok()?)?;
+                Some(d * match n.unit.as_deref() {
                     Some("%") => 100,
                     Some("銭") => 100,
                     _ => 1,

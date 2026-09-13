@@ -252,7 +252,7 @@ fn money_text(ds: &BTreeMap<String, Delta>, multi: bool) -> String {
 
 fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
     let inp: Vec<String> =
-        ex.input.iter().map(|(n, v)| format!("{n}={}", vectors::show(v))).collect();
+        ex.input.iter().map(|(n, v)| format!("{n}={}", vectors::show_named(c, n, v))).collect();
     let diff: Vec<String> = ex
         .differing(c)
         .iter()
@@ -261,7 +261,7 @@ fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
             Some(tr!(
                 "規則 {n}={} / {theirs} {n}={b}",
                 "rule {n}={} / {theirs} {n}={b}",
-                vectors::show(a)
+                vectors::show_named(c, n, a)
             ))
         })
         .collect();

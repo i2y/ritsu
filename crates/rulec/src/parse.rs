@@ -615,6 +615,28 @@ impl P {
     }
 
     fn out_cell(&mut self, ts: &[Token]) -> OutCell {
+        // §3.2 allows one value or one name here and no arithmetic. Reading only the first
+        // token and dropping the rest turned `商品合計 × 割引率` into `商品合計`, which
+        // generated code that quietly left the multiplication out.
+        if ts.len() > 1 {
+            let at = self.at(ts[0].span.line);
+            let first = &ts[0].span;
+            let last = &ts[ts.len() - 1].span;
+            let span = Span::new(first.line, first.col, (last.col + last.len).saturating_sub(first.col));
+            self.err(
+                Diag::error("E014", tr!("出力のセルに式は書けません", "An output cell cannot hold an expression"))
+                    .at(at)
+                    .mark(span, tr!("ここは語が二つ以上あります", "two or more words here"))
+                    .note(tr!(
+                        "出力のセルに書けるのは、値一つか名前一つだけです（§3.2）。かけ算や足し算は書けません。",
+                        "An output cell holds one value or one name (§3.2). Arithmetic cannot be written there."
+                    ))
+                    .note(tr!(
+                        "計算には名前を付けて、`define` の行に出してください。表には名前だけが残ります。",
+                        "Give the calculation a name on a `define` line, and leave only that name in the table."
+                    )),
+            );
+        }
         match lit_of(&ts[0]) {
             Some(Lit::Word(w)) => {
                 // A bare word is an enum value or, per §3.2, the name of an input / derived / define.

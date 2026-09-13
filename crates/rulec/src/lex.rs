@@ -9,8 +9,12 @@ use crate::diag::{Diag, Span};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Num {
     pub neg: bool,
-    /// Digits with `_` removed.
+    /// Digits before the decimal point, with `_` removed.
     pub digits: String,
+    /// Digits after the decimal point, with `_` removed. Empty when there is no point.
+    /// §2.1 wants `0.5%` to be the exact rational 1/200, so the two halves are kept apart
+    /// here and combined once, where the unit is known.
+    pub frac: String,
     /// 1, 10_000 (万), 100_000_000 (億).
     pub mult: u64,
     /// 円 / 銭 / g / kg / cm / m / % — absent for a bare number, which §3 rejects in a cell.
@@ -281,7 +285,7 @@ fn try_date(s: &str) -> Option<(i32, u32, u32, usize)> {
     ))
 }
 
-/// `120円` `2_000g` `100万円` `10%` `-110万円`. Returns the token and its byte length
+/// `120円` `2_000g` `100万円` `10%` `0.5%` `-110万円`. Returns the token and its byte length
 /// including the leading sign when `neg` is set.
 fn lex_number(s: &str, neg: bool) -> Result<(Num, usize), Diag> {
     let mut i = if neg { s.chars().next().unwrap().len_utf8() } else { 0 };
@@ -290,6 +294,18 @@ fn lex_number(s: &str, neg: bool) -> Result<(Num, usize), Diag> {
         i += 1;
     }
     let digits: String = s[start_digits..i].chars().filter(|c| *c != '_').collect();
+
+    // A decimal point counts only when a digit follows it, so `1.` still ends the number at
+    // `1` and the stray `.` is reported where it stands.
+    let mut frac = String::new();
+    if s[i..].starts_with('.') && s[i + 1..].chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        i += 1;
+        let start_frac = i;
+        while s[i..].chars().next().is_some_and(|c| c.is_ascii_digit() || c == '_') {
+            i += 1;
+        }
+        frac = s[start_frac..i].chars().filter(|c| *c != '_').collect();
+    }
 
     let mut mult = 1u64;
     if s[i..].starts_with('万') {
@@ -311,7 +327,7 @@ fn lex_number(s: &str, neg: bool) -> Result<(Num, usize), Diag> {
     };
 
     Ok((
-        Num { neg, digits, mult, unit, raw: s[..i].to_string() },
+        Num { neg, digits, frac, mult, unit, raw: s[..i].to_string() },
         i,
     ))
 }

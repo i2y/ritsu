@@ -30,9 +30,24 @@ enum Axis {
     /// Coordinates are true values. A rate is written in percent and travels as a count of
     /// steps (§10.2), and those two factors differ once the step is finer than 1%, so both
     /// are carried: `shown` to write the value back into a cell, `wire` to put it in a
-    /// witness. Everything else has 1 for both.
-    Num { unit: String, coords: Vec<Coord>, shown: i128, wire: i128 },
+    /// witness. Everything else has 1 for both. `step` is the axis's own grid, which is what
+    /// keeps a witness on a value the type can actually hold.
+    Num { unit: String, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat },
     Bool,
+}
+
+/// A value strictly inside an open coordinate, on the axis's own grid. The midpoint is not
+/// on it — `(10%, 30%)` has midpoint 20%, but `(10%, 15%)` has 12.5%, which `rate[step 1%]`
+/// cannot hold — and a witness that cannot be written back into a cell is no use to whoever
+/// has to close the gap. One grid unit in from the closed side is always representable, and
+/// it is the value most likely to show an off-by-one (§11 principle 2). Dates always used
+/// this; it is the same rule.
+fn inside(a: Option<Rat>, b: Option<Rat>, step: Rat) -> Rat {
+    match (a, b) {
+        (Some(a), _) => a.add(step),
+        (None, Some(b)) => b.sub(step),
+        (None, None) => Rat::zero(),
+    }
 }
 
 impl Axis {
@@ -49,7 +64,7 @@ impl Axis {
         match self {
             Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
             Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
-            Axis::Num { unit, coords, .. } if unit.is_empty() => match coords.get(i) {
+            Axis::Num { unit, coords, step, .. } if unit.is_empty() => match coords.get(i) {
                 // For dates, prefer a boundary (an actual calendar day). The midpoint of an
                 // interval need not be one.
                 Some(Coord::Point(v)) => {
@@ -59,26 +74,16 @@ impl Axis {
                 Some(Coord::Open(a, b)) => {
                     // Dates are serial day numbers, so an open interval always contains a real
                     // calendar day. Print that day instead of hedging with "around".
-                    let v = match (a, b) {
-                        (Some(a), _) => a.add(Rat::int(1)),
-                        (None, Some(b)) => b.sub(Rat::int(1)),
-                        (None, None) => Rat::zero(),
-                    };
-                    let (y, m, d) = crate::types::ord_to_date(v);
+                    let (y, m, d) = crate::types::ord_to_date(inside(*a, *b, *step));
                     format!("{y:04}-{m:02}-{d:02}")
                 }
                 None => String::new(),
             },
-            Axis::Num { unit, coords, shown, .. } => {
+            Axis::Num { unit, coords, shown, step, .. } => {
                 let w = |v: Rat| format!("{}{unit}", v.mul(Rat::int(*shown)));
                 match coords.get(i) {
                     Some(Coord::Point(v)) => w(*v),
-                    Some(Coord::Open(a, b)) => w(match (a, b) {
-                        (Some(a), Some(b)) => a.add(*b).div(Rat::int(2)),
-                        (Some(a), None) => a.add(Rat::int(1)),
-                        (None, Some(b)) => b.sub(Rat::int(1)),
-                        (None, None) => Rat::zero(),
-                    }),
+                    Some(Coord::Open(a, b)) => w(inside(*a, *b, *step)),
                     None => String::new(),
                 }
             }
@@ -95,15 +100,10 @@ impl Axis {
             Axis::Bool => WVal::Bool(i == 0),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
             Axis::Num { unit, .. } if unit.is_empty() => WVal::Str(self.witness(i)),
-            Axis::Num { coords, wire, .. } => {
+            Axis::Num { coords, wire, step, .. } => {
                 let v = match coords.get(i) {
                     Some(Coord::Point(v)) => *v,
-                    Some(Coord::Open(a, b)) => match (a, b) {
-                        (Some(a), Some(b)) => a.add(*b).div(Rat::int(2)),
-                        (Some(a), None) => a.add(Rat::int(1)),
-                        (None, Some(b)) => b.sub(Rat::int(1)),
-                        (None, None) => Rat::zero(),
-                    },
+                    Some(Coord::Open(a, b)) => inside(*a, *b, *step),
                     None => Rat::zero(),
                 };
                 WVal::Int(crate::types::wire_int(v, *wire))
@@ -287,6 +287,7 @@ impl TableRegion {
                         coords: num_coords(&b, lo, hi, Rat::int(1)),
                         shown: 1,
                         wire: 1,
+                        step: Rat::int(1),
                     }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
@@ -310,6 +311,7 @@ impl TableRegion {
                         // A rate is written in percent whatever its step is.
                         shown: if matches!(ty, Ty::Rate) { 100 } else { 1 },
                         wire: c.wire_scale(name),
+                        step: q,
                     }
                 }
                 _ => {
@@ -869,7 +871,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         feas = Feasible::Yes;
                         built = Some(
                             a.iter()
-                                .map(|(n, v)| format!("{n} = {}", crate::vectors::show(v)))
+                                .map(|(n, v)| format!("{n} = {}", crate::vectors::show_named(c, n, v)))
                                 .collect::<Vec<_>>()
                                 .join(", "),
                         );

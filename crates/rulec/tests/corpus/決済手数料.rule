@@ -1,0 +1,29 @@
+rule 決済手数料(payment_fee) v1
+description "契約ごとに決まる手数料率から取引一件の手数料を出す。率が 1% より細かい刻みで決まる例"
+
+inputs
+  取引額(amount) : money[円, incl_tax]  range >=0円 <=100万円
+  手数料率(rate) : rate[step 0.1%]      range >=0% <=10%
+  少額(small)    : bool
+
+outputs
+  手数料(fee) : money[円, incl_tax]  round up(1円)
+
+# 0.5% 以下は徴収しない、という契約上の下限（率の刻みが 0.1% なのでこの行が書ける）
+define 率手数料(rate_fee) : money[円, incl_tax] = 取引額 × 手数料率
+
+table 手数料表(fee_table)
+policy unique
+| 手数料率 | 少額  | -> 手数料(fee) : money[円, incl_tax] |
+| <=0.5%   | -     | 0円                                  |
+| >0.5%    | true  | 50円                                 |
+| >0.5%    | false | 率手数料                             |
+
+result 手数料 = 手数料
+
+examples
+| 取引額  | 手数料率 | 少額  | -> 手数料 |
+| 10000円 | 0.5%     | false | 0円       |
+| 10000円 | 0.6%     | false | 60円      |
+| 10000円 | 3.6%     | false | 360円     |
+| 10000円 | 3.6%     | true  | 50円      |

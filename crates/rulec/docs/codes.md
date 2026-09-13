@@ -19,6 +19,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E011](#e011) | error | A public name has no ASCII alias |
 | [E012](#e012) | error | The name is not declared |
 | [E013](#e013) | error | No such import |
+| [E014](#e014) | error | An output cell cannot hold an expression |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -32,6 +33,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E111](#e111) | error | The examples have no column for an output |
 | [E112](#e112) | error | The range of a derived value does not contain the values it can reach |
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
+| [E114](#e114) | error | A cell value does not sit on the column's step |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -315,6 +317,35 @@ import std/nope
 ```
 
 Related codes: [E012](#e012)
+
+## E014
+
+`error` — **An output cell cannot hold an expression**
+
+**When.** A cell to the right of `->` holds two or more words. Only one value or one name may be written there (§3.2). Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped.
+
+**Fix.** Give the calculation a name on a `define` line and leave only that name in the table (`| - | 率割引 |`). A table holds the branching and nothing else.
+
+**Smallest reproduction**:
+
+```
+rule t(t) v1
+
+inputs
+  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+  r(r) : rate[step 1%]  range >=0% <=100%
+
+outputs
+  o(o) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy first
+| r | -> o(o) : money[円, incl_tax] |
+| <=5% | 0円 |
+| - | p × r |
+```
+
+Related codes: [E008](#e008), [E012](#e012)
 
 ## E101
 
@@ -706,6 +737,34 @@ policy unique
 ```
 
 Related codes: [E112](#e112), [E103](#e103)
+
+## E114
+
+`error` — **A cell value does not sit on the column's step**
+
+**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation.
+
+**Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code.
+
+**Smallest reproduction**:
+
+```
+rule t(t) v1
+
+inputs
+  r(r) : rate[step 1%]  range >=0% <=100%
+
+outputs
+  o(o) : bool
+
+table j(j)
+policy first
+| r | -> o(o) : bool |
+| <=0.5% | true |
+| - | false |
+```
+
+Related codes: [E103](#e103), [E106](#e106)
 
 ## W105
 

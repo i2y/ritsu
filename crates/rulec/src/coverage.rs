@@ -162,12 +162,16 @@ fn in_range(c: &Checked, col: &str, v: Rat) -> bool {
         && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
 }
 
-fn show_rat(v: Rat, ty: &Ty) -> String {
-    if matches!(ty, Ty::Date) {
-        let (y, m, d) = crate::types::ord_to_date(v);
-        format!("{y:04}-{m:02}-{d:02}")
-    } else {
-        format!("{v}")
+pub fn show_rat(v: Rat, ty: &Ty) -> String {
+    match ty {
+        Ty::Date => {
+            let (y, m, d) = crate::types::ord_to_date(v);
+            format!("{y:04}-{m:02}-{d:02}")
+        }
+        // A rate is stored as a fraction and written as a percentage, and the two look
+        // nothing alike: the boundary `0.5%` would otherwise be named `0.005`.
+        Ty::Rate => format!("{}%", v.mul(Rat::int(100))),
+        _ => format!("{v}"),
     }
 }
 

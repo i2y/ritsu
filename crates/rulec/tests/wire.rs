@@ -38,7 +38,7 @@ table 判定(judge)
 policy first
 | 割引率 | -> 可否(ok) : bool |
 | <=10%  | true               |
-| >=30%  | false              |
+| >=13%  | false              |
 
 result 可否 = 可否
 ";
@@ -70,23 +70,24 @@ fn 証人の率は書き戻せる形で出る() {
     let p = write_tmp("hole", HOLE);
     let p = p.to_string_lossy().to_string();
     let (_, text) = run(&["check", &p]);
-    // Written back into a cell, so it is percent: 20%, not the stored 0.2.
-    assert!(text.contains("当たらない例: 割引率 = 20%"), "証人が率になっていない:\n{text}");
-    assert!(text.contains("`| 20% | true |`"), "書き戻せる行になっていない:\n{text}");
+    // Written back into a cell, so it is percent, and on the declared step: one step past
+    // 10% is 11%, not the stored 0.11 and not the midpoint 11.5%.
+    assert!(text.contains("当たらない例: 割引率 = 11%"), "証人が率になっていない:\n{text}");
+    assert!(text.contains("`| 11% | true |`"), "書き戻せる行になっていない:\n{text}");
 
     let (_, js) = run(&["check", &p, "--format", "json"]);
     let first = js.lines().find(|l| l.contains("E101")).expect("E101 が無い");
     // In the witness it is the wire form, so it is a count of steps: 20 steps of 1%.
-    assert!(first.contains("\"witness\":{\"inputs\":{\"割引率\":20}}"), "証人の JSON がワイヤの単位でない:\n{first}");
+    assert!(first.contains("\"witness\":{\"inputs\":{\"割引率\":11}}"), "証人の JSON がワイヤの単位でない:\n{first}");
 }
 
 #[test]
 fn 証人の行を貼ると穴が閉じる() {
     // The point of `fix.text`: pasting it has to actually remove that witness. With the
-    // wrong unit it pastes `0.2%`, which closes nothing and the same witness comes back.
+    // wrong unit it pastes `0.11%`, which closes nothing and the same witness comes back.
     let mut text = HOLE.to_string();
     let mut seen = Vec::new();
-    for _ in 0..8 {
+    for _ in 0..6 {
         let p = write_tmp("close", &text);
         let p = p.to_string_lossy().to_string();
         let (code, js) = run(&["check", &p, "--format", "json"]);
@@ -101,7 +102,7 @@ fn 証人の行を貼ると穴が閉じる() {
         // Insert the row above the `result` line.
         text = text.replace("\nresult ", &format!("{row}\n\nresult "));
     }
-    panic!("8 回貼っても穴が閉じない: {seen:?}");
+    panic!("6 回貼っても穴が閉じない: {seen:?}");
 }
 
 #[test]
@@ -145,4 +146,94 @@ fn 記録の率は刻みの個数として読まれる() {
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("1 / 1") || out.contains("(100.000%)"), "10% が掛かっていない:\n{out}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A rule whose rate moves in tenths of a percent, which is what §2.1 asks for and what the
+/// number scanner used to refuse outright.
+const FINE: &str = "\
+rule 細かい率(fine_rate) v1
+description \"刻みが 1% より細かい率\"
+
+inputs
+  取引額(amount) : money[円, incl_tax] range >=0円 <=100万円
+  手数料率(rate) : rate[step 0.1%]     range >=0% <=10%
+
+outputs
+  手数料(fee) : money[円, incl_tax] round up(1円)
+
+define 率手数料(rate_fee) : money[円, incl_tax] = 取引額 × 手数料率
+
+table 手数料表(fee_table)
+policy unique
+| 手数料率 | -> 手数料(fee) : money[円, incl_tax] |
+| <=0.5%   | 0円                                  |
+| >0.5%    | 率手数料                             |
+
+result 手数料 = 手数料
+";
+
+#[test]
+fn 一パーセントより細かい刻みが書ける() {
+    let p = write_tmp("fine", FINE);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 0, "{out}");
+
+    // 0.5% at a step of 0.1% is 5 steps, and the whole range is 100 of them.
+    let (_, sc) = run(&["schema", &p]);
+    assert!(sc.contains("\"手数料率\":{\"type\":\"integer\",\"description\":\"単位: 率（刻み単位の整数）\",\"minimum\":0,\"maximum\":100}"), "{sc}");
+
+    // The vectors have to step on both sides of 0.5%, which they cannot do if every rate
+    // under 100% collapses to the same value.
+    let (c, cov) = run(&["coverage", &p]);
+    assert_eq!(c, 0, "被覆が満たせていない:\n{cov}");
+    let (_, vs) = run(&["vectors", &p]);
+    for want in ["\"手数料率\":5", "\"手数料率\":6"] {
+        assert!(vs.contains(want), "{want} を踏むベクタが無い:\n{vs}");
+    }
+}
+
+#[test]
+fn 小数は正確な有理数として読まれる() {
+    // `3.6%` at a step of 0.1% is 36 steps. Truncating the literal to 3, or reading `.6` as
+    // six tenths of a percent of something else, both land elsewhere.
+    let rule = FINE.replace("<=0.5%", "<=3.6%").replace(">0.5%", ">3.6%");
+    let p = write_tmp("exact", &rule);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 0, "{out}");
+
+    let dir = std::env::temp_dir().join(format!("rulec-wire-exact-gen-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let o = dir.to_string_lossy().to_string();
+    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    assert_eq!(c, 0, "{msg}");
+    let py = std::fs::read_to_string(dir.join("python").join("fine_rate.py")).unwrap();
+    assert!(py.contains("rate <= 36"), "3.6% が 36 刻みになっていない:\n{py}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn 刻みに載らない値は止まる() {
+    // `0.05%` is half a step of 0.1%, so the runtime integer cannot hold it. Moving it to
+    // the nearest step quietly would put a different boundary in the code than on the page.
+    let rule = FINE.replace("<=0.5%", "<=0.05%").replace(">0.5%", ">0.05%");
+    let p = write_tmp("offstep", &rule);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 1, "刻みの間の値が通ってしまう:\n{out}");
+    assert!(out.contains("E114"), "{out}");
+    assert!(out.contains("0.1%"), "直し方が刻みを名指ししていない:\n{out}");
+}
+
+#[test]
+fn 出力のセルに式を書くと止まる() {
+    // §3.2 allows one name or one value. The first word used to be taken and the rest
+    // dropped, so `取引額 × 手数料率` generated code that never multiplied.
+    let rule = FINE.replace("| >0.5%    | 率手数料                             |", "| >0.5%    | 取引額 × 手数料率 |");
+    let p = write_tmp("expr", &rule);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 1, "式のセルが通ってしまう:\n{out}");
+    assert!(out.contains("E014"), "{out}");
 }
