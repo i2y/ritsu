@@ -52,6 +52,8 @@ pub const MONEY: &str = "money";
 pub const MASS: &str = "mass";
 pub const LENGTH: &str = "length";
 pub const RATE: &str = "rate";
+/// A whole number with no unit: a count of things, a number of days, a score (§2.1).
+pub const NUMBER: &str = "number";
 pub const BOOL: &str = "bool";
 pub const STRING: &str = "string";
 pub const DATE: &str = "date";

@@ -71,7 +71,7 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                     }
                 }
             }
-            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
                 let q = match &inner {
                     Ty::Rate => Rat::new(1, *c.scales.get(name).unwrap_or(&100)),
                     _ => Rat::int(1),
@@ -314,7 +314,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
             // so that the same input moves for the inside and the outside point.
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 let Some(ty) = c.ty_of(col) else { continue };
-                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                     continue;
                 }
                 let Some(cell) = row.cells.get(ci) else { continue };
@@ -662,7 +662,7 @@ fn satisfy_cell(
         }
     }
     // Number or date: solve for a point inside the cell.
-    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
         let q = crate::coverage::quantum(c, col, &ty);
         for (_, inside, _) in crate::coverage::thresholds_pub(cell, &ty, q) {
             if let Some(a) = place(f, c, seed, col, inside) {
@@ -795,7 +795,7 @@ fn violate_cell(
     cell: &Cell,
 ) -> Option<BTreeMap<String, Val>> {
     let ty = c.ty_of(col)?;
-    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
         let q = crate::coverage::quantum(c, col, &ty);
         for (_, _, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
             if let Some(a) = place(f, c, seed, col, outside) {
@@ -921,7 +921,7 @@ fn satisfy_all(
     if bind(f, c, seed).get(col).is_some_and(hit) {
         return Some(seed.clone());
     }
-    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+    if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
         // Intersect the intervals. If it is empty, the pair cannot hold at once on this column.
         let (mut lo, mut hi): (Option<Rat>, Option<Rat>) = match c.ranges.get(col) {
             Some((l, h)) => (*l, *h),

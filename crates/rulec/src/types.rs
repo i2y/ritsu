@@ -15,6 +15,9 @@ pub enum Ty {
     /// `mass[g]` / `length[cm]` — a dimension plus the declared unit.
     Qty { dim: String, unit: String },
     Rate,
+    /// §2.1: a whole number that carries no unit — a count, a number of days, a score. It is
+    /// dimensionless like a rate, but its values are whole and it has no step to declare.
+    Number,
     Bool,
     Str,
     Date,
@@ -31,6 +34,7 @@ impl std::fmt::Display for Ty {
             Ty::Money { cur, tax: None } => write!(f, "{}[{cur}]", crate::kw::MONEY),
             Ty::Qty { dim, unit } => write!(f, "{dim}[{unit}]"),
             Ty::Rate => write!(f, "{}", crate::kw::RATE),
+            Ty::Number => write!(f, "{}", crate::kw::NUMBER),
             Ty::Bool => write!(f, "{}", crate::kw::BOOL),
             Ty::Str => write!(f, "{}", crate::kw::STRING),
             Ty::Date => write!(f, "{}", crate::kw::DATE),
@@ -42,7 +46,7 @@ impl std::fmt::Display for Ty {
 
 impl Ty {
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate)
+        matches!(self, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number)
     }
     /// Do two types describe the same quantity? Money literals carry no tax brand,
     /// so they unify with either.
@@ -154,6 +158,11 @@ fn magnitude(n: &crate::lex::Num) -> Option<Rat> {
 /// was written where the declared unit only has whole values.
 fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     let v = magnitude(n)?;
+    // A number carries no unit, and that is the whole point of it: `3` is three of whatever
+    // the column counts. Nothing else accepts a bare literal (§3).
+    if matches!(want, Ty::Number) {
+        return if n.unit.is_none() && v.is_int() { Some(v) } else { None };
+    }
     let unit = n.unit.as_deref()?;
     let (dim, f) = unit_info(unit)?;
     // §2.1: money and quantities are integers in their declared unit, and only a rate is an
@@ -177,6 +186,9 @@ fn lit_ty(n: &crate::lex::Num) -> Ty {
         Some((crate::kw::MONEY, _)) => Ty::Money { cur: n.unit.clone().unwrap(), tax: None },
         Some((crate::kw::RATE, _)) => Ty::Rate,
         Some((d, _)) => Ty::Qty { dim: d.to_string(), unit: n.unit.clone().unwrap() },
+        // A literal with no unit is a plain number. It used to be "unknown", which unified
+        // with anything and let `3` stand where a yen amount was meant.
+        None if n.unit.is_none() => Ty::Number,
         None => Ty::Unknown,
     }
 }
@@ -566,6 +578,7 @@ impl Checked {
                 Ty::Qty { dim: t.base.clone(), unit }
             }
             crate::kw::RATE => Ty::Rate,
+            crate::kw::NUMBER => Ty::Number,
             crate::kw::BOOL => Ty::Bool,
             crate::kw::STRING => Ty::Str,
             crate::kw::DATE => Ty::Date,
@@ -655,11 +668,16 @@ impl Checked {
                     }
                     Mul => match (&lt, &rt) {
                         // §2.3: money × rate is unrounded money. money × money is forbidden.
-                        (Ty::Money { .. }, Ty::Rate) => lt.clone(),
-                        (Ty::Rate, Ty::Money { .. }) => rt.clone(),
-                        (Ty::Qty { .. }, Ty::Rate) | (Ty::Rate, Ty::Qty { .. }) => {
-                            if matches!(lt, Ty::Rate) { rt } else { lt }
+                        // A number is dimensionless too, so it multiplies the same way — that
+                        // is what makes `送料 × 個数` say what it means.
+                        (Ty::Money { .. }, Ty::Rate | Ty::Number) => lt.clone(),
+                        (Ty::Rate | Ty::Number, Ty::Money { .. }) => rt.clone(),
+                        (Ty::Qty { .. }, Ty::Rate | Ty::Number)
+                        | (Ty::Rate | Ty::Number, Ty::Qty { .. }) => {
+                            if matches!(lt, Ty::Rate | Ty::Number) { rt } else { lt }
                         }
+                        // A rate of a count is a rate, and a count of counts is a count.
+                        (Ty::Number, Ty::Rate) | (Ty::Rate, Ty::Number) => Ty::Rate,
                         (Ty::Money { .. }, Ty::Money { .. }) => {
                             self.diags.push(
                                 Diag::error("E103", tr!("金額どうしを掛けています", "Multiplying money by money"))
@@ -672,7 +690,16 @@ impl Checked {
                         (Ty::Rate, Ty::Rate) => Ty::Rate,
                         _ => lt.clone(),
                     },
-                    Div => lt.clone(),
+                    Div => {
+                        // §2.3: dividing by a constant of the same dimension cancels it and
+                        // leaves a plain number — this is the "one point per 100 yen" case.
+                        // Anything else keeps the left side's type.
+                        let same_dim = matches!(
+                            (&lt, &rt),
+                            (Ty::Money { .. }, Ty::Money { .. }) | (Ty::Qty { .. }, Ty::Qty { .. })
+                        ) && lt.unifies(&rt);
+                        if same_dim { Ty::Number } else { lt.clone() }
+                    }
                 }
             }
         }
@@ -1020,6 +1047,7 @@ fn unit_one(ty: &Ty) -> String {
         Ty::Money { cur, .. } => format!("1{cur}"),
         Ty::Qty { unit, .. } => format!("1{unit}"),
         Ty::Rate => "1%".into(),
+        Ty::Number => "1".into(),
         _ => "1".into(),
     }
 }
@@ -1101,7 +1129,10 @@ impl Checked {
                 }
             }
             Expr::Lit(Lit::Num(n), _) => {
-                let v = lit_value_in(n, ty)?;
+                // The expression's own type is only a hint: `商品合計 × 10%` and
+                // `税込金額 ÷ 100円` both mix dimensions on purpose (§2.3), so a literal that
+                // does not belong to `ty` is read in its own unit instead of giving up.
+                let v = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
                 Some((v, v))
             }
             Expr::Bin(l, op, r, _) => {
@@ -1124,6 +1155,14 @@ impl Checked {
             _ => None,
         }
     }
+}
+
+/// The value of a constant divisor, which §2.3 requires to be a positive whole number of its
+/// own unit: `100円` is 100 and `3` is 3.
+fn const_value(e: &Expr) -> Option<i128> {
+    let Expr::Lit(Lit::Num(n), _) = e else { return None };
+    let v = lit_value_in(n, &lit_ty(n))?;
+    if v.den == 1 && v.num > 0 { Some(v.num) } else { None }
 }
 
 /// The reciprocal of the step from the declaration: 1000 for `rate[step 0.1%]`.
@@ -1175,7 +1214,11 @@ impl Checked {
                 Some(match op {
                     BinOp::Add | BinOp::Sub => lcm(a, b),
                     BinOp::Mul => a * b,
-                    BinOp::Div => a * b,
+                    // Dividing by the constant k does not shrink the stored integer: it
+                    // multiplies the scale by k, so the division is exact and no language's
+                    // rounding convention gets a say (§7.1). The divisor is a constant —
+                    // §2.3 forbids dividing by a variable, and E103 says so.
+                    BinOp::Div => a.checked_mul(const_value(r)?)?,
                     _ => 1,
                 })
             }

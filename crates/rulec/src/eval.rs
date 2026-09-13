@@ -148,7 +148,11 @@ impl<'a> Env<'a> {
             Expr::Lit(l, _) => {
                 // A literal inside an expression is lowered from the unit it is written in
                 // to the base unit.
-                lit_to_val(l, &Ty::Money { cur: "円".into(), tax: None }).or_else(|| lit_to_val(l, &Ty::Rate))
+                lit_to_val(l, &Ty::Money { cur: "円".into(), tax: None })
+                    .or_else(|| lit_to_val(l, &Ty::Rate))
+                    // A literal with no unit at all is a plain number, which is the only
+                    // thing `× 2` can mean.
+                    .or_else(|| lit_to_val(l, &Ty::Number))
             }
             Expr::Call(name, args, _) => {
                 let a: Vec<Val> = args.iter().filter_map(|x| self.expr(x)).collect();

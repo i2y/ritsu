@@ -290,7 +290,7 @@ impl TableRegion {
                         step: Rat::int(1),
                     }
                 }
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
                     let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
                     let unit = match &ty {

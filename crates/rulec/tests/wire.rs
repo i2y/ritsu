@@ -237,3 +237,57 @@ fn 出力のセルに式を書くと止まる() {
     assert_eq!(c, 1, "式のセルが通ってしまう:\n{out}");
     assert!(out.contains("E014"), "{out}");
 }
+
+/// A count, a number of days, a score: numbers with no unit at all (§2.1). The only way a
+/// unit disappears is dividing money by money, which is the "one point per 100 yen" case
+/// §2.3 was written for and which had no type to land in until now.
+const COUNT: &str = "\
+rule 付与点数(pts_only) v1
+description \"100 円につき 1 点\"
+
+inputs
+  税込金額(paid) : money[円, incl_tax] range >=0円 <=100万円
+
+outputs
+  点数(pts) : number round down(1)
+
+define 基本点(base) : number = 税込金額 ÷ 100円
+
+result 点数 = 基本点
+";
+
+#[test]
+fn 単位のない数が書けて割り算が単位を消す() {
+    let p = write_tmp("count", COUNT);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 0, "{out}");
+
+    let dir = std::env::temp_dir().join(format!("rulec-wire-count-gen-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let o = dir.to_string_lossy().to_string();
+    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    assert_eq!(c, 0, "{msg}");
+    let py = std::fs::read_to_string(dir.join("python").join("pts_only.py")).unwrap();
+    // A number is a plain int on both sides: branding it would shadow the language's own
+    // `int` and protect nothing, since two counts of different things share the brand.
+    assert!(py.contains("-> int:"), "点数 が素の int で返っていない:\n{py}");
+    assert!(!py.contains("NewType(\"int\""), "int を NewType で覆っている:\n{py}");
+    // Dividing by 100 does not divide the integer: it multiplies the scale, so 1050円
+    // stays 1050 and the single rounding at the end turns it into 10 points.
+    assert!(py.contains("基本点 = paid"), "除算が整数を割ってしまっている:\n{py}");
+    assert!(py.contains("// 100"), "スケールが戻されていない:\n{py}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn 単位のある数とない数は混ざらない() {
+    // `number` is dimensionless, so it multiplies money — but it is not money, and putting
+    // one where the other is expected has to stop.
+    let bad = COUNT.replace("点数(pts) : number round down(1)", "点数(pts) : money[円, incl_tax] round down(1円)");
+    let p = write_tmp("mix", &bad);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 1, "単位のない数が金額の位置に通ってしまう:\n{out}");
+    assert!(out.contains("E103"), "{out}");
+}

@@ -34,6 +34,10 @@ fn brand_of(ty: &Ty) -> String {
             other => other.into(),
         },
         Ty::Rate => "Rate".into(),
+        // A number carries no unit, so there is nothing to brand it apart from. Two counts
+        // of different things would get the same brand anyway, and the caller would be left
+        // wrapping every integer for no protection at all.
+        Ty::Number => "int".into(),
         Ty::Date => "Date".into(),
         Ty::Bool => "bool".into(),
         Ty::Str => "str".into(),
@@ -101,7 +105,7 @@ impl<'a> Gen<'a> {
             let Item::Table(t) = it else { continue };
             for (oi, oc) in t.outputs.iter().enumerate() {
                 let ty = c.ty_of(&oc.name.text).unwrap_or(Ty::Unknown);
-                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
                     continue;
                 }
                 let mut sc: i128 = 1;
@@ -259,7 +263,16 @@ impl<'a> Gen<'a> {
                         text: format!("({} * {})", a.text, b.text),
                         scale: a.scale * b.scale,
                     },
-                    Div => Expr2 { text: format!("({} // {})", a.text, b.text), scale: a.scale },
+                    Div => {
+                        // Dividing by the constant k leaves the stored integer alone and
+                        // multiplies the scale by k, so the result is exact. Emitting `//`
+                        // would truncate here and Go's `/` would truncate the other way.
+                        let k = b.text.parse::<i128>().ok().filter(|k| b.scale > 0 && k % b.scale == 0);
+                        match k {
+                            Some(k) => Expr2 { text: a.text, scale: a.scale * (k / b.scale) },
+                            None => Expr2 { text: format!("({} // {})", a.text, b.text), scale: a.scale },
+                        }
+                    }
                     Le | Lt | Ge | Gt | Eq => {
                         let s = lcm(a.scale, b.scale);
                         let o = match op {
@@ -388,6 +401,8 @@ impl<'a> Gen<'a> {
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
             let ty = self.ty_of(v);
+            // A number gets no brand: it is a plain integer on purpose, and branding it
+            // would shadow the language's own `int`.
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
             }
@@ -579,7 +594,7 @@ impl<'a> Gen<'a> {
                 // completeness proof used, so it is guarded like any other number. Without
                 // this, a date outside the declared range falls into whichever branch happens
                 // to catch it and the caller gets a silently wrong answer.
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             // The bound has to be in the units the argument arrives in, which
@@ -871,7 +886,7 @@ impl<'a> Gen<'a> {
         match ty {
             Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "string".into()),
             Ty::Bool => "bool".into(),
-            Ty::Date => "int64".into(),
+            Ty::Number | Ty::Date => "int64".into(),
             Ty::Str => "string".into(),
             Ty::Opt(t) => format!("*{}", self.go_ty(t)),
             _ => brand_of(ty),
@@ -947,6 +962,8 @@ impl<'a> Gen<'a> {
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
             let ty = self.ty_of(v);
+            // A number gets no brand: it is a plain integer on purpose, and branding it
+            // would shadow the language's own `int`.
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
             }
@@ -1068,7 +1085,7 @@ impl<'a> Gen<'a> {
             match self.f.inputs.iter().find(|i| i.name.text == n) {
                 Some(i) => {
                     let f = format!("in.{}", pascal(&pub_name(&i.name)));
-                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                         format!("int64({f})")
                     } else {
                         f
@@ -1093,7 +1110,7 @@ impl<'a> Gen<'a> {
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
                     tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
                 )),
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
@@ -1189,7 +1206,7 @@ impl<'a> Gen<'a> {
         // In Go a variable declared inside an if does not escape it, so declare them up front.
         for oc in &t.outputs {
             let t2 = self.ty_of(&oc.name.text);
-            let ty = if matches!(t2, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date) {
+            let ty = if matches!(t2, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 "int64".to_string()
             } else {
                 self.go_ty(&t2)
@@ -1593,6 +1610,9 @@ impl<'a> Gen<'a> {
                 }
                 Ty::Bool => format!("\t\tin.{g} = d[{jp:?}] == true\n"),
                 Ty::Date => format!("\t\tin.{g} = ord(str(d[{jp:?}]))\n"),
+                // A number is a plain int64, not a type the package declares, so it must not
+                // be qualified with the package name.
+                Ty::Number => format!("\t\tin.{g} = int64(num(d[{jp:?}]))\n"),
                 _ => format!("\t\tin.{g} = r.{}(num(d[{jp:?}]))\n", self.go_ty(&ty)),
             };
             fields.push(conv);

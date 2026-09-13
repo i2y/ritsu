@@ -76,7 +76,7 @@ fn ord(v: &Val) -> Option<Rat> {
 }
 
 fn is_numeric(ty: &Ty) -> bool {
-    matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date)
+    matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date)
 }
 
 /// Whether every cell of the row except the `skip` column holds under these bindings.

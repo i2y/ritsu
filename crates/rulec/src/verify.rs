@@ -255,6 +255,7 @@ pub fn schema(f: &RuleFile, c: &Checked) -> String {
                     Ty::Money { cur, tax } => format!("{cur}, {}", tax.clone().unwrap_or_default()),
                     Ty::Qty { unit, .. } => unit.clone(),
                     Ty::Rate => tr!("率（刻み単位の整数）", "rate (integer in units of the step)"),
+                    Ty::Number => tr!("なし（個数や日数のような数）", "none (a plain count of things or days)"),
                     _ => String::new(),
                 };
                 let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));

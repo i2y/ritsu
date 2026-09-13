@@ -105,7 +105,7 @@ interval over dates exact.
 
 ## 3. Types
 
-Eight, and no others.
+Nine, and no others.
 
 | type | written | notes |
 |---|---|---|
@@ -114,12 +114,13 @@ Eight, and no others.
 | mass | `mass[g]`, `mass[kg]` | the unit is part of the type |
 | length | `length[cm]`, `length[m]` | |
 | money | `money[円, incl_tax]`, `money[円, excl_tax]` | currency **and** tax flag are both part of the type |
-| rate | `rate`, `rate[step 1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
+| rate | `rate`, `rate[step 1%]`, `rate[step 0.1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
+| number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
 | string | `string` | equality and set membership only. No pattern matching |
 | optional | `会員区分?` | any of the above, plus the absent value. Consumed by the cell `none` |
 
-Every quantity, money, rate and date is an **integer** internally. No floating point appears
+Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
 
 Money of different currencies or different tax flags cannot be added or compared, and neither
@@ -357,7 +358,7 @@ which is why it is caught at parse time.
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`
-`rate` `bool` `date` `string`), the money attributes (`incl_tax` `excl_tax`) and `std` are
+`rate` `number` `bool` `date` `string`), the money attributes (`incl_tax` `excl_tax`) and `std` are
 part of the vocabulary but are told apart by position, so they are not reserved as names.
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

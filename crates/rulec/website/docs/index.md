@@ -116,10 +116,11 @@ cell tests its own column and nothing else, which makes a row a box, which makes
 and overlaps exactly decidable — that is where the boundary is. So this is not "a tool
 for shipping fees" and not "a tool for e-commerce".
 
-**But a number you return needs a unit.** The numeric types are **quantity (g, cm),
-money and rate** — there is no type for a plain unitless number (a count, a number of
-days, a score). "How many days until it ships" has to become a class, or it cannot be
-written today.
+**Most numbers you return carry a unit.** The numeric types are **quantity (g, cm),
+money and rate**, plus `number` for the ones that carry none — a count of things, a
+number of days, a score. Numbers with a unit and numbers without do not mix, and the
+only way a unit disappears is dividing money by money: "one point per 100 yen" is a
+`number`.
 
 ### What money buys you on top
 
@@ -206,9 +207,10 @@ different sets of lines).
 
 **It cannot — when you split by ratio.** "Apportion by each line's share of the list
 price" needs `line ÷ total`, and **division is only allowed by a constant**:
-`注文金額 / 100円` is fine, `明細 / 合計` is not. Working around it by computing the
-ratio in the caller and passing it in as a rate is not practical either, because a rate
-step cannot currently be finer than 1%.
+`注文金額 ÷ 100円` is fine, `明細 ÷ 合計` is not. You can work around it by computing
+the ratio in the caller and passing it in as a rate — a rate step goes as fine as you
+declare it, `rate[step 0.1%]` and beyond — but then whether that ratio is right is no
+longer something this tool says anything about.
 
 ### What it is not for
 
@@ -217,7 +219,6 @@ step cannot currently be finer than 1%.
   items in the cart". Flatten those at the boundary and pass the scalar in
 - **Pattern matching on strings** — `string` has equality and set membership, no prefix
   match and no regular expressions
-- **Returning a number with no unit** — as above, there is no type for it today
 - **Scoring, optimisation, machine learning** — what can be proved here is which row
   fires, not whether a weight is right
 

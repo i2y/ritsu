@@ -99,7 +99,7 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
                 _ => Err(tr!("`{s}` は YYYY-MM-DD の日付ではありません", "`{s}` is not a YYYY-MM-DD date")),
             }
         }
-        (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate, Json::Int(n)) => {
+        (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, Json::Int(n)) => {
             // The wire carries an integer in the canonical unit; a rate carries a count of
             // steps (§10.2). The range was declared in true values, so convert first.
             let v = crate::types::from_wire(*n, c.wire_scale(name));
@@ -128,7 +128,7 @@ fn ty_word(ty: &Ty) -> String {
         Ty::Bool => crate::kw::BOOL.into(),
         Ty::Date => tr!("日付（YYYY-MM-DD の文字列）", "date (YYYY-MM-DD string)"),
         Ty::Str => tr!("文字列", "string"),
-        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => tr!("正準単位の整数", "integer in the canonical unit"),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => tr!("正準単位の整数", "integer in the canonical unit"),
         _ => format!("{ty}"),
     }
 }
@@ -173,7 +173,7 @@ impl Manifest {
         let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
         // Quantities, money, and rates are read as integers; everything else as a string.
         let j = match &ty {
-            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => text
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => text
                 .parse::<i128>()
                 .map(Json::Int)
                 .map_err(|_| tr!("`{name}` は正準単位の整数で書いてください", "`{name}` must be written as an integer in the canonical unit"))?,
