@@ -548,7 +548,11 @@ impl<'a> Gen<'a> {
                         self.py_ty(&ty)
                     )
                 )),
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                // A date is an ordinal, and its declared range is the universe the
+                // completeness proof used, so it is guarded like any other number. Without
+                // this, a date outside the declared range falls into whichever branch happens
+                // to catch it and the caller gets a silently wrong answer.
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             o.push_str(&format!(
@@ -1026,7 +1030,7 @@ impl<'a> Gen<'a> {
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
                     tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
                 )),
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
                         o.push_str(&format!(
                             "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
@@ -1604,4 +1608,208 @@ pub fn round_tests_go(pkg: &str) -> String {
 
 fn go_comment_ok(indent: &str) -> bool {
     indent.starts_with('\t')
+}
+
+// ── The API inventory (`rulec api`) ──────────────────────────────────────
+//
+// What a caller has to know to invoke the generated code: the module and function names,
+// the parameters in order with their brands, units and ranges, the outputs with their
+// rounding, the enum members under the spelling the generated code gives them, and the
+// errors it can raise.
+//
+// It lives here, next to the generator, on purpose. Anywhere else it would be a second
+// description of the same thing and would start drifting the first time a name changes; here
+// it is built from the same `pub_name`, `pascal`, `py_ty` and `go_ty` the emitters use, and a
+// test runs the generated Python and Go against it.
+
+impl Gen<'_> {
+    /// The unit as it is written in the rule (`円`, `g`, `%`), or absent for a type that has
+    /// none.
+    fn unit_of(ty: &Ty) -> Option<String> {
+        match ty {
+            Ty::Money { cur, .. } => Some(cur.clone()),
+            Ty::Qty { unit, .. } => Some(unit.clone()),
+            Ty::Rate => Some("%".into()),
+            Ty::Opt(t) => Self::unit_of(t),
+            _ => None,
+        }
+    }
+
+    /// The range **the generated guard actually enforces**, not a second computation of it.
+    /// Both entry guards above take `lo.num` and `hi.num`, so this does too: an inventory that
+    /// disagreed with the guard would send a caller values the code then rejects. A test holds
+    /// these two numbers to the text of the generated guard (§8.6).
+    fn range_json(&self, name: &str) -> Option<String> {
+        let (lo, hi) = self.c.ranges.get(name)?;
+        let (lo, hi) = (lo.as_ref()?, hi.as_ref()?);
+        Some(crate::json::Obj::new().int("min", lo.num).int("max", hi.num).finish())
+    }
+
+    /// `{"mode":"down","grid":1}` — the grid as an integer in the canonical unit, so it can be
+    /// compared against a value straight away.
+    fn rounding_json(&self, od: &OutDecl) -> Option<String> {
+        let rd = od.rounding.as_ref()?;
+        let ty = self.ty_of(&od.name.text);
+        let g = crate::types::lit_value_in_pub(&rd.grid, &ty)?;
+        Some(
+            crate::json::Obj::new()
+                .str("mode", &rd.mode)
+                .int("grid", g.num / g.den)
+                .finish(),
+        )
+    }
+
+    /// One parameter or field, described the same way on both sides.
+    fn value_json(&self, jp: &str, alias: &str, ty_name: &str, ty: &Ty) -> String {
+        crate::json::Obj::new()
+            .str("name", jp)
+            .str("alias", alias)
+            .str("type", ty_name)
+            .opt_str("unit", Self::unit_of(ty))
+            .opt_raw("range", self.range_json(jp))
+            .bool("optional", matches!(ty, Ty::Opt(_)))
+            .finish()
+    }
+
+    /// The enums, under the spelling each language gives their members.
+    fn enums_json(&self, member: impl Fn(&str, &str) -> String) -> String {
+        let mut out: Vec<String> = Vec::new();
+        let mut done: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if done.contains(ascii) {
+                continue;
+            }
+            done.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            let members: Vec<String> = vals
+                .iter()
+                .map(|v| {
+                    let a = self.value_names.get(v).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone());
+                    crate::json::Obj::new()
+                        .str("name", v)
+                        .str("alias", member(ascii, &a))
+                        .finish()
+                })
+                .collect();
+            out.push(
+                crate::json::Obj::new()
+                    .str("name", jp)
+                    .str("alias", ascii)
+                    .raw("values", crate::json::arr(&members))
+                    .finish(),
+            );
+        }
+        crate::json::arr(&out)
+    }
+
+    /// `rulec api <file.rule> --format json`. Language independent throughout: every field is
+    /// a name or a number that the generated code really uses.
+    pub fn api(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let pkg = alias.replace('_', "").to_lowercase();
+        let outs = &self.f.outputs;
+
+        // --- Python
+        let params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &self.py_ty(&ty), &ty)
+            })
+            .collect();
+        let py_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.py_ty(&ty), &ty);
+                // An output carries its rounding as well; `value_json` is shared with the
+                // inputs, so it is spliced in here rather than made optional there.
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let py_ret = if outs.len() == 1 {
+            self.py_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let py_sig = format!(
+            "def {alias}({}) -> {py_ret}:",
+            self.f
+                .inputs
+                .iter()
+                .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let python = crate::json::Obj::new()
+            .str("module", &alias)
+            .str("function", &alias)
+            .str("signature", &py_sig)
+            .raw("params", crate::json::arr(&params))
+            .str("returns", &py_ret)
+            .raw("outputs", crate::json::arr(&py_outs))
+            // A Python enum member is the alias in upper case (`CouponKind.PERCENT`).
+            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .finish();
+
+        // --- Go
+        let go_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(
+                    &i.name.text,
+                    &pascal(&pub_name(&i.name)),
+                    &self.go_ty(&ty),
+                    &ty,
+                )
+            })
+            .collect();
+        let go_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pascal(&pub_name(&od.name)), &self.go_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let go_fn = pascal(&alias);
+        let go_ret = if outs.len() == 1 {
+            self.go_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let go_sig = format!("func {go_fn}(in Input) ({go_ret}, error)");
+        let go = crate::json::Obj::new()
+            .str("package", &pkg)
+            .str("func", &go_fn)
+            .str("signature", &go_sig)
+            .str("input_type", "Input")
+            .raw("input_fields", crate::json::arr(&go_in))
+            .str("output_type", &go_ret)
+            .raw("output_fields", crate::json::arr(&go_outs))
+            // A Go enum member is the type name followed by the alias (`CouponKindPercent`).
+            .raw("enums", self.enums_json(|t, a| format!("{t}{a}")))
+            .finish();
+
+        crate::json::Obj::new()
+            .str("rule", &self.f.name.text)
+            .str("alias", &alias)
+            .str("version", &self.f.version)
+            .str("source_sha256", &self.src_hash)
+            .raw("python", python)
+            .raw("go", go)
+            .finish()
+    }
 }

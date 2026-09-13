@@ -335,6 +335,15 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 三つの実装（参照評価器・Python・Go）が同じ答えを返すことは、境界から自動で作ったテストケースを三方に流して、**正準 JSON のバイト一致**で確かめています。
 
+**呼び方は、生成物を読まなくても分かります。**
+
+```console
+$ rulec api rules/クーポン一枚.rule | jq -r .python.signature
+def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Output:
+```
+
+`rulec api` が、module と関数名、引数（和名・別名・型・単位・範囲）、出力（丸めつき）、列挙の値のその言語での綴り、送出しうる例外を一つの JSON で出します。手で書いた呼び出し規約は生成器が名前を変えた日から嘘になるので、**目録は生成器の隣で組み立て、テストが生成物そのものと突き合わせます** — Python は import して `inspect.signature` と比べ、Go は**目録だけから呼び出しコードを組み立てて** `go vet` に通します。生成物の形と保証は [`docs/generated-code.md`](docs/generated-code.md) にあります。
+
 ## 何を検査するか
 
 | | |
@@ -564,6 +573,7 @@ DESIGN.md         設計文書。決定と、何を捨てたかの記録
 docs/codes.md     診断コードの台帳（生成物。rulec explain --all の出力）
 docs/codes.ja.md  同じ台帳の日本語
 docs/formats.md   機械可読な出力の定義（--format json、ベクタ、fixtures）
+docs/generated-code.md 生成物の形と保証、呼び方（英語）
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
@@ -581,6 +591,7 @@ tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋�
 tests/codes.rs    診断台帳が単一のソースであること（全項目の再現が走る）
 tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
 tests/formats.rs  全コマンドの --format json の鍵が言語で動かないこと
+tests/api.rs      rulec api の目録が生成物と一致すること（実際に呼んで確かめる）
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```

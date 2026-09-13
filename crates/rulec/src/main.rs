@@ -295,6 +295,28 @@ fn commands() -> Vec<Cmd> {
             codes: &[],
         },
         Cmd {
+            name: "api",
+            args: "<file.rule>",
+            purpose: tr!(
+                "生成物の呼び方を、コードを読まずに得る",
+                "how to call the generated code, without reading it"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）。既定も json", "machine-facing JSON (docs/formats.md); also the default")).choices(&["json"]),
+            ],
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec api rules/送料.rule".into(),
+                "rulec api rules/送料.rule | jq -r .python.signature".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "schema",
             args: "<file.rule>",
             purpose: tr!(
@@ -768,6 +790,9 @@ fn main() -> ExitCode {
         "explain" => explain(&files, &a),
         "fmt" => fmt(&files, a.has("--check"), json),
         "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
+        // `api` needs the source text (the generator stamps its hash), so it does not go
+        // through `one`.
+        "api" => api(&files),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
             one(&files, move |f, _, _| Some(rulec::verify::template(&lang, f)))
@@ -1392,6 +1417,24 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
             }
             None => print!("{body}"),
         }
+    }
+    ExitCode::from(0)
+}
+
+/// §6 of the plan: the API inventory of the generated code. An agent that has to integrate
+/// the output should not have to read it first, and a human-written note about the calling
+/// convention rots; this is built from the same names the generator emits.
+fn api(files: &[&String]) -> ExitCode {
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            return ExitCode::from(1);
+        };
+        println!("{}", rulec::codegen::Gen::new(&f, &c, &src).api());
     }
     ExitCode::from(0)
 }
