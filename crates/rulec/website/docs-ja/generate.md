@@ -37,15 +37,15 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
         raise RuleInputError(f"三辺合計 is out of range: {girth}")
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
-        サイズ = SizeClass.S60
+        size = SizeClass.S60
     elif girth <= 80:  # row 2: <=80cm | S80
-        サイズ = SizeClass.S80
+        size = SizeClass.S80
     elif True:  # row 3: - | S100
-        サイズ = SizeClass.S100
+        size = SizeClass.S100
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return _round_up(運賃, 10)
+    return _round_up(fee, 10)
 ```
 
 ```go
@@ -54,18 +54,18 @@ func FeeDemo(in Input) (YenInclTax, error) {
 		return 0, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
 	}
 	// table サイズ判定 (policy first)
-	var サイズ SizeClass
+	var size SizeClass
 	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
-		サイズ = SizeClassS60
+		size = SizeClassS60
 	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
-		サイズ = SizeClassS80
+		size = SizeClassS80
 	} else if true { // row 3: - | S100
-		サイズ = SizeClassS100
+		size = SizeClassS100
 	} else {
 		panic("unreachable: completeness was statically checked by rulec")
 	}
 	...
-	return YenInclTax(roundUp(int64(運賃), 10)), nil
+	return YenInclTax(roundUp(int64(fee), 10)), nil
 }
 ```
 

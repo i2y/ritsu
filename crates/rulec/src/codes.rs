@@ -93,8 +93,8 @@ const X_E010: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10k
                       outputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| w | -> r(r) : bool |\n\
                       | 0g..1000g | true |\n| >1000g | false |\n";
-const X_E011: &str = "rule t(t) v1\n\ninputs\n  x : bool\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n| - | true |\n";
+const X_E011: &str = "rule t(t) v1\n\ninputs\n  重量 : bool\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| 重量 | -> r(r) : bool |\n| - | true |\n";
 const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true |\n";
 const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
@@ -353,12 +353,12 @@ pub fn ledger() -> Vec<Entry> {
             "E011",
             tr!("公開面の名前に ASCII 別名がありません", "A public name has no ASCII alias"),
             tr!(
-                "規則名・入力・出力とその型に、括弧の中の ASCII 別名が無いとき。別名は生成される Python と Go の公開名になります（漢字は Go の公開識別子になれません）。",
-                "The rule name, an input, an output or one of their types has no ASCII alias in parentheses. The alias becomes the public name in the generated Python and Go (a kanji cannot be an exported Go identifier)."
+                "規則名・入力・出力に、**ASCII でない名前**が付いていて括弧の中の別名も無いとき。別名は生成コードの公開名になります（漢字は大文字を持てず、Go の公開識別子になれません）。名前がもとから ASCII なら、それ自身が公開名になるので別名は要りません。",
+                "The rule name, an input or an output has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier). A name that is already ASCII is its own public name and needs no alias."
             ),
             tr!(
-                "括弧で別名を足してください（`x : bool` なら `x(x) : bool`）。導出・定義・表の名前は外に出ないので別名は要りません。",
-                "Add the alias in parentheses (`x : bool` becomes `x(x) : bool`). Derived values, definitions and table names never leave the tool, so they need none."
+                "括弧で別名を足してください（`重量 : bool` なら `重量(weight) : bool`）。導出・定義・群・表の別名は任意で、書けば生成コードがその名前を使い、書かなければ宣言した名前をそのまま使います。",
+                "Add the alias in parentheses (`重量 : bool` becomes `重量(weight) : bool`). On a derived value, a definition, a group or a table the alias is optional: write one and the generated code uses it, leave it out and the declared name is used as it stands."
             ),
             X_E011,
             &["E009", "E012"],

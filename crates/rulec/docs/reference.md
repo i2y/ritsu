@@ -60,16 +60,28 @@ Latin letters are all identifier characters; `-` never is (it is always an opera
 don't-care cell). Anything else at the start of a name is E002.
 
 **ASCII aliases** are written in parentheses after the name: `届け先(dest)`. They become the
-public names of the generated code. An alias is **required** on
+identifiers the generated code uses.
 
-- the rule name,
-- every input and every output,
-- every `enum` and every one of its values,
-- every `group`,
-- an output column of a table that introduces a new name (`-> 送料(fee) : money[円, incl_tax]`).
+An alias is **required** wherever a **non-ASCII** name reaches the public surface — the rule
+name, an input, an output — because a kanji has no uppercase and so cannot begin an exported
+Go identifier. A missing one is E011. **A name that is already ASCII needs no alias**: it is
+its own identifier, so a rule written entirely in ASCII carries no parentheses at all.
 
-It is **not** required on `derive`, `define` or table names, which never leave the tool.
-A missing one is E011.
+```
+rule bulk_fee v1            # no alias: the name is already an identifier
+inputs
+  weight : mass[g]  range >=1g <=40kg
+```
+
+Everywhere else an alias is **optional**, and writing one changes what the generated code
+calls the value: `derive 残余(margin)` becomes `margin`, `group 遠隔地(remote)` becomes
+`_remote` / `isRemote`, and a table output column `-> サイズ(size)` becomes `size`. Leave the
+alias out and the declared name is used as it stands — every target language accepts a
+Japanese identifier for something that does not have to be exported.
+
+The alias on a **`table`** is the one exception: it is accepted and currently unused, because
+a table is inlined into the one generated function rather than becoming a function of its
+own. It is kept for SQL generation, where a table will need a name of its own.
 
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:

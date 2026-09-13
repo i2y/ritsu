@@ -390,18 +390,21 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
-    // §1.3: the public face needs ASCII aliases; the inside does not.
+    // §1.3: the public face needs ASCII aliases; the inside does not. A name that is
+    // already ASCII needs none either — the reason for the alias is that a kanji has no
+    // uppercase and so cannot begin an exported Go identifier, which is not a problem
+    // `shipping_fee` has. Demanding `rule shipping_fee(shipping_fee)` was pure ceremony.
     let mut missing: Vec<String> = Vec::new();
-    if f.name.ascii.is_none() {
+    if needs_alias(&f.name) {
         missing.push(tr!("規則 {}", "rule {}", f.name.text));
     }
     for i in &f.inputs {
-        if i.name.ascii.is_none() {
+        if needs_alias(&i.name) {
             missing.push(tr!("入力 {}", "input {}", i.name.text));
         }
     }
     for o in &f.outputs {
-        if o.name.ascii.is_none() {
+        if needs_alias(&o.name) {
             missing.push(tr!("出力 {}", "output {}", o.name.text));
         }
     }
@@ -412,7 +415,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .fix_kind(crate::diag::FixKind::AddAlias)
                 .mark(f.name.span.clone(), "")
                 .note(tr!("不足: {}", "Missing: {}", missing.join(" / ")))
-                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3)."))
+                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。名前がもとから ASCII なら別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3). A name that is already ASCII needs no alias."))
                 .note(tr!("宣言の位置に丸括弧で書いてください。例: 届け先(dest)", "Write it in parentheses at the declaration, e.g. 届け先(dest)")),
         );
     }
@@ -1186,6 +1189,17 @@ impl Checked {
             _ => None,
         }
     }
+}
+
+/// Whether a public name still has to be given an ASCII alias. One written in ASCII already
+/// serves as its own identifier in every target language (§1.3).
+fn needs_alias(n: &Name) -> bool {
+    if n.ascii.is_some() {
+        return false;
+    }
+    let mut cs = n.text.chars();
+    let first_ok = cs.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    !(first_ok && cs.all(|c| c.is_ascii_alphanumeric() || c == '_'))
 }
 
 /// The value of a constant divisor, which §2.3 requires to be a positive whole number of its

@@ -341,7 +341,7 @@ fn rulec_testが生成物を走らせる() {
     if which("python3").is_some() {
         let p = dir.join("python").join("yupack_fee.py");
         let src = std::fs::read_to_string(&p).unwrap();
-        std::fs::write(&p, tweak(&src, "運賃 = 4350", "運賃 = 4351", 1)).unwrap();
+        std::fs::write(&p, tweak(&src, "fee = 4350", "fee = 4351", 1)).unwrap();
         let (c, r, _) = rulec(&["test", &out]);
         assert_eq!(c, 1, "壊れた生成物を通した:\n{r}");
         assert!(r.contains("FAIL  yupack_fee (Python)"), "{r}");

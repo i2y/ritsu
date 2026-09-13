@@ -76,6 +76,8 @@ pub struct Gen<'a> {
     /// once per column, 50% and 100% in the same column would come out at different scales and
     /// the values would be corrupted.
     col_scales: BTreeMap<String, i128>,
+    /// Declared name → the identifier the generated code uses for it (§1.3).
+    idents: BTreeMap<String, String>,
     /// Type name → the ASCII alias of that enum (PascalCase).
     enum_names: BTreeMap<String, String>,
     /// Enum value → (type name, ASCII alias).
@@ -136,11 +138,52 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        Gen { f, c, w114, col_scales, enum_names, value_names, src_hash: hash(src) }
+        // §1.3: a name that declared an ASCII alias is written out under that alias, inside
+        // the function as well as on the public face.
+        let mut idents: BTreeMap<String, String> = BTreeMap::new();
+        for n in f
+            .inputs
+            .iter()
+            .map(|i| &i.name)
+            .chain(f.outputs.iter().map(|o| &o.name))
+            .chain(f.groups.iter().map(|g| &g.name))
+            .chain(f.items.iter().flat_map(|it| -> Vec<&crate::ast::Name> {
+                match it {
+                    Item::Derived(d) => vec![&d.name],
+                    Item::Define(d) => vec![&d.name],
+                    Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
+                }
+            }))
+        {
+            if n.ascii.is_some() {
+                idents.insert(n.text.clone(), pub_name(n));
+            }
+        }
+        Gen { f, c, w114, col_scales, enum_names, value_names, idents, src_hash: hash(src) }
     }
 
     fn ty_of(&self, n: &str) -> Ty {
         self.c.ty_of(n).unwrap_or(Ty::Unknown)
+    }
+
+    /// The identifier a declared name gets in the generated code. §1.3: the public face
+    /// always uses its ASCII alias, and an internal name uses one when the author wrote it
+    /// and the name itself when they did not. Every lookup in this file keys on the declared
+    /// name; only what is *written out* goes through here.
+    fn ident(&self, n: &str) -> String {
+        self.idents.get(n).cloned().unwrap_or_else(|| n.to_string())
+    }
+
+    /// A name for a generated temporary that nothing in the rule already answers to. The
+    /// value held before the last rounding used to be called `raw` unconditionally, which
+    /// collided the day an output declared the alias `raw` — Python quietly rebound it and
+    /// TypeScript refused to parse.
+    fn temp(&self, base: &str) -> String {
+        let mut n = base.to_string();
+        while self.idents.contains_key(&n) || self.idents.values().any(|v| *v == n) {
+            n.push('_');
+        }
+        n
     }
 
     /// Storage scale of a value (values are held as multiples of 1/k; this is that k). §7.1.
@@ -367,13 +410,19 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} is None"),
+            // A cell that names one group uses the set the module already declares, rather
+            // than writing the members out again — otherwise that set is dead code.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("{var} in {}", members(&vec![Lit::Word(w.clone())]))
+                format!("{var} in _{}", self.ident(w))
             }
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("not {var}"),
             Cell::Lit(l) => format!("{var} == {}", lit(l)),
             Cell::Set(ls) => format!("{var} in {}", members(ls)),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("{var} not in _{}", self.ident(w))
+            }
             Cell::Not(ls) => format!("{var} not in {}", members(ls)),
             Cell::Cmp(cs) => cs
                 .iter()
@@ -442,7 +491,7 @@ impl<'a> Gen<'a> {
         // Groups
         for g in &self.f.groups {
             let ms: Vec<String> = g.members.iter().map(|m| self.py_value(&m.text)).collect();
-            o.push_str(&format!("_{} = frozenset({{{}}})\n", g.name.text, ms.join(", ")));
+            o.push_str(&format!("_{} = frozenset({{{}}})\n", self.ident(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
             o.push('\n');
@@ -474,8 +523,7 @@ def _max(a: int, b: int) -> int:
 
 def _round_down(x: int, g: int) -> int:
     """{down}"""
-    q, r = abs(x) // g, abs(x) % g
-    v = q * g
+    v = abs(x) // g * g
     return -v if x < 0 else v
 
 
@@ -570,12 +618,7 @@ impl<'a> Gen<'a> {
 
         // Entry guards (§8.5). They enforce at runtime what the proof assumes: inputs lie within
         // their declared domains.
-        let local = |n: &str| -> String {
-            match self.f.inputs.iter().find(|i| i.name.text == n) {
-                Some(i) => pub_name(&i.name),
-                None => n.to_string(),
-            }
-        };
+        let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
             let v = pub_name(&i.name);
             let ty = self.ty_of(&i.name.text);
@@ -620,11 +663,11 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", d.name.text, unparen(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("導出", "derived value")));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", d.name.text, unparen(&e.text), tr!("定義", "definition")));
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
                 Item::Table(t) => o.push_str(&self.py_table(t, &local)),
             }
@@ -647,12 +690,13 @@ impl<'a> Gen<'a> {
                 // the example in §8.2). Criterion 1 demands readability, and deep nesting breaks
                 // the visual correspondence with the generated code.
                 if res.scale != os {
+                    let raw = self.temp("raw");
                     o.push_str(&format!(
-                        "    raw = {}  # {}\n",
+                        "    {raw} = {}  # {}\n",
                         unparen(&res.text),
                         tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                     ));
-                    format!("_round_{}(raw, {}) // {}", mode_fn(m), grid_i, res.scale / os)
+                    format!("_round_{}({raw}, {}) // {}", mode_fn(m), grid_i, res.scale / os)
                 } else {
                     format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
                 }
@@ -730,7 +774,7 @@ impl<'a> Gen<'a> {
                     }
                     None => "0".into(),
                 };
-                o.push_str(&format!("        {} = {v}\n", oc.name.text));
+                o.push_str(&format!("        {} = {v}\n", self.ident(&oc.name.text)));
             }
         }
         o.push_str(&format!(
@@ -873,6 +917,18 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// A blank assignment for a value nothing downstream reads. The value is still computed,
+    /// so that the generated code and the rule stay line for line, but Go will not compile a
+    /// local that is never read — so say out loud that it is on purpose. W111 has already
+    /// named the declaration.
+    fn go_unread(&self, name: &str) -> String {
+        if self.is_read(name) {
+            String::new()
+        } else {
+            format!("\t_ = {}\n", self.ident(name))
+        }
+    }
+
     /// Whether anything downstream reads a table's output column. A column nothing reads is
     /// still assigned, so that the branch and the row stay 1:1 (§8.2), but Go refuses to
     /// compile a local that is never read. W111 reports the column itself.
@@ -927,13 +983,19 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} == nil"),
+            // A cell that names one group calls the predicate the package already declares,
+            // rather than writing the members out again — otherwise that function is dead.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                set(&vec![Lit::Word(w.clone())], false)
+                format!("is{}({var})", pascal(&self.ident(w)))
             }
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} == {}", lit(l)),
             Cell::Set(ls) => set(ls, false),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("!is{}({var})", pascal(&self.ident(w)))
+            }
             Cell::Not(ls) => set(ls, true),
             Cell::Cmp(cs) => cs
                 .iter()
@@ -1016,7 +1078,10 @@ impl<'a> Gen<'a> {
                 .get(&g.name.text)
                 .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
                 .unwrap_or_else(|| "int".into());
-            o.push_str(&format!("func is{}(v {ty}) bool {{\n\tswitch v {{\n\tcase ", g.name.text, ));
+            o.push_str(&format!(
+                "func is{}(v {ty}) bool {{\n\tswitch v {{\n\tcase ",
+                pascal(&self.ident(&g.name.text))
+            ));
             let ms: Vec<String> = g.members.iter().map(|m| self.go_value(&m.text)).collect();
             o.push_str(&ms.join(", "));
             o.push_str(":\n\t\treturn true\n\t}\n\treturn false\n}\n\n");
@@ -1089,7 +1154,7 @@ impl<'a> Gen<'a> {
                         f
                     }
                 }
-                None => n.to_string(),
+                None => self.ident(n),
             }
         };
 
@@ -1127,11 +1192,13 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", d.name.text, go_expr(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", d.name.text, go_expr(&e.text), tr!("定義", "definition")));
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
+                    o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Table(t) => o.push_str(&self.go_table(t, &local)),
             }
@@ -1150,14 +1217,15 @@ impl<'a> Gen<'a> {
                 let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                 let grid_i = g.num * res.scale / g.den;
                 if res.scale != os {
+                    let raw = self.temp("raw");
                     o.push_str(&format!(
                         // The cast needs its own parentheses: an expression that begins with
                         // a call rather than a `(` glued itself to the type name.
-                        "\traw := int64({}){CELL}// {}\n",
+                        "\t{raw} := int64({}){CELL}// {}\n",
                         go_expr(&res.text),
                         tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                     ));
-                    format!("round{}(raw, {}) / {}", pascal(mode_fn(m)), grid_i, res.scale / os)
+                    format!("round{}({raw}, {}) / {}", pascal(mode_fn(m)), grid_i, res.scale / os)
                 } else {
                     format!("round{}(int64({}), {})", pascal(mode_fn(m)), go_expr(&res.text), grid_i)
                 }
@@ -1209,7 +1277,7 @@ impl<'a> Gen<'a> {
             } else {
                 self.go_ty(&t2)
             };
-            o.push_str(&format!("\tvar {} {ty}\n", oc.name.text));
+            o.push_str(&format!("\tvar {} {ty}\n", self.ident(&oc.name.text)));
         }
         for (ri, row) in t.rows.iter().enumerate() {
             let conds: Vec<String> = t
@@ -1255,20 +1323,15 @@ impl<'a> Gen<'a> {
                     }
                     None => "0".into(),
                 };
-                o.push_str(&format!("\t\t{} = {v}\n", oc.name.text));
+                o.push_str(&format!("\t\t{} = {v}\n", self.ident(&oc.name.text)));
             }
         }
         o.push_str(&format!(
             "\t}} else {{\n\t\tpanic(\"{}\")\n\t}}\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
-        // A column nothing downstream reads is still assigned above, so that the branch and
-        // the row stay 1:1. Go will not compile a local that is never read, so say out loud
-        // that it is on purpose. W111 has already named the column.
         for oc in &t.outputs {
-            if !self.is_read(&oc.name.text) {
-                o.push_str(&format!("\t_ = {}\n", oc.name.text));
-            }
+            o.push_str(&self.go_unread(&oc.name.text));
         }
         o.push_str(&self.guards(t, local, Lang::Go, "\t", |name, i, j| {
             format!(
@@ -1854,12 +1917,16 @@ impl<'a> Gen<'a> {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} === null"),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("_{w}.has({var})")
+                format!("_{}.has({var})", self.ident(w))
             }
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} === {}", lit(l)),
             Cell::Set(ls) => format!("{}.includes({var})", members(ls)),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("!_{}.has({var})", self.ident(w))
+            }
             Cell::Not(ls) => format!("!{}.includes({var})", members(ls)),
             Cell::Cmp(cs) => cs
                 .iter()
@@ -1934,7 +2001,7 @@ impl<'a> Gen<'a> {
             let ms: Vec<String> = g.members.iter().map(|m| self.ts_value(&m.text)).collect();
             o.push_str(&format!(
                 "const _{}: ReadonlySet<string> = new Set([{}]);\n",
-                g.name.text,
+                self.ident(&g.name.text),
                 ms.join(", ")
             ));
         }
@@ -1982,12 +2049,7 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("export function {fname}({}): {ret} {{\n", params.join(", ")));
 
-        let local = |n: &str| -> String {
-            match self.f.inputs.iter().find(|i| i.name.text == n) {
-                Some(i) => pub_name(&i.name),
-                None => n.to_string(),
-            }
-        };
+        let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
             let v = pub_name(&i.name);
             let ty = self.ty_of(&i.name.text);
@@ -2025,7 +2087,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, &local);
                     o.push_str(&format!(
                         "  const {} = {}; // {}\n",
-                        d.name.text,
+                        self.ident(&d.name.text),
                         ts_expr(unparen(&e.text)),
                         tr!("導出", "derived value")
                     ));
@@ -2034,7 +2096,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, &local);
                     o.push_str(&format!(
                         "  const {} = {}; // {}\n",
-                        d.name.text,
+                        self.ident(&d.name.text),
                         ts_expr(unparen(&e.text)),
                         tr!("定義", "definition")
                     ));
@@ -2062,12 +2124,13 @@ impl<'a> Gen<'a> {
                 let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                 let grid_i = g.num * res.scale / g.den;
                 if res.scale != os {
+                    let raw = self.temp("raw");
                     o.push_str(&format!(
-                        "  const raw = {}; // {}\n",
+                        "  const {raw} = {}; // {}\n",
                         ts_expr(unparen(&res.text)),
                         tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                     ));
-                    format!("_round{}(raw, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
+                    format!("_round{}({raw}, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
                 } else {
                     format!("_round{}({}, {grid_i}n)", pascal(mode_fn(m)), ts_expr(&res.text))
                 }
@@ -2116,7 +2179,7 @@ impl<'a> Gen<'a> {
                 Ty::Enum(_) => self.ts_ty(&ty),
                 _ => "bigint".to_string(),
             };
-            o.push_str(&format!("  let {}: {decl};\n", oc.name.text));
+            o.push_str(&format!("  let {}: {decl};\n", self.ident(&oc.name.text)));
         }
         for (ri, row) in t.rows.iter().enumerate() {
             let conds: Vec<String> = t
@@ -2163,7 +2226,7 @@ impl<'a> Gen<'a> {
                     }
                     None => "0n".into(),
                 };
-                o.push_str(&format!("    {} = {v};\n", oc.name.text));
+                o.push_str(&format!("    {} = {v};\n", self.ident(&oc.name.text)));
             }
         }
         o.push_str(&format!(

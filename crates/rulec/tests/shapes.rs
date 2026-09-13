@@ -102,8 +102,8 @@ fn 読まれない列があっても生成物はコンパイルできる() {
     py_imports(&dir, "unused_col");
     let go = std::fs::read_to_string(dir.join("go").join("unusedcol").join("unused_col.go")).unwrap();
     // The cell is still written out, so that the branch and the row stay 1:1.
-    assert!(go.contains("補助 = false"), "セルが省かれている:\n{go}");
-    assert!(go.contains("_ = 補助"), "読まれない局所変数に印が無い:\n{go}");
+    assert!(go.contains("aux = false"), "セルが省かれている:\n{go}");
+    assert!(go.contains("_ = aux"), "読まれない局所変数に印が無い:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -149,5 +149,99 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     py_imports(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
     assert!(go.contains("return false, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A rule written entirely in ASCII. §1.3 asks for an alias because a kanji has no uppercase
+/// and cannot begin an exported Go identifier — which `shipping_fee` does not suffer from, so
+/// demanding `rule shipping_fee(shipping_fee)` was ceremony with nothing behind it.
+const ENGLISH: &str = "\
+rule bulk_fee v1
+description \"Written entirely in ASCII: no alias should be required anywhere\"
+
+enum member_kind = basic | gold | platinum
+
+inputs
+  weight : mass[g]  range >=1g <=40kg
+  member : member_kind
+
+outputs
+  fee : money[円, incl_tax]  round up(10円)
+
+table base_fee
+policy first
+| weight  | member   | -> fee : money[円, incl_tax] |
+| <=2000g | platinum | 0円                          |
+| <=2000g | -        | 800円                        |
+| >2000g  | -        | 1100円                       |
+
+result fee = fee
+";
+
+#[test]
+fn 全部asciiで書いた規則は別名を求められない() {
+    let dir = std::env::temp_dir().join(format!("rulec-shapes-en-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("r.rule");
+    std::fs::write(&src, ENGLISH).unwrap();
+    let (c, out) = run(&["check", &src.to_string_lossy()]);
+    assert_eq!(c, 0, "ASCII だけの規則が別名を要求されている:\n{out}");
+    assert!(!out.contains("E011"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn 全部asciiで書いた規則も生成物はコンパイルできる() {
+    let dir = generate("english", ENGLISH);
+    go_builds(&dir, "bulkfee");
+    py_imports(&dir, "bulk_fee");
+    let py = std::fs::read_to_string(dir.join("python").join("bulk_fee.py")).unwrap();
+    assert!(py.contains("def bulk_fee(weight: Gram, member: MemberKind) -> YenInclTax:"), "{py}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// §1.3: an alias on an internal name is optional, and writing one makes the generated code
+/// use it. It used to be parsed and then thrown away, so `derive 残余(margin)` promised a
+/// name the output never contained.
+#[test]
+fn 内部名の別名は生成コードの識別子になる() {
+    let dir = generate("alias", "\
+rule alias_demo(alias_demo) v1
+description \"内部名に別名を書いたら、生成コードがその名前を使う\"
+
+enum 色(color) = 赤(red) | 青(blue) | 緑(green)
+
+inputs
+  価格(price) : money[円, incl_tax] range >=0円 <=1万円
+  色(c)       : 色
+
+outputs
+  結果(result) : money[円, incl_tax] round down(1円)
+
+group 暖色(warm) = 赤
+derive 半額(half) : money[円, incl_tax] = 価格 - 価格  range >=-1万円 <=1万円
+define 高額(pricey) : bool = 価格 >= 5000円
+
+table 判定(decide)
+policy first
+| 色   | 高額 | -> 中間(mid) : money[円, incl_tax] |
+| 暖色 | true | 100円                              |
+| -    | -    | 0円                                |
+
+result 結果 = 中間
+");
+    let py = std::fs::read_to_string(dir.join("python").join("alias_demo.py")).unwrap();
+    for want in ["_warm = frozenset(", "half = ", "pricey = ", "mid = 100", "c in _warm"] {
+        assert!(py.contains(want), "`{want}` が生成 Python に無い:\n{py}");
+    }
+    for unwanted in ["暖色", "半額", "高額", "中間"] {
+        // The cells in the row comments still carry the rule's own words; the identifiers
+        // should not.
+        let code: String = py.lines().filter(|l| !l.contains('#')).collect::<Vec<_>>().join("\n");
+        assert!(!code.contains(unwanted), "`{unwanted}` が識別子として残っている:\n{code}");
+    }
+    go_builds(&dir, "aliasdemo");
+    py_imports(&dir, "alias_demo");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -251,9 +251,9 @@ Related codes: [E105](#e105), [E101](#e101)
 
 `error` — **A public name has no ASCII alias**
 
-**When.** The rule name, an input, an output or one of their types has no ASCII alias in parentheses. The alias becomes the public name in the generated Python and Go (a kanji cannot be an exported Go identifier).
+**When.** The rule name, an input or an output has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier). A name that is already ASCII is its own public name and needs no alias.
 
-**Fix.** Add the alias in parentheses (`x : bool` becomes `x(x) : bool`). Derived values, definitions and table names never leave the tool, so they need none.
+**Fix.** Add the alias in parentheses (`重量 : bool` becomes `重量(weight) : bool`). On a derived value, a definition, a group or a table the alias is optional: write one and the generated code uses it, leave it out and the declared name is used as it stands.
 
 **Smallest reproduction**:
 
@@ -261,14 +261,14 @@ Related codes: [E105](#e105), [E101](#e101)
 rule t(t) v1
 
 inputs
-  x : bool
+  重量 : bool
 
 outputs
   r(r) : bool
 
 table j(j)
 policy unique
-| x | -> r(r) : bool |
+| 重量 | -> r(r) : bool |
 | - | true |
 ```
 

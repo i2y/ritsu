@@ -5,5 +5,5 @@ error[E011]: A public name has no ASCII alias
   |      ^^^^^^^^^^^^^^
   |
  Missing: input あて先
- An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3).
+ An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3). A name that is already ASCII needs no alias.
  Write it in parentheses at the declaration, e.g. 届け先(dest)

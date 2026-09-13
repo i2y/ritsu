@@ -18,10 +18,10 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
     if not _isinstance(dest, Prefecture):
         raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
     ...
-    if dest in {Prefecture.SHIGA, ...} and サイズ == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
-        運賃 = 990
+    if dest in _kinki and size == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
+        fee = 990
     ...
-    return _round_up(運賃, 10)
+    return _round_up(fee, 10)
 ```
 
 出る前に済んでいる証明は、**「どの入力にも当たる行がある」「同時に二行に当たる入力はない」「決して当たらない行はない」「単位を取り違えていない」「端数の決め方が宣言されている」「中間値が int64 に収まる」「書いた例が全部通る」**の七つです。どれか一つでも示せなければ、生成そのものが止まります。
@@ -290,7 +290,11 @@ examples
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
-別名が必須なのは**規則名・入力・出力とその型**だけです。導出や定義や表の名前は、外に出ないので日本語のままで構いません。
+別名が要るのは、**ASCII でない名前が公開面に出るとき**だけです — 規則名・入力・出力。漢字は大文字を持てず、Go の公開識別子になれないからです。**名前がもとから ASCII なら別名は要りません**（`rule bulk_fee v1` のように、全部英語で書けば括弧はどこにも出てきません）。
+
+それ以外の場所では別名は任意で、**書けば生成コードがその名前を使います**。`derive 残余(margin)` は `margin`、`group 遠隔地(remote)` は `_remote` / `isRemote`、表の出力列 `-> サイズ(size)` は `size` になります。書かなければ宣言した名前がそのまま識別子になります（外に出ない名前なら、どの言語も日本語の識別子を受け付けます）。
+
+`table` の別名だけは例外で、**いまは受け付けるだけで使われません**。表は一つの関数にインライン展開されるので、行き先が無いためです。SQL 生成で表そのものに名前が要るので、構文としては残してあります。
 
 ### 型
 
@@ -481,15 +485,15 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
         raise RuleInputError(f"三辺合計 is out of range: {girth}")
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
-        サイズ = SizeClass.S60
+        size = SizeClass.S60
     elif girth <= 80:  # row 2: <=80cm | S80
-        サイズ = SizeClass.S80
+        size = SizeClass.S80
     elif True:  # row 3: - | S100
-        サイズ = SizeClass.S100
+        size = SizeClass.S100
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return _round_up(運賃, 10)
+    return _round_up(fee, 10)
 ```
 
 ```go
@@ -498,18 +502,18 @@ func FeeDemo(in Input) (YenInclTax, error) {
 		return 0, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
 	}
 	// table サイズ判定 (policy first)
-	var サイズ SizeClass
+	var size SizeClass
 	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
-		サイズ = SizeClassS60
+		size = SizeClassS60
 	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
-		サイズ = SizeClassS80
+		size = SizeClassS80
 	} else if true { // row 3: - | S100
-		サイズ = SizeClassS100
+		size = SizeClassS100
 	} else {
 		panic("unreachable: completeness was statically checked by rulec")
 	}
 	...
-	return YenInclTax(roundUp(int64(運賃), 10)), nil
+	return YenInclTax(roundUp(int64(fee), 10)), nil
 }
 ```
 

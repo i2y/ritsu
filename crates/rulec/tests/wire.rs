@@ -275,7 +275,7 @@ fn 単位のない数が書けて割り算が単位を消す() {
     assert!(!py.contains("NewType(\"int\""), "int を NewType で覆っている:\n{py}");
     // Dividing by 100 does not divide the integer: it multiplies the scale, so 1050円
     // stays 1050 and the single rounding at the end turns it into 10 points.
-    assert!(py.contains("基本点 = paid"), "除算が整数を割ってしまっている:\n{py}");
+    assert!(py.contains("base = paid"), "除算が整数を割ってしまっている:\n{py}");
     assert!(py.contains("// 100"), "スケールが戻されていない:\n{py}");
     let _ = std::fs::remove_dir_all(&dir);
 }

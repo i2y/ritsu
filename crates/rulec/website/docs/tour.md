@@ -78,9 +78,22 @@ exported Go identifier.
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
-An alias is required only on **the rule name, the inputs, the outputs
-and their types**. A `derive`, a `define` or a table name never leaves
-the tool, so it may stay in Japanese.
+An alias is required only where a **non-ASCII** name reaches the public
+surface — the rule name, the inputs, the outputs — because a kanji has
+no uppercase and cannot begin an exported Go identifier. **A name that
+is already ASCII needs none**: write the whole rule in English and there
+are no parentheses anywhere.
+
+Elsewhere the alias is optional, and writing one decides what the
+generated code calls the value: `derive 残余(margin)` becomes `margin`,
+`group 遠隔地(remote)` becomes `_remote` / `isRemote`, a table output
+column `-> サイズ(size)` becomes `size`. Leave it out and the declared
+name is the identifier — every target language takes a Japanese one for
+something that is not exported.
+
+The alias on a `table` is the exception: accepted, and currently unused,
+because a table is inlined into the one generated function instead of
+becoming a function of its own. It is kept for SQL generation.
 
 ## Types
 

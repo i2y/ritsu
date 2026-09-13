@@ -52,10 +52,10 @@ def fee_demo(dest: Prefecture, girth: Cm) -> YenInclTax:
     if not _isinstance(dest, Prefecture):
         raise RuleInputError(...)
     ...
-    if dest in KINKI and サイズ == SizeClass.S60:  # row 1
-        運賃 = 990
+    if dest in _kinki and size == SizeClass.S60:  # row 1
+        fee = 990
     ...
-    return _round_up(運賃, 10)
+    return _round_up(fee, 10)
 ```
 </div>
 </div>
