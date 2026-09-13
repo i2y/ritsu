@@ -43,7 +43,7 @@ rulec は、**その書き直しを AI エージェントにやらせるため�
 | **出口がコード** | 証明の済んだ表からだけ、依存ゼロの Python と Go が出ます。手で直す必要はありません |
 | **人に渡すものがある** | 承認してもらう資料と、「入れたら何件がいくら動くか」の差分。エージェントが勝手に決められないことを、人への質問の形にします |
 
-エージェント側の手順書は [AGENTS.md](AGENTS.md) です。**エージェントスキルとしてそのまま読ませられる形**で書いてあり、rulec のコマンドはどれも `--format json` を持っているので、エージェントは文章を解析せずに済みます。診断コードは `E101` のような固定の記号で、**文面が改善されても記号と JSON の形は変わりません**。
+エージェント側の手順書は [AGENTS.md](AGENTS.md) で、そこから組み立てた**エージェントスキルが [`skills/rulec/`](skills/) にあります** — 自分のプロジェクトの `.claude/skills/` にコピーすれば、そのまま使えます。rulec のコマンドはどれも `--format json` を持っているので、エージェントは文章を解析せずに済みます。診断コードは `E101` のような固定の記号で、**文面が改善されても記号と JSON の形は変わりません**。
 
 一言でいうと、**表で書ける業務ルールについて、エージェントが「書く → 証明する → 直す → コードにする → 差分を人に見せる」を自分で回せるようにした道具**です。
 
@@ -764,15 +764,17 @@ docs/formats.md   機械可読な出力の定義（--format json、ベクタ、f
 docs/generated-code.md 生成物の形と保証、呼び方（英語）
 docs/reference.md 文法の完全な定義（英語）
 website/          ドキュメントサイト（zensical。docs/ が英語、docs-ja/ が日本語）
+skills/rulec/     利用者向けのエージェントスキル（`.claude/skills/` にコピーして使う）
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
-tests/corpus/     実在する公開規約から書き起こした 7 本
+tests/corpus/     実在する公開規約から書き起こした規則
 tests/mutants/    誤りを一つずつ仕込んだ 19 本
 tests/golden/     診断の文面のスナップショット 21 件
 tests/coverage.rs カバー判定器そのものを変異で試す
 tests/m3.rs       合成 fixtures での過去再生（実データは要らない）
 tests/doc.rs      資料が事実しか言わないことの検査
+tests/skill.rs    スキルが文書と食い違わず、リンクが外へ出ないことの検査
 tests/threeway.rs 評価器・生成 Python・生成 Go の三者一致
 tests/budget.rs   検査予算を決めた合成ベンチ
 tests/golden_en.rs 同じ診断の英語スナップショット（tests/golden/en/）

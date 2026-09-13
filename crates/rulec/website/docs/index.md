@@ -86,9 +86,10 @@ it. It has four sides.
 | **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python and Go that nobody edits by hand |
 | **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
-The agent's own instructions are in [For agents](agents.md). They are written to be handed to
-an agent as a skill, and every rulec command has `--format json`, so an agent never parses
-prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
+The agent's own instructions are in [For agents](agents.md), and the
+[agent skill](https://github.com/i2y/rulec/tree/main/skills) built from them ships in the
+repository — copy `skills/rulec/` into your project's `.claude/skills/` and it works as it
+stands. Every rulec command has `--format json`, so an agent never parses prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
 the JSON shape do not**.
 
 In one line: **for business rules that can be written as a table, a tool that lets an agent

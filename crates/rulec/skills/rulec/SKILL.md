@@ -1,3 +1,37 @@
+---
+name: rulec
+description: Turn a table-shaped business rule into proved, dependency-free Python and Go with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E014, E101-E114, W105, W110, W111, W114) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
+license: MIT
+---
+
+## When this applies
+
+The source of truth is **already a table, or would be one if someone wrote it down**: a
+tariff, a rate card, a fee schedule, the conditions under which a discount applies, which
+period a date falls in, whether a return is accepted. It lives in a spreadsheet, a published
+policy, a wiki page, or a legacy implementation, and the job is to turn it into code someone
+can approve.
+
+It does **not** apply to workflows with several steps and state, to judgements about a
+collection ("any line is refrigerated", "three or more items"), to pattern matching on
+strings, or to scoring and optimisation. Flatten collection facts at the boundary and pass
+the scalar in; keep iteration in the caller.
+
+Bundled with this skill, read on demand — do not read them all up front:
+
+| | |
+|---|---|
+| [reference.md](reference.md) | the complete grammar |
+| [examples.md](examples.md) | ten complete rules, smallest first, each with what it demonstrates |
+| [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
+| [generated-code.md](generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
+
+Every diagnostic is `rulec explain <CODE>`, which is always current, so there is no bundled
+copy of the ledger.
+
+---
+
 # Working with rulec
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
@@ -36,7 +70,7 @@ write  →  fmt  →  check  →  (fix, repeat)  →  examples  →  gen  →  t
 
 ### Write
 
-The grammar is [docs/reference.md](docs/reference.md), complete. The shortest useful summary:
+The grammar is [reference.md](reference.md), complete. The shortest useful summary:
 declare `inputs` and `outputs` with their units, write one `table` per decision, and let
 `examples` state a few cases you know the answer to.
 
@@ -55,7 +89,7 @@ so your diffs stay about the rule and not about whitespace.
 ### `rulec check <file> --format json`
 
 The centre of the loop. One JSON object per finding
-([docs/formats.md](docs/formats.md#check)). Read these fields:
+([formats.md](formats.md#check)). Read these fields:
 
 | field | what to do with it |
 |---|---|
@@ -73,7 +107,7 @@ the exit code — not whether the output looks empty.
 
 ### Fixing, by code
 
-The full ledger is `rulec explain --all` ([docs/codes.md](docs/codes.md)). The ones you will
+The full ledger is `rulec explain --all`. The ones you will
 meet while transcribing:
 
 - **E101 completeness gap** — some input matches no row. The witness names it. Add a row that
@@ -108,7 +142,7 @@ the source: a published tariff's own worked examples are ideal.
 Writes Python, Go, and the vectors. It refuses to generate from a rule that does not pass
 check. `rulec api <file>` tells you how to call the result — signatures, parameters with
 units and ranges, enum member spellings, errors — so you never have to read the generated
-code to integrate it ([docs/generated-code.md](docs/generated-code.md)).
+code to integrate it ([generated-code.md](generated-code.md)).
 
 ### `rulec test generated/ --format json`
 
@@ -261,9 +295,9 @@ by the person who can overrule it.
 
 | | |
 |---|---|
-| [docs/reference.md](docs/reference.md) | the complete grammar |
-| [docs/codes.md](docs/codes.md) | every diagnostic: when it appears, how to fix it, a runnable reproduction |
-| [docs/formats.md](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
-| [docs/generated-code.md](docs/generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
-| `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
-| `README.md` (Japanese) | the tour, for a person |
+| [reference.md](reference.md) | the complete grammar |
+| [examples.md](examples.md) | ten complete rules that all pass `check`, generate, and agree across three implementations |
+| [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
+| [generated-code.md](generated-code.md) | the shape and guarantees of the generated Python and Go, and how to call it |
+| `rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
+| <https://github.com/i2y/rulec> | the source, the design document, and the tour written for a person |
