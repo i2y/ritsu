@@ -33,43 +33,6 @@ hide:
 
 一枚で言うと、こうです。表が入り、rulec が一行を一つの箱にして並べ、隙間も重なりも無いと証明できた表からだけコードが出ます。抜けがあれば、それを起こす入力がそのまま返ってきます。
 
-## 表が入って、関数が出る
-
-<div class="rc-flow" markdown>
-<div markdown>
-<p class="rc-flow__label">書くもの</p>
-
-```
-table 運賃表(fee_table)
-policy unique
-| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
-| 近畿圏      | S60    | 990円                              |
-| 近畿圏      | S80    | 1310円                             |
-| not: 近畿圏 | S60    | 880円                              |
-| not: 近畿圏 | S80    | 1200円                             |
-```
-</div>
-<div class="rc-flow__arrow">→</div>
-<div markdown>
-<p class="rc-flow__label">出るもの</p>
-
-```python
-def fee_demo(dest: Prefecture, girth: Cm) -> YenInclTax:
-    """Rule 送料例 v1. Each branch corresponds 1:1 to a row."""
-    if not _isinstance(dest, Prefecture):
-        raise RuleInputError(...)
-    ...
-    if dest in _kinki and size == SizeClass.S60:  # row 1
-        fee = 990
-    ...
-    return _round_up(fee, 10)
-```
-</div>
-</div>
-
-同じ表から Go のパッケージも出ます。どちらも**普通の関数**です — エンジンも設定も、標準ライブラリ以外の依存もありません。
-
----
 
 ## これは何か — 表で書ける業務ルールを、エージェントがコードにするためのハーネス
 

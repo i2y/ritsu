@@ -15,12 +15,10 @@ coloured bar is whoever makes it or takes it, indigo is the path between the
 table and rulec, amber is anything that needs a person, grey is what leaves
 the system.
 
-    table --check--> rulec
-      ^                | witness        | gen, once proved
-      |                v                |
+    table --check--> rulec --gen, once proved--> Python, TypeScript, Go
+      ^                |
+      |                v  the input that falls through the gap
       +-- add the row, run again -- witness (E101)
-                                        v
-                     Python, TypeScript, Go
 
 Where the flow diagram says who does what, this one shows the single idea
 the prose has the hardest time with: a row is a box. Every cell narrows its
@@ -85,10 +83,11 @@ JA = dict(
            "    if dest == Zone.KINKI and weight <= 2000:  # 行1: 近畿圏 | <=2kg | 800円",
            "        fee = 800",
            "    ...",
-           "    else:",
-           "        raise AssertionError(\"到達不能: 完全性は rulec が静的に検査済み\")",
+           "    elif dest == Zone.KINKI and weight > 5000:  # 行3: 近畿圏 | >5kg | 1300円",
+           "        fee = 1300",
+           "    ...",
            "    return _round_up(fee, 10)"],
-          "依存ゼロ・エンジンなし・どれも同じ答え", ".py"),
+          ["依存ゼロ・エンジンなし・どれも同じ答え"], ".py"),
     check="rulec check", gen="rulec gen", proved="証明できたら",
     falls="それを起こす入力", again="行を足して、もう一度",
 )
@@ -118,10 +117,11 @@ EN = dict(
            "    if dest == Zone.KINKI and weight <= 2000:  # row 1: Kinki | <=2kg | 800円",
            "        fee = 800",
            "    ...",
-           "    else:",
-           "        raise AssertionError(\"unreachable: completeness was statically checked by rulec\")",
+           "    elif dest == Zone.KINKI and weight > 5000:  # row 3: Kinki | >5kg | 1300円",
+           "        fee = 1300",
+           "    ...",
            "    return _round_up(fee, 10)"],
-          "zero dependencies, no engine, the same answer from every one", ".py"),
+          ["zero dependencies, no engine, the same answer from every one"], ".py"),
     check="rulec check", gen="rulec gen", proved="once proved",
     falls="the input that causes it", again="add the row, run again",
 )
@@ -130,41 +130,33 @@ FILES = [("overview", EN, "en"), ("overview-ja", JA, "ja")]   # (name, words, --
 
 # --- geometry ---------------------------------------------------------------
 #
-# Three tiers. The top one is the sentence "table -> rulec", read left to
-# right along Y_IN, with the plane filling the card. The witness drops out
-# of the hole, through the bottom of the card, onto a sheet in the middle
-# tier; from there the amber path turns left and climbs back into the table
-# it came from. The code sheet is the whole bottom tier, because a real
-# generated line with its row comment is long, and it is reached by a drop
-# from the card's bottom right that passes clear of the witness sheet - so
-# no line crosses another.
-#
-# The canvas is 900 units wide on purpose: the page scales the picture to
-# its column, so fewer units across means larger type on screen.
+# One horizontal line carries the pipeline - table, rulec, code - at Y_IN, so
+# it reads left to right as one sentence. The witness drops out of the hole,
+# through the bottom of the card, onto a sheet; from there the amber path
+# turns left and climbs back into the table it came from. The canvas is as
+# wide as it is because the code sheet holds a real generated line, row
+# comment and all, at a size that can still be read.
 
-W = 900
+W = 1260
 TOP = 20
-Y_IN = 72                            # the top tier's one horizontal line
+Y_IN = 72                            # the pipeline's one horizontal line
 
 TABLE = (20, TOP, 236, 204)
-CARD = (340, TOP, W - 20 - 340, 236)
+CARD = (340, TOP, 314, 236)
+CODE = (732, TOP, 490, 190)          # wide enough for a branch and its row comment
+STACK = 8                            # the two sheets behind the code, offset
+Y_NOTES = 179                        # where the quiet line under the code sits
+
 COLS = (TABLE[0] + PAD, TABLE[0] + PAD + 72, TABLE[0] + TABLE[2] - PAD)
 Y_HEAD, Y_ROW, ROW_H, Y_GHOST = 62, 84, 19, 184   # baselines, from the sheet's top
 
-# The plane and its label column sit centred in the card.
-LABELS = 52                          # room for the band names, left of the plane
-PLANE_W = 440
-PLANE = (CARD[0] + PAD + (CARD[2] - 2 * PAD - LABELS - 8 - PLANE_W) / 2 + LABELS + 8,
-         CARD[1] + 108, PLANE_W, 100)
+PLANE = (CARD[0] + 62, CARD[1] + 108, 240, 100)   # the declared input space
 RANGE = 10                           # 重量 is declared  range >=1g <=10kg
 BAND = PLANE[3] / 2                  # two destinations, two bands
 TICKS = (2, 5, 10)
 
-GAP = 26                             # between the tiers
 WIT_W = 270
 X_BACK = TABLE[0] + TABLE[2] / 2     # the return path climbs into the table here
-X_GEN = 720                          # the code drops out of the card here
-STACK = 8                            # the two sheets behind the code, offset
 
 
 def kg(v):
@@ -196,10 +188,9 @@ HOLE = box_of(JA["ghost"], JA["bands"])
 assert HOLE == box_of(EN["ghost"], EN["bands"]), "the two languages draw different holes"
 DOT = (kg(HOLE[1]) + 10.5, band_y(HOLE[0]) + BAND / 2)
 assert kg(HOLE[1]) + 6.5 <= DOT[0] <= kg(HOLE[2]) - 6.5, "the witness is not in the hole"
-WIT = (DOT[0] - WIT_W / 2, CARD[1] + CARD[3] + GAP, WIT_W, 62)
-CODE = (20, WIT[1] + WIT[3] + GAP, W - 20 - 2 * STACK - 20, 158)
-H = CODE[1] + CODE[3] + 2 * STACK + TOP
-assert WIT[0] + WIT[2] + 20 <= X_GEN <= CARD[0] + CARD[2], "the code's drop must clear the witness"
+WIT = (DOT[0] - WIT_W / 2, CARD[1] + CARD[3] + 30, WIT_W, 62)
+H = WIT[1] + WIT[3] + TOP
+assert CODE[0] + CODE[2] + 2 * STACK + TOP <= W, "the code sheets run off the right edge"
 
 
 # --- primitives of this picture only ----------------------------------------
@@ -259,7 +250,7 @@ def rulec_card(t, c):
     b, lo, hi = HOLE
     o.append(dashed(kg(lo) + 2, band_y(b) + 2, kg(hi) - kg(lo) - 4, BAND - 4, c))
     for b, name in enumerate(t["bands"]):
-        fit(name, 10.5, LABELS)
+        fit(name, 10.5, px - 8 - (CARD[0] + PAD))
         o.append(text(px - 8, band_y(b) + BAND / 2 + 4, name, 10.5, c["dim"], anchor="end"))
     # Each tick label ends at its tick, under the box it closes - which is
     # what a cell like <=2kg says - and keeps clear of the witness's drop.
@@ -273,24 +264,26 @@ def rulec_card(t, c):
 
 
 def code_sheets(t, c):
-    """Three sheets in a stack - one per language - with the front one open.
-    The quiet note shares the title line, between the title and the tag."""
-    title, code, note, tag = t["code"]
+    """Three sheets in a stack - one per language - with the front one open."""
+    title, code, notes, tag = t["code"]
     x, y, w, h = CODE
     o = []
     for k in (2, 1):
         o += sheet_frame((x + k * STACK, y + k * STACK, w, h), c)
     o += sheet_frame(CODE, c) + sheet_title(CODE, title, tag, c)
     inner = w - 2 * PAD
-    fit(note, 11.5, inner - width(title, 13, 600) - width(tag, 9.5, mono=True) - 2 * 16)
-    o.append(text(x + w / 2, y + 22, note, 11.5, c["dim"]))
     keep = ' xml:space="preserve" style="white-space:pre"'   # indentation is the point
     for i, line in enumerate(code):
         fit(line, 10, inner, mono=True)
         o.append(text(x + PAD, y + 40 + i * 15, line, 10, c["ink"], anchor="start",
                       mono=True, extra=keep))
-    if 40 + (len(code) - 1) * 15 + 13 > h:
-        raise ValueError(f"{title}: {len(code)} lines of code do not fit in {h}")
+    if 40 + len(code) * 15 > Y_NOTES:
+        raise ValueError(f"{title}: {len(code)} lines of code run into the notes")
+    for i, line in enumerate(notes):
+        fit(line, 11.5, inner)
+        o.append(text(x + PAD, y + Y_NOTES + i * 15, line, 11.5, c["dim"], anchor="start"))
+    if Y_NOTES + (len(notes) - 1) * 15 + 6 > h:
+        raise ValueError(f"{title}: the code and notes do not fit in {h}")
     return o
 
 
@@ -328,21 +321,20 @@ def draw(t, c):
     fit(t["check"], 10.5, x2 - x1 - 12, mono=True)
     o.append(text((x1 + x2) / 2, Y_IN - 9, t["check"], 10.5, c["dim"], mono=True))
 
+    # -- out: once proved, the code
+    x1, x2 = CARD[0] + CARD[2], CODE[0]
+    o.append(arrow(x1, Y_IN, x2, Y_IN, "neutral", c))
+    fit(t["gen"], 10.5, x2 - x1 - 12, mono=True)
+    fit(t["proved"], 10.5, x2 - x1 - 12)
+    o.append(text((x1 + x2) / 2, Y_IN - 9, t["gen"], 10.5, c["dim"], mono=True))
+    o.append(text((x1 + x2) / 2, Y_IN + 18, t["proved"], 10.5, c["dim"]))
+
     # -- down: the witness falls through the hole, out of the card, onto a sheet
     bottom = CARD[1] + CARD[3]
     o.append(arrow(DOT[0], DOT[1] + 7, DOT[0], WIT[1], "human", c))
-    fit(t["falls"], 11, X_GEN - 12 - (DOT[0] + 8))
+    fit(t["falls"], 11, CARD[0] + CARD[2] - (DOT[0] + 8))
     o.append(text(DOT[0] + 8, (bottom + WIT[1]) / 2 + 4, t["falls"], 11, c["human"],
                   anchor="start"))
-
-    # -- down, on the right: once proved, the code
-    o.append(arrow(X_GEN, bottom, X_GEN, CODE[1], "neutral", c))
-    mid = (bottom + CODE[1]) / 2
-    room = CARD[0] + CARD[2] - (X_GEN + 8)
-    fit(t["gen"], 10.5, room, mono=True)
-    fit(t["proved"], 10.5, room)
-    o.append(text(X_GEN + 8, mid - 4, t["gen"], 10.5, c["dim"], anchor="start", mono=True))
-    o.append(text(X_GEN + 8, mid + 12, t["proved"], 10.5, c["dim"], anchor="start"))
 
     # -- back: left along the band, then up into the table, one rounded corner
     yb = WIT[1] + WIT[3] / 2

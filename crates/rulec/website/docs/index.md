@@ -39,44 +39,6 @@ That is the whole of it in one picture. A table goes in; rulec turns each row in
 and only a table whose boxes leave no gap and no overlap comes out as code. When there is a
 gap, what comes back is the input that falls through it.
 
-## Table in, functions out
-
-<div class="rc-flow" markdown>
-<div markdown>
-<p class="rc-flow__label">what you write</p>
-
-```
-table 運賃表(fee_table)
-policy unique
-| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
-| 近畿圏      | S60    | 990円                              |
-| 近畿圏      | S80    | 1310円                             |
-| not: 近畿圏 | S60    | 880円                              |
-| not: 近畿圏 | S80    | 1200円                             |
-```
-</div>
-<div class="rc-flow__arrow">→</div>
-<div markdown>
-<p class="rc-flow__label">what you get</p>
-
-```python
-def fee_demo(dest: Prefecture, girth: Cm) -> YenInclTax:
-    """Rule 送料例 v1. Each branch corresponds 1:1 to a row."""
-    if not _isinstance(dest, Prefecture):
-        raise RuleInputError(...)
-    ...
-    if dest in _kinki and size == SizeClass.S60:  # row 1
-        fee = 990
-    ...
-    return _round_up(fee, 10)
-```
-</div>
-</div>
-
-The same table also becomes a Go package. Both are plain functions: no
-engine, no configuration, no dependency beyond the standard library.
-
----
 
 ## What this is — a harness for an agent turning table-shaped rules into code
 

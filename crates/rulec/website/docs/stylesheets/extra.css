@@ -179,41 +179,6 @@
    Two code blocks side by side on a wide screen, stacked on a narrow
    one, with an arrow between them that turns with the flow. */
 
-.rc-flow {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: .9rem;
-  margin: 1.4rem 0 2rem;
-}
-
-.rc-flow__arrow {
-  font-size: 1.4rem;
-  line-height: 1;
-  color: var(--rc-mark);
-  text-align: center;
-  user-select: none;
-}
-
-.md-typeset .rc-flow > div > .highlight,
-.md-typeset .rc-flow > div > pre { margin: 0; }
-
-/* A grid item will not shrink below its content unless told to, so without
-   this the two code blocks push the whole page wider than the phone and the
-   body scrolls sideways. They scroll inside their own box instead. */
-.rc-flow > div { min-width: 0; }
-
-.rc-flow__label {
-  margin: 0 0 .35rem;
-  font-size: .62rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--md-default-fg-color--light);
-}
-
-@media screen and (max-width: 59.9em) {
-  .rc-flow { grid-template-columns: 1fr; }
-  .rc-flow__arrow { transform: rotate(90deg); margin: .1rem 0; }
 }
 
 /* ---- the opening diagram ------------------------------------------- */
@@ -222,7 +187,7 @@
    rather than shrink — the page itself never scrolls sideways. */
 
 .rc-overview { overflow-x: auto; }
-.md-typeset .rc-overview img { min-width: 36rem; }
+.md-typeset .rc-overview img { min-width: 44rem; }
 
 /* ---- a diagnostic, shown as itself --------------------------------- */
 /* Terminal output on this site is quoted verbatim, frame and carets and
