@@ -87,16 +87,16 @@ pub struct Mismatch {
 impl Mismatch {
     /// Only the outputs that differ. When the counterpart gave no answer, all of them count
     /// as differing.
-    pub fn differing(&self) -> Vec<&(String, Option<Val>, Option<String>)> {
-        self.outs.iter().filter(|(_, a, b)| wire(a.as_ref()) != *b).collect()
+    pub fn differing(&self, c: &Checked) -> Vec<&(String, Option<Val>, Option<String>)> {
+        self.outs.iter().filter(|(n, a, b)| wire(c, n, a.as_ref()) != *b).collect()
     }
 }
 
-/// A value in its wire representation. JSON numbers are integers in the canonical unit
-/// (§10.2).
-pub fn wire(v: Option<&Val>) -> Option<String> {
+/// A value in its wire representation. JSON numbers are integers in the canonical unit, and
+/// a rate travels as the number of steps (§10.2), so the conversion needs the name.
+pub fn wire(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
     v.map(|o| match o {
-        Val::Num(r) => format!("{}", r.num / r.den),
+        Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
         Val::Bool(b) => format!("{b}"),
         other => vectors::show(other),
     })
@@ -225,15 +225,16 @@ impl Delta {
 }
 
 /// Per cluster: output name → Δ statistics.
-fn deltas(ms: &[&Mismatch]) -> BTreeMap<String, Delta> {
+fn deltas(ms: &[&Mismatch], c: &Checked) -> BTreeMap<String, Delta> {
     let mut out: BTreeMap<String, Delta> = BTreeMap::new();
     for m in ms {
-        for (n, a, b) in m.differing() {
+        for (n, a, b) in m.differing(c) {
             let (Some(Val::Num(a)), Some(b)) = (a, b) else { continue };
             let Ok(b) = b.parse::<i128>() else { continue };
+            // Both sides are wire integers, so a rate's Δ is counted in steps.
             out.entry(n.clone())
                 .or_insert(Delta { n: 0, sum: 0, lo: 0, hi: 0 })
-                .push((a.num / a.den) - b);
+                .push(crate::types::wire_int(*a, c.wire_scale(n)) - b);
         }
     }
     out.retain(|_, d| d.n > 0);
@@ -249,11 +250,11 @@ fn money_text(ds: &BTreeMap<String, Delta>, multi: bool) -> String {
         .collect()
 }
 
-fn witness(ex: &Mismatch, theirs: &str) -> String {
+fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
     let inp: Vec<String> =
         ex.input.iter().map(|(n, v)| format!("{n}={}", vectors::show(v))).collect();
     let diff: Vec<String> = ex
-        .differing()
+        .differing(c)
         .iter()
         .filter_map(|(n, a, b)| {
             let (a, b) = (a.as_ref()?, b.as_ref()?);
@@ -316,7 +317,7 @@ pub fn clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'
             label,
             fired: ms[0].fired.clone(),
             count: ms.len(),
-            deltas: deltas(&ms),
+            deltas: deltas(&ms, c),
             suspect_grid: sub_grid(&ms, f, c),
             error: ms[0].err.clone(),
             example: ms[0],
@@ -361,11 +362,11 @@ fn provenance(rep: &Report) -> Vec<String> {
 /// The §10.4 headline. Not just the count: the total amount that moves is always attached.
 /// "How many records move" and "how much money moves" are different questions, and it is
 /// the latter that sways an approval.
-fn impact(rep: &Report) -> String {
+fn impact(rep: &Report, c: &Checked) -> String {
     let n = rep.total - rep.errored;
     let pct = if n == 0 { 0.0 } else { rep.mismatches.len() as f64 * 100.0 / n as f64 };
     let all: Vec<&Mismatch> = rep.mismatches.iter().collect();
-    let money: Vec<String> = deltas(&all)
+    let money: Vec<String> = deltas(&all, c)
         .iter()
         .map(|(name, d)| {
             let label = if rep.multi { format!("{name} ") } else { String::new() };
@@ -399,7 +400,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
         return o;
     }
-    o.push_str(&format!("\n{}\n", impact(rep)));
+    o.push_str(&format!("\n{}\n", impact(rep, c)));
     for cl in clusters(rep, f, c) {
         let money = money_text(&cl.deltas, rep.multi);
         o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
@@ -412,7 +413,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 "    Suspected rounding difference (only fractions below the output grid {q})\n"
             ));
         }
-        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs)));
+        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
     }
     o
 }
@@ -454,7 +455,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
         return o;
     }
-    o.push_str(&format!("\n**{}**\n", impact(rep)));
+    o.push_str(&format!("\n**{}**\n", impact(rep, c)));
     o.push_str(&tr!(
         "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 証人 |\n|---|---:|---|---|\n",
         "\n#### Mismatch breakdown\n\n| Fired rows | Count | Difference | Witness |\n|---|---:|---|---|\n"
@@ -472,7 +473,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
             esc(&cl.label),
             cl.count,
             esc(&money),
-            esc(&witness(cl.example, &rep.theirs))
+            esc(&witness(cl.example, &rep.theirs, c))
         ));
     }
     o
@@ -509,14 +510,14 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
             }
             let ex = cl.example;
             let ins: Vec<(String, String)> =
-                ex.input.iter().map(|(n, v)| (n.clone(), wire(Some(v)).unwrap_or_default())).collect();
+                ex.input.iter().map(|(n, v)| (n.clone(), wire(c, n, Some(v)).unwrap_or_default())).collect();
             let ours: Vec<(String, String)> = ex
-                .differing()
+                .differing(c)
                 .iter()
-                .filter_map(|(n, a, _)| Some((n.clone(), wire(a.as_ref())?)))
+                .filter_map(|(n, a, _)| Some((n.clone(), wire(c, n, a.as_ref())?)))
                 .collect();
             let theirs: Vec<(String, String)> = ex
-                .differing()
+                .differing(c)
                 .iter()
                 .filter_map(|(n, _, b)| Some((n.clone(), b.clone()?)))
                 .collect();
@@ -575,7 +576,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
 fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
     let mut grids: BTreeMap<String, String> = BTreeMap::new();
     for m in ms {
-        let diff = m.differing();
+        let diff = m.differing(c);
         if diff.is_empty() {
             return None;
         }
@@ -588,7 +589,7 @@ fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
                 return None;
             }
             let (Some(Val::Num(a)), Some(b)) = (a, b) else { return None };
-            let d = (a.num / a.den) - b.parse::<i128>().ok()?;
+            let d = crate::types::wire_int(*a, c.wire_scale(n)) - b.parse::<i128>().ok()?;
             // Compare |d| < q in integers by clearing the denominator.
             if d == 0 || d.abs() * q.den >= q.num {
                 return None;

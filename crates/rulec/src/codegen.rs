@@ -106,10 +106,18 @@ impl<'a> Gen<'a> {
                 }
                 let mut sc: i128 = 1;
                 for row in &t.rows {
-                    if let Some(OutCell::Lit(Lit::Num(n))) = row.outs.get(oi) {
-                        if let Some(v) = crate::types::lit_value_in_pub(n, &ty) {
-                            sc = lcm(sc, v.den);
+                    match row.outs.get(oi) {
+                        Some(OutCell::Lit(Lit::Num(n))) => {
+                            if let Some(v) = crate::types::lit_value_in_pub(n, &ty) {
+                                sc = lcm(sc, v.den);
+                            }
                         }
+                        // A cell that names a value writes that value's scale into the
+                        // column. Sizing the column only by its literals is how a rate-valued
+                        // definition ended up assigned into a column a hundred times coarser
+                        // than itself, and silently multiplied.
+                        Some(OutCell::Name(w)) => sc = lcm(sc, *c.scales.get(w).unwrap_or(&1)),
+                        _ => {}
                     }
                 }
                 col_scales.insert(oc.name.text.clone(), sc);
@@ -137,6 +145,25 @@ impl<'a> Gen<'a> {
             return *s;
         }
         *self.c.scales.get(n).unwrap_or(&1)
+    }
+
+    /// A value written into an output column, brought to that column's scale.
+    ///
+    /// A name carries the scale of whatever it names — a definition over a rate input is
+    /// held in hundredths, say — while the column has a scale of its own, fixed by the
+    /// literals that appear in it. Assigning one into the other without this is how a rate
+    /// landed in a column a hundred times its size.
+    fn rescaled(&self, from: &str, to: &str, text: String) -> String {
+        let (a, b) = (self.scale(from), self.scale(to));
+        // The column is sized to hold whatever is written into it (see `Gen::new`), so this
+        // only ever widens. Anything else would silently drop precision the evaluator keeps.
+        if a == b || a == 0 || b % a != 0 {
+            text
+        } else {
+            // No parentheses: this lands on the right of an assignment, and both formatters
+            // strip a redundant pair there.
+            format!("{text} * {}", b / a)
+        }
     }
 
     /// An integer literal adjusted to the type and the column's scale.
@@ -555,10 +582,15 @@ impl<'a> Gen<'a> {
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
+                            // The bound has to be in the units the argument arrives in, which
+                            // for a rate is the number of steps. Taking the numerator alone
+                            // turned `range >=0% <=100%` into `0 <= r <= 1` and refused every
+                            // value above one step.
+                            let sc = self.c.wire_scale(&i.name.text);
                             o.push_str(&format!(
                                 "    if not {} <= {v} <= {}:\n        raise RuleInputError(f\"{}\")\n",
-                                lo.num,
-                                hi.num,
+                                crate::types::wire_int(*lo, sc),
+                                crate::types::wire_int(*hi, sc),
                                 tr!("{} が範囲の外です: {{{v}}}", "{} is out of range: {{{v}}}", i.name.text)
                             ));
                         }
@@ -678,7 +710,7 @@ impl<'a> Gen<'a> {
                         } else if self.value_names.contains_key(w) {
                             self.py_value(w)
                         } else {
-                            local(w)
+                            self.rescaled(w, &oc.name.text, local(w))
                         }
                     }
                     None => "0".into(),
@@ -978,8 +1010,17 @@ impl<'a> Gen<'a> {
             )
         ));
         for i in &self.f.inputs {
+            // The field holds the wire integer, so the range is shown in the same units as
+            // the guard below it, not in the units the declaration was written in.
+            let sc = self.c.wire_scale(&i.name.text);
             let doc = match self.c.ranges.get(&i.name.text) {
-                Some((Some(lo), Some(hi))) => tr!("// {} 範囲 {}..{}", "// {} range {}..{}", i.name.text, lo.num, hi.num),
+                Some((Some(lo), Some(hi))) => tr!(
+                    "// {} 範囲 {}..{}",
+                    "// {} range {}..{}",
+                    i.name.text,
+                    crate::types::wire_int(*lo, sc),
+                    crate::types::wire_int(*hi, sc)
+                ),
                 _ => format!("// {}", i.name.text),
             };
             o.push_str(&format!("\t{}{CELL}{}{CELL}{doc}\n", pascal(&pub_name(&i.name)), self.go_ty(&self.ty_of(&i.name.text))));
@@ -1032,10 +1073,11 @@ impl<'a> Gen<'a> {
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
+                        let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
                             "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
-                            lo.num,
-                            hi.num,
+                            crate::types::wire_int(*lo, sc),
+                            crate::types::wire_int(*hi, sc),
                             tr!("{} が範囲の外です: %d", "{} is out of range: %d", i.name.text)
                         ));
                     }
@@ -1072,7 +1114,9 @@ impl<'a> Gen<'a> {
                 let grid_i = g.num * res.scale / g.den;
                 if res.scale != os {
                     o.push_str(&format!(
-                        "\traw := int64{}{CELL}// {}\n",
+                        // The cast needs its own parentheses: an expression that begins with
+                        // a call rather than a `(` glued itself to the type name.
+                        "\traw := int64({}){CELL}// {}\n",
                         go_expr(&res.text),
                         tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                     ));
@@ -1167,7 +1211,7 @@ impl<'a> Gen<'a> {
                         } else if self.value_names.contains_key(w) {
                             self.go_value(w)
                         } else {
-                            local(w)
+                            self.rescaled(w, &oc.name.text, local(w))
                         }
                     }
                     None => "0".into(),
@@ -1192,7 +1236,8 @@ impl<'a> Gen<'a> {
 
 /// Adapt an expression built for Python to Go's spelling. Only integer division differs.
 fn go_expr(s: &str) -> String {
-    s.replace(" // ", " / ")
+    let t = s
+        .replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
         .replace("_round_down(", "roundDown(")
@@ -1200,7 +1245,44 @@ fn go_expr(s: &str) -> String {
         .replace("_round_half(", "roundHalf(")
         .replace("_round_bankers(", "roundBankers(")
         .replace("_min(", "minInt(")
-        .replace("_max(", "maxInt(")
+        .replace("_max(", "maxInt(");
+    tighten_nested_products(&t)
+}
+
+/// Match one habit of `gofmt`: a product written inside a group that sits two or more call
+/// arguments deep loses the spaces around its operator.
+///
+/// The generator formats its own Go rather than shelling out to `gofmt` (§8.5: the output
+/// must not depend on the version of a tool installed on the machine), and a test then holds
+/// it to `gofmt -l` being empty. That test is what turned this up: `roundDown(minInt(x, (int64(in.Cap) * 100)), (1 * 100))`
+/// comes back from `gofmt` with the first product tightened and the second left alone. The
+/// rule below reproduces that on the shapes the generator emits — at one call deep the spaces
+/// stay, which is what `gofmt` does too.
+fn tighten_nested_products(s: &str) -> String {
+    let b: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    // For every open paren still on the stack: was it a call's, or a grouping's?
+    let mut stack: Vec<bool> = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c == '(' {
+            let call = i > 0 && (b[i - 1].is_alphanumeric() || b[i - 1] == '_');
+            stack.push(call);
+        } else if c == ')' {
+            stack.pop();
+        }
+        let calls = stack.iter().filter(|x| **x).count();
+        let in_group = stack.last() == Some(&false);
+        if in_group && calls >= 2 && c == ' ' && i + 2 < b.len() && (b[i + 1] == '*' || b[i + 1] == '/') && b[i + 2] == ' ' {
+            out.push(b[i + 1]);
+            i += 3;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
 }
 
 fn round_go() -> String {
@@ -1642,7 +1724,13 @@ impl Gen<'_> {
     fn range_json(&self, name: &str) -> Option<String> {
         let (lo, hi) = self.c.ranges.get(name)?;
         let (lo, hi) = (lo.as_ref()?, hi.as_ref()?);
-        Some(crate::json::Obj::new().int("min", lo.num).int("max", hi.num).finish())
+        let sc = self.c.wire_scale(name);
+        Some(
+            crate::json::Obj::new()
+                .int("min", crate::types::wire_int(*lo, sc))
+                .int("max", crate::types::wire_int(*hi, sc))
+                .finish(),
+        )
     }
 
     /// `{"mode":"down","grid":1}` — the grid as an integer in the canonical unit, so it can be

@@ -26,7 +26,12 @@ enum Axis {
     Enum { values: Vec<String> },
     /// Numbers and dates. A date is held as an ordinal (its serial day number), so the interval
     /// machinery applies unchanged. An empty `unit` means "write it back as a date".
-    Num { unit: String, coords: Vec<Coord> },
+    ///
+    /// Coordinates are true values. A rate is written in percent and travels as a count of
+    /// steps (§10.2), and those two factors differ once the step is finer than 1%, so both
+    /// are carried: `shown` to write the value back into a cell, `wire` to put it in a
+    /// witness. Everything else has 1 for both.
+    Num { unit: String, coords: Vec<Coord>, shown: i128, wire: i128 },
     Bool,
 }
 
@@ -44,7 +49,7 @@ impl Axis {
         match self {
             Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
             Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
-            Axis::Num { unit, coords } if unit.is_empty() => match coords.get(i) {
+            Axis::Num { unit, coords, .. } if unit.is_empty() => match coords.get(i) {
                 // For dates, prefer a boundary (an actual calendar day). The midpoint of an
                 // interval need not be one.
                 Some(Coord::Point(v)) => {
@@ -64,19 +69,19 @@ impl Axis {
                 }
                 None => String::new(),
             },
-            Axis::Num { unit, coords } => match coords.get(i) {
-                Some(Coord::Point(v)) => format!("{v}{unit}"),
-                Some(Coord::Open(a, b)) => {
-                    let v = match (a, b) {
+            Axis::Num { unit, coords, shown, .. } => {
+                let w = |v: Rat| format!("{}{unit}", v.mul(Rat::int(*shown)));
+                match coords.get(i) {
+                    Some(Coord::Point(v)) => w(*v),
+                    Some(Coord::Open(a, b)) => w(match (a, b) {
                         (Some(a), Some(b)) => a.add(*b).div(Rat::int(2)),
                         (Some(a), None) => a.add(Rat::int(1)),
                         (None, Some(b)) => b.sub(Rat::int(1)),
                         (None, None) => Rat::zero(),
-                    };
-                    format!("{v}{unit}")
+                    }),
+                    None => String::new(),
                 }
-                None => String::new(),
-            },
+            }
         }
     }
 
@@ -90,7 +95,7 @@ impl Axis {
             Axis::Bool => WVal::Bool(i == 0),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
             Axis::Num { unit, .. } if unit.is_empty() => WVal::Str(self.witness(i)),
-            Axis::Num { coords, .. } => {
+            Axis::Num { coords, wire, .. } => {
                 let v = match coords.get(i) {
                     Some(Coord::Point(v)) => *v,
                     Some(Coord::Open(a, b)) => match (a, b) {
@@ -101,7 +106,7 @@ impl Axis {
                     },
                     None => Rat::zero(),
                 };
-                WVal::Int(v.num / v.den)
+                WVal::Int(crate::types::wire_int(v, *wire))
             }
         }
     }
@@ -277,7 +282,12 @@ impl TableRegion {
                     let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
                     // A date's step is one day. Dates are serial day numbers, so adjacent days
                     // differ by 1.
-                    Axis::Num { unit: String::new(), coords: num_coords(&b, lo, hi, Rat::int(1)) }
+                    Axis::Num {
+                        unit: String::new(),
+                        coords: num_coords(&b, lo, hi, Rat::int(1)),
+                        shown: 1,
+                        wire: 1,
+                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
@@ -294,7 +304,13 @@ impl TableRegion {
                         Ty::Rate => Rat::new(1, *c.scales.get(name).unwrap_or(&100)),
                         _ => Rat::int(1),
                     };
-                    Axis::Num { unit, coords: num_coords(&b, lo, hi, q) }
+                    Axis::Num {
+                        unit,
+                        coords: num_coords(&b, lo, hi, q),
+                        // A rate is written in percent whatever its step is.
+                        shown: if matches!(ty, Ty::Rate) { 100 } else { 1 },
+                        wire: c.wire_scale(name),
+                    }
                 }
                 _ => {
                     // Silently skipping a type we cannot analyze would report ok without ever

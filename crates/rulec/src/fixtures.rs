@@ -100,7 +100,9 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
             }
         }
         (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate, Json::Int(n)) => {
-            let v = Rat::int(*n);
+            // The wire carries an integer in the canonical unit; a rate carries a count of
+            // steps (§10.2). The range was declared in true values, so convert first.
+            let v = crate::types::from_wire(*n, c.wire_scale(name));
             if let Some((lo, hi)) = c.ranges.get(name) {
                 if lo.is_some_and(|l| v.cmp_to(l) == std::cmp::Ordering::Less)
                     || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater)

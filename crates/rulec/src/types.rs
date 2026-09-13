@@ -887,6 +887,36 @@ impl Checked {
     pub fn ty_of(&self, name: &str) -> Option<Ty> {
         self.syms.get(name).map(|s| s.ty.clone())
     }
+
+    /// The factor a named value is multiplied by to become the integer it travels as.
+    ///
+    /// One for everything with a unit of its own — yen, grams, centimetres are already
+    /// integers in the unit they declare. A **rate has no unit**, so it travels as the
+    /// number of steps its declaration names: `10%` under `rate[step 1%]` is 10 (§2.1,
+    /// §10.2). A rate with no step declared falls back to hundredths, which is what the
+    /// generated code assumes for a column whose literals fixed no finer grid.
+    ///
+    /// Everything that turns a value into an integer — the vectors, the fixtures, a
+    /// report, a witness, the entry guard of the generated code — asks here. Two answers
+    /// for one value is how a rate came to mean 1 on one side of the wire and 100 on the
+    /// other.
+    pub fn wire_scale(&self, name: &str) -> i128 {
+        match self.ty_of(name) {
+            Some(Ty::Rate) => *self.scales.get(name).unwrap_or(&100),
+            _ => 1,
+        }
+    }
+}
+
+/// A value as the integer it travels as, at the scale `Checked::wire_scale` gives.
+pub fn wire_int(v: Rat, scale: i128) -> i128 {
+    let s = v.mul(Rat::int(scale));
+    s.num / s.den
+}
+
+/// The same journey back: an integer off the wire into the value it stands for.
+pub fn from_wire(n: i128, scale: i128) -> Rat {
+    Rat::new(n, scale)
 }
 
 pub fn lit_ty_pub(n: &crate::lex::Num) -> Ty {

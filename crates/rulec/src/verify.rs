@@ -49,7 +49,7 @@ fn scalar(rest: &str) -> String {
 }
 
 /// Starts the adapter, streams the vectors through it and compares the answers.
-pub fn run(f: &RuleFile, _c: &Checked, adapter: &[String], vs: &[Vector]) -> Result<Report, String> {
+pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Result<Report, String> {
     let (cmd, args) = adapter
         .split_first()
         .ok_or_else(|| tr!("アダプタのコマンドがありません", "No adapter command was given"))?;
@@ -100,7 +100,7 @@ pub fn run(f: &RuleFile, _c: &Checked, adapter: &[String], vs: &[Vector]) -> Res
         Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "旧" } else { "legacy" }) };
 
     for (id, v) in vs.iter().enumerate() {
-        let body = vectors::to_json(f, v);
+        let body = vectors::to_json(f, c, v);
         let inpart = field(&body, "in").map(|s| {
             let depth_end = s.find("},\"out\"").map(|i| i + 1).unwrap_or(s.len());
             s[..depth_end].to_string()
@@ -131,7 +131,7 @@ pub fn run(f: &RuleFile, _c: &Checked, adapter: &[String], vs: &[Vector]) -> Res
             continue;
         }
         // With two or more outputs, a record matches only when all of them match (§8.5).
-        if pairs.iter().all(|(_, a, b)| wire(a.as_ref()) == *b) {
+        if pairs.iter().all(|(n, a, b)| wire(c, n, a.as_ref()) == *b) {
             rep.agreed += 1;
         } else {
             rep.mismatches.push(Mismatch {
@@ -258,15 +258,18 @@ pub fn schema(f: &RuleFile, c: &Checked) -> String {
                     _ => String::new(),
                 };
                 let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+                // The schema describes the wire, so the bounds are converted the same way a
+                // value is: a rate's 100% is 100 steps, not 1 (§10.2).
+                let sc = c.wire_scale(name);
                 let mut s = tr!(
                     "{{\"type\":\"integer\",\"description\":\"単位: {unit}\"",
                     "{{\"type\":\"integer\",\"description\":\"Unit: {unit}\""
                 );
                 if let Some(l) = lo {
-                    s.push_str(&format!(",\"minimum\":{}", l.num / l.den));
+                    s.push_str(&format!(",\"minimum\":{}", crate::types::wire_int(l, sc)));
                 }
                 if let Some(h) = hi {
-                    s.push_str(&format!(",\"maximum\":{}", h.num / h.den));
+                    s.push_str(&format!(",\"maximum\":{}", crate::types::wire_int(h, sc)));
                 }
                 s.push('}');
                 s

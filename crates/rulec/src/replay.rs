@@ -36,11 +36,11 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = outs
             .into_iter()
             .map(|(n, v)| {
-                let theirs = wire(r.observed.get(&n));
+                let theirs = wire(c, &n, r.observed.get(&n));
                 (n, v, theirs)
             })
             .collect();
-        let same = pairs.iter().all(|(_, a, b)| wire(a.as_ref()) == *b);
+        let same = pairs.iter().all(|(n, a, b)| wire(c, n, a.as_ref()) == *b);
 
         // §10.3: observed and filled records are always tallied separately; the headline
         // match rate comes from the observed records only.
@@ -102,11 +102,12 @@ pub fn diff(
         let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = n_outs
             .into_iter()
             .map(|(n, v)| {
-                let theirs = o_outs.iter().find(|(m, _)| *m == n).and_then(|(_, v)| wire(v.as_ref()));
+                let theirs =
+                    o_outs.iter().find(|(m, _)| *m == n).and_then(|(_, v)| wire(new.1, &n, v.as_ref()));
                 (n, v, theirs)
             })
             .collect();
-        let same = pairs.iter().all(|(_, a, b)| wire(a.as_ref()) == *b);
+        let same = pairs.iter().all(|(n, a, b)| wire(new.1, n, a.as_ref()) == *b);
 
         if r.filled.is_empty() {
             rep.total += 1;

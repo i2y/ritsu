@@ -492,13 +492,17 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
 }
 
 /// Canonical JSON. Three-way agreement is judged on these bytes (§8.5).
-pub fn to_json(f: &RuleFile, v: &Vector) -> String {
+pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let mut ins: Vec<String> = Vec::new();
     for i in &f.inputs {
         let Some(val) = v.input.get(&i.name.text) else { continue };
         let body = match val {
-            Val::Num(r) => format!("{}", r.num / r.den),
+            // A number goes out as the integer it travels as, which for a rate is the
+            // number of steps (§10.2). Asking `Checked` is the only way to know.
+            Val::Num(r) => {
+                format!("{}", crate::types::wire_int(*r, c.wire_scale(&i.name.text)))
+            }
             Val::Bool(b) => format!("{b}"),
             other => format!("\"{}\"", esc(&show(other))),
         };
@@ -507,7 +511,7 @@ pub fn to_json(f: &RuleFile, v: &Vector) -> String {
     format!(
         "{{\"in\":{{{}}},\"out\":{},\"trace\":[{}],\"why\":\"{}\"}}",
         ins.join(","),
-        out_object(v),
+        out_object(c, v),
         v.trace.iter().map(|t| format!("\"{}\"", esc(t))).collect::<Vec<_>>().join(","),
         esc(&v.why)
     )
@@ -515,23 +519,25 @@ pub fn to_json(f: &RuleFile, v: &Vector) -> String {
 
 /// The JSON object of the outputs, in declaration order (not the name order of a BTreeMap),
 /// so a reader can match it by eye against the `outputs` lines of the rule source.
-fn out_object(v: &Vector) -> String {
+fn out_object(c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let one = |o: &Option<Val>| match o {
-        Some(Val::Num(r)) => format!("{}", r.num / r.den),
+    let one = |name: &str, o: &Option<Val>| match o {
+        Some(Val::Num(r)) => {
+            format!("{}", crate::types::wire_int(*r, c.wire_scale(name)))
+        }
         Some(Val::Bool(b)) => format!("{b}"),
         Some(other) => format!("\"{}\"", esc(&show(other))),
         None => "null".into(),
     };
     let body: Vec<String> =
-        v.outputs.iter().map(|(n, val)| format!("\"{}\":{}", esc(n), one(val))).collect();
+        v.outputs.iter().map(|(n, val)| format!("\"{}\":{}", esc(n), one(n, val))).collect();
     format!("{{{}}}", body.join(","))
 }
 
 /// Only the expected values, in the same shape the runner emits. Three-way agreement is judged
 /// on these bytes.
-pub fn expected_json(_f: &RuleFile, v: &Vector) -> String {
-    out_object(v)
+pub fn expected_json(_f: &RuleFile, c: &Checked, v: &Vector) -> String {
+    out_object(c, v)
 }
 
 // ── The mapping of §9.1 ─────────────────────────────────────────────────────

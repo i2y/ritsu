@@ -55,14 +55,15 @@ impl<'a> Env<'a> {
 }
 
 /// A value as it goes into a diagnostic's witness: an integer in the canonical unit, an enum
-/// value by name, a boolean, a date as `YYYY-MM-DD` (§10.2).
-pub fn wval(v: &Val) -> crate::diag::WVal {
+/// value by name, a boolean, a date as `YYYY-MM-DD` (§10.2). A rate travels as a count of
+/// steps, so the conversion needs the name it is declared under.
+pub fn wval(c: &crate::types::Checked, name: &str, v: &Val) -> crate::diag::WVal {
     use crate::diag::WVal;
     match v {
         Val::Enum(s) | Val::Str(s) => WVal::Str(s.clone()),
         Val::Bool(b) => WVal::Bool(*b),
         Val::Date(y, m, d) => WVal::Str(format!("{y:04}-{m:02}-{d:02}")),
-        Val::Num(r) => WVal::Int(r.num / r.den),
+        Val::Num(r) => WVal::Int(crate::types::wire_int(*r, c.wire_scale(name))),
     }
 }
 
@@ -376,7 +377,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
         let wit_in: Vec<(String, crate::diag::WVal)> = ex
             .inputs
             .iter()
-            .filter_map(|(col, _)| env.get(col).map(|v| (col.clone(), wval(v))))
+            .filter_map(|(col, _)| env.get(col).map(|v| (col.clone(), wval(c, col, v))))
             .collect();
         let with_rows = |mut d: Diag| -> Diag {
             for (t, r) in &fired_rows {
@@ -410,8 +411,8 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
                     .wit(crate::diag::Witness {
                         inputs: wit_in.clone(),
-                        outputs: vec![(od.name.text.clone(), wval(g))],
-                        expected: vec![(od.name.text.clone(), wval(w))],
+                        outputs: vec![(od.name.text.clone(), wval(c, &od.name.text, g))],
+                        expected: vec![(od.name.text.clone(), wval(c, &od.name.text, w))],
                     })
                     .mark(row.span.clone(), "")
                     .note(tr!("発火した行: {}", "Fired rows: {}", fired.join(" / ")))
@@ -426,7 +427,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     .wit(crate::diag::Witness {
                         inputs: wit_in.clone(),
                         outputs: Vec::new(),
-                        expected: vec![(od.name.text.clone(), wval(w))],
+                        expected: vec![(od.name.text.clone(), wval(c, &od.name.text, w))],
                     })
                     .mark(row.span.clone(), "")
                     .note(if fired.is_empty() {

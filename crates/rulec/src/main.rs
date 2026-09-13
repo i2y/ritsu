@@ -1053,9 +1053,9 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         // cross-language agreement test and the golden files run on these.
         let vs = rulec::vectors::generate(&f, &c);
         let vec_body: String =
-            vs.iter().map(|v| rulec::vectors::to_json(&f, v)).collect::<Vec<_>>().join("\n") + "\n";
+            vs.iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
         let exp_body: String =
-            vs.iter().map(|v| rulec::vectors::expected_json(&f, v)).collect::<Vec<_>>().join("\n") + "\n";
+            vs.iter().map(|v| rulec::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
         let targets = [
             (format!("{out_dir}/python/{alias}.py"), g.python()),
             (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
@@ -1400,7 +1400,7 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
         let vs = rulec::vectors::generate(&f, &c);
         let body: String = vs
             .iter()
-            .map(|v| rulec::vectors::to_json(&f, v))
+            .map(|v| rulec::vectors::to_json(&f, &c, v))
             .collect::<Vec<_>>()
             .join("\n")
             + "\n";
