@@ -494,6 +494,53 @@ examples
 - **A value between two steps cannot be written.** `0.05%` in that column stops at E114 — quietly moving it to the nearest step would put a different boundary in the code than the one on the page.
 - The arithmetic stays a rate until the end, where it is rounded exactly once, because where to round is a business decision.
 
+## Scores added up, then ranked by how much of the total they reach
+
+No money anywhere in this one. Four scored criteria are added with weights, and the rank comes from how much of the maximum the total reaches. This is the shape of rule that is *not* written as a table today but becomes one the moment somebody writes it down.
+
+```
+rule 評価ランク(rank) v1
+description "四つの評価項目を重み付きで合算し、満点に対する達成率でランクを決める。金額の出てこない例"
+
+enum ランク(grade) = S(s) | A(a) | B(b) | C(c)
+
+inputs
+  品質(quality)  : number  range >=0 <=10
+  納期(delivery) : number  range >=0 <=10
+  価格(price)    : number  range >=0 <=10
+  対応(support)  : number  range >=0 <=10
+
+outputs
+  評価(grade) : ランク
+
+# 重みは 2:1:1:1、満点は 50 点
+derive 合計点(total) : number = 品質 × 2 + 納期 + 価格 + 対応  range >=0 <=50
+define 達成率(ratio) : rate = 合計点 ÷ 50
+
+table ランク表(grade_table)
+policy first
+| 達成率 | -> 評価(grade) : ランク |
+| >=90%  | S                       |
+| >=80%  | A                       |
+| >=60%  | B                       |
+| -      | C                       |
+
+result 評価 = 評価
+
+examples
+| 品質 | 納期 | 価格 | 対応 | -> 評価 |
+| 10   | 10   | 10   | 10   | S       |
+| 9    | 8    | 8    | 7    | A       |
+| 6    | 6    | 6    | 6    | B       |
+| 3    | 3    | 3    | 3    | C       |
+```
+
+**What this one shows**
+
+- A `derive` is a name for **additions, subtractions and integer multiples of the inputs**, which is exactly what a weighted total is.
+- Declaring `define 達成率 : rate = 合計点 ÷ 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.
+- **No division happens at runtime.** `>=90%` compiles to `合計点 >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.
+
 ## Returning a number with no unit
 
 One point per 100 yen. Dividing money by money cancels the unit and leaves a `number` — a whole number carrying none.

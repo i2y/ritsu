@@ -34,6 +34,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E112](#e112) | error | The range of a derived value does not contain the values it can reach |
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
 | [E114](#e114) | error | A cell value does not sit on the column's step |
+| [E115](#e115) | error | Cannot divide by a variable |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -765,6 +766,36 @@ policy first
 ```
 
 Related codes: [E103](#e103), [E106](#e106)
+
+## E115
+
+`error` — **Cannot divide by a variable**
+
+**When.** The right of `÷` is not a constant. A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3).
+
+**Fix.** If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree (§7.1).
+
+**Smallest reproduction**:
+
+```
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=100
+  d(d) : number  range >=1 <=100
+
+outputs
+  o(o) : bool
+
+define r(r) : number = n ÷ d
+
+table j(j)
+policy first
+| r | -> o(o) : bool |
+| - | true |
+```
+
+Related codes: [E103](#e103), [E108](#e108)
 
 ## W105
 

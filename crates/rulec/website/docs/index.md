@@ -71,10 +71,15 @@ engine, no configuration, no dependency beyond the standard library.
 
 ## What this is — a harness for an agent turning table-shaped rules into code
 
-A great many business rules **are already written as tables**. A shipping tariff, a fee
-schedule, which discounts apply, whether a return is accepted, which period a date falls in.
-The table lives in a spreadsheet, a published policy, or a wiki page, and an engineer rewrites
-it as a chain of `if`s. That is the normal way it goes.
+A great many business rules **can be written as a table**. Some already are — a shipping
+tariff, a fee schedule, a price list. Others live in prose, or in what people just know, and
+turn out to need **a table and a little arithmetic** once someone writes them down: which
+discounts apply, whether a return is accepted, which period a date falls in, what rank a set
+of scores earns. rulec is aimed at both — at anything a table could hold, not only at what is
+already in one.
+
+Today that rule is in a spreadsheet, a published policy, a wiki page, or somebody's head, and
+an engineer rewrites it as a chain of `if`s. That is the normal way it goes.
 
 rulec is **a harness for handing that rewrite to an AI agent** — a workbench, with guards on
 it. It has four sides.

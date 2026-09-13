@@ -588,7 +588,14 @@ impl Checked {
     }
 
     fn check_same(&mut self, want: &Ty, got: &Ty, span: &Span, path: &str, what: &str) {
-        if !want.unifies(got) && *got != Ty::Unknown {
+        // §2.1: a rate and a number are both dimensionless and share one runtime form — an
+        // integer with a scale. Which of the two a ratio is called is for the declaration to
+        // say: `達成率 : rate = 合計点 ÷ 満点` writes its thresholds as percentages, while
+        // `基本点 : number = 税込金額 ÷ 100円` writes them as counts. Only a declaration gets
+        // this latitude; `unifies` stays strict, so a rate still cannot be added to a count.
+        let both_dimensionless =
+            matches!((want, got), (Ty::Rate, Ty::Number) | (Ty::Number, Ty::Rate));
+        if !want.unifies(got) && !both_dimensionless && *got != Ty::Unknown {
             self.diags.push(
                 Diag::error("E103", tr!("型が合いません: {want} に {got} を入れています", "Type mismatch: {want} is given {got}"))
                     .at(format!("{path}:{} {what}", span.line))
@@ -691,7 +698,31 @@ impl Checked {
                         _ => lt.clone(),
                     },
                     Div => {
-                        // §2.3: dividing by a constant of the same dimension cancels it and
+                        // §2.3 and §7.4: the divisor is a constant, always. A variable
+                        // divisor would leave the scale undecidable, and the generator would
+                        // have to fall back on a language's own division — Python rounds
+                        // toward -inf and Go toward zero, so the two would disagree.
+                        if const_value(r).is_none() {
+                            self.diags.push(
+                                Diag::error("E115", tr!("変数で割ることはできません", "Cannot divide by a variable"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(sp.clone(), tr!("割る数が定数ではありません", "the divisor is not a constant"))
+                                    .note(tr!(
+                                        "割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
+                                        "A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."
+                                    ))
+                                    .note(tr!(
+                                        "割る数が業務のデータなら、それは率か、定数を引く表として書けるはずです。割合そのものを渡したいなら `rate` の入力にしてください。",
+                                        "If the divisor is business data, it can be written as a rate, or as a table that looks the constant up. To pass a ratio in, make it a `rate` input."
+                                    ))
+                                    .note(tr!(
+                                        "刻みが静的に決まらないと、生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います（§7.1）。",
+                                        "Without a statically known step the generated code would fall back on the language's own division, and Python rounding toward -inf and Go toward zero would give different answers (§7.1)."
+                                    )),
+                            );
+                            return Ty::Unknown;
+                        }
+                        // Dividing by a constant of the same dimension cancels it and
                         // leaves a plain number — this is the "one point per 100 yen" case.
                         // Anything else keeps the left side's type.
                         let same_dim = matches!(

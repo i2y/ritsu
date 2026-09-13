@@ -170,6 +170,11 @@ const X_E114: &str = "rule t(t) v1\n\ninputs\n  r(r) : rate[step 1%]  range >=0%
                       outputs\n  o(o) : bool\n\n\
                       table j(j)\npolicy first\n| r | -> o(o) : bool |\n\
                       | <=0.5% | true |\n| - | false |\n";
+const X_E115: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
+                      d(d) : number  range >=1 <=100\n\n\
+                      outputs\n  o(o) : bool\n\n\
+                      define r(r) : number = n \u{00f7} d\n\n\
+                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true |\n";
 
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
@@ -596,6 +601,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E114,
             &["E103", "E106"],
+        ),
+        err(
+            "E115",
+            tr!("変数で割ることはできません", "Cannot divide by a variable"),
+            tr!(
+                "`÷` の右が定数でないとき。割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
+                "The right of `÷` is not a constant. A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."
+            ),
+            tr!(
+                "割る数が業務のデータなら、率として入力に取るか、定数を引く表として書いてください。刻みが静的に決まらないと生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います（§7.1）。",
+                "If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree (§7.1)."
+            ),
+            X_E115,
+            &["E103", "E108"],
         ),
         warn(
             "W105",

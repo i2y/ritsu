@@ -7,11 +7,12 @@ license: MIT
 
 ## When this applies
 
-The source of truth is **already a table, or would be one if someone wrote it down**: a
-tariff, a rate card, a fee schedule, the conditions under which a discount applies, which
-period a date falls in, whether a return is accepted. It lives in a spreadsheet, a published
-policy, a wiki page, or a legacy implementation, and the job is to turn it into code someone
-can approve.
+The rule **is a table, or could be written as one** — a table plus, where it needs it, a
+little arithmetic over the inputs. Some are already tables: a tariff, a rate card, a fee
+schedule. Others are prose or folklore and become a table once written down: when a discount
+applies, whether a return is accepted, which period a date falls in, what rank a set of scores
+earns. The source of truth may be a spreadsheet, a published policy, a wiki page, a legacy
+implementation, or a person, and the job is to turn it into code someone can approve.
 
 It does **not** apply to workflows with several steps and state, to judgements about a
 collection ("any line is refrigerated", "three or more items"), to pattern matching on

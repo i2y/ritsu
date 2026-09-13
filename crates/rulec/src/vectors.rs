@@ -616,32 +616,87 @@ fn place(
         a.insert(col.into(), to_val(target, &ty));
         return Some(a);
     }
-    let e0 = as_rat(bind(f, c, seed).get(col)?)?;
-    for x in f.inputs.iter().map(|i| i.name.text.clone()) {
-        let xty = c.ty_of(&x)?;
-        let Some(x0) = seed.get(&x).and_then(as_rat) else { continue };
-        let q = crate::coverage::quantum(c, &x, &xty);
-        let mut probe = seed.clone();
-        probe.insert(x.clone(), to_val(x0.add(q), &xty));
-        let Some(e1) = bind(f, c, &probe).get(col).and_then(as_rat) else { continue };
-        let slope = e1.sub(e0).div(q);
-        if slope.num == 0 {
-            continue;
-        }
-        let xn = x0.add(target.sub(e0).div(slope));
-        // Discard a solution that is off the input's grid (an input in whole yen never gets
-        // 0.5 yen).
-        if !xn.div(q).is_int() || !within(c, &x, xn) {
-            continue;
-        }
-        let mut a = seed.clone();
-        a.insert(x.clone(), to_val(xn, &xty));
-        // A non-linear expression fails here: confirmed by evaluation, not by guessing.
-        if bind(f, c, &a).get(col).and_then(as_rat).is_some_and(|v| v.cmp_to(target) == std::cmp::Ordering::Equal) {
+    // One input often cannot span the target on its own: `品質 × 3 + 納期 × 2 + 価格 × 2 + 対応`
+    // with each score capped at 10 needs several of them moved before the total reaches 72.
+    // So each input is taken as far as its own range allows and the rest is left to the next
+    // one. Every step is confirmed by evaluating the rule, never by trusting the arithmetic,
+    // so a non-linear expression simply fails to place rather than placing wrongly.
+    let mut a = seed.clone();
+    for _ in 0..=f.inputs.len() {
+        let e0 = as_rat(bind(f, c, &a).get(col)?)?;
+        if e0.cmp_to(target) == std::cmp::Ordering::Equal {
             return Some(a);
+        }
+        let mut moved = false;
+        for x in f.inputs.iter().map(|i| i.name.text.clone()) {
+            let xty = c.ty_of(&x)?;
+            let Some(x0) = a.get(&x).and_then(as_rat) else { continue };
+            let e0 = as_rat(bind(f, c, &a).get(col)?)?;
+            let q = crate::coverage::quantum(c, &x, &xty);
+            let mut probe = a.clone();
+            probe.insert(x.clone(), to_val(x0.add(q), &xty));
+            let Some(e1) = bind(f, c, &probe).get(col).and_then(as_rat) else { continue };
+            let slope = e1.sub(e0).div(q);
+            if slope.num == 0 {
+                continue;
+            }
+            let want = x0.add(target.sub(e0).div(slope));
+            // Bring it inside the declared range and onto the input's own grid: an input in
+            // whole yen never gets 0.5 yen, and a score capped at 10 never gets 24.
+            let xn = snap(c, &x, want, q);
+            if xn.cmp_to(x0) == std::cmp::Ordering::Equal {
+                continue;
+            }
+            let mut next = a.clone();
+            next.insert(x.clone(), to_val(xn, &xty));
+            let Some(e2) = bind(f, c, &next).get(col).and_then(as_rat) else { continue };
+            // Only keep a step that actually moves the value toward the target. A non-linear
+            // expression that the slope mispredicts is dropped here.
+            if dist(e2, target).cmp_to(dist(e0, target)) != std::cmp::Ordering::Less {
+                continue;
+            }
+            a = next;
+            moved = true;
+            if e2.cmp_to(target) == std::cmp::Ordering::Equal {
+                return Some(a);
+            }
+        }
+        if !moved {
+            return None;
         }
     }
     None
+}
+
+fn dist(a: Rat, b: Rat) -> Rat {
+    let d = a.sub(b);
+    if d.num < 0 { Rat::zero().sub(d) } else { d }
+}
+
+/// A value brought inside the declared range of `name` and down onto its grid.
+fn snap(c: &Checked, name: &str, v: Rat, q: Rat) -> Rat {
+    use std::cmp::Ordering::*;
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    let mut v = v;
+    if let Some(h) = hi {
+        if v.cmp_to(h) == Greater {
+            v = h;
+        }
+    }
+    if let Some(l) = lo {
+        if v.cmp_to(l) == Less {
+            v = l;
+        }
+    }
+    if q.num == 0 {
+        return v;
+    }
+    let k = v.div(q);
+    if k.is_int() {
+        return v;
+    }
+    let floored = Rat::int(k.num / k.den).mul(q);
+    if lo.is_some_and(|l| floored.cmp_to(l) == Less) { floored.add(q) } else { floored }
 }
 
 /// Move one step toward satisfying a single cell. Numbers are solved for and hit exactly;
