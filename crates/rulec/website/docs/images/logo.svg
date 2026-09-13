@@ -1,15 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="rulec">
-  <!-- A decision table: three rows, each a condition and an output cell.
-       The badge is the proof that every one of them is covered. -->
-  <rect x="2" y="2" width="44" height="44" rx="11" fill="none"/>
-  <g fill="#ffffff" opacity=".92">
+  <!-- A decision table: three rows, each a condition and an output cell. The badge
+       is the proof that every one of them is covered.
+
+       The header of this theme takes the page's own background, so the mark sits on
+       near-white in one scheme and near-black in the other, and it is an <img>, so it
+       cannot inherit currentColor. Both colours below are therefore chosen to clear
+       4:1 against BOTH backgrounds: slate #78839c (3.8:1 on white, 4.8:1 on #12151c)
+       and indigo #5c6fe8 (4.3:1 on either). The check is white, which is what gives
+       the badge its pop on any ground. -->
+  <g fill="#78839c">
     <rect x="8" y="11" width="16" height="4.4" rx="2.2"/>
     <rect x="28" y="11" width="9" height="4.4" rx="2.2"/>
     <rect x="8" y="21.8" width="16" height="4.4" rx="2.2"/>
     <rect x="28" y="21.8" width="9" height="4.4" rx="2.2"/>
     <rect x="8" y="32.6" width="16" height="4.4" rx="2.2"/>
   </g>
-  <circle cx="33.5" cy="34.8" r="9.2" fill="#7a8cff"/>
-  <path d="M29.3 35.1l3 3 5.8-6.6" fill="none" stroke="#10131a" stroke-width="2.7"
+  <circle cx="33.5" cy="34.8" r="9.2" fill="#5c6fe8"/>
+  <path d="M29.4 35.1l3 3 5.7-6.5" fill="none" stroke="#ffffff" stroke-width="2.8"
         stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
