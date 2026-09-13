@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" width="1000" height="500" role="img" aria-label="人とエージェントと rulec の役割分担: エージェントが表を書き、rulec が証明して直し方を返し、決められないことだけを人が決める。出てくるのは証明済みの Python と Go と、入れる前に分かる影響。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9aa3ba"/></marker><marker id="headA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#3d55d4"/></marker></defs>
+<rect x="24" y="72" width="146" height="92" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
+<text x="97.0" y="105" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">規約の文書</text>
+<text x="97.0" y="124" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">Excel</text>
+<text x="97.0" y="143" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">旧実装</text>
+<rect x="256" y="72" width="200" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="356.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">エージェント</text>
+<text x="356.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">読んで、表（.rule）に書く</text>
+<text x="356.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">指摘のとおりに直す</text>
+<rect x="542" y="72" width="200" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="642.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="642.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">抜け・重なり・使われない行</text>
+<text x="642.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">単位・丸め・桁あふれ・例</text>
+<text x="642.0" y="158" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">を証明する</text>
+<rect x="828" y="72" width="148" height="92" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="902.0" y="102" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Python と Go</text>
+<text x="902.0" y="124" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">依存ゼロの</text>
+<text x="902.0" y="141" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">普通の関数</text>
+<rect x="560" y="268" width="240" height="84" rx="12" fill="#ffffff" stroke="#dfe3ee"/>
+<text x="680.0" y="298" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">人</text>
+<text x="680.0" y="320" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">金額と丸めの向きを決める</text>
+<text x="680.0" y="337" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">表を承認する</text>
+<line x1="176" y1="118" x2="250" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="213.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">読む</text>
+<line x1="462" y1="118" x2="536" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="499.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">① 検査</text>
+<line x1="748" y1="118" x2="822" y2="118" stroke="#9aa3ba" stroke-width="1.8" marker-end="url(#head)"/>
+<text x="785.0" y="106" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">⑤ 生成</text>
+<path d="M 592 164 V 214 H 352 V 170" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="472.0" y="205" font-size="11.5" font-weight="400" text-anchor="middle" fill="#3d55d4">② 直し方と、それを起こす入力</text>
+<path d="M 692 164 V 262" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="706" y="220.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#3d55d4">③ 道具が決められないこと</text>
+<path d="M 560 310 H 308 V 170" fill="none" stroke="#3d55d4" stroke-width="1.6" marker-end="url(#headA)"/>
+<text x="434.0" y="301" font-size="11.5" font-weight="400" text-anchor="middle" fill="#3d55d4">④ 答え（金額・丸めの向き）</text>
+<text x="24" y="380" font-size="12" font-weight="400" text-anchor="start" fill="#5b6478">こうして手に入るもの</text>
+<rect x="24" y="392" width="952" height="84" rx="12" fill="#f4f6fb" stroke="#e2e6f2"/>
+<text x="182.66666666666666" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">抜けも矛盾もない表</text>
+<text x="182.66666666666666" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">承認できる形で</text>
+<text x="500.0" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">証明済みの Python と Go</text>
+<text x="500.0" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">依存ゼロ・両言語で同じ答え</text>
+<line x1="341.3333333333333" y1="408" x2="341.3333333333333" y2="460" stroke="#e2e6f2" stroke-width="1"/>
+<text x="817.3333333333333" y="426" font-size="14" font-weight="700" text-anchor="middle" fill="#10131a">入れる前に分かる影響</text>
+<text x="817.3333333333333" y="448" font-size="12" font-weight="400" text-anchor="middle" fill="#5b6478">何件が、いくら動くか</text>
+<line x1="658.6666666666666" y1="408" x2="658.6666666666666" y2="460" stroke="#e2e6f2" stroke-width="1"/>
+</svg>

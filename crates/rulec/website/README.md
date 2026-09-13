@@ -62,6 +62,19 @@ drops `build/ja` — always go through `./build.sh`.
 Deployed by `.github/workflows/docs.yml` to GitHub Pages on every push
 to main that touches `website/`, `AGENTS.md` or `docs/`.
 
+## The front-page diagram
+
+`docs/images/flow*.svg` — four files (two languages, two colour schemes) —
+come from `tools/make_flow.py`, so the geometry cannot drift between them
+and only the words change. Edit the text at the top of that script and
+re-run it:
+
+```console
+$ python3 tools/make_flow.py
+```
+
+The SVGs are committed: building the site must not need Python.
+
 ## Both configs carry
 
 - `extra.alternate`, which renders the header language switcher;
