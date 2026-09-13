@@ -84,7 +84,7 @@ JA = dict(
     code=("Python と Go", ["証明済み", "依存ゼロ", "両言語で同じ答え"]),
     check="rulec check", gen="rulec gen",
     loop="通るまで繰り返す", passed="通ったら",
-    only="決められないことだけ", into="表に書き込む",
+    only="決められないことだけ", back="ループへ戻る",
 )
 
 EN = dict(
@@ -105,7 +105,7 @@ EN = dict(
     code=("Python & Go", ["already proved", "zero dependencies", "the same answer", "in both languages"]),
     check="rulec check", gen="rulec gen",
     loop="until it passes", passed="once it passes",
-    only="only what it cannot decide", into="into the table",
+    only="only what it cannot decide", back="back into the loop",
 )
 
 # --- geometry ---------------------------------------------------------------
@@ -304,7 +304,7 @@ def draw(t, c):
     o.append(text(mid(RULEC, CODE), Y_IN + 18, t["passed"], 10.5, c["dim"]))
 
     # -- the detour: what rulec cannot decide goes down to a person, and the
-    #    answer comes up into the agent, who writes it into the table
+    #    answer comes back up into the agent — that is, into the loop
     bottom = TOP + CARD_H
     o.append(arrow(X_ASK, bottom, X_ASK, QUESTION[1], "human", c))
     fit(t["only"], 11, W - (X_ASK + 8) - 20)
@@ -315,8 +315,8 @@ def draw(t, c):
     x1, x2 = right(ANSWER, PERSON)
     o.append(arrow(x2, Y_BAND, x1, Y_BAND, "human", c))
     o.append(arrow(X_ANS, ANSWER[1], X_ANS, bottom, "human", c))
-    fit(t["into"], 11, PERSON[0] - (X_ANS + 8) - 8)
-    o.append(text(X_ANS + 8, (bottom + ANSWER[1]) / 2 + 4, t["into"], 11, c["human"],
+    fit(t["back"], 11, PERSON[0] - (X_ANS + 8) - 8)
+    o.append(text(X_ANS + 8, (bottom + ANSWER[1]) / 2 + 4, t["back"], 11, c["human"],
                   anchor="start"))
 
     o.append("</svg>")
