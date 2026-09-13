@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "W111",
+        ),
+        "column": Int(
+            3,
+        ),
+        "file": Str(
+            "tests/mutants/m_w111.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "mark_contract_only",
+                ),
+                "text": Str(
+                    "contract_only",
+                ),
+            },
+        ),
+        "line": Int(
+            18,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "本来使うべき列の書き忘れかもしれません。",
+                ),
+                Str(
+                    "範囲の入口検査としてだけ効かせるつもりなら、宣言に `contract_only` を付けてください（§11 W111）。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            3,
+                        ),
+                        "label": Str(
+                            "どの列にも現れません",
+                        ),
+                        "length": Int(
+                            6,
+                        ),
+                        "line": Int(
+                            18,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "入力 重量 はどの表でも使われていません",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    3,
+                ),
+                "file": Str(
+                    "tests/mutants/m_w111.rule",
+                ),
+                "line": Int(
+                    18,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

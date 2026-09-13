@@ -21,6 +21,7 @@ error[E101]: Completeness gap: some input matches no row
    |
  An input that matches no row: あて先 = 山梨県, サイズ = S60
  hint: add a row that matches this input.
+ The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
 **旧実装も過去データも要りません。** 手元の Excel を転記して `rulec check` に掛けるだけで、穴と重なりが出はじめます。
@@ -366,9 +367,22 @@ note rules/ゆうパック運賃.rule: 21 shadow pairs (21 structural, 0 equival
 ok rules/ゆうパック運賃.rule
 
 $ rulec check rules/送料.rule --format json      # GitHub annotations にそのまま流せる形
+$ rulec check rules/送料.rule --terse             # 見出し・位置・証人の三行だけ
 $ rulec check rules/送料.rule --diff-base HEAD    # 基準から新たに生じた発見だけ
 $ rulec fmt --check rules/*.rule                  # gofmt と同じ運用
 ```
+
+`--format json` は**文面のほかに発見そのものをデータで持ちます**（v2。v1 の欄は全部残っています）。
+
+```json
+{"v":2,"code":"E101","title":"…","notes":["…"],
+ "where":{"file":"rules/送料.rule","line":34,"column":7,"table":"運賃表"},
+ "witness":{"inputs":{"あて先":"山梨県","サイズ":"S60"}},
+ "rows":[],
+ "fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820円 |"}}
+```
+
+`witness` と `fix` は**言語で変わりません**（テストが両言語のバイト一致を確かめています）。`fix.text` は `.rule` にそのまま貼れる形で、E101 と E104 については「貼ると本当にそのコードが消える」ことをテストが機械的に確かめています。ただし**金額と丸めの向きは業務の判断**なので、`fix.text` はそこを決めません — 形だけを渡し、注意は `notes` に書きます。
 
 どのコマンドも `rulec <cmd> --help`（`rulec help <cmd>` も同じ）が、**目的・引数・フラグ（値と既定）・exit code の意味・走らせられる例を二つ・出しうる診断コード**を出します。`rulec --help` が一覧、`rulec --version` が版です。**知らないフラグは黙って無視せず、exit 2 で止まります** — `--shwo-shadow` が通って 0 が返ると、要求が効いたと信じて次へ進んでしまうからです。
 
@@ -394,6 +408,7 @@ error[E101]: 完全性の欠落: どの行にも当たらない入力があり�
    |
  当たらない例: あて先 = 山梨県, サイズ = S60
  ヒント: この入力に当たる行を足してください。
+ 足す行の形: `| 山梨県 | S60 | 820円 |`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのはこの証人の穴だけで、まだ残っていれば次の証人が出ます。
 ```
 
 生成と、生成物の検証。
@@ -561,6 +576,7 @@ tests/golden_en.rs 同じ診断の英語スナップショット（tests/golden/
 tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替に従うこと
 tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋は既定の英語）
 tests/codes.rs    診断台帳が単一のソースであること（全項目の再現が走る）
+tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```

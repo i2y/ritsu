@@ -270,7 +270,7 @@ fn atom_bounds(e: &Expr, col: &str, ty: &Ty, set: &mut BTreeSet<(i128, i128)>) {
 
 /// The first candidate value that satisfies the cell. Row coverage (§9.2) targets a row with it.
 fn satisfying(cell: &Cell, cands: &[Val], ty: &Ty, c: &Checked) -> Option<Val> {
-    let env = eval::Env { vals: BTreeMap::new().into_iter().collect(), c, fired: Vec::new() };
+    let env = eval::Env::new(c, BTreeMap::new().into_iter().collect());
     cands.iter().find(|v| env.matches_pub(cell, v, ty)).cloned()
 }
 

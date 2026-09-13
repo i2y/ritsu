@@ -1,6 +1,12 @@
 //! Diagnostics: stable codes, Rust-style frames, JSON output (§11).
 //!
 //! §11 principle 5: the code and the JSON shape are a stable API; the prose may improve.
+//!
+//! A diagnostic carries **two** descriptions of the same finding: the prose a person reads,
+//! and the structured fields a program acts on (`table`, `row`, `witness`, `rows`, `fix`).
+//! The structured part is filled in where the diagnostic is raised, never parsed back out of
+//! the sentence — a reader that has to take the prose apart is a reader that breaks the next
+//! time the wording improves, which principle 5 explicitly allows.
 
 use std::fmt::Write as _;
 
@@ -16,6 +22,114 @@ impl Severity {
             Severity::Error => "error",
             Severity::Warning => "warning",
         }
+    }
+}
+
+/// A value inside a witness. The wire shape is the one the vectors use (§10.2): an integer
+/// in the canonical unit, an enum value by name, a boolean, a date as `YYYY-MM-DD`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WVal {
+    Int(i128),
+    Str(String),
+    Bool(bool),
+}
+
+impl WVal {
+    /// As JSON. Language independent — a witness is data, not prose.
+    pub fn json(&self) -> String {
+        match self {
+            WVal::Int(n) => n.to_string(),
+            WVal::Str(s) => crate::json::quote(s),
+            WVal::Bool(b) => b.to_string(),
+        }
+    }
+    /// As it is written in a `.rule` cell or in a terse line.
+    pub fn text(&self) -> String {
+        match self {
+            WVal::Int(n) => n.to_string(),
+            WVal::Str(s) => s.clone(),
+            WVal::Bool(b) => (if *b { crate::kw::TRUE } else { crate::kw::FALSE }).to_string(),
+        }
+    }
+}
+
+/// A concrete assignment of values that exhibits the finding (§11 principle 2).
+///
+/// It carries **only assignments** — inputs, the outputs they produce, and what an example
+/// said they should produce. An interval or a spread over rounding modes is not an
+/// assignment and stays in the prose (and, where it is actionable, in `fix.text`), so that a
+/// witness always has one shape: something a caller can hand straight back as a vector or a
+/// fixture (§10.2).
+#[derive(Debug, Clone, Default)]
+pub struct Witness {
+    pub inputs: Vec<(String, WVal)>,
+    /// What the rule actually produces for those inputs.
+    pub outputs: Vec<(String, WVal)>,
+    /// What the source said it should produce. Only E107 has one.
+    pub expected: Vec<(String, WVal)>,
+}
+
+impl Witness {
+    pub fn is_empty(&self) -> bool {
+        self.inputs.is_empty() && self.outputs.is_empty() && self.expected.is_empty()
+    }
+}
+
+/// A row of a table, named the way a person names it. `row` is 1-based, as it is printed.
+#[derive(Debug, Clone)]
+pub struct RowRef {
+    pub table: String,
+    pub row: usize,
+}
+
+/// What kind of edit removes the finding. The set is closed so a caller can switch on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixKind {
+    AddRow,
+    RemoveRow,
+    AddRounding,
+    AddRange,
+    WidenRange,
+    AddAlias,
+    MarkDefault,
+    MarkContractOnly,
+    ChangePolicy,
+    AddExpected,
+    /// No single mechanical edit is right. The reason is in the notes.
+    None,
+}
+
+impl FixKind {
+    pub fn word(self) -> &'static str {
+        match self {
+            FixKind::AddRow => "add_row",
+            FixKind::RemoveRow => "remove_row",
+            FixKind::AddRounding => "add_rounding",
+            FixKind::AddRange => "add_range",
+            FixKind::WidenRange => "widen_range",
+            FixKind::AddAlias => "add_alias",
+            FixKind::MarkDefault => "mark_default",
+            FixKind::MarkContractOnly => "mark_contract_only",
+            FixKind::ChangePolicy => "change_policy",
+            FixKind::AddExpected => "add_expected",
+            FixKind::None => "none",
+        }
+    }
+}
+
+/// §11 principle 3 as data: the hint says the rewritten form, and this is that form in a
+/// shape a program can paste. `text` is **language independent and carries no prose** — the
+/// caveats (a rounding direction is a business decision, an amount has to come from the
+/// written rule) live in the notes, which are prose and do change with the language.
+#[derive(Debug, Clone)]
+pub struct Fix {
+    pub kind: FixKind,
+    pub text: Option<String>,
+}
+
+impl Default for Fix {
+    fn default() -> Fix {
+        Fix { kind: FixKind::None, text: None }
     }
 }
 
@@ -47,6 +161,14 @@ pub struct Diag {
     /// the canonical form of the cell rather than the line number, so a realignment by
     /// `rulec fmt` does not change it. Never displayed.
     pub key: Option<String>,
+    /// The table the finding is about, when it is about one.
+    pub table: Option<String>,
+    /// The row of that table, 1-based, when a single row is at fault.
+    pub row: Option<usize>,
+    /// Every row that takes part (both sides of an overlap, the rows an example fired).
+    pub rows: Vec<RowRef>,
+    pub witness: Witness,
+    pub fix: Fix,
     pub severity: Severity,
     /// Stable code, e.g. "E101".
     pub code: &'static str,
@@ -63,6 +185,11 @@ impl Diag {
     pub fn error(code: &'static str, title: impl Into<String>) -> Self {
         Diag {
             key: None,
+            table: None,
+            row: None,
+            rows: Vec::new(),
+            witness: Witness::default(),
+            fix: Fix::default(),
             severity: Severity::Error,
             code,
             title: title.into(),
@@ -100,6 +227,78 @@ impl Diag {
     pub fn key(mut self, k: impl Into<String>) -> Self {
         self.key = Some(k.into());
         self
+    }
+
+    /// The table (and optionally the row) the finding is about.
+    pub fn table(mut self, t: impl Into<String>) -> Self {
+        self.table = Some(t.into());
+        self
+    }
+
+    pub fn row(mut self, r: usize) -> Self {
+        self.row = Some(r);
+        self
+    }
+
+    /// One more row that takes part in the finding.
+    pub fn rowref(mut self, table: impl Into<String>, row: usize) -> Self {
+        self.rows.push(RowRef { table: table.into(), row });
+        self
+    }
+
+    /// One input of the witness.
+    pub fn win(mut self, name: impl Into<String>, v: WVal) -> Self {
+        self.witness.inputs.push((name.into(), v));
+        self
+    }
+
+    /// One output of the witness: what the rule really produces.
+    pub fn wout(mut self, name: impl Into<String>, v: WVal) -> Self {
+        self.witness.outputs.push((name.into(), v));
+        self
+    }
+
+    /// The whole witness at once.
+    pub fn wit(mut self, w: Witness) -> Self {
+        self.witness = w;
+        self
+    }
+
+    /// §11 principle 3 as data. `text` is the rewritten form, ready to paste.
+    pub fn fix(mut self, kind: FixKind, text: impl Into<String>) -> Self {
+        self.fix = Fix { kind, text: Some(text.into()) };
+        self
+    }
+
+    /// A kind of edit with no single text (deleting a row, say).
+    pub fn fix_kind(mut self, kind: FixKind) -> Self {
+        self.fix = Fix { kind, text: None };
+        self
+    }
+
+    /// `witness: あて先 = 山梨県, サイズ = S60` — the one line `--terse` keeps.
+    pub fn witness_line(&self) -> Option<String> {
+        if self.witness.is_empty() {
+            return None;
+        }
+        let show = |ps: &[(String, WVal)]| {
+            ps.iter().map(|(n, v)| format!("{n} = {}", v.text())).collect::<Vec<_>>().join(", ")
+        };
+        let mut s = show(&self.witness.inputs);
+        if !self.witness.outputs.is_empty() {
+            if !s.is_empty() {
+                s.push(' ');
+            }
+            s.push_str(&format!("-> {}", show(&self.witness.outputs)));
+        }
+        if !self.witness.expected.is_empty() {
+            s.push_str(&tr!(
+                "（期待 {}）",
+                " (expected {})",
+                show(&self.witness.expected)
+            ));
+        }
+        Some(s)
     }
 }
 
@@ -164,27 +363,103 @@ pub fn render(d: &Diag, src_lines: &[String]) -> String {
     out
 }
 
-/// `--format json`: one object per diagnostic, shaped for GitHub annotations (§11 principle 6).
+/// `--terse`: the first line, the position, and the witness — nothing else. For a caller
+/// that reads a hundred findings and only needs to know what and where; `rulec explain
+/// <code>` has the rest, and `check` prints that pointer once at the end of the run.
+pub fn render_terse(d: &Diag) -> String {
+    let mut out = format!("{}[{}]: {}\n", d.severity.word(), d.code, d.title);
+    if !d.where_.is_empty() {
+        let _ = writeln!(out, "  --> {}", d.where_);
+    }
+    if let Some(w) = d.witness_line() {
+        let _ = writeln!(out, "  {}", tr!("証人: {w}", "witness: {w}"));
+    }
+    out
+}
+
+/// The one line `--terse` prints at the end of a run, after every finding.
+pub fn terse_footer() -> String {
+    tr!(
+        "details: rulec explain <code>\n",
+        "details: rulec explain <code>\n"
+    )
+}
+
+/// `--format json`, version 2 (§11 principle 6).
+///
+/// Every v1 field is still here and still means what it meant, so a reader written against
+/// v1 keeps working; `v` says which version wrote the line. What v2 adds is the finding as
+/// **data** — where it is, which rows take part, a witness whose values are in the canonical
+/// unit, and the rewritten form that removes it — so that acting on a diagnostic no longer
+/// means taking a sentence apart.
 pub fn render_json(d: &Diag, path: &str) -> String {
-    let esc = |s: &str| {
-        s.replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-    };
     let line = d.marks.first().map(|m| m.span.line).unwrap_or(1);
     let col = d.marks.first().map(|m| m.span.col + 1).unwrap_or(1);
-    format!(
-        r#"{{"severity":"{}","code":"{}","file":"{}","line":{},"column":{},"title":"{}","notes":[{}]}}"#,
-        d.severity.word(),
-        d.code,
-        esc(path),
-        line,
-        col,
-        esc(&d.title),
-        d.notes
-            .iter()
-            .map(|n| format!("\"{}\"", esc(n)))
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+
+    let where_ = crate::json::Obj::new()
+        .str("file", path)
+        .int("line", line as i128)
+        .int("column", col as i128)
+        .opt_str("table", d.table.as_deref())
+        .opt_raw("row", d.row.map(|r| r.to_string()))
+        .finish();
+
+    let spans: Vec<String> = d
+        .marks
+        .iter()
+        .map(|m| {
+            crate::json::Obj::new()
+                .int("line", m.span.line as i128)
+                .int("column", (m.span.col + 1) as i128)
+                .int("length", m.span.len as i128)
+                .str("label", &m.label)
+                .finish()
+        })
+        .collect();
+
+    let pairs = |ps: &[(String, WVal)]| -> String {
+        let mut o = crate::json::Obj::new();
+        for (n, v) in ps {
+            o = o.raw(n, v.json());
+        }
+        o.finish()
+    };
+    let mut witness = crate::json::Obj::new();
+    if !d.witness.inputs.is_empty() {
+        witness = witness.raw("inputs", pairs(&d.witness.inputs));
+    }
+    if !d.witness.outputs.is_empty() {
+        witness = witness.raw("outputs", pairs(&d.witness.outputs));
+    }
+    if !d.witness.expected.is_empty() {
+        witness = witness.raw("expected", pairs(&d.witness.expected));
+    }
+
+    let rows: Vec<String> = d
+        .rows
+        .iter()
+        .map(|r| crate::json::Obj::new().str("table", &r.table).int("row", r.row as i128).finish())
+        .collect();
+
+    let fix = crate::json::Obj::new()
+        .str("kind", d.fix.kind.word())
+        .opt_str("text", d.fix.text.as_deref())
+        .finish();
+
+    crate::json::Obj::new()
+        .int("v", 2)
+        .str("severity", d.severity.word())
+        .str("code", d.code)
+        .str("file", path)
+        .int("line", line as i128)
+        .int("column", col as i128)
+        .str("title", &d.title)
+        .raw("notes", crate::json::strs(&d.notes))
+        .raw("where", where_)
+        .raw("spans", crate::json::arr(&spans))
+        .raw("witness", witness.finish())
+        .raw("rows", crate::json::arr(&rows))
+        .raw("fix", fix)
+        .opt_str("key", d.key.as_deref())
+        .finish()
 }

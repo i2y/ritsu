@@ -302,6 +302,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 Diag::error("E104", tr!("出力に丸めの宣言がありません", "The output declares no rounding"))
                     .at(at(o.span.line))
                     .mark(o.ty.span.clone(), tr!("丸め の宣言がありません", "no rounding is declared"))
+                    .fix(
+                        crate::diag::FixKind::AddRounding,
+                        format!("{} {}({})", crate::kw::ROUND, crate::kw::DOWN, unit_one(&ty)),
+                    )
                     .note(tr!("出力 {} は {} です。", "Output {} has type {}.", o.name.text, ty)),
             );
         }
@@ -382,6 +386,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         c.diags.push(
             Diag::error("E011", tr!("公開面の名前に ASCII 別名がありません", "A public name has no ASCII alias"))
                 .at(at(f.name.span.line))
+                .fix_kind(crate::diag::FixKind::AddAlias)
                 .mark(f.name.span.clone(), "")
                 .note(tr!("不足: {}", "Missing: {}", missing.join(" / ")))
                 .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3)."))
@@ -456,6 +461,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             c.diags.push(
                 Diag::warning("W111", tr!("入力 {} はどの表でも使われていません", "Input {} is not used by any table", i.name.text))
                     .at(at(i.span.line))
+                    .fix(crate::diag::FixKind::MarkContractOnly, crate::kw::CONTRACT_ONLY)
                     .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
                     .note(tr!("本来使うべき列の書き忘れかもしれません。", "A column that should use it may have been left out."))
                     .note(tr!("範囲の入口検査としてだけ効かせるつもりなら、宣言に `{}` を付けてください（§11 W111）。", "If it is meant only as an entry check on its range, add `{}` to the declaration (§11 W111).", crate::kw::CONTRACT_ONLY)),
@@ -490,6 +496,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             c.diags.push(
                 Diag::warning("W111", tr!("型 {} の値がどの行にも現れません", "Values of type {} appear in no row", e.name.text))
                     .at(at(e.span.line))
+                    .fix(crate::diag::FixKind::MarkDefault, crate::kw::DEFAULT)
                     .mark(e.name.span.clone(), "")
                     .note(tr!("現れない値: {}", "Values that never appear: {}", names.join(" / ")))
                     .note(tr!("完全性検査は通っていても、その値に当たる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
@@ -916,6 +923,19 @@ fn fmt_big(v: Rat) -> String {
     format!("{n}")
 }
 
+/// One unit of the type, as it is written: `1円`, `1g`, `1%`. It is the finest grid a
+/// rounding declaration can name, so `round down(1円)` is the edit that removes E104 while
+/// changing the answer the least. **Which direction and which grid are right is a business
+/// decision**, which the notes say and `fix.text` cannot.
+fn unit_one(ty: &Ty) -> String {
+    match ty {
+        Ty::Money { cur, .. } => format!("1{cur}"),
+        Ty::Qty { unit, .. } => format!("1{unit}"),
+        Ty::Rate => "1%".into(),
+        _ => "1".into(),
+    }
+}
+
 fn fmt_val(v: Rat, ty: &Ty) -> String {
     match ty {
         Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v)),
@@ -960,6 +980,10 @@ impl Checked {
             self.diags.push(
                 Diag::error("E112", tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of the derived value does not contain the values it can actually reach"))
                     .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text))
+                    .fix(
+                        crate::diag::FixKind::WidenRange,
+                        format!("{} >={} <={}", crate::kw::RANGE, fmt_val(rl, ty), fmt_val(rh, ty)),
+                    )
                     .mark(rg.span.clone(), tr!("到達区間は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
                     .note(tr!("範囲が狭いと、網羅性検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
                     .note(tr!(

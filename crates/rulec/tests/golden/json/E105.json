@@ -1,0 +1,132 @@
+Obj(
+    {
+        "code": Str(
+            "E105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e105.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "line": Int(
+            44,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "両方に当たる例: あて先 = 青森県, サイズ = S60",
+                ),
+                Str(
+                    "`policy unique` では重なりは許されません。どちらが正しいか決めるか、順序に意味を持たせるなら `policy first` を宣言してください。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            8,
+                        ),
+                        "table": Str(
+                            "運賃表",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            22,
+                        ),
+                        "table": Str(
+                            "運賃表",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行8",
+                        ),
+                        "length": Int(
+                            65,
+                        ),
+                        "line": Int(
+                            44,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行22",
+                        ),
+                        "length": Int(
+                            65,
+                        ),
+                        "line": Int(
+                            58,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "行の重なり: 同じ入力が 行8 と 行22 の両方に当たります",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e105.rule",
+                ),
+                "line": Int(
+                    44,
+                ),
+                "table": Str(
+                    "運賃表",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "あて先": Str(
+                            "青森県",
+                        ),
+                        "サイズ": Str(
+                            "S60",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

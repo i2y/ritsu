@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "E112",
+        ),
+        "column": Int(
+            85,
+        ),
+        "file": Str(
+            "tests/mutants/m_e112.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "widen_range",
+                ),
+                "text": Str(
+                    "range >=-100万円 <=1000万円",
+                ),
+            },
+        ),
+        "line": Int(
+            24,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "範囲が狭いと、網羅性検査が実際に起きる値を見ないまま「完全」と答えます。",
+                ),
+                Str(
+                    "ヒント: 範囲 >=-100万円 <=1000万円 に広げてください。到達しない分まで広げても、実現不能な領域として検査が篩うので害はありません。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            85,
+                        ),
+                        "label": Str(
+                            "到達区間は >=-100万円 <=1000万円 です",
+                        ),
+                        "length": Int(
+                            25,
+                        ),
+                        "line": Int(
+                            24,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "導出の範囲が、実際に到達しうる値を含んでいません",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    85,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e112.rule",
+                ),
+                "line": Int(
+                    24,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

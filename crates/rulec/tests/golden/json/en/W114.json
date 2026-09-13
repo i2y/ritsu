@@ -1,0 +1,144 @@
+Obj(
+    {
+        "code": Str(
+            "W114",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/クーポン併用.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "<=1000円|-\u{1}-|>=3980円",
+        ),
+        "line": Int(
+            24,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Overlapping condition: 残高A <= 1000円 and 残高B >= 3980円",
+                ),
+                Str(
+                    "Because the derived values (残高A, 残高B) share inputs, the check could not decide whether an order satisfying this condition exists.",
+                ),
+                Str(
+                    "If one exists: fix the rows. The outputs differ (対象外 vs 対象), so a match would be a contradiction.",
+                ),
+                Str(
+                    "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row 1.",
+                ),
+                Str(
+                    "Under check --diff-base, only new instances of this warning are shown.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "適用判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "適用判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 1",
+                        ),
+                        "length": Int(
+                            57,
+                        ),
+                        "line": Int(
+                            24,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 2",
+                        ),
+                        "length": Int(
+                            56,
+                        ),
+                        "line": Int(
+                            25,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Unconfirmed overlap: an input may match both row 1 and row 2",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/クーポン併用.rule",
+                ),
+                "line": Int(
+                    24,
+                ),
+                "table": Str(
+                    "適用判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "残高A": Int(
+                            999,
+                        ),
+                        "残高B": Int(
+                            3980,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

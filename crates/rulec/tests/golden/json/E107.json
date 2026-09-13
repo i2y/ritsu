@@ -1,0 +1,130 @@
+Obj(
+    {
+        "code": Str(
+            "E107",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e107.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "line": Int(
+            83,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "発火した行: 表 サイズ判定 行3 / 表 運賃表 行38",
+                ),
+                Str(
+                    "例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            3,
+                        ),
+                        "table": Str(
+                            "サイズ判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            38,
+                        ),
+                        "table": Str(
+                            "運賃表",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "",
+                        ),
+                        "length": Int(
+                            42,
+                        ),
+                        "line": Int(
+                            83,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "例が合いません: 運賃 は 2170円 のはずが 2160円 になりました",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e107.rule",
+                ),
+                "line": Int(
+                    83,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "expected": Obj(
+                    {
+                        "運賃": Int(
+                            2170,
+                        ),
+                    },
+                ),
+                "inputs": Obj(
+                    {
+                        "あて先": Str(
+                            "沖縄県",
+                        ),
+                        "三辺合計": Int(
+                            100,
+                        ),
+                        "重量": Int(
+                            3000,
+                        ),
+                    },
+                ),
+                "outputs": Obj(
+                    {
+                        "運賃": Int(
+                            2160,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

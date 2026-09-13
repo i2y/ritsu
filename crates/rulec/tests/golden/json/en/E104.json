@@ -1,0 +1,90 @@
+Obj(
+    {
+        "code": Str(
+            "E104",
+        ),
+        "column": Int(
+            17,
+        ),
+        "file": Str(
+            "tests/mutants/m_e104.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "add_rounding",
+                ),
+                "text": Str(
+                    "round down(1円)",
+                ),
+            },
+        ),
+        "line": Int(
+            21,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Output 運賃 has type money[円, incl_tax].",
+                ),
+                Str(
+                    "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it).",
+                ),
+                Str(
+                    "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451円 is stopped by E106.",
+                ),
+                Str(
+                    "Hint: add rounding to the output declaration, e.g. round up(10円)",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            17,
+                        ),
+                        "label": Str(
+                            "no rounding is declared",
+                        ),
+                        "length": Int(
+                            20,
+                        ),
+                        "line": Int(
+                            21,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "The output declares no rounding",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    17,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e104.rule",
+                ),
+                "line": Int(
+                    21,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

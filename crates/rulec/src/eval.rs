@@ -42,6 +42,28 @@ pub struct Env<'a> {
     pub c: &'a Checked,
     /// The rows that fired. E107 of §11 is reported "with the fired rows".
     pub fired: Vec<String>,
+    /// The same rows as `(table, row)`, for the structured half of a diagnostic. Kept beside
+    /// the tags rather than parsed back out of them: `row_tag` is prose, and prose is allowed
+    /// to change (§11 principle 5).
+    pub fired_rows: Vec<(String, usize)>,
+}
+
+impl<'a> Env<'a> {
+    pub fn new(c: &'a Checked, vals: HashMap<String, Val>) -> Env<'a> {
+        Env { vals, c, fired: Vec::new(), fired_rows: Vec::new() }
+    }
+}
+
+/// A value as it goes into a diagnostic's witness: an integer in the canonical unit, an enum
+/// value by name, a boolean, a date as `YYYY-MM-DD` (§10.2).
+pub fn wval(v: &Val) -> crate::diag::WVal {
+    use crate::diag::WVal;
+    match v {
+        Val::Enum(s) | Val::Str(s) => WVal::Str(s.clone()),
+        Val::Bool(b) => WVal::Bool(*b),
+        Val::Date(y, m, d) => WVal::Str(format!("{y:04}-{m:02}-{d:02}")),
+        Val::Num(r) => WVal::Int(r.num / r.den),
+    }
 }
 
 /// The tag of a fired row, `表 名前 行N`. E107 prints it, and `coverage`, `vectors`, and
@@ -186,6 +208,7 @@ impl<'a> Env<'a> {
             })
         })?;
         self.fired.push(row_tag(&name, hit + 1));
+        self.fired_rows.push((name.clone(), hit + 1));
         for (oi, oc) in t.outputs.iter().enumerate() {
             let ty = self.c.ty_of(&oc.name.text).unwrap_or(Ty::Unknown);
             let v = match t.rows[hit].outs.get(oi) {
@@ -231,7 +254,18 @@ pub fn run_all(
     c: &Checked,
     inputs: HashMap<String, Val>,
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, HashMap<String, Val>) {
-    let mut env = Env { vals: inputs, c, fired: Vec::new() };
+    let (outs, fired, _, binds) = run_all_traced(f, c, inputs);
+    (outs, fired, binds)
+}
+
+/// `run_all`, plus the fired rows as `(table, row)` for a diagnostic's structured half.
+#[allow(clippy::type_complexity)]
+pub fn run_all_traced(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
+    let mut env = Env::new(c, inputs);
     for it in &f.items {
         match it {
             Item::Derived(d) => {
@@ -270,12 +304,12 @@ pub fn run_all(
         }
         outs.push((name, v));
     }
-    (outs, env.fired, env.vals)
+    (outs, env.fired, env.fired_rows, env.vals)
 }
 
 /// The match test for a single cell, used from outside the table (the coverage check of §9.2).
 pub fn cell_matches(c: &Checked, cell: &Cell, v: &Val, ty: &Ty) -> bool {
-    Env { vals: HashMap::new(), c, fired: Vec::new() }.matches(cell, v, ty)
+    Env::new(c, HashMap::new()).matches(cell, v, ty)
 }
 
 /// The `examples` section is executable specification (§1.2). A miss is E107, reported with
@@ -298,6 +332,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             out.push(
                 Diag::error("E111", tr!("例に出力 {} の列がありません", "The examples have no column for output {}", od.name.text))
                     .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
+                    .fix(crate::diag::FixKind::AddExpected, &od.name.text)
                     .mark(sp, tr!("{} の期待値がありません", "no expected value for {}", od.name.text))
                     .note(tr!("例は三者一致では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。", "The examples are the only wedge that catches errors the three-way agreement misses, so every output is written."))
                     .note(tr!("ヒント: 見出しに `{}` の列を足してください。", "Hint: add a `{}` column to the header.", od.name.text)),
@@ -335,7 +370,20 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 }
             }
         }
-        let (got, fired, _) = run_all(f, c, env);
+        let (got, fired, fired_rows, _) = run_all_traced(f, c, env.clone());
+        // The witness of E107 is the example's own row: the inputs as written, and the value
+        // it expected. A caller can hand these straight back as a vector (§10.2).
+        let wit_in: Vec<(String, crate::diag::WVal)> = ex
+            .inputs
+            .iter()
+            .filter_map(|(col, _)| env.get(col).map(|v| (col.clone(), wval(v))))
+            .collect();
+        let with_rows = |mut d: Diag| -> Diag {
+            for (t, r) in &fired_rows {
+                d = d.rowref(t.clone(), *r);
+            }
+            d
+        };
         // Every output is checked. Looking only at the first, an example would pass silently
         // no matter how wrong the second expected value is (the same shape as E110, which
         // silently skipped columns whose type could not be resolved).
@@ -349,7 +397,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             match (&want, &g) {
                 (Some(w), Some(g)) if w == g => {}
                 (Some(w), Some(g)) => out.push(
-                    Diag::error(
+                    with_rows(Diag::error(
                         "E107",
                         tr!(
                             "例が合いません: {} は {} のはずが {} になりました",
@@ -358,18 +406,28 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                             w.show(&oty),
                             g.show(&oty)
                         ),
-                    )
+                    ))
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .wit(crate::diag::Witness {
+                        inputs: wit_in.clone(),
+                        outputs: vec![(od.name.text.clone(), wval(g))],
+                        expected: vec![(od.name.text.clone(), wval(w))],
+                    })
                     .mark(row.span.clone(), "")
                     .note(tr!("発火した行: {}", "Fired rows: {}", fired.join(" / ")))
                     .note(tr!("例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。", "Examples are executable specification. Fix the table, or fix the example if the example is what is wrong.")),
                 ),
                 (Some(w), None) => out.push(
-                    Diag::error(
+                    with_rows(Diag::error(
                         "E107",
                         tr!("例が合いません: {} は {} のはずが、値が出ませんでした", "Example does not hold: {} should be {} but no value came out", od.name.text, w.show(&oty)),
-                    )
+                    ))
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .wit(crate::diag::Witness {
+                        inputs: wit_in.clone(),
+                        outputs: Vec::new(),
+                        expected: vec![(od.name.text.clone(), wval(w))],
+                    })
                     .mark(row.span.clone(), "")
                     .note(if fired.is_empty() {
                         tr!("どの表も発火しませんでした。", "No table fired.")
@@ -473,7 +531,7 @@ pub fn unrounded_output(f: &RuleFile, c: &Checked) -> Option<Rat> {
 }
 
 fn run_raw(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> (Option<Val>, Vec<String>) {
-    let mut env = Env { vals: inputs, c, fired: Vec::new() };
+    let mut env = Env::new(c, inputs);
     for it in &f.items {
         match it {
             Item::Derived(d) => {

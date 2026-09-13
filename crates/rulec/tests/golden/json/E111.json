@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "E111",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e111.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "add_expected",
+                ),
+                "text": Str(
+                    "素割引",
+                ),
+            },
+        ),
+        "line": Int(
+            40,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "例は三者一致では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。",
+                ),
+                Str(
+                    "ヒント: 見出しに `素割引` の列を足してください。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "素割引 の期待値がありません",
+                        ),
+                        "length": Int(
+                            94,
+                        ),
+                        "line": Int(
+                            40,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "例に出力 素割引 の列がありません",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e111.rule",
+                ),
+                "line": Int(
+                    40,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

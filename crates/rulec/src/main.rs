@@ -124,6 +124,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
                 flag("--show-shadow", None, tr!("件数に畳まれている遮蔽対も全部一覧する", "list every shadow pair, including the ones folded into the count")),
+                flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・証人）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
                 flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった発見を伏せる", "hide findings that were already present at that git revision")),
                 flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(rulec::region::DEFAULT_BUDGET.to_string()),
             ],
@@ -748,7 +749,13 @@ fn main() -> ExitCode {
                 },
                 None => rulec::region::DEFAULT_BUDGET,
             };
-            check(&files, json, a.has("--show-shadow"), a.get("--diff-base"), budget)
+            if json && a.has("--terse") {
+                return refuse(tr!(
+                    "`--format json` と `--terse` は一緒に書けません。JSON は既に機械向けの形です",
+                    "`--format json` and `--terse` cannot be combined; the JSON is already the machine-facing shape"
+                ));
+            }
+            check(&files, json, a.has("--terse"), a.has("--show-shadow"), a.get("--diff-base"), budget)
         }
         "explain" => explain(&files, &a),
         "fmt" => fmt(&files, a.has("--check")),
@@ -873,7 +880,15 @@ fn base_source(rev: &str, path: &str) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&str>, budget: i64) -> ExitCode {
+fn check(
+    files: &[&String],
+    json: bool,
+    terse: bool,
+    show_shadow: bool,
+    diff_base: Option<&str>,
+    budget: i64,
+) -> ExitCode {
+    let mut printed = 0usize;
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -906,8 +921,11 @@ fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&st
             if d.severity == Severity::Error {
                 worst = worst.max(1);
             }
+            printed += 1;
             if json {
                 println!("{}", render_json(d, path));
+            } else if terse {
+                print!("{}", rulec::diag::render_terse(d));
             } else {
                 print!("{}", render(d, &lines));
                 println!();
@@ -943,6 +961,11 @@ fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&st
         if !rulec::has_error(&diags) {
             println!("ok {path}");
         }
+    }
+    // §11 principle 3 still has to reach the reader; in terse mode it reaches them once,
+    // as a pointer, instead of once per finding.
+    if terse && printed > 0 {
+        print!("{}", rulec::diag::terse_footer());
     }
     ExitCode::from(worst)
 }

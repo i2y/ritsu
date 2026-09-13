@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "E111",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e111.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "add_expected",
+                ),
+                "text": Str(
+                    "素割引",
+                ),
+            },
+        ),
+        "line": Int(
+            40,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "The examples are the only wedge that catches errors the three-way agreement misses, so every output is written.",
+                ),
+                Str(
+                    "Hint: add a `素割引` column to the header.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "no expected value for 素割引",
+                        ),
+                        "length": Int(
+                            94,
+                        ),
+                        "line": Int(
+                            40,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "The examples have no column for output 素割引",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e111.rule",
+                ),
+                "line": Int(
+                    40,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

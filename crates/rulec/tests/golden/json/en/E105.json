@@ -1,0 +1,132 @@
+Obj(
+    {
+        "code": Str(
+            "E105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e105.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "line": Int(
+            44,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Both rows match: あて先 = 青森県, サイズ = S60",
+                ),
+                Str(
+                    "`policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            8,
+                        ),
+                        "table": Str(
+                            "運賃表",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            22,
+                        ),
+                        "table": Str(
+                            "運賃表",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 8",
+                        ),
+                        "length": Int(
+                            65,
+                        ),
+                        "line": Int(
+                            44,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 22",
+                        ),
+                        "length": Int(
+                            65,
+                        ),
+                        "line": Int(
+                            58,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Overlapping rows: the same input matches row 8 and row 22",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e105.rule",
+                ),
+                "line": Int(
+                    44,
+                ),
+                "table": Str(
+                    "運賃表",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "あて先": Str(
+                            "青森県",
+                        ),
+                        "サイズ": Str(
+                            "S60",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

@@ -79,6 +79,32 @@ impl Axis {
             },
         }
     }
+
+    /// The same witness value, typed, for the structured half of a diagnostic. Numbers come
+    /// out as integers in the canonical unit and dates as `YYYY-MM-DD`, which is the wire
+    /// shape of §10.2 — a caller can hand a witness straight to a vector or a fixture.
+    fn witness_val(&self, i: usize) -> crate::diag::WVal {
+        use crate::diag::WVal;
+        match self {
+            Axis::Enum { .. } => WVal::Str(self.witness(i)),
+            Axis::Bool => WVal::Bool(i == 0),
+            // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
+            Axis::Num { unit, .. } if unit.is_empty() => WVal::Str(self.witness(i)),
+            Axis::Num { coords, .. } => {
+                let v = match coords.get(i) {
+                    Some(Coord::Point(v)) => *v,
+                    Some(Coord::Open(a, b)) => match (a, b) {
+                        (Some(a), Some(b)) => a.add(*b).div(Rat::int(2)),
+                        (Some(a), None) => a.add(Rat::int(1)),
+                        (None, Some(b)) => b.sub(Rat::int(1)),
+                        (None, None) => Rat::zero(),
+                    },
+                    None => Rat::zero(),
+                };
+                WVal::Int(v.num / v.den)
+            }
+        }
+    }
 }
 
 /// Feasibility per §6.2. Because derived values get independent axes, the space contains points
@@ -541,6 +567,56 @@ impl TableRegion {
         items.sort_by_key(|(d, _)| *d);
         items.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join(", ")
     }
+
+    /// The same witness, as `(column, value)` pairs in the table's visible column order.
+    fn witness_pairs(&self, path: &[usize]) -> Vec<(String, crate::diag::WVal)> {
+        let mut items: Vec<(usize, (String, crate::diag::WVal))> = (0..self.axes.len())
+            .map(|ai| {
+                (
+                    self.display_of[ai],
+                    (
+                        self.col_names[ai].clone(),
+                        self.axes[ai].witness_val(path.get(ai).copied().unwrap_or(0)),
+                    ),
+                )
+            })
+            .collect();
+        items.sort_by_key(|(d, _)| *d);
+        items.into_iter().map(|(_, p)| p).collect()
+    }
+
+    /// A row that matches the witness, written out so it can be pasted into the table. The
+    /// output cells are copied from the table's first row: **the tool does not know the
+    /// amount**, only the shape, and the notes say so. This is E101's `fix.text`.
+    fn row_text(&self, path: &[usize], t: &Table) -> Option<String> {
+        let mut cells: Vec<(usize, String)> = (0..self.axes.len())
+            .map(|ai| {
+                (self.display_of[ai], self.axes[ai].witness(path.get(ai).copied().unwrap_or(0)))
+            })
+            .collect();
+        cells.sort_by_key(|(d, _)| *d);
+        let mut out: Vec<String> = cells.into_iter().map(|(_, c)| c).collect();
+        for o in &t.rows.first()?.outs {
+            out.push(out_cell_text(o));
+        }
+        Some(format!("| {} |", out.join(" | ")))
+    }
+}
+
+/// `(column, value)` pairs as the input half of a witness.
+fn pairs_to_witness(ps: Vec<(String, crate::diag::WVal)>) -> crate::diag::Witness {
+    crate::diag::Witness { inputs: ps, ..Default::default() }
+}
+
+/// An output cell as it is written in the source.
+fn out_cell_text(o: &OutCell) -> String {
+    match o {
+        OutCell::Name(n) => n.clone(),
+        OutCell::Lit(Lit::Num(n)) => n.raw.clone(),
+        OutCell::Lit(Lit::Word(n)) => n.clone(),
+        OutCell::Lit(Lit::Date(y, m, d)) => format!("{y:04}-{m:02}-{d:02}"),
+        OutCell::Lit(Lit::Str(v)) => format!("\"{v}\""),
+    }
 }
 
 /// The three kinds of shadowing (§4). Structural and equivalent ones are only counted; only
@@ -720,6 +796,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             diags: vec![
                 Diag::error("E110", tr!("列 {col} の型 {ty} は、まだ検査できません", "Column {col} has type {ty}, which cannot be checked yet"))
                     .at(tr!("{path}:{} 表 {tname}", "{path}:{} table {tname}", t.span.line))
+                    .table(tname.clone())
                     .mark(t.span.clone(), "")
                     .note(tr!("この表の完全性も重複も検査していません。黙って通すより止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
                     .note(tr!("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。", "Give the column one of these types: an enum, boolean, quantity, money, rate, date, or an optional of one of those.")),
@@ -813,6 +890,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             tr!("未確認の重なり: 行{} と 行{} の両方に当たる入力が有り得ます", "Unconfirmed overlap: an input may match both row {} and row {}", i + 1, j + 1),
                         )
                         .at(at(t.rows[j].span.line))
+                        .table(tname.clone())
+                        .rowref(tname.clone(), i + 1)
+                        .rowref(tname.clone(), j + 1)
+                        .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                         .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
                         .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
                         .note(tr!("重なる条件: {}", "Overlapping condition: {}", reg.overlap_text(&t.rows[i], &t.rows[j])))
@@ -857,6 +938,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     out.push(
                         Diag::error("E105", tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1))
                             .at(at(t.rows[j].span.line))
+                            .table(tname.clone())
+                            .rowref(tname.clone(), i + 1)
+                            .rowref(tname.clone(), j + 1)
+                            .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                             .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
                             .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
                             .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
@@ -897,6 +982,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1),
                     )
                     .at(at(t.rows[j].span.line))
+                    .table(tname.clone())
+                    .rowref(tname.clone(), i + 1)
+                    .rowref(tname.clone(), j + 1)
+                    .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                     .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
                     .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
                     .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
@@ -955,6 +1044,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             out.push(
                 Diag::error("E102", tr!("冗長な行: 行{} は決して当たりません", "Unreachable row: row {} never matches", i + 1))
                     .at(at(t.rows[i].span.line))
+                    .table(tname.clone())
+                    .row(i + 1)
+                    .rowref(tname.clone(), i + 1)
+                    .fix_kind(crate::diag::FixKind::RemoveRow)
                     .mark(t.rows[i].span.clone(), tr!("行{}: ここに到達する入力はありません", "row {}: no input reaches here", i + 1))
                     .note(if reg.unreachable_row[i] {
                         tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
@@ -979,16 +1072,35 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     nodes += budget - left;
     if let Some(hole) = hole {
         out.push(
-            Diag::error("E101", tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"))
-                .at(at(head_span.line))
-                .mark(head_span.clone(), tr!("入力空間を覆いきっていません", "the input space is not fully covered"))
-                .note(tr!("当たらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
-                .note(tr!("ヒント: この入力に当たる行を足してください。", "hint: add a row that matches this input.")),
+            {
+                let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"))
+                    .at(at(head_span.line))
+                    .table(tname.clone())
+                    .wit(pairs_to_witness(reg.witness_pairs(&hole)))
+                    .mark(head_span.clone(), tr!("入力空間を覆いきっていません", "the input space is not fully covered"))
+                    .note(tr!("当たらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
+                    .note(tr!("ヒント: この入力に当たる行を足してください。", "hint: add a row that matches this input."));
+                // The rewritten form (§11 principle 3) as data: the row's input cells are the
+                // witness, and the output cells are copied from the first row purely to give
+                // a shape that parses. **The amount has to come from the written rule**, which
+                // the note says and `fix.text` — being prose-free and language independent —
+                // cannot.
+                match reg.row_text(&hole, t) {
+                    Some(row) => d
+                        .note(tr!(
+                            "足す行の形: `{row}`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのはこの証人の穴だけで、まだ残っていれば次の証人が出ます。",
+                            "The shape of the row to add: `{row}`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one."
+                        ))
+                        .fix(crate::diag::FixKind::AddRow, row),
+                    None => d,
+                }
+            },
         );
     } else if left < 0 {
         out.push(
             Diag::error("E109", tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"))
                 .at(at(head_span.line))
+                .table(tname.clone())
                 .mark(head_span.clone(), "")
                 .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
                 .note(tr!("列を群でまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
@@ -1000,6 +1112,8 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         out.push(
             Diag::warning("W110", tr!("この表には重なりがありません", "This table has no overlapping rows"))
                 .at(at(head_span.line))
+                .table(tname.clone())
+                .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
                 .mark(head_span.clone(), "")
                 .note(tr!("`{} {}` にすると、行の並べ替えが意味を変えないことを検査が保証します。", "With `{} {}`, the checker guarantees that reordering the rows does not change the meaning.", crate::kw::POLICY, crate::kw::UNIQUE)),
         );

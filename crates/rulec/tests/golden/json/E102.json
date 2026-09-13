@@ -1,0 +1,98 @@
+Obj(
+    {
+        "code": Str(
+            "E102",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_e102.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "remove_row",
+                ),
+            },
+        ),
+        "line": Int(
+            33,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "`policy first` のため、この行の範囲は先行する行がすべて先に取ります。",
+                ),
+                Str(
+                    "ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            8,
+                        ),
+                        "table": Str(
+                            "サイズ判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行8: ここに到達する入力はありません",
+                        ),
+                        "length": Int(
+                            16,
+                        ),
+                        "line": Int(
+                            33,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "冗長な行: 行8 は決して当たりません",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e102.rule",
+                ),
+                "line": Int(
+                    33,
+                ),
+                "row": Int(
+                    8,
+                ),
+                "table": Str(
+                    "サイズ判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

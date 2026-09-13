@@ -457,6 +457,7 @@ impl P {
                 Some(crate::kw::FIRST) => policy = Policy::TopDown,
                 other => self.err(
                     Diag::error("E007", tr!("知らない方式 `{}` です", "Unknown policy `{}`", other.unwrap_or("")))
+                        .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
                         .mark(span_of(&l), "")
                         .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
                 ),

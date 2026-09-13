@@ -1,0 +1,423 @@
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/送料.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "true|-\u{1}-|プラチナ",
+        ),
+        "line": Int(
+            32,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Both rows match: 大口 = true, 会員 = プラチナ",
+                ),
+                Str(
+                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 30000, 重量 = 1",
+                ),
+                Str(
+                    "Because of `policy first`, row 1 wins. Is this intended?",
+                ),
+                Str(
+                    "If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 1",
+                        ),
+                        "length": Int(
+                            48,
+                        ),
+                        "line": Int(
+                            32,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 2",
+                        ),
+                        "length": Int(
+                            52,
+                        ),
+                        "line": Int(
+                            33,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Overlapping rows: the same input matches row 1 and row 2",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/送料.rule",
+                ),
+                "line": Int(
+                    32,
+                ),
+                "table": Str(
+                    "負担判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "会員": Str(
+                            "プラチナ",
+                        ),
+                        "大口": Bool(
+                            true,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/送料.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "true|-\u{1}-|-",
+        ),
+        "line": Int(
+            32,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Both rows match: 大口 = true, 会員 = 一般",
+                ),
+                Str(
+                    "An input producing this example: 会員 = 一般, 届け先 = 北海道, 注文金額 = 30000, 重量 = 1",
+                ),
+                Str(
+                    "Because of `policy first`, row 1 wins. Is this intended?",
+                ),
+                Str(
+                    "The row's region is entirely contained in the later row (the normal shape of a staircase).",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            3,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 1",
+                        ),
+                        "length": Int(
+                            48,
+                        ),
+                        "line": Int(
+                            32,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 3",
+                        ),
+                        "length": Int(
+                            48,
+                        ),
+                        "line": Int(
+                            34,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Overlapping rows: the same input matches row 1 and row 3",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/送料.rule",
+                ),
+                "line": Int(
+                    32,
+                ),
+                "table": Str(
+                    "負担判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "会員": Str(
+                            "一般",
+                        ),
+                        "大口": Bool(
+                            true,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/送料.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "-|プラチナ\u{1}-|-",
+        ),
+        "line": Int(
+            33,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Both rows match: 大口 = true, 会員 = プラチナ",
+                ),
+                Str(
+                    "An input producing this example: 会員 = プラチナ, 届け先 = 北海道, 注文金額 = 0, 重量 = 1",
+                ),
+                Str(
+                    "Because of `policy first`, row 2 wins. Is this intended?",
+                ),
+                Str(
+                    "The row's region is entirely contained in the later row (the normal shape of a staircase).",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            3,
+                        ),
+                        "table": Str(
+                            "負担判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 2",
+                        ),
+                        "length": Int(
+                            52,
+                        ),
+                        "line": Int(
+                            33,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 3",
+                        ),
+                        "length": Int(
+                            48,
+                        ),
+                        "line": Int(
+                            34,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Overlapping rows: the same input matches row 2 and row 3",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/送料.rule",
+                ),
+                "line": Int(
+                    33,
+                ),
+                "table": Str(
+                    "負担判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "会員": Str(
+                            "プラチナ",
+                        ),
+                        "大口": Bool(
+                            true,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)
