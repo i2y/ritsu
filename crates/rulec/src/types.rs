@@ -1357,7 +1357,7 @@ impl Checked {
                             tr!("比較の片側は入力か導出の名前、もう片側は定数である必要があります。", "One side of the comparison must be the name of an input or derived value, and the other side a constant.")
                         };
                         self.diags.push(
-                            Diag::error("E113", tr!("定義 {owner} の条件が、入力か導出への単項テストになっていません", "The condition of definition {owner} is not a unary test on an input or derived value"))
+                            Diag::error("E113", tr!("定義 {owner} の条件が、値ひとつと定数の比較になっていません", "The condition of definition {owner} is not one value compared with a constant"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(hint.to_string())

@@ -326,7 +326,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
         return out;
     }
 
-    // §1.2: the examples are the wedge that breaks the blind spot of the three-way agreement.
+    // §1.2: the examples are the wedge that breaks the blind spot the implementations share.
     // When all three share the same mistake the agreement stays green, and the only thing
     // that can break it is an expected value written by a person. That is why every output
     // must be written; a missing column is an error (E111).
@@ -339,7 +339,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
                     .fix(crate::diag::FixKind::AddExpected, &od.name.text)
                     .mark(sp, tr!("{} の期待値がありません", "no expected value for {}", od.name.text))
-                    .note(tr!("例は三者一致では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。", "The examples are the only wedge that catches errors the three-way agreement misses, so every output is written."))
+                    .note(tr!("例は実装どうしの照合では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。", "The examples are the only wedge that catches errors the implementations can share, so every output is written."))
                     .note(tr!("ヒント: 見出しに `{}` の列を足してください。", "Hint: add a `{}` column to the header.", od.name.text)),
             );
         }

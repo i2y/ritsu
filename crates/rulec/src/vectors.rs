@@ -85,7 +85,7 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
             _ => {}
         }
         // Drop values outside the declared range. The entry guard rejects them, so only in-range
-        // values take part in the three-way comparison (§8.5).
+        // values take part in the comparison across implementations (§8.5).
         if let Some((lo, hi)) = c.ranges.get(name) {
             vs.retain(|v| match v {
                 Val::Num(x) => {

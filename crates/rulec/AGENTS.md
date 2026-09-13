@@ -112,7 +112,7 @@ code to integrate it ([docs/generated-code.md](docs/generated-code.md)).
 
 ### `rulec test generated/ --format json`
 
-Runs both languages over the vectors and compares them with the reference evaluator, byte for
+Runs every generated language over the vectors and compares them with the reference evaluator, byte for
 byte. This is the only step that needs a `python3` and a `go` toolchain.
 
 ### In CI

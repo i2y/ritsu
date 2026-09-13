@@ -145,10 +145,23 @@ policy unique
 | >=2026-12-01              | 年末                 |
 ```
 
-What decides it is the **shape of the decision**, not what the values happen to be. A
-cell tests its own column and nothing else, which makes a row a box, which makes gaps
-and overlaps exactly decidable — that is where the boundary is. So this is not "a tool
-for shipping fees" and not "a tool for e-commerce".
+What decides it is the **shape of the decision**, not what the values happen to be. So
+this is not "a tool for shipping fees" and not "a tool for e-commerce".
+
+### The one constraint: a cell sees only its own column
+
+A cell holds a condition on **the value in that column and nothing else**. `<=2000g` is
+about the weight; `遠隔地` is about the destination. **No cell can span two columns** —
+there is no way to write `weight × 10 > order total`. If you need that, name it first
+with a `derive` or a `define` and make it a column of its own.
+
+It looks restrictive, and it is what holds everything else up. Because every cell only
+narrows its own column, **a row is a box** — a rectangle made of one interval per axis.
+Boxes can be compared exactly: whether a gap is left between them, whether any two
+overlap. Let a cell relate two columns and a row becomes an arbitrary shape, at which
+point "is there a gap?" has no general answer.
+
+That is where the boundary of this tool is drawn.
 
 **Most numbers you return carry a unit.** The numeric types are **quantity (g, cm),
 money and rate**, plus `number` for the ones that carry none — a count of things, a
@@ -263,7 +276,7 @@ so this is from their published material.
 
 | | What it is | How rulec differs |
 |---|---|---|
-| **DMN** (the OMG standard) and its implementations — Apache KIE / Drools, Camunda, jDMN, Kogito | The industry standard for decision tables, with hit policies, and static gap/overlap analysis in some implementations ([Drools DMN](https://kie.apache.org/drools/dmn/), [dmn-check](https://github.com/red6/dmn-check)). [jDMN](https://github.com/goldmansachs/jdmn) generates Java | A DMN cell holds a FEEL expression, so completeness is hard in general and the analyses work over a subset. rulec restricts a cell to **a unary test on its own column**, which is what puts completeness and overlap on the decidable side. Units and tax class as types, mandatory rounding, an int64 proof, two target languages and comparison against a legacy implementation are all outside DMN |
+| **DMN** (the OMG standard) and its implementations — Apache KIE / Drools, Camunda, jDMN, Kogito | The industry standard for decision tables, with hit policies, and static gap/overlap analysis in some implementations ([Drools DMN](https://kie.apache.org/drools/dmn/), [dmn-check](https://github.com/red6/dmn-check)). [jDMN](https://github.com/goldmansachs/jdmn) generates Java | A DMN cell holds a FEEL expression, so completeness is hard in general and the analyses work over a subset. rulec keeps **a cell to its own column** — no cell spans two — which is what puts completeness and overlap on the decidable side. Units and tax class as types, mandatory rounding, an int64 proof, generating into several languages, and comparison against a legacy implementation are all outside DMN |
 | **Rules engines** — Drools DRL, IBM ODM, [GoRules / ZEN](https://github.com/gorules/zen), OpenRules, OpenL Tablets | Evaluate rules at runtime through a library or a service | rulec **ships no engine**. What comes out is a dependency-free ordinary function, and rulec is not present at runtime |
 | **Corticon** (Progress, commercial) | Rulesheets with a [conflict checker and a completeness checker](https://docs.progress.com/bundle/corticon-js-rule-modeling/page/The-conflict-checker.html). The closest in ambition | Commercial, with its own runtime. rulec hands over plain source and stops there — and carries the comparison side (verify / replay / diff) itself |
 | **[Catala](https://github.com/CatalaLang/catala)** (Inria) | A language for writing statute law as a program, correctness-first, compiling to several languages | The closest relative in spirit. Different in shape: Catala mirrors the structure of legal text (defaults and exceptions), not decision tables, and has neither unit types nor a story for matching a legacy implementation |

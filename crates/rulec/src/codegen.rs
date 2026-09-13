@@ -1597,7 +1597,7 @@ fn align(src: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Runners (§9.3: feed the vectors through both languages and check the three-way agreement)
+// Runners (§9.3: feed the vectors through every generated language and compare the answers)
 // ---------------------------------------------------------------------------
 
 impl<'a> Gen<'a> {

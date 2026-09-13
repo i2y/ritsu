@@ -72,7 +72,7 @@ func FeeDemo(in Input) (YenInclTax, error) {
 読める形であることを、生成器は四つで守っています。
 
 - **セルを省略しません。** 手前の分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です。
-- **単位は型に載せます。** Python は `NewType`、Go は defined type。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。
+- **単位は型に載せます。** Python は `NewType`、TypeScript は branded bigint、Go は defined type。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。
 - **丸めは自前のヘルパで行います。** Python の `//` は −∞ 方向、Go の整数除算は 0 方向で食い違うので、言語の素の除算には任せません。
 - **言語の組み込み関数をそのまま呼びません。** 入力のエイリアスが `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています。
 

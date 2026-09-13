@@ -550,7 +550,7 @@ pub fn ledger() -> Vec<Entry> {
             "E111",
             tr!("例に出力の列がありません", "The examples have no column for an output"),
             tr!(
-                "`examples` が、宣言した出力の一部しか書いていないとき。三者一致（評価器・Python・Go）は三者が同じ誤りを共有すると緑のままなので、**それを破れるのは人の書いた期待値だけ**です。実際に複数出力の丸めが三方で揃って抜けたことがあります。",
+                "`examples` が、宣言した出力の一部しか書いていないとき。実装どうしの照合（評価器・Python・TypeScript・Go）は、全員が同じ誤りを共有すると緑のままなので、**それを破れるのは人の書いた期待値だけ**です。実際に複数出力の丸めが揃って抜けたことがあります。",
                 "`examples` writes only some of the declared outputs. Three-way agreement (evaluator, Python, Go) stays green when all three share the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in all three at once."
             ),
             tr!(
@@ -578,8 +578,8 @@ pub fn ledger() -> Vec<Entry> {
             "E113",
             tr!("真偽定義の条件が、許された二形のどちらでもありません", "The condition of a boolean definition is neither of the two allowed forms"),
             tr!(
-                "`define … : bool` の条件が、入力・導出への単項テストでも、導出で差の取れない型どうしの同型比較でもないとき。数値どうしの直接比較がこれに当たります（§5.3）。",
-                "The condition of `define … : bool` is neither a unary test on an input or derived value, nor a comparison of two values of a type whose difference cannot be derived. A direct comparison of two numbers is the usual case (§5.3)."
+                "`define … : bool` の条件が、「入力か導出の値ひとつを定数と比べる」形でも、「引き算で差を取れない型どうしの比較」（日付どうしなど）でもないとき。数値どうしを直接比べたときがこれに当たります（§5.3）。",
+                "The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3)."
             ),
             tr!(
                 "差を導出として宣言してから定数と比べてください。`define bigger : bool = a >= b` は `derive gap(gap) : money[円, incl_tax] = a - b  range …` を足して `| gap | >=0円 |` と書き換えます。そのほうが厳密に解析できます。",

@@ -82,3 +82,22 @@ fn readmeの診断抜粋は既定の言語で出る() {
         assert!(md.contains(line), "README の診断抜粋が実物と食い違う:\n{line}");
     }
 }
+
+/// The README states two counts about the tool. Both rot silently: a corpus rule or a
+/// diagnostic gets added and the sentence keeps claiming the old number, which is exactly
+/// the kind of quietly-false documentation the rest of this suite exists to prevent.
+#[test]
+fn readmeが言う件数は実物と合っている() {
+    let md = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"),
+    )
+    .unwrap();
+    let corpus = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
+        .count();
+    let codes = rulec::codes::ledger().len();
+    let want = format!("コーパスは {corpus} 本、診断は台帳の {codes} 項目すべてを実装しています。");
+    assert!(md.contains(&want), "README の件数が実物と違う。正しくは: {want}");
+}

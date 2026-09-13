@@ -712,7 +712,7 @@ Related codes: [E108](#e108), [E101](#e101)
 
 `error` — **The condition of a boolean definition is neither of the two allowed forms**
 
-**When.** The condition of `define … : bool` is neither a unary test on an input or derived value, nor a comparison of two values of a type whose difference cannot be derived. A direct comparison of two numbers is the usual case (§5.3).
+**When.** The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3).
 
 **Fix.** Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[円, incl_tax] = a - b  range …` and the cell `>=0円`. The analysis is exact that way.
 

@@ -1,4 +1,4 @@
-error[E113]: The condition of definition 得か is not a unary test on an input or derived value
+error[E113]: The condition of definition 得か is not one value compared with a constant
   --> tests/mutants/m_e113.rule:47
    |
 47 | define 得か(is_good) : bool = 素割引 >= 上限額

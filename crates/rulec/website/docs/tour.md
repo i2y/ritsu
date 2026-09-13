@@ -276,10 +276,11 @@ define 大口(bulk) : bool = 注文金額 >= 3万円
 define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 ```
 
-Its condition is limited to a unary test on one axis, or a comparison of
-**two values whose difference cannot be derived**. Comparing two numbers
-directly is refused, with a message asking you to declare the difference
-as a `derive` — that way the analysis is exact.
+Its condition holds either one value compared with a constant, or a
+comparison of **two values whose difference cannot be subtracted** (two
+dates, say). Comparing two numbers directly is refused, with a message
+asking you to declare the difference as a `derive` — that way the
+analysis is exact.
 
 **A result** assembles an output.
 
@@ -308,7 +309,7 @@ rows that fired**.
 reason is worth knowing: the agreement of the reference evaluator, the
 generated Python and the generated Go stays green **when all three share
 the same mistake**. That happened — rounding for multiple outputs was
-missing in all three at once, and the three-way agreement was green to
+missing in all of them at once, and the agreement check was green to
 the end. The only thing that can break it is an expectation a person
 wrote.
 
