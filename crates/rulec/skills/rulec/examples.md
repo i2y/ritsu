@@ -585,3 +585,77 @@ examples
 - `number` is the type for **counts, days and scores**: whole numbers with no unit.
 - `税込金額 ÷ 100円` **does not divide the integer**. It multiplies the internal step by 100, so 1050 yen stays 10.5 points all the way to the end, where `round down(1)` makes it 10 exactly once. Python's `//` and Go's `/` truncate in different directions; neither gets a say here.
 - Division is allowed **by a constant only**. If the divisor is business data, it belongs in the table as a rate or a constant column.
+
+## Three tables stacked, two outputs returned
+
+Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.
+
+```
+rule 会員特典(member_perk) v1
+description "会員区分と重量から請求額とポイントを一度に出す。出力が二つ、result が一本、率が表の列から来る例"
+
+enum 会員(member) = 一般(basic) | 上位(gold)
+enum 重さ区分(wclass) = 軽(light) | 中(mid) | 重(heavy)
+enum 帯(tier) = 銅(bronze) | 銀(silver) | 金(gold)
+
+inputs
+  会員区分(m)     : 会員
+  重量(weight)    : mass[g]              range >=1g <=20kg
+  商品合計(gross) : money[円, incl_tax]   range >=0円 <=100万円
+  値引(off)       : money[円, incl_tax]   range >=0円 <=10万円
+
+# 宣言順（請求額 → 付与点）と文字の並び順（付与点 → 請求額）がわざと逆。
+# 生成コードの返す順序が言語ごとにぶれていないかは、この順序でしか出ない。
+outputs
+  請求額(total) : money[円, incl_tax]  round half_up(10円)
+  付与点(pts)   : number               round down(1)
+
+derive 支払額(net) : money[円, incl_tax] = 商品合計 - 値引  range >=-10万円 <=100万円
+
+# 金額を金額の定数で割ると単位が消えて number になる（§2.3）
+define 基本点(base) : number = 商品合計 ÷ 100円
+
+table 重さ判定(w_of)
+policy first
+| 重量   | -> 区分(wc) : 重さ区分 |
+| <=2kg  | 軽                     |
+| <=10kg | 中                     |
+| -      | 重                     |
+
+table 帯判定(tier_of)
+policy unique
+| 区分 | 会員区分 | -> 帯(t) : 帯 |
+| 軽   | 一般     | 銅            |
+| 軽   | 上位     | 銀            |
+| 中   | 一般     | 銀            |
+| 中   | 上位     | 金            |
+| 重   | -        | 金            |
+
+# 一つの表が二つの列を出し、そのうち率の列を下の define が使う。
+# 率の刻み（10%）が列の保持スケールに入らないと、付与点が 10 倍になる。
+table 送料表(ship)
+policy unique
+| 帯 | 支払額   | -> 送料(s) : money[円, incl_tax] | -> 倍率(r) : rate[step 10%] |
+| 銅 | <3000円  | 800円                            | 100%                        |
+| 銅 | >=3000円 | 400円                            | 100%                        |
+| 銀 | -        | 300円                            | 120%                        |
+| 金 | -        | 0円                              | 150%                        |
+
+# 二つ目の出力は、その出力と同じ名前の define から取る（result は最初の出力にしか効かない）
+define 付与点(pts) : number = 基本点 × 倍率
+
+result 請求額 = max(支払額, 0円) + 送料
+
+examples
+| 会員区分 | 重量  | 商品合計 | 値引   | -> 請求額 | -> 付与点 |
+| 一般     | 1kg   | 2000円   | 500円  | 2300円    | 20        |
+| 上位     | 5kg   | 20000円  | 2000円 | 18000円   | 300       |
+| 一般     | 15kg  | 5000円   | 0円    | 5000円    | 75        |
+```
+
+**What this one shows**
+
+- **A table's output column is a column of any later table.** There is no limit on the depth (past the check's budget it stops at E109). When `rulec check` fails it names the row that fired in each of them: `table 重さ判定 row 2 / table 帯判定 row 4 / table 送料表 row 4`.
+- **One table may produce several output columns.** `送料表` produces `送料` and `倍率` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `基本点 × 倍率` is rounded exactly once, at the end.
+- **A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.
+- **`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.

@@ -309,6 +309,11 @@ Assembles the first output when it is not simply looked up from a table.
 result 送料 = 基本送料 × 負担率
 ```
 
+`result` is sugar for the **first** output and reaches no other. Every output — the first one
+included — is otherwise taken from the binding of its own name: a `define` or a table output
+column called `送料` is what the output `送料` returns. Naming a later output in a `result` is
+E015; a second `result` line is E016.
+
 Operators, from loosest to tightest: comparison (`<= >= < > =`), then `+ -`, then `* /`.
 Parentheses group. The two functions are `min(a, b)` and `max(a, b)`, and the four rounding
 modes may also be called as functions: `down(x, 1円)`, `up(x, 10円)`, `half_up(x, 1円)`,

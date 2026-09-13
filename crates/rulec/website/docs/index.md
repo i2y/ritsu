@@ -135,6 +135,56 @@ point "is there a gap?" has no general answer.
 
 That is where the boundary of this tool is drawn.
 
+### So how is something complicated written — tables stack
+
+Because a cell can only see its own column, **tables stack as deep as you like**. What one
+table produces is written as a column of the next.
+
+```
+table 重さ判定(w_of)    # weight -> weight class
+table 帯判定(tier_of)   # weight class x membership -> tier
+table 送料表(ship)      # tier x amount payable -> shipping, multiplier
+```
+
+Depth costs no visibility. When a check fails it names the row that fired in each of them.
+
+```
+fired rows: table 重さ判定 row 2 / table 帯判定 row 4 / table 送料表 row 4
+```
+
+Four things matter when stacking.
+
+| | |
+|---|---|
+| **A table's output is a column of any later table** | There is no limit on the depth; only the check's budget stops it, at E109 |
+| **One table may produce several output columns** | `送料表` above produces `送料` and `倍率` at once |
+| **A `derive` can be a column** | "Judge on the amount after the discount" becomes one column instead of one bare line of arithmetic |
+| **Completeness is checked across the stack** | The second form of E102 is "the upstream table never emits that value" |
+
+A rule that does this, and runs, is [Examples](examples.md) → "Three tables stacked, two
+outputs returned".
+
+### Where the arithmetic goes
+
+A table holds **the branching and nothing else**. Arithmetic lives in three places outside it.
+
+| | what it may hold | can it be a column? |
+|---|---|---|
+| `derive` | a linear combination of inputs — `+`, `-`, multiplication by a constant | **yes**, and it stays a quantity |
+| `define` | a boolean (two shapes), or a computed intermediate value | a boolean or an enum one can |
+| `result` | `+ - * /`, parentheses, `min` and `max`, and the four rounding modes as functions | — |
+
+- **Division is by a constant only.** Dividing by a variable stops at E115. Dividing money by
+  a money constant — `税込金額 ÷ 100円` — cancels the unit and leaves a `number`.
+- Multiplication by a rate is allowed: `基本送料 × 負担率`. The rate stays a rate to the end,
+  and rounding happens exactly once.
+- **There is no loop and no recursion**, and no date arithmetic — comparison and range only.
+- Everything is an integer. No floating point appears anywhere.
+
+**When a rule has more than one output**, `result` assembles the first one and nothing else
+(E015); the rest are taken from a `define` of the same name as the output. A second `result`
+line stops at E016.
+
 **Most numbers you return carry a unit.** The numeric types are **quantity (g, cm),
 money and rate**, plus `number` for the ones that carry none — a count of things, a
 number of days, a score. Numbers with a unit and numbers without do not mix, and the

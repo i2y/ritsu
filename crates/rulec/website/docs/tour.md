@@ -159,6 +159,11 @@ outputs
   素割引(raw) : money[円, incl_tax]  round down(1円)
 ```
 
+An output returns **the binding of its own name** — a `define` or a table
+output column called `素割引` is what the output `素割引` returns. `result`
+is sugar for that, and it reaches **the first output only**: naming a later
+one is E015, and a second `result` line is E016.
+
 ## `range` and `round` — the two you are not allowed to forget
 
 These are not decoration. They are where this language is aimed.
@@ -217,7 +222,13 @@ policy unique
 ```
 
 Left of `->` are input columns, right of it output columns. A column may
-name an input, a `derive`, or a boolean or enum intermediate.
+name an input, a `derive`, a boolean or enum intermediate, **or an output
+of an earlier table**.
+
+That last one is how tables stack, and stacking is how a complicated rule
+gets written: `table 重さ判定` produces `区分`, which is a column of
+`table 帯判定`, whose `帯` is a column of the next table again. There is no
+limit on the depth, and one table may produce several output columns.
 
 **There are exactly two policies.**
 

@@ -201,6 +201,25 @@ EXAMPLES = [
             "Division is allowed **by a constant only**. If the divisor is business data, it belongs in the table as a rate or a constant column.",
         ],
     ),
+    (
+        "会員特典.rule",
+        "表を三段重ねて、出力を二つ返す",
+        "重量から重さ区分、重さ区分と会員区分から帯、帯と支払額から送料と倍率。前の表が出した値が、そのまま次の表の列になります。返るのは請求額とポイントの二つです。",
+        [
+            "**前の表の出力は、後の表の列にそのまま書けます。** 段数に上限はありません（検査の予算を超えたら E109 で止まります）。`rulec check` が落ちたときの「発火した行」も、`表 重さ判定 行2 / 表 帯判定 行4 / 表 送料表 行4` と段の数だけ出ます。",
+            "**一つの表が出力列を複数持てます。** `送料表` は `送料` と `倍率` を同時に出し、下の `define` がその率を使います。率の刻み（`step 10%`）は列に入っても保たれるので、`基本点 × 倍率` は最後に一度だけ丸められます。",
+            "**`derive` が列になります。** `支払額 = 商品合計 − 値引` を宣言してあるので、「値引き後の金額で判定する」が一本の式ではなく `送料表` の一つの列になります。",
+            "**`result` が組み立てるのは最初の出力だけです**（E015）。二つ目からは、その出力と同じ名前の `define` から取ります — ここでは `define 付与点`。`result` を二本書くと E016 で止まります。",
+        ],
+        "Three tables stacked, two outputs returned",
+        "Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.",
+        [
+            "**A table's output column is a column of any later table.** There is no limit on the depth (past the check's budget it stops at E109). When `rulec check` fails it names the row that fired in each of them: `table 重さ判定 row 2 / table 帯判定 row 4 / table 送料表 row 4`.",
+            "**One table may produce several output columns.** `送料表` produces `送料` and `倍率` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `基本点 × 倍率` is rounded exactly once, at the end.",
+            "**A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.",
+            "**`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.",
+        ],
+    ),
 ]
 
 JA_HEAD = """# 例で見る

@@ -86,6 +86,15 @@ Two declarations are mandatory and are where most first drafts fail:
 - **`round` on every numeric output.** Without it the generated code would settle fractions
   silently.
 
+Two shapes are worth knowing before the first draft:
+
+- **Tables stack.** A table's output column is a column of any later table, to any depth, and
+  one table may produce several output columns. That, plus a `derive` used as a column, is how
+  a rule with interlocking conditions gets written — not by putting more into a cell.
+- **An output returns the binding of its own name** — a `define` or a table output column
+  called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
+  only: naming a later one is E015, and a second `result` line is E016.
+
 ### `rulec fmt <file>`
 
 Run it before `check`, every time. It aligns the columns and rewrites `→ ・ 、 ≦` to ASCII,
