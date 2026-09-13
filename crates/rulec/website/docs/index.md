@@ -250,6 +250,27 @@ longer something this tool says anything about.
 - **Scoring, optimisation, machine learning** — what can be proved here is which row
   fires, not whether a weight is right
 
+### What else is out there
+
+**Decision tables are not new.** An honest look at the neighbours — none of which I have used,
+so this is from their published material.
+
+| | What it is | How rulec differs |
+|---|---|---|
+| **DMN** (the OMG standard) and its implementations — Apache KIE / Drools, Camunda, jDMN, Kogito | The industry standard for decision tables, with hit policies, and static gap/overlap analysis in some implementations ([Drools DMN](https://kie.apache.org/drools/dmn/), [dmn-check](https://github.com/red6/dmn-check)). [jDMN](https://github.com/goldmansachs/jdmn) generates Java | A DMN cell holds a FEEL expression, so completeness is hard in general and the analyses work over a subset. rulec restricts a cell to **a unary test on its own column**, which is what puts completeness and overlap on the decidable side. Units and tax class as types, mandatory rounding, an int64 proof, two target languages and comparison against a legacy implementation are all outside DMN |
+| **Rules engines** — Drools DRL, IBM ODM, [GoRules / ZEN](https://github.com/gorules/zen), OpenRules, OpenL Tablets | Evaluate rules at runtime through a library or a service | rulec **ships no engine**. What comes out is a dependency-free ordinary function, and rulec is not present at runtime |
+| **Corticon** (Progress, commercial) | Rulesheets with a [conflict checker and a completeness checker](https://docs.progress.com/bundle/corticon-js-rule-modeling/page/The-conflict-checker.html). The closest in ambition | Commercial, with its own runtime. rulec hands over plain source and stops there — and carries the comparison side (verify / replay / diff) itself |
+| **[Catala](https://github.com/CatalaLang/catala)** (Inria) | A language for writing statute law as a program, correctness-first, compiling to several languages | The closest relative in spirit. Different in shape: Catala mirrors the structure of legal text (defaults and exceptions), not decision tables, and has neither unit types nor a story for matching a legacy implementation |
+| **[Morphir](https://github.com/finos/morphir)** (FINOS) | Model business logic once in an IR and emit it to many targets | Broad by design; checking a decision table for completeness is not what it is for |
+
+**Where rulec sits is the combination**: cells narrow enough that gaps and overlaps are
+exactly decidable, a witness (the input itself) attached every time, units and rounding held
+by types and declarations, two languages out with zero dependencies, comparison against the
+old implementation and against past records — and **all of it drivable by an agent through
+`--format json` alone**. Each piece exists somewhere already. The assembly, and treating an
+agent as the first user, is the position.
+
+
 ---
 
 ## A person, an agent, and the tool
