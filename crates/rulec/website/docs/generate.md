@@ -13,7 +13,7 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Three are supported today — Python, TypeScript and Go — and **Java,
+Four are supported today — Python, TypeScript, Rust and Go — and **Java,
 Kotlin, Swift and SQL are planned**. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
@@ -23,6 +23,7 @@ exists.
 |---|---|---|
 | Python | supported | `python3` |
 | TypeScript | supported | just `node` — no build step, no tsconfig |
+| Rust | supported | just `rustc` — no cargo, no crates |
 | Go | supported | `go` |
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |

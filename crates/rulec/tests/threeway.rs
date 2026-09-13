@@ -62,8 +62,9 @@ fn 評価器と生成コードが全言語で一致する() {
     let py = have("python3");
     let go = have("go");
     let ts = have("node");
-    assert!(py || go || ts, "python3 も go も node も無いので一致を確かめられない");
-    for (ok, name) in [(py, "python3"), (ts, "node"), (go, "go")] {
+    let rs = have("rustc");
+    assert!(py || go || ts || rs, "どの toolchain も無いので一致を確かめられない");
+    for (ok, name) in [(py, "python3"), (ts, "node"), (rs, "rustc"), (go, "go")] {
         if !ok {
             eprintln!("注意: {name} が無いのでその言語を飛ばした");
         }
@@ -100,6 +101,27 @@ fn 評価器と生成コードが全言語で一致する() {
             assert!(o.status.success(), "{alias}: TypeScript が落ちた: {}", String::from_utf8_lossy(&o.stderr));
             assert_eq!(got, exp, "{alias}: 評価器と生成 TypeScript が食い違う");
         }
+        if rs {
+            let cwd = dir.join("rust");
+            let built = Command::new("rustc")
+                .current_dir(&cwd)
+                .args(["--edition", "2021", "-O", &format!("{alias}_runner.rs"), "-o", alias])
+                .output()
+                .expect("rustc を起動できない");
+            assert!(
+                built.status.success(),
+                "{alias}: 生成した Rust がコンパイルできない:\n{}",
+                String::from_utf8_lossy(&built.stderr)
+            );
+            let o = Command::new(format!("./{alias}"))
+                .current_dir(&cwd)
+                .stdin(std::fs::File::open(&vec_path).unwrap())
+                .output()
+                .expect("生成した Rust を起動できない");
+            let got = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(o.status.success(), "{alias}: Rust が落ちた: {}", String::from_utf8_lossy(&o.stderr));
+            assert_eq!(got, exp, "{alias}: 評価器と生成 Rust が食い違う");
+        }
         if go {
             let pkg = alias.replace('_', "");
             let o = Command::new("go")
@@ -113,7 +135,10 @@ fn 評価器と生成コードが全言語で一致する() {
             assert_eq!(got, exp, "{alias}: 評価器と生成 Go が食い違う");
         }
     }
-    eprintln!("一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Go {go}）", CORPUS.len());
+    eprintln!(
+        "一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Rust {rs} / Go {go}）",
+        CORPUS.len()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

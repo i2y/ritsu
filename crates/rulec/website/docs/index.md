@@ -17,7 +17,7 @@ hide:
 A business rule — a shipping tariff, a coupon policy, an eligibility
 test — written as one table a domain expert can read. rulec proves the
 table has no gaps, no contradictions and no dead rows, and then
-generates ordinary Python, TypeScript and Go with no runtime to install.
+generates ordinary Python, TypeScript, Rust and Go with no runtime to install.
 <strong>The proof happens before the code exists</strong>: a rule that
 cannot be proved does not generate.
 </p>
@@ -31,8 +31,8 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go](images/overview.svg#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go](images/overview-light.svg#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
@@ -97,7 +97,7 @@ it. It has four sides.
 |---|---|
 | **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
 | **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
-| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript and Go that nobody edits by hand — with Java, Kotlin, Swift and SQL on the way |
+| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go that nobody edits by hand — with Java, Kotlin, Swift and SQL on the way |
 | **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
 The agent's own instructions are in [For agents](agents.md), and the

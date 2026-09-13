@@ -115,7 +115,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
 
-    let (py, go, ts) = (have("python3"), have("go"), have("node"));
+    let (py, go, ts, rs) = (have("python3"), have("go"), have("node"), have("rustc"));
     // Python is run with `-B` and any bytecode cache in the output directory is removed
     // first. A `.pyc` is considered fresh when the source has the same size and the same
     // mtime in whole seconds, so a same-length edit made within a second of the previous
@@ -129,13 +129,16 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     if !ts {
         out.skipped.push(tr!("node が無いので TypeScript 側を飛ばしました", "node not found; skipped the TypeScript side"));
     }
+    if !rs {
+        out.skipped.push(tr!("rustc が無いので Rust 側を飛ばしました", "rustc not found; skipped the Rust side"));
+    }
     if !go {
         out.skipped.push(tr!("go が無いので Go 側を飛ばしました", "go not found; skipped the Go side"));
     }
-    if !py && !go && !ts {
+    if !py && !go && !ts && !rs {
         return Err(tr!(
-            "python3 も go も無いので、生成物を走らせられません",
-            "neither python3 nor go is available, so the generated code cannot be run"
+            "python3 も node も rustc も go も無いので、生成物を走らせられません",
+            "none of python3, node, rustc or go is available, so the generated code cannot be run"
         ));
     }
 
@@ -146,7 +149,13 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let n = std::fs::read_to_string(&vec_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
 
-        let mut one = |lang: &'static str, cmd: &str, cwd: PathBuf, args: &[&str]| {
+        // `pre` carries a failure that happened before the command could be run at all —
+        // Rust has to compile first. Routing it through here keeps one borrow of `out`.
+        let mut one = |lang: &'static str, cmd: &str, cwd: PathBuf, args: &[&str], pre: Option<Failure>| {
+            if pre.is_some() {
+                out.results.push(Outcome { rule: alias.clone(), lang, vectors: n, diff: pre });
+                return;
+            }
             let Ok(stdin) = std::fs::File::open(&vec_path) else { return };
             let o = Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).stdin(stdin).output();
             let diff = match o {
@@ -164,7 +173,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             out.results.push(Outcome { rule: alias.clone(), lang, vectors: n, diff });
         };
         if py {
-            one("Python", "python3", dir.join("python"), &["-B", &format!("{alias}_runner.py")]);
+            one("Python", "python3", dir.join("python"), &["-B", &format!("{alias}_runner.py")], None);
         }
         if ts {
             one(
@@ -172,10 +181,31 @@ pub fn run(dir: &Path) -> Result<Run, String> {
                 "node",
                 dir.join("typescript"),
                 &["--no-warnings", &format!("{alias}_runner.ts")],
+                None,
             );
         }
+        if rs {
+            // rustc takes no dependencies and needs no project file, so one invocation
+            // builds both the rule and its runner (`#[path] mod`).
+            let cwd = dir.join("rust");
+            let built = Command::new("rustc")
+                .current_dir(&cwd)
+                .args(["--edition", "2021", "-O", &format!("{alias}_runner.rs"), "-o", alias])
+                .envs(closed())
+                .output();
+            let pre = match built {
+                Ok(o) if o.status.success() => None,
+                Ok(o) => Some(Failure::Other(tr!(
+                    "コンパイルできません:\n{}",
+                    "does not compile:\n{}",
+                    String::from_utf8_lossy(&o.stderr).trim()
+                ))),
+                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+            };
+            one("Rust", &format!("./{alias}"), cwd, &[], pre);
+        }
         if go {
-            one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."]);
+            one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."], None);
         }
     }
 
@@ -204,6 +234,28 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
         };
         out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "TypeScript", vectors: 0, diff });
+    }
+    if rs {
+        let cwd = dir.join("rust");
+        let built = Command::new("rustc")
+            .current_dir(&cwd)
+            .args(["--edition", "2021", "-O", "_round_test.rs", "-o", "_round_test"])
+            .envs(closed())
+            .output();
+        let diff = match built {
+            Ok(o) if o.status.success() => match Command::new("./_round_test").current_dir(&cwd).output() {
+                Ok(o) if o.status.success() => None,
+                Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
+                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+            },
+            Ok(o) => Some(Failure::Other(tr!(
+                "コンパイルできません:\n{}",
+                "does not compile:\n{}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            ))),
+            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+        };
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Rust", vectors: 0, diff });
     }
     if go {
         let o = Command::new("go")

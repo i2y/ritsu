@@ -231,24 +231,39 @@ fn 図が見せている出力は本物と一致する() {
         eprintln!("注意: python3 が無いので飛ばした");
         return;
     }
+    // Regenerating writes the four SVGs, so their bytes are kept and put back: a test has
+    // no business leaving the working tree different from how it found it.
+    let images = root().join("website/docs/images");
+    let files: Vec<std::path::PathBuf> = std::fs::read_dir(&images)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("overview")))
+        .collect();
+    let before: Vec<(std::path::PathBuf, Vec<u8>)> =
+        files.iter().map(|p| (p.clone(), std::fs::read(p).unwrap())).collect();
+
     let o = Command::new("python3")
         .current_dir(root().join("website"))
         .args(["tools/make_overview.py", "--verify", env!("CARGO_BIN_EXE_rulec")])
         .output()
         .expect("python3 を起動できない");
+    let stale: Vec<String> = before
+        .iter()
+        .filter(|(p, was)| std::fs::read(p).ok().as_ref() != Some(was))
+        .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    for (p, was) in &before {
+        let _ = std::fs::write(p, was);
+    }
+
     assert!(
         o.status.success(),
         "図が見せている出力が実物とずれています。`python3 tools/make_overview.py` で作り直してください:\n{}{}",
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
-    // The four SVGs are committed, so a regeneration must leave the tree clean.
-    let dirty = Command::new("git")
-        .current_dir(root())
-        .args(["status", "--porcelain", "website/docs/images"])
-        .output()
-        .expect("git を起動できない");
-    let dirty = String::from_utf8_lossy(&dirty.stdout);
-    let stale: Vec<&str> = dirty.lines().filter(|l| l.starts_with(" M")).collect();
-    assert!(stale.is_empty(), "図が古いままコミットされています: {stale:?}");
+    assert!(
+        stale.is_empty(),
+        "図が古いままです。`python3 tools/make_overview.py` で作り直してください: {stale:?}"
+    );
 }

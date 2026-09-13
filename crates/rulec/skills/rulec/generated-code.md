@@ -1,7 +1,7 @@
 # The generated code
 
-`rulec gen` writes an ordinary Python module, an ordinary TypeScript module and an ordinary
-Go package. There is no runtime to install and nothing to configure: a function takes the
+`rulec gen` writes an ordinary Python module, an ordinary TypeScript module, an ordinary Rust
+module and an ordinary Go package. There is no runtime to install and nothing to configure: a function takes the
 declared inputs and returns the declared outputs. This file says what shape that code has, what it guarantees, and how to
 call it.
 
@@ -21,7 +21,8 @@ spelling each language gives them, and the errors the code can raise. The shape 
 ## What it guarantees
 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
-TypeScript imports nothing at all; the generated Go imports `fmt`. The `go.mod` lists nothing
+TypeScript imports nothing at all; the generated Rust imports nothing outside `std` and needs
+no `Cargo.toml`; the generated Go imports `fmt`. The `go.mod` lists nothing
 but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim.
 
@@ -121,6 +122,46 @@ a `tsc` build works just as well. The member spelling is the alias in upper case
 
 The two error classes are `RuleInputError` and `RuleContradictionError`, with the same
 meanings as in Python.
+
+### Rust
+
+```rust
+pub fn coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Result<Output, RuleError>
+```
+
+Every number is an `i64`, which is the type the overflow proof (E108) is stated in. A unit is
+a newtype over it — `pub struct YenInclTax(pub i64)` — so the compiler refuses a
+tax-exclusive amount where a tax-inclusive one was meant, at no run-time cost. Construct one
+with `YenInclTax(10000)` and read it back with `.0`.
+
+```rust
+use coupon_step::{coupon_step, CouponKind, YenInclTax, Rate};
+
+let out = coupon_step(
+    YenInclTax(10000),
+    YenInclTax(0),
+    CouponKind::Percent,
+    Rate(10),
+    YenInclTax(0),
+    false,
+)?;
+println!("{} {}", out.ok, out.raw.0);
+```
+
+An enum is a plain Rust enum whose members are the aliases in PascalCase
+(`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
+`CouponKind::parse(&str)` reads one back.
+
+**There is no entry guard on an enum input**, unlike the other three languages. A value of a
+Rust enum type is one of its variants by construction, so the check the others have to make
+at run time is already made by the compiler.
+
+Errors come back as `Err(RuleError)`, whose two variants carry the same distinction as
+Python's two exception classes: `RuleError::Input` is a contract violation by the caller, and
+`RuleError::Contradiction` is the runtime guard described below.
+
+It compiles with `rustc` alone — `rustc --edition 2021 -O coupon_step_runner.rs` builds both
+the rule and its runner through a `#[path] mod`, with no project file and nothing to fetch.
 
 ### Go
 

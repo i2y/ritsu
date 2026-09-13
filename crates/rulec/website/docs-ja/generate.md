@@ -10,12 +10,13 @@ $ rulec gen rules/ --out generated/
 
 ## 対応する出力言語
 
-いま対応しているのは Python・TypeScript・Go の三つで、**Java・Kotlin・Swift・SQL に対応予定**です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
+いま対応しているのは Python・TypeScript・Rust・Go の四つで、**Java・Kotlin・Swift・SQL に対応予定**です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
 
 | | 状態 | 要るもの |
 |---|---|---|
 | Python | 対応済み | `python3` |
 | TypeScript | 対応済み | `node` だけ（ビルド手順も tsconfig も要りません） |
+| Rust | 対応済み | `rustc` だけ（cargo もクレートも要りません） |
 | Go | 対応済み | `go` |
 | Java | 対応予定 | JDK。単一ファイル実行でビルドツール無しに走らせられます |
 | Kotlin | 対応予定 | kotlinc |

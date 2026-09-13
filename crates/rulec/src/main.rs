@@ -1061,6 +1061,8 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
             (format!("{out_dir}/typescript/{alias}.ts"), g.typescript()),
             (format!("{out_dir}/typescript/{alias}_runner.ts"), g.ts_runner()),
+            (format!("{out_dir}/rust/{alias}.rs"), g.rust()),
+            (format!("{out_dir}/rust/{alias}_runner.rs"), g.rs_runner()),
             (format!("{out_dir}/go/{pkg}/{alias}.go"), g.go()),
             (format!("{out_dir}/go/{pkg}/go.mod"), format!("module {pkg}\n\ngo 1.25\n")),
             (format!("{out_dir}/go/{pkg}runner/main.go"), g.go_runner()),
@@ -1074,6 +1076,7 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             // agreement alone would hide.
             (format!("{out_dir}/python/_round_test.py"), rulec::codegen::round_tests_python()),
             (format!("{out_dir}/typescript/_round_test.ts"), rulec::codegen::round_tests_typescript()),
+            (format!("{out_dir}/rust/_round_test.rs"), rulec::codegen::round_tests_rust()),
             (format!("{out_dir}/go/{pkg}/round_test.go"), rulec::codegen::round_tests_go(&pkg)),
         ];
         for (p, body) in targets {

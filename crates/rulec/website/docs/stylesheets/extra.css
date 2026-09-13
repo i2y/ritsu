@@ -222,7 +222,7 @@
    rather than shrink — the page itself never scrolls sideways. */
 
 .rc-overview { overflow-x: auto; }
-.md-typeset .rc-overview img { min-width: 44rem; }
+.md-typeset .rc-overview img { min-width: 36rem; }
 
 /* ---- a diagnostic, shown as itself --------------------------------- */
 /* Terminal output on this site is quoted verbatim, frame and carets and

@@ -2,7 +2,7 @@
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python, TypeScript and Go.
+anyone runs it, and turned into ordinary Python, TypeScript, Rust and Go.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the

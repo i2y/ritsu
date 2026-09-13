@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript and Go with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E014, E101-E115, W105, W110, W111, W114) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, Rust and Go with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E014, E101-E115, W105, W110, W111, W114) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -19,7 +19,7 @@ collection ("any line is refrigerated", "three or more items"), to pattern match
 strings, or to scoring and optimisation. Flatten collection facts at the boundary and pass
 the scalar in; keep iteration in the caller.
 
-`rulec gen` writes Python, TypeScript and Go today; Java, Kotlin, Swift and SQL are planned.
+`rulec gen` writes Python, TypeScript, Rust and Go today; Java, Kotlin, Swift and SQL are planned.
 A language only goes in once its output can be held against the reference evaluator byte for
 byte, so whatever `rulec gen` writes is covered by `rulec test`.
 
@@ -41,7 +41,7 @@ copy of the ledger.
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python, TypeScript and Go.
+anyone runs it, and turned into ordinary Python, TypeScript, Rust and Go.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the

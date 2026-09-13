@@ -118,6 +118,7 @@ One object for the run.
 ```json
 {"results":[{"rule":"shipping_fee","lang":"python","vectors":68,"ok":true,"first_diff":null},
              {"rule":"shipping_fee","lang":"typescript","vectors":68,"ok":true,"first_diff":null},
+             {"rule":"shipping_fee","lang":"rust","vectors":68,"ok":true,"first_diff":null},
              {"rule":"shipping_fee","lang":"go","vectors":68,"ok":true,"first_diff":null}],
  "skipped":[]}
 ```
@@ -206,6 +207,12 @@ meaning is in [generated-code.md](generated-code.md).
                "enums":[{"name":"クーポン種別","alias":"CouponKind",
                          "values":[{"name":"率引き","alias":"PERCENT"}]}],
                "errors":["RuleInputError","RuleContradictionError"]},
+ "rust":{"module":"coupon_step.rs","function":"coupon_step",
+         "signature":"pub fn coupon_step(subtotal: YenInclTax, …) -> Result<Output, RuleError>",
+         "params":[…],"returns":"Output","outputs":[…],
+         "enums":[{"name":"クーポン種別","alias":"CouponKind",
+                   "values":[{"name":"率引き","alias":"Percent"}]}],
+         "errors":["RuleError::Input","RuleError::Contradiction"]},
  "go":{"package":"couponstep","func":"CouponStep",
        "signature":"func CouponStep(in Input) (Output, error)",
        "input_type":"Input","input_fields":[…],
@@ -217,7 +224,7 @@ meaning is in [generated-code.md](generated-code.md).
 Everything here is a name or a number the generated code really uses, so nothing in it moves
 with `--lang`. `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
-`couponstep.CouponKindPercent` in Go). `unit`, `range` and `rounding` are absent when the
+`CouponKind::Percent` in Rust, `couponstep.CouponKindPercent` in Go). `unit`, `range` and `rounding` are absent when the
 type has none.
 
 ## `schema` and `adapter`

@@ -818,6 +818,7 @@ impl<'a> Gen<'a> {
                         Lang::Py => self.py_cell(cell, &local(col), &ty, sc),
                         Lang::Go => self.go_cell(cell, &local(col), &ty, sc),
                         Lang::Ts => self.ts_cell(cell, &local(col), &ty, sc),
+                        Lang::Rs => self.rs_cell(cell, &local(col), &ty, sc),
                     };
                     if let Some(c) = c {
                         if !conds.contains(&c) {
@@ -844,6 +845,7 @@ impl<'a> Gen<'a> {
                 Lang::Py => o.push_str(&format!("{indent}if {joined}:\n")),
                 Lang::Go => o.push_str(&format!("{indent}if {joined} {{\n")),
                 Lang::Ts => o.push_str(&format!("{indent}if ({joined}) {{\n")),
+                Lang::Rs => o.push_str(&format!("{indent}if {joined} {{\n")),
             }
             o.push_str(&raise(&name, i + 1, j + 1));
             if lang != Lang::Py {
@@ -1858,6 +1860,7 @@ enum Lang {
     Py,
     Go,
     Ts,
+    Rs,
 }
 
 impl<'a> Gen<'a> {
@@ -2325,6 +2328,678 @@ impl<'a> Gen<'a> {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Rust (§8.3)
+// ---------------------------------------------------------------------------
+
+/// Turn the shared expression text into Rust. The same post-processing shape as `go_expr`
+/// and `ts_expr`. Integer division truncates toward zero here, exactly as it does in Go and
+/// on a JavaScript bigint, so the rounding helpers are the Go ones transliterated.
+fn rs_expr(s: &str) -> String {
+    s.replace(" // ", " / ")
+        .replace("True", "true")
+        .replace("False", "false")
+        .replace("_round_down(", "round_down(")
+        .replace("_round_up(", "round_up(")
+        .replace("_round_half(", "round_half(")
+        .replace("_round_bankers(", "round_bankers(")
+        .replace("_min(", "min_i64(")
+        .replace("_max(", "max_i64(")
+}
+
+/// The error type and the four modes of §7.3.
+fn round_rs() -> String {
+    format!(
+        r#"
+/// {err}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuleError {{
+    /// {input}
+    Input(String),
+    /// {contra}
+    Contradiction(String),
+}}
+
+impl std::fmt::Display for RuleError {{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
+        match self {{
+            RuleError::Input(m) | RuleError::Contradiction(m) => f.write_str(m),
+        }}
+    }}
+}}
+
+impl std::error::Error for RuleError {{}}
+
+fn min_i64(a: i64, b: i64) -> i64 {{
+    if a < b {{ a }} else {{ b }}
+}}
+
+fn max_i64(a: i64, b: i64) -> i64 {{
+    if a > b {{ a }} else {{ b }}
+}}
+
+/// {down}
+fn round_down(x: i64, g: i64) -> i64 {{
+    let v = x.abs() / g * g;
+    if x < 0 {{ -v }} else {{ v }}
+}}
+
+/// {up}
+fn round_up(x: i64, g: i64) -> i64 {{
+    let a = x.abs();
+    let v = if a % g == 0 {{ a / g * g }} else {{ (a / g + 1) * g }};
+    if x < 0 {{ -v }} else {{ v }}
+}}
+
+/// {half}
+fn round_half(x: i64, g: i64) -> i64 {{
+    let a = x.abs();
+    let v = if 2 * (a % g) >= g {{ (a / g + 1) * g }} else {{ a / g * g }};
+    if x < 0 {{ -v }} else {{ v }}
+}}
+
+/// {bankers}
+fn round_bankers(x: i64, g: i64) -> i64 {{
+    let a = x.abs();
+    let (mut q, r) = (a / g, a % g);
+    if 2 * r > g || (2 * r == g && q % 2 == 1) {{
+        q += 1;
+    }}
+    let v = q * g;
+    if x < 0 {{ -v }} else {{ v }}
+}}
+"#,
+        err = tr!("この規則が返しうる誤り。", "Everything this rule can go wrong with."),
+        input = tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+        contra = tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
+        down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen → -4 yen."),
+        up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen → -5 yen."),
+        half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
+        bankers = tr!("半分ちょうどは偶数へ。", "An exact half goes to the even neighbor."),
+    )
+}
+
+impl<'a> Gen<'a> {
+    /// The Rust type for a value. A unit is a newtype over `i64`: the compiler refuses
+    /// `YenExclTax` where `YenInclTax` was meant, and it costs nothing at run time.
+    fn rs_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "String".into()),
+            Ty::Bool => "bool".into(),
+            Ty::Str => "String".into(),
+            Ty::Number | Ty::Date => "i64".into(),
+            Ty::Opt(t) => format!("Option<{}>", self.rs_ty(t)),
+            _ => brand_of(ty),
+        }
+    }
+
+    fn rs_value(&self, v: &str) -> String {
+        match self.value_names.get(v) {
+            Some((ty, alias)) => format!("{ty}::{}", pascal(alias)),
+            None => format!("{v:?}"),
+        }
+    }
+
+    /// Render a cell as a Rust condition. A don't-care yields None (no condition).
+    fn rs_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
+        let inner = match ty {
+            Ty::Opt(t) => t.as_ref(),
+            other => other,
+        };
+        let lit = |l: &Lit| -> String {
+            match l {
+                Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                Lit::Word(w) => self.rs_value(w),
+                Lit::Num(n) => self.int_lit(n, inner, col_scale),
+                Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                Lit::Str(s) => format!("{s:?}"),
+            }
+        };
+        let any_of = |ls: &Vec<Lit>, neg: bool| -> String {
+            let mut out: Vec<String> = Vec::new();
+            for l in ls {
+                if let Lit::Word(w) = l {
+                    if let Some((_, ms)) = self.c.groups.get(w) {
+                        out.extend(ms.iter().map(|m| self.rs_value(m)));
+                        continue;
+                    }
+                }
+                out.push(lit(l));
+            }
+            let (op, join) = if neg { ("!=", " && ") } else { ("==", " || ") };
+            format!("({})", out.iter().map(|v| format!("{var} {op} {v}")).collect::<Vec<_>>().join(join))
+        };
+        Some(match cell {
+            Cell::DontCare => return None,
+            Cell::Nothing => format!("{var}.is_none()"),
+            Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
+                format!("is_{}({var})", self.ident(w))
+            }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
+            Cell::Lit(l) => format!("{var} == {}", lit(l)),
+            Cell::Set(ls) => any_of(ls, false),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("!is_{}({var})", self.ident(w))
+            }
+            Cell::Not(ls) => any_of(ls, true),
+            Cell::Cmp(cs) => cs
+                .iter()
+                .map(|(o, l)| {
+                    let op = match o {
+                        CmpOp::Le => "<=",
+                        CmpOp::Ge => ">=",
+                        CmpOp::Lt => "<",
+                        CmpOp::Gt => ">",
+                    };
+                    format!("{var} {op} {}", lit(l))
+                })
+                .collect::<Vec<_>>()
+                .join(" && "),
+        })
+    }
+
+    pub fn rust(&self) -> String {
+        let mut o = self.header("//");
+        o.push_str(
+            "\n#![allow(non_snake_case, uncommon_codepoints, unused_parens)]\n\n",
+        );
+
+        // Brands: a newtype over i64, which is what the overflow proof is stated in.
+        let mut brands: BTreeMap<String, String> = BTreeMap::new();
+        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+            let ty = self.ty_of(v);
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                brands.insert(brand_of(&ty), format!("{ty}"));
+            }
+        }
+        for (b, doc) in &brands {
+            o.push_str(&format!(
+                "/// {doc}\n#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]\npub struct {b}(pub i64);\n\n"
+            ));
+        }
+
+        // Enums. Each carries its Japanese name, which is what the wire format uses (§10).
+        let mut emitted: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if emitted.contains(ascii) {
+                continue;
+            }
+            emitted.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            let members: Vec<String> = vals
+                .iter()
+                .map(|v| self.value_names.get(v).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
+                .collect();
+            o.push_str(&format!(
+                "#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub enum {ascii} {{\n{}}}\n\n",
+                members.iter().map(|m| format!("    {m},\n")).collect::<String>()
+            ));
+            o.push_str(&format!("impl {ascii} {{\n    pub fn as_str(self) -> &'static str {{\n        match self {{\n"));
+            for (m, v) in members.iter().zip(vals) {
+                o.push_str(&format!("            {ascii}::{m} => {v:?},\n"));
+            }
+            o.push_str("        }\n    }\n\n");
+            o.push_str(&format!("    pub fn parse(s: &str) -> Option<{ascii}> {{\n        match s {{\n"));
+            for (m, v) in members.iter().zip(vals) {
+                o.push_str(&format!("            {v:?} => Some({ascii}::{m}),\n"));
+            }
+            o.push_str("            _ => None,\n        }\n    }\n}\n\n");
+        }
+
+        o.push_str(round_rs().trim_start_matches('\n'));
+        o.push('\n');
+
+        for g in &self.f.groups {
+            let ty = self
+                .c
+                .groups
+                .get(&g.name.text)
+                .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
+                .unwrap_or_else(|| "i64".into());
+            let ms: Vec<String> = g.members.iter().map(|m| self.rs_value(&m.text)).collect();
+            o.push_str(&format!(
+                "fn is_{}(v: {ty}) -> bool {{\n    matches!(v, {})\n}}\n\n",
+                self.ident(&g.name.text),
+                ms.join(" | ")
+            ));
+        }
+
+        o.push_str(&self.rs_fn());
+        o
+    }
+
+    fn rs_fn(&self) -> String {
+        let fname = pub_name(&self.f.name);
+        let outs = &self.f.outputs;
+        let mut o = String::new();
+
+        if outs.len() > 1 {
+            o.push_str("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Output {\n");
+            for od in outs {
+                o.push_str(&format!(
+                    "    pub {}: {},\n",
+                    pub_name(&od.name),
+                    self.rs_ty(&self.ty_of(&od.name.text))
+                ));
+            }
+            o.push_str("}\n\n");
+        }
+
+        let ret = if outs.len() == 1 {
+            self.rs_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
+            .collect();
+
+        o.push_str(&tr!(
+            "/// 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。\n",
+            "/// Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\n",
+            self.f.name.text,
+            self.f.version
+        ));
+        o.push_str(&format!(
+            "pub fn {fname}({}) -> Result<{ret}, RuleError> {{\n",
+            params.join(", ")
+        ));
+
+        // A branded input is an i64 inside; unwrap it once, where it is read.
+        let local = |n: &str| -> String {
+            match self.f.inputs.iter().find(|i| i.name.text == n) {
+                Some(i) => {
+                    let v = pub_name(&i.name);
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.0")
+                    } else {
+                        v
+                    }
+                }
+                None => self.ident(n),
+            }
+        };
+        // Entry guards. An enum needs none: in Rust a value of an enum type is one of its
+        // variants by construction, so the check the other three languages have to make at
+        // run time is already made by the compiler.
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                continue;
+            }
+            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
+                continue;
+            };
+            let sc = self.c.wire_scale(&i.name.text);
+            let v = local(&i.name.text);
+            // Rust's inline format arguments take a name, not a field access, so the value
+            // goes in as a positional argument.
+            o.push_str(&format!(
+                "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input(format!(\"{}\", {v})));\n    }}\n",
+                crate::types::wire_int(lo, sc),
+                crate::types::wire_int(hi, sc),
+                tr!("{} が範囲の外です: {{}}", "{} is out of range: {{}}", i.name.text)
+            ));
+        }
+
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => o.push_str(&format!(
+                    "    let {} = {}; // {}\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, &local).text)),
+                    tr!("導出", "derived value")
+                )),
+                Item::Define(d) => o.push_str(&format!(
+                    "    let {} = {}; // {}\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, &local).text)),
+                    tr!("定義", "definition")
+                )),
+                Item::Table(t) => o.push_str(&self.rs_table(t, &local)),
+            }
+        }
+
+        let out_name = &outs[0].name.text;
+        let res = match &self.f.result {
+            Some(r) => self.expr(&r.expr, &local),
+            None => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+        };
+        let os = self.out_scale(out_name);
+        let ty = self.ty_of(out_name);
+        let wrap = |ty: &Ty, body: String| -> String {
+            match ty {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}({body})", self.rs_ty(ty)),
+                _ => body,
+            }
+        };
+        let text = match &outs[0].rounding {
+            Some(rd) => {
+                let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                let grid_i = g.num * res.scale / g.den;
+                if res.scale != os {
+                    let raw = self.temp("raw");
+                    o.push_str(&format!(
+                        "    let {raw} = {}; // {}\n",
+                        rs_expr(unparen(&res.text)),
+                        tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                    ));
+                    format!("round_{}({raw}, {grid_i}) / {}", mode_fn(m), res.scale / os)
+                } else {
+                    format!("round_{}({}, {grid_i})", mode_fn(m), rs_expr(&res.text))
+                }
+            }
+            None => rs_expr(&res.text),
+        };
+        if outs.len() == 1 {
+            o.push_str(&format!("    Ok({})\n}}\n", wrap(&ty, text)));
+        } else {
+            let fields: Vec<String> = outs
+                .iter()
+                .map(|od| {
+                    let n = &od.name.text;
+                    let oty = self.ty_of(n);
+                    let body = match &od.rounding {
+                        Some(rd) => {
+                            let q = crate::types::lit_value_in_pub(&rd.grid, &oty).unwrap_or(Rat::int(1));
+                            let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                            format!(
+                                "round_{}({}, {})",
+                                mode_fn(m),
+                                self.ident(n),
+                                q.num * self.scale(n) / q.den
+                            )
+                        }
+                        None => self.ident(n),
+                    };
+                    format!("{}: {}", pub_name(&od.name), wrap(&oty, body))
+                })
+                .collect();
+            o.push_str(&format!("    Ok(Output {{ {} }})\n}}\n", fields.join(", ")));
+        }
+        o
+    }
+
+    fn rs_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+        let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        for oc in &t.outputs {
+            let ty = self.ty_of(&oc.name.text);
+            let decl = match ty {
+                Ty::Bool => "bool".to_string(),
+                Ty::Str => "String".to_string(),
+                Ty::Enum(_) => self.rs_ty(&ty),
+                _ => "i64".to_string(),
+            };
+            o.push_str(&format!("    let {}: {decl};\n", self.ident(&oc.name.text)));
+        }
+        for (ri, row) in t.rows.iter().enumerate() {
+            let conds: Vec<String> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, (col, _))| {
+                    let ty = self.ty_of(col);
+                    self.rs_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                })
+                .collect();
+            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            let head = if ri == 0 { "    if" } else { " else if" };
+            if ri == 0 {
+                o.push_str(&format!("{head} {cond} {{ // {line}\n"));
+            } else {
+                o.push_str(&format!("    }}{head} {cond} {{ // {line}\n"));
+            }
+            for (oi, oc) in t.outputs.iter().enumerate() {
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => {
+                        let oty = self.ty_of(&oc.name.text);
+                        self.int_lit(n, &oty, self.scale(&oc.name.text))
+                    }
+                    Some(OutCell::Lit(l)) => match l {
+                        Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                        Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                        Lit::Word(w) => self.rs_value(w),
+                        Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        _ => "0".into(),
+                    },
+                    Some(OutCell::Name(w)) => {
+                        if w == crate::kw::TRUE {
+                            "true".into()
+                        } else if w == crate::kw::FALSE {
+                            "false".into()
+                        } else if self.value_names.contains_key(w) {
+                            self.rs_value(w)
+                        } else {
+                            rs_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                        }
+                    }
+                    None => "0".into(),
+                };
+                o.push_str(&format!("        {} = {v};\n", self.ident(&oc.name.text)));
+            }
+        }
+        o.push_str(&format!(
+            "    }} else {{\n        unreachable!(\"{}\");\n    }}\n",
+            tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
+        ));
+        o.push_str(&self.guards(t, local, Lang::Rs, "    ", |name, i, j| {
+            format!(
+                "        return Err(RuleError::Contradiction(\"{}\".into()));\n",
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+            )
+        }));
+        o
+    }
+
+    /// The runner. Rust has no JSON in its standard library, and the generated code takes no
+    /// dependencies, so the reader below is written out here: the wire format is one flat
+    /// object of numbers, strings and booleans (§10.2), which is small enough to scan.
+    pub fn rs_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let mut args: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            let jp = &i.name.text;
+            args.push(match &ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
+                }
+                Ty::Bool => format!("b(&d, {jp:?})"),
+                Ty::Date => format!("ord(s(&d, {jp:?}))"),
+                Ty::Number => format!("n(&d, {jp:?})"),
+                _ => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(&ty)),
+            });
+        }
+        let one = |expr: &str, ty: &Ty| match ty {
+            Ty::Enum(_) => format!("q({expr}.as_str())"),
+            Ty::Str => format!("q(&{expr})"),
+            Ty::Bool => format!("{expr}.to_string()"),
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{expr}.0.to_string()"),
+            _ => format!("{expr}.to_string()"),
+        };
+        let fields: Vec<String> = if self.f.outputs.len() == 1 {
+            let od = &self.f.outputs[0];
+            vec![format!("q({:?}) + \":\" + &{}", od.name.text, one("got", &self.ty_of(&od.name.text)))]
+        } else {
+            self.f
+                .outputs
+                .iter()
+                .map(|od| {
+                    format!(
+                        "q({:?}) + \":\" + &{}",
+                        od.name.text,
+                        one(&format!("got.{}", pub_name(&od.name)), &self.ty_of(&od.name.text))
+                    )
+                })
+                .collect()
+        };
+        format!(
+            r#"// Code generated by rulec {ver}. DO NOT EDIT.
+#![allow(non_snake_case, uncommon_codepoints, unused_parens)]
+
+#[path = "{alias}.rs"]
+mod r;
+
+use std::io::Read;
+
+/// One flat JSON object as (key, value) pairs, values kept as their source text.
+fn fields(line: &str) -> Vec<(String, String)> {{
+    let b: Vec<char> = line.chars().collect();
+    let (mut i, mut out) = (0usize, Vec::new());
+    // Step into the object under "in" and read the pairs of the one level below it.
+    while i < b.len() && !(b[i] == '"' && b[i..].starts_with(&['"', 'i', 'n', '"'])) {{
+        i += 1;
+    }}
+    while i < b.len() && b[i] != '{{' {{
+        i += 1;
+    }}
+    i += 1;
+    while i < b.len() && b[i] != '}}' {{
+        while i < b.len() && b[i] != '"' && b[i] != '}}' {{
+            i += 1;
+        }}
+        if i >= b.len() || b[i] == '}}' {{
+            break;
+        }}
+        let (k, ni) = string_at(&b, i);
+        i = ni;
+        while i < b.len() && b[i] != ':' {{
+            i += 1;
+        }}
+        i += 1;
+        while i < b.len() && b[i] == ' ' {{
+            i += 1;
+        }}
+        let v = if b[i] == '"' {{
+            let (v, ni) = string_at(&b, i);
+            i = ni;
+            v
+        }} else {{
+            let s = i;
+            while i < b.len() && b[i] != ',' && b[i] != '}}' {{
+                i += 1;
+            }}
+            b[s..i].iter().collect::<String>().trim().to_string()
+        }};
+        out.push((k, v));
+    }}
+    out
+}}
+
+/// The string starting at `i`, and the index just past its closing quote.
+fn string_at(b: &[char], i: usize) -> (String, usize) {{
+    let (mut i, mut s) = (i + 1, String::new());
+    while i < b.len() && b[i] != '"' {{
+        if b[i] == '\\' && i + 1 < b.len() {{
+            i += 1;
+            s.push(match b[i] {{
+                'n' => '\n',
+                't' => '\t',
+                c => c,
+            }});
+        }} else {{
+            s.push(b[i]);
+        }}
+        i += 1;
+    }}
+    (s, i + 1)
+}}
+
+fn get<'a>(d: &'a [(String, String)], k: &str) -> &'a str {{
+    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).unwrap_or("")
+}}
+
+fn n(d: &[(String, String)], k: &str) -> i64 {{
+    get(d, k).parse().unwrap_or(0)
+}}
+
+fn s<'a>(d: &'a [(String, String)], k: &str) -> &'a str {{
+    get(d, k)
+}}
+
+fn b(d: &[(String, String)], k: &str) -> bool {{
+    get(d, k) == "true"
+}}
+
+/// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool uses.
+fn ord(s: &str) -> i64 {{
+    let p: Vec<i64> = s.split('-').map(|x| x.parse().unwrap_or(0)).collect();
+    let (y, m, d) = (p[0], p[1], p[2]);
+    let y2 = if m <= 2 {{ y - 1 }} else {{ y }};
+    let era = if y2 >= 0 {{ y2 }} else {{ y2 - 399 }} / 400;
+    let yoe = y2 - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}}
+
+/// A JSON string. The wire format keeps Japanese as itself (§10.2), so only the two
+/// characters JSON requires are escaped.
+fn q(s: &str) -> String {{
+    format!("\"{{}}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+}}
+
+fn main() {{
+    let mut src = String::new();
+    std::io::stdin().read_to_string(&mut src).unwrap();
+    for line in src.lines() {{
+        if line.trim().is_empty() {{
+            continue;
+        }}
+        let d = fields(line);
+        let got = r::{alias}({args}).unwrap();
+        println!("{{{{{{}}}}}}", [{fields}].join(","));
+    }}
+}}
+"#,
+            ver = env!("CARGO_PKG_VERSION"),
+            args = args.join(", "),
+            fields = fields.join(", ")
+        )
+    }
+}
+
+pub fn round_tests_rust() -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(unused_parens)]\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The four modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    o.push_str(round_rs().trim_start_matches('\n'));
+    o.push_str("\nconst CASES: &[(&str, i64, i64, i64)] = &[\n");
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
+    }
+    o.push_str(
+        "];\n\nfn main() {\n    let mut bad = 0;\n    for (mode, x, g, want) in CASES {\n        \
+         let got = match *mode {\n            \"down\" => round_down(*x, *g),\n            \
+         \"up\" => round_up(*x, *g),\n            \"half\" => round_half(*x, *g),\n            \
+         _ => round_bankers(*x, *g),\n        };\n        if got != *want {\n            \
+         println!(\"NG {mode}({x}, {g}) = {got}, want {want}\");\n            bad += 1;\n        \
+         }\n    }\n    if bad > 0 {\n        std::process::exit(1);\n    }\n",
+    );
+    let line = tr!("ok {{}} 件", "ok {{}} cases");
+    o.push_str(&format!("    println!(\"{line}\", CASES.len());\n}}\n"));
+    o
+}
+
 // ---------------------------------------------------------------------------
 // Unit vectors for the rounding helpers (§8.5)
 // ---------------------------------------------------------------------------
@@ -2632,6 +3307,53 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
+        // --- Rust
+        let rs_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &self.rs_ty(&ty), &ty)
+            })
+            .collect();
+        let rs_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.rs_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let rs_ret = if outs.len() == 1 {
+            self.rs_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let rs_sig = format!(
+            "pub fn {alias}({}) -> Result<{rs_ret}, RuleError>",
+            self.f
+                .inputs
+                .iter()
+                .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let rust = crate::json::Obj::new()
+            .str("module", &format!("{alias}.rs"))
+            .str("function", &alias)
+            .str("signature", &rs_sig)
+            .raw("params", crate::json::arr(&rs_in))
+            .str("returns", &rs_ret)
+            .raw("outputs", crate::json::arr(&rs_outs))
+            // A Rust enum member is the alias in PascalCase on the enum's own type.
+            .raw("enums", self.enums_json(|_, a| pascal(a)))
+            .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
+            .finish();
+
         // --- Go
         let go_in: Vec<String> = self
             .f
@@ -2684,6 +3406,7 @@ impl Gen<'_> {
             .str("source_sha256", &self.src_hash)
             .raw("python", python)
             .raw("typescript", typescript)
+            .raw("rust", rust)
             .raw("go", go)
             .finish()
     }

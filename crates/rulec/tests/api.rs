@@ -84,9 +84,12 @@ fn 署名とガードが生成物と一致する() {
 
         let ts_j = j.get("typescript").unwrap();
         let ts = std::fs::read_to_string(dir.join("typescript").join(s(ts_j, "module"))).unwrap();
+        let rs_j = j.get("rust").unwrap();
+        let rs = std::fs::read_to_string(dir.join("rust").join(s(rs_j, "module"))).unwrap();
 
         assert!(py.contains(&s(py_j, "signature")), "python の署名が違う: {}", s(py_j, "signature"));
         assert!(ts.contains(&s(ts_j, "signature")), "typescript の署名が違う: {}", s(ts_j, "signature"));
+        assert!(rs.contains(&s(rs_j, "signature")), "rust の署名が違う: {}", s(rs_j, "signature"));
         assert!(go.contains(&s(go_j, "signature")), "go の署名が違う: {}", s(go_j, "signature"));
 
         // The entry guards. A range in the inventory that the guard does not enforce would
@@ -123,7 +126,34 @@ fn 署名とガードが生成物と一致する() {
             }
         }
 
+        for p in arr(rs_j, "params") {
+            if let Some(r) = p.get("range") {
+                let (lo, hi) = (r.get("min").unwrap(), r.get("max").unwrap());
+                let a = s(p, "alias");
+                // A branded input is an i64 inside, so the guard reads it through `.0`.
+                let v = if s(p, "type").chars().next().is_some_and(|c| c.is_uppercase()) {
+                    format!("{a}.0")
+                } else {
+                    a.clone()
+                };
+                assert!(
+                    rs.contains(&format!("if {v} < {lo} || {v} > {hi} {{")),
+                    "rust のガードが範囲と食い違う: {v} {lo}..{hi}\n{rs}"
+                );
+            }
+        }
+
         // Enum members, under the spelling each language gives them.
+        for e in arr(rs_j, "enums") {
+            assert!(rs.contains(&format!("pub enum {} {{", s(e, "alias"))), "{}", s(e, "alias"));
+            for v in arr(e, "values") {
+                assert!(
+                    rs.contains(&format!("    {},", s(v, "alias"))),
+                    "rust の列挙値が違う: {}",
+                    s(v, "alias")
+                );
+            }
+        }
         for e in arr(ts_j, "enums") {
             assert!(ts.contains(&format!("export const {} = {{", s(e, "alias"))), "{}", s(e, "alias"));
             for v in arr(e, "values") {
