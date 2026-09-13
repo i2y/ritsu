@@ -244,7 +244,7 @@ the build. **Never edit generated code by hand**: the header says `DO NOT EDIT`,
 `gen` overwrites it. Anything the generated code lacks belongs either in the `.rule` or on the
 calling side.
 
-`rulec test generated/` goes one step further and actually runs both languages over the
+`rulec test generated/` goes one step further and actually runs every generated language over the
 generated vectors, comparing them with the reference evaluator by canonical JSON, byte for
 byte. That is the only step that needs a `python3` and a `go` toolchain.
 
