@@ -11,9 +11,9 @@ fn readme() -> String {
     std::fs::read_to_string(&p).expect("README.md が読めない")
 }
 
-/// The `.rule` block under "## 書き方".
+/// The `.rule` block under "## Write a table".
 fn example(md: &str) -> &str {
-    let head = md.find("## 書き方").expect("## 書き方 の節が無い");
+    let head = md.find("## Write a table").expect("## Write a table の節が無い");
     let fence = md[head..].find("```").expect("コードブロックが無い") + head;
     // Step over the fence and the tag on it (```rule), to the first line of the source.
     let open = fence + md[fence..].find('\n').expect("コードブロックが閉じていない") + 1;
@@ -50,8 +50,8 @@ fn readmeの生成コード抜粋は実物と一致する() {
     let g = rulec::codegen::Gen::new(&f, &c, src);
     let py = g.python();
     let go = g.go();
-    let sec = md.find("## 生成されるコード").expect("## 生成されるコード の節が無い");
-    let end = md[sec..].find("## 何を検査するか").expect("節の終わりが無い") + sec;
+    let sec = md.find("## The generated code").expect("## The generated code の節が無い");
+    let end = md[sec..].find("## Using it").expect("節の終わりが無い") + sec;
     for (lang, body) in [("python", &py), ("go", &go)] {
         let fence = format!("```{lang}\n");
         let open = md[sec..end].find(&fence).unwrap_or_else(|| panic!("{lang} の抜粋が無い")) + sec + fence.len();
@@ -100,6 +100,7 @@ fn readmeが言う件数は実物と合っている() {
         .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
         .count();
     let codes = rulec::codes::ledger().len();
-    let want = format!("コーパスは {corpus} 本、診断は台帳の {codes} 項目すべてを実装しています。");
+    let want =
+        format!("The corpus is {corpus} rules, and all {codes} entries in the diagnostic ledger are implemented.");
     assert!(md.contains(&want), "README の件数が実物と違う。正しくは: {want}");
 }

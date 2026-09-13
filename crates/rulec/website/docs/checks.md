@@ -155,6 +155,30 @@ text does not show**: that a group of six values and its complement of
 41 really do cover all 47, which rows shadow which, where a rounding was
 assumed rather than sourced.
 
+This is what `rulec doc` writes (excerpt; the command above asked for Japanese).
+
+```markdown
+## グループ
+
+グループは列挙の一部に名前を付けたものです。表のセルに書かれた一語が、下の値をまとめて指しています。
+
+- **近畿圏**（6 値）— 滋賀県、京都府、大阪府、兵庫県、奈良県、和歌山県
+- **中国四国**（9 値）— 鳥取県、島根県、岡山県、広島県、山口県、徳島県、香川県、愛媛県、高知県
+- **沖縄**（1 値）— 沖縄県
+…
+
+この 6 グループは 都道府県 の 47 値を過不足なく分割しています（この資料が宣言から数えました）。
+
+## 表 運賃表（policy unique）
+
+| 列 | 出どころ |
+|---|---|
+| あて先 | 入力 |
+| サイズ | 表 サイズ判定 の出力 |
+| → 運賃 | この規則の出力 |
+…
+```
+
 There is one prohibition. **It writes no sentence that is not in the
 checker's output** — every line traces back to the source or to a check
 result, and the two are named apart ("rulec check confirmed" versus

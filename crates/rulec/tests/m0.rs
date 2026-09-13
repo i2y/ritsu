@@ -374,16 +374,16 @@ fn optionalの列も検査される() {
             ds.iter().map(|d| d.code).collect::<Vec<_>>());
 }
 
-/// The keyword table in the README must match the words the parser actually accepts.
+/// The keyword table on the site must match the words the parser actually accepts.
 /// Both adding a word without writing it in the table, and listing a word the parser lacks, go red.
 #[test]
-fn readmeのキーワード表はパーサと一致する() {
+fn 文書のキーワード表はパーサと一致する() {
     let md = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("website/docs-ja/tour.md"),
     )
     .unwrap();
     let i = md.find("行頭に書けるのは次の語だけで").expect("キーワード表の前書きが無い");
-    let j = md[i..].find("\n\n### ").expect("表の終わりが無い") + i;
+    let j = md[i..].find("\n\n## ").expect("表の終わりが無い") + i;
     let mut listed: Vec<String> = Vec::new();
     for l in md[i..j].lines().filter(|l| l.starts_with("| `")) {
         for part in l.split('|').next_or_all() {

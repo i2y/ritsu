@@ -230,19 +230,22 @@ fn out_で書き出せる() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The rendering excerpt pasted into the README must not diverge from the real thing.
-/// Hand-copied text rots (the same reasoning as for the generated-code excerpts).
+/// The rendering excerpt pasted into the documentation must not diverge from the real
+/// thing. Hand-copied text rots (the same reasoning as for the generated-code excerpts).
+/// Both language pages carry the same excerpt, so both are held to the output.
 #[test]
-fn readmeの抜粋は実物と一致する() {
-    let md = std::fs::read_to_string(root().join("README.md")).unwrap();
+fn 資料の抜粋は実物と一致する() {
     let (_, real, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
-    let i = md.find("## グループ\n\n- **近畿圏**").expect("README に doc の抜粋が無い");
-    let j = md[i..].find("```").expect("抜粋が閉じていない") + i;
-    for l in md[i..j].lines() {
-        if l.trim().is_empty() || l.trim() == "…" {
-            continue;
+    for page in ["website/docs/checks.md", "website/docs-ja/checks.md"] {
+        let md = std::fs::read_to_string(root().join(page)).unwrap();
+        let i = md.find("## グループ\n").unwrap_or_else(|| panic!("{page} に doc の抜粋が無い"));
+        let j = md[i..].find("```").expect("抜粋が閉じていない") + i;
+        for l in md[i..j].lines() {
+            if l.trim().is_empty() || l.trim() == "…" {
+                continue;
+            }
+            assert!(real.contains(l), "{page} の抜粋が実物に無い:\n{l}");
         }
-        assert!(real.contains(l), "README の抜粋が実物に無い:\n{l}");
     }
 }
 

@@ -1,8 +1,9 @@
 # rulec
 
-**表で書ける業務ルールを、エージェントがコードにするためのハーネス**です。
+**A harness for an agent turning table-shaped business rules into code.**
 
-表を書くと、Python・TypeScript・Rust・Go の関数が出ます。**出る前に、証明が済んでいます。**
+Write the table, and out come Python, TypeScript, Rust and Go functions. **The proof is
+finished before the code exists.**
 
 ```rule
 table 運賃表(fee_table)
@@ -26,260 +27,46 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
     return _round_up(fee, 10)
 ```
 
-生成の前に済ませることが七つあります。**静的に証明するのが五つ** — 「どの入力にも当てはまる行がある」「同時に二行に当てはまる入力はない」「どの入力にも当てはまらない行はない」「単位を取り違えていない」「中間値が int64 に収まる」。**宣言があるかを確かめるのが一つ** — 「端数の決め方が書いてある」（どちら向きが正しいかは業務の判断なので、道具は決めません）。**実際に走らせて確かめるのが一つ** — 「書いた例が全部通る」。どれか一つでも示せなければ、生成そのものが止まります。
+Seven things are settled before anything is generated. **Five are proved statically** —
+every input matches some row, no input matches two rows, no row matches nothing, units are
+never confused, and every intermediate fits in int64. **One is a declaration that has to be
+there** — how fractions are settled, because which way is right is a business decision and
+the tool does not make it. **One is run** — every worked example holds. If any of the seven
+cannot be shown, nothing is generated.
 
-**証明していないこと**も、同じくらい大事です。
+What is **not** proved matters just as much.
 
-1. **表が現実と合っているか。** 運賃表を写し間違えていれば、全部緑のまま間違いが通ります。この道具が証明するのは、書いた表について言えることだけです。
-2. **生成コードが表と同じ答えを返すこと。** これは証明ではなく**テスト**です — 境界から自動で作ったテストケースを、参照評価器と生成した各言語に流してバイト単位で突き合わせています。強い証拠ですが、等価性の証明ではありません。
-3. **重なりの証明が届かなかった行の対。** `unique` の表で、両方に当てはまる入力を組み立てることも、存在しないことを示すこともできなかったときは、**W114 で名指しして実行時のガードに降ろします**。そこだけは静的な証明がありません（黙って一方を選ばず、エラーを返します）。
+1. **That the table matches reality.** Transcribe the tariff wrong and everything stays
+   green. What is proved is only what can be said about the table as written.
+2. **That the generated code answers like the table.** That is a *test*, not a proof: test
+   cases built from the boundaries are run through the reference evaluator and every
+   generated language, and compared byte for byte. Strong evidence, not an equivalence
+   proof.
+3. **Row pairs the overlap proof could not reach.** When neither an input matching both
+   rows nor its impossibility could be constructed, **W114 names the pair and moves the
+   check into a runtime guard** — the one place with no static proof. It returns an error
+   rather than silently picking a side.
 
-依存ゼロの普通の関数が出ます。ランタイムも設定も要りません。
+No runtime and no configuration: what comes out is ordinary dependency-free functions.
 
----
-
-## これは何か — 表で書ける業務ルールを、エージェントがコードにするためのハーネス
-
-世の中の業務ルールには、**表で書き表せる**ものが相当あります。すでに表になっているもの（運賃表、手数料率、料金表）もあれば、文章や、担当者のあいだの口伝で伝わっていて、**書き出してみれば表と少しの式で足りる**もの（割引の適用条件、返品の可否、期間ごとの区分、評価項目からのランク付け）もあります。rulec が狙うのは後者も含めた「潜在的に表で書けるもの」全部です。
-
-いまはそれが Excel か、規約の PDF か、Wiki のページか、誰かの頭の中にあって、エンジニアが `if` の連なりに書き直す — というのが普通の流れです。
-
-rulec は、**その書き直しを AI エージェントにやらせるためのハーネス**です。四つの面があります。
-
-| | |
-|---|---|
-| **入口が表** | エージェントが規約や Excel から写す先が、人の読める一枚の表になります。書いた本人以外に読めることが、承認してもらう前提です |
-| **安全装置が検査** | 写した表に抜けや矛盾があれば、走らせる前に、それを起こす具体的な入力つきで止まります。「たぶん大丈夫」で先へ進めません |
-| **出口がコード** | 証明の済んだ表からだけ、依存ゼロの Python・TypeScript・Rust・Go が出ます。手で直す必要はありません（Java・Kotlin・Swift・SQL に対応予定です） |
-| **人に渡すものがある** | 承認してもらう資料と、「入れたら何件がいくら動くか」の差分。エージェントが勝手に決められないことを、人への質問の形にします |
-
-エージェント側の手順書は [AGENTS.md](AGENTS.md) で、そこから組み立てた**エージェントスキルが [`skills/rulec/`](skills/) にあります** — 自分のプロジェクトの `.claude/skills/` にコピーすれば、そのまま使えます。rulec のコマンドはどれも `--format json` を持っているので、エージェントは文章を解析せずに済みます。診断コードは `E101` のような固定の記号で、**文面が改善されても記号と JSON の形は変わりません**。
-
-一言でいうと、**表で書ける業務ルールについて、エージェントが「書く → 証明する → 直す → コードにする → 差分を人に見せる」を自分で回せるようにした道具**です。
+> **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**
+> Everything below at length, in English and Japanese.
+> 日本語のドキュメントは **[i2y.github.io/rulec/ja/](https://i2y.github.io/rulec/ja/)** にあります。
 
 ---
 
-## どんなルールのための言語か
+## Install
 
-**一件の取引を、決まった数の値から一度で判定する規則**です。値は入れ子でない、そのままの値です。返ってくる答えは四種類 — **金額・可否・区分・順序**。
-
-- **運賃・送料** — あて先 × サイズ × 重量 で金額が決まる表
-- **割引・クーポン** — 適用できるか、いくら引くか、二枚あるときどちらを先に使うか
-- **料率・手数料** — 会員区分や支払方法や契約種別で率が変わるもの
-- **適用可否** — 返品できるか、保証の対象か、この条件で申し込めるか
-- **区分・等級** — どの期間に入るか、どのサイズ区分か、どの優先度か
-- **振り分け** — どの倉庫から出すか、どの担当に回すか
-
-### お金が絡まなくても構いません
-
-たとえばこれは、円が一度も出てこない規則です。日付が一つ入って、区分が一つ出るだけ。そのまま検査を通ります。
-
-```rule
-rule 期間区分(period) v1
-
-enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
-
-inputs
-  注文日(order_date) : date  range >=2026-01-01 <=2026-12-31
-
-outputs
-  区分(kind) : 期間
-
-table 期間判定(pick)
-policy unique
-| 注文日                    | -> 区分(kind) : 期間 |
-| <=2026-03-31              | 改定前               |
-| >=2026-04-01 <=2026-06-30 | 春季                 |
-| >=2026-07-01 <=2026-11-30 | 通常                 |
-| >=2026-12-01              | 年末                 |
+```console
+$ cargo install --path .
+$ rulec --help
 ```
 
-決め手は**判定の形**であって、扱う値が何かではありません。だから「送料のための道具」でも「EC のための道具」でもありません。
-
-### 一つだけある制約: セルは自分の列しか見ない
-
-表の一つのセルに書けるのは、**その列の値だけを見た条件**です。`<=2000g` は重量の列、`遠隔地` はあて先の列。**二つの列をまたぐ条件は書けません** — `重量 × 10 > 注文金額` のようなセルはありません。そういう条件が要るなら、先に `derive` か `define` で名前を付けて、それを一つの列にします。
-
-窮屈に見えますが、この制約が全部を支えています。どのセルも自分の列だけを狭めるので、**一行が一つの「区画」になります** — 各列で許す幅を掛け合わせた長方形です。区画どうしなら、隙間があるか（抜け）、重なっているか（矛盾）を**計算で厳密に決められます**。セルが二つの列を結びつけられると、行は任意の形になり、「隙間はあるか」は一般には答えの出ない問いになります。
-
-この道具が使えるかどうかの線は、そこで引かれます。
-
-### では複雑なものはどう書くか — 表を重ねます
-
-セルが自分の列しか見られないぶん、**表は何段でも重ねられます**。前の表が出した値を、そのまま後の表の列に書けます。
-
-```rule
-table 重さ判定(w_of)    # 重量 → 重さ区分
-table 帯判定(tier_of)   # 重さ区分 × 会員区分 → 帯
-table 送料表(ship)      # 帯 × 支払額 → 送料・倍率
-```
-
-段をまたいでも、どこで何が起きたかは見えたままです。検査が落ちたときに出るのは、段の数だけの行です。
-
-```
-発火した行: 表 重さ判定 行2 / 表 帯判定 行4 / 表 送料表 行4
-```
-
-重ねるときに効くものが四つあります。
-
-| | |
-|---|---|
-| **前の表の出力が、後の表の列になる** | 段数に上限はありません。検査の予算を超えたときだけ E109 で止まります |
-| **一つの表が出力列を複数持てる** | 上の `送料表` は `送料` と `倍率` を同時に出します |
-| **`derive` が列になる** | 「値引き後の金額で判定する」が、一本の式ではなく一つの列になります |
-| **完全性の検査が段をまたぐ** | E102 の二つ目の形が「上流の表がその値を決して出さない」です |
-
-動く例が `tests/corpus/会員特典.rule`にあります。
-
-### 計算はどこに書くか
-
-表は**分岐だけ**を持ちます。計算は表の外の三か所です。
-
-| | 書けるもの | 表の列に置けるか |
-|---|---|---|
-| `derive` | 入力の一次結合 — `+`、`-`、定数倍 | **置けます**（数量のまま） |
-| `define` | 真偽（形は二つ）、または計算した中間値 | 真偽と列挙なら置けます |
-| `result` | `+ - * /`、カッコ、`min` `max`、丸め四種を関数としても | — |
-
-- **割り算は定数でだけ**書けます。変数で割ると E115 で止まります。`税込金額 ÷ 100円` のように金額を金額の定数で割ると、単位が消えて `number` になります
-- 率を掛けられます — `基本送料 × 負担率`。率は最後まで率のまま運ばれ、丸めは一度だけです
-- **ループも再帰もありません。** 日付の計算もありません（比較と範囲だけです）
-- 全部整数です。浮動小数点はどこにも出てきません
-
-**出力が二つ以上あるとき**、`result` が組み立てるのは最初の出力だけです（E015）。二つ目からは、その出力と同じ名前の `define` から取ります。`result` を二本書くと E016 で止まります。
-
-**数を返すなら、たいてい単位が要ります。** 数値の型は**数量（g・cm）・金額・率**の三つ。これに加えて、単位を持たない数のための `number` があります（件数、日数、点数のような、数えるだけの数）。単位のある数とない数は混ざらず、`100 円につき 1 点` のように金額を金額で割ったときだけ、単位が消えて `number` になります。
-
-### お金が絡むと、追加で効くもの
-
-この道具はもともと送料の表から始まりました。そのぶん金額まわりだけ機能が厚くなっています。
-
-- 単位（円 / g / cm）と**税区分（税込 / 税抜）が型**。混ぜるとコンパイルで止まる
-- 数値の出力に `round` が必須。書き忘れには「丸め方で最大 9 円動きます」と**円で見せてから**訊く
-- 変更の影響を出すとき、件数と一緒に**動く金額**が出る
-
-金額を返さない規則では、この三つが使われないだけです。ほかは同じように働きます。
-
-### なぜこの形を狙うのか
-
-次の五つが同時に成り立つ領域だからで、道具の機能はその一つずつから生えています。
-
-| ルールの性質 | 道具がそれに払っているもの |
-|---|---|
-| **間違えると実害が出る** | 近似して通すことをしない。証明できなければ止まる。実害がお金なら上の三つが効き、実害が「断られる／通ってしまう」なら抜けと重なりの検査が効く |
-| **正しい形が別のところに書いてある** | 規約・運賃表・約款。仕事はゼロから設計することではなく**写すこと**です。だから最初の価値が「写した瞬間に抜けが出る」になる |
-| **条件が絡み合う** | あて先 × サイズ × 重量、種別 × 期間 × 会員区分。`if` 一本では書けず、組み合わせを網羅できたかは目で確かめられない |
-| **期日で改定される** | 運賃改定、キャンペーン期間、規約変更。だから版を指して比べられ、変更が何件をいくら動かすかを、入れる前に出せる |
-| **書く人と決める人が違う** | 金額も、丸めの向きも、区分の切れ目も業務の判断。だから承認する人に見せる資料を書き出せて、検査は「決められないこと」を具体例つきの質問に変える |
-
-### 言語としての狙い
-
-**一つのファイルに三役を兼ねさせること**です。同じ `.rule` が、承認する人が読む**仕様**であり、検査器が証明する**対象**であり、生成コードの**もと**。この三つが別々のファイルに分かれた瞬間、どれかが必ず腐ります。そして腐るのは、たいてい仕様のほうです。
-
-### 自分のルールが入るか
-
-全部 **はい** なら入ります。お金の有無は条件に入りません。
-
-1. 入力の**個数が決まっている**か（可変長のリストではない）
-2. 入力が**そのままの値**か（`注文.配送先.都道府県` ではなく、都道府県そのものを渡せる）
-3. **一回の判定**か（繰り返しと並べ替えは呼び出し側に置けるか）
-4. 同じ入力なら**いつでも同じ答え**か（「今日」も在庫も引数として渡す）
-5. その答えを**人が承認する**か、**期日で改定される**か
-
-1〜4 のどれかが いいえ なら、構造として入りません。5 だけが いいえ なら、動きはしますが道具が過剰です。
-
-### 按分は、やり方によります
-
-値引きを明細に配分するような按分は、**配り方の決め方**によって書けたり書けなかったりします。
-
-**書けます — 順に充てていく形。**「値引きを、明細に順に、上限まで充てる」。一明細ぶんの判定だけを規則にして、繰り返しは呼び出し側に置きます。
-
-```rule
-inputs
-  明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
-  残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
-  対象(eligible)      : bool
-
-outputs
-  充当額(applied) : money[円, incl_tax]  round down(1円)
-
-define 充てられる額(cap) : money[円, incl_tax] = min(明細定価, 残り値引)
-
-table 充当可否(applies)
-policy unique
-| 対象  | -> 充当(on) : money[円, incl_tax] |
-| true  | 充てられる額                      |
-| false | 0円                               |
-
-result 充当額 = 充当
-```
-
-呼び出し側は明細を順に回して `残り値引` を引いていくだけです。この形なら**合計は必ずぴったり合います** — 配りすぎも配り残しも起きません（2,000 通りの明細で確かめました）。
-
-**書けません — 定価の比で割り付ける形。** 「明細の定価の比で按分する」には `明細 ÷ 合計` が要りますが、**割り算は定数でしか書けません**（変数で割ると E115 で止まります）。`注文金額 ÷ 100円` は書けても、`明細 ÷ 合計` は書けない。比率を呼び出し側で出して率として渡す手もあります（率は `rate[step 0.1%]` のように細かく刻めます）。ただしその比率が正しいかは、もうこの道具の外の話です。
-
-### 向いていないもの
-
-- **ワークフロー** — 複数の段階、状態を持つもの
-- **集合そのものの判定** — 「明細のどれかが冷蔵品」「カート全体で 3 点以上」。呼び出す手前でほどいて、値そのものを渡します
-- **文字列で分岐すること** — `string` は表の列に置けません（E110）。分岐に使う値は `enum` にしてください — 閉じた集合なので完全性検査が効きます。前方一致も正規表現もありません
-- **重みや閾値そのものを決めること** — 最適化や機械学習の領分です。**決まった重みで点数を合算してランクを付けるのは書けます**（`tests/corpus/評価ランク.rule` がその例で、金額はどこにも出てきません）。ただし証明できるのは「どの行に当てはまるか」であって、その重みが妥当かどうかではありません
-
-### 似たものは何があるか
-
-**決定表そのものは、新しくありません。** 隣にあるものを正直に並べます（どれも実際に使ってはいないので、公開情報から読んだ範囲です）。
-
-| | それは何か | rulec との違い |
-|---|---|---|
-| **DMN**（OMG の標準）と、その実装（Apache KIE / Drools、Camunda、jDMN、Kogito ほか） | 決定表の業界標準。ヒットポリシーがあり、抜けと重なりの静的解析を持つ実装もある。jDMN は Java を生成する | セルに書ける式が広い（FEEL は式言語）ぶん、完全性の判定は一般には難しく、解析はその部分集合が相手になります。rulec は**一つのセルが自分の列しか見ない**こと（二つの列をまたぐ条件は書けない）にして、抜けと重なりを厳密に決められる側に置いています。単位や税区分の型、丸めの必須宣言、int64 の証明、複数言語への生成、旧実装との突き合わせは DMN の範囲外です |
-| **ルールエンジン**（Drools DRL、IBM ODM、GoRules / ZEN、OpenRules、OpenL Tablets ほか） | 規則を実行時にライブラリかサービスで評価する | rulec は**エンジンを配りません**。出るのは依存ゼロの普通の関数で、実行時に rulec は存在しません |
-| **Corticon**（Progress、商用） | rulesheet に矛盾チェッカと完全性チェッカがある。狙いとしてはいちばん近い | 商用・専用ランタイム。rulec は生成したソースを渡して終わりで、そのかわり差分の突き合わせ（verify / replay / diff）まで道具側に持っています |
-| **Catala**（Inria） | 法令をそのままプログラムにする言語。正しさを最優先に設計され、複数言語へコンパイルされる | 精神としてはいちばん近い親戚です。形は違って、Catala は法文の構造（既定と例外）を写す言語で、決定表ではありません。単位・税区分の型や、旧実装との照合は持ちません |
-| **Morphir**（FINOS） | 業務ロジックを一つの中間表現でモデル化し、複数の対象へ出す | 対象が広いぶん、決定表そのものの完全性検査は目的ではありません |
-
-**rulec が置かれている場所は、この組み合わせです** — セルを絞って抜けと重なりを厳密に決め、それを起こす入力そのものを必ず返し、単位と丸めを型と宣言で縛り、四つの言語へ依存ゼロで出し、旧実装や過去データと突き合わせ、**その全部を AI エージェントが `--format json` だけで回せる**。一つひとつはどこかに既にあります。まとまった形と、エージェントを第一の利用者に据えた設計が、この道具の立ち位置です。
-
-
----
-
-## 誰のための道具か
-
-**第一の利用者は AI エージェントです。** 規約の文書や Excel や旧実装から `.rule` を書き、`rulec` に証明させ、直し、生成物を組み込み、変更の影響を過去データの再生で示す — その一連を、人の助けなしに `--help` と診断の JSON だけで回せるように作ってあります。手順は [`AGENTS.md`](AGENTS.md)（英語）にあります。
-
-人は二つの役で残ります。どちらもエージェントには渡せません。
-
-- **表を承認する人。** 金額も、丸めの向きも、食い違う二つの読みのどちらが正しいかも、業務の判断です。検査はそこを決めません — **決められないことを具体的な質問に変える**のが仕事です（「山梨県あての S60 の運賃はいくらですか」）。
-- **生成物を組み込むアプリの持ち主。**
-
-だから出力の既定は英語です。日本語で読むには `--lang ja` か `RULEC_LANG=ja` — 承認者に見せる `doc` と PR に貼る `diff` はそちらで出します。名前とセルは、どちらの言語でももとの規則に書いた日本語のまま出ます。
-
----
-
-## 書き写した瞬間に、抜けが出ます
-
-これが最初の実用価値です。日本郵便のゆうパック運賃表を書き写して、47 都道府県を 6 つのグループにまとめたとき、県をひとつ書き落とすと:
-
-```
-error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
-   |
-34 | table 運賃表(fee_table)
-   |       ^^^^^^ the input space is not fully covered
-   |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
- hint: add a row that matches this input.
- The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
-```
-
-**旧実装も過去データも要りません。** 手元の Excel を書き写して `rulec check` に掛けるだけで、抜けと重なりが出はじめます。
-
-そして、変えるときにやっていることを変えます。送料もクーポンもポイントも返品可否も、たいていは `if` 文の泥沼か設定テーブルか Excel にあって、直すときは**入れてみて、後から数字を見る**。rulec はそれを**入れる前に、過去のデータで再生して差分を見る**に変えます。
-
-## 書き方
+## Write a table
 
 ```rule
 rule 送料例(fee_demo) v1
-description "README の例。そのまま rulec check を通る"
+description "The README's example. Passes rulec check as written"
 
 import std/都道府県
 
@@ -317,223 +104,21 @@ examples
 | 東京都 | 90cm     | 3kg  | 1500円  |
 ```
 
-この例はそのまま `rulec check` を通ります（リポジトリのテストが毎回確かめています）。
-
-**`examples` は実行される仕様です。** 外れたら、どの行が発火したかつきでエラーになります。
-
-## 言語ツアー
-
-`.rule` ファイルは**上から順に決まった形**をしています。前方参照はできないので、上から読めば依存が読めます。**キーワードは英語、名前とセルは日本語のまま**書けます。行頭に書けるのは次の語だけで、これで全部です。
-
-| 書くもの | 何を宣言するか |
-|---|---|
-| `rule` | ファイルの先頭。規則名と版 |
-| `description` | 一行の説明 |
-| `import` | 組み込みの列挙を持ち込む |
-| `enum` | 閉じた列挙 |
-| `group` | 列挙の一部に名前を付けたもの |
-| `inputs` | 規則の引数 |
-| `outputs` | 規則の結果 |
-| `derive` | 入力の線形結合。**数量のまま表の列に置ける唯一の中間値** |
-| `define` | 真偽や、計算した中間の値 |
-| `table` | 決定表。この言語の本体 |
-| `policy` | その表のヒットポリシー（`unique` か `first`）|
-| `result` | 出力の組み立て |
-| `examples` | 実行される仕様 |
-
-### 名前と ASCII 別名
-
-宣言の括弧の中は **ASCII 別名**で、生成される三言語の公開名になります（漢字は Go の公開識別子になれないため）。
-
-```rule
-enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
-```
-
-別名が要るのは、**ASCII でない名前が公開面に出るとき**だけです — 規則名・入力・出力。漢字は大文字を持てず、Go の公開識別子になれないからです。**名前がもとから ASCII なら別名は要りません**（`rule bulk_fee v1` のように、全部英語で書けば括弧はどこにも出てきません）。
-
-それ以外の場所では別名は任意で、**書けば生成コードがその名前を使います**。`derive 残余(margin)` は `margin`、`group 遠隔地(remote)` は `_remote` / `isRemote`、表の出力列 `-> サイズ(size)` は `size` になります。書かなければ宣言した名前がそのまま識別子になります（外に出ない名前なら、どの言語も日本語の識別子を受け付けます）。
-
-`table` の別名だけは例外で、**いまは受け付けるだけで使われません**。表は一つの関数にインライン展開されるので、行き先が無いためです。SQL 生成で表そのものに名前が要るので、構文としては残してあります。
-
-### 型
-
-九つで全部です。
-
-| 型 | 書き方 | 押さえどころ |
-|---|---|---|
-| 真偽 | `bool` | |
-| 列挙 | `会員区分` | **閉じた**有限集合。`enum` で宣言するか `import` で持ち込む |
-| 数量 | `mass[g]` `length[cm]` | **単位が型の一部**。`2kg` は `2000g` を短く書けるようにしただけで、実行時の値は宣言した単位の整数一本 |
-| 金額 | `money[円, incl_tax]` | **通貨と税区分の二重の brand**。`incl_tax` と `excl_tax` は足せません |
-| 率 | `rate[step 1%]` `rate` | 内部は整数のまま。刻みを宣言すればその単位の整数（`10%` は 10）、宣言しなければ列に現れたリテラルから刻みが決まります。`rate[step 0.1%]` のように 1% より細かくもできます |
-| 数 | `number` | 単位のない整数。個数、日数、点数のような数えるだけの数。金額を同じ通貨の金額で割ると、単位が消えてこれになります |
-| 日付 | `date` | 比較と範囲だけ。**加減算はありません** |
-| 文字列 | `string` | **表の列には置けません**（E110）。出力か、素通しの入力にだけ使えます。分岐に使う値は `enum` にしてください |
-| optional | `会員区分?` | セルの `none` でだけ消費できます |
-
-数量・金額・率・数・日付は**すべて整数**で持ちます。日付は通算日、率は刻みの個数です。浮動小数点はどこにも現れません — 端数がどう決まるかは下の `round` が決め、言語の除算には任せません。
-
-**列挙は閉じています。開いた列挙はありません** — 値が増えたら、それを見ていない表が完全性検査で割れるのが狙いです。
-
-```rule
-enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
-```
-
-`default` は「この値に専用の行は要らない、`-` に吸われるのが正しい」という宣言です。付けないと「どの行にも現れません」と警告されます。
-
-**グループ**（`group`）は列挙の一部に名前を付けたもので、セルの中で値と同じように使えます。検査のときは必ずもとの値に展開されるので、グループで書いた表に穴があれば完全性検査が捕まえます。
-
-```rule
-group 遠隔地(remote) = 北海道, 沖縄県
-```
-
-組み込みの `std/都道府県`（47 値）は `import std/都道府県` で使えます。
-
-### 入力と出力
-
-```rule
-inputs
-  届け先(dest)    : 都道府県
-  重量(weight)    : mass[g]        range >=1g <=40kg
-  注文金額(total) : money[円, incl_tax]  range >=0円 <=1000万円
-  会員(member)    : 会員区分
-
-outputs
-  送料(fee) : money[円, incl_tax]  round up(10円)
-```
-
-出力は複数書けます。生成物は Python の `NamedTuple`、TypeScript の `interface`、Go の構造体になり、**丸めは出力ごとに一度ずつ**掛かります。
-
-```rule
-outputs
-  可否(ok)    : bool
-  素割引(raw) : money[円, incl_tax]  round down(1円)
-```
-
-### 範囲と丸め — 書き忘れを許さない二つ
-
-上の例に出てくる `range` と `round` は、飾りではなく**必須の宣言**です。この二つが、この言語がやりたいことの中心にあります。
-
-**`range` は、数量と金額の入力すべてと、導出すべてに要ります。** 一つの宣言が三つを兼ねます。
-
-1. **オーバーフローの証明** — 中間値が int64 に収まることを、範囲と刻みから計算します
-2. **完全性検査の全体集合** — 「どの入力にも当てはまる行がある」の「どの入力」がこれで決まります
-3. **生成コードの入口ガード** — 範囲外で呼ばれたら、黙って計算せずエラーを返します
-
-導出の範囲は、**入力範囲から計算した到達区間を含んでいないとエラー**です（`0 円〜100 万円` の入力から `−10 万円` が出るなら、それも範囲に入っていなければなりません）。
-
-範囲の入口検査としてしか効かない入力には `contract_only` を付けます。「表の条件には出てこないが、契約として範囲は守らせたい」という意図の宣言で、未使用の警告が黙ります。
-
-**`round` は、数値の出力すべてに要ります。** 端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまうからです。四種あり、**負の向きまで固定**されています。
-
-| モード | 向き | 例（刻みが 1 円のとき） |
-|---|---|---|
-| `up` | 0 から遠ざける（切り上げ） | −4.2 → −5 |
-| `down` | 0 へ寄せる（切り捨て） | −4.8 → −4 |
-| `half_up` | 半分ちょうどは 0 から遠ざける（四捨五入） | −4.5 → −5 |
-| `half_even` | 半分ちょうどは偶数へ（銀行家丸め） | 2.5 → 2、3.5 → 4 |
-
-括弧の中が**刻み**です。`up(10円)` なら 10 円単位へ丸めるので、−4.2 円は −10 円になります。
-
-負の向きまで決めてあるのは、**Python の `//` は −∞ 方向、Go の整数除算は 0 方向で食い違う**からです。言語の素の除算に任せると、同じ規則が二つの言語で違う答えを出します。生成コードは自前のヘルパを通し、その一致は単体ベクタで毎回確かめています。
-
-### 表
-
-```rule
-table 基本送料(base_fee)
-policy unique
-| 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
-| 遠隔地      | <=2000g | 1200円                                  |
-| 遠隔地      | >2000g  | 1800円                                  |
-| not: 遠隔地 | <=2000g | 800円                                   |
-| not: 遠隔地 | >2000g  | 1100円                                  |
-```
-
-`->` の左が入力列、右が出力列です。列に書けるのは**入力・導出・真偽や列挙の中間値**です。
-
-**方式は二つだけ**です。
-
-- **`unique`**（既定）— 行の重なりはすべてエラー。順序に意味が無いので、並べ替えても意味が変わりません
-- **`first`** — 最初に当てはまった行が勝ちます。「例外を先に、一般則を後に」という業務の書き方をそのまま受けるためのもの
-
-DMN の Any / Priority / Collect は採りませんでした。**完全性は宣言できず、常に必須**です。穴を許したい表は書けません。
-
-### セルに書けるもの
-
-七種で全部です。
-
-| 書き方 | 意味 |
-|---|---|
-| `-` | 任意の値。**空欄は書き忘れと区別がつかないので構文エラー**です |
-| `1200円` `2000g` `true` `2026-04-01` | リテラル一致。数量と金額には**単位が必須**（裸の `2000` はエラー） |
-| `北海道, 沖縄県` | 集合。要素はリテラルかグループ名 |
-| `not: 遠隔地` | 補集合 |
-| `<=2000g` | 比較。`<= >= < >` の四種 |
-| `>=1000円 <20000円` | 区間（比較の並記＝連言） |
-| `none` | optional が空 |
-
-記号はすべて ASCII です。`→` や `・` `、` と書いても読めますが、`rulec fmt` が `->` と `,` に直します。名前とセルの値以外に IME は要りません。
-
-**`..` を使った範囲記法は構文エラーです。** 「2000g まで」がその値を含むのか含まないのかが読めないためで、比較演算子なら解釈が一つに決まります。境界の貼り合わせ間違いは、重複検査が、それを起こす入力つきで捕まえます。
-
-### 導出・定義・結果
-
-**導出**は入力だけの線形結合で、**数量のまま表の列に置けます**。
-
-```rule
-derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
-```
-
-「クーポン適用後の金額が 3,980 円以上なら」のような、値引き後で判定する規約が実在します。これを列に書けないと、いちばん間違えやすい引き算が呼び出し側の裸の一行になってしまいます。`range` の扱いは入力と同じです（上の「範囲と丸め」）。
-
-**定義**は真偽や中間の値に名前を付けます。真偽の定義は表の列に置けます。
-
-```rule
-define 大口(bulk) : bool = 注文金額 >= 3万円
-define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
-```
-
-条件に書けるのは「一つの値と定数の比較」か「**引き算で差を取れない型どうしの比較**」（日付どうしなど）だけです。数値どうしを直接比べると、差を `derive` で宣言するよう促されます — そのほうが厳密に解析できるからです。
-
-**結果**が出力を組み立てます。
-
-```rule
-result 送料 = 基本送料 × 負担率
-```
-
-使える演算は加減、定数倍、率との積、`min` `max`、丸め（`up` `down` `half_up` `half_even`）の四種です。**ループも再帰もありません。**
-
-### 例
-
-```rule
-examples
-| 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
-| 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
-| 東京都 | 1999g | 12000円  | プラチナ | 400円   |
-```
-
-`examples` は**実行される仕様**です。`rulec check` が参照評価器で全行を走らせ、外れたら**どの表のどの行が発火したか**つきで報告します。
-
-`->` は入力と出力の境目を一度だけ示します。出力が二つ以上あるときは、二列目以降に `->` を書いても書かなくても構いません（`rulec fmt` が決まった形に畳みます）。
-
-```rule
-| 商品合計 | 種別   | 同商品適用済 | -> 可否 | 素割引 |
-| 10000円  | 率引き | false        | true    | 1000円 |
-```
-
-**期待値は出力を全部書きます。** 列を落とすとエラーです。理由は、生成した各言語と参照評価器の一致が、**全員が同じ誤りを共有した場合には緑のまま**だからです。実際にこれが起きました — 複数出力の丸めが評価器と生成コードの全部で揃って抜けていて、一致は最後まで緑でした。それを破れるのは人の書いた期待値だけです。
-
-### 書けないもの
-
-- 入れ子のオブジェクト（`注文.配送先.都道府県`）— 境界でほどいて、値そのものを入力として渡します
-- コレクションと反復 — クーポンの重ね掛けのような可変個数は、規則を「一回の判定」に固定して、順序と反復を呼び出し側に置きます
-- 日付の加減算 — 比較と範囲だけです
-
-この三つを許すと、完全性と重複の検査が有限で終わらなくなります。**書けなさは、検査が終わることの代金です。**
-
-## 生成されるコード
-
-`rulec gen` が出すのは、**ランタイムに依存しない普通の関数**です。表の一行が分岐の一本になり、もとの表のセルがそのままコメントで添えてあります。上の「書き方」の例から出たものです。
+**The keywords are English; the names and the cell values stay in the language of the
+business.** This example passes `rulec check` as it stands — the repository's tests run it
+on every commit. `examples` is an executable specification, and a row that does not hold is
+reported with the rows that fired.
+
+A cell tests **its own column and nothing else**, which is what makes a row a box and the
+completeness and overlap checks exact. Complicated rules are written by **stacking tables**:
+what one table produces is a column of the next. The whole language is in
+[Write a table](https://i2y.github.io/rulec/tour/) and, exhaustively, in
+[`docs/reference.md`](docs/reference.md).
+
+## The generated code
+
+One row of the table becomes one branch, with the cells it came from beside it as a
+comment. This is what the example above generates.
 
 ```python
 def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
@@ -576,337 +161,156 @@ func FeeDemo(in Input) (YenInclTax, error) {
 }
 ```
 
-生成物の中のコメントと文面も `--lang` に従います（上は既定の英語）。もとの表のセルと名前は、どちらの言語でもそのまま引かれます。
+Four rules keep it readable. **No cell is dropped** — a condition an earlier branch already
+settled is still written out (`elif True:`), because reading the output against the table is
+the only way it is meant to be read. **Units ride in the type**: `NewType` in Python, a
+branded bigint in TypeScript, a defined type in Go, so confusing `YenInclTax` with
+`YenExclTax` stops at compile time. **Rounding goes through a helper of its own**, because
+Python's `//` truncates toward −∞ and Go's integer division toward zero. **Nothing builtin
+is called bare**, so an input aliased `min` or `list` cannot break the output.
 
-読める形であることを、生成器は次の四つで守っています。
+How to call it is a question `rulec api` answers without reading the code — module and
+function name, arguments with their units and ranges, outputs with their rounding, the enum
+spellings in that language, and the exceptions it can raise, as one JSON document that tests
+hold to the real output. The shape and the guarantees are in
+[`docs/generated-code.md`](docs/generated-code.md).
 
-- **セルを省略しません。** 先行分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です
-- **単位は型に載せます。** Python は `NewType`、TypeScript は branded bigint、Go は defined type。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります
-- **丸めは自前のヘルパで行います。** Python の `//` は −∞ 方向、Go の整数除算は 0 方向で食い違うので、言語の素の除算には任せません
-- **組み込みを裸で呼びません。** 入力の別名が `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています
-
-参照評価器と生成した各言語が同じ答えを返すことは、境界から自動で作ったテストケースを全部に流して、**決まった形の JSON のバイト一致**で確かめています。
-
-**呼び方は、生成物を読まなくても分かります。**
-
-```console
-$ rulec api rules/クーポン一枚.rule | jq -r .python.signature
-def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Output:
-```
-
-`rulec api` が、module と関数名、引数（和名・別名・型・単位・範囲）、出力（丸めつき）、列挙の値のその言語での綴り、送出しうる例外を一つの JSON で出します。手で書いた呼び出し規約は生成器が名前を変えた日から嘘になるので、**目録は生成器の隣で組み立て、テストが生成物そのものと突き合わせます** — Python は import して `inspect.signature` と比べ、Go は**目録だけから呼び出しコードを組み立てて** `go vet` に通します。生成物の形と保証は [`docs/generated-code.md`](docs/generated-code.md) にあります。
-
-## 何を検査するか
-
-| | |
-|---|---|
-| **完全性** | どの行にも当てはまらない入力があれば、その具体例つきで止まる |
-| **重なり** | `policy unique` では重なりがエラー。`policy first` では、階段としてふつうに起きる隠れと、出力が食い違っていて確認に値するものを区別する |
-| **どの入力にも当てはまらない行** | 先行行に覆われている場合と、上流の表が決して出さない値を名指ししている場合を書き分ける |
-| **単位** | 円と g を足したら止まる。税込と税抜も別物 |
-| **丸め** | 数値出力に丸めの宣言が要る。宣言が無いと「切り捨てなら 0 円、切り上げ(10円)なら 10 円と、丸め方で最大 10 円動きます」と、**円が動くことを数字で見せてから**訊く |
-| **溢れ** | 中間値が int64 に収まることを、宣言範囲と刻みから証明する |
-| **例** | 全部の例を実行し、外れたら発火行つきで報告する。出力の列が欠けていたら止める |
-
-すべての診断は業務の言葉で一行目を書き、**それを起こす入力を必ず付け**、ヒントは書き換え後の形まで示します。
-
-## 何をしないか
-
-境界を決めておくことが、この道具が終わるための条件です。
-
-- **汎用の言語にしません。** ループも再帰もありません。停止性は自明です
-- **実行時にルールエンジンを積みません。** 生成された普通の関数が動くだけです
-- **状態やワークフローを持ちません。** 時刻も在庫も会員区分も、すべて引数で渡します。これが「過去に遡って再生する」ことを意味あるものにしています
-- **入れ子のオブジェクトはセルに書けません。** `注文.配送先.都道府県` は境界でほどいて渡します。この制限が、完全性と重複の検査が有限で終わることの土台です
-- **不健全な緑を出しません。** 証明できなければ、近似で通さずにエラーで止まります
-
-## 使い方
+## Using it
 
 ```console
 $ rulec check rules/*.rule
-note rules/ゆうパック運賃.rule: 21 shadow pairs (21 structural, 0 equivalent, 0 needs review)
-ok rules/ゆうパック運賃.rule
-
-$ rulec check rules/送料.rule --format json      # GitHub annotations にそのまま流せる形
-$ rulec check rules/送料.rule --terse             # 見出し・位置・その入力の三行だけ
-$ rulec check rules/送料.rule --diff-base HEAD    # 基準から新たに生じた発見だけ
-$ rulec fmt --check rules/*.rule                  # gofmt と同じ運用
+$ rulec check rules/送料.rule --format json      # ready for GitHub annotations
+$ rulec check rules/送料.rule --terse             # heading, position, the input: three lines
+$ rulec check rules/送料.rule --diff-base HEAD    # only what is newly introduced
+$ rulec fmt --check rules/*.rule                  # the gofmt convention
+$ rulec gen rules/*.rule --out generated [--check]
+$ rulec vectors | coverage | test                 # the test cases, their coverage, the run
+$ rulec adapter | schema | verify                 # against a legacy implementation
+$ rulec fixtures lint | replay | diff             # against past records
+$ rulec doc rules/送料.rule --lang ja             # for whoever approves the table
+$ rulec explain E101                              # when it appears, how to fix it, a repro
 ```
 
-`--format json` は**文面のほかに発見そのものをデータで持ちます**（v2。v1 の欄は全部残っています）。
+Transcribe a tariff, drop one prefecture out of forty-seven, and the gap comes back with the
+input that falls through it:
 
-```json
-{"v":2,"code":"E101","title":"…","notes":["…"],
- "where":{"file":"rules/送料.rule","line":34,"column":7,"table":"運賃表"},
- "witness":{"inputs":{"あて先":"山梨県","サイズ":"S60"}},
- "rows":[],
- "fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820円 |"}}
 ```
-
-`witness` と `fix` は**文面の言語で変わりません**（テストが日英のバイト一致を確かめています）。`fix.text` は `.rule` にそのまま貼れる形で、E101 と E104 については「貼ると本当にそのコードが消える」ことをテストが機械的に確かめています。ただし**金額と丸めの向きは業務の判断**なので、`fix.text` はそこを決めません — 形だけを渡し、注意は `notes` に書きます。
-
-どのコマンドも `rulec <cmd> --help`（`rulec help <cmd>` も同じ）が、**目的・引数・フラグ（値と既定）・exit code の意味・走らせられる例を二つ・出しうる診断コード**を出します。`rulec --help` が一覧、`rulec --version` が版です。**知らないフラグは黙って無視せず、exit 2 で止まります** — `--shwo-shadow` が通って 0 が返ると、要求が効いたと信じて次へ進んでしまうからです。
-
-診断コードは `rulec explain` が引きます。**いつ出るか・どう直すか（書き換え後の形まで）・最小の再現 `.rule`・関係するコード**が出ます。
-
-```console
-$ rulec explain E101
-$ rulec explain E101 --format json      # 機械で読む形
-$ rulec explain --all --format markdown # 台帳の全部
-```
-
-台帳は `src/codes.rs` の一枚で、`docs/codes.md`（英）と `docs/codes.ja.md`（日）は **`rulec explain --all --format markdown` の出力そのもの**です（手で編集しません。テストが同一性を確かめています）。台帳の全項目には**走る最小の再現**が付いていて、それが本当にそのコードを出すことも毎回検査しています。
-
-`--format json` は `check` だけのものではありません。**`fmt --check`・`gen`（と `--check`）・`coverage`・`test`・`verify`・`replay`・`diff`・`fixtures lint` が同じ流儀で出します** — 一行一件、鍵は英語固定、文面は `title` `notes` `what` `hint` `text` にだけ。形式の定義は [`docs/formats.md`](docs/formats.md) にあります。`vectors`・`schema`・`adapter` は元から機械可読で、`doc` だけは人の承認者向けなので markdown のままです。
-
-文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ英語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
-
-```console
-$ rulec check rules/ゆうパック運賃.rule --lang ja
-error[E101]: 完全性の欠落: どの行にも当てはまらない入力があります
-  --> rules/ゆうパック運賃.rule:34 表 運賃表
+error[E101]: Completeness gap: some input matches no row
+  --> rules/ゆうパック運賃.rule:34 table 運賃表
    |
 34 | table 運賃表(fee_table)
-   |       ^^^^^^ 起こりうる入力を覆いきっていません
+   |       ^^^^^^ the input space is not fully covered
    |
- 当てはまらない例: あて先 = 山梨県, サイズ = S60
- ヒント: この入力に当てはまる行を足してください。
- 足す行の形: `| 山梨県 | S60 | 820円 |`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。
+ An input that matches no row: あて先 = 山梨県, サイズ = S60
+ hint: add a row that matches this input.
+ The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
-生成と、生成物の検証。
+**No legacy implementation and no past data are needed for that.** Every command carries
+`--format json`, where a finding is data — `where`, `witness`, `rows`, `fix` — with the keys
+fixed in English whatever language `--lang` puts the prose in. An unknown flag is refused
+with exit 2 rather than ignored. The formats are defined in
+[`docs/formats.md`](docs/formats.md), and the diagnostic ledger is `src/codes.rs`, of which
+[`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` output.
 
-```console
-$ rulec gen rules/*.rule --out generated
-$ rulec gen rules/*.rule --out generated --check   # 生成物が古ければ 1 で落ちる（CI 用）
-```
-
-生成されるのは Python・TypeScript・Rust・Go の**普通の関数**です。**Java・Kotlin・Swift・SQL にも対応予定**で、狙いは「同じ表から、フロントもバックもモバイルも DB も同じ答えを返す」ことを一致検査で証明できるようにすることです（下の[対応する出力言語](#対応する出力言語)）。分岐はもとの表の行と 1:1 に対応し、行ごとにセルがコメントで添えてあります。整形は生成器が内蔵しているので、後段で `gofmt` を走らせません（環境の版に依存した瞬間、生成が決定的でなくなります）。`gofmt -l` が空であることと、`ruff check --select E,W` が行長を除いて無指摘であることは、テストが毎回確かめています。
-
-ベクタと、そのカバー。
-
-```console
-$ rulec vectors rules/送料.rule            # 境界から作ったテストケース
-$ rulec coverage rules/送料.rule
-68 vectors
-  row coverage              7 / 7     satisfied
-  boundary-pair coverage    4 / 4     satisfied
-  shadow-pair coverage      3 / 3     satisfied
-```
-
-`coverage` は**テストケースの側を検査するもの**です。三つのカバー基準を、生成したベクタからではなく**規則から先に**導いて、実際に片づいたかを確かめます。欠けていれば、どの行・どの境界・どの隠れ対かを名指しして 1 で落ちます。
-
-旧実装との突き合わせ。
-
-```console
-$ rulec adapter rules/送料.rule --template python > adapter.py   # 20〜30 行の雛形
-$ rulec schema rules/送料.rule                                    # ワイヤの JSON Schema
-$ rulec verify rules/ゆうパック運賃.rule --adapter python3 adapter.py
-Compared 207 / matched 182 (87.923%)
-Counterpart: legacy@fake-1
-
-Affected 25 (12.077%)  amount -250
-  table サイズ判定 row 1 / table 運賃表 row 36                 7 records  difference -10 uniform  total -70
-    Example: あて先=沖縄県, 三辺合計=1, 重量=1 → rule 運賃=1450 / legacy 運賃=1460
-```
-
-旧実装は**プロセスとして立てて標準入出力で JSON Lines をやりとりする**だけなので、言語も置き場所も問いません。不一致は発火行でクラスタし、件数・金額差・入力例を出します。ずれが出力の丸めの刻みより小さいクラスタには「丸め方の違いの疑い」が付きます。アダプタが答えられなかった件は、一致率の分母から外して件数を明示します。
-
-**承認する人に見せる。**
-
-```console
-$ rulec doc rules/ゆうパック運賃.rule --lang ja > 運賃.md
-```
-
-`.rule` は既にほぼ markdown なので、**構文の転写には価値がありません**（`|---|` を一行挿むだけ）。`doc` の仕事は、**検査器が知っていて表には出てこない事実を添える**ことです。
-
-```markdown
-## グループ
-
-- **近畿圏**（6 値）— 滋賀県、京都府、大阪府、兵庫県、奈良県、和歌山県
-- **中国四国**（9 値）— 鳥取県、島根県、岡山県、広島県、山口県、徳島県、香川県、愛媛県、高知県
-  …
-
-この 6 グループは 都道府県 の 47 値を過不足なく分割しています（この資料が宣言から数えました）。
-
-## 表 運賃表（policy unique）
-
-| 列 | 出どころ |
-|---|---|
-| あて先 | 入力 |
-| サイズ | 表 サイズ判定 の出力 |
-| → 運賃 | この規則の出力 |
-
-**`rulec check` が確かめたこと**
-
-- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）
-- どの入力にも当てはまらない行はありません（E102）
-- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません
-```
-
-**`近畿圏` の一語が 6 県を、`not: 近畿圏` が 41 県を隠しています。**「本当に 47 県を覆えているか」を読み手は目視では確かめられません — 検査器は知っているのに。そこを言うのが `doc` です。ほかに、表どうしの依存、隠れの三分類と既定行、W114 とガードの存在、単位と丸めの列見出しへの畳み込み、導出の式と範囲、`contract_only`・`default` の宣言意図、そして**丸めの仮置きの出典コメント**（規約に根拠のない丸めが、承認者の目に入る唯一の場所です）。
-
-してはいけないことが一つあります。**検査器の出力に無い文章は書きません。** すべての行が、もとの規則か検査結果までたどれること — 表のセルがもとの規則と一字一句同じであることは、テストが毎回確かめています。事実の出どころも、`rulec check が確かめました` と `この資料が宣言から数えました` で必ず書き分けます。
-
-`doc` は**生成物として扱いません。**コミットせず、CI が生成して PR に貼ります。古い資料がいまの正しい姿に見えてしまうのがいちばん危ないので、長く残るものを作らないことにしました。ヘッダにもとの規則のパス・ハッシュ・rulec の版が刻まれるので、貼られた先でも古さを検査できます。markdown から `.rule` への逆方向は**作りません**。
-
-過去のデータで再生する。**ここが「入れてみて後から数字を見る」を「入れる前に見る」に変える段**です。
-
-```console
-$ rulec fixtures lint replay/2025-08.jsonl rules/ゆうパック運賃.rule
-replay/2025-08.jsonl: 208 records (208 observed, 0 filled)
-
-5 problems:
-  `in.あて先`: `江戸` is not a value of enum 都道府県
-    1 record(s). Example: line 21 (order:b3)
-    The type or range disagrees with the declaration.
-
-$ rulec diff ゆうパック運賃@v1 ゆうパック運賃@v2 --fixtures replay/2025-08.jsonl
-Compared 207 / matched 190 (91.787%)
-Counterpart: ゆうパック運賃@v1 → ゆうパック運賃@v2
-
-Affected 17 (8.213%)  amount +5,300
-  table サイズ判定 row 1→row 2 / table 運賃表 row 29→row 30    7 records  difference +300 uniform  total +2,100
-    Example: あて先=北海道, 三辺合計=60, 重量=1 → rule 運賃=1710 / old version 運賃=1410
-```
-
-`ゆうパック運賃@v2` は、git タグ `rules/ゆうパック運賃/v2` を引くための短い書き方です。差分は**当てはまる行がどこからどこへ移ったか**でクラスタします（`行1→行2` が「どの行に移ったか」）。クラスタごとに件数・金額の合計・最小最大・入力例が出て、ずれが全部同じ額なら一行にまとめます。
-
-`--format markdown` を付けると PR に貼れる形になります。投稿は CI の一行（`gh pr comment`）に任せて、整形までを道具が持ちます。
-
-**補ったことは必ず記録に残ります。** 記録に欄が欠けているとき、rulec がやることは二つだけです — その記録を丸ごと外すか、**再生マニフェストに宣言した既定値**で補って「補った記録」の札を付けるか。逆推定はしません。そして**見出しの一致率は、欄が全部そろっていた記録だけから計算**し、補完の件数と使った既定値をレポート自身が必ず書きます。
-
-```
-Excluded 5 records (not matching the declared format)
-Filled records: 4 (重量: 4); matched 4. Not included in the headline match rate
-Default values used: 重量 = 1000
-```
-
-既定値を `.rule` に書かないのは、**規則は純関数で、補完は特定の再生実験の判断**だからです。「会員は一般で埋める」と「ゴールドで埋めて影響の上限を見る」を同じ規則に別々に走らせるのは正当な使い方で、規則に一つ焼くとそれができません。
-
-**fixtures はリポジトリに入れません。** 注文金額を含むので、CI にはアーティファクトか保護ストレージで渡します。マニフェストは既定値と欄名しか持たないので、こちらは入ります。
-
-exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内部異常）です。
-
-## CI に置く
+## In CI
 
 ```yaml
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
 - run: rulec coverage rules/
-- run: rulec test generated/        # python3・node・go の toolchain を使う唯一の段
+- run: rulec test generated/        # the only step that needs python3, node, rustc and go
 ```
 
-ここまでのログを読むのは機械と開発者なので、言語は既定の英語のままにします。
+Those logs are read by machines and developers, so they stay in the default English. What
+goes to a person — `rulec diff` on a pull request, `rulec doc` for an approver — is built in
+the same job with `RULEC_LANG` set to their language.
 
-過去再生は fixtures を持つ環境だけの別ジョブにします。**こちらは人に貼るので、言語を日本語に倒します。**
-
-```yaml
-- run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
-  env:
-    RULEC_LANG: ja          # PR コメントは日本の承認者が読む
-- run: gh pr comment "$PR" --body-file diff.md
-```
-
-承認者に見せる資料も、同じ通り道です（コミットせず、その場で作って貼る）。
-
-```yaml
-- run: rulec doc rules/送料.rule > doc.md
-  env:
-    RULEC_LANG: ja
-- run: gh pr comment "$PR" --body-file doc.md
-```
-
-## リポジトリの中身
+## What is in this repository
 
 ```
-AGENTS.md         エージェント向けの手順（英語）
-DESIGN.md         設計文書。決定と、何を捨てたかの記録
-docs/codes.md     診断コードの台帳（生成物。rulec explain --all の出力）
-docs/codes.ja.md  同じ台帳の日本語
-docs/formats.md   機械可読な出力の定義（--format json、ベクタ、fixtures）
-docs/generated-code.md 生成物の形と保証、呼び方（英語）
-docs/reference.md 文法の完全な定義（英語）
-website/          ドキュメントサイト（zensical。docs/ が英語、docs-ja/ が日本語）
-skills/rulec/     利用者向けのエージェントスキル（`.claude/skills/` にコピーして使う）
-src/              kw / i18n / lex / parse / types / region / eval / fmt / json
-                  codegen / vectors / coverage / verify
-                  fixtures / replay / report / runtest / doc
-tests/corpus/     実在する公開規約から書き起こした規則
-tests/mutants/    誤りを一つずつ仕込んだ 19 本
-tests/golden/     診断の文面のスナップショット 21 件
-tests/coverage.rs カバー判定器そのものを変異で試す
-tests/m3.rs       合成 fixtures での過去再生（実データは要らない）
-tests/doc.rs      資料が事実しか言わないことの検査
-tests/skill.rs    スキルが文書と食い違わず、リンクが外へ出ないことの検査
-tests/threeway.rs 評価器と生成した各言語が同じ答えを返すことの照合
-tests/budget.rs   検査予算を決めた合成ベンチ
-tests/golden_en.rs 同じ診断の英語スナップショット（tests/golden/en/）
-tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替に従うこと
-tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋は既定の英語）
-tests/codes.rs    診断台帳が単一のソースであること（全項目の再現が走る）
-tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
-tests/formats.rs  全コマンドの --format json の鍵が言語で動かないこと
-tests/api.rs      rulec api の目録が生成物と一致すること（実際に呼んで確かめる）
-tests/docs.rs     文書が名指しするコマンドとリンクと実演が実物と合うこと
-tests/website.rs  サイトの nav とリンクとコマンドが実物と合うこと
-.cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
-                  cargo が起動するプロセスに RULEC_LANG=ja を刻む
+AGENTS.md         the procedure an agent follows
+DESIGN.md         the design record: every decision, and what was discarded with it
+docs/             reference.md (the grammar), formats.md (machine-readable output),
+                  generated-code.md, codes.md / codes.ja.md (the ledger, generated),
+website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
+skills/rulec/     an agent skill for using rulec — copy it into .claude/skills/
+src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+                  codegen, vectors, coverage, verify, fixtures, replay, report, doc
+tests/corpus/     12 rules transcribed from real published terms
+tests/mutants/    19 files, each with one mistake planted in it
+tests/golden/     21 snapshots of diagnostic prose, in both languages
+tests/            and the properties: threeway (every language agrees), readme, docs,
+                  website, skill, codes, json_v2, formats, api, coverage, m3, budget
 ```
 
-コーパスはすべて**公開情報**から作られています — 日本郵便の運賃表、ヤマト運輸のサイズ区分、楽天とヤフーのクーポン規約。非公開のデータは一つも入っていません。
+Everything in the corpus comes from **public information** — Japan Post's tariff, Yamato's
+size classes, the coupon terms of Rakuten and Yahoo. None of it is private data.
 
-## いまどこまで来ているか
+```console
+$ cargo test          # 200 tests; python3, node, rustc and go are used where present
+```
 
-**M0 から M3 まで、四段すべて完成しています。** コーパスは 12 本、診断は台帳の 35 項目すべてを実装しています。
+## Where it is
 
-- **M0 検査器** — 完全性・重なり・当てはまらない行・単位・丸め・溢れ・例。それを起こす入力が必ず付く
-- **M1 生成器** — Python・TypeScript・Rust・Go への出力。参照評価器と生成物すべての**一致**を、決まった形の JSON のバイト単位で確かめる。テストケースは境界から自動で作り、そのベクタ一式が三つのカバー基準を満たしていることを別の判定器が検査する
-- **M2 等価検証** — 旧実装をプロセスとして立てて同じ答えを出すか確かめる
-- **M3 過去再生** — 記録の検証、再生、版の差分、PR 用 Markdown
-- **語彙と文面（2026-09）** — キーワードを英語に統一し、記号も ASCII（`->` と `,`。`→` `・` は `fmt` が直す）。名前とセルは日本語のまま。診断・レポート・資料・生成コードの文面は日本語と英語の二言語（`--lang`）で、**既定は英語**（第一の利用者はエージェント）
-- **エージェントを第一の利用者に（2026-09）** — サブコマンドごとの `--help` と未知のフラグの拒否、診断台帳の単一ソース化と `rulec explain`、診断 JSON v2（それを起こす入力と直し方をデータで持つ）と `--terse`、全コマンドの `--format json`、生成物の呼び方の目録 `rulec api`、そして `AGENTS.md` と `docs/`
-
-**M0 から M3 まで、実装は実データを一件も使わずに完成しました。** M3 のテストは、生成したベクタから合成した fixtures で全部を行使しています。
-
-残っているのは機能ではなく**当てること**です。M2 と M3 が本当に効くのは、**旧実装の不一致 1,000 件を前にして、その身元（旧実装のバグか、書き写しのミスか、fixtures の汚れか、丸め方の違いか）をレポートが自力で切り分けられるか**で決まります。発火行クラスタ・丸め方の違いの自動タグ・そのままの記録と補った記録の分離はすべてそのための設計ですが、**その有効性は実データに当てるまで仮説のまま**です。
-
-### 対応する出力言語
-
-いま対応しているのは **Python・TypeScript・Rust・Go** の四つで、**Java・Kotlin・Swift・SQL に対応予定**です。
-
-| | 状態 | 要るもの |
-|---|---|---|
-| Python | 対応済み | `python3` |
-| TypeScript | 対応済み | `node` だけ（生成物は消去可能構文なので、ビルド手順も tsconfig も要りません） |
-| Rust | 対応済み | `rustc` だけ（cargo もクレートも要りません） |
-| Go | 対応済み | `go` |
-| Java | 対応予定 | JDK。単一ファイル実行でビルドツール無しにランナーが書けます |
-| Kotlin | 対応予定 | kotlinc |
-| Swift | 対応予定 | swiftc |
-| SQL | 対応予定（形を検討中） | 行が分岐ではなく `CASE` の枝になり、標準入出力のランナーも作れないので、方言と出す形を先に決めます |
-
-**一致検査に乗らない言語は入れません。** 参照評価器とバイト単位で突き合わせられない生成物は、「証明済み」という看板の外側にあることになるからです。三つめの TypeScript を通すのに掛かった実コストは生成器に約 700 行で、言語ごとの差は型名・ゼロ値・分岐の括弧・ランナーの四箇所に集中していました（DESIGN §15.13）。
-
-## どこを読むか
+**All four stages, M0 to M3, are complete.** The corpus is 12 rules, and all 35 entries in the diagnostic ledger are implemented.
 
 | | |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | エージェント向けの手順。書く→検査→直す→生成→組み込む→影響を見せる→人に訊く（英語） |
-| [`docs/reference.md`](docs/reference.md) | 文法の完全な定義（英語） |
-| [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | 診断コードの台帳。`rulec explain --all` の出力そのもの |
-| [`docs/formats.md`](docs/formats.md) | 機械可読な形式の全部 — `--format json`、ベクタ、fixtures、マニフェスト、アダプタの手順（英語） |
-| [`docs/generated-code.md`](docs/generated-code.md) | 生成物の形と保証、呼び方（英語） |
-| `DESIGN.md` | なぜそう決めたか、そのとき何を捨てたか（日本語） |
+| **M0 the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
+| **M1 the generator** | Python, TypeScript, Rust and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **M2 equivalence** | stand the legacy implementation up as a process and see whether it answers the same |
+| **M3 replay** | validate records, replay them, diff two versions, write the Markdown for a pull request |
 
-ドキュメントサイト（同じ内容を読みやすく、日英）は [i2y.github.io/rulec](https://i2y.github.io/rulec/) にあります。中身は `website/` で、リファレンスの四つはこのリポジトリの文書をそのまま持ち込んでいます（二重に持つと必ず片方が腐るので）。
+**All four were finished without a single record of real data**: M3's tests exercise
+everything through fixtures synthesised from the generated vectors. What is left is not a
+feature but an aiming problem. Whether the report can tell a legacy bug from a transcription
+slip from dirty records from a rounding difference, with a thousand mismatches in front of
+it, stays a hypothesis until it meets real data.
 
-## 設計について
+### Output languages
 
-決定と、そのとき何を捨てたかは `DESIGN.md`（1,239 行）にあります。決定表の意味論とヒットポリシーの語彙は DMN から借り、重複・欠落の検出は Calvanese らの定式化に合わせました。借りていないのは XML の交換形式、実行時エンジン、GUI モデラです。そして DMN が面倒を見ない**単位・丸め・複数言語へのコード生成・過去再生**が、この道具の差分です。
+**Python, TypeScript, Rust and Go** today; **Java, Kotlin, Swift and SQL** are planned.
 
-## ライセンス
+| | | |
+|---|---|---|
+| Python | shipped | `python3` |
+| TypeScript | shipped | `node` alone — the output is erasable syntax, so no build step and no tsconfig |
+| Rust | shipped | `rustc` alone — no cargo, no crates |
+| Go | shipped | `go` |
+| Java / Kotlin / Swift | planned | a JDK / kotlinc / swiftc |
+| SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, and there is no stdin/stdout runner, so the dialect and the shape come first |
 
-未定。
+**A language that cannot join the agreement check does not get added**: output that cannot
+be compared byte for byte against the reference evaluator sits outside the word "proved".
+The third one, TypeScript, cost about 700 lines in the generator, and the differences
+between languages concentrated in four places — type names, zero values, brackets around
+branches, and the runner (DESIGN §15.13).
 
+## Where to read next
+
+| | |
+|---|---|
+| **[The documentation site](https://i2y.github.io/rulec/)** | all of this at length, in English and [日本語](https://i2y.github.io/rulec/ja/) |
+| [`AGENTS.md`](AGENTS.md) | the procedure for an agent: write → check → fix → generate → integrate → show the impact → ask a person |
+| [`docs/reference.md`](docs/reference.md) | the complete grammar |
+| [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | the diagnostic ledger, as `rulec explain --all` prints it |
+| [`docs/formats.md`](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, manifests, the adapter protocol |
+| [`docs/generated-code.md`](docs/generated-code.md) | the shape of the output, its guarantees, and how to call it |
+| `DESIGN.md` | why each decision was made and what was discarded with it (Japanese, 1,483 lines) |
+
+The four references under `docs/` are carried into the site verbatim: holding the same text
+twice is how one of the copies goes stale.
+
+## About the design
+
+The decision-table semantics and the hit-policy vocabulary are borrowed from DMN, and the
+detection of overlap and gaps follows the formulation of Calvanese et al. Not borrowed: the
+XML interchange format, the runtime engine, the GUI modeller. What DMN does not cover —
+units, rounding, code generation for several languages, replay against past records — is
+where this tool differs.
+
+## License
+
+Undecided.
