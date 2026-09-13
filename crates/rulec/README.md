@@ -210,8 +210,8 @@ error[E101]: Completeness gap: some input matches no row
 `--format json`, where a finding is data — `where`, `witness`, `rows`, `fix` — with the keys
 fixed in English whatever language `--lang` puts the prose in. An unknown flag is refused
 with exit 2 rather than ignored. The formats are defined in
-[`docs/formats.md`](docs/formats.md), and the diagnostic ledger is `src/codes.rs`, of which
-[`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` output.
+[`docs/formats.md`](docs/formats.md). Every diagnostic is defined once, in `src/codes.rs`,
+and [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` output.
 
 ## In CI
 
@@ -233,7 +233,7 @@ the same job with `RULEC_LANG` set to their language.
 AGENTS.md         the procedure an agent follows
 DESIGN.md         the design record: every decision, and what was discarded with it
 docs/             reference.md (the grammar), formats.md (machine-readable output),
-                  generated-code.md, codes.md / codes.ja.md (the ledger, generated),
+                  generated-code.md, codes.md / codes.ja.md (every diagnostic, generated),
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy it into .claude/skills/
 src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
@@ -245,29 +245,23 @@ tests/            and the properties: threeway (every language agrees), readme, 
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget
 ```
 
-Everything in the corpus comes from **public information** — Japan Post's tariff, Yamato's
+Every one of those twelve rules comes from **public information** — Japan Post's tariff, Yamato's
 size classes, the coupon terms of Rakuten and Yahoo. None of it is private data.
 
 ```console
 $ cargo test          # 200 tests; python3, node, rustc and go are used where present
 ```
 
-## Where it is
+## Where it stands
 
-**All four stages, M0 to M3, are complete.** The corpus is 12 rules, and all 35 entries in the diagnostic ledger are implemented.
+Twelve rules taken from real published terms are checked, generated and run on every commit, and all 35 diagnostics are implemented. What is built:
 
 | | |
 |---|---|
-| **M0 the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
-| **M1 the generator** | Python, TypeScript, Rust and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
-| **M2 equivalence** | stand the legacy implementation up as a process and see whether it answers the same |
-| **M3 replay** | validate records, replay them, diff two versions, write the Markdown for a pull request |
-
-**All four were finished without a single record of real data**: M3's tests exercise
-everything through fixtures synthesised from the generated vectors. What is left is not a
-feature but an aiming problem. Whether the report can tell a legacy bug from a transcription
-slip from dirty records from a rounding difference, with a thousand mismatches in front of
-it, stays a hypothesis until it meets real data.
+| **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
+| **the generators** | Python, TypeScript, Rust and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
+| **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
@@ -295,7 +289,7 @@ branches, and the runner (DESIGN §15.13).
 | **[The documentation site](https://i2y.github.io/rulec/)** | all of this at length, in English and [日本語](https://i2y.github.io/rulec/ja/) |
 | [`AGENTS.md`](AGENTS.md) | the procedure for an agent: write → check → fix → generate → integrate → show the impact → ask a person |
 | [`docs/reference.md`](docs/reference.md) | the complete grammar |
-| [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | the diagnostic ledger, as `rulec explain --all` prints it |
+| [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | every diagnostic code, as `rulec explain --all` prints it |
 | [`docs/formats.md`](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, manifests, the adapter protocol |
 | [`docs/generated-code.md`](docs/generated-code.md) | the shape of the output, its guarantees, and how to call it |
 | `DESIGN.md` | why each decision was made and what was discarded with it (Japanese, 1,483 lines) |
@@ -313,4 +307,5 @@ where this tool differs.
 
 ## License
 
-Undecided.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT), at your option.

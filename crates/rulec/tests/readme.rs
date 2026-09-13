@@ -100,7 +100,12 @@ fn readmeが言う件数は実物と合っている() {
         .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
         .count();
     let codes = rulec::codes::ledger().len();
-    let want =
-        format!("The corpus is {corpus} rules, and all {codes} entries in the diagnostic ledger are implemented.");
+    let want = format!(
+        "{} rules taken from real published terms are checked, generated and run on every commit, and all {codes} diagnostics are implemented.",
+        match corpus {
+            12 => "Twelve".to_string(),
+            n => n.to_string(),
+        }
+    );
     assert!(md.contains(&want), "README の件数が実物と違う。正しくは: {want}");
 }
