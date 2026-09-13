@@ -111,7 +111,7 @@ Smallest reproduction
 Related codes: E102 E105 W111
 ```
 
-`rulec explain --all --format markdown` is the whole ledger — and is
+`rulec explain --all --format markdown` prints every one of them — and is
 exactly what [Diagnostics](codes.md) on this site is built from. Every
 reproduction in it is run by the test suite, so an example cannot rot
 into something that reads well and is no longer true.
@@ -189,5 +189,5 @@ against.
 
 ---
 
-[The diagnostics ledger](codes.md){ .md-button .md-button--primary }
+[All the diagnostic codes](codes.md){ .md-button .md-button--primary }
 [Generate and call](generate.md){ .md-button }

@@ -42,7 +42,7 @@ still means the same thing, and `v` says which version wrote the line.
 |---|---|
 | `v` | format version. `2` today |
 | `severity` | `error` or `warning` |
-| `code` | the stable code. `rulec explain <code>` has the ledger entry |
+| `code` | the stable code. `rulec explain <code>` describes it |
 | `file`, `line`, `column` | the primary position. `column` is 1-based |
 | `title`, `notes` | **prose** |
 | `where` | `file`, `line`, `column`, and `table` / `row` when the finding is about a table row. `row` is 1-based |

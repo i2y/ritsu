@@ -147,15 +147,15 @@ fn commands() -> Vec<Cmd> {
             name: "explain",
             args: "<CODE>",
             purpose: tr!(
-                "診断コードの台帳を引く。いつ出るか、どう直すか、最小の再現",
-                "look one diagnostic code up in the ledger: when it appears, how to fix it, the smallest reproduction"
+                "診断コードを一つ引く。いつ出るか、どう直すか、最小の再現",
+                "look one diagnostic code up: when it appears, how to fix it, the smallest reproduction"
             ),
             params: vec![(
                 "<CODE>",
                 tr!("`E101` のような診断コード。`--all` なら要らない", "a diagnostic code such as `E101`; not needed with `--all`"),
             )],
             flags: vec![
-                flag("--all", None, tr!("台帳の全部を出す", "print the whole ledger")),
+                flag("--all", None, tr!("全部のコードを出す", "print every code")),
                 flag("--format", Some("markdown|json"), tr!("出し方。既定は端末向けの text", "how to render it; the default is text for a terminal"))
                     .choices(&["markdown", "json"]),
             ],
@@ -867,8 +867,8 @@ fn explain(files: &[&String], a: &Args) -> ExitCode {
     };
     let Some(e) = rulec::codes::find(code) else {
         return refuse(tr!(
-            "`{code}` は台帳にないコードです。`rulec explain --all` に全部あります",
-            "`{code}` is not a code in the ledger; `rulec explain --all` lists every one"
+            "`{code}` は知らないコードです。`rulec explain --all` に全部あります",
+            "`{code}` is not a code this tool knows; `rulec explain --all` lists every one"
         ));
     };
     print!(

@@ -82,7 +82,7 @@ the exit code — not whether the output looks empty.
 
 ### Fixing, by code
 
-The full ledger is `rulec explain --all` ([docs/codes.md](docs/codes.md)). The ones you will
+Every code is in `rulec explain --all` ([docs/codes.md](docs/codes.md)). The ones you will
 meet while transcribing:
 
 - **E101 completeness gap** — some input matches no row. The witness names it. Add a row that
