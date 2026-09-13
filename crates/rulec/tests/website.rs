@@ -272,9 +272,10 @@ fn 図が見せている出力は本物と一致する() {
 }
 
 /// The two generated diagrams: the script that draws one, and the stem its four files share.
-const DIAGRAMS: [(&str, &str); 2] = [
+const DIAGRAMS: [(&str, &str); 3] = [
     ("tools/make_overview.py", "overview"),
     ("tools/make_checks.py", "checks"),
+    ("tools/make_stack.py", "stack"),
 ];
 
 /// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader
@@ -299,7 +300,8 @@ fn 図のurlは中身のハッシュを持っている() {
             })
             .collect();
         // Two per diagram: one for the dark scheme and one for the light.
-        assert_eq!(refs.len(), 4, "{lang}: 図の参照が 4 つでない: {refs:?}");
+        let want_refs = DIAGRAMS.len() * 2;
+        assert_eq!(refs.len(), want_refs, "{lang}: 図の参照が {want_refs} つでない: {refs:?}");
         for r in refs {
             assert!(
                 r.contains(&format!("?v={want}")),
