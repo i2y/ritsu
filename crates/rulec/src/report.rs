@@ -457,7 +457,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
     }
     o.push_str(&format!("\n**{}**\n", impact(rep, c)));
     o.push_str(&tr!(
-        "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 証人 |\n|---|---:|---|---|\n",
+        "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
         "\n#### Mismatch breakdown\n\n| Fired rows | Count | Difference | Witness |\n|---|---:|---|---|\n"
     ));
     for cl in clusters(rep, f, c) {

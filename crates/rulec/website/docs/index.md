@@ -31,13 +31,14 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=e2898623#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=e2898623#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=03abffe0#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=03abffe0#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
-and only a table whose boxes leave no gap and no overlap comes out as code. When there is a
-gap, what comes back is the input that falls through it.
+and only a table whose boxes leave no gap and no overlap comes out as code. The picture
+shows a gap, but **the same computation decides overlaps and rows nothing reaches** — the
+three are set side by side further down.
 
 
 ## What this is — a harness for an agent turning table-shaped rules into code
@@ -322,6 +323,19 @@ exhibits it.
 ---
 
 ## What gets proved
+
+The first three are **one computation**. Lay the rectangle each row covers over the input
+space, and ask whether anything is left uncovered, whether two rows cover the same stretch,
+and whether an earlier row takes a later row's stretch first. Same table in all three; one
+thing changed.
+
+<div class="rc-overview" markdown>
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=03abffe0#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=03abffe0#only-light)
+</div>
+
+The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They
+are held by the types and the declarations.
 
 | | |
 |---|---|

@@ -372,7 +372,7 @@ pub fn render_terse(d: &Diag) -> String {
         let _ = writeln!(out, "  --> {}", d.where_);
     }
     if let Some(w) = d.witness_line() {
-        let _ = writeln!(out, "  {}", tr!("証人: {w}", "witness: {w}"));
+        let _ = writeln!(out, "  {}", tr!("その入力: {w}", "witness: {w}"));
     }
     out
 }

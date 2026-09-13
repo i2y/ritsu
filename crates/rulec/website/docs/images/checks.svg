@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1082 262" role="img" aria-label="One check decides three defects. A gap (E101) is a stretch of the input space no row covers. An overlap (E105) is a stretch two rows both cover, under policy unique. An unreachable row (E102) is a row whose whole stretch the earlier rows take first, under policy first. All three are decided by the same arithmetic on the same rectangles, and the first two hand back the input that causes them." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<pattern id="both" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#e0b45c" stroke-width="2"/></pattern>
+<pattern id="dead" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#6b7590" stroke-width="2"/></pattern>
+</defs>
+<g transform="translate(20,20)">
+<rect x="0" y="0" width="330" height="222" rx="10" fill="#171b24" stroke="#2b3242"/>
+<text x="9" y="22" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Gap</text>
+<text x="321" y="22" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">E101</text>
+<text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy unique</text>
+<rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
+<rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<rect x="192.0" y="104.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<rect x="116.6" y="106.0" width="73.4" height="44.0" rx="3" fill="none" stroke="#e0b45c" stroke-width="1" stroke-dasharray="3 2.5"/>
+<circle cx="125.1" cy="128.0" r="4.5" fill="#e0b45c" stroke="#1e2331" stroke-width="1.5"/>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
+<text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
+<text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>
+<text x="9" y="190" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">An input that matches no row:</text>
+<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Remote, Weight = 2001g</text>
+</g>
+<g transform="translate(376,20)">
+<rect x="0" y="0" width="330" height="222" rx="10" fill="#171b24" stroke="#2b3242"/>
+<text x="9" y="22" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Overlap</text>
+<text x="321" y="22" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">E105</text>
+<text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy unique</text>
+<rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
+<rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<rect x="114.6" y="104.0" width="206.4" height="24.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="217.8" y="120.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<rect x="114.6" y="128.0" width="77.4" height="24.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="153.3" y="144.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1500円</text>
+<rect x="114.6" y="104.0" width="77.4" height="48.0" fill="url(#both)" fill-opacity="0.42" stroke="#e0b45c" stroke-width="1"/>
+<circle cx="125.1" cy="128.0" r="4.5" fill="#e0b45c" stroke="#1e2331" stroke-width="1.5"/>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
+<text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
+<text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>
+<text x="9" y="190" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Both rows match:</text>
+<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Remote, Weight = 2001g</text>
+</g>
+<g transform="translate(732,20)">
+<rect x="0" y="0" width="330" height="222" rx="10" fill="#171b24" stroke="#2b3242"/>
+<text x="9" y="22" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Unreachable row</text>
+<text x="321" y="22" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">E102</text>
+<text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy first</text>
+<rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
+<rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<rect x="192.0" y="104.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<rect x="114.6" y="104.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
+<rect x="127.5" y="110.0" width="51.599999999999994" height="36.0" rx="3" fill="url(#dead)" fill-opacity="0.5" stroke="#6b7590" stroke-width="1" stroke-dasharray="3 2.5"/>
+<text x="153.3" y="131.5" font-size="10" font-weight="400" text-anchor="middle" fill="#98a1b8">row 7</text>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
+<text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
+<text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>
+<text x="9" y="190" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">row 7 never matches</text>
+<text x="9" y="207" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">the earlier rows take all of this row's range first</text>
+</g>
+</svg>

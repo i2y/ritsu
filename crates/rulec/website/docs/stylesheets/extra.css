@@ -174,8 +174,9 @@
   border-color: var(--rc-mark-dark);
 }
 
-/* ---- the opening diagram ------------------------------------------- */
-/* Three panels side by side become a thumbnail on a phone. Below the width where the
+/* ---- the generated diagrams ----------------------------------------- */
+/* Both of them are panels side by side, which becomes a thumbnail on a phone. Below the
+   width where the
    labels stop being legible, let it scroll sideways in its own box rather than shrink —
    the page itself never scrolls sideways.
 

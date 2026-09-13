@@ -1106,7 +1106,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                 match reg.row_text(&hole, t) {
                     Some(row) => d
                         .note(tr!(
-                            "足す行の形: `{row}`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのはこの証人の穴だけで、まだ残っていれば次の証人が出ます。",
+                            "足す行の形: `{row}`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
                             "The shape of the row to add: `{row}`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one."
                         ))
                         .fix(crate::diag::FixKind::AddRow, row),

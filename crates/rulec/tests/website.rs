@@ -232,42 +232,50 @@ fn 図が見せている出力は本物と一致する() {
         eprintln!("注意: python3 が無いので飛ばした");
         return;
     }
-    // Regenerating writes the four SVGs, so their bytes are kept and put back: a test has
-    // no business leaving the working tree different from how it found it.
-    let images = root().join("website/docs/images");
-    let files: Vec<std::path::PathBuf> = std::fs::read_dir(&images)
-        .unwrap()
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("overview")))
-        .collect();
-    let before: Vec<(std::path::PathBuf, Vec<u8>)> =
-        files.iter().map(|p| (p.clone(), std::fs::read(p).unwrap())).collect();
+    for (script, prefix) in DIAGRAMS {
+        // Regenerating writes the four SVGs, so their bytes are kept and put back: a test
+        // has no business leaving the working tree different from how it found it.
+        let images = root().join("website/docs/images");
+        let files: Vec<std::path::PathBuf> = std::fs::read_dir(&images)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(prefix)))
+            .collect();
+        let before: Vec<(std::path::PathBuf, Vec<u8>)> =
+            files.iter().map(|p| (p.clone(), std::fs::read(p).unwrap())).collect();
 
-    let o = Command::new("python3")
-        .current_dir(root().join("website"))
-        .args(["tools/make_overview.py", "--verify", env!("CARGO_BIN_EXE_rulec")])
-        .output()
-        .expect("python3 を起動できない");
-    let stale: Vec<String> = before
-        .iter()
-        .filter(|(p, was)| std::fs::read(p).ok().as_ref() != Some(was))
-        .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
-        .collect();
-    for (p, was) in &before {
-        let _ = std::fs::write(p, was);
+        let o = Command::new("python3")
+            .current_dir(root().join("website"))
+            .args([script, "--verify", env!("CARGO_BIN_EXE_rulec")])
+            .output()
+            .expect("python3 を起動できない");
+        let stale: Vec<String> = before
+            .iter()
+            .filter(|(p, was)| std::fs::read(p).ok().as_ref() != Some(was))
+            .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        for (p, was) in &before {
+            let _ = std::fs::write(p, was);
+        }
+
+        assert!(
+            o.status.success(),
+            "図が見せている出力が実物とずれています。`python3 {script}` で作り直してください:\n{}{}",
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        );
+        assert!(
+            stale.is_empty(),
+            "図が古いままです。`python3 {script}` で作り直してください: {stale:?}"
+        );
     }
-
-    assert!(
-        o.status.success(),
-        "図が見せている出力が実物とずれています。`python3 tools/make_overview.py` で作り直してください:\n{}{}",
-        String::from_utf8_lossy(&o.stdout),
-        String::from_utf8_lossy(&o.stderr)
-    );
-    assert!(
-        stale.is_empty(),
-        "図が古いままです。`python3 tools/make_overview.py` で作り直してください: {stale:?}"
-    );
 }
+
+/// The two generated diagrams: the script that draws one, and the stem its four files share.
+const DIAGRAMS: [(&str, &str); 2] = [
+    ("tools/make_overview.py", "overview"),
+    ("tools/make_checks.py", "checks"),
+];
 
 /// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader
 /// who has been to the site before keeps seeing the previous picture — the filename never
@@ -278,14 +286,20 @@ fn 図のurlは中身のハッシュを持っている() {
     let want = diagram_version();
     for lang in ["docs", "docs-ja"] {
         let page = read(&format!("website/{lang}/index.md"));
-        let refs: Vec<&str> = page
-            .match_indices("images/overview")
-            .map(|(i, _)| {
-                let rest = &page[i..];
-                &rest[..rest.find(')').unwrap_or(rest.len())]
+        let refs: Vec<&str> = DIAGRAMS
+            .iter()
+            .flat_map(|(_, stem)| {
+                let mark = format!("images/{stem}");
+                page.match_indices(&mark)
+                    .map(|(i, _)| {
+                        let rest = &page[i..];
+                        &rest[..rest.find(')').unwrap_or(rest.len())]
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
-        assert_eq!(refs.len(), 2, "{lang}: 図の参照が 2 つでない: {refs:?}");
+        // Two per diagram: one for the dark scheme and one for the light.
+        assert_eq!(refs.len(), 4, "{lang}: 図の参照が 4 つでない: {refs:?}");
         for r in refs {
             assert!(
                 r.contains(&format!("?v={want}")),
@@ -295,11 +309,16 @@ fn 図のurlは中身のハッシュを持っている() {
     }
 }
 
-/// The eight hex characters stamped into those URLs: a hash over the two dark SVGs, which
-/// change together with their light twins.
+/// The eight hex characters stamped into those URLs: a hash over every dark SVG, which
+/// changes together with its light twin. One stamp covers both diagrams, so editing one
+/// costs the other a single refetch — cheaper than two stamps to keep straight.
 fn diagram_version() -> String {
-    let mut bytes = read("website/docs/images/overview-ja.svg").into_bytes();
-    bytes.extend(read("website/docs/images/overview.svg").into_bytes());
+    let mut bytes = Vec::new();
+    for (_, stem) in DIAGRAMS {
+        for lang in ["-ja", ""] {
+            bytes.extend(read(&format!("website/docs/images/{stem}{lang}.svg")).into_bytes());
+        }
+    }
     // A small, dependency-free digest. It only has to change when the files do.
     let mut h: u64 = 0xcbf29ce484222325;
     for b in bytes {

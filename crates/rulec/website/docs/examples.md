@@ -69,7 +69,7 @@ inputs
 outputs
   送料(fee) : money[円, incl_tax]  round up(10円)
 
-# 真偽の定義。原子は入力への単項テストなので、DNF 展開で箱和に落ちる（§5.3、§6.2）
+# 真偽の定義。条件は入力ひとつを見るだけなので、展開すれば区画の足し合わせになる（§5.3、§6.2）
 define 大口(bulk) : bool = 注文金額 >= 3万円
 
 table 基本送料(base_fee)

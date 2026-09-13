@@ -124,7 +124,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
                 flag("--show-shadow", None, tr!("件数に畳んである隠れ対も全部並べる", "list every shadow pair, including the ones folded into the count")),
-                flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・証人）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
+                flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・その入力）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
                 flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった発見を伏せる", "hide findings that were already present at that git revision")),
                 flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(rulec::region::DEFAULT_BUDGET.to_string()),
             ],
@@ -382,7 +382,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
-                (1, tr!("不一致がある（件数・差・証人つきで出る）", "there are mismatches (reported with counts, differences and witnesses)")),
+                (1, tr!("不一致がある（件数・差・入力例つきで出る）", "there are mismatches (reported with counts, differences and witnesses)")),
                 (2, tr!("引数の誤り、アダプタを起動できない", "bad arguments, or the adapter could not be started")),
             ],
             examples: vec![

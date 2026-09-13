@@ -132,7 +132,7 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
         }
         if raw.is_int() {
             d.notes.push(tr!(
-                "証人をいくつか試しましたが、この出力に端数は生まれませんでした（表から引いた額がそのまま出るか、式の中で既に丸めているためです）。",
+                "入力をいくつか試しましたが、この出力に端数は生まれませんでした（表から引いた額がそのまま出るか、式の中で既に丸めているためです）。",
                 "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it)."
             ));
             d.notes.push(tr!(
