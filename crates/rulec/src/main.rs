@@ -143,6 +143,32 @@ fn commands() -> Vec<Cmd> {
             ],
         },
         Cmd {
+            name: "explain",
+            args: "<CODE>",
+            purpose: tr!(
+                "診断コードの台帳を引く。いつ出るか、どう直すか、最小の再現",
+                "look one diagnostic code up in the ledger: when it appears, how to fix it, the smallest reproduction"
+            ),
+            params: vec![(
+                "<CODE>",
+                tr!("`E101` のような診断コード。`--all` なら要らない", "a diagnostic code such as `E101`; not needed with `--all`"),
+            )],
+            flags: vec![
+                flag("--all", None, tr!("台帳の全部を出す", "print the whole ledger")),
+                flag("--format", Some("markdown|json"), tr!("描画の形。既定は端末向けの text", "how to render it; the default is text for a terminal"))
+                    .choices(&["markdown", "json"]),
+            ],
+            exits: vec![
+                (0, tr!("引けた", "found")),
+                (2, tr!("知らないコード、または引数の誤り", "unknown code, or bad arguments")),
+            ],
+            examples: vec![
+                "rulec explain E101".into(),
+                "rulec explain --all --format json".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "fmt",
             args: "<file.rule>...",
             purpose: tr!(
@@ -466,7 +492,10 @@ fn help_cmd(c: &Cmd) -> String {
     }
 
     if !c.codes.is_empty() {
-        o.push_str(&tr!("\n出しうる診断:\n  ", "\nDiagnostics it can print:\n  "));
+        o.push_str(&tr!(
+            "\n出しうる診断（`rulec explain <CODE>` が引きます）:\n  ",
+            "\nDiagnostics it can print (`rulec explain <CODE>` looks one up):\n  "
+        ));
         o.push_str(&c.codes.join(" "));
         o.push('\n');
     }
@@ -704,7 +733,7 @@ fn main() -> ExitCode {
         a.pos.iter().flat_map(|x| expand(x)).collect()
     };
     let files: Vec<&String> = expanded.iter().collect();
-    if files.is_empty() && !cmd.args.is_empty() {
+    if files.is_empty() && !cmd.args.is_empty() && !a.has("--all") {
         return need_args(cmd);
     }
     let json = a.get("--format") == Some("json");
@@ -721,6 +750,7 @@ fn main() -> ExitCode {
             };
             check(&files, json, a.has("--show-shadow"), a.get("--diff-base"), budget)
         }
+        "explain" => explain(&files, &a),
         "fmt" => fmt(&files, a.has("--check")),
         "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
         "adapter" => {
@@ -767,6 +797,45 @@ fn main() -> ExitCode {
         "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check")),
         _ => unreachable!("the table and the dispatch are the same list"),
     }
+}
+
+/// §11: the ledger of codes, rendered. `docs/codes.md` and `docs/codes.ja.md` are
+/// `--all --format markdown` in the two languages, checked in and held to this output by a
+/// test, so there is no second place where a code's meaning is written down.
+fn explain(files: &[&String], a: &Args) -> ExitCode {
+    let fmt = a.get("--format");
+    if a.has("--all") {
+        print!(
+            "{}",
+            match fmt {
+                Some("markdown") => rulec::codes::markdown_all(),
+                Some("json") => rulec::codes::json_all(),
+                _ => rulec::codes::text_all(),
+            }
+        );
+        return ExitCode::from(0);
+    }
+    let Some(code) = files.first() else {
+        return refuse(tr!(
+            "`rulec explain <CODE>` か `rulec explain --all` です",
+            "it is `rulec explain <CODE>` or `rulec explain --all`"
+        ));
+    };
+    let Some(e) = rulec::codes::find(code) else {
+        return refuse(tr!(
+            "`{code}` は台帳にないコードです。`rulec explain --all` に全部あります",
+            "`{code}` is not a code in the ledger; `rulec explain --all` lists every one"
+        ));
+    };
+    print!(
+        "{}",
+        match fmt {
+            Some("markdown") => rulec::codes::render_markdown(&e),
+            Some("json") => format!("{}\n", rulec::codes::render_json(&e)),
+            _ => rulec::codes::render_text(&e),
+        }
+    );
+    ExitCode::from(0)
 }
 
 /// §1.5: the one and only formatter. `--check` is for CI: it lists the files that need

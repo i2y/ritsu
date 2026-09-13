@@ -1,7 +1,6 @@
-//! A minimal JSON reader (for the record format of §10.2).
+//! A minimal JSON reader and writer (the record format of §10.2, and every `--format json`).
 //!
-//! The policy is to add no external dependencies (§12), so we carry our own. Writing is done
-//! by each caller assembling the canonical form, so only reading lives here.
+//! The policy is to add no external dependencies (§12), so we carry our own.
 //!
 //! The job of `fixtures lint` is to "point precisely at the broken record", and naive string
 //! extraction is not enough for that: a single string value containing `"送料":` is all it
@@ -278,6 +277,93 @@ fn utf8_len(b: u8) -> usize {
         0xC0..=0xDF => 2,
         0xE0..=0xEF => 3,
         _ => 4,
+    }
+}
+
+// ── Writing ─────────────────────────────────────────────────────────────
+//
+// `Json::Obj` is a `BTreeMap`, which sorts its keys; a rendered object should keep the
+// order its writer chose, so output is built here instead. Every `--format json` surface
+// goes through this, which is what keeps the escaping in one place.
+
+/// The inside of a JSON string, escaped. Control characters are written as `\uXXXX`;
+/// everything else, Japanese included, is passed through as UTF-8.
+pub fn esc(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            '\n' => o.push_str("\\n"),
+            '\r' => o.push_str("\\r"),
+            '\t' => o.push_str("\\t"),
+            c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+            c => o.push(c),
+        }
+    }
+    o
+}
+
+/// A quoted JSON string.
+pub fn quote(s: &str) -> String {
+    format!("\"{}\"", esc(s))
+}
+
+/// A JSON array of already-encoded values.
+pub fn arr<S: AsRef<str>>(items: &[S]) -> String {
+    format!("[{}]", items.iter().map(|s| s.as_ref()).collect::<Vec<_>>().join(","))
+}
+
+/// A JSON array of strings.
+pub fn strs<S: AsRef<str>>(items: &[S]) -> String {
+    arr(&items.iter().map(|s| quote(s.as_ref())).collect::<Vec<_>>())
+}
+
+/// One object, written in the order the fields are added.
+#[derive(Default)]
+pub struct Obj {
+    parts: Vec<String>,
+}
+
+impl Obj {
+    pub fn new() -> Obj {
+        Obj::default()
+    }
+    /// An already-encoded value.
+    pub fn raw(mut self, k: &str, v: impl AsRef<str>) -> Obj {
+        self.parts.push(format!("{}:{}", quote(k), v.as_ref()));
+        self
+    }
+    pub fn str(self, k: &str, v: impl AsRef<str>) -> Obj {
+        let q = quote(v.as_ref());
+        self.raw(k, q)
+    }
+    pub fn int(self, k: &str, v: impl Into<i128>) -> Obj {
+        let n: i128 = v.into();
+        self.raw(k, n.to_string())
+    }
+    pub fn bool(self, k: &str, v: bool) -> Obj {
+        self.raw(k, if v { "true" } else { "false" })
+    }
+    /// Omitted entirely when `None`. A field that is absent and a field that is `null` are
+    /// different statements, and the readers of these files act on the difference.
+    pub fn opt_str(self, k: &str, v: Option<impl AsRef<str>>) -> Obj {
+        match v {
+            Some(v) => self.str(k, v),
+            None => self,
+        }
+    }
+    pub fn opt_raw(self, k: &str, v: Option<impl AsRef<str>>) -> Obj {
+        match v {
+            Some(v) => self.raw(k, v),
+            None => self,
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+    pub fn finish(self) -> String {
+        format!("{{{}}}", self.parts.join(","))
     }
 }
 

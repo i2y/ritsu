@@ -372,6 +372,16 @@ $ rulec fmt --check rules/*.rule                  # gofmt と同じ運用
 
 どのコマンドも `rulec <cmd> --help`（`rulec help <cmd>` も同じ）が、**目的・引数・フラグ（値と既定）・exit code の意味・走らせられる例を二つ・出しうる診断コード**を出します。`rulec --help` が一覧、`rulec --version` が版です。**知らないフラグは黙って無視せず、exit 2 で止まります** — `--shwo-shadow` が通って 0 が返ると、要求が効いたと信じて次へ進んでしまうからです。
 
+診断コードは `rulec explain` が引きます。**いつ出るか・どう直すか（書き換え後の形まで）・最小の再現 `.rule`・関係するコード**が出ます。
+
+```console
+$ rulec explain E101
+$ rulec explain E101 --format json      # 機械で読む形
+$ rulec explain --all --format markdown # 台帳の全部
+```
+
+台帳は `src/codes.rs` の一枚で、`docs/codes.md`（英）と `docs/codes.ja.md`（日）は **`rulec explain --all --format markdown` の出力そのもの**です（手で編集しません。テストが同一性を確かめています）。台帳の全項目には**走る最小の再現**が付いていて、それが本当にそのコードを出すことも毎回検査しています。
+
 文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ英語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
 
 ```console
@@ -534,6 +544,8 @@ exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内
 
 ```
 DESIGN.md         設計文書。決定と、何を捨てたかの記録
+docs/codes.md     診断コードの台帳（生成物。rulec explain --all の出力）
+docs/codes.ja.md  同じ台帳の日本語
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
@@ -548,6 +560,7 @@ tests/budget.rs   検査予算を決めた合成ベンチ
 tests/golden_en.rs 同じ診断の英語スナップショット（tests/golden/en/）
 tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替に従うこと
 tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋は既定の英語）
+tests/codes.rs    診断台帳が単一のソースであること（全項目の再現が走る）
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```

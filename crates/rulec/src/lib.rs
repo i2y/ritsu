@@ -26,6 +26,7 @@ pub mod fixtures;
 pub mod fmt;
 pub mod i18n;
 pub mod codegen;
+pub mod codes;
 pub mod coverage;
 pub mod json;
 pub mod kw;
