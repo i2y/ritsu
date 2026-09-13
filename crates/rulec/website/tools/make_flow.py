@@ -1,43 +1,60 @@
 #!/usr/bin/env python3
-"""Draw the one diagram the front page needs: who hands what to whom.
+"""The front page's one diagram: who makes what, and who takes it.
 
-Four files come from one layout — two languages times two colour schemes — so the
-geometry cannot drift between them and only the words change. Run it after editing
-the text below; the SVGs are committed, because building the site must not need
-Python.
+Four files come from one layout - two languages times two colour schemes - so
+the geometry cannot drift between them; only the words change. Run it after
+editing the text below. The SVGs are committed because building the site must
+not need Python.
 
     python3 tools/make_flow.py
 
-Every actor box states what it takes in and what it gives out, and every arrow is
-labelled with **the thing that moves**, not with a verb — a verb on an arrow leaves
-the reader to guess what was actually passed. The forward arrows also carry the
-command that causes them, because rulec does not act on its own: the agent runs it.
+The picture has two kinds of shape and nothing else:
 
-No line crosses another:
+  * actors - the agent, rulec, a person - are cards: a filled surface with a
+    coloured bar along the top and a bold name;
+  * artifacts - the things that move between them - are sheets: a thin outline
+    with a folded corner, the silhouette of a document.
 
-    documents -> agent -> rulec -> generated code
-                   ^        |
-                   |        +-- (2) the diagnosis ---------+
-                   |        |
-                   |        +-- (3) what it cannot decide -> person
-                   +--------------- (4) the answer ---------+
+Every arrow runs from an actor to a sheet or from a sheet to an actor, so
+"this actor produces this thing, which that actor consumes" is the only
+sentence an arrow can say. There are three colours for the three paths: grey
+for what enters and leaves the whole system, indigo for the loop between the
+agent and rulec, amber for the detour through a person.
+
+    sources -> Agent -> table -> rulec -> Python and Go
+                 ^                |
+                 +-- diagnosis <--+          round and round, until it passes
+                 ^                |
+             answer <- Person <- question     only what the tool cannot decide
+
+No line crosses another: the loop lives between the two cards, the question
+drops out of the bottom of rulec, the answer climbs into the bottom of the
+agent, and the person sits between those two verticals.
 """
 
 import pathlib
 
-W, H = 1000, 600
+W = 1000
 
 # --- palettes ---------------------------------------------------------------
+#
+# "actor" is the card surface, "sheet" the paper of an artifact. On the light
+# page the sheets are a shade greyer than the cards, on the dark page a shade
+# lighter: either way the two kinds of shape differ in fill as well as in
+# outline, so the distinction survives a small rendering. The amber is the
+# second accent: everything on the path through a person carries it.
 
 DARK = dict(
-    box="#171b24", edge="#2b3242", muted_box="#12151c", muted_edge="#242a37",
-    ink="#e8ebf4", dim="#98a1b8", accent="#8e9cff", line="#4a5468",
-    rule="#2b3242", chip="#c3cae0",
+    ink="#e8ebf4", dim="#98a1b8",
+    actor="#171b24", actor_edge="#2b3242",
+    sheet="#1e2331", sheet_edge="#3a4257", fold="#2b3242",
+    accent="#8e9cff", human="#e0b45c", neutral="#6b7590",
 )
 LIGHT = dict(
-    box="#ffffff", edge="#dfe3ee", muted_box="#f4f6fb", muted_edge="#e2e6f2",
-    ink="#10131a", dim="#5b6478", accent="#3d55d4", line="#9aa3ba",
-    rule="#e6e9f3", chip="#404a60",
+    ink="#10131a", dim="#5b6478",
+    actor="#ffffff", actor_edge="#dfe3ee",
+    sheet="#f5f6fa", sheet_edge="#cdd3e2", fold="#e3e7f1",
+    accent="#4457d8", human="#9c6508", neutral="#8b94ab",
 )
 
 FONT = ('-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", '
@@ -46,181 +63,261 @@ MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 # --- words ------------------------------------------------------------------
 #
-# Each actor is (title, what it does, what it takes in, what it gives out).
+# Cards are (name, lines); sheets are (title, lines) with an optional tag - the
+# file format, set in monospace at the top right. The line breaks are chosen by
+# hand for each language because SVG cannot wrap; fit() below refuses to write
+# a file where a line would leave its shape.
 
 JA = dict(
-    alt="エージェントは規約や Excel を読んで表（.rule）を書き、rulec check にかける。"
-        "rulec は診断（どこが・どう直すか・それを起こす入力）を返し、道具では決められないことは"
-        "具体例つきの質問として人に渡る。人は金額と丸めの向きだけを決める。"
-        "表が通ったら rulec gen が依存ゼロの Python と Go を出す。",
-    in_="入", out_="出",
-    source=["規約の文書", "Excel", "旧実装"],
-    agent=("エージェント", "読んで書く・直す", "規約・診断・人の答え", "表（.rule）"),
-    rulec=("rulec", "7 つを証明する", "表（.rule）", "診断・生成物"),
-    person=("人", "業務の判断だけをする", "具体例つきの質問", "答え・承認"),
-    out_box=("Python と Go", ["依存ゼロの関数", "両言語で同じ答え"]),
-    a_read="読む",
-    a_check=("rulec check", "① 表（.rule）"),
-    a_gen=("rulec gen", "⑤ 生成物"),
-    r_fix=["② 診断 ＝ どこが・どう直すか・", "それを起こす入力 → 直して ① へ"],
-    r_ask=["③ 道具では決められないこと", "＝ 具体例つきの質問"],
-    r_answer=["④ 答え（金額・丸めの向き）", "→ 表に書いて ① へ"],
-    foot_label="このループが終わったとき、手に入るもの",
-    foot=[("抜けも矛盾もない表", "人が承認できる形で"),
-          ("証明済みの Python と Go", "依存ゼロ・両言語で同じ答え"),
-          ("入れる前に分かる影響", "何件が、いくら動くか")],
+    alt="エージェントが資料を読んで表（.rule）を書き、rulec check にかける。"
+        "rulec は診断（どこが・どう直すか・それを起こす入力）を返し、エージェントが直して、"
+        "表が通るまで繰り返す。道具では決められないことだけが具体例つきの質問として人に渡り、"
+        "人は金額と丸めの向きを答える。表が通ると rulec gen が証明済みの Python と Go を出す。",
+    agent=("エージェント", ["資料を読む", "表を書く", "診断のとおりに直す", "決められないことは人へ"]),
+    rulec=("rulec", ["7 つを証明する：", "完全性・重なり", "当たらない行・単位", "丸め・オーバーフロー", "例が通ること"]),
+    person=("人", ["金額を決める", "丸めの向きを決める", "表を承認する", "コードは書かない"]),
+    sources=("元の資料", ["規約の文書", "Excel", "旧実装"]),
+    table=("表", ["1 規則 = 1 表"], ".rule"),
+    diagnosis=("診断", ["どこが", "どう直すか", "それを起こす入力"], "JSON"),
+    question=("具体例つきの質問", ["「山梨県あての S60 の", "運賃はいくらですか」"]),
+    answer=("答え", ["金額", "丸めの向き"]),
+    code=("Python と Go", ["証明済み", "依存ゼロ", "両言語で同じ答え"]),
+    check="rulec check", gen="rulec gen",
+    loop="通るまで繰り返す", passed="通ったら",
+    only="決められないことだけ", into="表に書き込む",
 )
 
 EN = dict(
-    alt="The agent reads documents and writes the table, then runs rulec check. rulec "
-        "returns the diagnosis — where, how to fix it, and an input that shows the problem. "
-        "What the tool cannot decide goes to a person as a question with a concrete case; "
-        "the person decides only amounts and rounding. Once the table passes, rulec gen "
-        "emits Python and Go with no dependencies.",
-    in_="in", out_="out",
-    source=["Policy documents", "Spreadsheets", "Legacy code"],
-    agent=("Agent", "reads, writes, fixes", "docs, diagnosis, answers", "the table (.rule)"),
-    rulec=("rulec", "proves the seven", "the table (.rule)", "diagnosis, code"),
-    person=("Person", "only business decisions", "a concrete question", "the answer, approval"),
-    out_box=("Python & Go", ["plain functions", "zero dependencies", "same answer in both"]),
-    a_read="read",
-    a_check=("rulec check", "① the table"),
-    a_gen=("rulec gen", "⑤ the code"),
-    r_fix=["② the diagnosis — where, how to fix,", "an input that shows it → fix, then ①"],
-    r_ask=["③ what the tool cannot decide", "= a question with a real case"],
-    r_answer=["④ the answer (amount, rounding)", "→ into the table, then ①"],
-    foot_label="What you have when the loop ends",
-    foot=[("A table with no gaps", "in a shape a person can approve"),
-          ("Proved Python and Go", "zero deps, same answer in both"),
-          ("The impact, before you deploy", "how many change, and by how much")],
+    alt="The agent reads the sources and writes the table (.rule), then runs rulec check. "
+        "rulec returns a diagnosis - where, how to fix it, and an input that shows the "
+        "problem - and the agent fixes the table until it passes. Only what the tool cannot "
+        "decide reaches a person, as a question with a concrete case; the person answers "
+        "with an amount or a rounding direction. Once the table passes, rulec gen emits "
+        "proved Python and Go.",
+    agent=("Agent", ["reads the sources", "writes the table", "fixes what rulec finds", "asks a person the rest"]),
+    rulec=("rulec", ["proves seven things:", "completeness, overlap,", "dead rows, units,", "rounding, overflow,", "the worked examples"]),
+    person=("Person", ["decides amounts", "and which way to round", "approves the table", "never writes code"]),
+    sources=("Sources", ["policy documents", "spreadsheets", "legacy code"]),
+    table=("Table", ["1 rule = 1 table"], ".rule"),
+    diagnosis=("Diagnosis", ["where", "how to fix it", "an input that shows it"], "JSON"),
+    question=("A concrete question", ["“What is the fee to 山梨県", "at size S60?”"]),
+    answer=("Answer", ["an amount,", "which way to round"]),
+    code=("Python & Go", ["already proved", "zero dependencies", "the same answer", "in both languages"]),
+    check="rulec check", gen="rulec gen",
+    loop="until it passes", passed="once it passes",
+    only="only what it cannot decide", into="into the table",
 )
 
 # --- geometry ---------------------------------------------------------------
+#
+# One horizontal line carries the whole pipeline - sources, agent, table,
+# rulec, code - at Y_IN, so the eye reads it left to right as one sentence.
+# The loop is the pair of opposite arrows between the two cards: the table
+# goes right along Y_IN, the diagnosis comes back left along Y_BACK. The
+# person's band is below, read right to left like every return path.
 
-ROW_Y, ROW_H = 64, 132
-S = (24, ROW_Y, 126, ROW_H)          # the documents that start it
-A = (238, ROW_Y, 210, ROW_H)         # agent
-R = (536, ROW_Y, 210, ROW_H)         # rulec
-G = (834, ROW_Y, 142, ROW_H)         # what comes out
-P = (550, 300, 240, ROW_H)           # person
-MID = ROW_Y + ROW_H // 2             # 130 — where the row-1 arrows run
-BOT = ROW_Y + ROW_H                  # 196 — the underside of row 1
+TOP = 20
+Y_IN, Y_BACK = 70, 162               # the two horizontal lines of the loop
+CARD_H = 196                         # tall enough to receive both lines
+AGENT = (166, TOP, 160, CARD_H)
+RULEC = (606, TOP, 160, CARD_H)
+SOURCES = (20, Y_IN - 50, 116, 100)  # what goes in, level with the pipeline
+CODE = (860, Y_IN - 50, 120, 100)    # what comes out, same
+TABLE = (410, Y_IN - 25, 112, 50)
+DIAG = (391, Y_BACK - 40, 150, 80)
+LOOP_Y = 113                         # the caption between the two lines
 
-FIX_X, FIX_Y, FIX_IN = 580, 242, 340   # rulec -> agent: the diagnosis
-ASK_X = 680                            # rulec -> person: what it cannot decide
-ANS_Y, ANS_IN = 366, 300               # person -> agent: the answer
+Y_BAND = 306                         # centre line of the person's band
+X_ASK = 686                          # the question drops from the middle of rulec
+X_ANS = 246                          # the answer climbs into the middle of the agent
+QUESTION = (X_ASK - 85, Y_BAND - 35, 170, 70)
+ANSWER = (X_ANS - 70, Y_BAND - 35, 140, 70)
+PERSON = (375, Y_BAND - 74, 170, 148)
+H = PERSON[1] + PERSON[3] + TOP
 
-FOOT_Y, FOOT_H = 482, 88
+CARD_RX, BAR = 10, 5                 # card corners; the coloured bar on top
+FOLD, PAD = 12, 9                    # the sheet's dog-ear; text inset in both shapes
+LINE_W = 1.8
+
+
+# --- measuring text ---------------------------------------------------------
+
+def width(s, size, weight=400, mono=False):
+    """A rough advance width - enough to catch a line that will not fit.
+
+    Ideographs and kana are one em square; Latin averages about half an em,
+    more for capitals, less for punctuation; bold runs a little wider. The
+    renders are still looked at, this only turns an overflow into an error
+    instead of a picture with text sticking out of a box."""
+    if mono:
+        return len(s) * 0.6 * size
+    bold = 1.08 if weight >= 600 else 1.0
+    w = 0.0
+    for ch in s:
+        o = ord(ch)
+        if o > 0x2E7F:                   # CJK, kana, full-width forms, 「」
+            w += 1.0
+        elif ch == " ":
+            w += 0.27
+        elif ch in ",.;:'!|“”":
+            w += 0.28
+        elif ch in "()[]-=&":
+            w += 0.36 * bold
+        elif ch.isupper():
+            w += 0.66 * bold
+        elif ch.isdigit():
+            w += 0.56 * bold
+        else:
+            w += 0.5 * bold
+    return w * size
+
+
+def fit(s, size, avail, weight=400, mono=False):
+    if width(s, size, weight, mono) > avail:
+        raise ValueError(f"{s!r} needs {width(s, size, weight, mono):.0f}, has {avail}")
 
 
 def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def box(x, y, w, h, c, muted=False):
-    f, e = (c["muted_box"], c["muted_edge"]) if muted else (c["box"], c["edge"])
-    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" '
-            f'fill="{f}" stroke="{e}"/>')
+# --- primitives -------------------------------------------------------------
 
-
-def text(x, y, s, c, size=13, fill=None, weight=400, anchor="middle", font=None):
-    f = f' font-family=\'{font}\'' if font else ""
+def text(x, y, s, size, fill, weight=400, anchor="middle", mono=False):
+    fam = f' font-family="{MONO}"' if mono else ""
     return (f'<text x="{x}" y="{y}" font-size="{size}" font-weight="{weight}" '
-            f'text-anchor="{anchor}" fill="{fill or c["ink"]}"{f}>{esc(s)}</text>')
+            f'text-anchor="{anchor}" fill="{fill}"{fam}>{esc(s)}</text>')
 
 
-def actor(rect, spec, c, t):
-    """An actor: what it is, what it does, and — the point of the picture — what it
-    takes in and what it gives out."""
+def card(rect, spec, bar, c, cid):
+    """An actor. The bar along the top is the colour of the path it belongs
+    to, which is the only decoration a card gets; the bold name does the rest.
+    A clipPath rounds the bar's corners with the card's."""
     x, y, w, h = rect
-    title, action, takes, gives = spec
+    name, lines = spec
     cx = x + w / 2
-    o = [box(x, y, w, h, c),
-         text(cx, y + 27, title, c, size=16.5, weight=700),
-         text(cx, y + 47, action, c, size=11, fill=c["dim"]),
-         f'<line x1="{x + 14}" y1="{y + 60}" x2="{x + w - 14}" y2="{y + 60}" '
-         f'stroke="{c["rule"]}" stroke-width="1"/>']
-    for i, (label, value) in enumerate([(t["in_"], takes), (t["out_"], gives)]):
-        yy = y + 80 + i * 21
-        o.append(f'<text x="{x + 14}" y="{yy}" font-size="10.5" text-anchor="start" '
-                 f'fill="{c["accent"]}">{esc(label)}'
-                 f'<tspan dx="7" font-size="11" fill="{c["dim"]}">{esc(value)}</tspan></text>')
+    fit(name, 17, w - 2 * PAD, 700)
+    o = [f'<clipPath id="{cid}"><rect x="{x}" y="{y}" width="{w}" height="{h}" '
+         f'rx="{CARD_RX}"/></clipPath>',
+         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{CARD_RX}" '
+         f'fill="{c["actor"]}" stroke="{c["actor_edge"]}"/>',
+         f'<rect x="{x}" y="{y}" width="{w}" height="{BAR}" fill="{bar}" '
+         f'clip-path="url(#{cid})"/>',
+         text(cx, y + 43, name, 17, c["ink"], 700)]
+    for i, line in enumerate(lines):
+        fit(line, 12.5, w - 2 * PAD)
+        o.append(text(cx, y + 72 + i * 19, line, 12.5, c["dim"]))
+    if 72 + (len(lines) - 1) * 19 + 8 > h:
+        raise ValueError(f"{name}: {len(lines)} lines do not fit in {h}")
     return o
 
 
-def arrow(x1, y1, x2, y2, c):
-    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c["line"]}" '
-            f'stroke-width="1.8" marker-end="url(#head)"/>')
+def sheet(rect, spec, c):
+    """An artifact: a document silhouette, thin outline, folded corner. The
+    fold is what says "a thing that is handed over" at any size, and it is
+    the one feature no card has."""
+    x, y, w, h = rect
+    title, lines = spec[0], spec[1]
+    tag = spec[2] if len(spec) > 2 else None
+    f = FOLD
+    inner = w - 2 * PAD
+    o = [f'<path d="M{x},{y} H{x + w - f} L{x + w},{y + f} V{y + h} H{x} Z" '
+         f'fill="{c["sheet"]}" stroke="{c["sheet_edge"]}" stroke-linejoin="round"/>',
+         f'<path d="M{x + w - f},{y} V{y + f} H{x + w} Z" fill="{c["fold"]}" '
+         f'stroke="{c["sheet_edge"]}" stroke-linejoin="round"/>']
+    # A title with a tag shares its line with it; leave the tag's width free.
+    fit(title, 13, inner - (width(tag, 9.5, mono=True) + 8 if tag else 0), 600)
+    o.append(text(x + PAD, y + 22, title, 13, c["ink"], 600, "start"))
+    if tag:
+        o.append(text(x + w - PAD, y + 22, tag, 9.5, c["dim"], anchor="end", mono=True))
+    for i, line in enumerate(lines):
+        fit(line, 11.5, inner)
+        o.append(text(x + PAD, y + 40 + i * 15, line, 11.5, c["dim"], anchor="start"))
+    if 40 + (len(lines) - 1) * 15 + 6 > h:
+        raise ValueError(f"{title}: {len(lines)} lines do not fit in {h}")
+    return o
 
 
-def path(d, c):
-    """A feedback edge, in the accent so the loop reads as a loop rather than as
-    one more step to the right."""
-    return (f'<path d="{d}" fill="none" stroke="{c["accent"]}" stroke-width="1.6" '
-            f'marker-end="url(#headA)"/>')
+def arrow(x1, y1, x2, y2, kind, c):
+    """kind names the path - "neutral", "accent" or "human" - which picks both
+    the stroke and the matching arrowhead."""
+    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c[kind]}" '
+            f'stroke-width="{LINE_W}" marker-end="url(#head-{kind})"/>')
 
 
-def lines(x, y, ls, c, size=11, fill=None, anchor="middle"):
-    return [text(x, y + i * 15, l, c, size=size, fill=fill, anchor=anchor)
-            for i, l in enumerate(ls)]
+def marker(kind, c):
+    # userSpaceOnUse keeps the head the same size whatever the stroke width.
+    return (f'<marker id="head-{kind}" viewBox="0 0 10 10" refX="9" refY="5" '
+            f'markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" '
+            f'orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="{c[kind]}"/></marker>')
 
+
+def right(a, b):
+    """The x-extent between two rects: from the right edge of a to the left of b."""
+    return a[0] + a[2], b[0]
+
+
+def mid(a, b):
+    x1, x2 = right(a, b)
+    return (x1 + x2) / 2
+
+
+# --- the picture ------------------------------------------------------------
 
 def draw(t, c):
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" '
          f'height="{H}" role="img" aria-label="{esc(t["alt"])}" font-family=\'{FONT}\'>',
-         f'<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" '
-         f'markerHeight="6" orient="auto-start-reverse">'
-         f'<path d="M 0 1 L 9 5 L 0 9 z" fill="{c["line"]}"/></marker>'
-         f'<marker id="headA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" '
-         f'markerHeight="6" orient="auto-start-reverse">'
-         f'<path d="M 0 1 L 9 5 L 0 9 z" fill="{c["accent"]}"/></marker></defs>']
+         "<defs>", marker("neutral", c), marker("accent", c), marker("human", c), "</defs>"]
 
-    # --- where it starts: not an actor, just what the agent is handed
-    x, y, w, h = S
-    o.append(box(x, y, w, h, c, muted=True))
-    o += lines(x + w / 2, y + 52, t["source"], c, size=12, fill=c["dim"])
+    # Shapes first, then arrows, then the words that sit beside arrows, so
+    # that a label is never painted under a shape.
+    o += card(AGENT, t["agent"], c["accent"], c, "clip-agent")
+    o += card(RULEC, t["rulec"], c["accent"], c, "clip-rulec")
+    o += card(PERSON, t["person"], c["human"], c, "clip-person")
+    for rect, key in [(SOURCES, "sources"), (TABLE, "table"), (DIAG, "diagnosis"),
+                      (CODE, "code"), (QUESTION, "question"), (ANSWER, "answer")]:
+        o += sheet(rect, t[key], c)
 
-    o += actor(A, t["agent"], c, t)
-    o += actor(R, t["rulec"], c, t)
-    o += actor(P, t["person"], c, t)
+    # -- in: the sources, read by the agent
+    x1, x2 = right(SOURCES, AGENT)
+    o.append(arrow(x1, Y_IN, x2, Y_IN, "neutral", c))
 
-    # --- what comes out is an artifact, not an actor, so it has no in/out rows
-    x, y, w, h = G
-    o.append(box(x, y, w, h, c))
-    o.append(text(x + w / 2, y + 48, t["out_box"][0], c, size=15, weight=700))
-    o += lines(x + w / 2, y + 72, t["out_box"][1], c, size=10.5, fill=c["dim"])
+    # -- the loop, clockwise: table to the right, diagnosis back to the left
+    x1, x2 = right(AGENT, TABLE)
+    o.append(arrow(x1, Y_IN, x2, Y_IN, "accent", c))
+    x1, x2 = right(TABLE, RULEC)
+    o.append(arrow(x1, Y_IN, x2, Y_IN, "accent", c))
+    o.append(text(mid(TABLE, RULEC), Y_IN - 9, t["check"], 10.5, c["dim"], mono=True))
+    x1, x2 = right(DIAG, RULEC)
+    o.append(arrow(x2, Y_BACK, x1, Y_BACK, "accent", c))
+    x1, x2 = right(AGENT, DIAG)
+    o.append(arrow(x2, Y_BACK, x1, Y_BACK, "accent", c))
+    fit(t["loop"], 11, DIAG[2])
+    o.append(text(TABLE[0] + TABLE[2] / 2, LOOP_Y, t["loop"], 11, c["accent"]))
 
-    # --- the forward arrows: the artifact, and the command that moves it
-    o.append(arrow(S[0] + S[2] + 6, MID, A[0] - 6, MID, c))
-    o.append(text((S[0] + S[2] + A[0]) / 2, MID - 10, t["a_read"], c, size=10.5, fill=c["dim"]))
-    for (a, b, spec) in [(A[0] + A[2], R[0], t["a_check"]), (R[0] + R[2], G[0], t["a_gen"])]:
-        cmd, what = spec
-        o.append(arrow(a + 6, MID, b - 6, MID, c))
-        o.append(text((a + b) / 2, MID - 26, cmd, c, size=10, fill=c["chip"], font=MONO))
-        o.append(text((a + b) / 2, MID - 10, what, c, size=10.5, fill=c["dim"]))
+    # -- out: once the table passes, the code
+    x1, x2 = right(RULEC, CODE)
+    o.append(arrow(x1, Y_IN, x2, Y_IN, "neutral", c))
+    fit(t["gen"], 10.5, x2 - x1 - 12, mono=True)
+    fit(t["passed"], 10.5, x2 - x1 - 12)
+    o.append(text(mid(RULEC, CODE), Y_IN - 9, t["gen"], 10.5, c["dim"], mono=True))
+    o.append(text(mid(RULEC, CODE), Y_IN + 18, t["passed"], 10.5, c["dim"]))
 
-    # --- (2) rulec -> agent: the diagnosis
-    o.append(path(f"M {FIX_X} {BOT} V {FIX_Y} H {FIX_IN} V {BOT + 6}", c))
-    o += lines((FIX_IN + FIX_X) / 2, FIX_Y - 24, t["r_fix"], c, size=11, fill=c["accent"])
-
-    # --- (3) rulec -> person, and (4) person -> agent
-    o.append(path(f"M {ASK_X} {BOT} V {P[1] - 6}", c))
-    o += lines(ASK_X + 14, BOT + 34, t["r_ask"], c, size=11, fill=c["accent"], anchor="start")
-    o.append(path(f"M {P[0]} {ANS_Y} H {ANS_IN} V {BOT + 6}", c))
-    o += lines((ANS_IN + P[0]) / 2, ANS_Y - 24, t["r_answer"], c, size=11, fill=c["accent"])
-
-    # --- what all of that leaves you with
-    o.append(text(24, FOOT_Y - 12, t["foot_label"], c, size=12, fill=c["dim"], anchor="start"))
-    o.append(box(24, FOOT_Y, W - 48, FOOT_H, c, muted=True))
-    cell = (W - 48) / 3
-    for i, (head, sub) in enumerate(t["foot"]):
-        cx = 24 + cell * (i + 0.5)
-        o.append(text(cx, FOOT_Y + 36, head, c, size=14, weight=700))
-        o.append(text(cx, FOOT_Y + 58, sub, c, size=11.5, fill=c["dim"]))
-        if i:
-            gx = 24 + cell * i
-            o.append(f'<line x1="{gx}" y1="{FOOT_Y + 18}" x2="{gx}" y2="{FOOT_Y + FOOT_H - 18}" '
-                     f'stroke="{c["muted_edge"]}" stroke-width="1"/>')
+    # -- the detour: what rulec cannot decide goes down to a person, and the
+    #    answer comes up into the agent, who writes it into the table
+    bottom = TOP + CARD_H
+    o.append(arrow(X_ASK, bottom, X_ASK, QUESTION[1], "human", c))
+    fit(t["only"], 11, W - (X_ASK + 8) - 20)
+    o.append(text(X_ASK + 8, (bottom + QUESTION[1]) / 2 + 4, t["only"], 11, c["human"],
+                  anchor="start"))
+    x1, x2 = right(PERSON, QUESTION)
+    o.append(arrow(x2, Y_BAND, x1, Y_BAND, "human", c))
+    x1, x2 = right(ANSWER, PERSON)
+    o.append(arrow(x2, Y_BAND, x1, Y_BAND, "human", c))
+    o.append(arrow(X_ANS, ANSWER[1], X_ANS, bottom, "human", c))
+    fit(t["into"], 11, PERSON[0] - (X_ANS + 8) - 8)
+    o.append(text(X_ANS + 8, (bottom + ANSWER[1]) / 2 + 4, t["into"], 11, c["human"],
+                  anchor="start"))
 
     o.append("</svg>")
     return "\n".join(o) + "\n"

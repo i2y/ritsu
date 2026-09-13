@@ -66,8 +66,12 @@ to main that touches `website/`, `AGENTS.md` or `docs/`.
 
 `docs/images/flow*.svg` — four files (two languages, two colour schemes) —
 come from `tools/make_flow.py`, so the geometry cannot drift between them
-and only the words change. Edit the text at the top of that script and
-re-run it:
+and only the words change. It draws two kinds of shape and no others:
+**cards** for the actors and **sheets** (a folded corner) for the things
+that move between them, so that an arrow can only say "this actor produces
+this thing, which that actor consumes". The script refuses to write a file
+whose text would overflow a shape, which is what keeps a later wording
+change from shipping unseen. Edit the text at the top of it and re-run:
 
 ```console
 $ python3 tools/make_flow.py

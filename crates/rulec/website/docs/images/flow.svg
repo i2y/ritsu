@@ -1,57 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" role="img" aria-label="The agent reads documents and writes the table, then runs rulec check. rulec returns the diagnosis — where, how to fix it, and an input that shows the problem. What the tool cannot decide goes to a person as a question with a concrete case; the person decides only amounts and rounding. Once the table passes, rulec gen emits Python and Go with no dependencies." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
-<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#4a5468"/></marker><marker id="headA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#8e9cff"/></marker></defs>
-<rect x="24" y="64" width="126" height="132" rx="12" fill="#12151c" stroke="#242a37"/>
-<text x="87.0" y="116" font-size="12" font-weight="400" text-anchor="middle" fill="#98a1b8">Policy documents</text>
-<text x="87.0" y="131" font-size="12" font-weight="400" text-anchor="middle" fill="#98a1b8">Spreadsheets</text>
-<text x="87.0" y="146" font-size="12" font-weight="400" text-anchor="middle" fill="#98a1b8">Legacy code</text>
-<rect x="238" y="64" width="210" height="132" rx="12" fill="#171b24" stroke="#2b3242"/>
-<text x="343.0" y="91" font-size="16.5" font-weight="700" text-anchor="middle" fill="#e8ebf4">Agent</text>
-<text x="343.0" y="111" font-size="11" font-weight="400" text-anchor="middle" fill="#98a1b8">reads, writes, fixes</text>
-<line x1="252" y1="124" x2="434" y2="124" stroke="#2b3242" stroke-width="1"/>
-<text x="252" y="144" font-size="10.5" text-anchor="start" fill="#8e9cff">in<tspan dx="7" font-size="11" fill="#98a1b8">docs, diagnosis, answers</tspan></text>
-<text x="252" y="165" font-size="10.5" text-anchor="start" fill="#8e9cff">out<tspan dx="7" font-size="11" fill="#98a1b8">the table (.rule)</tspan></text>
-<rect x="536" y="64" width="210" height="132" rx="12" fill="#171b24" stroke="#2b3242"/>
-<text x="641.0" y="91" font-size="16.5" font-weight="700" text-anchor="middle" fill="#e8ebf4">rulec</text>
-<text x="641.0" y="111" font-size="11" font-weight="400" text-anchor="middle" fill="#98a1b8">proves the seven</text>
-<line x1="550" y1="124" x2="732" y2="124" stroke="#2b3242" stroke-width="1"/>
-<text x="550" y="144" font-size="10.5" text-anchor="start" fill="#8e9cff">in<tspan dx="7" font-size="11" fill="#98a1b8">the table (.rule)</tspan></text>
-<text x="550" y="165" font-size="10.5" text-anchor="start" fill="#8e9cff">out<tspan dx="7" font-size="11" fill="#98a1b8">diagnosis, code</tspan></text>
-<rect x="550" y="300" width="240" height="132" rx="12" fill="#171b24" stroke="#2b3242"/>
-<text x="670.0" y="327" font-size="16.5" font-weight="700" text-anchor="middle" fill="#e8ebf4">Person</text>
-<text x="670.0" y="347" font-size="11" font-weight="400" text-anchor="middle" fill="#98a1b8">only business decisions</text>
-<line x1="564" y1="360" x2="776" y2="360" stroke="#2b3242" stroke-width="1"/>
-<text x="564" y="380" font-size="10.5" text-anchor="start" fill="#8e9cff">in<tspan dx="7" font-size="11" fill="#98a1b8">a concrete question</tspan></text>
-<text x="564" y="401" font-size="10.5" text-anchor="start" fill="#8e9cff">out<tspan dx="7" font-size="11" fill="#98a1b8">the answer, approval</tspan></text>
-<rect x="834" y="64" width="142" height="132" rx="12" fill="#171b24" stroke="#2b3242"/>
-<text x="905.0" y="112" font-size="15" font-weight="700" text-anchor="middle" fill="#e8ebf4">Python &amp; Go</text>
-<text x="905.0" y="136" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">plain functions</text>
-<text x="905.0" y="151" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">zero dependencies</text>
-<text x="905.0" y="166" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">same answer in both</text>
-<line x1="156" y1="130" x2="232" y2="130" stroke="#4a5468" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="194.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">read</text>
-<line x1="454" y1="130" x2="530" y2="130" stroke="#4a5468" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="492.0" y="104" font-size="10" font-weight="400" text-anchor="middle" fill="#c3cae0" font-family='ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'>rulec check</text>
-<text x="492.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">① the table</text>
-<line x1="752" y1="130" x2="828" y2="130" stroke="#4a5468" stroke-width="1.8" marker-end="url(#head)"/>
-<text x="790.0" y="104" font-size="10" font-weight="400" text-anchor="middle" fill="#c3cae0" font-family='ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'>rulec gen</text>
-<text x="790.0" y="120" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">⑤ the code</text>
-<path d="M 580 196 V 242 H 340 V 202" fill="none" stroke="#8e9cff" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="460.0" y="218" font-size="11" font-weight="400" text-anchor="middle" fill="#8e9cff">② the diagnosis — where, how to fix,</text>
-<text x="460.0" y="233" font-size="11" font-weight="400" text-anchor="middle" fill="#8e9cff">an input that shows it → fix, then ①</text>
-<path d="M 680 196 V 294" fill="none" stroke="#8e9cff" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="694" y="230" font-size="11" font-weight="400" text-anchor="start" fill="#8e9cff">③ what the tool cannot decide</text>
-<text x="694" y="245" font-size="11" font-weight="400" text-anchor="start" fill="#8e9cff">= a question with a real case</text>
-<path d="M 550 366 H 300 V 202" fill="none" stroke="#8e9cff" stroke-width="1.6" marker-end="url(#headA)"/>
-<text x="425.0" y="342" font-size="11" font-weight="400" text-anchor="middle" fill="#8e9cff">④ the answer (amount, rounding)</text>
-<text x="425.0" y="357" font-size="11" font-weight="400" text-anchor="middle" fill="#8e9cff">→ into the table, then ①</text>
-<text x="24" y="470" font-size="12" font-weight="400" text-anchor="start" fill="#98a1b8">What you have when the loop ends</text>
-<rect x="24" y="482" width="952" height="88" rx="12" fill="#12151c" stroke="#242a37"/>
-<text x="182.66666666666666" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#e8ebf4">A table with no gaps</text>
-<text x="182.66666666666666" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#98a1b8">in a shape a person can approve</text>
-<text x="500.0" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#e8ebf4">Proved Python and Go</text>
-<text x="500.0" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#98a1b8">zero deps, same answer in both</text>
-<line x1="341.3333333333333" y1="500" x2="341.3333333333333" y2="552" stroke="#242a37" stroke-width="1"/>
-<text x="817.3333333333333" y="518" font-size="14" font-weight="700" text-anchor="middle" fill="#e8ebf4">The impact, before you deploy</text>
-<text x="817.3333333333333" y="540" font-size="11.5" font-weight="400" text-anchor="middle" fill="#98a1b8">how many change, and by how much</text>
-<line x1="658.6666666666666" y1="500" x2="658.6666666666666" y2="552" stroke="#242a37" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="The agent reads the sources and writes the table (.rule), then runs rulec check. rulec returns a diagnosis - where, how to fix it, and an input that shows the problem - and the agent fixes the table until it passes. Only what the tool cannot decide reaches a person, as a question with a concrete case; the person answers with an amount or a rounding direction. Once the table passes, rulec gen emits proved Python and Go." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#6b7590"/></marker>
+<marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8e9cff"/></marker>
+<marker id="head-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#e0b45c"/></marker>
+</defs>
+<clipPath id="clip-agent"><rect x="166" y="20" width="160" height="196" rx="10"/></clipPath>
+<rect x="166" y="20" width="160" height="196" rx="10" fill="#171b24" stroke="#2b3242"/>
+<rect x="166" y="20" width="160" height="5" fill="#8e9cff" clip-path="url(#clip-agent)"/>
+<text x="246.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#e8ebf4">Agent</text>
+<text x="246.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">reads the sources</text>
+<text x="246.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">writes the table</text>
+<text x="246.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">fixes what rulec finds</text>
+<text x="246.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">asks a person the rest</text>
+<clipPath id="clip-rulec"><rect x="606" y="20" width="160" height="196" rx="10"/></clipPath>
+<rect x="606" y="20" width="160" height="196" rx="10" fill="#171b24" stroke="#2b3242"/>
+<rect x="606" y="20" width="160" height="5" fill="#8e9cff" clip-path="url(#clip-rulec)"/>
+<text x="686.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#e8ebf4">rulec</text>
+<text x="686.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">proves seven things:</text>
+<text x="686.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">completeness, overlap,</text>
+<text x="686.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">dead rows, units,</text>
+<text x="686.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">rounding, overflow,</text>
+<text x="686.0" y="168" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">the worked examples</text>
+<clipPath id="clip-person"><rect x="375" y="232" width="170" height="148" rx="10"/></clipPath>
+<rect x="375" y="232" width="170" height="148" rx="10" fill="#171b24" stroke="#2b3242"/>
+<rect x="375" y="232" width="170" height="5" fill="#e0b45c" clip-path="url(#clip-person)"/>
+<text x="460.0" y="275" font-size="17" font-weight="700" text-anchor="middle" fill="#e8ebf4">Person</text>
+<text x="460.0" y="304" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">decides amounts</text>
+<text x="460.0" y="323" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">and which way to round</text>
+<text x="460.0" y="342" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">approves the table</text>
+<text x="460.0" y="361" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">never writes code</text>
+<path d="M20,20 H124 L136,32 V120 H20 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M124,20 V32 H136 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="29" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Sources</text>
+<text x="29" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">policy documents</text>
+<text x="29" y="75" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">spreadsheets</text>
+<text x="29" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">legacy code</text>
+<path d="M410,45 H510 L522,57 V95 H410 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M510,45 V57 H522 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="419" y="67" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Table</text>
+<text x="513" y="67" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
+<text x="419" y="85" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">1 rule = 1 table</text>
+<path d="M391,122 H529 L541,134 V202 H391 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M529,122 V134 H541 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="400" y="144" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Diagnosis</text>
+<text x="532" y="144" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">JSON</text>
+<text x="400" y="162" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">where</text>
+<text x="400" y="177" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">how to fix it</text>
+<text x="400" y="192" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">an input that shows it</text>
+<path d="M860,20 H968 L980,32 V120 H860 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M968,20 V32 H980 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="869" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Python &amp; Go</text>
+<text x="869" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">already proved</text>
+<text x="869" y="75" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">zero dependencies</text>
+<text x="869" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">the same answer</text>
+<text x="869" y="105" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">in both languages</text>
+<path d="M601,271 H759 L771,283 V341 H601 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M759,271 V283 H771 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="610" y="293" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">A concrete question</text>
+<text x="610" y="311" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">“What is the fee to 山梨県</text>
+<text x="610" y="326" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">at size S60?”</text>
+<path d="M176,271 H304 L316,283 V341 H176 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
+<path d="M304,271 V283 H316 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
+<text x="185" y="293" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Answer</text>
+<text x="185" y="311" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">an amount,</text>
+<text x="185" y="326" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">which way to round</text>
+<line x1="136" y1="70" x2="166" y2="70" stroke="#6b7590" stroke-width="1.8" marker-end="url(#head-neutral)"/>
+<line x1="326" y1="70" x2="410" y2="70" stroke="#8e9cff" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<line x1="522" y1="70" x2="606" y2="70" stroke="#8e9cff" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="564.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec check</text>
+<line x1="606" y1="162" x2="541" y2="162" stroke="#8e9cff" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<line x1="391" y1="162" x2="326" y2="162" stroke="#8e9cff" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="466.0" y="113" font-size="11" font-weight="400" text-anchor="middle" fill="#8e9cff">until it passes</text>
+<line x1="766" y1="70" x2="860" y2="70" stroke="#6b7590" stroke-width="1.8" marker-end="url(#head-neutral)"/>
+<text x="813.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec gen</text>
+<text x="813.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">once it passes</text>
+<line x1="686" y1="216" x2="686" y2="271" stroke="#e0b45c" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="694" y="247.5" font-size="11" font-weight="400" text-anchor="start" fill="#e0b45c">only what it cannot decide</text>
+<line x1="601" y1="306" x2="545" y2="306" stroke="#e0b45c" stroke-width="1.8" marker-end="url(#head-human)"/>
+<line x1="375" y1="306" x2="316" y2="306" stroke="#e0b45c" stroke-width="1.8" marker-end="url(#head-human)"/>
+<line x1="246" y1="271" x2="246" y2="216" stroke="#e0b45c" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="254" y="247.5" font-size="11" font-weight="400" text-anchor="start" fill="#e0b45c">into the table</text>
 </svg>
