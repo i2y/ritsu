@@ -122,3 +122,32 @@ fn skill_mdは十分に短い() {
     let n = read("skills/rulec/SKILL.md").lines().count();
     assert!(n < 500, "SKILL.md が {n} 行あります。詳しいものは横のファイルへ出してください");
 }
+
+/// The skill's description is what decides whether it gets loaded at all, and it names the
+/// range of diagnostic codes. A code added outside that range is a code the skill will not
+/// be reached for.
+#[test]
+fn スキルのdescriptionが名指しする範囲に全コードが入る() {
+    let s = read("skills/rulec/SKILL.md");
+    let desc = s
+        .lines()
+        .find(|l| l.starts_with("description:"))
+        .expect("description が無い");
+    // Each `Xnnn-Xmmm` in the description is an inclusive range of codes.
+    let mut ranges: Vec<(char, u32, u32)> = Vec::new();
+    for part in desc.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')) {
+        let Some((a, b)) = part.split_once('-') else { continue };
+        let (Some(fa), Some(fb)) = (a.chars().next(), b.chars().next()) else { continue };
+        let (Ok(na), Ok(nb)) = (a[1..].parse::<u32>(), b[1..].parse::<u32>()) else { continue };
+        if fa == fb {
+            ranges.push((fa, na, nb));
+        }
+    }
+    assert!(!ranges.is_empty(), "description に範囲が書かれていない: {desc}");
+    for e in rulec::codes::ledger() {
+        let code = e.code;
+        let (f, n) = (code.chars().next().unwrap(), code[1..].parse::<u32>().unwrap());
+        let named = desc.contains(code) || ranges.iter().any(|(rf, a, b)| *rf == f && (*a..=*b).contains(&n));
+        assert!(named, "{code} が skill の description のどの範囲にも入っていない: {desc}");
+    }
+}

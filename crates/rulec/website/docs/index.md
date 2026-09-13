@@ -254,7 +254,7 @@ different sets of lines).
 
 **It cannot — when you split by ratio.** "Apportion by each line's share of the list
 price" needs `line ÷ total`, and **division is only allowed by a constant**:
-`注文金額 ÷ 100円` is fine, `明細 ÷ 合計` is not. You can work around it by computing
+`注文金額 ÷ 100円` is fine, `明細 ÷ 合計` is not — dividing by a variable stops at E115. You can work around it by computing
 the ratio in the caller and passing it in as a rate — a rate step goes as fine as you
 declare it, `rate[step 0.1%]` and beyond — but then whether that ratio is right is no
 longer something this tool says anything about.
@@ -264,10 +264,14 @@ longer something this tool says anything about.
 - **Workflows** — several steps, carrying state
 - **Judgements about a collection itself** — "any line is refrigerated", "three or more
   items in the cart". Flatten those at the boundary and pass the scalar in
-- **Pattern matching on strings** — `string` has equality and set membership, no prefix
-  match and no regular expressions
-- **Scoring, optimisation, machine learning** — what can be proved here is which row
-  fires, not whether a weight is right
+- **Branching on a string** — `string` cannot be a table column (E110). A value that
+  decides a branch belongs in an `enum`, where the closed set makes the completeness check
+  work. No prefix match and no regular expressions either
+- **Deciding the weights or the thresholds themselves** — that is optimisation and
+  machine learning. **Adding up scores with weights that are already agreed and turning
+  the total into a rank is writable** — see "評価ランク" in the [examples](examples.md),
+  where no money appears anywhere. What can be proved is which row fires, never whether a
+  weight is the right one
 
 ### What else is out there
 

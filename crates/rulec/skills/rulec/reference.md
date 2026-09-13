@@ -129,7 +129,7 @@ Nine, and no others.
 | rate | `rate`, `rate[step 1%]`, `rate[step 0.1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
-| string | `string` | equality and set membership only. No pattern matching |
+| string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
 | optional | `会員区分?` | any of the above, plus the absent value. Consumed by the cell `none` |
 
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears

@@ -107,7 +107,7 @@ Eight, and no others.
 | money | `money[円, incl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add |
 | rate | `rate[step 1%]` `rate` | an integer throughout. With a step, the integer counts steps (`10%` is 10); without one, the step comes from the literals in the column |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
-| string | `string` | equality and set membership only. No pattern matching |
+| string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
 | optional | `会員区分?` | consumed only by the cell `none` |
 
 Quantities, money, rates and dates are **all integers** — a date is a day
