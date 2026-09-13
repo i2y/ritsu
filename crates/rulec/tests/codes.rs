@@ -173,3 +173,35 @@ fn helpが名指しするコードは台帳にある() {
     }
     assert!(named >= 30, "どの help もコードを名指ししていない");
 }
+
+// ── The reference (docs/reference.md) ────────────────────────────────────
+
+/// The reserved-word table in the reference must be exactly `kw::RESERVED`. Both a word the
+/// parser reserves but the document omits, and a word the document claims but the parser
+/// does not reserve, go red — the same shape as the README's keyword test.
+#[test]
+fn 参照文書の予約語表はkwと一致する() {
+    let doc = std::fs::read_to_string(root().join("docs/reference.md")).unwrap();
+    let i = doc.find("<!-- RESERVED -->").expect("予約語表の印が無い");
+    let j = doc.find("<!-- /RESERVED -->").expect("予約語表の閉じ印が無い");
+    let mut listed: Vec<String> = Vec::new();
+    for w in doc[i..j].split('`').skip(1).step_by(2) {
+        listed.push(w.to_string());
+    }
+    listed.sort();
+    listed.dedup();
+    let mut want: Vec<String> = rulec::kw::RESERVED.iter().map(|s| s.to_string()).collect();
+    want.sort();
+    want.dedup();
+    assert_eq!(listed, want, "docs/reference.md の予約語表と src/kw.rs が食い違う");
+}
+
+/// Every rule of the corpus has to be describable by the reference, so the reference has to
+/// name every section word the corpus actually uses.
+#[test]
+fn 参照文書は行頭の語を全部説明している() {
+    let doc = std::fs::read_to_string(root().join("docs/reference.md")).unwrap();
+    for w in rulec::kw::LINE_HEAD.iter().chain([&rulec::kw::RULE]) {
+        assert!(doc.contains(&format!("`{w}`")), "docs/reference.md に `{w}` の説明が無い");
+    }
+}

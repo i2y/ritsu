@@ -1,10 +1,45 @@
 # rulec
 
-**業務ルールを、業務担当者が読める一枚の表として書き、機械に検査させ、Python と Go の両方に生成する。**
+**表を書くと、Python と Go の関数が出ます。出る前に、証明が済んでいます。**
 
-送料、クーポン、ポイント、返品可否 — 業務には「条件が絡み合った判断」がいくつもあります。たいてい `if` 文の泥沼か、設定テーブルか、Excel にあります。そして変えるときにやっていることは、**入れてみて、後から数字を見る**ことです。
+```
+table 運賃表(fee_table)
+policy unique
+| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
+| 近畿圏      | S60    | 990円                              |
+| not: 近畿圏 | S60    | 880円                              |
+```
 
-rulec は、それを**入れる前に、過去のデータで再生して差分を見る**に変えるための道具です。
+↓ `rulec gen`
+
+```python
+def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
+    """Rule 送料例 v1. Each branch corresponds 1:1 to a row of the rule source."""
+    if not _isinstance(dest, Prefecture):
+        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+    ...
+    if dest in {Prefecture.SHIGA, ...} and サイズ == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
+        運賃 = 990
+    ...
+    return _round_up(運賃, 10)
+```
+
+出る前に済んでいる証明は、**「どの入力にも当たる行がある」「同時に二行に当たる入力はない」「決して当たらない行はない」「単位を取り違えていない」「端数の決め方が宣言されている」「中間値が int64 に収まる」「書いた例が全部通る」**の七つです。どれか一つでも示せなければ、生成そのものが止まります。
+
+依存ゼロの普通の関数が出ます。ランタイムも設定も要りません。
+
+---
+
+## 誰のための道具か
+
+**第一の利用者は AI エージェントです。** 規約の文書や Excel や旧実装から `.rule` を書き、`rulec` に証明させ、直し、生成物を組み込み、変更の影響を過去データの再生で示す — その一連を、人の助けなしに `--help` と診断の JSON だけで回せるように作ってあります。手順は [`AGENTS.md`](AGENTS.md)（英語）にあります。
+
+人は二つの役で残ります。どちらもエージェントには渡せません。
+
+- **表を承認する人。** 金額も、丸めの向きも、食い違う二つの読みのどちらが正しいかも、業務の判断です。検査はそこを決めません — **決められないことを具体的な質問に変える**のが仕事です（「山梨県あての S60 の運賃はいくらですか」）。
+- **生成物を組み込むアプリの持ち主。**
+
+だから出力の既定は英語です。日本語で読むには `--lang ja` か `RULEC_LANG=ja` — 承認者に見せる `doc` と PR に貼る `diff` はそちらで出します。名前とセルは、どちらの言語でも原本の日本語のまま出ます。
 
 ---
 
@@ -26,7 +61,7 @@ error[E101]: Completeness gap: some input matches no row
 
 **旧実装も過去データも要りません。** 手元の Excel を転記して `rulec check` に掛けるだけで、穴と重なりが出はじめます。
 
-出力の既定は英語です — この道具の第一の利用者が AI エージェントだからです。日本語で読むには `--lang ja` を付けるか、`RULEC_LANG=ja` を置いてください。名前とセルは、どちらの言語でも原本の日本語のまま出ます。
+そして、変えるときにやっていることを変えます。送料もクーポンもポイントも返品可否も、たいていは `if` 文の泥沼か設定テーブルか Excel にあって、直すときは**入れてみて、後から数字を見る**。rulec はそれを**入れる前に、過去のデータで再生して差分を見る**に変えます。
 
 ## 書き方
 
@@ -569,11 +604,13 @@ exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内
 ## リポジトリの中身
 
 ```
+AGENTS.md         エージェント向けの手順（英語）
 DESIGN.md         設計文書。決定と、何を捨てたかの記録
 docs/codes.md     診断コードの台帳（生成物。rulec explain --all の出力）
 docs/codes.ja.md  同じ台帳の日本語
 docs/formats.md   機械可読な出力の定義（--format json、ベクタ、fixtures）
 docs/generated-code.md 生成物の形と保証、呼び方（英語）
+docs/reference.md 文法の完全な定義（英語）
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
@@ -592,6 +629,7 @@ tests/codes.rs    診断台帳が単一のソースであること（全項目�
 tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
 tests/formats.rs  全コマンドの --format json の鍵が言語で動かないこと
 tests/api.rs      rulec api の目録が生成物と一致すること（実際に呼んで確かめる）
+tests/docs.rs     文書が名指しするコマンドとリンクと実演が実物と合うこと
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```
@@ -611,6 +649,17 @@ tests/api.rs      rulec api の目録が生成物と一致すること（実際�
 **M0 から M3 まで、実装は実データを一件も使わずに完成しました。** M3 のテストは、生成したベクタから合成した fixtures で全部を行使しています。
 
 残っているのは機能ではなく**当てること**です。M2 と M3 が本当に効くのは、**旧実装の不一致 1,000 件を前にして、その身元（旧実装のバグか、転記ミスか、fixtures の汚れか、丸め差異か）をレポートが自力で切り分けられるか**で決まります。発火行クラスタ・丸め差異の自動タグ・実測系と補完系の分離はすべてそのための設計ですが、**その有効性は実データに当てるまで仮説のまま**です。
+
+## どこを読むか
+
+| | |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | エージェント向けの手順。書く→検査→直す→生成→組み込む→影響を見せる→人に訊く（英語） |
+| [`docs/reference.md`](docs/reference.md) | 文法の完全な定義（英語） |
+| [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | 診断コードの台帳。`rulec explain --all` の出力そのもの |
+| [`docs/formats.md`](docs/formats.md) | 機械可読な形式の全部 — `--format json`、ベクタ、fixtures、マニフェスト、アダプタの手順（英語） |
+| [`docs/generated-code.md`](docs/generated-code.md) | 生成物の形と保証、呼び方（英語） |
+| `DESIGN.md` | なぜそう決めたか、そのとき何を捨てたか（日本語） |
 
 ## 設計について
 
