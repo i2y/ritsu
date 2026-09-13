@@ -822,7 +822,7 @@ impl Checked {
                                 if !v.on_grid(g) {
                                     let near = v.round_to(m, g);
                                     self.diags.push(
-                                        Diag::error("E106", tr!("`{}` は丸めの格子に載っていません", "`{}` is not on the rounding grid", n.raw))
+                                        Diag::error("E106", tr!("`{}` は丸めの刻みに載っていません", "`{}` is not on the rounding grid", n.raw))
                                             .at(at(row.span.line))
                                             .mark(osp.clone(), "")
                                             .note(tr!("出力 {ocol} の丸めは {}({}) です。", "The rounding of output {ocol} is {}({}).", m.name(), fmt_val(g, want)))

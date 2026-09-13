@@ -111,7 +111,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         "JSON として読めません",
         // A decimal is refused at the field, naming it: §10.2 wants an integer in the
         // canonical unit, and the record says which field broke that.
-        "`observed.運賃`: 正準単位の整数 を期待しましたが 小数 でした",
+        "`observed.運賃`: 決まった単位の整数 を期待しましたが 小数 でした",
         "規則が知らない欄",
         "列挙 都道府県 の値ではありません",
         "宣言範囲 1..170 の外",
@@ -217,7 +217,7 @@ fn 境界の変更は発火行の遷移として出る() {
 /// §10.4: a cluster made only of deviations smaller than the output grid gets tagged as a
 /// suspected rounding difference.
 #[test]
-fn 格子未満のずれは丸め差異として括られる() {
+fn 刻み未満のずれは丸め方の違いとして括られる() {
     let dir = setup("round");
     // Shift the recorded side by just 3 yen. The output grid is 10円, so this has the shape of a
     // difference in rounding convention.
@@ -239,7 +239,7 @@ fn 格子未満のずれは丸め差異として括られる() {
 
     let (c, r, _) = rulec(&["replay", RULE, "--fixtures", p.to_str().unwrap()]);
     assert_eq!(c, 1);
-    assert!(r.contains("丸め差異の疑い（出力格子 10円 未満"), "{r}");
+    assert!(r.contains("丸め方の違いの疑い（出力の刻み 10円 未満"), "{r}");
     assert!(r.contains("差 +3 一様"), "{r}");
     let _ = std::fs::remove_dir_all(&dir);
 }

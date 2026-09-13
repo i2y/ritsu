@@ -186,7 +186,7 @@ fn 一パーセントより細かい刻みが書ける() {
     // The vectors have to step on both sides of 0.5%, which they cannot do if every rate
     // under 100% collapses to the same value.
     let (c, cov) = run(&["coverage", &p]);
-    assert_eq!(c, 0, "被覆が満たせていない:\n{cov}");
+    assert_eq!(c, 0, "カバーが満たせていない:\n{cov}");
     let (_, vs) = run(&["vectors", &p]);
     for want in ["\"手数料率\":5", "\"手数料率\":6"] {
         assert!(vs.contains(want), "{want} を踏むベクタが無い:\n{vs}");

@@ -128,7 +128,7 @@ fn ty_word(ty: &Ty) -> String {
         Ty::Bool => crate::kw::BOOL.into(),
         Ty::Date => tr!("日付（YYYY-MM-DD の文字列）", "date (YYYY-MM-DD string)"),
         Ty::Str => tr!("文字列", "string"),
-        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => tr!("正準単位の整数", "integer in the canonical unit"),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => tr!("決まった単位の整数", "integer in the canonical unit"),
         _ => format!("{ty}"),
     }
 }
@@ -176,7 +176,7 @@ impl Manifest {
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => text
                 .parse::<i128>()
                 .map(Json::Int)
-                .map_err(|_| tr!("`{name}` は正準単位の整数で書いてください", "`{name}` must be written as an integer in the canonical unit"))?,
+                .map_err(|_| tr!("`{name}` は決まった単位の整数で書いてください", "`{name}` must be written as an integer in the canonical unit"))?,
             Ty::Bool => match text {
                 crate::kw::TRUE => Json::Bool(true),
                 crate::kw::FALSE => Json::Bool(false),
@@ -328,7 +328,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         observed.insert(name.clone(), v);
                     }
                     Err(e) => {
-                        bad("bad_observed", name, format!("`observed.{name}`: {e}"), &tr!("そのとき出た値を、正準単位で書いてください。", "Write the value that came out at the time, in the canonical unit."));
+                        bad("bad_observed", name, format!("`observed.{name}`: {e}"), &tr!("そのとき出た値を、決まった単位で書いてください。", "Write the value that came out at the time, in the canonical unit."));
                         broken = true;
                     }
                 },

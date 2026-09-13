@@ -136,7 +136,7 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
                 "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it)."
             ));
             d.notes.push(tr!(
-                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその格子に載っているかを検査するのに使われ、1451円 のような桁の打ち間違いが E106 で止まります。",
+                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、1451円 のような桁の打ち間違いが E106 で止まります。",
                 "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451円 is stopped by E106."
             ));
             d.notes.push(tr!(

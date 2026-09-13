@@ -61,7 +61,7 @@ golden!(e104_丸め_端数あり, "E104-a", "tests/mutants/m_e104b.rule", "E104"
 golden!(e105_重複, "E105", "tests/mutants/m_e105.rule", "E105");
 
 // The rest, for which §11 spells out the wording as well.
-golden!(e106_格子, "E106", "tests/mutants/m_e106.rule", "E106");
+golden!(e106_丸めの刻み, "E106", "tests/mutants/m_e106.rule", "E106");
 golden!(e107_例, "E107", "tests/mutants/m_e107.rule", "E107");
 golden!(e108_溢れ, "E108", "tests/mutants/m_e108.rule", "E108");
 golden!(e111_例の出力欠落, "E111", "tests/mutants/m_e111.rule", "E111");

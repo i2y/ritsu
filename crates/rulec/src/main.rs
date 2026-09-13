@@ -117,13 +117,13 @@ fn commands() -> Vec<Cmd> {
             name: "check",
             args: "<file.rule>...",
             purpose: tr!(
-                "規則を検査する。完全性・重なり・冗長・単位・丸め・溢れ・例",
+                "規則を検査する。完全性・重なり・当たらない行・単位・丸め・溢れ・例",
                 "check a rule: completeness, overlap, redundancy, units, rounding, overflow, examples"
             ),
             params: vec![rule_files()],
             flags: vec![
                 flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
-                flag("--show-shadow", None, tr!("件数に畳まれている遮蔽対も全部一覧する", "list every shadow pair, including the ones folded into the count")),
+                flag("--show-shadow", None, tr!("件数に畳んである隠れ対も全部並べる", "list every shadow pair, including the ones folded into the count")),
                 flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・証人）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
                 flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった発見を伏せる", "hide findings that were already present at that git revision")),
                 flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(rulec::region::DEFAULT_BUDGET.to_string()),
@@ -156,7 +156,7 @@ fn commands() -> Vec<Cmd> {
             )],
             flags: vec![
                 flag("--all", None, tr!("台帳の全部を出す", "print the whole ledger")),
-                flag("--format", Some("markdown|json"), tr!("描画の形。既定は端末向けの text", "how to render it; the default is text for a terminal"))
+                flag("--format", Some("markdown|json"), tr!("出し方。既定は端末向けの text", "how to render it; the default is text for a terminal"))
                     .choices(&["markdown", "json"]),
             ],
             exits: vec![
@@ -173,7 +173,7 @@ fn commands() -> Vec<Cmd> {
             name: "fmt",
             args: "<file.rule>...",
             purpose: tr!(
-                "正準形に整形する。列を揃え、記号を ASCII に直す",
+                "決まった形に整える。列を揃え、記号を ASCII に直す",
                 "format to the canonical shape: align the columns, write the symbols in ASCII"
             ),
             params: vec![rule_files()],
@@ -239,7 +239,7 @@ fn commands() -> Vec<Cmd> {
             name: "coverage",
             args: "<file.rule>...",
             purpose: tr!(
-                "ベクタ套件そのものを検査する。行・境界両側・遮蔽対の三基準",
+                "作ったテストケースの側を検査する。行・境界の両側・隠れ対の三つ",
                 "check the vector suite itself against three criteria: rows, both sides of a boundary, shadow pairs"
             ),
             params: vec![rule_files()],
@@ -278,14 +278,14 @@ fn commands() -> Vec<Cmd> {
             name: "doc",
             args: "<file.rule>...",
             purpose: tr!(
-                "承認する人に見せる描画。検査器が知っていて字面に現れない事実を添える",
+                "承認する人に見せる資料。検査器が知っていて表には出てこない事実を添える",
                 "the rendering for the person who approves: the facts the checker knows that the text does not show"
             ),
             params: vec![rule_files()],
-            flags: vec![out_flag(&tr!("描画", "rendering"))],
+            flags: vec![out_flag(&tr!("資料", "rendering"))],
             exits: vec![
-                (0, tr!("描画した", "rendered")),
-                (1, tr!("規則が検査を通らない（壊れた規則は描画しない）", "the rule does not pass check (a broken rule is not rendered)")),
+                (0, tr!("資料を書き出した", "rendered")),
+                (1, tr!("規則が検査を通らない（壊れた規則からは書き出さない）", "the rule does not pass check (a broken rule is not rendered)")),
                 (2, tr!("引数の誤り、書けないファイル", "bad arguments, or a file that cannot be written")),
             ],
             examples: vec![
@@ -1002,7 +1002,7 @@ fn check(
             println!(
                 "{}",
                 tr!(
-                    "note {path}: 遮蔽 {} 対（構造的 {}、同値 {}、要確認 {}）",
+                    "note {path}: 隠れ {} 対（階段 {}、同じ答え {}、要確認 {}）",
                     "note {path}: {} shadow pairs ({} structural, {} equivalent, {} needs review)",
                     s.total(),
                     s.structural,
@@ -1160,7 +1160,7 @@ fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
                 print!("{}", render(d, &lines));
                 println!();
             }
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので描画しません（§1.6）", "error: `{path}` does not pass check, so it is not rendered (§1.6)"));
+            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので資料を書き出しません（§1.6）", "error: `{path}` does not pass check, so it is not rendered (§1.6)"));
             return ExitCode::from(1);
         }
         let Ok((f, c)) = rulec::prepare(&src, path) else {
@@ -1179,7 +1179,7 @@ fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
                     eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
                     return ExitCode::from(2);
                 }
-                println!("{}", tr!("描画しました: {p}", "rendered: {p}"));
+                println!("{}", tr!("書き出しました: {p}", "rendered: {p}"));
             }
             None => print!("{body}"),
         }

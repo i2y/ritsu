@@ -61,7 +61,7 @@ fn 通ったファイルはokを出す() {
     assert_eq!(c, 0);
     assert!(out.contains("ok "), "通ったら ok を出す");
     // Shadowing is a single count line. With zero needs-confirmation pairs, no list is printed.
-    assert!(out.contains("遮蔽 10 対（構造的 4、同値 6、要確認 0）"), "件数行が出る: {out}");
+    assert!(out.contains("隠れ 10 対（階段 4、同じ答え 6、要確認 0）"), "件数行が出る: {out}");
     assert!(!out.contains("warning[W105]"), "要確認ゼロなら一覧は出ない");
 }
 

@@ -931,7 +931,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             outs(&t.rows[j])
                         ))
                         .note(tr!(
-                            "存在しないなら: このままで構いません。生成コードには、万一この条件に当たる入力が来たとき黙って 行{} を選ばずエラーを返す番人が入ります。",
+                            "存在しないなら: このままで構いません。生成コードには、万一この条件に当たる入力が来たとき黙って 行{} を選ばずエラーを返すガードが入ります。",
                             "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row {}.",
                             i + 1
                         ))
@@ -1060,7 +1060,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         if dead {
             dead_rows.push(i);
             out.push(
-                Diag::error("E102", tr!("冗長な行: 行{} は決して当たりません", "Unreachable row: row {} never matches", i + 1))
+                Diag::error("E102", tr!("行{} は決して当たりません", "Unreachable row: row {} never matches", i + 1))
                     .at(at(t.rows[i].span.line))
                     .table(tname.clone())
                     .row(i + 1)

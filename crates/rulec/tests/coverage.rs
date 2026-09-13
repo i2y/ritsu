@@ -60,7 +60,7 @@ fn 空集合はすべての義務が欠ける() {
 
 /// Removing every vector that lets a row win leaves exactly that row's row coverage missing.
 #[test]
-fn 行を勝たせる例を抜くと行被覆が欠ける() {
+fn 行を勝たせる例を抜くと行カバーが欠ける() {
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
     let tag = "表 運賃表 行42"; // the 沖縄 × S170 cell
@@ -75,7 +75,7 @@ fn 行を勝たせる例を抜くと行被覆が欠ける() {
 /// Removing the vectors that step on the outside of a boundary leaves both-sides boundary coverage
 /// missing. An auditor that goes green on the inside alone cannot catch a boundary's ±1.
 #[test]
-fn 境界の片側を抜くと境界両側被覆が欠ける() {
+fn 境界の片側を抜くと境界の両側カバーが欠ける() {
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
     // Drop every example that steps on 三辺合計 = 61cm (just outside <=60cm).
@@ -94,17 +94,17 @@ fn 境界の片側を抜くと境界両側被覆が欠ける() {
 /// A shadow pair demands a point "inside the intersection". A point that merely hits row j is not
 /// enough.
 #[test]
-fn 交差の内側を抜くと遮蔽対被覆が欠ける() {
+fn 交差の内側を抜くと隠れ対カバーが欠ける() {
     let rel = "tests/corpus/送料.rule";
     let (f, c, vs) = load(rel);
     let checks = rulec::table_checks(&f, &c, rel);
     let pairs: usize = checks.iter().map(|k| k.overlaps.len()).sum();
-    assert!(pairs > 0, "遮蔽対のある規則を選んでいない");
+    assert!(pairs > 0, "隠れ対のある規則を選んでいない");
     let a = coverage::audit(&f, &c, rel, &vs);
-    assert_eq!(a.tally[SHADOW].1, pairs, "遮蔽対の数が検査と食い違う");
+    assert_eq!(a.tally[SHADOW].1, pairs, "隠れ対の数が検査と食い違う");
     // Drop the inside points. What remains are only the points that hit row j alone.
     let inside: Vec<usize> = (0..vs.len())
-        .filter(|&i| vs[i].why.starts_with("遮蔽対"))
+        .filter(|&i| vs[i].why.starts_with("隠れ対"))
         .collect();
     assert!(!inside.is_empty(), "交差の内側を狙ったベクタがない");
     let kept: Vec<Vector> =

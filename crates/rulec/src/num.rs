@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn 格子は1円とは限らない() {
+    fn 丸めの刻みは1円とは限らない() {
         let ten = Rat::int(10);
         assert_eq!(Rat::int(701).round_to(RoundMode::Up, ten), Rat::int(710));
         assert_eq!(Rat::int(701).round_to(RoundMode::Down, ten), Rat::int(700));

@@ -334,7 +334,7 @@ pub fn ledger() -> Vec<Entry> {
             "E010",
             tr!("`..` を使った範囲記法は書けません", "The `..` range notation is not allowed"),
             tr!(
-                "セルに `0g..1000g` のような `..` があるとき。「1000g まで」が両端含みか排他かが字面から読めないためです（§3.1）。",
+                "セルに `0g..1000g` のような `..` があるとき。「1000g まで」が両端を含むのか含まないのかが、書いてある字から読めないためです（§3.1）。",
                 "A cell contains `..`, as in `0g..1000g`. Whether \"up to 1000g\" includes the endpoint cannot be read off the text (§3.1)."
             ),
             tr!(
@@ -416,7 +416,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E102",
-            tr!("冗長な行: その行は決して当たりません", "Unreachable row: the row never matches"),
+            tr!("決して当たらない行があります", "Unreachable row: the row never matches"),
             tr!(
                 "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。二形あり、文面が原因を書き分けます。",
                 "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
@@ -472,13 +472,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E106",
-            tr!("出力のリテラルが丸めの格子に載っていません", "An output literal is not on the rounding grid"),
+            tr!("出力のリテラルが丸めの刻みに載っていません", "An output literal is not on the rounding grid"),
             tr!(
-                "出力セルに書かれたリテラルが、宣言した丸めの格子の倍数でないとき。`round up(10円)` の表に `1451円` があるような、桁の打ち間違いをここで落とします（§7.2）。",
+                "出力セルに書かれたリテラルが、宣言した丸めの刻みの倍数でないとき。`round up(10円)` の表に `1451円` があるような、桁の打ち間違いをここで落とします（§7.2）。",
                 "A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451円` in a table rounded `up(10円)` — is stopped (§7.2)."
             ),
             tr!(
-                "リテラルを格子に載せてください（`1451円` は `1450円` か `1460円`）。その額が本当に正しいなら、丸めの格子のほうを直します。",
+                "リテラルを刻みに載せてください（`1451円` は `1450円` か `1460円`）。その額が本当に正しいなら、丸めの刻みのほうを直します。",
                 "Put the literal on the grid (`1451円` becomes `1450円` or `1460円`). If the amount really is right, change the grid instead."
             ),
             X_E106,
@@ -599,9 +599,9 @@ pub fn ledger() -> Vec<Entry> {
         ),
         warn(
             "W105",
-            tr!("要確認の遮蔽: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
+            tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
             tr!(
-                "`policy first` の表で、部分交差していて出力が違う行の対があるとき。構造的な遮蔽（階段）と同値の遮蔽は件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです（§4）。",
+                "`policy first` の表で、部分交差していて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです（§4）。",
                 "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed (§4)."
             ),
             tr!(
@@ -647,7 +647,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency."
             ),
             tr!(
-                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当たれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当たる入力が来たとき黙って先の行を選ばずエラーを返す番人が入ります。",
+                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当たれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当たる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
                 "If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row."
             ),
             X_W114,

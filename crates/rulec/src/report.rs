@@ -409,7 +409,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
             // likely a difference in rounding convention, not in the values themselves. Flag
             // it automatically.
             o.push_str(&tr!(
-                "    丸め差異の疑い（出力格子 {q} 未満の端数のみ）\n",
+                "    丸め方の違いの疑い（出力の刻み {q} 未満の端数だけ）\n",
                 "    Suspected rounding difference (only fractions below the output grid {q})\n"
             ));
         }
@@ -464,7 +464,7 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
         if let Some(q) = &cl.suspect_grid {
             money.push_str(&tr!(
-                "<br>丸め差異の疑い（格子 {q} 未満）",
+                "<br>丸め方の違いの疑い（刻み {q} 未満）",
                 "<br>suspected rounding difference (below grid {q})"
             ));
         }

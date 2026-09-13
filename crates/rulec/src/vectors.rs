@@ -347,7 +347,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                     if row_holds(f, c, t, &t.rows[j], &a) {
                         out.push((
                             a,
-                            tr!("遮蔽対: 表 {tname} 行{}∩行{}", "shadow pair: table {tname} row {} ∩ row {}", i + 1, j + 1),
+                            tr!("隠れ対: 表 {tname} 行{}∩行{}", "shadow pair: table {tname} row {} ∩ row {}", i + 1, j + 1),
                         ));
                     }
                 }

@@ -69,7 +69,7 @@ const RULES: &[(&str, &str)] = &[
 ];
 
 #[test]
-fn 署名と番人が生成物の字面と一致する() {
+fn 署名とガードが生成物と一致する() {
     // The cheapest check that cannot be fooled: every name and number the inventory states
     // has to occur in the file the generator wrote.
     for (tag, rule) in RULES {
@@ -93,7 +93,7 @@ fn 署名と番人が生成物の字面と一致する() {
                 let alias = s(p, "alias");
                 assert!(
                     py.contains(&format!("if not {lo} <= {alias} <= {hi}:")),
-                    "python の番人が範囲と食い違う: {alias} {lo}..{hi}"
+                    "python のガードが範囲と食い違う: {alias} {lo}..{hi}"
                 );
             }
         }
@@ -103,7 +103,7 @@ fn 署名と番人が生成物の字面と一致する() {
                 let f = format!("in.{}", s(p, "alias"));
                 assert!(
                     go.contains(&format!("if int64({f}) < {lo} || int64({f}) > {hi} {{")),
-                    "go の番人が範囲と食い違う: {f} {lo}..{hi}\n{go}"
+                    "go のガードが範囲と食い違う: {f} {lo}..{hi}\n{go}"
                 );
             }
         }

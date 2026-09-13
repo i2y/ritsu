@@ -57,14 +57,14 @@ fn doc_of(src: &str, name: &str) -> String {
     let p = dir.join("t.rule");
     std::fs::write(&p, src).unwrap();
     let (c, out, e) = run(&["doc", p.to_str().unwrap()]);
-    assert_eq!(c, 0, "描画できない: {out}{e}");
+    assert_eq!(c, 0, "資料を書き出せない: {out}{e}");
     let _ = std::fs::remove_dir_all(&dir);
     out
 }
 
 /// The heart of §1.6. Of what a single group name hides, say **only what can be said**.
 #[test]
-fn 群の被覆は事実のとおりに言う() {
+fn 群のカバーは事実のとおりに言う() {
     // A partition.
     let d = doc_of(&groups_rule("赤", "青, 緑"), "part");
     assert!(d.contains("この 2 群は 色 の 3 値を過不足なく分割しています"), "{d}");
@@ -80,13 +80,13 @@ fn 群の被覆は事実のとおりに言う() {
     assert!(d.contains("覆うのは 色 の 3 値のうち 2 値で、緑 はどの群にも属しません"), "{d}");
 
     // State where the fact comes from (whether the checker verified it or the renderer counted it).
-    assert!(d.contains("この描画が宣言から数えました"), "{d}");
+    assert!(d.contains("この資料が宣言から数えました"), "{d}");
 }
 
 /// Prohibition: never write prose that is not in the checker's output. Table cells keep the exact
 /// text of the source.
 #[test]
-fn 表のセルは原本に遡れる() {
+fn 表のセルはもとの規則までたどれる() {
     for rel in CORPUS {
         let src = std::fs::read_to_string(root().join(rel)).unwrap();
         let (c, out, e) = run(&["doc", rel]);
@@ -124,7 +124,7 @@ fn 表のセルは原本に遡れる() {
                 let raw = cell.replace("\\|", "|");
                 assert!(
                     src.contains(&raw),
-                    "{rel}: 原本に無い字面が表に出ている: `{raw}`\n行: {l}"
+                    "{rel}: もとの規則に無い字が表に出ている: `{raw}`\n行: {l}"
                 );
                 checked += 1;
             }
@@ -139,20 +139,20 @@ fn 検査を通らない規則は描かない() {
     let (c, out, e) = run(&["doc", "tests/mutants/m_e101.rule"]);
     assert_eq!(c, 1, "エラーのある規則を描いた");
     assert!(out.contains("error[E101]"), "何が悪いかを言う: {out}");
-    assert!(e.contains("描画しません"), "{e}");
-    assert!(!out.contains("# 規則"), "描画が始まってしまっている: {out}");
+    assert!(e.contains("資料を書き出しません"), "{e}");
+    assert!(!out.contains("# 規則"), "資料が書き出され始めている: {out}");
 }
 
 /// The greatest danger is a stale rendering that lingers looking authoritative (§1.6). The stamp
 /// must make staleness checkable.
 #[test]
-fn 原本の刻印が入る() {
+fn もとの規則の刻印が入る() {
     let rel = "tests/corpus/送料.rule";
     let (_, out, _) = run(&["doc", rel]);
     let first = out.lines().next().unwrap();
-    assert!(first.contains(rel), "原本のパスを刻む: {first}");
+    assert!(first.contains(rel), "もとの規則のパスを刻む: {first}");
     assert!(first.contains(&format!("rulec {}", env!("CARGO_PKG_VERSION"))), "道具の版を刻む: {first}");
-    assert!(first.contains("sha256:"), "原本のハッシュを刻む: {first}");
+    assert!(first.contains("sha256:"), "もとの規則のハッシュを刻む: {first}");
     assert!(first.contains("正本は .rule のほう"), "一方向であることを言う: {first}");
 
     // Changing one character of the source changes the stamp.
@@ -166,14 +166,14 @@ fn 原本の刻印が入る() {
     std::fs::write(&p, src.replace("1100円", "1110円")).unwrap();
     let (_, other, _) = run(&["doc", p.to_str().unwrap()]);
     let h = |s: &str| s.lines().next().unwrap().split("sha256:").nth(1).unwrap()[..12].to_string();
-    assert_ne!(h(&out), h(&other), "原本が変わったのに刻印が同じ");
+    assert_ne!(h(&out), h(&other), "もとの規則が変わったのに刻印が同じ");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Must be deterministic. If what gets pasted into a PR wobbled from run to run, the diff would be
 /// unreadable.
 #[test]
-fn 描画は決定的である() {
+fn 書き出す資料は決定的である() {
     for rel in CORPUS {
         let (_, a, _) = run(&["doc", rel]);
         let (_, b, _) = run(&["doc", rel]);
@@ -187,7 +187,7 @@ fn 承認者が知るべきことが載る() {
     // W114 and the presence of the guard.
     let (_, d, _) = run(&["doc", "tests/corpus/クーポン併用.rule"]);
     assert!(d.contains("証明できていません**（W114）"), "{d}");
-    assert!(d.contains("番人"), "番人の存在を言う: {d}");
+    assert!(d.contains("ガード"), "ガードの存在を言う: {d}");
 
     // The three shadowing classes, and the needs-confirmation row pair plus its witness.
     let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
@@ -273,7 +273,7 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
                 let bare = |t: &str| -> String { t.chars().filter(|c| !c.is_whitespace()).collect() };
                 assert!(
                     src.contains(&bare(name)),
-                    "{rel}: 見出しの出力名が原本に無い: `{name}`"
+                    "{rel}: 見出しの出力名がもとの規則に無い: `{name}`"
                 );
                 for tok in rest.split(" / ") {
                     if tok.is_empty() {
@@ -288,7 +288,7 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
                     for p in parts {
                         assert!(
                             src.contains(&bare(p)),
-                            "{rel}: 見出しに原本に無いトークンがある: `{p}`（見出し: {body}）"
+                            "{rel}: 見出しにもとの規則に無い語がある: `{p}`（見出し: {body}）"
                         );
                     }
                 }

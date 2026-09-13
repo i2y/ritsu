@@ -59,7 +59,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e104.rule", &[("E104", 1)], "出力の丸め宣言を消した"),
         ("m_e104b.rule", &[("E104", 1)], "端数の出る式から丸めを消した"),
         ("m_e105.rule", &[("E101", 1), ("E105", 1)], "一意の表で行を重ねた"),
-        ("m_e106.rule", &[("E106", 2)], "丸めの格子に載らない額を書いた"),
+        ("m_e106.rule", &[("E106", 2)], "丸めの刻みに載らない額を書いた"),
         ("m_e107.rule", &[("E107", 1)], "例の期待値をずらした"),
         ("m_e108.rule", &[("E108", 1)], "入力の範囲を int64 に収まらないほど広げた"),
         ("m_e111.rule", &[("E111", 1)], "例から出力の列を落とした"),
@@ -87,7 +87,7 @@ fn 変異は決めたコードだけを出す() {
 }
 
 #[test]
-fn 遮蔽は三分類される() {
+fn 隠れは三つに分けられる() {
     // §4: structural and equivalent get counts only; only needs-confirmation pairs are listed.
     let r = |rel: &str| {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
@@ -111,7 +111,7 @@ fn 遮蔽は三分類される() {
 }
 
 #[test]
-fn 遮蔽は上からの表でだけ出る() {
+fn 隠れは上からの表でだけ出る() {
     // W105 does not appear in a `unique` table (an overlap there is an error).
     let ds = codes("tests/corpus/ゆうパック運賃.rule");
     assert!(!ds.iter().any(|c| c == "E105"), "上から の重なりがエラーになってはいけない");
@@ -306,7 +306,7 @@ fn 定義が絡む実在の重なりは入力を構成して示す() {
 }
 
 #[test]
-fn 定義が矛盾する重なりは番人へ降ろす() {
+fn 定義が矛盾する重なりはガードへ降ろす() {
     // For the same input, `>=3万円` and `<=1000円` cannot both hold, but region analysis treats
     // definitions as free axes and so cannot eliminate this intersection. Since no witness can be
     // constructed, even under `unique` it is not an error; it is demoted to W114 and a guard (an
@@ -337,8 +337,8 @@ fn 定義が矛盾する重なりは番人へ降ろす() {
     // The matching guard goes into the generated code (§8.1).
     let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
     let py = rulec::codegen::Gen::new(&f, &c, src).python();
-    assert!(py.contains("番人"), "番人が入っていない");
-    assert!(py.contains("RuleContradictionError"), "番人が例外を投げない");
+    assert!(py.contains("ガード"), "ガードが入っていない");
+    assert!(py.contains("RuleContradictionError"), "ガードが例外を投げない");
 }
 
 #[test]

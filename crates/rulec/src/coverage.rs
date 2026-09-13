@@ -13,9 +13,9 @@ use crate::types::{Checked, Ty};
 use crate::vectors::{self, Vector};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const ROW: &str = "行被覆";
-pub const BOUND: &str = "境界両側被覆";
-pub const SHADOW: &str = "遮蔽対被覆";
+pub const ROW: &str = "行カバー";
+pub const BOUND: &str = "境界の両側カバー";
+pub const SHADOW: &str = "隠れ対カバー";
 
 /// The name of a criterion in the output language. The constants above stay Japanese: they
 /// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
