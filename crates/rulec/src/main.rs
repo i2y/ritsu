@@ -161,7 +161,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("引けた", "found")),
-                (2, tr!("知らないコード、または引数の誤り", "unknown code, or bad arguments")),
+                (2, tr!("そのコードが無い、または引数の誤り", "no such code, or bad arguments")),
             ],
             examples: vec![
                 "rulec explain E101".into(),
@@ -867,8 +867,8 @@ fn explain(files: &[&String], a: &Args) -> ExitCode {
     };
     let Some(e) = rulec::codes::find(code) else {
         return refuse(tr!(
-            "`{code}` は知らないコードです。`rulec explain --all` に全部あります",
-            "`{code}` is not a code this tool knows; `rulec explain --all` lists every one"
+            "`{code}` というコードはありません。`rulec explain --all` に全部あります",
+            "There is no code `{code}`; `rulec explain --all` lists every one"
         ));
     };
     print!(
