@@ -79,7 +79,7 @@ changed.**
 
 ---
 
-## A person, an agent, and the tool
+## A person, an agent, and rulec — who hands what to whom
 
 There are two kinds of shape and nothing else. A **sheet** with a folded
 corner is a thing that gets handed over — the table, the diagnosis, the
