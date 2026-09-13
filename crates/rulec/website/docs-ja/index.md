@@ -14,7 +14,11 @@ hide:
 <p class="rc-hero__tag">表を書く。証明つきで出る。</p>
 
 <p class="rc-hero__lede">
-送料、クーポン、返品可否 — 条件が絡み合った業務の判断を、業務担当者が読める<strong>一枚の表</strong>として書きます。rulec はその表に<strong>抜けも矛盾も、決して使われない行も無い</strong>ことを証明してから、依存ゼロの普通の Python・TypeScript・Rust・Go を生成します。
+<strong>表で書ける業務ルールを、エージェントがコードにするためのハーネス</strong>（作業台と安全装置）です。
+</p>
+
+<p class="rc-hero__lede">
+送料、クーポン、返品可否 — 条件が絡み合った業務の判断を、業務担当者が読める<strong>一枚の表</strong>として書き、rulec はその表に<strong>抜けも矛盾も、決して使われない行も無い</strong>ことを証明してから、依存ゼロの普通の Python・TypeScript・Rust・Go を生成します。
 <strong>証明はコードが存在する前に済みます</strong> — 証明できない規則は、そもそも生成されません。
 </p>
 

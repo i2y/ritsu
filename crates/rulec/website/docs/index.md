@@ -14,8 +14,13 @@ hide:
 <p class="rc-hero__tag">Write the table. Ship the proof.</p>
 
 <p class="rc-hero__lede">
+<strong>A harness for an agent turning table-shaped business rules into
+code</strong> — a workbench, and a safety rail.
+</p>
+
+<p class="rc-hero__lede">
 A business rule — a shipping tariff, a coupon policy, an eligibility
-test — written as one table a domain expert can read. rulec proves the
+test — is written as one table a domain expert can read; rulec proves the
 table has no gaps, no contradictions and no dead rows, and then
 generates ordinary Python, TypeScript, Rust and Go with no runtime to install.
 <strong>The proof happens before the code exists</strong>: a rule that

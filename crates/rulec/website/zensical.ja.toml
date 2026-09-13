@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/ja/"
-site_description = "業務ルールを一枚の表として書く。出てくる Python と Go は、出る前に証明が済んでいる。"
+site_description = "表で書ける業務ルールを、エージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロの Python・TypeScript・Rust・Go を出す。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
