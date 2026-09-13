@@ -365,6 +365,23 @@ exhibits it.
 Nothing is approximated. When a check cannot prove something, it says
 so rather than passing.
 
+### What is *not* proved
+
+Worth saying in the same breath.
+
+1. **That the table matches reality.** Transcribe the tariff wrong and
+   everything stays green. What gets proved is what can be said about
+   the table you wrote.
+2. **That the generated code answers like the table.** That is a
+   **test**, not a proof: vectors built from the boundaries are fed to
+   the reference evaluator and to every generated language and compared
+   byte for byte. Strong evidence, not a proof of equivalence.
+3. **Row pairs the overlap proof could not reach.** When a `unique`
+   table has two rows and neither an input that hits both nor a proof
+   that none exists can be constructed, **W114 names the pair and the
+   obligation moves to a runtime guard**. That one spot has no static
+   proof — instead of silently picking a row, the generated code raises.
+
 [What it proves, in detail](checks.md){ .md-button }
 
 ---
