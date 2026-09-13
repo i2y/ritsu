@@ -177,11 +177,10 @@ fn commands() -> Vec<Cmd> {
                 "format to the canonical shape: align the columns, write the symbols in ASCII"
             ),
             params: vec![rule_files()],
-            flags: vec![flag(
-                "--check",
-                None,
-                tr!("書き換えず、整形されていないファイルを名指しする（CI 用）", "name the unformatted files instead of rewriting them (for CI)"),
-            )],
+            flags: vec![
+                flag("--check", None, tr!("書き換えず、整形されていないファイルを名指しする（CI 用）", "name the unformatted files instead of rewriting them (for CI)")),
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
+            ],
             exits: vec![
                 (0, tr!("整形済み（--check）、または書き換えた", "already formatted (--check), or rewritten")),
                 (1, tr!("--check で整形されていないファイルがある", "--check found a file that is not formatted")),
@@ -201,6 +200,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 out_flag(&tr!("生成物", "generated files")).default("generated"),
                 flag("--check", None, tr!("書き換えず、生成物が古ければ 1 で落ちる（CI 用）", "write nothing and exit 1 if a generated file is stale (for CI)")),
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
                 (0, tr!("生成した、または --check が一致を確かめた", "generated, or --check found everything up to date")),
@@ -224,7 +224,9 @@ fn commands() -> Vec<Cmd> {
                 "<dir>",
                 tr!("gen --out で書いた生成先ディレクトリ", "the output directory that `gen --out` wrote"),
             )],
-            flags: vec![],
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
+            ],
             exits: vec![
                 (0, tr!("全部一致した、または toolchain が無くて飛ばした", "everything matched, or the toolchain is absent and it was skipped")),
                 (1, tr!("食い違いがある", "something disagreed")),
@@ -241,7 +243,9 @@ fn commands() -> Vec<Cmd> {
                 "check the vector suite itself against three criteria: rows, both sides of a boundary, shadow pairs"
             ),
             params: vec![rule_files()],
-            flags: vec![],
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
+            ],
             exits: vec![
                 (0, tr!("三基準すべてを満たす", "all three criteria are met")),
                 (1, tr!("欠けている義務がある（名指しされる）", "an obligation is missing (it is named)")),
@@ -342,7 +346,9 @@ fn commands() -> Vec<Cmd> {
                 "stand the legacy implementation up as a process and check it answers the same on the same inputs"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
-            flags: vec![flag(
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
+                flag(
                 "--adapter",
                 Some("<cmd> [args...]"),
                 tr!(
@@ -350,7 +356,8 @@ fn commands() -> Vec<Cmd> {
                     "the command that starts the legacy implementation; everything after it is that command's own arguments"
                 ),
             )
-            .rest()],
+            .rest(),
+            ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
                 (1, tr!("不一致がある（件数・差・証人つきで出る）", "there are mismatches (reported with counts, differences and witnesses)")),
@@ -377,6 +384,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--manifest", Some("<m.json>"), tr!("欄が欠けた記録を補完する既定値の宣言", "the declaration of the default values that fill a missing field")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
                 (0, tr!("形式の問題なし", "no format problems")),
@@ -401,7 +409,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
-                flag("--format", Some("markdown"), tr!("PR に貼れる markdown", "markdown to paste into a PR")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
@@ -429,7 +437,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
-                flag("--format", Some("markdown"), tr!("PR に貼れる markdown", "markdown to paste into a PR")).choices(&["markdown"]),
+                flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
             ],
             exits: vec![
                 (0, tr!("全件同じ答え（影響なし）", "both versions answered the same everywhere (no impact)")),
@@ -758,7 +766,7 @@ fn main() -> ExitCode {
             check(&files, json, a.has("--terse"), a.has("--show-shadow"), a.get("--diff-base"), budget)
         }
         "explain" => explain(&files, &a),
-        "fmt" => fmt(&files, a.has("--check")),
+        "fmt" => fmt(&files, a.has("--check"), json),
         "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
@@ -771,9 +779,9 @@ fn main() -> ExitCode {
                     "`--adapter <cmd>` is required; run `rulec verify --help`"
                 ));
             }
-            verify(&files, &a.rest)
+            verify(&files, &a.rest, json)
         }
-        "coverage" => coverage(&files),
+        "coverage" => coverage(&files, json),
         "doc" => doc(&files, a.get("--out")),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
@@ -783,15 +791,19 @@ fn main() -> ExitCode {
                     "only `rulec fixtures lint` exists for now"
                 ));
             }
-            fixtures_lint(&files[1..], &a)
+            fixtures_lint(&files[1..], &a, json)
         }
-        "replay" => replay_cmd(&files, &a, markdown),
-        "diff" => diff_cmd(&files, &a, markdown),
+        "replay" => replay_cmd(&files, &a, markdown, json),
+        "diff" => diff_cmd(&files, &a, markdown, json),
         "test" => {
             let Some(dir) = files.first() else { return need_args(cmd) };
             match rulec::runtest::run(std::path::Path::new(dir.as_str())) {
                 Ok(r) => {
-                    print!("{}", rulec::runtest::render(&r));
+                    if json {
+                        println!("{}", rulec::runtest::render_json(&r));
+                    } else {
+                        print!("{}", rulec::runtest::render(&r));
+                    }
                     ExitCode::from(u8::from(!r.ok()))
                 }
                 Err(e) => {
@@ -801,7 +813,7 @@ fn main() -> ExitCode {
             }
         }
         "vectors" => vectors(&files, a.get("--out")),
-        "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check")),
+        "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check"), json),
         _ => unreachable!("the table and the dispatch are the same list"),
     }
 }
@@ -847,8 +859,9 @@ fn explain(files: &[&String], a: &Args) -> ExitCode {
 
 /// §1.5: the one and only formatter. `--check` is for CI: it lists the files that need
 /// fixing and exits with 1.
-fn fmt(files: &[&String], check_only: bool) -> ExitCode {
+fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
     let mut dirty = 0u8;
+    let (mut unformatted, mut formatted): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -859,14 +872,29 @@ fn fmt(files: &[&String], check_only: bool) -> ExitCode {
             continue;
         }
         if check_only {
-            println!("{}", tr!("整形されていません: {path}", "not formatted: {path}"));
+            unformatted.push((*path).clone());
+            if !json {
+                println!("{}", tr!("整形されていません: {path}", "not formatted: {path}"));
+            }
             dirty = 1;
         } else if std::fs::write(path, &out).is_err() {
             eprintln!("{}", tr!("error: `{path}` に書けません", "error: cannot write `{path}`"));
             return ExitCode::from(2);
         } else {
-            println!("{}", tr!("整形しました: {path}", "formatted: {path}"));
+            formatted.push((*path).clone());
+            if !json {
+                println!("{}", tr!("整形しました: {path}", "formatted: {path}"));
+            }
         }
+    }
+    if json {
+        println!(
+            "{}",
+            rulec::json::Obj::new()
+                .raw("unformatted", rulec::json::strs(&unformatted))
+                .raw("formatted", rulec::json::strs(&formatted))
+                .finish()
+        );
     }
     ExitCode::from(dirty)
 }
@@ -972,8 +1000,10 @@ fn check(
 
 /// §8.4: the generated files are committed to git, and `--check` in CI verifies that they
 /// match a fresh generation.
-fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
+fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> ExitCode {
     let mut dirty = 0u8;
+    let (mut written, mut stale, mut missing): (Vec<String>, Vec<String>, Vec<String>) =
+        (Vec::new(), Vec::new(), Vec::new());
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1024,7 +1054,10 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
                 continue;
             }
             if check_only {
-                println!("{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
+                if existing.is_none() { missing.push(p.clone()) } else { stale.push(p.clone()) }
+                if !json {
+                    println!("{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
+                }
                 dirty = 1;
                 continue;
             }
@@ -1035,8 +1068,21 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
                 eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
                 return ExitCode::from(2);
             }
-            println!("{}", tr!("生成しました: {p}", "generated: {p}"));
+            written.push(p.clone());
+            if !json {
+                println!("{}", tr!("生成しました: {p}", "generated: {p}"));
+            }
         }
+    }
+    if json {
+        println!(
+            "{}",
+            rulec::json::Obj::new()
+                .raw("written", rulec::json::strs(&written))
+                .raw("stale", rulec::json::strs(&stale))
+                .raw("missing", rulec::json::strs(&missing))
+                .finish()
+        );
     }
     ExitCode::from(dirty)
 }
@@ -1186,7 +1232,7 @@ fn fixtures_arg(a: &Args) -> Result<(String, String), String> {
 }
 
 /// §10.2: only the validation of types and ranges is done here. ETL is the user's job.
-fn fixtures_lint(files: &[&String], a: &Args) -> ExitCode {
+fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
     let (Some(jsonl), Some(rule)) = (files.first(), files.get(1)) else {
         eprintln!("error: `rulec fixtures lint <file.jsonl> <file.rule>`");
         return ExitCode::from(2);
@@ -1210,12 +1256,16 @@ fn fixtures_lint(files: &[&String], a: &Args) -> ExitCode {
         return ExitCode::from(2);
     };
     let l = rulec::fixtures::load(&src, &f, &c, &m);
-    print!("{}", rulec::fixtures::render_lint(&l, jsonl));
+    if json {
+        println!("{}", rulec::fixtures::render_lint_json(&l, jsonl));
+    } else {
+        print!("{}", rulec::fixtures::render_lint(&l, jsonl));
+    }
     ExitCode::from(u8::from(!l.problems.is_empty()))
 }
 
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
-fn replay_cmd(files: &[&String], a: &Args, md: bool) -> ExitCode {
+fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     let Some(rule) = files.first() else { return refuse(tr!("規則が要ります", "a rule is required")) };
     let r = (|| -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
         let (_, f, c) = load_rule(rule)?;
@@ -1232,7 +1282,9 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool) -> ExitCode {
     };
     let l = rulec::fixtures::load(&src, &f, &c, &m);
     let rep = rulec::replay::replay(&f, &c, &l, &m, &path);
-    if md {
+    if json {
+        println!("{}", rulec::report::render_json(&rep, &f, &c));
+    } else if md {
         print!("{}", rulec::report::markdown(&rep, &f, &c, &tr!("過去再生", "Replay")));
     } else {
         print!("{}", rulec::report::render(&rep, &f, &c));
@@ -1241,7 +1293,7 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool) -> ExitCode {
 }
 
 /// §10.4: apply two versions to the same records and report how many change and by how much.
-fn diff_cmd(files: &[&String], opts: &Args, md: bool) -> ExitCode {
+fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
         eprintln!("{}", tr!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
         return ExitCode::from(2);
@@ -1270,7 +1322,9 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool) -> ExitCode {
     let l = rulec::fixtures::load(&src, &nf, &nc, &m);
     let rep = rulec::replay::diff((&of, &oc), (&nf, &nc), &l, &m, (a, b));
     let _ = path;
-    if md {
+    if json {
+        println!("{}", rulec::report::render_json(&rep, &nf, &nc));
+    } else if md {
         print!("{}", rulec::report::markdown(&rep, &nf, &nc, &tr!("版の差分", "Version diff")));
     } else {
         print!("{}", rulec::report::render(&rep, &nf, &nc));
@@ -1281,7 +1335,7 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool) -> ExitCode {
 /// §9.2: decide whether the generated vectors meet the three coverage criteria. The
 /// obligations are counted independently of the generator; the missing ones are named and
 /// the exit code is 1.
-fn coverage(files: &[&String]) -> ExitCode {
+fn coverage(files: &[&String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -1293,8 +1347,12 @@ fn coverage(files: &[&String]) -> ExitCode {
             return ExitCode::from(1);
         };
         let (a, vs) = rulec::coverage::audit_file(&f, &c, path);
-        println!("{path}");
-        print!("{}", rulec::coverage::render(&a, &vs));
+        if json {
+            println!("{}", rulec::coverage::render_json(&a, &vs, path));
+        } else {
+            println!("{path}");
+            print!("{}", rulec::coverage::render(&a, &vs));
+        }
         if !a.ok() {
             worst = 1;
         }
@@ -1360,7 +1418,7 @@ fn one(
 }
 
 /// §10: feed the vectors through the adapter of the legacy implementation and compare.
-fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
+fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -1374,7 +1432,11 @@ fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
         let vs = rulec::vectors::generate(&f, &c);
         match rulec::verify::run(&f, &c, adapter, &vs) {
             Ok(rep) => {
-                print!("{}", rulec::report::render(&rep, &f, &c));
+                if json {
+                    println!("{}", rulec::report::render_json(&rep, &f, &c));
+                } else {
+                    print!("{}", rulec::report::render(&rep, &f, &c));
+                }
                 if !rep.mismatches.is_empty() {
                     worst = 1;
                 }

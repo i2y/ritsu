@@ -18,6 +18,59 @@ use crate::types::Checked;
 use crate::vectors;
 use std::collections::BTreeMap;
 
+/// A row that fired, as data. The cluster key is built from these and the label is rendered
+/// from them, rather than the other way round: `row_tag` is prose and prose may change (§11
+/// principle 5), so nothing downstream is allowed to take it apart.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fired {
+    /// One side fired this row (`verify`, `replay`).
+    One { table: String, row: usize },
+    /// How the fired row moved between two versions (`diff`). `None` on a side means that
+    /// version's table did not fire at all.
+    Moved { table: String, from: Option<usize>, to: Option<usize> },
+}
+
+impl Fired {
+    /// The form the text and markdown renderings show.
+    pub fn label(&self) -> String {
+        match self {
+            Fired::One { table, row } => crate::eval::row_tag(table, *row),
+            Fired::Moved { table, from: Some(a), to: Some(b) } if a == b => {
+                crate::eval::row_tag(table, *a)
+            }
+            Fired::Moved { table, from: Some(a), to: Some(b) } => {
+                tr!("{}→行{b}", "{}→row {b}", crate::eval::row_tag(table, *a))
+            }
+            Fired::Moved { table, from: Some(a), to: None } => {
+                tr!("{}（旧のみ）", "{} (old only)", crate::eval::row_tag(table, *a))
+            }
+            Fired::Moved { table, from: None, to: Some(b) } => {
+                tr!("{}（新のみ）", "{} (new only)", crate::eval::row_tag(table, *b))
+            }
+            Fired::Moved { table, .. } => table.clone(),
+        }
+    }
+
+    /// `{"table":…,"row":…}` for one side, `{"table":…,"from":…,"to":…}` for a transition
+    /// (docs/formats.md).
+    pub fn json(&self) -> String {
+        let n = |v: Option<usize>| match v {
+            Some(v) => v.to_string(),
+            None => "null".to_string(),
+        };
+        match self {
+            Fired::One { table, row } => {
+                crate::json::Obj::new().str("table", table).int("row", *row as i128).finish()
+            }
+            Fired::Moved { table, from, to } => crate::json::Obj::new()
+                .str("table", table)
+                .raw("from", n(*from))
+                .raw("to", n(*to))
+                .finish(),
+        }
+    }
+}
+
 pub struct Mismatch {
     pub id: usize,
     /// The record's label (e.g. `order:1234567`). Empty when there is none.
@@ -27,8 +80,8 @@ pub struct Mismatch {
     /// outputs, all of them are listed here.
     pub outs: Vec<(String, Option<Val>, Option<String>)>,
     pub err: Option<String>,
-    /// The fired rows that form the cluster key. diff stores "old → new" as one string.
-    pub trace: Vec<String>,
+    /// The rows that fired. They form the cluster key.
+    pub fired: Vec<Fired>,
 }
 
 impl Mismatch {
@@ -71,8 +124,10 @@ pub struct Report {
     pub fills_used: BTreeMap<String, String>,
     pub filled_total: usize,
     pub filled_agreed: usize,
-    /// Number of records excluded for a broken format, with the reason.
-    pub excluded: Vec<(String, usize)>,
+    /// Records excluded before the comparison: a stable kind (`missing_field`, `bad_format`),
+    /// the reason as **prose**, and how many. The kind is what `--format json` reports, so a
+    /// caller never has to match on the sentence.
+    pub excluded: Vec<(&'static str, String, usize)>,
 }
 
 impl Report {
@@ -124,11 +179,11 @@ fn records(n: usize) -> &'static str {
 
 /// Statistics of Δ within a cluster (§10.4). Always carries the count, the total and the
 /// min/max.
-struct Delta {
-    n: usize,
-    sum: i128,
-    lo: i128,
-    hi: i128,
+pub struct Delta {
+    pub n: usize,
+    pub sum: i128,
+    pub lo: i128,
+    pub hi: i128,
 }
 
 impl Delta {
@@ -143,7 +198,7 @@ impl Delta {
         self.n += 1;
         self.sum += d;
     }
-    fn uniform(&self) -> bool {
+    pub fn uniform(&self) -> bool {
         self.lo == self.hi
     }
     /// Folded into one line when every record has the same value. Otherwise the min/max are
@@ -224,13 +279,49 @@ fn cluster<'a>(rep: &'a Report) -> BTreeMap<String, Vec<&'a Mismatch>> {
         // would be gained, and for computed outputs the clusters would split once per distinct
         // value and the summary would die. What the split would show is recovered by the
         // min/max of Δ.
-        let key = match &m.err {
-            Some(e) => tr!("答えられない: {e}", "could not answer: {e}"),
-            None => m.trace.join(" / "),
-        };
-        out.entry(key).or_default().push(m);
+        out.entry(key_of(m)).or_default().push(m);
     }
     out
+}
+
+fn key_of(m: &Mismatch) -> String {
+    match &m.err {
+        Some(e) => tr!("答えられない: {e}", "could not answer: {e}"),
+        None => m.fired.iter().map(|x| x.label()).collect::<Vec<_>>().join(" / "),
+    }
+}
+
+/// One cluster of mismatches, as data. The three renderings (text, markdown, JSON) are all
+/// built from this, so they cannot drift apart.
+pub struct Cluster<'a> {
+    /// The fired rows joined, as displayed. **Prose.**
+    pub label: String,
+    pub fired: Vec<Fired>,
+    pub count: usize,
+    /// Output name → how far it moved across the cluster.
+    pub deltas: BTreeMap<String, Delta>,
+    /// The record shown as the example.
+    pub example: &'a Mismatch,
+    /// The output grid, when every difference in the cluster is below it (§10.4).
+    pub suspect_grid: Option<String>,
+    /// Set when the counterpart declared it could not answer. **Prose.**
+    pub error: Option<String>,
+}
+
+/// Every cluster, in the order the renderings show them.
+pub fn clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    cluster(rep)
+        .into_iter()
+        .map(|(label, ms)| Cluster {
+            label,
+            fired: ms[0].fired.clone(),
+            count: ms.len(),
+            deltas: deltas(&ms),
+            suspect_grid: sub_grid(&ms, f, c),
+            error: ms[0].err.clone(),
+            example: ms[0],
+        })
+        .collect()
 }
 
 /// The record of fills and exclusions (§10.3). Wherever a number appears, its basis is
@@ -244,7 +335,7 @@ fn provenance(rep: &Report) -> Vec<String> {
             rep.errored
         ));
     }
-    for (why, n) in &rep.excluded {
+    for (_, why, n) in &rep.excluded {
         let unit = records(*n);
         o.push(tr!("{why}記録を {n} {unit}外しました", "Excluded {n} {unit} ({why})"));
     }
@@ -309,10 +400,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         return o;
     }
     o.push_str(&format!("\n{}\n", impact(rep)));
-    for (k, ms) in &cluster(rep) {
-        let money = money_text(&deltas(ms), rep.multi);
-        o.push_str(&format!("  {:<48} {:>5} {}{money}\n", k, ms.len(), records(ms.len())));
-        if let Some(q) = sub_grid(ms, f, c) {
+    for cl in clusters(rep, f, c) {
+        let money = money_text(&cl.deltas, rep.multi);
+        o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
+        if let Some(q) = &cl.suspect_grid {
             // §10.4: a cluster made up solely of differences below the output grid is most
             // likely a difference in rounding convention, not in the values themselves. Flag
             // it automatically.
@@ -321,7 +412,7 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 "    Suspected rounding difference (only fractions below the output grid {q})\n"
             ));
         }
-        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(ms[0], &rep.theirs)));
+        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs)));
     }
     o
 }
@@ -368,9 +459,9 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 証人 |\n|---|---:|---|---|\n",
         "\n#### Mismatch breakdown\n\n| Fired rows | Count | Difference | Witness |\n|---|---:|---|---|\n"
     ));
-    for (k, ms) in &cluster(rep) {
-        let mut money = money_text(&deltas(ms), rep.multi).trim().to_string();
-        if let Some(q) = sub_grid(ms, f, c) {
+    for cl in clusters(rep, f, c) {
+        let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
+        if let Some(q) = &cl.suspect_grid {
             money.push_str(&tr!(
                 "<br>丸め差異の疑い（格子 {q} 未満）",
                 "<br>suspected rounding difference (below grid {q})"
@@ -378,13 +469,101 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         }
         o.push_str(&format!(
             "| {} | {} | {} | {} |\n",
-            esc(k),
-            ms.len(),
+            esc(&cl.label),
+            cl.count,
             esc(&money),
-            esc(&witness(ms[0], &rep.theirs))
+            esc(&witness(cl.example, &rep.theirs))
         ));
     }
     o
+}
+
+/// `--format json` for `verify`, `replay` and `diff` (docs/formats.md). All three share one
+/// shape, because all three are "the rule against a counterpart".
+pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
+    let pairs = |ps: &[(String, String)]| {
+        let mut o = crate::json::Obj::new();
+        for (n, v) in ps {
+            // A wire value is already the canonical integer, a boolean, or a name. Numbers
+            // and booleans go in bare; anything else is a string.
+            let looks_scalar = v.parse::<i128>().is_ok() || v == "true" || v == "false";
+            o = if looks_scalar { o.raw(n, v) } else { o.str(n, v) };
+        }
+        o.finish()
+    };
+    let cls: Vec<String> = clusters(rep, f, c)
+        .iter()
+        .map(|cl| {
+            let rows: Vec<String> = cl.fired.iter().map(|x| x.json()).collect();
+            let mut delta = crate::json::Obj::new();
+            for (n, d) in &cl.deltas {
+                delta = delta.raw(
+                    n,
+                    crate::json::Obj::new()
+                        .int("min", d.lo)
+                        .int("max", d.hi)
+                        .bool("uniform", d.uniform())
+                        .int("total", d.sum)
+                        .finish(),
+                );
+            }
+            let ex = cl.example;
+            let ins: Vec<(String, String)> =
+                ex.input.iter().map(|(n, v)| (n.clone(), wire(Some(v)).unwrap_or_default())).collect();
+            let ours: Vec<(String, String)> = ex
+                .differing()
+                .iter()
+                .filter_map(|(n, a, _)| Some((n.clone(), wire(a.as_ref())?)))
+                .collect();
+            let theirs: Vec<(String, String)> = ex
+                .differing()
+                .iter()
+                .filter_map(|(n, _, b)| Some((n.clone(), b.clone()?)))
+                .collect();
+            let wit = crate::json::Obj::new()
+                .raw("in", pairs(&ins))
+                .raw("ours", pairs(&ours))
+                .raw("theirs", pairs(&theirs))
+                .finish();
+            crate::json::Obj::new()
+                .raw("rows", crate::json::arr(&rows))
+                .int("count", cl.count as i128)
+                .raw("delta", delta.finish())
+                .raw("witness", wit)
+                .bool("suspect_rounding", cl.suspect_grid.is_some())
+                .opt_str("error", cl.error.as_deref())
+                .finish()
+        })
+        .collect();
+
+    let mut excluded = crate::json::Obj::new();
+    for (kind, _, n) in &rep.excluded {
+        excluded = excluded.int(kind, *n as i128);
+    }
+    let mut by_field = crate::json::Obj::new();
+    for (n, k) in &rep.filled {
+        by_field = by_field.int(n, *k as i128);
+    }
+    let mut defaults = crate::json::Obj::new();
+    for (n, v) in &rep.fills_used {
+        defaults = defaults.str(n, v);
+    }
+    let filled = crate::json::Obj::new()
+        .int("count", rep.filled_total as i128)
+        .raw("by_field", by_field.finish())
+        .raw("defaults", defaults.finish())
+        .finish();
+
+    crate::json::Obj::new()
+        .int("compared", rep.total as i128)
+        .int("matched", rep.agreed as i128)
+        .raw("rate", format!("{:.5}", rep.rate()))
+        .str("counterpart", &rep.impl_id)
+        .int("unanswered", rep.errored as i128)
+        .raw("clusters", crate::json::arr(&cls))
+        .raw("excluded", excluded.finish())
+        .raw("filled", filled)
+        .finish()
 }
 
 /// §10.4: a suspected rounding difference is when every record in the cluster shows a

@@ -371,3 +371,39 @@ pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>)
     let a = audit(f, c, path, &vs);
     (a, vs)
 }
+
+/// `--format json` (docs/formats.md). One object per rule file.
+pub fn render_json(a: &Audit, vs: &[Vector], path: &str) -> String {
+    let criteria: Vec<String> = [ROW, BOUND, SHADOW]
+        .iter()
+        .map(|k| {
+            let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
+            let missing: Vec<String> = a
+                .missing
+                .iter()
+                .filter(|m| m.kind == *k)
+                .map(|m| crate::json::Obj::new().str("what", &m.what).str("hint", &m.hint).finish())
+                .collect();
+            crate::json::Obj::new()
+                .str("name", json_name(k))
+                .int("satisfied", met as i128)
+                .int("total", req as i128)
+                .raw("missing", crate::json::arr(&missing))
+                .finish()
+        })
+        .collect();
+    crate::json::Obj::new()
+        .str("file", path)
+        .int("vectors", vs.len() as i128)
+        .raw("criteria", crate::json::arr(&criteria))
+        .finish()
+}
+
+/// The criterion's name in JSON. Language independent, unlike `label`.
+fn json_name(k: &str) -> &'static str {
+    match k {
+        ROW => "row",
+        BOUND => "boundary_pair",
+        _ => "shadow_pair",
+    }
+}

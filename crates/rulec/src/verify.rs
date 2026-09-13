@@ -126,7 +126,7 @@ pub fn run(f: &RuleFile, _c: &Checked, adapter: &[String], vs: &[Vector]) -> Res
                 input: v.input.clone(),
                 outs: pairs,
                 err: Some(scalar(e)),
-                trace: v.trace.clone(),
+                fired: fired_of(v),
             });
             continue;
         }
@@ -140,7 +140,7 @@ pub fn run(f: &RuleFile, _c: &Checked, adapter: &[String], vs: &[Vector]) -> Res
                 input: v.input.clone(),
                 outs: pairs,
                 err: None,
-                trace: v.trace.clone(),
+                fired: fired_of(v),
             });
         }
     }
@@ -318,4 +318,12 @@ fn prop_inner(ty: &Ty, c: &Checked) -> String {
         Ty::Bool => "{\"type\":\"boolean\"}".into(),
         _ => "{\"type\":\"integer\"}".into(),
     }
+}
+
+/// A vector's fired rows, in the shape the clustering uses.
+fn fired_of(v: &crate::vectors::Vector) -> Vec<crate::report::Fired> {
+    v.fired
+        .iter()
+        .map(|(t, r)| crate::report::Fired::One { table: t.clone(), row: *r })
+        .collect()
 }

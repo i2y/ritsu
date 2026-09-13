@@ -37,6 +37,11 @@ pub struct Record {
 pub struct Problem {
     pub line: usize,
     pub tag: String,
+    /// A stable identifier for the kind of problem, for `--format json`. It never changes
+    /// with `--lang`, which `what` and `hint` do (docs/formats.md).
+    pub kind: &'static str,
+    /// The field of the record at fault, empty when the problem is about the whole record.
+    pub field: String,
     pub what: String,
     pub hint: String,
 }
@@ -227,6 +232,8 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                 out.problems.push(Problem {
                     line,
                     tag: String::new(),
+                    kind: "not_json",
+                    field: String::new(),
                     what: tr!("JSON として読めません: {e}", "Not readable as JSON: {e}"),
                     hint: tr!("1 件 1 行の JSON Lines です（§10.2）。", "The format is JSON Lines, one record per line (§10.2)."),
                 });
@@ -235,16 +242,23 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
         };
         let tag = j.get("tag").and_then(|x| x.as_str()).unwrap_or_default().to_string();
         let ts = j.get("ts").and_then(|x| x.as_str()).unwrap_or_default().to_string();
-        let mut bad = |what: String, hint: &str| {
-            out.problems.push(Problem { line, tag: tag.clone(), what, hint: hint.into() });
+        let mut bad = |kind: &'static str, field: &str, what: String, hint: &str| {
+            out.problems.push(Problem {
+                line,
+                tag: tag.clone(),
+                kind,
+                field: field.to_string(),
+                what,
+                hint: hint.into(),
+            });
         };
 
         let Some(ins) = j.get("in").and_then(|x| x.as_obj()) else {
-            bad(tr!("`in` がありません", "`in` is missing"), &tr!("入力は `in` の下に、規則の和名で置きます。", "Inputs go under `in`, keyed by the names used in the rule."));
+            bad("no_in", "", tr!("`in` がありません", "`in` is missing"), &tr!("入力は `in` の下に、規則の和名で置きます。", "Inputs go under `in`, keyed by the names used in the rule."));
             continue;
         };
         let Some(obs) = j.get("observed").and_then(|x| x.as_obj()) else {
-            bad(tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置きます。", "Put the values that actually came out at the time under `observed`."));
+            bad("no_observed", "", tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置きます。", "Put the values that actually came out at the time under `observed`."));
             continue;
         };
 
@@ -256,6 +270,8 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
         extra.sort();
         if !extra.is_empty() {
             bad(
+                "unknown_field",
+                extra[0],
                 tr!("`in` に規則が知らない欄があります: {}", "`in` has fields the rule does not know: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
                 &tr!("規則の入力の和名と綴りを合わせてください。", "Match the spelling of the rule's input names."),
             );
@@ -274,7 +290,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         input.insert(name.clone(), v);
                     }
                     Err(e) => {
-                        bad(format!("`in.{name}`: {e}"), &tr!("型か範囲が宣言と食い違っています。", "The type or range disagrees with the declaration."));
+                        bad("bad_input", name, format!("`in.{name}`: {e}"), &tr!("型か範囲が宣言と食い違っています。", "The type or range disagrees with the declaration."));
                         broken = true;
                     }
                 },
@@ -310,12 +326,14 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         observed.insert(name.clone(), v);
                     }
                     Err(e) => {
-                        bad(format!("`observed.{name}`: {e}"), &tr!("そのとき出た値を、正準単位で書いてください。", "Write the value that came out at the time, in the canonical unit."));
+                        bad("bad_observed", name, format!("`observed.{name}`: {e}"), &tr!("そのとき出た値を、正準単位で書いてください。", "Write the value that came out at the time, in the canonical unit."));
                         broken = true;
                     }
                 },
                 None => {
                     bad(
+                        "missing_observed",
+                        name,
                         tr!("`observed.{name}` がありません", "`observed.{name}` is missing"),
                         &tr!("出力は全部要ります。片方だけ比べると、比べなかった側の食い違いが緑になります。", "Every output is required. Comparing only one side turns a mismatch on the other side green."),
                     );
@@ -364,4 +382,41 @@ pub fn render_lint(l: &Load, path: &str) -> String {
         o.push_str(&tr!("  {what}\n    {} 件。例: {where_}\n    {}\n", "  {what}\n    {} record(s). Example: {where_}\n    {}\n", ps.len(), ex.hint));
     }
     o
+}
+
+/// `--format json` for `fixtures lint` (docs/formats.md). Problems of the same shape are
+/// grouped exactly as in the text rendering: in a 10,000-line extract, the same misspelling
+/// listed 10,000 times is unreadable in either form.
+pub fn render_lint_json(l: &Load, path: &str) -> String {
+    let mut by: BTreeMap<&str, Vec<&Problem>> = BTreeMap::new();
+    for p in &l.problems {
+        by.entry(p.what.as_str()).or_default().push(p);
+    }
+    let problems: Vec<String> = by
+        .values()
+        .map(|ps| {
+            let ex = ps[0];
+            let example = crate::json::Obj::new()
+                .int("line", ex.line as i128)
+                .str("tag", &ex.tag)
+                .finish();
+            let mut o = crate::json::Obj::new().str("kind", ex.kind);
+            if !ex.field.is_empty() {
+                o = o.str("field", &ex.field);
+            }
+            o.int("count", ps.len() as i128)
+                .raw("example", example)
+                .str("what", &ex.what)
+                .str("hint", &ex.hint)
+                .finish()
+        })
+        .collect();
+    crate::json::Obj::new()
+        .str("file", path)
+        .int("records", l.records.len() as i128)
+        .int("observed", l.measured() as i128)
+        .int("filled", l.filled() as i128)
+        .int("dropped", l.dropped as i128)
+        .raw("problems", crate::json::arr(&problems))
+        .finish()
 }

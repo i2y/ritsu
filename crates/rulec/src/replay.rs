@@ -16,7 +16,7 @@
 use crate::ast::RuleFile;
 use crate::eval;
 use crate::fixtures::{Load, Manifest};
-use crate::report::{wire, Mismatch, Report};
+use crate::report::{wire, Fired, Mismatch, Report};
 use crate::types::Checked;
 
 /// Run the records through the rule and compare against `observed`.
@@ -25,14 +25,14 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
     rep.impl_id = source.into();
     rep.fills_used = m.shown.clone();
     if l.dropped > 0 {
-        rep.excluded.push((tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
+        rep.excluded.push(("missing_field", tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
     }
     if !l.problems.is_empty() {
-        rep.excluded.push((tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
+        rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
     }
 
     for (id, r) in l.records.iter().enumerate() {
-        let (outs, trace, _) = eval::run_all(f, c, r.input.clone().into_iter().collect());
+        let (outs, _, fired, _) = eval::run_all_traced(f, c, r.input.clone().into_iter().collect());
         let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = outs
             .into_iter()
             .map(|(n, v)| {
@@ -65,7 +65,7 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
                 input: r.input.clone(),
                 outs: pairs,
                 err: None,
-                trace,
+                fired: fired.iter().map(|(t, r)| Fired::One { table: t.clone(), row: *r }).collect(),
             });
         }
     }
@@ -88,16 +88,16 @@ pub fn diff(
     rep.impl_id = format!("{} → {}", label.0, label.1);
     rep.fills_used = m.shown.clone();
     if l.dropped > 0 {
-        rep.excluded.push((tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
+        rep.excluded.push(("missing_field", tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
     }
     if !l.problems.is_empty() {
-        rep.excluded.push((tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
+        rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
     }
 
     for (id, r) in l.records.iter().enumerate() {
         let ins: std::collections::HashMap<_, _> = r.input.clone().into_iter().collect();
-        let (o_outs, o_trace, _) = eval::run_all(old.0, old.1, ins.clone());
-        let (n_outs, n_trace, _) = eval::run_all(new.0, new.1, ins);
+        let (o_outs, _, o_fired, _) = eval::run_all_traced(old.0, old.1, ins.clone());
+        let (n_outs, _, n_fired, _) = eval::run_all_traced(new.0, new.1, ins);
 
         let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = n_outs
             .into_iter()
@@ -125,61 +125,41 @@ pub fn diff(
         if !same {
             // "row 3" when the row stayed, "row 3→row 5" when it moved. What the reader is
             // looking for is the row that moved.
-            let trace = transition(&o_trace, &n_trace);
             rep.mismatches.push(Mismatch {
                 id,
                 tag: r.tag.clone(),
                 input: r.input.clone(),
                 outs: pairs,
                 err: None,
-                trace,
+                fired: transition(&o_fired, &n_fired),
             });
         }
     }
     rep
 }
 
-/// Fold the fired-row transition into a single key, of the form `表 基本送料 行2→行5`.
-fn transition(old: &[String], new: &[String]) -> Vec<String> {
-    // A fired-row label (eval.rs) names the table and ends with the row number, in either
-    // language (`表 基本送料 行2` / `table 基本送料 row 2`). Splitting off the trailing number
-    // leaves a head that identifies the table and ends with the row word, so the comparison
-    // and the rendering below do not depend on the wording.
-    let split = |s: &str| -> (String, String) {
-        let head = s.trim_end_matches(|c: char| c.is_ascii_digit());
-        (head.to_string(), s[head.len()..].to_string())
-    };
+/// Pair up the rows the two versions fired, table by table. The label (`表 基本送料 行2→行5`)
+/// is rendered from this afterwards — the transition itself is data, so nothing has to read a
+/// row number back out of a sentence.
+fn transition(old: &[(String, usize)], new: &[(String, usize)]) -> Vec<Fired> {
     let mut out = Vec::new();
     let mut i = 0;
     let mut j = 0;
     while i < old.len() || j < new.len() {
         match (old.get(i), new.get(j)) {
-            (Some(a), Some(b)) => {
-                let (ta, ra) = split(a);
-                let (tb, rb) = split(b);
-                if ta == tb {
-                    out.push(if ra == rb {
-                        a.clone()
-                    } else {
-                        // Repeat the row word (`行` / `row `) after the arrow: `行2→行5`.
-                        let word = &tb[tb.trim_end().rfind(' ').map_or(0, |k| k + 1)..];
-                        format!("{a}→{word}{rb}")
-                    });
-                    i += 1;
-                    j += 1;
-                } else {
-                    // A version that added or removed a table itself. Emit both sides without
-                    // disturbing the order.
-                    out.push(tr!("{a}（旧のみ）", "{a} (old only)"));
-                    i += 1;
-                }
+            (Some((ta, ra)), Some((tb, rb))) if ta == tb => {
+                out.push(Fired::Moved { table: ta.clone(), from: Some(*ra), to: Some(*rb) });
+                i += 1;
+                j += 1;
             }
-            (Some(a), None) => {
-                out.push(tr!("{a}（旧のみ）", "{a} (old only)"));
+            // A version that added or removed a table itself. Emit both sides without
+            // disturbing the order.
+            (Some((ta, ra)), _) => {
+                out.push(Fired::Moved { table: ta.clone(), from: Some(*ra), to: None });
                 i += 1;
             }
-            (None, Some(b)) => {
-                out.push(tr!("{b}（新のみ）", "{b} (new only)"));
+            (None, Some((tb, rb))) => {
+                out.push(Fired::Moved { table: tb.clone(), from: None, to: Some(*rb) });
                 j += 1;
             }
             (None, None) => break,

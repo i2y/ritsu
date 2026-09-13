@@ -18,6 +18,8 @@ pub struct Vector {
     /// golden files follow this order too.
     pub outputs: Vec<(String, Option<Val>)>,
     pub trace: Vec<String>,
+    /// The same rows as `(table, row)`. `verify` clusters on these; `trace` is the prose.
+    pub fired: Vec<(String, usize)>,
     pub why: String,
 }
 
@@ -435,8 +437,8 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         if !seen_in.insert(key) {
             continue;
         }
-        let (outs, trace, _) = eval::run_all(f, c, a.clone().into_iter().collect());
-        evaluated.push(Vector { input: a, outputs: outs, trace, why });
+        let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+        evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
     }
 
     // Keep the vectors that actually discharged one of the three §9.2 criteria. The key is not

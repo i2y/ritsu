@@ -396,6 +396,8 @@ $ rulec explain --all --format markdown # 台帳の全部
 
 台帳は `src/codes.rs` の一枚で、`docs/codes.md`（英）と `docs/codes.ja.md`（日）は **`rulec explain --all --format markdown` の出力そのもの**です（手で編集しません。テストが同一性を確かめています）。台帳の全項目には**走る最小の再現**が付いていて、それが本当にそのコードを出すことも毎回検査しています。
 
+`--format json` は `check` だけのものではありません。**`fmt --check`・`gen`（と `--check`）・`coverage`・`test`・`verify`・`replay`・`diff`・`fixtures lint` が同じ流儀で出します** — 一行一件、鍵は英語固定、文面は `title` `notes` `what` `hint` `text` にだけ。形式の定義は [`docs/formats.md`](docs/formats.md) にあります。`vectors`・`schema`・`adapter` は元から機械可読で、`doc` だけは人の承認者向けなので markdown のままです。
+
 文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ英語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
 
 ```console
@@ -561,6 +563,7 @@ exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内
 DESIGN.md         設計文書。決定と、何を捨てたかの記録
 docs/codes.md     診断コードの台帳（生成物。rulec explain --all の出力）
 docs/codes.ja.md  同じ台帳の日本語
+docs/formats.md   機械可読な出力の定義（--format json、ベクタ、fixtures）
 src/              kw / i18n / lex / parse / types / region / eval / fmt / json
                   codegen / vectors / coverage / verify
                   fixtures / replay / report / runtest / doc
@@ -577,6 +580,7 @@ tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替
 tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋は既定の英語）
 tests/codes.rs    診断台帳が単一のソースであること（全項目の再現が走る）
 tests/json_v2.rs  診断 JSON の構造と、fix が嘘をつかないこと
+tests/formats.rs  全コマンドの --format json の鍵が言語で動かないこと
 .cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
                   cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```

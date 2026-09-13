@@ -109,7 +109,9 @@ fn 汚れた記録は種類ごとに数えて報告する() {
     assert_eq!(c, 1, "壊れた記録があれば 1 で終わる: {out}");
     for want in [
         "JSON として読めません",
-        "小数は受け付けません",
+        // A decimal is refused at the field, naming it: §10.2 wants an integer in the
+        // canonical unit, and the record says which field broke that.
+        "`observed.運賃`: 正準単位の整数 を期待しましたが 小数 でした",
         "規則が知らない欄",
         "列挙 都道府県 の値ではありません",
         "宣言範囲 1..170 の外",

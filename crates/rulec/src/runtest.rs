@@ -12,12 +12,40 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Why one run failed. The first case is the one a caller can act on, so it is kept apart
+/// from the prose (docs/formats.md).
+pub enum Failure {
+    /// The first line of the canonical JSON on which the two sides disagreed.
+    Diff { line: usize, generated: String, expected: String },
+    /// Anything else: the process would not start, it crashed, the line counts differ.
+    /// **Prose.**
+    Other(String),
+}
+
+impl Failure {
+    /// The form the text rendering puts under `FAIL`.
+    pub fn text(&self) -> String {
+        match self {
+            Failure::Diff { line, generated, expected } => tr!(
+                "{line} 行目\n      生成: {generated}\n      期待: {expected}",
+                "line {line}\n      generated: {generated}\n      expected: {expected}"
+            ),
+            Failure::Other(s) => s.clone(),
+        }
+    }
+}
+
+/// The id of the pseudo-rule that stands for the rounding helpers. A stable token rather
+/// than prose, because `--format json` reports `rule` as an identifier.
+pub const ROUND_HELPER: &str = "_round";
+
 pub struct Outcome {
+    /// The rule's ASCII alias, or `_round` for the rounding helpers.
     pub rule: String,
     pub lang: &'static str,
     pub vectors: usize,
-    /// Which line disagreed. None when everything matched.
-    pub diff: Option<String>,
+    /// Why it failed. None when everything matched.
+    pub diff: Option<Failure>,
 }
 
 pub struct Run {
@@ -45,22 +73,22 @@ fn have(cmd: &str) -> bool {
 }
 
 /// Report the first line that disagrees, with its line number. No thousand-line diffs.
-fn first_diff(got: &str, want: &str) -> String {
+fn first_diff(got: &str, want: &str) -> Failure {
     for (i, (g, w)) in got.lines().zip(want.lines()).enumerate() {
         if g != w {
-            return tr!(
-                "{} 行目\n      生成: {g}\n      期待: {w}",
-                "line {}\n      generated: {g}\n      expected: {w}",
-                i + 1
-            );
+            return Failure::Diff {
+                line: i + 1,
+                generated: g.to_string(),
+                expected: w.to_string(),
+            };
         }
     }
-    tr!(
+    Failure::Other(tr!(
         "行数が違います（生成 {} 行 / 期待 {} 行）",
         "line counts differ (generated {} lines / expected {} lines)",
         got.lines().count(),
         want.lines().count()
-    )
+    ))
 }
 
 pub fn run(dir: &Path) -> Result<Run, String> {
@@ -119,10 +147,12 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             let Ok(stdin) = std::fs::File::open(&vec_path) else { return };
             let o = Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).stdin(stdin).output();
             let diff = match o {
-                Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
-                Ok(o) if !o.status.success() => {
-                    Some(tr!("落ちました:\n{}", "failed:\n{}", String::from_utf8_lossy(&o.stderr).trim()))
-                }
+                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+                Ok(o) if !o.status.success() => Some(Failure::Other(tr!(
+                    "落ちました:\n{}",
+                    "failed:\n{}",
+                    String::from_utf8_lossy(&o.stderr).trim()
+                ))),
                 Ok(o) => {
                     let got = String::from_utf8_lossy(&o.stdout).into_owned();
                     (got != want).then(|| first_diff(&got, &want))
@@ -147,10 +177,10 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             .output();
         let diff = match o {
             Ok(o) if o.status.success() => None,
-            Ok(o) => Some(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-            Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
+            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
+            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
         };
-        out.results.push(Outcome { rule: tr!("丸めヘルパ", "rounding helper"), lang: "Python", vectors: 0, diff });
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Python", vectors: 0, diff });
     }
     if go {
         let o = Command::new("go")
@@ -160,12 +190,21 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             .output();
         let diff = match o {
             Ok(o) if o.status.success() => None,
-            Ok(o) => Some(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-            Err(e) => Some(tr!("起動できません: {e}", "cannot start: {e}")),
+            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
+            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
         };
-        out.results.push(Outcome { rule: tr!("丸めヘルパ", "rounding helper"), lang: "Go", vectors: 0, diff });
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Go", vectors: 0, diff });
     }
     Ok(out)
+}
+
+/// How a rule is named in the text rendering. Only the helpers have a prose name.
+fn shown(rule: &str) -> String {
+    if rule == ROUND_HELPER {
+        tr!("丸めヘルパ", "rounding helper")
+    } else {
+        rule.to_string()
+    }
 }
 
 pub fn render(r: &Run) -> String {
@@ -182,14 +221,15 @@ pub fn render(r: &Run) -> String {
                 } else {
                     tr!("単体ベクタ", "unit vectors")
                 };
-                o.push_str(&format!("ok    {} ({}) {n}\n", x.rule, x.lang));
+                o.push_str(&format!("ok    {} ({}) {n}\n", shown(&x.rule), x.lang));
             }
             Some(d) => {
                 bad += 1;
+                let d = d.text();
                 o.push_str(&tr!(
                     "FAIL  {} ({}) 参照評価器と食い違います\n    {d}\n",
                     "FAIL  {} ({}) disagrees with the reference evaluator\n    {d}\n",
-                    x.rule,
+                    shown(&x.rule),
                     x.lang
                 ));
             }
@@ -201,4 +241,36 @@ pub fn render(r: &Run) -> String {
         o.push_str(&tr!("\n{bad} 件が食い違いました。\n", "\n{bad} disagreed.\n"));
     }
     o
+}
+
+/// `--format json` (docs/formats.md). One object for the run.
+pub fn render_json(r: &Run) -> String {
+    let results: Vec<String> = r
+        .results
+        .iter()
+        .map(|x| {
+            let first = match &x.diff {
+                Some(Failure::Diff { line, generated, expected }) => crate::json::Obj::new()
+                    .int("line", *line as i128)
+                    .str("generated", generated)
+                    .str("expected", expected)
+                    .finish(),
+                // A failure that is not a line disagreement still has to be visible; it goes
+                // into the prose field rather than pretending to be a diff.
+                Some(Failure::Other(e)) => crate::json::Obj::new().str("error", e).finish(),
+                None => "null".into(),
+            };
+            crate::json::Obj::new()
+                .str("rule", &x.rule)
+                .str("lang", x.lang.to_lowercase())
+                .int("vectors", x.vectors as i128)
+                .bool("ok", x.diff.is_none())
+                .raw("first_diff", first)
+                .finish()
+        })
+        .collect();
+    crate::json::Obj::new()
+        .raw("results", crate::json::arr(&results))
+        .raw("skipped", crate::json::strs(&r.skipped))
+        .finish()
 }

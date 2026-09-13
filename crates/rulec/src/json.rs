@@ -13,9 +13,14 @@ use std::fmt;
 pub enum Json {
     Null,
     Bool(bool),
-    /// Only integers are accepted as numbers. The wire format is fixed to integers in the
-    /// canonical unit (§10.1), so a decimal fraction is itself an error worth reporting.
+    /// Integers in the canonical unit are what the wire format carries (§10.1).
     Int(i128),
+    /// A number with a fractional part, kept as the exact digits that were written. rulec
+    /// itself emits one (a match rate), so the reader has to accept it — but `as_int` says
+    /// no, which is what keeps a decimal out of a fixtures record where §10.2 wants an
+    /// integer in the canonical unit. Held as text so reading and writing it never goes
+    /// through a float.
+    Frac(String),
     Str(String),
     Arr(Vec<Json>),
     Obj(BTreeMap<String, Json>),
@@ -52,6 +57,7 @@ impl Json {
             Json::Null => "null",
             Json::Bool(_) => if crate::i18n::ja() { "真偽" } else { "boolean" },
             Json::Int(_) => if crate::i18n::ja() { "整数" } else { "integer" },
+            Json::Frac(_) => if crate::i18n::ja() { "小数" } else { "a fraction" },
             Json::Str(_) => if crate::i18n::ja() { "文字列" } else { "string" },
             Json::Arr(_) => if crate::i18n::ja() { "配列" } else { "array" },
             Json::Obj(_) => if crate::i18n::ja() { "オブジェクト" } else { "object" },
@@ -65,6 +71,7 @@ impl fmt::Display for Json {
             Json::Null => write!(w, "null"),
             Json::Bool(b) => write!(w, "{b}"),
             Json::Int(n) => write!(w, "{n}"),
+            Json::Frac(s) => write!(w, "{s}"),
             Json::Str(s) => write!(w, "{s}"),
             Json::Arr(_) => write!(w, "{}", self.kind()),
             Json::Obj(_) => write!(w, "{}", self.kind()),
@@ -136,20 +143,33 @@ impl P<'_> {
         if self.i == start || (self.i == start + 1 && self.b[start] == b'-') {
             return Err(tr!("{} 文字目が読めません", "cannot read character {}", start + 1));
         }
-        // No decimal fractions or exponents. The wire format is integers in the canonical
-        // unit (§10.1).
-        if matches!(self.b.get(self.i), Some(b'.') | Some(b'e') | Some(b'E')) {
+        // A fractional part is read but kept apart from `Int`. §10.1 fixes the wire format to
+        // integers in the canonical unit, and that rule is enforced where it belongs — in the
+        // fixtures loader, which asks for an integer and gets told "a fraction". Exponents
+        // are still refused: there is no reading of `1e3` that a transcribed record wants.
+        let mut frac = false;
+        if self.b.get(self.i) == Some(&b'.') {
+            frac = true;
+            self.i += 1;
+            while self.i < self.b.len() && self.b[self.i].is_ascii_digit() {
+                self.i += 1;
+            }
+        }
+        if matches!(self.b.get(self.i), Some(b'e') | Some(b'E')) {
             return Err(tr!(
-                "{} 文字目: 小数は受け付けません。値は正準単位の整数で書いてください",
-                "character {}: decimal fractions are not accepted; write the value as an integer in the canonical unit",
+                "{} 文字目: 指数表記は受け付けません",
+                "character {}: exponent notation is not accepted",
                 start + 1
             ));
         }
-        std::str::from_utf8(&self.b[start..self.i])
-            .ok()
-            .and_then(|s| s.parse::<i128>().ok())
+        let text = std::str::from_utf8(&self.b[start..self.i])
+            .map_err(|_| tr!("{} 文字目が読めません", "cannot read character {}", start + 1))?;
+        if frac {
+            return Ok(Json::Frac(text.to_string()));
+        }
+        text.parse::<i128>()
             .map(Json::Int)
-            .ok_or_else(|| tr!("{} 文字目: 整数が大きすぎます", "character {}: integer too large", start + 1))
+            .map_err(|_| tr!("{} 文字目: 整数が大きすぎます", "character {}: integer too large", start + 1))
     }
     fn string(&mut self) -> Result<String, String> {
         self.eat(b'"')?;
@@ -380,9 +400,14 @@ mod tests {
 
     #[test]
     fn 壊れた行は位置つきで断る() {
-        for bad in [r#"{"a":1"#, r#"{"a":}"#, r#"{"a":1}x"#, r#"{"a":1.5}"#, r#"{"a":1,"a":2}"#] {
+        for bad in [r#"{"a":1"#, r#"{"a":}"#, r#"{"a":1}x"#, r#"{"a":1e3}"#, r#"{"a":1,"a":2}"#] {
             assert!(parse(bad).is_err(), "parsed although it should have failed: {bad}");
         }
+        // A fraction reads back — rulec writes one itself (a match rate) — but it is not an
+        // integer, which is how a decimal stays out of a fixtures record (§10.2).
+        let v = parse(r#"{"a":1.5}"#).unwrap();
+        assert_eq!(v.get("a").unwrap(), &Json::Frac("1.5".into()));
+        assert_eq!(v.get("a").unwrap().as_int(), None);
     }
 
     #[test]
