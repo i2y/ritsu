@@ -88,6 +88,12 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     }
 
     let (py, go) = (have("python3"), have("go"));
+    // Python is run with `-B` and any bytecode cache in the output directory is removed
+    // first. A `.pyc` is considered fresh when the source has the same size and the same
+    // mtime in whole seconds, so a same-length edit made within a second of the previous
+    // run would otherwise execute the *old* module and report a stale result as ok. The
+    // cache would also litter a directory that is committed.
+    let _ = std::fs::remove_dir_all(dir.join("python").join("__pycache__"));
     let mut out = Run { results: Vec::new(), skipped: Vec::new() };
     if !py {
         out.skipped.push(tr!("python3 が無いので Python 側を飛ばしました", "python3 not found; skipped the Python side"));
@@ -125,7 +131,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             out.results.push(Outcome { rule: alias.clone(), lang, vectors: n, diff });
         };
         if py {
-            one("Python", "python3", dir.join("python"), &[&format!("{alias}_runner.py")]);
+            one("Python", "python3", dir.join("python"), &["-B", &format!("{alias}_runner.py")]);
         }
         if go {
             one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."]);
@@ -137,7 +143,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     if py {
         let o = Command::new("python3")
             .current_dir(dir.join("python"))
-            .arg("_round_test.py")
+            .args(["-B", "_round_test.py"])
             .output();
         let diff = match o {
             Ok(o) if o.status.success() => None,
