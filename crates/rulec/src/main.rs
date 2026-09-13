@@ -26,7 +26,7 @@ fn usage() -> ExitCode {
              rulec schema  <file.rule>\n  \
              rulec adapter <file.rule> --template python|go\n  \
              rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
-             どのコマンドにも --lang ja|en を付けられます（既定は ja、環境変数 RULEC_LANG でも指定できます）\n\n\
+             どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG でも指定できます）\n\n\
              exit code: 0 注記のみ / 1 エラーあり / 2 内部異常",
             "rulec {}\n\n\
              Usage:\n  \
@@ -46,7 +46,7 @@ fn usage() -> ExitCode {
              rulec schema  <file.rule>\n  \
              rulec adapter <file.rule> --template python|go\n  \
              rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
-             Every command accepts --lang ja|en (default ja; the RULEC_LANG environment variable works too)\n\n\
+             Every command accepts --lang ja|en (default en; the RULEC_LANG environment variable works too)\n\n\
              exit code: 0 notes only / 1 errors found / 2 internal failure",
             env!("CARGO_PKG_VERSION")
         )
@@ -57,7 +57,7 @@ fn usage() -> ExitCode {
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     // `--lang ja|en` (or `--lang=en`) decides the output language before anything
-    // is printed; `RULEC_LANG` is the fallback, Japanese the default (i18n.rs).
+    // is printed; `RULEC_LANG` is the fallback, English the default (i18n.rs).
     if let Some(i) = args.iter().position(|a| a == "--lang") {
         let Some(v) = args.get(i + 1).and_then(|v| rulec::i18n::Lang::parse(v)) else {
             eprintln!("error: --lang ja|en");

@@ -3,10 +3,14 @@
 //! generated code.
 //!
 //! The language is chosen explicitly — `--lang` on the command line, else the
-//! `RULEC_LANG` environment variable, else Japanese. The system locale is
+//! `RULEC_LANG` environment variable, else English. The system locale is
 //! deliberately ignored: generated artifacts are committed and checked with
 //! `gen --check`, and CI logs are diffed, so the output must not change with
 //! the machine it runs on.
+//!
+//! English is the default because the first reader of this tool is an agent
+//! (§11 principle 7). Japanese comes back with one setting, which is what the
+//! approver-facing side of a CI job sets.
 //!
 //! Every user-facing string is written twice, next to each other, with the
 //! `tr!` macro (see `lib.rs`). Message *codes* (E101, W105, …) are language
@@ -50,9 +54,9 @@ pub fn set(l: Lang) {
     LANG.store(if l == Lang::Ja { 1 } else { 2 }, Ordering::Relaxed);
 }
 
-/// The language `RULEC_LANG` asks for, or Japanese when it is unset or unknown.
+/// The language `RULEC_LANG` asks for, or English when it is unset or unknown.
 pub fn from_env() -> Lang {
-    std::env::var("RULEC_LANG").ok().and_then(|s| Lang::parse(&s)).unwrap_or(Lang::Ja)
+    std::env::var("RULEC_LANG").ok().and_then(|s| Lang::parse(&s)).unwrap_or(Lang::En)
 }
 
 pub fn current() -> Lang {

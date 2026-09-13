@@ -1,5 +1,5 @@
 //! The output language switch (§11 principle 7): `--lang` beats `RULEC_LANG`,
-//! `RULEC_LANG` beats the default, and the default is Japanese. Every surface
+//! `RULEC_LANG` beats the default, and the default is English. Every surface
 //! that prints prose — diagnostics, reports, the rendered document, generated
 //! code — must follow the same switch.
 
@@ -34,10 +34,11 @@ fn title(out: &str) -> String {
 const MUTANT: &str = "tests/mutants/m_e101.rule";
 
 #[test]
-fn default_is_japanese() {
+fn default_is_english() {
     let (c, out, _) = run(&["check", MUTANT], &[]);
     assert_eq!(c, 1);
-    assert!(title(&out).contains("完全性の欠落"), "{out}");
+    let t = title(&out);
+    assert!(t.starts_with("error[E101]:") && !has_japanese(&t), "{out}");
 }
 
 #[test]
@@ -46,6 +47,14 @@ fn env_selects_english() {
     assert_eq!(c, 1);
     let t = title(&out);
     assert!(t.starts_with("error[E101]:") && !has_japanese(&t), "{out}");
+}
+
+/// Japanese is one setting away — the single knob the approver's side needs.
+#[test]
+fn env_selects_japanese() {
+    let (c, out, _) = run(&["check", MUTANT], &[("RULEC_LANG", "ja")]);
+    assert_eq!(c, 1);
+    assert!(title(&out).contains("完全性の欠落"), "{out}");
 }
 
 #[test]
@@ -110,7 +119,7 @@ fn generated_code_prose_follows_the_switch() {
     // generated with.
     let (c, o, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "en"], &[]);
     assert_eq!(c, 0, "{o}");
-    let (c, _, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check"], &[]);
+    let (c, _, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out, "--check", "--lang", "ja"], &[]);
     assert_eq!(c, 1, "a Japanese --check against English output must report a difference");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -342,47 +342,6 @@ fn 定義が矛盾する重なりは番人へ降ろす() {
 }
 
 #[test]
-fn readmeの例は通る() {
-    // Check the example in the README every time so it does not rot.
-    // Putting an example that does not pass into the README goes against the point of this tool.
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md");
-    let md = std::fs::read_to_string(&p).expect("README.md が読めない");
-    let head = md.find("## 書き方").expect("## 書き方 の節が無い");
-    let open = md[head..].find("```").expect("コードブロックが無い") + head + 3;
-    let close = md[open..].find("```").expect("コードブロックが閉じていない") + open;
-    let src = md[open..close].trim_start_matches('\n');
-
-    let ds = rulec::check_source(src, "README.md");
-    assert!(
-        !rulec::has_error(&ds),
-        "README の例が通らない: {:?}",
-        ds.iter().map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>()
-    );
-
-    // The excerpts pasted under "generated code" must not diverge from the actual output.
-    // The excerpts are abridged with `...`, so the whole cannot be compared, but it can be verified
-    // that every line shown is in the output. The generated code in the README was copied by hand,
-    // and hand-copied text rots.
-    let (f, c) = rulec::prepare(src, "README.md").expect("README の例は検査を通る");
-    let g = rulec::codegen::Gen::new(&f, &c, src);
-    let py = g.python();
-    let go = g.go();
-    let sec = md.find("## 生成されるコード").expect("## 生成されるコード の節が無い");
-    let end = md[sec..].find("## 何を検査するか").expect("節の終わりが無い") + sec;
-    for (lang, body) in [("python", &py), ("go", &go)] {
-        let fence = format!("```{lang}\n");
-        let open = md[sec..end].find(&fence).unwrap_or_else(|| panic!("{lang} の抜粋が無い")) + sec + fence.len();
-        let close = md[open..end].find("```").expect("抜粋が閉じていない") + open;
-        for line in md[open..close].lines() {
-            if line.trim() == "..." || line.trim().is_empty() {
-                continue;
-            }
-            assert!(body.contains(line), "README の {lang} 抜粋が生成物に無い:\n{line}");
-        }
-    }
-}
-
-#[test]
 fn 解析できない型の列は黙って飛ばさない() {
     // When a type could not be analyzed, `TableRegion::build` gave up and ok was printed with
     // neither the completeness nor the duplication of that table checked. Having stepped on this

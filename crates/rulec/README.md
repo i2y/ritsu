@@ -13,17 +13,19 @@ rulec は、それを**入れる前に、過去のデータで再生して差分
 これが最初の実用価値です。日本郵便のゆうパック運賃表を転記して、47 都道府県を 6 つの群にまとめたとき、県をひとつ書き落とすと:
 
 ```
-error[E101]: 完全性の欠落: どの行にも当たらない入力があります
-  --> rules/ゆうパック運賃.rule:34 表 運賃表
+error[E101]: Completeness gap: some input matches no row
+  --> rules/ゆうパック運賃.rule:34 table 運賃表
    |
 34 | table 運賃表(fee_table)
-   |       ^^^^^^ 入力空間を覆いきっていません
+   |       ^^^^^^ the input space is not fully covered
    |
- 当たらない例: あて先 = 山梨県, サイズ = S60
- ヒント: この入力に当たる行を足してください。
+ An input that matches no row: あて先 = 山梨県, サイズ = S60
+ hint: add a row that matches this input.
 ```
 
 **旧実装も過去データも要りません。** 手元の Excel を転記して `rulec check` に掛けるだけで、穴と重なりが出はじめます。
+
+出力の既定は英語です — この道具の第一の利用者が AI エージェントだからです。日本語で読むには `--lang ja` を付けるか、`RULEC_LANG=ja` を置いてください。名前とセルは、どちらの言語でも原本の日本語のまま出ます。
 
 ## 書き方
 
@@ -282,20 +284,20 @@ examples
 
 ```python
 def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
-    """規則 送料例 v1。分岐は原本の行と 1:1 に対応する。"""
+    """Rule 送料例 v1. Each branch corresponds 1:1 to a row of the rule source."""
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError(f"あて先 が列挙 Prefecture の値ではありません: {dest!r}")
+        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
     if not 1 <= girth <= 100:
-        raise RuleInputError(f"三辺合計 が範囲の外です: {girth}")
-    # 表 サイズ判定（policy first）
-    if girth <= 60:  # 行1: <=60cm | S60
+        raise RuleInputError(f"三辺合計 is out of range: {girth}")
+    # table サイズ判定 (policy first)
+    if girth <= 60:  # row 1: <=60cm | S60
         サイズ = SizeClass.S60
-    elif girth <= 80:  # 行2: <=80cm | S80
+    elif girth <= 80:  # row 2: <=80cm | S80
         サイズ = SizeClass.S80
-    elif True:  # 行3: - | S100
+    elif True:  # row 3: - | S100
         サイズ = SizeClass.S100
     else:
-        raise AssertionError("到達不能: 完全性は rulec が静的に検査済み")
+        raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
     return _round_up(運賃, 10)
 ```
@@ -303,23 +305,25 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 ```go
 func FeeDemo(in Input) (YenInclTax, error) {
 	if !in.Dest.Valid() {
-		return 0, fmt.Errorf("あて先 が列挙の値ではありません: %d", in.Dest)
+		return 0, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
 	}
-	// 表 サイズ判定（policy first）
+	// table サイズ判定 (policy first)
 	var サイズ SizeClass
-	if int64(in.Girth) <= 60 { // 行1: <=60cm | S60
+	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
 		サイズ = SizeClassS60
-	} else if int64(in.Girth) <= 80 { // 行2: <=80cm | S80
+	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
 		サイズ = SizeClassS80
-	} else if true { // 行3: - | S100
+	} else if true { // row 3: - | S100
 		サイズ = SizeClassS100
 	} else {
-		panic("到達不能: 完全性は rulec が静的に検査済み")
+		panic("unreachable: completeness was statically checked by rulec")
 	}
 	...
 	return YenInclTax(roundUp(int64(運賃), 10)), nil
 }
 ```
+
+生成物の中のコメントと文面も `--lang` に従います（上は既定の英語）。原本のセルと名前は、どちらの言語でも原本のまま引かれます。
 
 読める形であることを、生成器は次の四つで守っています。
 
@@ -358,7 +362,7 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 ```console
 $ rulec check rules/*.rule
-note rules/ゆうパック運賃.rule: 遮蔽 21 対（構造的 21、同値 0、要確認 0）
+note rules/ゆうパック運賃.rule: 21 shadow pairs (21 structural, 0 equivalent, 0 needs review)
 ok rules/ゆうパック運賃.rule
 
 $ rulec check rules/送料.rule --format json      # GitHub annotations にそのまま流せる形
@@ -366,18 +370,18 @@ $ rulec check rules/送料.rule --diff-base HEAD    # 基準から新たに生�
 $ rulec fmt --check rules/*.rule                  # gofmt と同じ運用
 ```
 
-文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ日本語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
+文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ英語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
 
 ```console
-$ rulec check rules/ゆうパック運賃.rule --lang en
-error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
+$ rulec check rules/ゆうパック運賃.rule --lang ja
+error[E101]: 完全性の欠落: どの行にも当たらない入力があります
+  --> rules/ゆうパック運賃.rule:34 表 運賃表
    |
 34 | table 運賃表(fee_table)
-   |       ^^^^^^ the input space is not fully covered
+   |       ^^^^^^ 入力空間を覆いきっていません
    |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
- hint: add a row that matches this input.
+ 当たらない例: あて先 = 山梨県, サイズ = S60
+ ヒント: この入力に当たる行を足してください。
 ```
 
 生成と、生成物の検証。
@@ -394,10 +398,10 @@ $ rulec gen rules/*.rule --out generated --check   # 生成物が古ければ 1 
 ```console
 $ rulec vectors rules/送料.rule            # 境界から作ったテストケース
 $ rulec coverage rules/送料.rule
-ベクタ 68 件
-  行被覆              7 / 7     満たす
-  境界両側被覆         4 / 4     満たす
-  遮蔽対被覆           3 / 3     満たす
+68 vectors
+  row coverage              7 / 7     satisfied
+  boundary-pair coverage    4 / 4     satisfied
+  shadow-pair coverage      3 / 3     satisfied
 ```
 
 `coverage` は**ベクタ套件そのものの完全性検査**です。三つの被覆基準を、生成したベクタからではなく**規則から先に**導いて、実際に片づいたかを確かめます。欠けていれば、どの行・どの境界・どの遮蔽対かを名指しして 1 で落ちます。
@@ -407,11 +411,13 @@ $ rulec coverage rules/送料.rule
 ```console
 $ rulec adapter rules/送料.rule --template python > adapter.py   # 20〜30 行の雛形
 $ rulec schema rules/送料.rule                                    # ワイヤの JSON Schema
-$ rulec verify rules/送料.rule --adapter python3 adapter.py
-照合 60 件 / 一致 53 (88.333%)
-不一致 7 件の内訳:
-  表 サイズ判定 行1 / 表 運賃表 行36                    1 件  差 -10
-    例: あて先=沖縄県, 三辺合計=1, 重量=24999 → 規則 運賃=1450 / 旧 運賃=1460
+$ rulec verify rules/ゆうパック運賃.rule --adapter python3 adapter.py
+Compared 207 / matched 182 (87.923%)
+Counterpart: legacy@fake-1
+
+Affected 25 (12.077%)  amount -250
+  table サイズ判定 row 1 / table 運賃表 row 36                 7 records  difference -10 uniform  total -70
+    Example: あて先=沖縄県, 三辺合計=1, 重量=1 → rule 運賃=1450 / legacy 運賃=1460
 ```
 
 旧実装は**プロセスとして立てて標準入出力で JSON Lines をやりとりする**だけなので、言語も置き場所も問いません。不一致は発火行でクラスタし、件数・金額差・証人を出します。ずれが出力の丸め格子より小さいクラスタには「丸め差異の疑い」が付きます。アダプタが答えられなかった件は、一致率の分母から外して件数を明示します。
@@ -419,7 +425,7 @@ $ rulec verify rules/送料.rule --adapter python3 adapter.py
 **承認する人に見せる。**
 
 ```console
-$ rulec doc rules/ゆうパック運賃.rule > 運賃.md
+$ rulec doc rules/ゆうパック運賃.rule --lang ja > 運賃.md
 ```
 
 `.rule` は既にほぼ markdown なので、**構文の転写には価値がありません**（`|---|` を一行挿むだけ）。`doc` の仕事は、**検査器が知っていて字面に現れない事実を添える**ことです。
@@ -458,20 +464,20 @@ $ rulec doc rules/ゆうパック運賃.rule > 運賃.md
 
 ```console
 $ rulec fixtures lint replay/2025-08.jsonl rules/ゆうパック運賃.rule
-replay/2025-08.jsonl: 記録 208 件（実測系 208、補完系 0）
+replay/2025-08.jsonl: 208 records (208 observed, 0 filled)
 
-問題 5 件:
-  `in.あて先`: `江戸` は列挙 都道府県 の値ではありません
-    1 件。例: 21 行目 (order:b3)
-    型か範囲が宣言と食い違っています。
+5 problems:
+  `in.あて先`: `江戸` is not a value of enum 都道府県
+    1 record(s). Example: line 21 (order:b3)
+    The type or range disagrees with the declaration.
 
 $ rulec diff ゆうパック運賃@v1 ゆうパック運賃@v2 --fixtures replay/2025-08.jsonl
-照合 207 件 / 一致 190 (91.787%)
-相手: ゆうパック運賃@v1 → ゆうパック運賃@v2
+Compared 207 / matched 190 (91.787%)
+Counterpart: ゆうパック運賃@v1 → ゆうパック運賃@v2
 
-影響 17 件 (8.213%)  金額 +5,300
-  表 サイズ判定 行1→行2 / 表 運賃表 行29→行30           7 件  差 +300 一様  合計 +2,100
-    例: あて先=北海道, 三辺合計=60, 重量=1 → 規則 運賃=1710 / 旧版 運賃=1410
+Affected 17 (8.213%)  amount +5,300
+  table サイズ判定 row 1→row 2 / table 運賃表 row 29→row 30    7 records  difference +300 uniform  total +2,100
+    Example: あて先=北海道, 三辺合計=60, 重量=1 → rule 運賃=1710 / old version 運賃=1410
 ```
 
 `ゆうパック運賃@v2` は git タグ `rules/ゆうパック運賃/v2` を引く糖衣です。差分は**発火行の遷移**でクラスタします（`行1→行2` が「どの行に移ったか」）。クラスタごとに件数・金額の合計・最小最大・証人が出て、ずれが一様なら一行に畳まれます。
@@ -481,9 +487,9 @@ $ rulec diff ゆうパック運賃@v1 ゆうパック運賃@v2 --fixtures replay
 **補完は必ず刻印されます。** 記録に欄が欠けているとき、rulec がやることは二つだけです — その記録を丸ごと外すか、**再生マニフェストに宣言した既定値**で補って「補完系」の札を付けるか。逆推定はしません。そして**見出しの一致率は実測系だけから計算**し、補完の件数と使った既定値をレポート自身が必ず書きます。
 
 ```
-形式が宣言と食い違う記録を 5 件外しました
-補完系 4 件（重量 4 件）。一致 4 件。見出しの一致率には入れていません
-使った既定値: 重量 = 1000
+Excluded 5 records (not matching the declared format)
+Filled records: 4 (重量: 4); matched 4. Not included in the headline match rate
+Default values used: 重量 = 1000
 ```
 
 既定値を `.rule` に書かないのは、**規則は純関数で、補完は特定の再生実験の判断**だからです。「会員は一般で埋める」と「ゴールドで埋めて影響の上限を見る」を同じ規則に別々に走らせるのは正当な使い方で、規則に一つ焼くとそれができません。
@@ -502,10 +508,14 @@ exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内
 - run: rulec test generated/        # python3 と go の toolchain を使う唯一の段
 ```
 
-過去再生は fixtures を持つ環境だけの別ジョブにします。
+ここまでのログを読むのは機械と開発者なので、言語は既定の英語のままにします。
+
+過去再生は fixtures を持つ環境だけの別ジョブにします。**こちらは人に貼るので、言語を日本語に倒します。**
 
 ```yaml
 - run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
+  env:
+    RULEC_LANG: ja          # PR コメントは日本の承認者が読む
 - run: gh pr comment "$PR" --body-file diff.md
 ```
 
@@ -513,6 +523,8 @@ exit code は **0**（注記のみ）、**1**（エラーあり）、**2**（内
 
 ```yaml
 - run: rulec doc rules/送料.rule > doc.md
+  env:
+    RULEC_LANG: ja
 - run: gh pr comment "$PR" --body-file doc.md
 ```
 
@@ -533,7 +545,9 @@ tests/threeway.rs 評価器・生成 Python・生成 Go の三者一致
 tests/budget.rs   検査予算を決めた合成ベンチ
 tests/golden_en.rs 同じ診断の英語スナップショット（tests/golden/en/）
 tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替に従うこと
-.cargo/config.toml テストは日本語の文面を固定しているので、cargo が起動するプロセスに RULEC_LANG=ja を刻む
+tests/readme.rs   README の例と抜粋が実物と一致すること（抜粋は既定の英語）
+.cargo/config.toml 既定は英語だが、テストの多くは日本語の文面を固定しているので、
+                  cargo が起動するプロセスに RULEC_LANG=ja を刻む
 ```
 
 コーパスはすべて**公開情報**から作られています — 日本郵便の運賃表、ヤマト運輸のサイズ区分、楽天とヤフーのクーポン規約、労働基準法の割増率。非公開のデータは一つも入っていません。
@@ -546,7 +560,7 @@ tests/lang.rs     --lang / RULEC_LANG の優先順位と、全出力面が切替
 - **M1 生成器** — Python と Go への出力。参照評価器と生成物二つの**三者一致**を、正準 JSON のバイト単位で確かめる。テストケースは境界から自動で作り、その套件が三つの被覆基準を満たしていることを別の判定器が検査する
 - **M2 等価検証** — 旧実装をプロセスとして立てて同じ答えを出すか確かめる
 - **M3 過去再生** — 記録の検証、再生、版の差分、PR 用 Markdown
-- **語彙と文面（2026-09）** — キーワードを英語に統一し、記号も ASCII（`->` と `,`。`→` `・` は `fmt` が直す）。名前とセルは日本語のまま。診断・レポート・描画・生成コードの文面は日本語と英語の二言語（`--lang`）
+- **語彙と文面（2026-09）** — キーワードを英語に統一し、記号も ASCII（`->` と `,`。`→` `・` は `fmt` が直す）。名前とセルは日本語のまま。診断・レポート・描画・生成コードの文面は日本語と英語の二言語（`--lang`）で、**既定は英語**（第一の利用者はエージェント）
 
 **M0 から M3 まで、実装は実データを一件も使わずに完成しました。** M3 のテストは、生成したベクタから合成した fixtures で全部を行使しています。
 

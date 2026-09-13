@@ -1,6 +1,8 @@
-# The test suite asserts Japanese output (golden snapshots, message substrings).
-# Pin the language for everything cargo launches so an exported RULEC_LANG=en in
-# a developer's shell cannot turn the suite red. `--lang` on the command line
-# still wins for `cargo run`.
+# The default output language is English (src/i18n.rs), but most of the suite
+# asserts the Japanese wording (golden snapshots, message substrings). Pin the
+# language for everything cargo launches so the suite does not depend on the
+# process default, in either direction. `--lang` on the command line still wins
+# for `cargo run`, and tests that observe the fallback order clear this variable
+# themselves (tests/lang.rs).
 [env]
 RULEC_LANG = { value = "ja", force = true }
