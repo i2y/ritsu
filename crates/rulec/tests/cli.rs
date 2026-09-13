@@ -265,3 +265,115 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     assert!(r.contains("period"), "{r}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ── §2 of the plan: one table behind `--help` and the parser ─────────────
+//
+// The CLI is what an agent reads instead of asking a person, so two properties are
+// pinned here: every subcommand explains itself, and a flag the tool does not know
+// stops the run instead of being silently dropped.
+
+/// Subcommand names, read out of the overall `rulec --help`.
+fn subcommands() -> Vec<String> {
+    let (c, out, _) = run(&["--help"]);
+    assert_eq!(c, 0, "rulec --help は 0 で終わる");
+    out.lines()
+        .filter_map(|l| l.strip_prefix("  rulec "))
+        .filter_map(|l| l.split_whitespace().next())
+        .filter(|w| w.chars().all(|c| c.is_ascii_lowercase()))
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// The flags a command's own `--help` lists, with their value placeholders.
+fn flags_of(cmd: &str) -> Vec<(String, Option<String>)> {
+    let (c, out, _) = run(&[cmd, "--help"]);
+    assert_eq!(c, 0, "`rulec {cmd} --help` は 0 で終わる");
+    out.lines()
+        .filter_map(|l| l.strip_prefix("  --"))
+        .map(|l| {
+            let mut it = l.split_whitespace();
+            let name = format!("--{}", it.next().unwrap());
+            let v = it.next().filter(|w| !w.starts_with('(') && !w.starts_with('-'));
+            (name, v.map(|s| s.to_string()))
+        })
+        .collect()
+}
+
+#[test]
+fn 全サブコマンドがヘルプを持つ() {
+    let cmds = subcommands();
+    assert!(cmds.len() >= 13, "サブコマンドが読み取れていない: {cmds:?}");
+    for c in &cmds {
+        let (code, out, _) = run(&[c, "--help"]);
+        assert_eq!(code, 0, "`rulec {c} --help` が 0 でない");
+        assert!(out.contains(&format!("rulec {c}")), "自分の名前を言わない: {out}");
+        // §11 principle 6 pins the exit codes, so every help says what they mean here,
+        // and every help shows two examples the reader can run.
+        assert!(out.contains("exit"), "exit code の節が無い: {c}");
+        let ex = out.lines().filter(|l| l.trim_start().starts_with("$ rulec ")).count();
+        assert!(ex >= 2, "例が二つ未満: {c}\n{out}");
+        // `rulec help <cmd>` is the same page.
+        let (code2, out2, _) = run(&["help", c]);
+        assert_eq!(code2, 0);
+        assert_eq!(out2, out, "`rulec help {c}` と `rulec {c} --help` が違う");
+    }
+}
+
+#[test]
+fn ヘルプに載る全フラグを解析器が知っている() {
+    // The rendering and the parsing read the same table, so a flag that `--help`
+    // lists can never be one the parser rejects.
+    for c in subcommands() {
+        for (name, value) in flags_of(&c) {
+            if name == "--help" {
+                continue;
+            }
+            let mut args = vec![c.as_str(), name.as_str()];
+            if value.is_some() {
+                args.push("X");
+            }
+            let (_, _, err) = run(&args);
+            assert!(
+                !err.contains("unknown flag") && !err.contains("知らないフラグ"),
+                "`rulec {c} {name}` が未知扱い: {err}"
+            );
+        }
+    }
+}
+
+#[test]
+fn 知らないフラグは黙殺せず2で止まる() {
+    for c in subcommands() {
+        let (code, _, err) = run(&[&c, "--no-such-flag"]);
+        assert_eq!(code, 2, "`rulec {c} --no-such-flag` が 2 でない");
+        assert!(err.contains("--no-such-flag"), "打ち間違いを名指ししない: {err}");
+        assert!(err.contains(&format!("rulec {c} --help")), "どこを読めばよいか言わない: {err}");
+    }
+    // A misspelled value of a flag that has a closed set of values is caught too.
+    let (code, _, err) = run(&["check", "tests/corpus/送料.rule", "--format", "jsn"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("jsn"), "{err}");
+}
+
+#[test]
+fn 値を取るフラグは値なしで止まる() {
+    let (code, _, err) = run(&["check", "tests/corpus/送料.rule", "--diff-base"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("--diff-base"), "{err}");
+}
+
+#[test]
+fn versionは版だけを言う() {
+    let (code, out, _) = run(&["--version"]);
+    assert_eq!(code, 0);
+    assert_eq!(out.trim(), format!("rulec {}", env!("CARGO_PKG_VERSION")));
+    assert_eq!(out.lines().count(), 1, "版だけを言う: {out}");
+}
+
+#[test]
+fn 知らないサブコマンドは2で止まる() {
+    let (code, _, err) = run(&["chekc", "x.rule"]);
+    assert_eq!(code, 2);
+    assert!(err.contains("chekc"), "{err}");
+    assert!(err.contains("rulec --help"), "{err}");
+}

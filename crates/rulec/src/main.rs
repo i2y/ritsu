@@ -1,57 +1,630 @@
-//! The `rulec` CLI. M0 is `check`.
+//! The `rulec` CLI.
+//!
+//! One table (`commands()`) is the only place that knows which flags exist. `--help`
+//! renders from it and `parse` validates against it, so a flag can never be documented
+//! and then ignored, nor accepted and left undocumented. The first reader of this
+//! surface is an agent that has nobody to ask, so a misspelled flag stops the run with
+//! exit 2 instead of being silently dropped.
 
 use rulec::diag::{Severity, render, render_json};
 use rulec::tr;
 use std::process::ExitCode;
 
-fn usage() -> ExitCode {
-    eprintln!(
-        "{}",
-        tr!(
-            "rulec {}\n\n\
-             使い方:\n  \
-             rulec check <file.rule>...  [--format json] [--show-shadow] [--diff-base <rev>] [--budget N]\n  \
-             rulec fmt   <file.rule>...  [--check]\n  \
-             rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
-             rulec vectors <file.rule>... [--out DIR]\n  \
-             rulec coverage <file.rule>...\n  \
-             rulec doc   <file.rule>...  [--out DIR]\n  \
-             rulec test  <生成先ディレクトリ>\n  \
-\
-             rulec fixtures lint <file.jsonl> <file.rule> [--manifest m.json] [--fill 欄=値]\n  \
-\
-             rulec replay <file.rule> --fixtures <f.jsonl> [--manifest m.json] [--fill 欄=値] [--format markdown]\n  \
-\
-             rulec diff <旧> <新> --fixtures <f.jsonl> [同上]   # 旧/新 は file.rule か 送料@v3\n  \
-             rulec schema  <file.rule>\n  \
-             rulec adapter <file.rule> --template python|go\n  \
-             rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
-             どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG でも指定できます）\n\n\
-             exit code: 0 注記のみ / 1 エラーあり / 2 内部異常",
-            "rulec {}\n\n\
-             Usage:\n  \
-             rulec check <file.rule>...  [--format json] [--show-shadow] [--diff-base <rev>] [--budget N]\n  \
-             rulec fmt   <file.rule>...  [--check]\n  \
-             rulec gen   <file.rule>...  [--out DIR] [--check]\n  \
-             rulec vectors <file.rule>... [--out DIR]\n  \
-             rulec coverage <file.rule>...\n  \
-             rulec doc   <file.rule>...  [--out DIR]\n  \
-             rulec test  <output directory>\n  \
-\
-             rulec fixtures lint <file.jsonl> <file.rule> [--manifest m.json] [--fill field=value]\n  \
-\
-             rulec replay <file.rule> --fixtures <f.jsonl> [--manifest m.json] [--fill field=value] [--format markdown]\n  \
-\
-             rulec diff <old> <new> --fixtures <f.jsonl> [same options]   # old/new: file.rule or 送料@v3\n  \
-             rulec schema  <file.rule>\n  \
-             rulec adapter <file.rule> --template python|go\n  \
-             rulec verify  <file.rule> --adapter <cmd> [args...]\n\n\
-             Every command accepts --lang ja|en (default en; the RULEC_LANG environment variable works too)\n\n\
-             exit code: 0 notes only / 1 errors found / 2 internal failure",
-            env!("CARGO_PKG_VERSION")
+// ── The one table ────────────────────────────────────────────────────────
+
+/// A `--flag`, and what may follow it.
+struct Flag {
+    name: &'static str,
+    /// Placeholder for the value; `None` for a boolean flag.
+    value: Option<&'static str>,
+    /// The only values accepted, when the set is closed. Empty means "anything".
+    choices: &'static [&'static str],
+    /// What is used when the flag is absent.
+    default: Option<String>,
+    help: String,
+    /// May be given more than once (`--fill`).
+    repeat: bool,
+    /// Everything after this flag belongs to it verbatim (`--adapter`).
+    rest: bool,
+}
+
+fn flag(name: &'static str, value: Option<&'static str>, help: String) -> Flag {
+    Flag { name, value, choices: &[], default: None, help, repeat: false, rest: false }
+}
+
+impl Flag {
+    fn choices(mut self, cs: &'static [&'static str]) -> Flag {
+        self.choices = cs;
+        self
+    }
+    fn default(mut self, d: impl Into<String>) -> Flag {
+        self.default = Some(d.into());
+        self
+    }
+    fn repeat(mut self) -> Flag {
+        self.repeat = true;
+        self
+    }
+    fn rest(mut self) -> Flag {
+        self.rest = true;
+        self
+    }
+    /// `--out <dir>` — the flag as it appears in a usage line.
+    fn spelled(&self) -> String {
+        match self.value {
+            Some(v) => format!("{} {v}", self.name),
+            None => self.name.to_string(),
+        }
+    }
+}
+
+/// One subcommand: what it is for, what it takes, and what its exit codes mean.
+struct Cmd {
+    name: &'static str,
+    /// The positional part of the usage line.
+    args: &'static str,
+    purpose: String,
+    /// One line per positional argument.
+    params: Vec<(&'static str, String)>,
+    flags: Vec<Flag>,
+    /// What each exit code means here. §11 principle 6 fixed 0/1/2 for the tool; this
+    /// says which condition produces which for this command.
+    exits: Vec<(u8, String)>,
+    /// Two runnable examples. Fewer than two teaches nothing about combining flags.
+    examples: Vec<String>,
+    /// The diagnostic codes this command can print.
+    codes: &'static [&'static str],
+}
+
+/// `--lang` and `--help` work everywhere, so they are appended to every command rather
+/// than repeated in the table.
+fn global_flags() -> Vec<Flag> {
+    vec![
+        flag(
+            "--lang",
+            Some("ja|en"),
+            tr!(
+                "文面の言語。無ければ環境変数 RULEC_LANG、それも無ければ en",
+                "language of the prose; else the RULEC_LANG environment variable, else en"
+            ),
         )
-    );
+        .choices(&["ja", "en"])
+        .default("en"),
+        flag("--help", None, tr!("この画面を出す", "print this page")),
+    ]
+}
+
+fn rule_files() -> (&'static str, String) {
+    (
+        "<file.rule>...",
+        tr!(
+            "規則ファイル。ディレクトリを渡すと下の .rule を全部（パス順）",
+            "rule files; a directory expands to every .rule under it, in path order"
+        ),
+    )
+}
+
+fn commands() -> Vec<Cmd> {
+    let out_flag = |what: &str| {
+        flag(
+            "--out",
+            Some("<dir>"),
+            tr!("{what} の書き出し先", "directory to write the {what} into"),
+        )
+    };
+    vec![
+        Cmd {
+            name: "check",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "規則を検査する。完全性・重なり・冗長・単位・丸め・溢れ・例",
+                "check a rule: completeness, overlap, redundancy, units, rounding, overflow, examples"
+            ),
+            params: vec![rule_files()],
+            flags: vec![
+                flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
+                flag("--show-shadow", None, tr!("件数に畳まれている遮蔽対も全部一覧する", "list every shadow pair, including the ones folded into the count")),
+                flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった発見を伏せる", "hide findings that were already present at that git revision")),
+                flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(rulec::region::DEFAULT_BUDGET.to_string()),
+            ],
+            exits: vec![
+                (0, tr!("エラーなし（警告と注記はありうる）", "no errors (warnings and notes are possible)")),
+                (1, tr!("エラーが一つ以上", "at least one error")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec check rules/".into(),
+                "rulec check rules/送料.rule --format json --diff-base origin/main".into(),
+            ],
+            codes: &[
+                "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010",
+                "E011", "E012", "E013", "E101", "E102", "E103", "E104", "E105", "E106", "E107",
+                "E108", "E109", "E110", "E111", "E112", "E113", "W105", "W110", "W111", "W114",
+            ],
+        },
+        Cmd {
+            name: "fmt",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "正準形に整形する。列を揃え、記号を ASCII に直す",
+                "format to the canonical shape: align the columns, write the symbols in ASCII"
+            ),
+            params: vec![rule_files()],
+            flags: vec![flag(
+                "--check",
+                None,
+                tr!("書き換えず、整形されていないファイルを名指しする（CI 用）", "name the unformatted files instead of rewriting them (for CI)"),
+            )],
+            exits: vec![
+                (0, tr!("整形済み（--check）、または書き換えた", "already formatted (--check), or rewritten")),
+                (1, tr!("--check で整形されていないファイルがある", "--check found a file that is not formatted")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec!["rulec fmt rules/送料.rule".into(), "rulec fmt --check rules/".into()],
+            codes: &[],
+        },
+        Cmd {
+            name: "gen",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "Python と Go と単体ベクタを生成する。検査を通らない規則からは生成しない",
+                "generate Python, Go and the unit vectors; nothing is generated from a rule that does not pass check"
+            ),
+            params: vec![rule_files()],
+            flags: vec![
+                out_flag(&tr!("生成物", "generated files")).default("generated"),
+                flag("--check", None, tr!("書き換えず、生成物が古ければ 1 で落ちる（CI 用）", "write nothing and exit 1 if a generated file is stale (for CI)")),
+            ],
+            exits: vec![
+                (0, tr!("生成した、または --check が一致を確かめた", "generated, or --check found everything up to date")),
+                (1, tr!("--check でずれがある、または規則が検査を通らない", "--check found a difference, or the rule does not pass check")),
+                (2, tr!("引数の誤り、書けないファイル", "bad arguments, or a file that cannot be written")),
+            ],
+            examples: vec![
+                "rulec gen rules/ --out generated/".into(),
+                "rulec gen rules/ --out generated/ --check".into(),
+            ],
+            codes: &["E001", "E003", "E009", "E011", "E012", "E013", "E103", "E104", "E106", "E108", "E112", "E113"],
+        },
+        Cmd {
+            name: "test",
+            args: "<dir>",
+            purpose: tr!(
+                "生成物を実際に走らせ、ベクタの期待値と突き合わせる",
+                "run the generated code and compare it against the expected values of the vectors"
+            ),
+            params: vec![(
+                "<dir>",
+                tr!("gen --out で書いた生成先ディレクトリ", "the output directory that `gen --out` wrote"),
+            )],
+            flags: vec![],
+            exits: vec![
+                (0, tr!("全部一致した、または toolchain が無くて飛ばした", "everything matched, or the toolchain is absent and it was skipped")),
+                (1, tr!("食い違いがある", "something disagreed")),
+                (2, tr!("引数の誤り、読めないディレクトリ", "bad arguments, or a directory that cannot be read")),
+            ],
+            examples: vec!["rulec test generated/".into(), "rulec test generated/ --lang ja".into()],
+            codes: &[],
+        },
+        Cmd {
+            name: "coverage",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "ベクタ套件そのものを検査する。行・境界両側・遮蔽対の三基準",
+                "check the vector suite itself against three criteria: rows, both sides of a boundary, shadow pairs"
+            ),
+            params: vec![rule_files()],
+            flags: vec![],
+            exits: vec![
+                (0, tr!("三基準すべてを満たす", "all three criteria are met")),
+                (1, tr!("欠けている義務がある（名指しされる）", "an obligation is missing (it is named)")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec!["rulec coverage rules/送料.rule".into(), "rulec coverage rules/".into()],
+            codes: &[],
+        },
+        Cmd {
+            name: "vectors",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "境界から作ったテストケースを JSON Lines で出す",
+                "emit the test cases built from the boundaries, as JSON Lines"
+            ),
+            params: vec![rule_files()],
+            flags: vec![out_flag(&tr!("ベクタ", "vectors"))],
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、書けないファイル", "bad arguments, or a file that cannot be written")),
+            ],
+            examples: vec![
+                "rulec vectors rules/送料.rule".into(),
+                "rulec vectors rules/ --out vectors/".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "doc",
+            args: "<file.rule>...",
+            purpose: tr!(
+                "承認する人に見せる描画。検査器が知っていて字面に現れない事実を添える",
+                "the rendering for the person who approves: the facts the checker knows that the text does not show"
+            ),
+            params: vec![rule_files()],
+            flags: vec![out_flag(&tr!("描画", "rendering"))],
+            exits: vec![
+                (0, tr!("描画した", "rendered")),
+                (1, tr!("規則が検査を通らない（壊れた規則は描画しない）", "the rule does not pass check (a broken rule is not rendered)")),
+                (2, tr!("引数の誤り、書けないファイル", "bad arguments, or a file that cannot be written")),
+            ],
+            examples: vec![
+                "rulec doc rules/送料.rule --lang ja > doc.md".into(),
+                "rulec doc rules/ --out docs/".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "schema",
+            args: "<file.rule>",
+            purpose: tr!(
+                "アダプタとやりとりするワイヤの JSON Schema を出す",
+                "emit the JSON Schema of the wire an adapter speaks"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![],
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec schema rules/送料.rule".into(),
+                "rulec schema rules/送料.rule > wire.schema.json".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "adapter",
+            args: "<file.rule>",
+            purpose: tr!(
+                "旧実装を包む 20〜30 行の雛形を出す",
+                "emit the 20-to-30-line template that wraps a legacy implementation"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![
+                flag("--template", Some("python|go"), tr!("雛形の言語", "language of the template"))
+                    .choices(&["python", "go"])
+                    .default("python"),
+            ],
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec adapter rules/送料.rule --template python > adapter.py".into(),
+                "rulec adapter rules/送料.rule --template go > adapter.go".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "verify",
+            args: "<file.rule>",
+            purpose: tr!(
+                "旧実装をプロセスとして立て、同じ入力で同じ答えを出すか確かめる",
+                "stand the legacy implementation up as a process and check it answers the same on the same inputs"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![flag(
+                "--adapter",
+                Some("<cmd> [args...]"),
+                tr!(
+                    "旧実装を立てるコマンド。これ以降は全部そのコマンドの引数",
+                    "the command that starts the legacy implementation; everything after it is that command's own arguments"
+                ),
+            )
+            .rest()],
+            exits: vec![
+                (0, tr!("全件一致した", "every record agreed")),
+                (1, tr!("不一致がある（件数・差・証人つきで出る）", "there are mismatches (reported with counts, differences and witnesses)")),
+                (2, tr!("引数の誤り、アダプタを起動できない", "bad arguments, or the adapter could not be started")),
+            ],
+            examples: vec![
+                "rulec verify rules/送料.rule --adapter python3 adapter.py".into(),
+                "rulec verify rules/送料.rule --adapter ./legacy --port 0".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "fixtures",
+            args: "lint <file.jsonl> <file.rule>",
+            purpose: tr!(
+                "過去の記録が宣言どおりの形かを検査する。ETL はしない",
+                "check that past records have the declared shape; no ETL is done here"
+            ),
+            params: vec![
+                ("lint", tr!("いまあるのはこの一つだけ", "the only subcommand there is for now")),
+                ("<file.jsonl>", tr!("1 件 1 行の記録", "the records, one per line")),
+                ("<file.rule>", tr!("突き合わせる規則", "the rule to check them against")),
+            ],
+            flags: vec![
+                flag("--manifest", Some("<m.json>"), tr!("欄が欠けた記録を補完する既定値の宣言", "the declaration of the default values that fill a missing field")),
+                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+            ],
+            exits: vec![
+                (0, tr!("形式の問題なし", "no format problems")),
+                (1, tr!("問題がある（種類ごとに数えて出る）", "there are problems (counted by kind)")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec fixtures lint replay/2025-08.jsonl rules/送料.rule".into(),
+                "rulec fixtures lint replay/2025-08.jsonl rules/送料.rule --fill 重量=1000".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "replay",
+            args: "<file.rule>",
+            purpose: tr!(
+                "過去の記録に規則を当て、そのとき出た値と突き合わせる",
+                "apply the rule to past records and compare with the values that came out at the time"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル、または 送料@v3", "the rule file, or 送料@v3"))],
+            flags: vec![
+                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
+                flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
+                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--format", Some("markdown"), tr!("PR に貼れる markdown", "markdown to paste into a PR")).choices(&["markdown"]),
+            ],
+            exits: vec![
+                (0, tr!("全件一致した", "every record agreed")),
+                (1, tr!("不一致がある", "there are mismatches")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec replay rules/送料.rule --fixtures replay/2025-08.jsonl".into(),
+                "rulec replay 送料@v3 --fixtures replay/2025-08.jsonl --format markdown".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "diff",
+            args: "<old> <new>",
+            purpose: tr!(
+                "二つの版を同じ記録に当て、何件がいくら動くかを出す",
+                "apply two versions to the same records and report how many change and by how much"
+            ),
+            params: vec![
+                ("<old>", tr!("旧の規則。file.rule か 送料@v3（git タグ rules/送料/v3）", "the old rule: file.rule or 送料@v3 (the git tag rules/送料/v3)")),
+                ("<new>", tr!("新の規則。同じ書き方", "the new rule, written the same way")),
+            ],
+            flags: vec![
+                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
+                flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
+                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--format", Some("markdown"), tr!("PR に貼れる markdown", "markdown to paste into a PR")).choices(&["markdown"]),
+            ],
+            exits: vec![
+                (0, tr!("全件同じ答え（影響なし）", "both versions answered the same everywhere (no impact)")),
+                (1, tr!("影響がある", "there is an impact")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec diff 送料@v3 送料@v4 --fixtures replay/2025-08.jsonl".into(),
+                "rulec diff rules/送料.rule 送料@v4 --fixtures \"$FIXTURES\" --format markdown".into(),
+            ],
+            codes: &[],
+        },
+    ]
+}
+
+// ── Rendering the table ──────────────────────────────────────────────────
+
+fn usage_line(c: &Cmd) -> String {
+    let mut o = format!("rulec {} {}", c.name, c.args);
+    for f in &c.flags {
+        o.push_str(&format!(" [{}]", f.spelled()));
+    }
+    o
+}
+
+/// `rulec <cmd> --help` and `rulec help <cmd>`.
+fn help_cmd(c: &Cmd) -> String {
+    let mut o = format!("rulec {} — {}\n\n", c.name, c.purpose);
+    o.push_str(&tr!("使い方:\n", "Usage:\n"));
+    o.push_str(&format!("  {}\n", usage_line(c)));
+
+    if !c.params.is_empty() {
+        o.push_str(&tr!("\n引数:\n", "\nArguments:\n"));
+        let w = c.params.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
+        for (n, h) in &c.params {
+            o.push_str(&format!("  {n:w$}  {h}\n", w = w));
+        }
+    }
+
+    o.push_str(&tr!("\nフラグ:\n", "\nFlags:\n"));
+    let flags: Vec<&Flag> = c.flags.iter().chain(GLOBALS.get_or_init(global_flags)).collect();
+    let w = flags.iter().map(|f| rulec::diag::width(&f.spelled())).max().unwrap_or(0);
+    for f in &flags {
+        let s = f.spelled();
+        let pad = " ".repeat(w - rulec::diag::width(&s));
+        let d = match &f.default {
+            Some(d) => tr!(" (既定 {d})", " (default {d})"),
+            None => String::new(),
+        };
+        o.push_str(&format!("  {s}{pad}  {}{d}\n", f.help));
+    }
+
+    o.push_str(&tr!("\nexit code:\n", "\nExit codes:\n"));
+    for (n, h) in &c.exits {
+        o.push_str(&format!("  {n}  {h}\n"));
+    }
+
+    o.push_str(&tr!("\n例:\n", "\nExamples:\n"));
+    for e in &c.examples {
+        o.push_str(&format!("  $ {e}\n"));
+    }
+
+    if !c.codes.is_empty() {
+        o.push_str(&tr!("\n出しうる診断:\n  ", "\nDiagnostics it can print:\n  "));
+        o.push_str(&c.codes.join(" "));
+        o.push('\n');
+    }
+    o
+}
+
+/// `rulec --help`: the list of commands, one line each.
+fn help_all() -> String {
+    let cs = commands();
+    let mut o = format!("rulec {}\n\n", env!("CARGO_PKG_VERSION"));
+    o.push_str(&tr!(
+        "業務ルールを一枚の表として書き、検査し、Python と Go に生成する。\n\n",
+        "Write business rules as one table, check them, and generate Python and Go.\n\n"
+    ));
+    o.push_str(&tr!("使い方:\n", "Usage:\n"));
+    let w = cs.iter().map(|c| c.name.len() + c.args.len()).max().unwrap_or(0);
+    for c in &cs {
+        let head = format!("{} {}", c.name, c.args);
+        o.push_str(&format!("  rulec {head:w$}  {}\n", c.purpose, w = w));
+    }
+    o.push_str(&tr!(
+        "\n一つのコマンドの詳しい説明は `rulec <cmd> --help`（`rulec help <cmd>` も同じ）。\n",
+        "\nFor one command in detail: `rulec <cmd> --help` (`rulec help <cmd>` is the same page).\n"
+    ));
+    o.push_str(&tr!(
+        "どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG でも指定できます）。\n",
+        "Every command accepts --lang ja|en (default en; the RULEC_LANG environment variable works too).\n"
+    ));
+    o.push_str(&tr!(
+        "exit code: 0 注記のみ / 1 エラーあり / 2 内部異常\n",
+        "Exit codes: 0 notes only / 1 errors found / 2 internal failure\n"
+    ));
+    o
+}
+
+static GLOBALS: std::sync::OnceLock<Vec<Flag>> = std::sync::OnceLock::new();
+
+// ── Parsing against the table ────────────────────────────────────────────
+
+/// What one command line said.
+struct Args {
+    /// Flag name → value. A boolean flag stores the empty string. A repeatable flag
+    /// appears once per occurrence.
+    got: Vec<(&'static str, String)>,
+    /// Everything after a `rest` flag (`--adapter`), verbatim.
+    rest: Vec<String>,
+    pos: Vec<String>,
+}
+
+impl Args {
+    fn has(&self, n: &str) -> bool {
+        self.got.iter().any(|(k, _)| *k == n)
+    }
+    fn get(&self, n: &str) -> Option<&str> {
+        self.got.iter().find(|(k, _)| *k == n).map(|(_, v)| v.as_str())
+    }
+    fn all(&self, n: &str) -> Vec<&str> {
+        self.got.iter().filter(|(k, _)| *k == n).map(|(_, v)| v.as_str()).collect()
+    }
+}
+
+/// Walk the command line against the command's flags. An unknown flag, a missing value
+/// and a value outside a closed set all stop the run; none of them is dropped quietly.
+fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
+    let globals = GLOBALS.get_or_init(global_flags);
+    let find = |name: &str| c.flags.iter().chain(globals.iter()).find(|f| f.name == name);
+    let mut out = Args { got: Vec::new(), rest: Vec::new(), pos: Vec::new() };
+    let mut i = 0;
+    while i < argv.len() {
+        let a = &argv[i];
+        if !a.starts_with("--") {
+            out.pos.push(a.clone());
+            i += 1;
+            continue;
+        }
+        let (name, inline) = match a.split_once('=') {
+            Some((k, v)) => (k.to_string(), Some(v.to_string())),
+            None => (a.clone(), None),
+        };
+        let Some(f) = find(&name) else {
+            return Err(tr!(
+                "知らないフラグ `{name}` です。`rulec {} --help` を読んでください",
+                "unknown flag `{name}`; run `rulec {} --help`",
+                c.name
+            ));
+        };
+        if f.rest {
+            out.got.push((f.name, String::new()));
+            out.rest = argv[i + 1..].to_vec();
+            if out.rest.is_empty() {
+                return Err(tr!(
+                    "`{}` にはコマンドが要ります",
+                    "`{}` needs a command",
+                    f.spelled()
+                ));
+            }
+            return Ok(out);
+        }
+        let v = match (f.value, inline) {
+            (None, Some(v)) => {
+                return Err(tr!(
+                    "`{}` は値を取りません（`={v}` が付いています）",
+                    "`{}` takes no value (it was given `={v}`)",
+                    f.name
+                ));
+            }
+            (None, None) => String::new(),
+            (Some(_), Some(v)) => v,
+            (Some(_), None) => {
+                i += 1;
+                match argv.get(i) {
+                    Some(v) => v.clone(),
+                    None => {
+                        return Err(tr!(
+                            "`{}` に値がありません",
+                            "`{}` is missing its value",
+                            f.spelled()
+                        ));
+                    }
+                }
+            }
+        };
+        if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
+            return Err(tr!(
+                "`{} {v}` は知らない値です。書けるのは {} だけです",
+                "`{} {v}` is not a value this flag takes; it takes only {}",
+                f.name,
+                f.choices.join(" | ")
+            ));
+        }
+        if !f.repeat && out.has(f.name) {
+            return Err(tr!(
+                "`{}` が二度書かれています",
+                "`{}` is given twice",
+                f.name
+            ));
+        }
+        out.got.push((f.name, v));
+        i += 1;
+    }
+    Ok(out)
+}
+
+/// Stop before doing anything, and say which command's help explains it.
+fn refuse(msg: String) -> ExitCode {
+    eprintln!("error: {msg}");
     ExitCode::from(2)
+}
+
+/// A command that needs files but was given none.
+fn need_args(c: &Cmd) -> ExitCode {
+    refuse(tr!(
+        "`rulec {}` には引数が要ります: {}。`rulec {} --help` を読んでください",
+        "`rulec {}` needs arguments: {}; run `rulec {} --help`",
+        c.name,
+        c.args,
+        c.name
+    ))
 }
 
 fn main() -> ExitCode {
@@ -73,103 +646,112 @@ fn main() -> ExitCode {
         rulec::i18n::set(v);
         args.remove(i);
     }
+
     if args.is_empty() {
-        return usage();
+        eprint!("{}", help_all());
+        return ExitCode::from(2);
     }
-    let json = args.iter().any(|a| a == "--format=json")
-        || args.windows(2).any(|w| w[0] == "--format" && w[1] == "json");
-    // §12: the form that gets pasted into a PR. The tool owns the formatting; posting it is
-    // one line of CI.
-    let markdown = args.iter().any(|a| a == "--format=markdown")
-        || args.windows(2).any(|w| w[0] == "--format" && w[1] == "markdown");
-    // §4: partial shadowing is how a top-down (`first`) table normally looks, so by default
-    // only the count is printed.
-    let show_shadow = args.iter().any(|a| a == "--show-shadow");
-    // §4: shadow pairs that need review and W114 surface only what is new since the base
-    // revision.
-    let budget: i64 = args
-        .windows(2)
-        .find(|w| w[0] == "--budget")
-        .and_then(|w| w[1].parse().ok())
-        .unwrap_or(rulec::region::DEFAULT_BUDGET);
-    let diff_base = args
-        .windows(2)
-        .find(|w| w[0] == "--diff-base")
-        .map(|w| w[1].clone());
-    // Pick up the file names, skipping the V of `--x V` and values that would otherwise look
-    // like arguments.
-    let mut skip: Vec<String> = vec!["json".into(), "markdown".into(), budget.to_string()];
-    // --fill can be repeated, so skip every one of its values.
-    for w in args.windows(2).filter(|w| w[0] == "--fill") {
-        skip.push(w[1].clone());
+    if args[0] == "--version" || args[0] == "-V" {
+        println!("rulec {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::from(0);
     }
-    for k in ["--out", "--diff-base", "--budget", "--format", "--template", "--fixtures", "--manifest"] {
-        if let Some(w) = args.windows(2).find(|w| w[0] == k) {
-            skip.push(w[1].clone());
-        }
+    if args[0] == "--help" || args[0] == "-h" {
+        print!("{}", help_all());
+        return ExitCode::from(0);
     }
-    let raw: Vec<&String> = args
-        .iter()
-        .filter(|a| !a.starts_with("--") && !skip.contains(a))
-        .skip(1)
-        .collect();
+    let cmds = commands();
+    if args[0] == "help" {
+        return match args.get(1) {
+            None => {
+                print!("{}", help_all());
+                ExitCode::from(0)
+            }
+            Some(n) => match cmds.iter().find(|c| c.name == n.as_str()) {
+                Some(c) => {
+                    print!("{}", help_cmd(c));
+                    ExitCode::from(0)
+                }
+                None => refuse(tr!(
+                    "知らないコマンド `{n}` です。`rulec --help` に一覧があります",
+                    "unknown command `{n}`; `rulec --help` lists them"
+                )),
+            },
+        };
+    }
+    let Some(cmd) = cmds.iter().find(|c| c.name == args[0].as_str()) else {
+        let n = &args[0];
+        return refuse(tr!(
+            "知らないコマンド `{n}` です。`rulec --help` に一覧があります",
+            "unknown command `{n}`; `rulec --help` lists them"
+        ));
+    };
+    let a = match parse(cmd, &args[1..]) {
+        Ok(a) => a,
+        Err(e) => return refuse(e),
+    };
+    if a.has("--help") {
+        print!("{}", help_cmd(cmd));
+        return ExitCode::from(0);
+    }
+
     // The CI of §12 writes `rulec check rules/`. A directory expands to the `.rule` files
     // inside it, in a deterministic order (by path) so that the order of the report does not
     // change with the machine. Only `test` takes the output directory itself as its
     // argument, so it is not expanded.
-    let expanded: Vec<String> = if args[0] == "test" {
-        raw.iter().map(|a| (*a).clone()).collect()
+    let expanded: Vec<String> = if cmd.name == "test" {
+        a.pos.clone()
     } else {
-        raw.iter().flat_map(|a| expand(a)).collect()
+        a.pos.iter().flat_map(|x| expand(x)).collect()
     };
     let files: Vec<&String> = expanded.iter().collect();
+    if files.is_empty() && !cmd.args.is_empty() {
+        return need_args(cmd);
+    }
+    let json = a.get("--format") == Some("json");
+    let markdown = a.get("--format") == Some("markdown");
 
-    match args[0].as_str() {
-        "check" => check(&files, json, show_shadow, diff_base.as_deref(), budget),
-        "fmt" => fmt(&files, args.iter().any(|a| a == "--check")),
+    match cmd.name {
+        "check" => {
+            let budget = match a.get("--budget") {
+                Some(v) => match v.parse::<i64>() {
+                    Ok(n) if n > 0 => n,
+                    _ => return refuse(tr!("`--budget {v}` は正の整数ではありません", "`--budget {v}` is not a positive integer")),
+                },
+                None => rulec::region::DEFAULT_BUDGET,
+            };
+            check(&files, json, a.has("--show-shadow"), a.get("--diff-base"), budget)
+        }
+        "fmt" => fmt(&files, a.has("--check")),
         "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
         "adapter" => {
-            let lang = args
-                .windows(2)
-                .find(|w| w[0] == "--template")
-                .map(|w| w[1].clone())
-                .unwrap_or_else(|| "python".into());
+            let lang = a.get("--template").unwrap_or("python").to_string();
             one(&files, move |f, _, _| Some(rulec::verify::template(&lang, f)))
         }
         "verify" => {
-            let i = args.iter().position(|a| a == "--adapter");
-            let Some(i) = i else {
-                eprintln!("{}", tr!("error: --adapter <cmd> が要ります", "error: --adapter <cmd> is required"));
-                return ExitCode::from(2);
-            };
-            let cmd: Vec<String> = args[i + 1..].to_vec();
-            // Everything after --adapter is the command, so exclude it from the file-name
-            // candidates.
-            let before: Vec<String> = args[..i].to_vec();
-            let vfiles: Vec<&String> = before
-                .iter()
-                .filter(|a| !a.starts_with("--") && !skip.contains(a))
-                .skip(1)
-                .collect();
-            verify(&vfiles, &cmd)
+            if a.rest.is_empty() {
+                return refuse(tr!(
+                    "`--adapter <cmd>` が要ります。`rulec verify --help` を読んでください",
+                    "`--adapter <cmd>` is required; run `rulec verify --help`"
+                ));
+            }
+            verify(&files, &a.rest)
         }
         "coverage" => coverage(&files),
-        "doc" => {
-            let out = args.windows(2).find(|w| w[0] == "--out").map(|w| w[1].clone());
-            doc(&files, out.as_deref())
-        }
+        "doc" => doc(&files, a.get("--out")),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {
-                eprintln!("{}", tr!("error: いまあるのは `rulec fixtures lint` だけです", "error: only `rulec fixtures lint` exists for now"));
-                return ExitCode::from(2);
+                return refuse(tr!(
+                    "いまあるのは `rulec fixtures lint` だけです",
+                    "only `rulec fixtures lint` exists for now"
+                ));
             }
-            fixtures_lint(&files[1..], &args)
+            fixtures_lint(&files[1..], &a)
         }
-        "replay" => replay_cmd(&files, &args, markdown),
-        "diff" => diff_cmd(&files, &args, markdown),
+        "replay" => replay_cmd(&files, &a, markdown),
+        "diff" => diff_cmd(&files, &a, markdown),
         "test" => {
-            let Some(dir) = files.first() else { return usage() };
+            let Some(dir) = files.first() else { return need_args(cmd) };
             match rulec::runtest::run(std::path::Path::new(dir.as_str())) {
                 Ok(r) => {
                     print!("{}", rulec::runtest::render(&r));
@@ -181,31 +763,15 @@ fn main() -> ExitCode {
                 }
             }
         }
-        "vectors" => {
-            let out = args
-                .windows(2)
-                .find(|w| w[0] == "--out")
-                .map(|w| w[1].clone());
-            vectors(&files, out.as_deref())
-        }
-        "gen" => {
-            let out = args
-                .windows(2)
-                .find(|w| w[0] == "--out")
-                .map(|w| w[1].clone())
-                .unwrap_or_else(|| "generated".into());
-            generate(&files, &out, args.iter().any(|a| a == "--check"))
-        }
-        _ => usage(),
+        "vectors" => vectors(&files, a.get("--out")),
+        "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check")),
+        _ => unreachable!("the table and the dispatch are the same list"),
     }
 }
 
 /// §1.5: the one and only formatter. `--check` is for CI: it lists the files that need
 /// fixing and exits with 1.
 fn fmt(files: &[&String], check_only: bool) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     let mut dirty = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -239,9 +805,6 @@ fn base_source(rev: &str, path: &str) -> Option<String> {
 }
 
 fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&str>, budget: i64) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -318,9 +881,6 @@ fn check(files: &[&String], json: bool, show_shadow: bool, diff_base: Option<&st
 /// §8.4: the generated files are committed to git, and `--check` in CI verifies that they
 /// match a fresh generation.
 fn generate(files: &[&String], out_dir: &str, check_only: bool) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     let mut dirty = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -423,9 +983,6 @@ fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
 /// pastes it into the PR. The biggest danger is a stale rendering that lingers looking
 /// authoritative, so no long-lived artifact is produced.
 fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -511,34 +1068,33 @@ fn load_rule(spec: &str) -> Result<(String, rulec::ast::RuleFile, rulec::types::
 /// `--fill` is a temporary override for sensitivity analysis, so it applies after the
 /// manifest.
 fn build_manifest(
-    args: &[String],
+    a: &Args,
     f: &rulec::ast::RuleFile,
     c: &rulec::types::Checked,
 ) -> Result<rulec::fixtures::Manifest, String> {
-    let mut m = match args.windows(2).find(|w| w[0] == "--manifest") {
-        Some(w) => {
-            let src = std::fs::read_to_string(&w[1]).map_err(|_| tr!("`{}` を読めません", "cannot read `{}`", w[1]))?;
+    let mut m = match a.get("--manifest") {
+        Some(path) => {
+            let src = std::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
             rulec::fixtures::Manifest::load(&src, f, c)?
         }
         None => rulec::fixtures::Manifest::default(),
     };
-    for w in args.windows(2).filter(|w| w[0] == "--fill") {
-        m.add(&w[1], f, c)?;
+    for spec in a.all("--fill") {
+        m.add(spec, f, c)?;
     }
     Ok(m)
 }
 
-fn fixtures_arg(args: &[String]) -> Result<(String, String), String> {
-    let w = args
-        .windows(2)
-        .find(|w| w[0] == "--fixtures")
+fn fixtures_arg(a: &Args) -> Result<(String, String), String> {
+    let path = a
+        .get("--fixtures")
         .ok_or_else(|| tr!("--fixtures <file.jsonl> が要ります", "--fixtures <file.jsonl> is required"))?;
-    let src = std::fs::read_to_string(&w[1]).map_err(|_| tr!("`{}` を読めません", "cannot read `{}`", w[1]))?;
-    Ok((w[1].clone(), src))
+    let src = std::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
+    Ok((path.to_string(), src))
 }
 
 /// §10.2: only the validation of types and ranges is done here. ETL is the user's job.
-fn fixtures_lint(files: &[&String], args: &[String]) -> ExitCode {
+fn fixtures_lint(files: &[&String], a: &Args) -> ExitCode {
     let (Some(jsonl), Some(rule)) = (files.first(), files.get(1)) else {
         eprintln!("error: `rulec fixtures lint <file.jsonl> <file.rule>`");
         return ExitCode::from(2);
@@ -550,7 +1106,7 @@ fn fixtures_lint(files: &[&String], args: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let m = match build_manifest(args, &f, &c) {
+    let m = match build_manifest(a, &f, &c) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("error: {e}");
@@ -567,12 +1123,12 @@ fn fixtures_lint(files: &[&String], args: &[String]) -> ExitCode {
 }
 
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
-fn replay_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
-    let Some(rule) = files.first() else { return usage() };
+fn replay_cmd(files: &[&String], a: &Args, md: bool) -> ExitCode {
+    let Some(rule) = files.first() else { return refuse(tr!("規則が要ります", "a rule is required")) };
     let r = (|| -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
         let (_, f, c) = load_rule(rule)?;
-        let m = build_manifest(args, &f, &c)?;
-        let (path, src) = fixtures_arg(args)?;
+        let m = build_manifest(a, &f, &c)?;
+        let (path, src) = fixtures_arg(a)?;
         Ok((String::new(), f, c, m, path, src))
     })();
     let (_, f, c, m, path, src) = match r {
@@ -593,7 +1149,7 @@ fn replay_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
 }
 
 /// §10.4: apply two versions to the same records and report how many change and by how much.
-fn diff_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
+fn diff_cmd(files: &[&String], opts: &Args, md: bool) -> ExitCode {
     let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
         eprintln!("{}", tr!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
         return ExitCode::from(2);
@@ -608,8 +1164,8 @@ fn diff_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
                 of.name.text, nf.name.text
             ));
         }
-        let m = build_manifest(args, &nf, &nc)?;
-        let (path, src) = fixtures_arg(args)?;
+        let m = build_manifest(opts, &nf, &nc)?;
+        let (path, src) = fixtures_arg(opts)?;
         Ok((of, oc, nf, nc, m, path, src))
     })();
     let (of, oc, nf, nc, m, path, src) = match r {
@@ -634,9 +1190,6 @@ fn diff_cmd(files: &[&String], args: &[String], md: bool) -> ExitCode {
 /// obligations are counted independently of the generator; the missing ones are named and
 /// the exit code is 1.
 fn coverage(files: &[&String]) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
@@ -660,9 +1213,6 @@ fn coverage(files: &[&String]) -> ExitCode {
 /// §9: build the vectors from the boundaries. The reference evaluator attaches the expected
 /// values and the fired rows.
 fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -701,9 +1251,6 @@ fn one(
     files: &[&String],
     f: impl Fn(&rulec::ast::RuleFile, &rulec::types::Checked, &str) -> Option<String>,
 ) -> ExitCode {
-    if files.is_empty() {
-        return usage();
-    }
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -722,9 +1269,6 @@ fn one(
 
 /// §10: feed the vectors through the adapter of the legacy implementation and compare.
 fn verify(files: &[&String], adapter: &[String]) -> ExitCode {
-    if files.is_empty() || adapter.is_empty() {
-        return usage();
-    }
     let mut worst = 0u8;
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {

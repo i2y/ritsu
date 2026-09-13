@@ -370,6 +370,8 @@ $ rulec check rules/送料.rule --diff-base HEAD    # 基準から新たに生�
 $ rulec fmt --check rules/*.rule                  # gofmt と同じ運用
 ```
 
+どのコマンドも `rulec <cmd> --help`（`rulec help <cmd>` も同じ）が、**目的・引数・フラグ（値と既定）・exit code の意味・走らせられる例を二つ・出しうる診断コード**を出します。`rulec --help` が一覧、`rulec --version` が版です。**知らないフラグは黙って無視せず、exit 2 で止まります** — `--shwo-shadow` が通って 0 が返ると、要求が効いたと信じて次へ進んでしまうからです。
+
 文面の言語は `--lang ja|en` で選べます（どのコマンドにも付けられます）。無ければ環境変数 `RULEC_LANG`、それも無ければ英語です。システムのロケールは見ません — 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせた機械で出力が変わってはいけないからです。
 
 ```console
