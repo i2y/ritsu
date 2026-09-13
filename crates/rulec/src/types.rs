@@ -547,7 +547,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for g in &f.groups {
         if !c.used.contains(&g.name.text) {
             c.diags.push(
-                Diag::warning("W111", tr!("群 {} はどのセルでも使われていません", "Group {} is not used in any cell", g.name.text))
+                Diag::warning("W111", tr!("グループ {} はどのセルでも使われていません", "Group {} is not used in any cell", g.name.text))
                     .at(at(g.span.line))
                     .mark(g.name.span.clone(), ""),
             );
@@ -938,7 +938,7 @@ impl Checked {
                     (Some(e), Ty::Enum(w2)) if e == w2 => {}
                     (_, Ty::Unknown) => {}
                     (None, _) => s.diags.push(
-                        Diag::error("E012", tr!("`{w}` は値としても群としても見つかりません", "`{w}` is found neither as a value nor as a group"))
+                        Diag::error("E012", tr!("`{w}` は値としてもグループとしても見つかりません", "`{w}` is found neither as a value nor as a group"))
                             .at(at.to_string())
                             .mark(span.clone(), ""),
                     ),

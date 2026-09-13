@@ -84,7 +84,7 @@ fn n_values(n: usize) -> String {
 /// agreement (`This group covers` / `These 3 groups cover`) stays in one place.
 fn n_groups(n: usize, verb: &str) -> String {
     if crate::i18n::ja() {
-        format!("この {n} 群")
+        format!("この {n} グループ")
     } else if n == 1 {
         format!("This group {verb}s")
     } else {
@@ -165,14 +165,14 @@ fn group_fact(c: &Checked, en: &str, names: &[String]) -> String {
             all = n_values(all.len())
         ),
         (true, false) => tr!(
-            "{g}は {en} の {all}をすべて覆いますが、{dup} が二つ以上の群に属します（この資料が宣言から数えました）。",
+            "{g}は {en} の {all}をすべて覆いますが、{dup} が二つ以上のグループに入っています（この資料が宣言から数えました）。",
             "{g} all {all} of {en}, but the following belong to two or more groups: {dup} (counted from the declarations by this rendering).",
             g = n_groups(n, "cover"),
             all = n_values(all.len()),
             dup = dup.join(sep())
         ),
         (false, true) => tr!(
-            "{g}が覆うのは {en} の {all}のうち {seen}で、{miss} はどの群にも属しません（この資料が宣言から数えました）。",
+            "{g}が覆うのは {en} の {all}のうち {seen}で、{miss} はどのグループにも入っていません（この資料が宣言から数えました）。",
             "{g} {seen} of the {all} of {en}; the following belong to no group: {miss} (counted from the declarations by this rendering).",
             g = n_groups(n, "cover"),
             all = n_values(all.len()),
@@ -328,9 +328,9 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
 
     // --- Groups. What one word hides.
     if !f.groups.is_empty() {
-        o.push_str(&tr!("\n## 群\n\n", "\n## Groups\n\n"));
+        o.push_str(&tr!("\n## グループ\n\n", "\n## Groups\n\n"));
         o.push_str(&tr!(
-            "群は列挙の名前つき部分集合です。表のセルに書かれた一語が、下の値をまとめて指しています。\n\n",
+            "グループは列挙の一部に名前を付けたものです。表のセルに書かれた一語が、下の値をまとめて指しています。\n\n",
             "A group is a named subset of an enum. One word written in a table cell stands for all the values below.\n\n"
         ));
         let mut by_enum: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -595,7 +595,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
             })
             .collect();
         o.push_str(&tr!(
-            "\nこの表のセルに現れる群: {}。中身は「群」の節にあります。\n",
+            "\nこの表のセルに現れるグループ: {}。中身は「グループ」の節にあります。\n",
             "\nGroups appearing in the cells of this table: {}. Their members are in the \"Groups\" section.\n",
             list.join(sep())
         ));

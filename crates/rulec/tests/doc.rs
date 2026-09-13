@@ -64,20 +64,20 @@ fn doc_of(src: &str, name: &str) -> String {
 
 /// The heart of §1.6. Of what a single group name hides, say **only what can be said**.
 #[test]
-fn 群のカバーは事実のとおりに言う() {
+fn グループのカバーは事実のとおりに言う() {
     // A partition.
     let d = doc_of(&groups_rule("赤", "青, 緑"), "part");
-    assert!(d.contains("この 2 群は 色 の 3 値を過不足なく分割しています"), "{d}");
+    assert!(d.contains("この 2 グループは 色 の 3 値を過不足なく分割しています"), "{d}");
 
     // Covers, but overlaps. It must not say "partition".
     let d = doc_of(&groups_rule("赤, 緑", "青, 緑"), "dup");
     assert!(!d.contains("過不足なく分割"), "重なっているのに分割だと言っている:\n{d}");
-    assert!(d.contains("すべて覆いますが、緑 が二つ以上の群に属します"), "{d}");
+    assert!(d.contains("すべて覆いますが、緑 が二つ以上のグループに入っています"), "{d}");
 
     // Does not cover everything. Name the gap so the approver can ask "what happens to 緑?".
     let d = doc_of(&groups_rule("赤", "青"), "gap");
     assert!(!d.contains("過不足なく分割"), "覆えていないのに分割だと言っている:\n{d}");
-    assert!(d.contains("覆うのは 色 の 3 値のうち 2 値で、緑 はどの群にも属しません"), "{d}");
+    assert!(d.contains("覆うのは 色 の 3 値のうち 2 値で、緑 はどのグループにも入っていません"), "{d}");
 
     // State where the fact comes from (whether the checker verified it or the renderer counted it).
     assert!(d.contains("この資料が宣言から数えました"), "{d}");
@@ -234,7 +234,7 @@ fn out_で書き出せる() {
 fn readmeの抜粋は実物と一致する() {
     let md = std::fs::read_to_string(root().join("README.md")).unwrap();
     let (_, real, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
-    let i = md.find("## 群\n\n- **近畿圏**").expect("README に doc の抜粋が無い");
+    let i = md.find("## グループ\n\n- **近畿圏**").expect("README に doc の抜粋が無い");
     let j = md[i..].find("```").expect("抜粋が閉じていない") + i;
     for l in md[i..j].lines() {
         if l.trim().is_empty() || l.trim() == "…" {
@@ -298,12 +298,12 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
     }
 }
 
-/// §1.6 condition (b): `not: 群` is not expanded, but the count is attached.
+/// §1.6 condition (b): `not: <group>` is not expanded, but the count is attached.
 /// A list of 41 prefectures does not survive visual inspection, so not expanding is right, but
 /// "it is the complement" alone cannot answer the approver's first question (is the scale
 /// plausible?).
 #[test]
-fn 以外の群には件数を添える() {
+fn 以外のグループには件数を添える() {
     // 基本送料 in 送料 uses `not: 遠隔地`. 遠隔地 has 2 values, so 45 remain.
     let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
     assert!(
@@ -315,6 +315,6 @@ fn 以外の群には件数を添える() {
     // 運賃表 in ゆうパック運賃 only lists groups and never uses `not:`.
     // Giving the scale of a form that is not used would be noise, so no complement is written.
     let (_, d, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
-    assert!(d.contains("**近畿圏**（6 値）"), "群の値数は出す:\n{d}");
+    assert!(d.contains("**近畿圏**（6 値）"), "グループの値数は出す:\n{d}");
     assert!(!d.contains("`not: 近畿圏` は残り"), "使っていない形の件数を出している");
 }

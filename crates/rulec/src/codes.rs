@@ -629,7 +629,7 @@ pub fn ledger() -> Vec<Entry> {
             "W111",
             tr!("使われていない宣言があります", "A declaration is never used"),
             tr!(
-                "入力・導出・群・列挙値が、どの表のどのセルにも現れないとき。書き忘れの徴候であることも、正当な契約であることもあります。取込した型の値は対象外です。",
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れの徴候であることも、正当な契約であることもあります。取込した型の値は対象外です。",
                 "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way."
             ),
             tr!(

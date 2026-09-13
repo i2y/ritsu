@@ -1121,7 +1121,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                 .table(tname.clone())
                 .mark(head_span.clone(), "")
                 .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
-                .note(tr!("列を群でまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
+                .note(tr!("列をグループでまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
         );
     }
 

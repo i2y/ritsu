@@ -237,7 +237,7 @@ impl P {
     fn group_decl(&mut self, line: &[Token]) -> Option<GroupDecl> {
         let (name, mut k) = self.name_at(line, 1)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
-            self.err(Diag::error("E006", tr!("群の宣言に `=` がありません", "Missing `=` in the group declaration")).mark(span_of(line), ""));
+            self.err(Diag::error("E006", tr!("グループの宣言に `=` がありません", "Missing `=` in the group declaration")).mark(span_of(line), ""));
             return None;
         }
         k += 1;
