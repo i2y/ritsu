@@ -68,22 +68,41 @@ drops `build/ja` — always go through `./build.sh`.
 Deployed by `.github/workflows/docs.yml` to GitHub Pages on every push
 to main that touches `website/`, `AGENTS.md` or `docs/`.
 
-## The front-page diagram
+## The front-page diagrams
 
-`docs/images/flow*.svg` — four files (two languages, two colour schemes) —
-come from `tools/make_flow.py`, so the geometry cannot drift between them
-and only the words change. It draws two kinds of shape and no others:
-**cards** for the actors and **sheets** (a folded corner) for the things
-that move between them, so that an arrow can only say "this actor produces
-this thing, which that actor consumes". The script refuses to write a file
-whose text would overflow a shape, which is what keeps a later wording
-change from shipping unseen. Edit the text at the top of it and re-run:
+Two pictures, eight files (two languages times two colour schemes each),
+each drawn by one script from one layout so that the geometry cannot
+drift between the files and only the words change:
+
+| files | script | what it shows |
+|---|---|---|
+| `docs/images/overview*.svg` | `tools/make_overview.py` | what the tool does to a table: a row is a box, the boxes must tile the input space, and a gap comes back as the input that falls through it |
+| `docs/images/flow*.svg` | `tools/make_flow.py` | who makes what and who takes it: the agent, rulec, a person |
+
+Both draw with the vocabulary in `tools/diagram.py` — two kinds of shape
+and no others, **cards** for the actors and **sheets** (a folded corner)
+for the things that move between them, so that an arrow can only say
+"this actor produces this thing, which that actor consumes" — and the
+same three arrow colours. Either script refuses to write a file whose
+text would overflow a shape, which is what keeps a later wording change
+from shipping unseen. Edit the text at the top of a script and re-run it:
 
 ```console
+$ python3 tools/make_overview.py
 $ python3 tools/make_flow.py
 ```
 
 The SVGs are committed: building the site must not need Python.
+
+Nothing on the overview's sheets is made up: the table is
+`tools/overview.rule` / `tools/overview-ja.rule`, the witness is what
+`rulec check` says about that rule without its last row, and the code is
+what `rulec gen` writes for it, line for line. `--verify` holds all three
+to the tool, so run it after changing the table:
+
+```console
+$ python3 tools/make_overview.py --verify ../target/release/rulec
+```
 
 ## Both configs carry
 

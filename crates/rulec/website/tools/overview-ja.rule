@@ -1,0 +1,26 @@
+# The table on the front page's opening diagram (tools/make_overview.py).
+# Its last row is the one the picture shows as missing: without that row,
+# rulec check reports the witness the picture shows; with it, rulec gen
+# writes the code on the right-hand sheet. The amount in that row is a
+# placeholder, which is the point - the tool never invents one.
+
+rule 運賃(fee) v1
+
+enum あて先区分(zone) = 近畿圏(kinki) | 遠隔地(remote)
+
+inputs
+  あて先(dest)  : あて先区分
+  重量(weight)  : mass[g]  range >=1g <=10kg
+
+outputs
+  運賃(fee) : money[円, incl_tax]  round up(10円)
+
+table 運賃表(fee_table)
+policy unique
+| あて先 | 重量       | -> 運賃(fee) : money[円, incl_tax] |
+| 近畿圏 | <=2kg      | 800円                              |
+| 近畿圏 | >2kg <=5kg | 1000円                             |
+| 近畿圏 | >5kg       | 1300円                             |
+| 遠隔地 | <=2kg      | 1200円                             |
+| 遠隔地 | >5kg       | 2000円                             |
+| 遠隔地 | >2kg <=5kg | 1500円                             |

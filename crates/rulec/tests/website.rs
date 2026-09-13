@@ -220,3 +220,35 @@ fn 例のページは両言語で同じ規則を同じ順に並べる() {
     };
     assert_eq!(names("docs"), names("docs-ja"), "例の並びが言語で違う");
 }
+
+/// The opening diagram draws generated code, a table and a diagnostic witness. All three are
+/// things the tool produces, so all three can go stale the moment the generator changes — and
+/// a diagram that shows output nobody can reproduce is worse than no diagram. Its script
+/// carries a `--verify` mode that holds every one of those to the real thing; this runs it.
+#[test]
+fn 図が見せている出力は本物と一致する() {
+    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let o = Command::new("python3")
+        .current_dir(root().join("website"))
+        .args(["tools/make_overview.py", "--verify", env!("CARGO_BIN_EXE_rulec")])
+        .output()
+        .expect("python3 を起動できない");
+    assert!(
+        o.status.success(),
+        "図が見せている出力が実物とずれています。`python3 tools/make_overview.py` で作り直してください:\n{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    // The four SVGs are committed, so a regeneration must leave the tree clean.
+    let dirty = Command::new("git")
+        .current_dir(root())
+        .args(["status", "--porcelain", "website/docs/images"])
+        .output()
+        .expect("git を起動できない");
+    let dirty = String::from_utf8_lossy(&dirty.stdout);
+    let stale: Vec<&str> = dirty.lines().filter(|l| l.starts_with(" M")).collect();
+    assert!(stale.is_empty(), "図が古いままコミットされています: {stale:?}");
+}

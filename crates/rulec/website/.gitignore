@@ -17,3 +17,6 @@ docs-ja/generated-code.md
 docs-ja/codes.md
 docs-ja/stylesheets/
 docs-ja/images/
+
+# Left behind by the diagram scripts importing tools/diagram.py.
+tools/__pycache__/

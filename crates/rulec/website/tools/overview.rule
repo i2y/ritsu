@@ -1,0 +1,26 @@
+# The table on the front page's opening diagram (tools/make_overview.py).
+# Its last row is the one the picture shows as missing: without that row,
+# rulec check reports the witness the picture shows; with it, rulec gen
+# writes the code on the right-hand sheet. The amount in that row is a
+# placeholder, which is the point - the tool never invents one.
+
+rule Fee(fee) v1
+
+enum Zone(zone) = Kinki(kinki) | Remote(remote)
+
+inputs
+  Destination(dest) : Zone
+  Weight(weight)    : mass[g]  range >=1g <=10kg
+
+outputs
+  Fee(fee) : money[円, incl_tax]  round up(10円)
+
+table FeeTable(fee_table)
+policy unique
+| Destination | Weight     | -> Fee(fee) : money[円, incl_tax] |
+| Kinki       | <=2kg      | 800円                             |
+| Kinki       | >2kg <=5kg | 1000円                            |
+| Kinki       | >5kg       | 1300円                            |
+| Remote      | <=2kg      | 1200円                            |
+| Remote      | >5kg       | 2000円                            |
+| Remote      | >2kg <=5kg | 1500円                            |
