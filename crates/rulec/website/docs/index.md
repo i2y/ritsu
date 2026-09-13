@@ -71,35 +71,83 @@ engine, no configuration, no dependency beyond the standard library.
 
 ## What kind of rule is this language for
 
-rulec is aimed at decisions where **money moves, the source of truth is a document
-outside the code, the rule is revised on a date, and a person signs it off**.
+**A rule that decides one transaction, in one shot, from a fixed number of flat
+facts.** The answer it gives back is one of four things — **an amount, a yes/no, a
+class, an order**.
 
-- **Tariffs and shipping fees** — an amount decided by a combination of destination,
-  size and weight
+- **Tariffs and shipping fees** — an amount decided by destination × size × weight
 - **Discounts and coupons** — whether one applies, how much it takes off, which of two
   is applied first
 - **Rates and charges** — a percentage that changes with membership tier, payment
   method or contract type
-- **Eligibility and classification** — may this be returned, which period does this date
-  fall in, which band does this land in
+- **Eligibility** — may this be returned, is it covered by the guarantee, can this
+  application be accepted
+- **Classification** — which period does this date fall in, which size band, which
+  priority
+- **Routing** — which warehouse ships it, which desk handles it
 
-All seven rules in the corpus are of that kind, transcribed from Japan Post's tariff
-table, Yamato's size bands and Rakuten's and Yahoo's coupon terms. Their inputs are one
-to ten flat values; their outputs are one of four things — **an amount, a yes/no, a
-class, an order** — and every one of them decides a single transaction in a single shot.
+### Money does not have to be involved
 
-### Why those four
+Here is a rule with no money in it anywhere. One date goes in, one class comes out, and
+it passes the checks as written.
 
-Because five properties hold at once, and every feature of the tool is paid for by one
-of them.
+```
+rule 期間区分(period) v1
+
+enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
+
+inputs
+  注文日(order_date) : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  区分(kind) : 期間
+
+table 期間判定(pick)
+policy unique
+| 注文日                    | -> 区分(kind) : 期間 |
+| <=2026-03-31              | 改定前               |
+| >=2026-04-01 <=2026-06-30 | 春季                 |
+| >=2026-07-01 <=2026-11-30 | 通常                 |
+| >=2026-12-01              | 年末                 |
+```
+
+What decides it is the **shape of the decision**, not what the values happen to be. A
+cell tests its own column and nothing else, which makes a row a box, which makes gaps
+and overlaps exactly decidable — that is where the boundary is. So this is not "a tool
+for shipping fees" and not "a tool for e-commerce".
+
+**But a number you return needs a unit.** The numeric types are **quantity (g, cm),
+money and rate** — there is no type for a plain unitless number (a count, a number of
+days, a score). "How many days until it ships" has to become a class, or it cannot be
+written today.
+
+### What money buys you on top
+
+This tool started life on a shipping tariff, so the machinery around amounts is the
+thickest part of it.
+
+- Units (円 / g / cm) and the **tax flag (inclusive / exclusive) are part of the type**.
+  Mix them and it stops at compile time.
+- A numeric output must declare `round`. When one is missing, the message shows the gap
+  **in yen** — "the rounding mode moves this by up to 9 yen" — before it asks.
+- When you ask what a change does, the money that moves is reported next to the number
+  of records.
+
+In a rule that returns no amount, those three simply go unused. Everything else works
+the same.
+
+### Why this shape
+
+Because these five hold at once, and every feature of the tool is paid for by one of
+them.
 
 | the property | what the tool spends on it |
 |---|---|
-| **Money moves** | units (円 / g / cm) and the tax flag (incl./excl.) are part of the type, and a numeric output that declares no `round` does not compile. When one is missing, the message shows the gap **in yen** — "the rounding mode moves this by up to 9 yen" — before it asks |
-| **The source is outside** | the work is not designing something from nothing, it is **transcribing** a tariff or a set of terms. That is why the first thing the tool is worth is "the gap shows up the moment you transcribe it", and why `doc` writes no sentence that does not trace back to the source or to a check |
-| **Conditions interlock** | destination × size × weight, kind × period × tier. It does not fit in one `if`, and no one can confirm by eye that the combinations are covered. Hence a decision table, and hence a completeness check that means something |
-| **It is revised on a date** | a tariff revision, a campaign window, a change of terms. Hence versions (`送料@v3`), hence `--diff-base` showing only what is newly reported, hence `diff` putting a number on the impact using real past records |
-| **The writer is not the decider** | the amount and the rounding direction are business decisions. Hence `doc`, and hence a checker that turns what it cannot decide into a question with a real case in it |
+| **Being wrong costs something** | nothing is approximated to make it pass; what cannot be proved stops. If the cost is money, the three above apply; if it is "wrongly refused, or wrongly let through", the gap and overlap checks are what apply |
+| **The right answer is written down elsewhere** | a tariff, a set of terms, a contract. The work is not designing something from nothing, it is **transcribing** — which is why the first thing the tool is worth is the gap showing up as you copy it across |
+| **Conditions interlock** | destination × size × weight, kind × period × tier. It does not fit in one `if`, and no one can confirm by eye that the combinations are covered |
+| **It is revised on a date** | a tariff revision, a campaign window, a change of terms. So you can point at two versions and get, before you deploy, how many records change and by how much |
+| **The writer is not the decider** | the amount, the rounding direction and where a class begins are all business decisions. So there is a rendering for the person who approves, and a checker that turns what it cannot decide into a question with a real case in it |
 
 ### What the language is trying to be
 
@@ -110,7 +158,7 @@ it is almost always the specification.
 
 ### Does your rule fit
 
-If all five are **yes**, it fits.
+If all five are **yes**, it fits. Whether money is involved is not one of them.
 
 1. Is the **number of inputs fixed** (not a list of variable length)?
 2. Are the inputs **flat values** (you can pass the prefecture itself, not
@@ -123,17 +171,55 @@ If all five are **yes**, it fits.
 If any of 1–4 is no, it does not fit structurally. If only 5 is no, it will work, but
 the tool is more than you need.
 
+### Apportionment depends on how you apportion
+
+Spreading a discount across the lines of an order can or cannot be written, depending on
+how the split is decided.
+
+**It can — when you fill each line in turn.** "Apply the discount to the lines in order,
+up to each line's own value." Make the rule decide one line, and leave the loop to the
+caller.
+
+```
+inputs
+  明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
+  残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
+  対象(eligible)      : bool
+
+outputs
+  充当額(applied) : money[円, incl_tax]  round down(1円)
+
+define 充てられる額(cap) : money[円, incl_tax] = min(明細定価, 残り値引)
+
+table 充当可否(applies)
+policy unique
+| 対象  | -> 充当(on) : money[円, incl_tax] |
+| true  | 充てられる額                      |
+| false | 0円                               |
+
+result 充当額 = 充当
+```
+
+The caller walks the lines and subtracts from `残り値引`. Done this way **the total
+always comes out exact** — nothing is over- or under-allocated (checked over 2,000
+different sets of lines).
+
+**It cannot — when you split by ratio.** "Apportion by each line's share of the list
+price" needs `line ÷ total`, and **division is only allowed by a constant**:
+`注文金額 / 100円` is fine, `明細 / 合計` is not. Working around it by computing the
+ratio in the caller and passing it in as a rate is not practical either, because a rate
+step cannot currently be finer than 1%.
+
 ### What it is not for
 
 - **Workflows** — several steps, carrying state
-- **Judgements about a collection** — "any line item is refrigerated", "three or more
+- **Judgements about a collection itself** — "any line is refrigerated", "three or more
   items in the cart". Flatten those at the boundary and pass the scalar in
 - **Pattern matching on strings** — `string` has equality and set membership, no prefix
   match and no regular expressions
+- **Returning a number with no unit** — as above, there is no type for it today
 - **Scoring, optimisation, machine learning** — what can be proved here is which row
   fires, not whether a weight is right
-- **Proration** — it has not once come up in a transcription, so whether this choice of
-  granularity survives it is **untested** (DESIGN §15-7)
 
 ---
 

@@ -1,0 +1,26 @@
+rule 値引の充当(allocate) v1
+description "一括値引きを明細に配分する。1 明細 = 1 回の判定で、反復と順序は呼び出し側が持つ"
+
+inputs
+  明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
+  残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
+  対象(eligible)      : bool
+
+outputs
+  充当額(applied) : money[円, incl_tax]  round down(1円)
+
+define 充てられる額(cap) : money[円, incl_tax] = min(明細定価, 残り値引)
+
+table 充当可否(applies)
+policy unique
+| 対象  | -> 充当(on) : money[円, incl_tax] |
+| true  | 充てられる額                      |
+| false | 0円                               |
+
+result 充当額 = 充当
+
+examples
+| 明細定価 | 残り値引 | 対象  | -> 充当額 |
+| 3000円   | 1000円   | true  | 1000円    |
+| 500円    | 1000円   | true  | 500円     |
+| 3000円   | 1000円   | false | 0円       |
