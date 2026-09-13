@@ -407,13 +407,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E101",
-            tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"),
+            tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です（§4）。当たらない入力の具体例が必ず付きます。",
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です（§4）。当てはまらない入力の具体例が必ず付きます。",
                 "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required (§4). A concrete input that matches no row is always attached."
             ),
             tr!(
-                "証人の入力に当たる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足します。値に専用の行が要らないなら、列挙の宣言に `default` を付けます。",
+                "証人の入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足します。値に専用の行が要らないなら、列挙の宣言に `default` を付けます。",
                 "Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
             ),
             X_E101,
@@ -421,7 +421,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E102",
-            tr!("決して当たらない行があります", "Unreachable row: the row never matches"),
+            tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
                 "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。二形あり、文面が原因を書き分けます。",
                 "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
@@ -463,9 +463,9 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E105",
-            tr!("行の重なり: 同じ入力が二つ以上の行に当たります", "Overlapping rows: the same input matches two or more rows"),
+            tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
             tr!(
-                "`policy unique` の表で、両方に当たる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。",
+                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。",
                 "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead."
             ),
             tr!(
@@ -660,13 +660,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         warn(
             "W114",
-            tr!("未確認の重なり: 両方に当たる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
+            tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
                 "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出どうしが入力を共有していると起こります（独立な区間の篩はその従属を見ません）。",
                 "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency."
             ),
             tr!(
-                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当たれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当たる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
+                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
                 "If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row."
             ),
             X_W114,

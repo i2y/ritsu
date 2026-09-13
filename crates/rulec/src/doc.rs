@@ -543,7 +543,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
         .position(|r| !r.cells.is_empty() && r.cells.iter().all(|x| matches!(x, Cell::DontCare)));
     if let Some(i) = default_row {
         o.push_str(&tr!(
-            "\n行{} はすべての列が `-` なので、上のどれにも当たらない入力が落ちる**既定行**です。\n",
+            "\n行{} はすべての列が `-` なので、上のどれにも当てはまらない入力が落ちる**既定行**です。\n",
             "\nRow {} has `-` in every column, so it is the **default row** where inputs that match none of the rows above fall.\n",
             i + 1
         ));
@@ -604,11 +604,11 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     // Verified statements. This part alone writes nothing but what `rulec check` verified.
     o.push_str(&tr!("\n**`rulec check` が確かめたこと**\n\n", "\n**What `rulec check` verified**\n\n"));
     o.push_str(&tr!(
-        "- どの入力の組合せも、いずれかの行に当たります（E101 完全性）\n",
+        "- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）\n",
         "- Every combination of inputs matches some row (E101 completeness)\n"
     ));
     o.push_str(&tr!(
-        "- 決して当たらない行はありません（E102）\n",
+        "- どの入力にも当てはまらない行はありません（E102）\n",
         "- There is no row that can never match (E102 unreachable row)\n"
     ));
     let r = region::check_table(t, c, f, path, region::DEFAULT_BUDGET);
@@ -616,7 +616,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
         Policy::Unique => {
             if r.w114.is_empty() {
                 o.push_str(&tr!(
-                    "- 二つ以上の行に同時に当たる入力はありません（E105 重なり）。行の並べ替えは意味を変えません\n",
+                    "- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません\n",
                     "- No input matches two or more rows at once (E105 overlap). Reordering the rows does not change the meaning\n"
                 ));
             } else {
@@ -657,7 +657,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
                     let w = d
                         .notes
                         .iter()
-                        .find(|n| n.starts_with(&tr!("両方に当たる例:", "Both rows match:")))
+                        .find(|n| n.starts_with(&tr!("両方に当てはまる例:", "Both rows match:")))
                         .cloned()
                         .unwrap_or_default();
                     o.push_str(&tr!(

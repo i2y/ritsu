@@ -905,7 +905,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     out.push(
                         Diag::warning(
                             "W114",
-                            tr!("未確認の重なり: 行{} と 行{} の両方に当たる入力が有り得ます", "Unconfirmed overlap: an input may match both row {} and row {}", i + 1, j + 1),
+                            tr!("未確認の重なり: 行{} と 行{} の両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both row {} and row {}", i + 1, j + 1),
                         )
                         .at(at(t.rows[j].span.line))
                         .table(tname.clone())
@@ -925,13 +925,13 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             )
                         })
                         .note(tr!(
-                            "存在するなら: 行を直してください。出力が異なる（{} と {}）ので、当たれば矛盾です。",
+                            "存在するなら: 行を直してください。出力が異なる（{} と {}）ので、当てはまれば矛盾です。",
                             "If one exists: fix the rows. The outputs differ ({} vs {}), so a match would be a contradiction.",
                             outs(&t.rows[i]),
                             outs(&t.rows[j])
                         ))
                         .note(tr!(
-                            "存在しないなら: このままで構いません。生成コードには、万一この条件に当たる入力が来たとき黙って 行{} を選ばずエラーを返すガードが入ります。",
+                            "存在しないなら: このままで構いません。生成コードには、万一この条件に当てはまる入力が来たとき黙って 行{} を選ばずエラーを返すガードが入ります。",
                             "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row {}.",
                             i + 1
                         ))
@@ -954,7 +954,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         .map(|ai| reg.col_names[ai].clone())
                         .collect();
                     out.push(
-                        Diag::error("E105", tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1))
+                        Diag::error("E105", tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当てはまります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1))
                             .at(at(t.rows[j].span.line))
                             .table(tname.clone())
                             .rowref(tname.clone(), i + 1)
@@ -962,7 +962,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                             .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
                             .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
-                            .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
+                            .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
                             .note(match &built {
                                 // §6.2: a witness that involves definitions is shown only after
                                 // an input has been constructed and confirmed by the evaluator.
@@ -997,7 +997,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     let same_out = outs_equal(&t.rows[i], &t.rows[j]);
                     let d = Diag::warning(
                         "W105",
-                        tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当たります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1),
+                        tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当てはまります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1),
                     )
                     .at(at(t.rows[j].span.line))
                     .table(tname.clone())
@@ -1006,7 +1006,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                     .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
                     .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
-                    .note(tr!("両方に当たる例: {w}", "Both rows match: {w}"))
+                    .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
                     .note(match &built {
                         Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
                         None => String::new(),
@@ -1060,7 +1060,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         if dead {
             dead_rows.push(i);
             out.push(
-                Diag::error("E102", tr!("行{} は決して当たりません", "Unreachable row: row {} never matches", i + 1))
+                Diag::error("E102", tr!("行{} はどの入力にも当てはまりません", "Unreachable row: row {} never matches", i + 1))
                     .at(at(t.rows[i].span.line))
                     .table(tname.clone())
                     .row(i + 1)
@@ -1091,13 +1091,13 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     if let Some(hole) = hole {
         out.push(
             {
-                let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当たらない入力があります", "Completeness gap: some input matches no row"))
+                let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"))
                     .at(at(head_span.line))
                     .table(tname.clone())
                     .wit(pairs_to_witness(reg.witness_pairs(&hole)))
                     .mark(head_span.clone(), tr!("起こりうる入力を覆いきっていません", "the input space is not fully covered"))
-                    .note(tr!("当たらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
-                    .note(tr!("ヒント: この入力に当たる行を足してください。", "hint: add a row that matches this input."));
+                    .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
+                    .note(tr!("ヒント: この入力に当てはまる行を足してください。", "hint: add a row that matches this input."));
                 // The rewritten form (§11 principle 3) as data: the row's input cells are the
                 // witness, and the output cells are copied from the first row purely to give
                 // a shape that parses. **The amount has to come from the written rule**, which

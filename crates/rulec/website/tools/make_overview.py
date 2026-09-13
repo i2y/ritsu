@@ -75,7 +75,7 @@ JA = dict(
     bands=("近畿圏", "遠隔地"),
     rulec=("rulec", ["一行を一つの箱にして、入力の空間に並べる",
                      "隙間も重なりも、目ではなく計算で見つける"]),
-    witness=("当たらない例", "あて先 = 遠隔地, 重量 = 2001g",
+    witness=("当てはまらない例", "あて先 = 遠隔地, 重量 = 2001g",
              "運賃はいくら？ それだけは人が決める", "E101"),
     code=("Python · TypeScript · Go",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",

@@ -72,7 +72,7 @@ fn 証人の率は書き戻せる形で出る() {
     let (_, text) = run(&["check", &p]);
     // Written back into a cell, so it is percent, and on the declared step: one step past
     // 10% is 11%, not the stored 0.11 and not the midpoint 11.5%.
-    assert!(text.contains("当たらない例: 割引率 = 11%"), "証人が率になっていない:\n{text}");
+    assert!(text.contains("当てはまらない例: 割引率 = 11%"), "証人が率になっていない:\n{text}");
     assert!(text.contains("`| 11% | true |`"), "書き戻せる行になっていない:\n{text}");
 
     let (_, js) = run(&["check", &p, "--format", "json"]);

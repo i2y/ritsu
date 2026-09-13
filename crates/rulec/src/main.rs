@@ -117,7 +117,7 @@ fn commands() -> Vec<Cmd> {
             name: "check",
             args: "<file.rule>...",
             purpose: tr!(
-                "規則を検査する。完全性・重なり・当たらない行・単位・丸め・溢れ・例",
+                "規則を検査する。完全性・重なり・当てはまらない行・単位・丸め・溢れ・例",
                 "check a rule: completeness, overlap, redundancy, units, rounding, overflow, examples"
             ),
             params: vec![rule_files()],

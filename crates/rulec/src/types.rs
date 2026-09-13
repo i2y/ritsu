@@ -525,7 +525,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .fix(crate::diag::FixKind::MarkDefault, crate::kw::DEFAULT)
                     .mark(e.name.span.clone(), "")
                     .note(tr!("現れない値: {}", "Values that never appear: {}", names.join(" / ")))
-                    .note(tr!("完全性検査は通っていても、その値に当たる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
+                    .note(tr!("完全性検査は通っていても、その値に当てはまる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
             );
         }
     }

@@ -282,7 +282,7 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 |---|---|
 | E101, `witness.inputs = {あて先: 山梨県, サイズ: S60}` | 「山梨県あての S60 サイズの運賃はいくらですか」 |
 | E104 on output `送料`, notes saying the spread is 9 yen | 「送料の端数はどちら向きに丸めますか。切り上げと切り捨てで最大 9 円変わります。規約に記載はありますか」 |
-| E105 between rows 3 and 7 with different outputs | 「この入力（証人）は 1,200 円と 800 円のどちらですか。両方の条件に当たります」 |
+| E105 between rows 3 and 7 with different outputs | 「この入力（証人）は 1,200 円と 800 円のどちらですか。両方の条件に当てはまります」 |
 | W114 | 「この二つの条件を同時に満たす注文は実在しますか」 |
 | A rounding you assumed | 「この丸めは規約に根拠がありません。仮に切り捨てにしています。出典はありますか」 |
 

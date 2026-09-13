@@ -784,7 +784,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Py, "    ", |name, i, j| {
             format!(
                 "        raise RuleContradictionError(\"{}\")\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
             )
         }));
         o
@@ -1341,7 +1341,7 @@ impl<'a> Gen<'a> {
                 } else {
                     "Output{}".into()
                 },
-                tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
             )
         }));
         o
@@ -2236,7 +2236,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Ts, "  ", |name, i, j| {
             format!(
                 "      throw new RuleContradictionError(\"{}\");\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当たりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
             )
         }));
         o
