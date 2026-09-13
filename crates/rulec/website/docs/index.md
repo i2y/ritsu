@@ -97,7 +97,7 @@ class, an order**.
 Here is a rule with no money in it anywhere. One date goes in, one class comes out, and
 it passes the checks as written.
 
-```
+```rule
 rule 期間区分(period) v1
 
 enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
@@ -253,7 +253,7 @@ how the split is decided.
 up to each line's own value." Make the rule decide one line, and leave the loop to the
 caller.
 
-```
+```rule
 inputs
   明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
   残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円

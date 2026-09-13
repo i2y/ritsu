@@ -258,7 +258,7 @@ def page(head, tail, title_i, lede_i, points_i, shows):
     out = [head]
     for e in EXAMPLES:
         src = (CORPUS / e[0]).read_text(encoding="utf-8").rstrip("\n")
-        out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```\n{src}\n```\n\n**{shows}**\n\n")
+        out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```rule\n{src}\n```\n\n**{shows}**\n\n")
         out.append("".join(f"- {p}\n" for p in e[points_i]))
         out.append("\n")
     out.append(tail)

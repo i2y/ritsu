@@ -70,7 +70,7 @@ rulec は、**その書き直しを AI エージェントにやらせるため�
 
 たとえばこれは、円が一度も出てこない規則です。日付が一つ入って、区分が一つ出るだけ。そのまま検査を通ります。
 
-```
+```rule
 rule 期間区分(period) v1
 
 enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
@@ -191,7 +191,7 @@ policy unique
 
 **書けます — 順に充てていく形。**「値引きを、明細に順に、上限まで充てる」。一明細ぶんの判定だけを規則にして、繰り返しは呼び出し側に置きます。
 
-```
+```rule
 inputs
   明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
   残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円

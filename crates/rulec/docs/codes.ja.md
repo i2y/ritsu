@@ -52,7 +52,7 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 description "unterminated
 ```
@@ -69,7 +69,7 @@ description "unterminated
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -88,7 +88,7 @@ inputs
 
 **最小の再現**:
 
-```
+```rule
 inputs
   x(x) : bool
 ```
@@ -105,7 +105,7 @@ inputs
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 = 1
@@ -123,7 +123,7 @@ rule t(t) v1
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 foo bar
@@ -141,7 +141,7 @@ foo bar
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) a(a) | b(b)
@@ -159,7 +159,7 @@ enum k(k) a(a) | b(b)
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -186,7 +186,7 @@ policy any
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -213,7 +213,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum range(kind) = a(a) | b(b)
@@ -231,7 +231,7 @@ enum range(kind) = a(a) | b(b)
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -259,7 +259,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -286,7 +286,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -313,7 +313,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 import std/nope
@@ -331,7 +331,7 @@ import std/nope
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -360,7 +360,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -390,7 +390,7 @@ result b = p
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -420,7 +420,7 @@ result a = p + 100円
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b) | c(c)
@@ -450,7 +450,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -478,7 +478,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -508,7 +508,7 @@ result r = p + w
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -536,7 +536,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -568,7 +568,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -596,7 +596,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -628,7 +628,7 @@ examples
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -658,7 +658,7 @@ policy unique
 
 **最小の再現**（`--budget 1` で）:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b) | c(c)
@@ -689,7 +689,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -716,7 +716,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -749,7 +749,7 @@ examples
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -780,7 +780,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -811,7 +811,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -839,7 +839,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -869,7 +869,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -901,7 +901,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -931,7 +931,7 @@ policy first
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -960,7 +960,7 @@ policy unique
 
 **最小の再現**:
 
-```
+```rule
 rule t(t) v1
 
 inputs

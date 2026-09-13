@@ -14,9 +14,11 @@ fn readme() -> String {
 /// The `.rule` block under "## 書き方".
 fn example(md: &str) -> &str {
     let head = md.find("## 書き方").expect("## 書き方 の節が無い");
-    let open = md[head..].find("```").expect("コードブロックが無い") + head + 3;
+    let fence = md[head..].find("```").expect("コードブロックが無い") + head;
+    // Step over the fence and the tag on it (```rule), to the first line of the source.
+    let open = fence + md[fence..].find('\n').expect("コードブロックが閉じていない") + 1;
     let close = md[open..].find("```").expect("コードブロックが閉じていない") + open;
-    md[open..close].trim_start_matches('\n')
+    &md[open..close]
 }
 
 #[test]

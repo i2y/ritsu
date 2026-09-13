@@ -52,7 +52,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 description "unterminated
 ```
@@ -69,7 +69,7 @@ Related codes: [E002](#e002)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -88,7 +88,7 @@ Related codes: [E001](#e001), [E009](#e009)
 
 **Smallest reproduction**:
 
-```
+```rule
 inputs
   x(x) : bool
 ```
@@ -105,7 +105,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 = 1
@@ -123,7 +123,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 foo bar
@@ -141,7 +141,7 @@ Related codes: [E004](#e004), [E009](#e009)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) a(a) | b(b)
@@ -159,7 +159,7 @@ Related codes: [E005](#e005)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -186,7 +186,7 @@ Related codes: [W110](#w110), [E105](#e105), [W105](#w105)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -213,7 +213,7 @@ Related codes: [E101](#e101)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum range(kind) = a(a) | b(b)
@@ -231,7 +231,7 @@ Related codes: [E005](#e005), [E011](#e011)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -259,7 +259,7 @@ Related codes: [E105](#e105), [E101](#e101)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -286,7 +286,7 @@ Related codes: [E009](#e009), [E012](#e012)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -313,7 +313,7 @@ Related codes: [E011](#e011), [E013](#e013)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 import std/nope
@@ -331,7 +331,7 @@ Related codes: [E012](#e012)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -360,7 +360,7 @@ Related codes: [E008](#e008), [E012](#e012)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -390,7 +390,7 @@ Related codes: [E016](#e016), [E103](#e103)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -420,7 +420,7 @@ Related codes: [E015](#e015)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b) | c(c)
@@ -450,7 +450,7 @@ Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -478,7 +478,7 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -508,7 +508,7 @@ Related codes: [E108](#e108), [E112](#e112)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -536,7 +536,7 @@ Related codes: [E106](#e106), [E103](#e103)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -568,7 +568,7 @@ Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -596,7 +596,7 @@ Related codes: [E104](#e104)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -628,7 +628,7 @@ Related codes: [E111](#e111), [E105](#e105)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -658,7 +658,7 @@ Related codes: [E112](#e112), [E103](#e103)
 
 **Smallest reproduction** (with `--budget 1`):
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b) | c(c)
@@ -689,7 +689,7 @@ Related codes: [E101](#e101), [W114](#w114)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -716,7 +716,7 @@ Related codes: [E101](#e101), [E105](#e105)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -749,7 +749,7 @@ Related codes: [E107](#e107)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -780,7 +780,7 @@ Related codes: [E108](#e108), [E101](#e101)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -811,7 +811,7 @@ Related codes: [E112](#e112), [E103](#e103)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -839,7 +839,7 @@ Related codes: [E103](#e103), [E106](#e106)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -869,7 +869,7 @@ Related codes: [E103](#e103), [E108](#e108)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -901,7 +901,7 @@ Related codes: [E105](#e105), [W110](#w110), [E102](#e102)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 enum k(k) = a(a) | b(b)
@@ -931,7 +931,7 @@ Related codes: [W105](#w105), [E105](#e105)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs
@@ -960,7 +960,7 @@ Related codes: [E101](#e101), [E012](#e012)
 
 **Smallest reproduction**:
 
-```
+```rule
 rule t(t) v1
 
 inputs

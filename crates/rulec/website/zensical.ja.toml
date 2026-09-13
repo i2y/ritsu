@@ -104,6 +104,11 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
+# Colours a ```rule fence. The module is not really a Markdown extension: naming it
+# here is how it gets imported, and importing it is what registers the lexer with
+# Pygments. build.sh puts tools/ on PYTHONPATH.
+[project.markdown_extensions.rulelexer]
+
 [project.markdown_extensions.pymdownx.details]
 [project.markdown_extensions.pymdownx.superfences]
 [project.markdown_extensions.pymdownx.emoji]

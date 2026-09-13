@@ -183,10 +183,11 @@ fn サイトの相対リンクは実在する() {
 fn 例のページの規則はコーパスと一字一句同じ() {
     for lang in ["docs", "docs-ja"] {
         let page = read(&format!("website/{lang}/examples.md"));
+        // Every source on the page opens with the ```rule fence that colours it.
         let blocks: Vec<&str> = page
-            .split("\n```\n")
+            .split("\n```rule\n")
             .skip(1)
-            .step_by(2)
+            .map(|b| b.split("\n```").next().unwrap())
             .collect();
         assert!(blocks.len() >= 10, "{lang}: 例が少なすぎる ({} 本)", blocks.len());
         for b in &blocks {
@@ -328,4 +329,109 @@ fn diagram_version() -> String {
         h = h.wrapping_mul(0x100000001b3);
     }
     format!("{h:016x}")[..8].to_string()
+}
+
+/// The lexer that colours `.rule` on the site keeps the language's vocabulary a second
+/// time, in Python. §0 of PLAN says the vocabulary lives in `src/kw.rs` and nowhere else,
+/// so the copy is held to the original here: a word added to `kw.rs` and forgotten in the
+/// lexer would simply stop being coloured, without anything failing.
+#[test]
+fn 色づけの語彙はkwと同じ() {
+    use rulec::kw;
+    let py = read("website/tools/rulelexer.py");
+    let list = |name: &str| -> Vec<String> {
+        let head = format!("\n{name} = (");
+        let at = py.find(&head).unwrap_or_else(|| panic!("rulelexer.py に {name} が無い"));
+        let open = at + head.len() - 1;
+        let close = open + py[open..].find(')').expect("閉じ括弧が無い");
+        py[open + 1..close]
+            .split(',')
+            .map(|s| s.trim().trim_matches('"').to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    let sorted = |v: &[&str]| {
+        let mut v: Vec<String> = v.iter().map(|s| s.to_string()).collect();
+        v.sort();
+        v
+    };
+    let mut heads = list("HEAD_NAMED");
+    heads.extend(list("HEAD_PLAIN"));
+    heads.sort();
+    let mut want_heads = vec![kw::RULE.to_string()];
+    want_heads.extend(kw::LINE_HEAD.iter().map(|s| s.to_string()));
+    want_heads.sort();
+    assert_eq!(heads, want_heads, "レクサの行頭語が kw::LINE_HEAD と違います");
+
+    for (name, want) in [
+        ("MODIFIERS", sorted(&[kw::RANGE, kw::ROUND, kw::CONTRACT_ONLY, kw::DEFAULT, kw::STEP])),
+        ("TYPES", sorted(&[kw::MONEY, kw::MASS, kw::LENGTH, kw::RATE, kw::NUMBER, kw::BOOL, kw::STRING, kw::DATE])),
+        ("TAX", sorted(&[kw::INCL_TAX, kw::EXCL_TAX])),
+        ("POLICIES", sorted(&[kw::UNIQUE, kw::FIRST])),
+        ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_EVEN])),
+        ("CONSTANTS", sorted(&[kw::TRUE, kw::FALSE, kw::NONE])),
+        ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX])),
+    ] {
+        let mut got = list(name);
+        got.sort();
+        assert_eq!(got, want, "レクサの {name} が kw と違います");
+    }
+    // The two that are written into the patterns rather than into a list.
+    for w in [kw::NOT, kw::STD] {
+        assert!(py.contains(w), "レクサが {w} を知りません");
+    }
+}
+
+/// A `.rule` fence without its `rule` tag is not coloured, and nothing else goes wrong, so
+/// a forgotten tag would never be noticed. Every fenced block that holds rule source — in
+/// the pages, in the README, and in what the tool itself writes — carries the tag.
+#[test]
+fn 規則のコード片には札が付いている() {
+    const HEADS: [&str; 13] = [
+        "rule ", "description ", "import ", "enum ", "group ", "inputs", "outputs",
+        "derive ", "define ", "table ", "policy ", "result ", "examples",
+    ];
+    let mut bare: Vec<String> = Vec::new();
+    let mut files: Vec<String> = vec!["README.md".into()];
+    for dir in ["docs", "website/docs", "website/docs-ja"] {
+        let mut here: Vec<String> = std::fs::read_dir(root().join(dir))
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "md"))
+            .map(|p| format!("{dir}/{}", p.file_name().unwrap().to_string_lossy()))
+            .collect();
+        here.sort();
+        files.append(&mut here);
+    }
+    for rel in files {
+        let src = read(&rel);
+        let lines: Vec<&str> = src.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            if !lines[i].starts_with("```") {
+                i += 1;
+                continue;
+            }
+            let info = lines[i][3..].trim().to_string();
+            let mut j = i + 1;
+            while j < lines.len() && !lines[j].starts_with("```") {
+                j += 1;
+            }
+            let body = &lines[i + 1..j];
+            // Rule source is what starts with a line-head word, or is a table whose header
+            // row carries the `->` that separates the input columns from the output ones.
+            let looks = body.iter().any(|b| HEADS.iter().any(|h| b.starts_with(h)))
+                || (body.iter().any(|b| b.trim_start().starts_with('|'))
+                    && body.iter().any(|b| b.trim_start().starts_with('|') && b.contains("->")));
+            if looks && info.is_empty() {
+                bare.push(format!("{rel}:{}", i + 1));
+            }
+            i = j + 1;
+        }
+    }
+    assert!(
+        bare.is_empty(),
+        "規則のコード片に ```rule の札がありません（付けると色が付きます）: {bare:?}"
+    );
 }

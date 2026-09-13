@@ -11,7 +11,7 @@ They are ordered smallest first.
 
 The smallest example there is: one input, one output. The rows are adjacent date ranges laid end to end with nothing between them.
 
-```
+```rule
 rule 期間区分(period) v1
 description "注文日で適用期間を決める。両端含みの隣接敷き詰めを行使する"
 # 通算日で持たないと、月末と翌月初のあいだに実在しない整数の隙間ができて偽の E101 が出る（§2.1）
@@ -51,7 +51,7 @@ examples
 
 The design sketch written out as a rule. A boolean definition used as a column, a rate output, the `default` mark and `policy first` shadowing all appear at once.
 
-```
+```rule
 rule 送料(shipping_fee) v4
 description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対を行使する"
 
@@ -106,7 +106,7 @@ examples
 
 Japan Post's base tariff, shipping from Tokyo. 47 prefectures × 7 sizes = 329 combinations, folded into 42 rows by six groups. **This is where the tool first pays for itself**: drop one prefecture and it stops before anything runs, naming that prefecture.
 
-```
+```rule
 rule ゆうパック運賃(yupack_fee) v1
 description "東京から差し出す場合の基本運賃。出典: 日本郵便 基本運賃表（東京）"
 
@@ -203,7 +203,7 @@ examples
 
 For one coupon: whether it applies, and how much it takes off. Stacking several coupons — the order and the loop — stays with the caller.
 
-```
+```rule
 rule クーポン一枚(coupon_step) v1
 description "クーポン1枚の適用可否と素割引（設計文書 §5.4 のスケッチ）。重ね掛けの順序と反復は呼び出し側が持つ。複数出力と、出力セルの名前を行使する"
 
@@ -260,7 +260,7 @@ examples
 
 The same subject in another shape: a `derive` computes what is left, and that becomes a column.
 
-```
+```rule
 rule クーポン割引(coupon_discount) v1
 description "クーポン1枚の適用可否と割引額。順序と反復は呼び出し側。出典: 楽天/Yahoo の公開ヘルプから再構成"
 # ※ 出力セルに名前を書ける（§3.2 で採用済み）。式は書けないので、率引きは定義を一枚挟む
@@ -325,7 +325,7 @@ examples
 
 Two derived values share an input, so whether two rows can fire together is not decidable here. The tool neither waves it through nor invents an error: **it warns, and puts a runtime guard in the generated code.**
 
-```
+```rule
 rule クーポン併用(coupon_stack) v1
 description "二つの導出が入力を共有する 一意 の表。W114 と生成コードのガードの題材（§6.2、§11）"
 
@@ -370,7 +370,7 @@ examples
 
 Which of two coupons applies first. The sorting itself is the caller's loop, but **the comparison lives in the rule**, because that is the part someone has to approve.
 
-```
+```rule
 rule 適用順序(apply_order) v1
 description "クーポン二枚のどちらを先に適用するか（§5.4）。反復と並べ替えは呼び出し側で、比較だけが規則になる"
 # 楽天の規約は「率引きを先に、次に額引き、額引きどうしは有効期限が近い順」
@@ -417,7 +417,7 @@ examples
 
 Spreading one discount across the lines of an order. **One line is one decision**; the loop and the running remainder stay with the caller, who walks the lines subtracting as it goes. **The total comes out exact by construction** (checked over 2,000 generated sets of lines).
 
-```
+```rule
 rule 値引の充当(allocate) v1
 description "一括値引きを明細に配分する。1 明細 = 1 回の判定で、反復と順序は呼び出し側が持つ"
 
@@ -456,7 +456,7 @@ examples
 
 A per-contract fee rate turned into the fee on one transaction. The rate moves in tenths of a percent, so `0.5%` is a value you can write.
 
-```
+```rule
 rule 決済手数料(payment_fee) v1
 description "契約ごとに決まる手数料率から取引一件の手数料を出す。率が 1% より細かい刻みで決まる例"
 
@@ -498,7 +498,7 @@ examples
 
 No money anywhere in this one. Four scored criteria are added with weights, and the rank comes from how much of the maximum the total reaches. This is the shape of rule that is *not* written as a table today but becomes one the moment somebody writes it down.
 
-```
+```rule
 rule 評価ランク(rank) v1
 description "四つの評価項目を重み付きで合算し、満点に対する達成率でランクを決める。金額の出てこない例"
 
@@ -545,7 +545,7 @@ examples
 
 One point per 100 yen. Dividing money by money cancels the unit and leaves a `number` — a whole number carrying none.
 
-```
+```rule
 rule ポイント付与(points) v1
 description "会計 1 件で貯まる点数。100 円につき 1 点で、区分とキャンペーンで倍になる。単位のない数を使う例"
 
@@ -590,7 +590,7 @@ examples
 
 Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.
 
-```
+```rule
 rule 会員特典(member_perk) v1
 description "会員区分と重量から請求額とポイントを一度に出す。出力が二つ、result が一本、率が表の列から来る例"
 

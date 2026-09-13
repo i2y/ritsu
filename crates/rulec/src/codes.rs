@@ -760,7 +760,9 @@ pub fn render_markdown(e: &Entry) -> String {
         Some(b) => tr!("**最小の再現**（`--budget {b}` で）:\n\n", "**Smallest reproduction** (with `--budget {b}`):\n\n"),
         None => tr!("**最小の再現**:\n\n", "**Smallest reproduction**:\n\n"),
     });
-    o.push_str("```\n");
+    // Tagged, so that the site colours it; a reader of the plain file sees the tag and
+    // nothing else changes.
+    o.push_str("```rule\n");
     o.push_str(e.example);
     o.push_str("```\n");
     if !e.related.is_empty() {

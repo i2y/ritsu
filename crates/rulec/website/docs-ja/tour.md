@@ -22,7 +22,7 @@
 
 これはこのまま検査を通ります（リポジトリのテストが毎回確かめています）。
 
-```
+```rule
 rule 送料例(fee_demo) v1
 description "サイトの例。そのまま rulec check を通る"
 
@@ -67,7 +67,7 @@ examples
 
 宣言の括弧の中は **ASCII のエイリアス（別名）**で、生成される三言語の公開名になります（漢字は Go の公開識別子になれないため）。
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
@@ -97,7 +97,7 @@ enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチ�
 
 **列挙は閉じています。値を後から自由に足せる「開いた列挙」はありません** — 値が増えたら、それを見ていない表が完全性検査で割れるのが狙いです。
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
 ```
 
@@ -105,7 +105,7 @@ enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) defa
 
 **グループ**（`group`）は列挙の一部に名前を付けたもので、セルの中で値と同じように使えます。検査のときは必ず元の値に展開されるので、グループで書いた表に穴があっても完全性検査が捕まえます。
 
-```
+```rule
 group 遠隔地(remote) = 北海道, 沖縄県
 ```
 
@@ -113,7 +113,7 @@ group 遠隔地(remote) = 北海道, 沖縄県
 
 ## 入力と出力
 
-```
+```rule
 inputs
   届け先(dest)    : 都道府県
   重量(weight)    : mass[g]        range >=1g <=40kg
@@ -126,7 +126,7 @@ outputs
 
 出力は複数書けます。生成物は Python の `NamedTuple`、TypeScript の `interface`、Go の構造体になり、**丸めは出力ごとに一度ずつ**掛かります。
 
-```
+```rule
 outputs
   可否(ok)    : bool
   素割引(raw) : money[円, incl_tax]  round down(1円)
@@ -163,7 +163,7 @@ outputs
 
 ## 表
 
-```
+```rule
 table 基本送料(base_fee)
 policy unique
 | 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
@@ -206,7 +206,7 @@ DMN の Any / Priority / Collect は採りませんでした。**完全性は宣
 
 **導出**は入力どうしの足し算・引き算（と定数倍）だけでできていて、**数量のまま表の列に置けます**。
 
-```
+```rule
 derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
 ```
 
@@ -214,7 +214,7 @@ derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  r
 
 **定義**は真偽や途中の値に名前を付けます。真偽の定義は表の列に置けます。
 
-```
+```rule
 define 大口(bulk) : bool = 注文金額 >= 3万円
 define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 ```
@@ -223,7 +223,7 @@ define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 
 **結果**が出力を組み立てます。
 
-```
+```rule
 result 送料 = 基本送料 × 負担率
 ```
 
@@ -231,7 +231,7 @@ result 送料 = 基本送料 × 負担率
 
 ## 例
 
-```
+```rule
 examples
 | 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
 | 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
@@ -242,7 +242,7 @@ examples
 
 `->` は入力と出力の境目を一度だけ示します。出力が二つ以上あるときは、二列目以降に `->` を書いても書かなくても構いません（`rulec fmt` が決まった形に揃えます）。
 
-```
+```rule
 | 商品合計 | 種別   | 同商品適用済 | -> 可否 | 素割引 |
 | 10000円  | 率引き | false        | true    | 1000円 |
 ```

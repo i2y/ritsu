@@ -28,7 +28,7 @@ These are all the words that may start a line.
 This one checks clean as it stands; the repository's test suite runs it
 on every commit.
 
-```
+```rule
 rule 送料例(fee_demo) v1
 description "The README's example. Passes rulec check as written"
 
@@ -74,7 +74,7 @@ What is in the parentheses is the **ASCII alias**, and it becomes the
 public name in the generated code — a kanji cannot be an
 exported Go identifier.
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
@@ -119,7 +119,7 @@ host language's division.
 a value is added, every table that has not accounted for it breaks the
 completeness check.
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
 ```
 
@@ -130,7 +130,7 @@ A **group** is a named subset of an enum and may be used in a cell
 wherever a value may. Groups are always expanded before checking, so a
 hole in a table written with groups is still found.
 
-```
+```rule
 group 遠隔地(remote) = 北海道, 沖縄県
 ```
 
@@ -139,7 +139,7 @@ The built-in `std/都道府県` (47 values) arrives with
 
 ## Inputs and outputs
 
-```
+```rule
 inputs
   届け先(dest)    : 都道府県
   重量(weight)    : mass[g]              range >=1g <=40kg
@@ -153,7 +153,7 @@ outputs
 There may be several outputs. They become a `NamedTuple` in Python and a
 struct in Go, and **rounding applies once per output**.
 
-```
+```rule
 outputs
   可否(ok)    : bool
   素割引(raw) : money[円, incl_tax]  round down(1円)
@@ -211,7 +211,7 @@ unit vectors on every run.
 
 ## Tables
 
-```
+```rule
 table 基本送料(base_fee)
 policy unique
 | 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
@@ -270,7 +270,7 @@ a witness.
 **A derive** is a linear combination of inputs only, and **can sit in a
 table column while still being a quantity**.
 
-```
+```rule
 derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
 ```
 
@@ -282,7 +282,7 @@ one bare line on the calling side.
 **A define** names a boolean or an intermediate value. A boolean one may
 sit in a column.
 
-```
+```rule
 define 大口(bulk) : bool = 注文金額 >= 3万円
 define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 ```
@@ -295,7 +295,7 @@ analysis is exact.
 
 **A result** assembles an output.
 
-```
+```rule
 result 送料 = 基本送料 × 負担率
 ```
 
@@ -305,7 +305,7 @@ modes. **There is no loop and no recursion.**
 
 ## Examples
 
-```
+```rule
 examples
 | 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
 | 沖縄県 | 2500g | 40000円  | 一般     | 0円     |

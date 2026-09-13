@@ -20,7 +20,7 @@ Two things to know before anything else.
 One `.rule` is one rule, and becomes one generated function. Sections appear in this order;
 every one except `rule` is optional, but an order that differs from this one is an error.
 
-```
+```rule
 rule <name>(<alias>) v<version>
 description "<one line>"
 import std/<name>
@@ -67,7 +67,7 @@ name, an input, an output — because a kanji has no uppercase and so cannot beg
 Go identifier. A missing one is E011. **A name that is already ASCII needs no alias**: it is
 its own identifier, so a rule written entirely in ASCII carries no parentheses at all.
 
-```
+```rule
 rule bulk_fee v1            # no alias: the name is already an identifier
 inputs
   weight : mass[g]  range >=1g <=40kg
@@ -140,13 +140,13 @@ can values of different units (E103). A conversion is written as a table, never 
 
 ### Declaring an enum
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
 A value may be marked `default`:
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) | プラチナ(platinum)
 ```
 
@@ -155,7 +155,7 @@ silences W111 for it.
 
 ### Declaring a group
 
-```
+```rule
 group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
 ```
 
@@ -169,7 +169,7 @@ anything else).
 
 ## 4. inputs and outputs
 
-```
+```rule
 inputs
   届け先(dest)    : 都道府県
   重量(weight)    : mass[g]              range >=1g <=40kg
@@ -227,7 +227,7 @@ multiple of the grid is E106.
 A linear combination of inputs, which **can be used as a table column while still being a
 quantity**.
 
-```
+```rule
 derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
 ```
 
@@ -238,7 +238,7 @@ required and behaves exactly as it does for an input.
 
 A named boolean or intermediate value. A boolean `define` may be used as a table column.
 
-```
+```rule
 define 大口(bulk) : bool = 注文金額 >= 3万円
 define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 define 率割引(rate_off) : money[円, incl_tax] = 元価 × 割引率
@@ -255,7 +255,7 @@ compare that with a constant; the analysis is exact that way, and the message sa
 
 ## 7. Tables
 
-```
+```rule
 table 基本送料(base_fee)
 policy unique
 | 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
@@ -305,7 +305,7 @@ a `define`). It never holds an expression.
 
 Assembles the first output when it is not simply looked up from a table.
 
-```
+```rule
 result 送料 = 基本送料 × 負担率
 ```
 
@@ -323,7 +323,7 @@ modes may also be called as functions: `down(x, 1円)`, `up(x, 10円)`, `half_up
 
 ## 9. examples
 
-```
+```rule
 examples
 | 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
 | 沖縄県 | 2500g | 40000円  | 一般     | 0円     |

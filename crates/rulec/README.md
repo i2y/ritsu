@@ -2,7 +2,7 @@
 
 **表を書くと、Python と TypeScript と Go の関数が出ます。出る前に、証明が済んでいます。**
 
-```
+```rule
 table 運賃表(fee_table)
 policy unique
 | あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
@@ -72,7 +72,7 @@ rulec は、**その書き直しを AI エージェントにやらせるため�
 
 たとえばこれは、円が一度も出てこない規則です。日付が一つ入って、区分が一つ出るだけ。そのまま検査を通ります。
 
-```
+```rule
 rule 期間区分(period) v1
 
 enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
@@ -106,7 +106,7 @@ policy unique
 
 セルが自分の列しか見られないぶん、**表は何段でも重ねられます**。前の表が出した値を、そのまま後の表の列に書けます。
 
-```
+```rule
 table 重さ判定(w_of)    # 重量 → 重さ区分
 table 帯判定(tier_of)   # 重さ区分 × 会員区分 → 帯
 table 送料表(ship)      # 帯 × 支払額 → 送料・倍率
@@ -192,7 +192,7 @@ table 送料表(ship)      # 帯 × 支払額 → 送料・倍率
 
 **書けます — 順に充てていく形。**「値引きを、明細に順に、上限まで充てる」。一明細ぶんの判定だけを規則にして、繰り返しは呼び出し側に置きます。
 
-```
+```rule
 inputs
   明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
   残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
@@ -275,7 +275,7 @@ error[E101]: Completeness gap: some input matches no row
 
 ## 書き方
 
-```
+```rule
 rule 送料例(fee_demo) v1
 description "README の例。そのまま rulec check を通る"
 
@@ -343,7 +343,7 @@ examples
 
 宣言の括弧の中は **ASCII 別名**で、生成される三言語の公開名になります（漢字は Go の公開識別子になれないため）。
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
 ```
 
@@ -373,7 +373,7 @@ enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチ�
 
 **列挙は閉じています。開いた列挙はありません** — 値が増えたら、それを見ていない表が完全性検査で割れるのが狙いです。
 
-```
+```rule
 enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
 ```
 
@@ -381,7 +381,7 @@ enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) defa
 
 **グループ**（`group`）は列挙の一部に名前を付けたもので、セルの中で値と同じように使えます。検査のときは必ずもとの値に展開されるので、グループで書いた表に穴があれば完全性検査が捕まえます。
 
-```
+```rule
 group 遠隔地(remote) = 北海道, 沖縄県
 ```
 
@@ -389,7 +389,7 @@ group 遠隔地(remote) = 北海道, 沖縄県
 
 ### 入力と出力
 
-```
+```rule
 inputs
   届け先(dest)    : 都道府県
   重量(weight)    : mass[g]        range >=1g <=40kg
@@ -402,7 +402,7 @@ outputs
 
 出力は複数書けます。生成物は Python の `NamedTuple`、TypeScript の `interface`、Go の構造体になり、**丸めは出力ごとに一度ずつ**掛かります。
 
-```
+```rule
 outputs
   可否(ok)    : bool
   素割引(raw) : money[円, incl_tax]  round down(1円)
@@ -437,7 +437,7 @@ outputs
 
 ### 表
 
-```
+```rule
 table 基本送料(base_fee)
 policy unique
 | 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
@@ -478,7 +478,7 @@ DMN の Any / Priority / Collect は採りませんでした。**完全性は宣
 
 **導出**は入力だけの線形結合で、**数量のまま表の列に置けます**。
 
-```
+```rule
 derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
 ```
 
@@ -486,7 +486,7 @@ derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  r
 
 **定義**は真偽や中間の値に名前を付けます。真偽の定義は表の列に置けます。
 
-```
+```rule
 define 大口(bulk) : bool = 注文金額 >= 3万円
 define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 ```
@@ -495,7 +495,7 @@ define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
 
 **結果**が出力を組み立てます。
 
-```
+```rule
 result 送料 = 基本送料 × 負担率
 ```
 
@@ -503,7 +503,7 @@ result 送料 = 基本送料 × 負担率
 
 ### 例
 
-```
+```rule
 examples
 | 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
 | 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
@@ -514,7 +514,7 @@ examples
 
 `->` は入力と出力の境目を一度だけ示します。出力が二つ以上あるときは、二列目以降に `->` を書いても書かなくても構いません（`rulec fmt` が決まった形に畳みます）。
 
-```
+```rule
 | 商品合計 | 種別   | 同商品適用済 | -> 可否 | 素割引 |
 | 10000円  | 率引き | false        | true    | 1000円 |
 ```
