@@ -36,8 +36,8 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=d84aeb6f#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=d84aeb6f#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=209d2628#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=209d2628#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
@@ -76,6 +76,37 @@ the JSON shape do not**.
 In one line: **for business rules that can be written as a table, a tool that lets an agent
 run the whole loop itself — write it, prove it, fix it, generate it, and show a person what
 changed.**
+
+---
+
+## A person, an agent, and the tool
+
+There are two kinds of shape and nothing else. A **sheet** with a folded
+corner is a thing that gets handed over — the table, the diagnosis, the
+question, the answer, the code. A **card** with a coloured bar is whoever
+makes it or takes it. Every arrow runs card → sheet or sheet → card, so
+**who produces what, and who consumes it** is the geometry itself rather
+than a caption.
+
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow.svg?v=209d2628#only-dark)
+
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow-light.svg?v=209d2628#only-light)
+
+Three colours, three paths: **grey** for what enters and leaves the whole
+system, **indigo** for the loop between the agent and rulec, **amber** for
+the detour through a person.
+
+The indigo loop is the middle of it. Hand over the table, get back a
+diagnosis — where, how to fix it, and an input that shows the problem —
+fix it, hand it over again. **Round and round until it passes.** No person
+appears in that loop at all.
+
+A person is pulled onto the amber path only. Most tools pass "could not
+tell" off as a pass, or fill it with a plausible default. rulec stops
+there and turns it into a question with a real case in it — *"what is the
+fee to 山梨県 at size S60?"* What the person answers is an amount and a
+rounding direction; they never see a line of code. The answer goes into
+the table, and the indigo loop picks up again.
 
 ---
 
@@ -145,8 +176,8 @@ Because a cell can only see its own column, **tables stack as deep as you like**
 table produces is written as a column of the next.
 
 <div class="rc-overview" markdown>
-![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack.svg?v=d84aeb6f#only-dark)
-![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack-light.svg?v=d84aeb6f#only-light)
+![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack.svg?v=209d2628#only-dark)
+![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack-light.svg?v=209d2628#only-light)
 </div>
 
 What to look at is **the word that appears twice**. `区分` leaves the first table and arrives
@@ -317,42 +348,10 @@ so this is from their published material.
 
 **Where rulec sits is the combination**: cells narrow enough that gaps and overlaps are
 exactly decidable, a witness (the input itself) attached every time, units and rounding held
-by types and declarations, two languages out with zero dependencies, comparison against the
+by types and declarations, four languages out with zero dependencies, comparison against the
 old implementation and against past records — and **all of it drivable by an agent through
 `--format json` alone**. Each piece exists somewhere already. The assembly, and treating an
 agent as the first user, is the position.
-
-
----
-
-## A person, an agent, and the tool
-
-There are two kinds of shape and nothing else. A **sheet** with a folded
-corner is a thing that gets handed over — the table, the diagnosis, the
-question, the answer, the code. A **card** with a coloured bar is whoever
-makes it or takes it. Every arrow runs card → sheet or sheet → card, so
-**who produces what, and who consumes it** is the geometry itself rather
-than a caption.
-
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow.svg#only-dark)
-
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow-light.svg#only-light)
-
-Three colours, three paths: **grey** for what enters and leaves the whole
-system, **indigo** for the loop between the agent and rulec, **amber** for
-the detour through a person.
-
-The indigo loop is the middle of it. Hand over the table, get back a
-diagnosis — where, how to fix it, and an input that shows the problem —
-fix it, hand it over again. **Round and round until it passes.** No person
-appears in that loop at all.
-
-A person is pulled onto the amber path only. Most tools pass "could not
-tell" off as a pass, or fill it with a plausible default. rulec stops
-there and turns it into a question with a real case in it — *"what is the
-fee to 山梨県 at size S60?"* What the person answers is an amount and a
-rounding direction; they never see a line of code. The answer goes into
-the table, and the indigo loop picks up again.
 
 ---
 
@@ -387,8 +386,8 @@ and whether an earlier row takes a later row's stretch first. Same table in all 
 thing changed.
 
 <div class="rc-overview" markdown>
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=d84aeb6f#only-dark)
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=d84aeb6f#only-light)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=209d2628#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=209d2628#only-light)
 </div>
 
 The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They

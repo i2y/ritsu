@@ -273,10 +273,11 @@ fn 図が見せている出力は本物と一致する() {
 }
 
 /// The two generated diagrams: the script that draws one, and the stem its four files share.
-const DIAGRAMS: [(&str, &str); 3] = [
+const DIAGRAMS: [(&str, &str); 4] = [
     ("tools/make_overview.py", "overview"),
     ("tools/make_checks.py", "checks"),
     ("tools/make_stack.py", "stack"),
+    ("tools/make_flow.py", "flow"),
 ];
 
 /// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader

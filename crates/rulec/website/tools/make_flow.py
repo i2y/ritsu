@@ -21,7 +21,7 @@ sentence an arrow can say. There are three colours for the three paths: grey
 for what enters and leaves the whole system, indigo for the loop between the
 agent and rulec, amber for the detour through a person.
 
-    sources -> Agent -> table -> rulec -> Python and Go
+    sources -> Agent -> table -> rulec -> Python, TypeScript, Rust, Go
                  ^                |
                  +-- diagnosis <--+          round and round, until it passes
                  ^                |
@@ -33,12 +33,12 @@ agent, and the person sits between those two verticals.
 """
 
 import pathlib
+import sys
 
 # The palettes, the fonts, the text metrics and the two shapes are shared
 # with make_overview.py, so that the two pictures cannot drift apart.
 from diagram import DARK, LIGHT, FONT, fit, esc, text, card, sheet, arrow, marker
 
-W = 1000
 
 # --- words ------------------------------------------------------------------
 #
@@ -47,20 +47,26 @@ W = 1000
 # hand for each language because SVG cannot wrap; fit() below refuses to write
 # a file where a line would leave its shape.
 
+# The languages `rulec gen` writes, as (the name the diagram shows, the directory it
+# writes into). --verify holds both halves to the tool: a backend added without touching
+# this diagram fails, and so does a name dropped from it. This drawing said "Python と Go"
+# for two releases after there were four, which is what the check is for.
+LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("Rust", "rust"), ("Go", "go")]
+
 JA = dict(
     alt="エージェントが資料を読んで表（.rule）を書き、rulec check にかける。"
         "rulec は診断（どこが・どう直すか・それを起こす入力）を返し、エージェントが直して、"
         "表が通るまで繰り返す。道具では決められないことだけが具体例つきの質問として人に渡り、"
-        "人は金額と丸めの向きを答える。表が通ると rulec gen が証明済みの Python と Go を出す。",
+        "人は金額と丸めの向きを答える。表が通ると rulec gen が証明済みの Python・TypeScript・Rust・Go を出す。",
     agent=("エージェント", ["資料を読む", "表を書く", "診断のとおりに直す", "決められないことは人へ"]),
-    rulec=("rulec", ["7 つを証明する：", "完全性・重なり", "当たらない行・単位", "丸め・オーバーフロー", "例が通ること"]),
+    rulec=("rulec", ["7 つを証明する：", "完全性・重なり", "当てはまらない行", "単位・丸め", "オーバーフロー・例"]),
     person=("人", ["金額を決める", "丸めの向きを決める", "表を承認する", "コードは書かない"]),
     sources=("元の資料", ["規約の文書", "Excel", "旧実装"]),
     table=("表", ["1 規則 = 1 表"], ".rule"),
     diagnosis=("診断", ["どこが", "どう直すか", "それを起こす入力"], "JSON"),
     question=("具体例つきの質問", ["「山梨県あての S60 の", "運賃はいくらですか」"]),
     answer=("答え", ["金額", "丸めの向き"]),
-    code=("Python と Go", ["証明済み", "依存ゼロ", "両言語で同じ答え"]),
+    code=("生成コード", ["Python・TypeScript", "Rust・Go", "証明済み・依存ゼロ", "どれも同じ答え"]),
     check="rulec check", gen="rulec gen",
     loop="通るまで繰り返す", passed="通ったら",
     only="決められないことだけ", back="ループへ戻る",
@@ -72,7 +78,7 @@ EN = dict(
         "problem - and the agent fixes the table until it passes. Only what the tool cannot "
         "decide reaches a person, as a question with a concrete case; the person answers "
         "with an amount or a rounding direction. Once the table passes, rulec gen emits "
-        "proved Python and Go.",
+        "proved Python, TypeScript, Rust and Go.",
     agent=("Agent", ["reads the sources", "writes the table", "fixes what rulec finds", "asks a person the rest"]),
     rulec=("rulec", ["proves seven things:", "completeness, overlap,", "dead rows, units,", "rounding, overflow,", "the worked examples"]),
     person=("Person", ["decides amounts", "and which way to round", "approves the table", "never writes code"]),
@@ -81,7 +87,7 @@ EN = dict(
     diagnosis=("Diagnosis", ["where", "how to fix it", "an input that shows it"], "JSON"),
     question=("A concrete question", ["“What is the fee to 山梨県", "at size S60?”"]),
     answer=("Answer", ["an amount,", "which way to round"]),
-    code=("Python & Go", ["already proved", "zero dependencies", "the same answer", "in both languages"]),
+    code=("Generated code", ["Python, TypeScript,", "Rust and Go", "proved, no dependencies,", "the same answer from each"]),
     check="rulec check", gen="rulec gen",
     loop="until it passes", passed="once it passes",
     only="only what it cannot decide", back="back into the loop",
@@ -101,7 +107,8 @@ CARD_H = 196                         # tall enough to receive both lines
 AGENT = (166, TOP, 160, CARD_H)
 RULEC = (606, TOP, 160, CARD_H)
 SOURCES = (20, Y_IN - 50, 116, 100)  # what goes in, level with the pipeline
-CODE = (860, Y_IN - 50, 120, 100)    # what comes out, same
+CODE = (860, Y_IN - 50, 200, 100)    # what comes out, same
+W = CODE[0] + CODE[2] + TOP
 TABLE = (410, Y_IN - 25, 112, 50)
 DIAG = (391, Y_BACK - 40, 150, 80)
 LOOP_Y = 113                         # the caption between the two lines
@@ -186,7 +193,34 @@ def draw(t, c):
     return "\n".join(o) + "\n"
 
 
-def main():
+def verify(rulec):
+    """The one fact in this picture that the tool can settle: which languages come out."""
+    import subprocess
+    import tempfile
+    here = pathlib.Path(__file__).resolve().parent
+    rule = here / "overview.rule"
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([rulec, "gen", str(rule), "--out", tmp], capture_output=True, text=True)
+        if r.returncode:
+            raise SystemExit(r.stdout + r.stderr)
+        # `gen` also writes the unit vectors, which are not a language.
+        wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors"}
+    want = {d for _, d in LANGS}
+    if wrote != want:
+        raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn for {sorted(want)}")
+    for t in (JA, EN):
+        said = " ".join([t["code"][0], *t["code"][1], t["alt"]])
+        for name, _ in LANGS:
+            if name not in said:
+                raise SystemExit(f"the diagram does not name {name}")
+    print("verified against", rulec)
+
+
+def main(argv):
+    # --verify draws as well, so that a test can tell a stale SVG from a fresh one by
+    # whether the bytes on disk moved.
+    if argv[:1] == ["--verify"]:
+        verify(argv[1] if len(argv) > 1 else "rulec")
     here = pathlib.Path(__file__).resolve().parent.parent / "docs" / "images"
     for name, t in [("flow", EN), ("flow-ja", JA)]:
         for suffix, c in [("", DARK), ("-light", LIGHT)]:
@@ -196,4 +230,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
