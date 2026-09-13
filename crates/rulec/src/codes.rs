@@ -604,7 +604,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E115",
-            tr!("変数で割ることはできません", "Cannot divide by a variable"),
+            tr!("変数では割れません", "Cannot divide by a variable"),
             tr!(
                 "`÷` の右が定数でないとき。割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
                 "The right of `÷` is not a constant. A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."

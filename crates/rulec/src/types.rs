@@ -707,7 +707,7 @@ impl Checked {
                         // toward -inf and Go toward zero, so the two would disagree.
                         if const_value(r).is_none() {
                             self.diags.push(
-                                Diag::error("E115", tr!("変数で割ることはできません", "Cannot divide by a variable"))
+                                Diag::error("E115", tr!("変数では割れません", "Cannot divide by a variable"))
                                     .at(format!("{path}:{}", sp.line))
                                     .mark(sp.clone(), tr!("割る数が定数ではありません", "the divisor is not a constant"))
                                     .note(tr!(
