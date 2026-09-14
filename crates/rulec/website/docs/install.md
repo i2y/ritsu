@@ -39,6 +39,34 @@ Two steps reach outside:
 - **`rulec verify`** starts your adapter as a child process, so it needs
   whatever that adapter is written in.
 
+## The agent skill
+
+The first user of this tool is an agent, and `skills/rulec/` is the
+skill that drives it: the procedure, the grammar, thirteen worked
+rules, the data formats, and how to target a language rulec does not
+generate. It does not copy the tool's own details down: it asks, through
+`--help`, `--format json` and `rulec explain`, so it does not go stale
+against the binary on the path.
+
+Copy the directory in, keeping its name:
+
+```console
+$ git clone https://github.com/i2y/rulec /tmp/rulec
+$ mkdir -p .claude/skills
+$ cp -r /tmp/rulec/skills/rulec .claude/skills/
+```
+
+That gives `.claude/skills/rulec/SKILL.md` with five files beside it.
+The folder is what makes the skill findable, so keep it whole. To have
+it in every project rather than one, put it in `~/.claude/skills/`
+instead.
+
+The only thing it needs is `rulec` on the path — the section above.
+
+Ask for something it covers ("write a `.rule` for this tariff", "fix this
+E101") and it usually applies on its own. **To be certain, name it: "use
+the rulec skill".**
+
 ## Language
 
 Output is **English by default**. One setting brings back Japanese —

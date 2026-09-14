@@ -243,7 +243,7 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
                   generated-code.md, backends.md (targeting another language),
                   codes.md / codes.ja.md (every diagnostic, generated),
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
-skills/rulec/     an agent skill for using rulec — copy it into .claude/skills/
+skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, vectors, coverage, verify, fixtures, replay, report, doc
 tests/corpus/     13 rules transcribed from real published terms

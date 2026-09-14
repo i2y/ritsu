@@ -69,8 +69,8 @@ rulec is **a harness for handing that rewrite to an AI agent**. It has four side
 
 The agent's own instructions are in [For agents](agents.md), and the
 [agent skill](https://github.com/i2y/rulec/tree/main/skills) built from them ships in the
-repository — copy `skills/rulec/` into your project's `.claude/skills/` and it works as it
-stands. Every rulec command has `--format json`, so an agent never parses prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
+repository — copy the `skills/rulec/` folder into your project's `.claude/skills/` and it
+works as it stands ([how](install.md#the-agent-skill)). Every rulec command has `--format json`, so an agent never parses prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
 the JSON shape do not**.
 
 In one line: **for business rules that can be written as a table, a tool that lets an agent
