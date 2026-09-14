@@ -275,7 +275,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E005",
-            tr!("この位置で知らない語です", "Not a known word at this position"),
+            tr!("この位置に書けない語です", "A word that cannot appear at this position"),
             tr!(
                 "行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。",
                 "The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1)."
@@ -304,7 +304,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E007",
-            tr!("知らない方式です", "Unknown policy"),
+            tr!("そういう方式はありません", "No such policy"),
             tr!(
                 "`policy` の後ろが {} 以外のとき。DMN の Any / Priority / Collect は採っていません（§4）。",
                 "The word after `policy` is not {}. DMN's Any, Priority and Collect are not adopted (§4).",

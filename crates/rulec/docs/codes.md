@@ -10,9 +10,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E002](#e002) | error | Unreadable character |
 | [E003](#e003) | error | The file does not start with a `rule` line |
 | [E004](#e004) | error | The line does not start with a word |
-| [E005](#e005) | error | Not a known word at this position |
+| [E005](#e005) | error | A word that cannot appear at this position |
 | [E006](#e006) | error | The declaration has no `=` |
-| [E007](#e007) | error | Unknown policy |
+| [E007](#e007) | error | No such policy |
 | [E008](#e008) | error | Empty cell |
 | [E009](#e009) | error | A declared name collides with a reserved word |
 | [E010](#e010) | error | The `..` range notation is not allowed |
@@ -115,7 +115,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 ## E005
 
-`error` — **Not a known word at this position**
+`error` — **A word that cannot appear at this position**
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
@@ -151,7 +151,7 @@ Related codes: [E005](#e005)
 
 ## E007
 
-`error` — **Unknown policy**
+`error` — **No such policy**
 
 **When.** The word after `policy` is not unique or first. DMN's Any, Priority and Collect are not adopted (§4).
 

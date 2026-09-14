@@ -202,7 +202,7 @@ impl P {
                 }
                 other => {
                     self.err(
-                        Diag::error("E005", tr!("`{other}` はこの位置で知らない語です", "`{other}` is not a known word at this position"))
+                        Diag::error("E005", tr!("`{other}` はこの位置に書けません", "`{other}` cannot appear at this position"))
                             .mark(line[0].span.clone(), "")
                             .note(tr!("書けるのは {} です", "The words allowed at this position are {}", crate::kw::line_heads())),
                     );
@@ -476,7 +476,7 @@ impl P {
                 Some(crate::kw::UNIQUE) => policy = Policy::Unique,
                 Some(crate::kw::FIRST) => policy = Policy::TopDown,
                 other => self.err(
-                    Diag::error("E007", tr!("知らない方式 `{}` です", "Unknown policy `{}`", other.unwrap_or("")))
+                    Diag::error("E007", tr!("`{}` という方式はありません", "There is no policy `{}`", other.unwrap_or("")))
                         .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
                         .mark(span_of(&l), "")
                         .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
