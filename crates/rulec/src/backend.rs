@@ -131,6 +131,8 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("ruby/{alias}.rb"), g.ruby()),
                 (format!("ruby/{alias}_runner.rb"), g.ruby_runner()),
+                // The signature goes under sig/, where steep looks by default.
+                (format!("ruby/sig/{alias}.rbs"), g.rbs()),
                 ("ruby/_round_test.rb".into(), crate::codegen::round_tests_ruby()),
             ]
         },

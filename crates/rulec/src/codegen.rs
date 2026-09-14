@@ -3422,6 +3422,8 @@ impl Gen<'_> {
             .str("module", &self.rb_module())
             .str("function", &alias)
             .str("signature", &rb_sig)
+            // The signature file that ships with it; `steep` reads this, not the entry.
+            .str("rbs", &format!("sig/{alias}.rbs"))
             .raw("params", crate::json::arr(&rb_in))
             .str("returns", &rb_ret)
             .raw("outputs", crate::json::arr(&rb_outs))
@@ -3988,4 +3990,120 @@ impl<'a> Gen<'a> {
             Lang::Rb => self.rb_cell(cell, var, ty, scale),
         }
     }
+}
+
+impl<'a> Gen<'a> {
+    /// The RBS type name for a value. There is no newtype in RBS either, so a unit is not
+    /// expressible and every number is `Integer` (§15.23) — but an enum **is**, as the
+    /// union of its own values, which closes the set at the type level.
+    fn rbs_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => self
+                .enum_names
+                .get(n)
+                .map(|a| snake(a))
+                .unwrap_or_else(|| "String".into()),
+            Ty::Bool => "bool".into(),
+            Ty::Str => "String".into(),
+            Ty::Opt(t) => format!("{}?", self.rbs_ty(t)),
+            _ => "Integer".into(),
+        }
+    }
+
+    /// The signature file that ships beside the generated Ruby. `steep` reads it and
+    /// refuses a caller that passes the wrong kind, the wrong count, or a string that is
+    /// not one of an enum's values. It cannot refuse grams where yen were meant — RBS has
+    /// no newtype, and a type alias is the same type (§15.23).
+    pub fn rbs(&self) -> String {
+        let m = self.rb_module();
+        let mut o = self.header("#");
+        o.push_str(&format!("\nmodule {m}\n"));
+
+        // Enums, as a union of the values themselves.
+        let mut emitted: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if emitted.contains(ascii) {
+                continue;
+            }
+            emitted.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            let lits: Vec<String> = vals.iter().map(|v| format!("{v:?}")).collect();
+            o.push_str(&format!("  type {} = {}\n\n", snake(ascii), lits.join(" | ")));
+            o.push_str(&format!("  module {}\n", rb_const(ascii)));
+            let mut names: Vec<String> = Vec::new();
+            for v in vals {
+                let name = rb_const(
+                    &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                );
+                o.push_str(&format!("    {name}: {v:?}\n"));
+                names.push(name);
+            }
+            o.push_str(&format!("    ALL: Array[{}]\n  end\n\n", snake(ascii)));
+        }
+
+        o.push_str("  class RuleInputError < ArgumentError\n  end\n\n");
+        o.push_str("  class RuleContradictionError < RuntimeError\n  end\n\n");
+
+        for g in &self.f.groups {
+            let el = self
+                .c
+                .groups
+                .get(&g.name.text)
+                .map(|(ty, _)| self.rbs_ty(&Ty::Enum(ty.clone())))
+                .unwrap_or_else(|| "String".into());
+            o.push_str(&format!("  GROUP_{}: Array[{el}]\n", self.ident(&g.name.text)));
+        }
+        if !self.f.groups.is_empty() {
+            o.push('\n');
+        }
+
+        let outs = &self.f.outputs;
+        if outs.len() > 1 {
+            let tys: Vec<String> = outs.iter().map(|od| self.rbs_ty(&self.ty_of(&od.name.text))).collect();
+            o.push_str("  class Output < Struct[untyped]\n");
+            for (od, t) in outs.iter().zip(&tys) {
+                o.push_str(&format!("    attr_reader {}: {t}\n", pub_name(&od.name)));
+            }
+            o.push_str(&format!("    def self.new: ({}) -> Output\n  end\n\n", tys.join(", ")));
+        }
+
+        // The rounding helpers are private at run time; declaring them keeps `steep` from
+        // warning about a method the module defines and the signature does not mention.
+        o.push_str(&format!("  # {}\n", tr!("丸めの補助。実行時は私有。", "The rounding helpers, private at run time.")));
+        for h in ["_min", "_max", "_round_down", "_round_up", "_round_half", "_round_bankers"] {
+            o.push_str(&format!("  private def self.{h}: (Integer, Integer) -> Integer\n"));
+        }
+        o.push('\n');
+
+        let params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{} {}", self.rbs_ty(&self.ty_of(&i.name.text)), pub_name(&i.name)))
+            .collect();
+        let ret = if outs.len() == 1 {
+            self.rbs_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        o.push_str(&format!("  def self.{}: ({}) -> {ret}\n", pub_name(&self.f.name), params.join(", ")));
+        o.push_str("end\n");
+        o
+    }
+}
+
+/// PascalCase to snake_case, for an RBS type alias — those have to start lowercase.
+fn snake(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() + 4);
+    for (i, c) in s.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                o.push('_');
+            }
+            o.push(c.to_ascii_lowercase());
+        } else {
+            o.push(c);
+        }
+    }
+    o
 }

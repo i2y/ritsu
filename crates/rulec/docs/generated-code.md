@@ -204,6 +204,18 @@ Python's two exception classes.
 It needs no gem: the module itself requires nothing, and the runner requires only `json` and
 `date`, both standard library.
 
+**A signature ships with it.** `sig/<rule>.rbs` sits beside the module, where `steep` looks
+by default, and it is checked against the module itself — a method the signature forgot fails
+as loudly as a wrong type. It refuses a caller that passes a string where a number is
+declared, that gets the argument count wrong, or that passes a value which is not one of an
+enum's: an enum is typed as the union of its own values (`"率引き" | "額引き" | "送料無料"`),
+which is stronger than the plain Ruby, where every member is a `String` until the entry guard
+fires.
+
+It still does not refuse grams where yen were meant. RBS has no newtype either, and
+`type yen = Integer` is *the same type* as `type gram = Integer` — measured with `steep`, not
+assumed (§15.23). Units stay a matter of the declaration and the comment.
+
 ### Go
 
 ```go

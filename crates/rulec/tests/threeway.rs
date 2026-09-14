@@ -357,3 +357,84 @@ fn 生成pythonはmypy_strictを通る() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `steep`, if it is installed. There is no `uvx` for gems, so this is all or nothing.
+fn steep() -> bool {
+    have("steep") && have("rbs")
+}
+
+/// The `.rbs` that ships beside the generated Ruby has to describe the module it sits next
+/// to — `steep` checking the module against its own signature is the strongest statement
+/// available, because it fails on a method the signature forgot as well as on a wrong type.
+///
+/// What it cannot do is refuse grams where yen were meant: RBS has no newtype and a type
+/// alias is the same type, which is measured rather than assumed in §15.23.
+#[test]
+fn 生成rubyは自分のrbsでsteepを通る() {
+    if !steep() {
+        eprintln!("注意: steep か rbs が無いので飛ばした");
+        return;
+    }
+    let dir = root().join("target").join("steep-check");
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut args: Vec<String> = vec!["gen".into()];
+    args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
+    args.push("--out".into());
+    args.push(dir.to_string_lossy().into_owned());
+    rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+
+    let rb = dir.join("ruby");
+    let modules: Vec<String> = CORPUS.iter().map(|(_, a)| format!("\"{a}.rb\"")).collect();
+    std::fs::write(
+        rb.join("Steepfile"),
+        format!("target :app do\n  signature \"sig\"\n  check {}\nend\n", modules.join(", ")),
+    )
+    .expect("Steepfile を書けない");
+
+    let o = Command::new("steep").arg("check").current_dir(&rb).output().expect("steep を起動できない");
+    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(
+        out.contains("No type error detected"),
+        "生成した Ruby が自分の .rbs で steep を通らない:\n{out}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// And the signature has to bite. A caller that passes a string where the rule declares a
+/// number, or a value that is not one of an enum's, has to be refused — otherwise the file
+/// is decoration. The enum case is the one `.rbs` buys that plain Ruby cannot: the members
+/// are a closed union of the values themselves, not `String`.
+#[test]
+fn rbsは誤った呼び出しを拒む() {
+    if !steep() {
+        eprintln!("注意: steep か rbs が無いので飛ばした");
+        return;
+    }
+    let dir = root().join("target").join("steep-bite");
+    let _ = std::fs::remove_dir_all(&dir);
+    rulec(&["gen", "tests/corpus/クーポン一枚.rule", "--out", dir.to_str().unwrap()]);
+    let rb = dir.join("ruby");
+    std::fs::write(
+        rb.join("caller.rb"),
+        "require_relative \"coupon_step\"\n\
+         CouponStep.coupon_step(10000, 0, CouponStep::CouponKind::PERCENT, 10, 0, false)\n\
+         CouponStep.coupon_step(\"x\", 0, CouponStep::CouponKind::PERCENT, 10, 0, false)\n\
+         CouponStep.coupon_step(10000, 0, \"存在しない種別\", 10, 0, false)\n\
+         CouponStep.coupon_step(10000, 0, CouponStep::CouponKind::PERCENT, 10, 0)\n",
+    )
+    .expect("caller を書けない");
+    std::fs::write(
+        rb.join("Steepfile"),
+        "target :app do\n  signature \"sig\"\n  check \"caller.rb\"\nend\n",
+    )
+    .expect("Steepfile を書けない");
+
+    let o = Command::new("steep").arg("check").current_dir(&rb).output().expect("steep を起動できない");
+    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+    // Three bad calls, one good one. The good one must not be among the complaints.
+    assert!(out.contains("caller.rb:3"), "数の型が守られていない:\n{out}");
+    assert!(out.contains("caller.rb:4"), "列挙の値が閉じていない:\n{out}");
+    assert!(out.contains("caller.rb:5"), "引数の数が守られていない:\n{out}");
+    assert!(!out.contains("caller.rb:2"), "正しい呼び出しが拒まれている:\n{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
