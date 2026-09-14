@@ -75,7 +75,7 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return _round_up(fee, 10)
+    return YenInclTax(_round_up(fee, 10))
 ```
 
 ```go

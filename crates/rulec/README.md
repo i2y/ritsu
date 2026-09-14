@@ -24,7 +24,7 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
     if dest in _kinki and size == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
         fee = 990
     ...
-    return _round_up(fee, 10)
+    return YenInclTax(_round_up(fee, 10))
 ```
 
 Seven things are settled before anything is generated. **Five are proved statically** —
@@ -144,7 +144,7 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return _round_up(fee, 10)
+    return YenInclTax(_round_up(fee, 10))
 ```
 
 ```go

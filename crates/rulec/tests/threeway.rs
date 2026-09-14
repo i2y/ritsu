@@ -307,3 +307,53 @@ fn 丸めヘルパは両言語で参照実装と一致する() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `mypy`, the way `ruff` is found: installed, or reachable through `uvx`.
+fn mypy() -> Option<Vec<String>> {
+    if have("mypy") {
+        return Some(vec!["mypy".into()]);
+    }
+    let ok = Command::new("uvx")
+        .args(["mypy", "--version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    ok.then(|| vec!["uvx".into(), "mypy".into()])
+}
+
+/// The brands are the reason the Python side declares `NewType` at all, and the README says
+/// they "work with mypy and pyright". Nothing checked that, and eight of the thirteen corpus
+/// rules did not pass `mypy --strict`: arithmetic on a `NewType` yields the supertype, so
+/// the value returned from a rounding helper was a plain `int` where a branded output was
+/// declared — exactly the mistake the brand exists to catch (§15.22).
+///
+/// The runner is checked with the module, because it is also the worked example of how a
+/// caller constructs a branded argument.
+#[test]
+fn 生成pythonはmypy_strictを通る() {
+    let Some(my) = mypy() else {
+        eprintln!("注意: mypy も uvx も無いので飛ばした");
+        return;
+    };
+    let dir = root().join("target").join("mypy-check");
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut args: Vec<String> = vec!["gen".into()];
+    args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
+    args.push("--out".into());
+    args.push(dir.to_string_lossy().into_owned());
+    rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+
+    let o = Command::new(&my[0])
+        .args(&my[1..])
+        .args(["--strict", "--no-color-output"])
+        .arg(dir.join("python"))
+        .current_dir(root())
+        .output()
+        .expect("mypy を起動できない");
+    assert!(
+        o.status.success(),
+        "生成した Python が mypy --strict を通らない:\n{}",
+        String::from_utf8_lossy(&o.stdout)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
