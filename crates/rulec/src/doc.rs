@@ -636,8 +636,8 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
             let s = r.shadow;
             if s.total() > 0 {
                 o.push_str(&tr!(
-                    "- 行の重なりは {} 対あります（階段の通常の姿である**構造的** {}、\
-                     どちらが勝っても値の変わらない**同値** {}、出力が食い違うので**要確認** {}）。\
+                    "- 行の重なりは {} 対あります（先に書いた行が後ろを隠すだけの**階段** {}、\
+                     どちらが勝っても値の変わらない**同じ答え** {}、出力が食い違うので**要確認** {}）。\
                      `{} {}` なので、先に書かれた行が勝ちます\n",
                     "- There are {} pairs of overlapping rows (**structural** {}, the normal shape of a \
                      staircase; **equivalent** {}, where the value is the same whichever row wins; \

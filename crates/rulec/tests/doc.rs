@@ -193,7 +193,7 @@ fn 承認者が知るべきことが載る() {
 
     // The three shadowing classes, and the needs-confirmation row pair plus its witness.
     let (_, d, _) = run(&["doc", "tests/corpus/送料.rule"]);
-    assert!(d.contains("**構造的** 2") && d.contains("**要確認** 1"), "{d}");
+    assert!(d.contains("**階段** 2") && d.contains("**要確認** 1"), "{d}");
     assert!(d.contains("要確認: 同じ入力が 行1 と 行2"), "どの行対かを言う: {d}");
     assert!(d.contains("両方に当てはまる例:"), "証人を出す: {d}");
     assert!(d.contains("既定行"), "既定行を指す: {d}");
