@@ -6,7 +6,14 @@
     this tool is built for is an agent transcribing from a published policy or a
     spreadsheet, and a person reading the table it produced and approving it. So what this
     page is most worth for is learning to **read** one — writing follows from the same
-    material. The agent's own procedure is in [For agents](agents.md).
+    material.
+
+    And you are not left alone with the file when you read it. `rulec doc` renders the
+    document for approval, with the facts the checker knows that the table does not show:
+    that a group and its complement really do cover all 47 values, which rows shadow which,
+    where a rounding is a placeholder rather than a decision. For a change, how many records
+    move and by how much comes out before it ships. Both are things to ask the agent for,
+    and so is an explanation of any row. Its own procedure is in [For agents](agents.md).
 
 A `.rule` file **has one fixed shape, read from the top**. There is no
 forward reference, so reading downwards is reading the dependencies in

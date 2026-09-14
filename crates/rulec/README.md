@@ -67,7 +67,9 @@ $ rulec --help
 Nothing stops you writing one by hand. But the shape this is built for is an agent
 transcribing from a published policy or a spreadsheet, and a person reading the table it
 produced and approving it — so the thing worth taking from this section is how to *read*
-one.
+one. Reading is not unaided either: `rulec doc` renders the table for an approver with the
+facts the checker knows that the text does not show, and `rulec diff` says how many records
+a change moves, and by how much, before it ships.
 
 ```rule
 rule 送料例(fee_demo) v1
