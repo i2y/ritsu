@@ -1056,32 +1056,17 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             vs.iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
         let exp_body: String =
             vs.iter().map(|v| rulec::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
-        let targets = [
-            (format!("{out_dir}/python/{alias}.py"), g.python()),
-            (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
-            (format!("{out_dir}/typescript/{alias}.ts"), g.typescript()),
-            (format!("{out_dir}/typescript/{alias}_runner.ts"), g.ts_runner()),
-            (format!("{out_dir}/ruby/{alias}.rb"), g.ruby()),
-            (format!("{out_dir}/ruby/{alias}_runner.rb"), g.ruby_runner()),
-            (format!("{out_dir}/rust/{alias}.rs"), g.rust()),
-            (format!("{out_dir}/rust/{alias}_runner.rs"), g.rs_runner()),
-            (format!("{out_dir}/go/{pkg}/{alias}.go"), g.go()),
-            (format!("{out_dir}/go/{pkg}/go.mod"), format!("module {pkg}\n\ngo 1.25\n")),
-            (format!("{out_dir}/go/{pkg}runner/main.go"), g.go_runner()),
-            (
-                format!("{out_dir}/go/{pkg}runner/go.mod"),
-                format!("module {pkg}runner\n\ngo 1.25\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
-            ),
-            (format!("{out_dir}/vectors/{alias}.jsonl"), vec_body),
-            (format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body),
-            // Unit vectors for the rounding helpers (§8.5). They catch errors that table
-            // agreement alone would hide.
-            (format!("{out_dir}/python/_round_test.py"), rulec::codegen::round_tests_python()),
-            (format!("{out_dir}/typescript/_round_test.ts"), rulec::codegen::round_tests_typescript()),
-            (format!("{out_dir}/ruby/_round_test.rb"), rulec::codegen::round_tests_ruby()),
-            (format!("{out_dir}/rust/_round_test.rs"), rulec::codegen::round_tests_rust()),
-            (format!("{out_dir}/go/{pkg}/round_test.go"), rulec::codegen::round_tests_go(&pkg)),
-        ];
+        // Every backend says which files it writes (src/backend.rs). The list used to be
+        // here, spelled out per language, which is one of the seven places a new target had
+        // to be added by hand.
+        let mut targets: Vec<(String, String)> = Vec::new();
+        for b in rulec::backend::ALL {
+            for (rel, body) in (b.files)(&g, &alias, &pkg) {
+                targets.push((format!("{out_dir}/{rel}"), body));
+            }
+        }
+        targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
+        targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
         for (p, body) in targets {
             let existing = std::fs::read_to_string(&p).ok();
             if existing.as_deref() == Some(body.as_str()) {

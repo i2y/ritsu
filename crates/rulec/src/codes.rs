@@ -588,8 +588,8 @@ pub fn ledger() -> Vec<Entry> {
             "E111",
             tr!("例に出力の列がありません", "The examples have no column for an output"),
             tr!(
-                "`examples` が、宣言した出力の一部しか書いていないとき。実装どうしの照合（評価器・Python・TypeScript・Go）は、全員が同じ誤りを共有すると緑のままなので、**それを破れるのは人の書いた期待値だけ**です。実際に複数出力の丸めが揃って抜けたことがあります。",
-                "`examples` writes only some of the declared outputs. Three-way agreement (evaluator, Python, Go) stays green when all three share the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in all three at once."
+                "`examples` が、宣言した出力の一部しか書いていないとき。実装どうしの照合は、生成物が揃って同じ誤りを持つと緑のままなので、**それを破れるのは人の書いた期待値だけ**です。実際に複数出力の丸めが、どの言語でも揃って抜けたことがあります。",
+                "`examples` writes only some of the declared outputs. Agreement across the implementations stays green when they all carry the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in every one at once."
             ),
             tr!(
                 "欠けている出力の列を `examples` に足してください。出力が二つ以上あるときは、二列目以降に `->` を書いても書かなくても構いません。",

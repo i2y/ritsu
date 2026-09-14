@@ -158,3 +158,58 @@ fn agentsとreadmeのciが同じ行を言う() {
         assert!(readme.contains(line), "README の CI に `{line}` が無い");
     }
 }
+
+/// The set of target languages, held to `src/backend.rs` wherever a document states it.
+///
+/// Adding Ruby meant editing twenty-odd places by hand, and the only thing that caught an
+/// omission was the flow diagram's `--verify`; the prose had no such check and would have
+/// gone stale silently (§15.20). This is that check for the prose: every document that
+/// names the set has to name all of it, and nothing that is not in it.
+#[test]
+fn 文書が並べる対象言語はレジストリと同じ() {
+    let all = rulec::backend::ALL;
+    let names: Vec<&str> = all.iter().map(|b| b.name).collect();
+    // The two spellings the documents use, and the Japanese one.
+    let en = rulec::backend::names_en();
+    let ja = rulec::backend::names_ja();
+    let en_comma = names.join(", ");
+
+    // A document naming three or more of them in a row is stating the set.
+    for (name, body) in docs() {
+        for (i, line) in body.lines().enumerate() {
+            let hits = names.iter().filter(|n| line.contains(**n)).count();
+            if hits < 3 {
+                continue;
+            }
+            assert!(
+                line.contains(&en) || line.contains(&ja) || line.contains(&en_comma),
+                "{name}:{}: 対象言語の並びがレジストリと違います。\n  行: {}\n  期待: 「{en}」か「{ja}」",
+                i + 1,
+                line.trim()
+            );
+        }
+    }
+}
+
+/// Every id the registry declares has a directory of its own under what `gen` writes, and
+/// nothing else does. A backend added without its files, or files left behind by one that
+/// was removed, both fail here.
+#[test]
+fn genが書く言語のディレクトリはレジストリと同じ() {
+    let dir = std::env::temp_dir().join(format!("rulec-docs-langs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (code, out) = run(&["gen", "tests/corpus/ec261.rule", "--out", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "{out}");
+    let mut got: Vec<String> = std::fs::read_dir(&dir)
+        .expect("出力が無い")
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "vectors")
+        .collect();
+    got.sort();
+    let mut want: Vec<String> = rulec::backend::ids().iter().map(|s| s.to_string()).collect();
+    want.sort();
+    assert_eq!(got, want, "gen が書くディレクトリとレジストリが食い違います");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -801,13 +801,7 @@ impl<'a> Gen<'a> {
                 let sc = self.scale(col);
                 for r in [*i, *j] {
                     let Some(cell) = t.rows[r].cells.get(ci) else { continue };
-                    let c = match lang {
-                        Lang::Py => self.py_cell(cell, &local(col), &ty, sc),
-                        Lang::Go => self.go_cell(cell, &local(col), &ty, sc),
-                        Lang::Ts => self.ts_cell(cell, &local(col), &ty, sc),
-                        Lang::Rs => self.rs_cell(cell, &local(col), &ty, sc),
-                        Lang::Rb => self.rb_cell(cell, &local(col), &ty, sc),
-                    };
+                    let c = self.cell(lang, cell, &local(col), &ty, sc);
                     if let Some(c) = c {
                         if !conds.contains(&c) {
                             conds.push(c);
@@ -818,10 +812,11 @@ impl<'a> Gen<'a> {
             if conds.is_empty() {
                 continue;
             }
-            let joined = conds.join(if lang == Lang::Py { " and " } else { " && " });
+            let sp = lang.spelling();
+            let joined = conds.join(sp.and);
             o.push_str(&format!(
                 "{indent}{} {guard}: {}\n",
-                if matches!(lang, Lang::Py | Lang::Rb) { "#" } else { "//" },
+                sp.comment,
                 tr!(
                     "W114（表 {name} 行{} × 行{}）。重ならないことを静的に証明できなかった行の対",
                     "W114 (table {name}, row {} × row {}): a pair of rows whose exclusivity could not be proven statically",
@@ -829,18 +824,10 @@ impl<'a> Gen<'a> {
                     j + 1
                 )
             ));
-            match lang {
-                Lang::Py => o.push_str(&format!("{indent}if {joined}:\n")),
-                Lang::Go => o.push_str(&format!("{indent}if {joined} {{\n")),
-                Lang::Ts => o.push_str(&format!("{indent}if ({joined}) {{\n")),
-                Lang::Rs => o.push_str(&format!("{indent}if {joined} {{\n")),
-                Lang::Rb => o.push_str(&format!("{indent}if {joined}\n")),
-            }
+            o.push_str(&format!("{indent}{}\n", (sp.if_head)(&joined)));
             o.push_str(&raise(&name, i + 1, j + 1));
-            match lang {
-                Lang::Py => {}
-                Lang::Rb => o.push_str(&format!("{indent}end\n")),
-                _ => o.push_str(&format!("{indent}}}\n")),
+            if !sp.close.is_empty() {
+                o.push_str(&format!("{indent}{}\n", sp.close));
             }
         }
         o
@@ -1848,12 +1835,57 @@ function _roundBankers(x: bigint, g: bigint): bigint {{
 /// share, and it used to tell Python from Go by whether the indent was a tab — which quietly
 /// handed TypeScript the Python spelling.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Lang {
+pub enum Lang {
     Py,
     Go,
     Ts,
     Rs,
     Rb,
+}
+
+/// The few spellings shared code needs to know per language. Keeping them in one row each
+/// is what lets `guards()` be written once: it used to carry three separate `match`es, and
+/// a sixth language meant finding all three (§15.20).
+struct Spelling {
+    /// How a line comment starts.
+    comment: &'static str,
+    /// How two conditions are joined.
+    and: &'static str,
+    /// The condition as an `if` head, without the indent.
+    if_head: fn(&str) -> String,
+    /// What closes the block, or "" for a language that closes by indentation.
+    close: &'static str,
+}
+
+impl Lang {
+    fn spelling(self) -> Spelling {
+        match self {
+            Lang::Py => Spelling {
+                comment: "#",
+                and: " and ",
+                if_head: |c| format!("if {c}:"),
+                close: "",
+            },
+            Lang::Rb => Spelling {
+                comment: "#",
+                and: " && ",
+                if_head: |c| format!("if {c}"),
+                close: "end",
+            },
+            Lang::Ts => Spelling {
+                comment: "//",
+                and: " && ",
+                if_head: |c| format!("if ({c}) {{"),
+                close: "}",
+            },
+            Lang::Go | Lang::Rs => Spelling {
+                comment: "//",
+                and: " && ",
+                if_head: |c| format!("if {c} {{"),
+                close: "}",
+            },
+        }
+    }
 }
 
 impl<'a> Gen<'a> {
@@ -3915,6 +3947,20 @@ impl<'a> Gen<'a> {
             Ty::Str => "String".into(),
             Ty::Opt(t) => format!("{} | nil", self.rb_api_ty(t)),
             _ => "Integer".into(),
+        }
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// A cell as a condition in one language. The one place that maps a `Lang` to its cell
+    /// renderer, so that shared code never has to know the set (§15.20).
+    fn cell(&self, lang: Lang, cell: &Cell, var: &str, ty: &Ty, scale: i128) -> Option<String> {
+        match lang {
+            Lang::Py => self.py_cell(cell, var, ty, scale),
+            Lang::Go => self.go_cell(cell, var, ty, scale),
+            Lang::Ts => self.ts_cell(cell, var, ty, scale),
+            Lang::Rs => self.rs_cell(cell, var, ty, scale),
+            Lang::Rb => self.rb_cell(cell, var, ty, scale),
         }
     }
 }

@@ -132,8 +132,10 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     for r in rs {
         keys(r, &["rule", "lang", "vectors", "ok", "first_diff"], "result");
         let lang = r.get("lang").unwrap().as_str().unwrap();
+        // The stable ids are src/backend.rs's; a language added there without a name here
+        // used to fail for the wrong reason.
         assert!(
-            ["python", "typescript", "rust", "ruby", "go"].contains(&lang),
+            rulec::backend::ids().contains(&lang),
             "言語の名前が安定していない: {lang}"
         );
         assert_eq!(r.get("ok").unwrap(), &rulec::json::Json::Bool(true));

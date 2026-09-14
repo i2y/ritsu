@@ -1,9 +1,9 @@
 # The generated code
 
-`rulec gen` writes an ordinary Python module, an ordinary TypeScript module, an ordinary Rust
-module and an ordinary Go package. There is no runtime to install and nothing to configure: a function takes the
-declared inputs and returns the declared outputs. This file says what shape that code has, what it guarantees, and how to
-call it.
+`rulec gen` writes ordinary Python, TypeScript, Rust, Ruby and Go — a module in each, and a
+package in Go's case. There is no runtime to install and nothing to configure: a function
+takes the declared inputs and returns the declared outputs. This file says what shape that
+code has, what it guarantees, and how to call it.
 
 To get the calling convention without reading the code at all, ask for it:
 
@@ -176,9 +176,9 @@ happen quietly here either.
 
 **The unit is not in the type.** Ruby has no zero-cost brand, so `money[円, incl_tax]` and
 `mass[g]` are both `Integer`, and which is which is stated in the comment above the method
-and in `rulec api`. This is the one guarantee Ruby gives up relative to Rust, Go and
-TypeScript — the proof still holds, but the compiler will not catch a caller that swaps two
-same-typed arguments. Python is in the same position, with `NewType` doing the job only when
+and in `rulec api`. This is the one guarantee Ruby gives up relative to the three targets
+whose type systems can hold a unit — the proof still holds, but nothing will catch a caller
+that swaps two same-typed arguments. Python is in the same position, with `NewType` doing the job only when
 a type checker is run.
 
 ```ruby

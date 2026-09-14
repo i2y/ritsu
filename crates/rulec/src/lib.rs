@@ -19,6 +19,7 @@ macro_rules! tr {
 }
 
 pub mod ast;
+pub mod backend;
 pub mod diag;
 pub mod doc;
 pub mod eval;

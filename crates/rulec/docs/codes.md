@@ -710,7 +710,7 @@ Related codes: [E101](#e101), [E105](#e105)
 
 `error` — **The examples have no column for an output**
 
-**When.** `examples` writes only some of the declared outputs. Three-way agreement (evaluator, Python, Go) stays green when all three share the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in all three at once.
+**When.** `examples` writes only some of the declared outputs. Agreement across the implementations stays green when they all carry the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in every one at once.
 
 **Fix.** Add the missing output column to `examples`. With two or more outputs, writing `->` before the later columns is optional.
 

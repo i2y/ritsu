@@ -85,17 +85,16 @@ fn 評価器と生成コードが全言語で一致する() {
     args.push(&out);
     rulec(&args);
 
-    let py = have("python3");
-    let go = have("go");
-    let ts = have("node");
-    let rs = have("rustc");
-    let rb = have("ruby");
-    assert!(py || go || ts || rs || rb, "どの toolchain も無いので一致を確かめられない");
-    for (ok, name) in [(py, "python3"), (ts, "node"), (rs, "rustc"), (rb, "ruby"), (go, "go")] {
-        if !ok {
-            eprintln!("注意: {name} が無いのでその言語を飛ばした");
+    // Which languages can run here. The set is src/backend.rs; this file used to name
+    // each one twice and a sixth would have needed both spots (§15.20).
+    let present: Vec<&rulec::backend::Backend> =
+        rulec::backend::ALL.iter().filter(|b| have(b.tool)).collect();
+    for b in rulec::backend::ALL {
+        if !present.iter().any(|p| p.id == b.id) {
+            eprintln!("注意: {} が無いので {} を飛ばした", b.tool, b.name);
         }
     }
+    assert!(!present.is_empty(), "どの toolchain も無いので一致を確かめられない");
 
     let mut total = 0usize;
     for (_, alias) in CORPUS {
@@ -105,77 +104,44 @@ fn 評価器と生成コードが全言語で一致する() {
         let vectors = std::fs::read_to_string(&vec_path).expect("ベクタが無い");
         assert!(!vectors.trim().is_empty(), "{alias}: ベクタがゼロ件");
         total += vectors.lines().count();
+        let pkg = alias.replace('_', "");
 
-        if py {
-            let o = Command::new("python3")
-                .current_dir(dir.join("python"))
-                .arg(format!("{alias}_runner.py"))
-                .stdin(std::fs::File::open(&vec_path).unwrap())
-                .output()
-                .expect("python3 を起動できない");
-            let got = String::from_utf8_lossy(&o.stdout).into_owned();
-            assert!(o.status.success(), "{alias}: Python が落ちた: {}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(got, exp, "{alias}: 評価器と生成 Python が食い違う");
-        }
-        if ts {
-            let o = Command::new("node")
-                .current_dir(dir.join("typescript"))
-                .args(["--no-warnings", &format!("{alias}_runner.ts")])
-                .stdin(std::fs::File::open(&vec_path).unwrap())
-                .output()
-                .expect("node を起動できない");
-            let got = String::from_utf8_lossy(&o.stdout).into_owned();
-            assert!(o.status.success(), "{alias}: TypeScript が落ちた: {}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(got, exp, "{alias}: 評価器と生成 TypeScript が食い違う");
-        }
-        if rs {
-            let cwd = dir.join("rust");
-            let built = Command::new("rustc")
+        for b in &present {
+            let plan = (b.run)(alias, &pkg);
+            let cwd = dir.join(&plan.cwd);
+            if let Some((cmd, args)) = &plan.build {
+                let built = Command::new(cmd)
+                    .current_dir(&cwd)
+                    .args(args)
+                    .output()
+                    .unwrap_or_else(|e| panic!("{}: {cmd} を起動できない: {e}", b.name));
+                assert!(
+                    built.status.success(),
+                    "{alias}: 生成した {} がコンパイルできない:\n{}",
+                    b.name,
+                    String::from_utf8_lossy(&built.stderr)
+                );
+            }
+            let o = Command::new(&plan.cmd)
                 .current_dir(&cwd)
-                .args(["--edition", "2021", "-O", &format!("{alias}_runner.rs"), "-o", alias])
+                .args(&plan.args)
+                .stdin(std::fs::File::open(&vec_path).unwrap())
                 .output()
-                .expect("rustc を起動できない");
+                .unwrap_or_else(|e| panic!("{}: 起動できない: {e}", b.name));
+            let got = String::from_utf8_lossy(&o.stdout).into_owned();
             assert!(
-                built.status.success(),
-                "{alias}: 生成した Rust がコンパイルできない:\n{}",
-                String::from_utf8_lossy(&built.stderr)
+                o.status.success(),
+                "{alias}: {} が落ちた: {}",
+                b.name,
+                String::from_utf8_lossy(&o.stderr)
             );
-            let o = Command::new(format!("./{alias}"))
-                .current_dir(&cwd)
-                .stdin(std::fs::File::open(&vec_path).unwrap())
-                .output()
-                .expect("生成した Rust を起動できない");
-            let got = String::from_utf8_lossy(&o.stdout).into_owned();
-            assert!(o.status.success(), "{alias}: Rust が落ちた: {}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(got, exp, "{alias}: 評価器と生成 Rust が食い違う");
-        }
-        if rb {
-            let o = Command::new("ruby")
-                .current_dir(dir.join("ruby"))
-                .arg(format!("{alias}_runner.rb"))
-                .stdin(std::fs::File::open(&vec_path).unwrap())
-                .output()
-                .expect("ruby を起動できない");
-            let got = String::from_utf8_lossy(&o.stdout).into_owned();
-            assert!(o.status.success(), "{alias}: Ruby が落ちた: {}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(got, exp, "{alias}: 評価器と生成 Ruby が食い違う");
-        }
-        if go {
-            let pkg = alias.replace('_', "");
-            let o = Command::new("go")
-                .current_dir(dir.join("go").join(format!("{pkg}runner")))
-                .args(["run", "."])
-                .stdin(std::fs::File::open(&vec_path).unwrap())
-                .output()
-                .expect("go を起動できない");
-            let got = String::from_utf8_lossy(&o.stdout).into_owned();
-            assert!(o.status.success(), "{alias}: Go が落ちた: {}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(got, exp, "{alias}: 評価器と生成 Go が食い違う");
+            assert_eq!(got, exp, "{alias}: 評価器と生成 {} が食い違う", b.name);
         }
     }
     eprintln!(
-        "一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Rust {rs} / Ruby {rb} / Go {go}）",
-        CORPUS.len()
+        "一致: 規則 {} 本 / ベクタ {total} 件（{}）",
+        CORPUS.len(),
+        present.iter().map(|b| b.name).collect::<Vec<_>>().join(" / ")
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -9,7 +9,7 @@
 //! The unit vectors of the rounding helpers (§8.5) run in the same place. Table agreement
 //! alone would hide a helper bug in a table that never produces fractions.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 /// Why one run failed. The first case is the one a caller can act on, so it is kept apart
@@ -115,180 +115,99 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
 
-    let (py, go, ts, rs, rb) = (have("python3"), have("go"), have("node"), have("rustc"), have("ruby"));
-    // Python is run with `-B` and any bytecode cache in the output directory is removed
-    // first. A `.pyc` is considered fresh when the source has the same size and the same
-    // mtime in whole seconds, so a same-length edit made within a second of the previous
-    // run would otherwise execute the *old* module and report a stale result as ok. The
-    // cache would also litter a directory that is committed.
-    let _ = std::fs::remove_dir_all(dir.join("python").join("__pycache__"));
+    // Which toolchains are here. The set of backends lives in src/backend.rs, so a new
+    // language is a row there rather than five more blocks in this file.
     let mut out = Run { results: Vec::new(), skipped: Vec::new() };
-    if !py {
-        out.skipped.push(tr!("python3 が無いので Python 側を飛ばしました", "python3 not found; skipped the Python side"));
-    }
-    if !ts {
-        out.skipped.push(tr!("node が無いので TypeScript 側を飛ばしました", "node not found; skipped the TypeScript side"));
-    }
-    if !rs {
-        out.skipped.push(tr!("rustc が無いので Rust 側を飛ばしました", "rustc not found; skipped the Rust side"));
-    }
-    if !rb {
-        out.skipped.push(tr!("ruby が無いので Ruby 側を飛ばしました", "ruby not found; skipped the Ruby side"));
-    }
-    if !go {
-        out.skipped.push(tr!("go が無いので Go 側を飛ばしました", "go not found; skipped the Go side"));
-    }
-    if !py && !go && !ts && !rs && !rb {
+    let present: Vec<&crate::backend::Backend> = crate::backend::ALL
+        .iter()
+        .filter(|b| {
+            let ok = have(b.tool);
+            if !ok {
+                out.skipped.push(tr!(
+                    "{} が無いので {} 側を飛ばしました",
+                    "{} not found; skipped the {} side",
+                    b.tool,
+                    b.name
+                ));
+            }
+            ok
+        })
+        .collect();
+    if present.is_empty() {
         return Err(tr!(
-            "python3 も node も rustc も ruby も go も無いので、生成物を走らせられません",
-            "none of python3, node, rustc, ruby or go is available, so the generated code cannot be run"
+            "どの toolchain も無いので、生成物を走らせられません（{}）",
+            "none of the toolchains is available, so the generated code cannot be run ({})",
+            crate::backend::ALL.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
         ));
     }
+    // A `.pyc` counts as fresh when the source has the same length and the same
+    // whole-second mtime, so a same-length edit within a second of the last run would
+    // otherwise execute the old module and report a stale result as ok.
+    let _ = std::fs::remove_dir_all(dir.join("python").join("__pycache__"));
+
+    // One plan is one command, with an optional build that has to succeed first.
+    // Ok is the command's stdout; Err is anything that stopped it from producing one.
+    let exec = |plan: &crate::backend::Plan, stdin: Option<&Path>| -> Result<String, Failure> {
+        let cwd = dir.join(&plan.cwd);
+        if let Some((cmd, args)) = &plan.build {
+            match Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).output() {
+                Ok(o) if o.status.success() => {}
+                Ok(o) => {
+                    return Err(Failure::Other(tr!(
+                        "コンパイルできません:\n{}",
+                        "does not compile:\n{}",
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    )))
+                }
+                Err(e) => return Err(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+            }
+        }
+        let mut c = Command::new(&plan.cmd);
+        c.current_dir(&cwd).args(&plan.args).envs(closed());
+        if let Some(p) = stdin {
+            let Ok(f) = std::fs::File::open(p) else {
+                return Err(Failure::Other(tr!("ベクタが読めません", "cannot read the vectors")));
+            };
+            c.stdin(f);
+        }
+        match c.output() {
+            Err(e) => Err(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+            Ok(o) if !o.status.success() => {
+                // A round-test script reports on stdout and exits non-zero; a runner that
+                // crashes says so on stderr. Show whichever is not empty.
+                let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                let msg = if err.is_empty() { String::from_utf8_lossy(&o.stdout).trim().to_string() } else { err };
+                Err(Failure::Other(tr!("落ちました:\n{}", "failed:\n{}", msg)))
+            }
+            Ok(o) => Ok(String::from_utf8_lossy(&o.stdout).into_owned()),
+        }
+    };
 
     for alias in &aliases {
-        let vec_path = vdir.join(format!("{alias}.jsonl"));
-        let want = std::fs::read_to_string(vdir.join(format!("{alias}.expected.jsonl")))
+        let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
+        let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
             .map_err(|_| tr!("{alias}: 期待値がありません", "{alias}: no expected values"))?;
         let n = std::fs::read_to_string(&vec_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
-
-        // `pre` carries a failure that happened before the command could be run at all —
-        // Rust has to compile first. Routing it through here keeps one borrow of `out`.
-        let mut one = |lang: &'static str, cmd: &str, cwd: PathBuf, args: &[&str], pre: Option<Failure>| {
-            if pre.is_some() {
-                out.results.push(Outcome { rule: alias.clone(), lang, vectors: n, diff: pre });
-                return;
-            }
-            let Ok(stdin) = std::fs::File::open(&vec_path) else { return };
-            let o = Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).stdin(stdin).output();
-            let diff = match o {
-                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-                Ok(o) if !o.status.success() => Some(Failure::Other(tr!(
-                    "落ちました:\n{}",
-                    "failed:\n{}",
-                    String::from_utf8_lossy(&o.stderr).trim()
-                ))),
-                Ok(o) => {
-                    let got = String::from_utf8_lossy(&o.stdout).into_owned();
-                    (got != want).then(|| first_diff(&got, &want))
-                }
+        for b in &present {
+            let diff = match exec(&(b.run)(alias, &pkg), Some(&vec_path)) {
+                Err(f) => Some(f),
+                Ok(got) => (got != want).then(|| first_diff(&got, &want)),
             };
-            out.results.push(Outcome { rule: alias.clone(), lang, vectors: n, diff });
-        };
-        if py {
-            one("Python", "python3", dir.join("python"), &["-B", &format!("{alias}_runner.py")], None);
-        }
-        if ts {
-            one(
-                "TypeScript",
-                "node",
-                dir.join("typescript"),
-                &["--no-warnings", &format!("{alias}_runner.ts")],
-                None,
-            );
-        }
-        if rs {
-            // rustc takes no dependencies and needs no project file, so one invocation
-            // builds both the rule and its runner (`#[path] mod`).
-            let cwd = dir.join("rust");
-            let built = Command::new("rustc")
-                .current_dir(&cwd)
-                .args(["--edition", "2021", "-O", &format!("{alias}_runner.rs"), "-o", alias])
-                .envs(closed())
-                .output();
-            let pre = match built {
-                Ok(o) if o.status.success() => None,
-                Ok(o) => Some(Failure::Other(tr!(
-                    "コンパイルできません:\n{}",
-                    "does not compile:\n{}",
-                    String::from_utf8_lossy(&o.stderr).trim()
-                ))),
-                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-            };
-            one("Rust", &format!("./{alias}"), cwd, &[], pre);
-        }
-        if rb {
-            one("Ruby", "ruby", dir.join("ruby"), &[&format!("{alias}_runner.rb")], None);
-        }
-        if go {
-            one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."], None);
+            out.results.push(Outcome { rule: alias.clone(), lang: b.name, vectors: n, diff });
         }
     }
 
     // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one.
     let pkg0 = aliases[0].replace('_', "");
-    if py {
-        let o = Command::new("python3")
-            .current_dir(dir.join("python"))
-            .args(["-B", "_round_test.py"])
-            .output();
-        let diff = match o {
-            Ok(o) if o.status.success() => None,
-            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
-            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-        };
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Python", vectors: 0, diff });
+    for b in &present {
+        let diff = exec(&(b.round)(&pkg0), None).err();
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, vectors: 0, diff });
     }
-    if ts {
-        let o = Command::new("node")
-            .current_dir(dir.join("typescript"))
-            .args(["--no-warnings", "_round_test.ts"])
-            .output();
-        let diff = match o {
-            Ok(o) if o.status.success() => None,
-            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
-            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-        };
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "TypeScript", vectors: 0, diff });
-    }
-    if rs {
-        let cwd = dir.join("rust");
-        let built = Command::new("rustc")
-            .current_dir(&cwd)
-            .args(["--edition", "2021", "-O", "_round_test.rs", "-o", "_round_test"])
-            .envs(closed())
-            .output();
-        let diff = match built {
-            Ok(o) if o.status.success() => match Command::new("./_round_test").current_dir(&cwd).output() {
-                Ok(o) if o.status.success() => None,
-                Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
-                Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-            },
-            Ok(o) => Some(Failure::Other(tr!(
-                "コンパイルできません:\n{}",
-                "does not compile:\n{}",
-                String::from_utf8_lossy(&o.stderr).trim()
-            ))),
-            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-        };
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Rust", vectors: 0, diff });
-    }
-    if rb {
-        let o = Command::new("ruby").current_dir(dir.join("ruby")).args(["_round_test.rb"]).output();
-        let diff = match o {
-            Ok(o) if o.status.success() => None,
-            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
-            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-        };
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Ruby", vectors: 0, diff });
-    }
-    if go {
-        let o = Command::new("go")
-            .current_dir(dir.join("go").join(&pkg0))
-            .args(["test", "./..."])
-            .envs(closed())
-            .output();
-        let diff = match o {
-            Ok(o) if o.status.success() => None,
-            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
-            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
-        };
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Go", vectors: 0, diff });
-    }
+
     Ok(out)
 }
 
-/// How a rule is named in the text rendering. Only the helpers have a prose name.
 fn shown(rule: &str) -> String {
     if rule == ROUND_HELPER {
         tr!("丸めヘルパ", "rounding helper")
