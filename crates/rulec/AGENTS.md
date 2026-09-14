@@ -126,8 +126,9 @@ with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to 
 
 ### `rulec test generated/ --format json`
 
-Runs every generated language over the vectors and compares them with the reference evaluator, byte for
-byte. This is the only step that needs a `python3` and a `go` toolchain.
+Runs every generated language over the vectors and compares them with the reference
+evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
+`node`, `rustc` and `go`, and skips-and-reports the side whose toolchain is missing.
 
 ### In CI
 
@@ -281,4 +282,5 @@ by the person who can overrule it.
 | [docs/generated-code.md](docs/generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | [docs/backends.md](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
-| `README.md` (Japanese) | the tour, for a person |
+| `README.md` | the worked example, the excerpts of generated code, and how to run the suite |
+| <https://i2y.github.io/rulec/> | the same references as pages, plus the tour and the worked rules written for a person — English, and Japanese under `/ja/` |
