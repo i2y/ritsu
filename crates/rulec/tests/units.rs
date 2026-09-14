@@ -121,10 +121,13 @@ fn 読めない範囲の境界は黙って落ちない() {
 /// `499銭 >= 500銭` evaluated to true.
 ///
 /// This walks the whole unit table, because the bug was invisible for exactly as long as the
-/// corpus happened to write its expressions in 円.
+/// corpus happened to write its expressions in 円. Each rule puts the literal through **both**
+/// callers of `Expr::Lit` that a rule can reach — a `define`'s comparison and a `derive`'s
+/// arithmetic — since a fix that reached only one of them would look like a fix.
 #[test]
 fn 式の中のリテラルはどの単位でも評価される() {
-    // (declared type, low, high, the literal the define compares against)
+    // (declared type, low, high, the literal). The high is twice the literal, so the derived
+    // `x - lit` spans exactly [-lit, lit] and needs no range of its own to be worked out.
     let cases: &[(&str, &str, &str, &str)] = &[
         ("mass[mg]", "0mg", "1000mg", "500mg"),
         ("mass[g]", "0g", "1000g", "500g"),
@@ -146,10 +149,11 @@ fn 式の中のリテラルはどの単位でも評価される() {
         let src = format!(
             "rule t(t) v1\n\ninputs\n  x(x) : {ty}  range >={lo} <={hi}\n\n\
              outputs\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
+             derive gap(gap) : {ty} = x - {lit}  range >=-{lit} <={lit}\n\
              define big(big) : bool = x >= {lit}\n\n\
              table j(j)\npolicy first\n\
-             | big | -> fee(fee) : money[円, incl_tax] |\n\
-             | true | 100円 |\n| - | 0円 |\n\nresult fee = fee\n"
+             | big | gap | -> fee(fee) : money[円, incl_tax] |\n\
+             | true | >{lo} | 100円 |\n| - | - | 0円 |\n\nresult fee = fee\n"
         );
         let (f, c) = rulec::prepare(&src, "units.rule")
             .unwrap_or_else(|d| panic!("{ty}: 検査を通らない: {:?}", d.iter().map(|x| x.code.to_string()).collect::<Vec<_>>()));

@@ -367,6 +367,33 @@ result 可否 = 可否
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Every identifier a runner binds, read out of a runner that was just generated.
+///
+/// Hard-coding the list would go stale the first time someone adds a local — which is
+/// precisely how this class of bug arrives — so it is discovered instead.
+fn runner_locals(dir: &Path, alias: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut take = |body: &str, kw: &str| {
+        for (i, _) in body.match_indices(kw) {
+            let rest = &body[i + kw.len()..];
+            let name: String =
+                rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+            // A rule alias is an ASCII identifier; anything else cannot collide.
+            if !name.is_empty() && !name.starts_with(|c: char| c.is_ascii_digit()) && !out.contains(&name) {
+                out.push(name);
+            }
+        }
+    };
+    let ts = std::fs::read_to_string(dir.join("typescript").join(format!("{alias}_runner.ts"))).unwrap();
+    take(&ts, "const ");
+    let sw = std::fs::read_to_string(dir.join("swift").join(format!("{alias}_runner.swift"))).unwrap();
+    take(&sw, "let ");
+    out.retain(|n| n != alias);
+    assert!(out.len() > 3, "ランナーから局所変数を読み出せていない: {out:?}");
+    out
+}
+
+/// A rule whose alias is a name the runner itself uses for a local.
 /// A rule whose alias is a name the runner itself uses for a local.
 ///
 /// The TypeScript and Swift runners call the rule by its bare name, in the same scope as the
@@ -378,12 +405,31 @@ result 可否 = 可否
 /// that the next local someone adds is not free to reintroduce it.
 #[test]
 fn ランナーの局所変数と同じ名前の規則でも生成物は動く() {
-    for name in ["d", "line", "got", "root", "r", "lines"] {
-        let dir = generate(
-            &format!("local{name}"),
-            &format!(
-                "\
-rule {name} v1
+    // `d` is the one that actually collided, and it gets the full sweep.
+    let dir = generate("locald", &collide_rule("d"));
+    py_imports(&dir, "d");
+    rb_loads(&dir, "d");
+    go_builds(&dir, "d");
+    sw_typechecks(&dir, "d");
+    ts_runs(&dir, "d");
+
+    // The rest are whatever those two runners bind today. Only TypeScript and Swift call the
+    // rule by its bare name, so only they can be shadowed; the other four qualify the call.
+    let names = runner_locals(&dir, "d");
+    let _ = std::fs::remove_dir_all(&dir);
+    for name in names {
+        let d = generate(&format!("local{name}"), &collide_rule(&name));
+        sw_typechecks(&d, &name);
+        ts_runs(&d, &name);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+/// The smallest rule that reaches the runner, under a chosen alias.
+fn collide_rule(alias: &str) -> String {
+    format!(
+        "\
+rule {alias} v1
 description \"別名がランナーの局所変数と衝突する\"
 
 inputs
@@ -402,13 +448,5 @@ policy first
 
 result 料 = 料
 "
-            ),
-        );
-        py_imports(&dir, name);
-        rb_loads(&dir, name);
-        go_builds(&dir, name);
-        sw_typechecks(&dir, name);
-        ts_runs(&dir, name);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
+    )
 }
