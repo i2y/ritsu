@@ -1,4 +1,4 @@
-# Write a table
+# Write a table (.rule)
 
 A `.rule` file **has one fixed shape, read from the top**. There is no
 forward reference, so reading downwards is reading the dependencies in

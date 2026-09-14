@@ -34,7 +34,9 @@ sed -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
 cp ../docs/formats.md        rulec/formats.md
 cp ../docs/generated-code.md rulec/generated-code.md
 # The examples page ends in the site's own navigation buttons, which lead nowhere here.
-sed -e '/^\[Write a table\](tour\.md)/,$d' ../website/docs/examples.md \
+# Matched by where they point, not by what they are labelled: the label has been renamed
+# once already, and the cut failed silently when it was.
+sed -e '/^\[.*\](tour\.md)/,$d' ../website/docs/examples.md \
   | awk '{ a[n++] = $0 } END { while (n > 0 && (a[n-1] == "" || a[n-1] == "---")) n--
            for (i = 0; i < n; i++) print a[i] }' > rulec/examples.md
 

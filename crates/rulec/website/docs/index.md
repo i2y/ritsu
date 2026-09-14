@@ -29,7 +29,7 @@ cannot be proved does not generate.
 
 <div class="rc-hero__cta" markdown>
 [Install](install.md){ .md-button .md-button--primary }
-[Write a table](tour.md){ .md-button }
+[Write a table (.rule)](tour.md){ .md-button }
 [For agents](agents.md){ .md-button }
 [GitHub](https://github.com/i2y/rulec){ .md-button }
 </div>

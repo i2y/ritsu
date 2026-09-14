@@ -64,7 +64,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 <div class="grid cards" markdown>
 
--   __[表を書く](tour.md)__
+-   __[表(.rule)を書く](tour.md)__
 
     最初の一行から、検査を通る規則まで。
 

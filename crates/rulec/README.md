@@ -62,7 +62,7 @@ $ cargo install --path .
 $ rulec --help
 ```
 
-## Write a table
+## Write a table (.rule)
 
 Nothing stops you writing one by hand. But the shape this is built for is an agent
 transcribing from a published policy or a spreadsheet, and a person reading the table it
@@ -119,7 +119,7 @@ reported with the rows that fired.
 A cell tests **its own column and nothing else**, which is what makes a row a box and the
 completeness and overlap checks exact. Complicated rules are written by **stacking tables**:
 what one table produces is a column of the next. The whole language is in
-[Write a table](https://i2y.github.io/rulec/tour/) and, exhaustively, in
+[Write a table (.rule)](https://i2y.github.io/rulec/tour/) and, exhaustively, in
 [`docs/reference.md`](docs/reference.md).
 
 ## The generated code

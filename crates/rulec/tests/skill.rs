@@ -60,7 +60,7 @@ fn スキルはいまの文書から組み立てたものと同じ() {
     );
     // The examples page loses the site's own navigation buttons.
     let want = read("website/docs/examples.md");
-    let want = want.split("\n[Write a table](tour.md)").next().unwrap();
+    let want = want.split("\n[Write a table (.rule)](tour.md)").next().unwrap();
     assert_eq!(
         read("skills/rulec/examples.md").trim_end(),
         want.trim_end().trim_end_matches("---").trim_end(),

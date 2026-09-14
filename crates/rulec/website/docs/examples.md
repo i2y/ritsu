@@ -662,5 +662,5 @@ examples
 
 ---
 
-[Write a table](tour.md){ .md-button .md-button--primary }
+[Write a table (.rule)](tour.md){ .md-button .md-button--primary }
 [Grammar](reference.md){ .md-button }

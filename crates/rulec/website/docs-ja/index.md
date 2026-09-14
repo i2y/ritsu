@@ -24,7 +24,7 @@ hide:
 
 <div class="rc-hero__cta" markdown>
 [インストール](install.md){ .md-button .md-button--primary }
-[表を書く](tour.md){ .md-button }
+[表(.rule)を書く](tour.md){ .md-button }
 [エージェント向け](agents.md){ .md-button }
 [GitHub](https://github.com/i2y/rulec){ .md-button }
 </div>

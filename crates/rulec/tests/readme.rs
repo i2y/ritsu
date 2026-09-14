@@ -11,9 +11,9 @@ fn readme() -> String {
     std::fs::read_to_string(&p).expect("README.md が読めない")
 }
 
-/// The `.rule` block under "## Write a table".
+/// The `.rule` block under "## Write a table (.rule)".
 fn example(md: &str) -> &str {
-    let head = md.find("## Write a table").expect("## Write a table の節が無い");
+    let head = md.find("## Write a table (.rule)").expect("## Write a table (.rule) の節が無い");
     let fence = md[head..].find("```").expect("コードブロックが無い") + head;
     // Step over the fence and the tag on it (```rule), to the first line of the source.
     let open = fence + md[fence..].find('\n').expect("コードブロックが閉じていない") + 1;

@@ -79,7 +79,7 @@ Japanese, because what it produces is pasted in front of a person:
 
 <div class="grid cards" markdown>
 
--   __[Write a table](tour.md)__
+-   __[Write a table (.rule)](tour.md)__
 
     The language, from the first line to a rule that checks clean.
 
