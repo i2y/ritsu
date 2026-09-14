@@ -51,7 +51,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 - run: rulec test generated/
 ```
 
-この五行が門です。過去再生は記録を持つ環境の別ジョブにします。そちらは**人に見せるものを作る**ので、言語を日本語に倒します。
+この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。そちらは**人に見せるものを作る**ので、言語を日本語に倒します。
 
 ```yaml
 - run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
