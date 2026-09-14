@@ -1199,7 +1199,7 @@ impl Checked {
                         format!("{} >={} <={}", crate::kw::RANGE, fmt_val(rl, ty), fmt_val(rh, ty)),
                     )
                     .mark(rg.span.clone(), tr!("到達区間は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
-                    .note(tr!("範囲が狭いと、網羅性検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
+                    .note(tr!("範囲が狭いと、完全性の検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
                     .note(tr!(
                         "ヒント: 範囲 >={} <={} に広げてください。到達しない分まで広げても、実現不能な領域として検査が篩うので害はありません。",
                         "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
@@ -1425,7 +1425,7 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(hint.to_string())
-                                .note(tr!("この制限が、完全性と重複の検査が有限で終わることの土台です（§5.3、§6.2）。", "This restriction is what makes the completeness and overlap checks finite (§5.3, §6.2).")),
+                                .note(tr!("この制限が、完全性と重なりの検査が有限で終わることの土台です（§5.3、§6.2）。", "This restriction is what makes the completeness and overlap checks finite (§5.3, §6.2).")),
                         );
                     }
                     return;

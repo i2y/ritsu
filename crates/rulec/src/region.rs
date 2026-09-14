@@ -816,7 +816,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .at(tr!("{path}:{} 表 {tname}", "{path}:{} table {tname}", t.span.line))
                     .table(tname.clone())
                     .mark(t.span.clone(), "")
-                    .note(tr!("この表の完全性も重複も検査していません。黙って通すより止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
+                    .note(tr!("この表の完全性も重なりも検査していません。黙って通すより止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
                     .note(tr!("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。", "Give the column one of these types: an enum, boolean, quantity, money, rate, date, or an optional of one of those.")),
             ],
             quiet: Vec::new(),
