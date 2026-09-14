@@ -159,33 +159,38 @@ fn agentsとreadmeのciが同じ行を言う() {
     }
 }
 
-/// The set of target languages, held to `src/backend.rs` wherever a document states it.
+/// The set of target languages, held to `src/backend.rs` wherever a document enumerates it.
 ///
 /// Adding Ruby meant editing twenty-odd places by hand, and the only thing that caught an
 /// omission was the flow diagram's `--verify`; the prose had no such check and would have
-/// gone stale silently (§15.20). This is that check for the prose: every document that
-/// names the set has to name all of it, and nothing that is not in it.
+/// gone stale silently (§15.20). This is that check for the prose.
+///
+/// The unit is a **paragraph**, not a line: markdown here is hard-wrapped, and a paragraph
+/// that walks through what each language does names them in whatever order reads best. What
+/// is not allowed is naming three or more of them and leaving one out — which is what
+/// `docs/generated-code.md` and E107's own text were both doing when this was written.
 #[test]
 fn 文書が並べる対象言語はレジストリと同じ() {
-    let all = rulec::backend::ALL;
-    let names: Vec<&str> = all.iter().map(|b| b.name).collect();
-    // The two spellings the documents use, and the Japanese one.
-    let en = rulec::backend::names_en();
-    let ja = rulec::backend::names_ja();
-    let en_comma = names.join(", ");
-
-    // A document naming three or more of them in a row is stating the set.
+    let names: Vec<&str> = rulec::backend::ALL.iter().map(|b| b.name).collect();
     for (name, body) in docs() {
-        for (i, line) in body.lines().enumerate() {
-            let hits = names.iter().filter(|n| line.contains(**n)).count();
-            if hits < 3 {
+        let mut line = 1usize;
+        for para in body.split("\n\n") {
+            let at = line;
+            line += para.matches('\n').count() + 2;
+            // A fenced block is code, not prose about the set.
+            if para.trim_start().starts_with("```") {
                 continue;
             }
-            assert!(
-                line.contains(&en) || line.contains(&ja) || line.contains(&en_comma),
-                "{name}:{}: 対象言語の並びがレジストリと違います。\n  行: {}\n  期待: 「{en}」か「{ja}」",
-                i + 1,
-                line.trim()
+            let named: Vec<&&str> = names.iter().filter(|n| para.contains(**n)).collect();
+            if named.len() < 3 || named.len() == names.len() {
+                continue;
+            }
+            let missing: Vec<&&str> = names.iter().filter(|n| !para.contains(**n)).collect();
+            panic!(
+                "{name}:{at}: 対象言語を {} つ並べて {:?} を落としています。\n  段落: {}",
+                named.len(),
+                missing,
+                para.trim().chars().take(160).collect::<String>()
             );
         }
     }

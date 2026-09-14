@@ -252,23 +252,34 @@ Worth doing when a target is used often enough that regenerating it should be on
 when its output should be held by the suite rather than by you. It buys `rulec gen`,
 `rulec test`, an entry in `rulec api`, and a place in the agreement test.
 
-What it costs, measured on TypeScript and unchanged since: **about 700 lines in
-`src/codegen.rs` and 280 elsewhere**, measured twice now — on TypeScript and again on Ruby.
-The per-language differences sit in four places — type names, zero values, branch punctuation,
-and the runner — so one `Lang` enum still covers them and no backend trait has been worth
-pulling out.
+What it costs, measured on TypeScript and again on Ruby: **about 500 to 700 lines in
+`src/codegen.rs`**, plus one row elsewhere.
+
+That "one row" is recent. Adding Ruby meant editing twenty-two files, because the set of
+backends was written out again in seven separate lists. It now lives once, in
+`src/backend.rs`, and `gen`, `test`, `api` and the test suites all walk it.
 
 The pieces, in the order they are usually written:
 
-1. A `Lang` variant, and an arm wherever `Lang` is matched.
-2. `Gen::<lang>()` — the module: brands, enums, the rounding helpers, the entry guards, one
-   branch per row with the row quoted in a comment.
-3. `Gen::<lang>_runner()` — reads the wire JSON on stdin, writes the canonical JSON on stdout.
-   This is what lets the target join the agreement test.
+1. A `Lang` variant, and its spellings in `Lang::spelling()` — the comment marker, how two
+   conditions are joined, how an `if` opens, what closes the block. Shared code reads those
+   rather than matching on the language.
+2. `Gen::<lang>()` — the module: brands or their absence, enums, the rounding helpers, the
+   entry guards, one branch per row with the row quoted in a comment.
+3. `Gen::<lang>_runner()` — reads the wire JSON on stdin, writes the canonical JSON on
+   stdout. This is what lets the target join the agreement test.
 4. `round_tests_<lang>()` — the four rounding modes against the reference values.
-5. Wiring in `src/main.rs` for `gen` and `test`, and an entry in `Gen::api()`.
-6. The tests: the corpus agreement in `tests/threeway.rs`, the two shapes in `tests/shapes.rs`,
-   and a caller built from the inventory alone in `tests/api.rs`.
+5. An arm in `Gen::cell()`, and an entry in `Gen::api()`.
+6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, and
+   how to run them. Nothing else has to be told about the language — `rulec gen` writes it,
+   `rulec test` runs it, the agreement test compares it, and the test that holds the
+   documents to the registry starts requiring the prose to name it.
+
+Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
+Rust and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
+`NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
+Ruby cannot hold a unit at all, so it is documented instead, and the `.rbs` that ships with it
+says so too.
 
 The rule that decides whether a target may be built in has not moved: **it must be able to
 join the byte-for-byte agreement check.** A generated artifact the suite cannot run is outside

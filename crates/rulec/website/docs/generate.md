@@ -24,7 +24,7 @@ exists.
 | Python | supported | `python3` |
 | TypeScript | supported | just `node` — no build step, no tsconfig |
 | Rust | supported | just `rustc` — no cargo, no crates |
-| Ruby | supported | `ruby` 3.x or 4.x — `json` is standard library, so no gem |
+| Ruby | supported | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and a `.rbs` ships beside the module |
 | Go | supported | `go` |
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |

@@ -170,11 +170,14 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 Four rules keep it readable. **No cell is dropped** — a condition an earlier branch already
 settled is still written out (`elif True:`), because reading the output against the table is
-the only way it is meant to be read. **Units ride in the type**: `NewType` in Python, a
-branded bigint in TypeScript, a defined type in Go, so confusing `YenInclTax` with
-`YenExclTax` stops at compile time. **Rounding goes through a helper of its own**, because
-Python's `//` truncates toward −∞ and Go's integer division toward zero. **Nothing builtin
-is called bare**, so an input aliased `min` or `list` cannot break the output.
+the only way it is meant to be read. **Units ride in the type wherever the language has one
+to ride in**: a newtype in Rust, a defined type in Go, a branded bigint in TypeScript, a
+`NewType` in Python that `mypy --strict` is run over. Ruby has none, so there the unit is
+declared in the signature and stated in a comment, and the `.rbs` that ships with the module
+says as much. **Rounding goes through a helper of its own**, because integer division does
+not agree between them — Python and Ruby floor toward −∞, Go and Rust truncate toward zero.
+**Nothing builtin is called bare**, so an input aliased `min` or `list` cannot break the
+output.
 
 How to call it is a question `rulec api` answers without reading the code — module and
 function name, arguments with their units and ranges, outputs with their rounding, the enum
@@ -244,8 +247,8 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
                   codes.md / codes.ja.md (every diagnostic, generated),
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
-src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
-                  codegen, vectors, coverage, verify, fixtures, replay, report, doc
+src/              26 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+                  codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc
 tests/corpus/     13 rules transcribed from real published terms
 tests/mutants/    19 files, each with one mistake planted in it
 tests/golden/     21 snapshots of diagnostic prose, in both languages
@@ -287,6 +290,7 @@ rule over every case built from its own boundaries, exactly as the four above ar
 | Python | shipped | `python3` |
 | TypeScript | shipped | `node` alone — the output is erasable syntax, so no build step and no tsconfig |
 | Rust | shipped | `rustc` alone — no cargo, no crates |
+| Ruby | shipped | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and an `.rbs` ships alongside |
 | Go | shipped | `go` |
 | Java / Kotlin / Swift | planned | a JDK / kotlinc / swiftc |
 | SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, and there is no stdin/stdout runner, so the dialect and the shape come first |

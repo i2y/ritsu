@@ -119,6 +119,7 @@ One object for the run.
 {"results":[{"rule":"shipping_fee","lang":"python","vectors":68,"ok":true,"first_diff":null},
              {"rule":"shipping_fee","lang":"typescript","vectors":68,"ok":true,"first_diff":null},
              {"rule":"shipping_fee","lang":"rust","vectors":68,"ok":true,"first_diff":null},
+             {"rule":"shipping_fee","lang":"ruby","vectors":68,"ok":true,"first_diff":null},
              {"rule":"shipping_fee","lang":"go","vectors":68,"ok":true,"first_diff":null}],
  "skipped":[]}
 ```
@@ -213,6 +214,13 @@ meaning is in [generated-code.md](generated-code.md).
          "enums":[{"name":"クーポン種別","alias":"CouponKind",
                    "values":[{"name":"率引き","alias":"Percent"}]}],
          "errors":["RuleError::Input","RuleError::Contradiction"]},
+ "ruby":{"module":"CouponStep","function":"coupon_step",
+         "signature":"CouponStep.coupon_step(subtotal, applied, …)",
+         "rbs":"sig/coupon_step.rbs",
+         "params":[…],"returns":"Output","outputs":[…],
+         "enums":[{"name":"クーポン種別","alias":"CouponKind",
+                   "values":[{"name":"率引き","alias":"PERCENT"}]}],
+         "errors":["RuleInputError","RuleContradictionError"]},
  "go":{"package":"couponstep","func":"CouponStep",
        "signature":"func CouponStep(in Input) (Output, error)",
        "input_type":"Input","input_fields":[…],
@@ -224,8 +232,10 @@ meaning is in [generated-code.md](generated-code.md).
 Everything here is a name or a number the generated code really uses, so nothing in it moves
 with `--lang`. `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
-`CouponKind::Percent` in Rust, `couponstep.CouponKindPercent` in Go). `unit`, `range` and `rounding` are absent when the
-type has none.
+`CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
+`couponstep.CouponKindPercent` in Go). `unit`, `range` and `rounding` are absent when the
+type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
+with the module.
 
 ## `schema` and `adapter`
 

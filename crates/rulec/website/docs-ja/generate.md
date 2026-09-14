@@ -17,7 +17,7 @@ $ rulec gen rules/ --out generated/
 | Python | 対応済み | `python3` |
 | TypeScript | 対応済み | `node` だけ（ビルド手順も tsconfig も要りません） |
 | Rust | 対応済み | `rustc` だけ（cargo もクレートも要りません） |
-| Ruby | 対応済み | `ruby` 3.x か 4.x。`json` が標準添付なので gem は要りません |
+| Ruby | 対応済み | `ruby` 3.x か 4.x。`json` が標準添付なので gem は要りません。モジュールの隣に `.rbs` も出ます |
 | Go | 対応済み | `go` |
 | Java | 対応予定 | JDK。単一ファイル実行でビルドツール無しに走らせられます |
 | Kotlin | 対応予定 | kotlinc |
