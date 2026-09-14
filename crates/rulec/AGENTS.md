@@ -114,10 +114,15 @@ the source: a published tariff's own worked examples are ideal.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, Go, and the vectors. It refuses to generate from a rule that does not pass
-check. `rulec api <file>` tells you how to call the result — signatures, parameters with
+Writes Python, TypeScript, Rust, Go, and the vectors. It refuses to generate from a rule
+that does not pass check. `rulec api <file>` tells you how to call the result — signatures, parameters with
 units and ranges, enum member spellings, errors — so you never have to read the generated
 code to integrate it ([docs/generated-code.md](docs/generated-code.md)).
+
+For a target none of the four covers — another language, a workflow engine's expression
+language, SQL — you do not need a backend and you do not have to give up the comparison:
+generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
+with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to end.
 
 ### `rulec test generated/ --format json`
 
@@ -274,5 +279,6 @@ by the person who can overrule it.
 | [docs/codes.md](docs/codes.md) | every diagnostic: when it appears, how to fix it, a runnable reproduction |
 | [docs/formats.md](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
 | [docs/generated-code.md](docs/generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
+| [docs/backends.md](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
 | `README.md` (Japanese) | the tour, for a person |

@@ -153,10 +153,15 @@ the source: a published tariff's own worked examples are ideal.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, Go, and the vectors. It refuses to generate from a rule that does not pass
-check. `rulec api <file>` tells you how to call the result — signatures, parameters with
+Writes Python, TypeScript, Rust, Go, and the vectors. It refuses to generate from a rule
+that does not pass check. `rulec api <file>` tells you how to call the result — signatures, parameters with
 units and ranges, enum member spellings, errors — so you never have to read the generated
 code to integrate it ([generated-code.md](generated-code.md)).
+
+For a target none of the four covers — another language, a workflow engine's expression
+language, SQL — you do not need a backend and you do not have to give up the comparison:
+generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
+with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
 
 ### `rulec test generated/ --format json`
 
@@ -313,5 +318,6 @@ by the person who can overrule it.
 | [examples.md](examples.md) | complete rules that all pass `check`, generate, and agree across every implementation |
 | [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
 | [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
+| [backends.md](backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
 | <https://github.com/i2y/rulec> | the source, the design document, and the tour written for a person |

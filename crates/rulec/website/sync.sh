@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pull the repository's canonical documents into the site.
 #
-# Four documents (AGENTS.md and the three references under docs/) are
+# Five documents (AGENTS.md and the four references under docs/) are
 # written once, in the repository, and tested there: tests/docs.rs
 # checks their links and the commands they name, tests/codes.rs holds
 # docs/codes*.md to `rulec explain --all`, and tests/api.rs holds
@@ -22,13 +22,17 @@ sed 's|](docs/|](|g' "$root/AGENTS.md"            > docs/agents.md
 cp "$root/docs/reference.md"                        docs/reference.md
 cp "$root/docs/formats.md"                          docs/formats.md
 cp "$root/docs/generated-code.md"                   docs/generated-code.md
+# The worked example links to a rule in the repository; on the site that path does not
+# exist, so it points at the file on GitHub instead.
+sed 's|](../tests/corpus/ec261.rule)|](https://github.com/i2y/rulec/blob/main/tests/corpus/ec261.rule)|g' \
+    "$root/docs/backends.md"                      > docs/backends.md
 # Already the output of `rulec explain --all --format markdown`, and a
 # test in the repository holds it to that, so it is copied rather than
 # regenerated (the site build needs no Rust toolchain).
 cp "$root/docs/codes.md"                            docs/codes.md
 
 # ---- Japanese: the ledger has a Japanese rendering of its own; the
-# other four are English by the project's own rule (the first reader of
+# other five are English by the project's own rule (the first reader of
 # a reference is an agent), so each copy says so at the top rather than
 # leaving a reader wondering whether a translation was lost.
 mkdir -p docs-ja/stylesheets docs-ja/images
@@ -42,7 +46,7 @@ banner() {
 
 MD
 }
-for f in agents reference formats generated-code; do
+for f in agents reference formats generated-code backends; do
   { banner; cat "docs/$f.md"; } > "docs-ja/$f.md"
 done
 
@@ -50,4 +54,4 @@ done
 # follow a symlinked directory, so they are real copies.
 cp docs/stylesheets/extra.css docs-ja/stylesheets/extra.css
 cp docs/images/*.svg          docs-ja/images/
-echo "synced: agents, reference, formats, generated-code, codes (en + ja)"
+echo "synced: agents, reference, formats, generated-code, backends, codes (en + ja)"

@@ -17,7 +17,8 @@ fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("読めない: {rel}: {e}"))
 }
 
-const BUNDLED: &[&str] = &["SKILL.md", "reference.md", "formats.md", "generated-code.md", "examples.md"];
+const BUNDLED: &[&str] =
+    &["SKILL.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "examples.md"];
 
 /// The same assembly `skills/sync.sh` does, in one place so the two cannot disagree.
 fn built_skill_md() -> String {
@@ -28,10 +29,12 @@ fn built_skill_md() -> String {
         .replace("(docs/reference.md)", "(reference.md)")
         .replace("(docs/formats.md", "(formats.md")
         .replace("(docs/generated-code.md)", "(generated-code.md)")
+        .replace("(docs/backends.md)", "(backends.md)")
         .replace(" ([docs/codes.md](docs/codes.md))", "")
         .replace("[docs/reference.md]", "[reference.md]")
         .replace("[docs/formats.md]", "[formats.md]")
-        .replace("[docs/generated-code.md]", "[generated-code.md]");
+        .replace("[docs/generated-code.md]", "[generated-code.md]")
+        .replace("[docs/backends.md]", "[backends.md]");
     format!("{}{}{}", read("skills/header.md"), body, read("skills/footer.md"))
 }
 
@@ -57,6 +60,15 @@ fn スキルはいまの文書から組み立てたものと同じ() {
         read("skills/rulec/reference.md"),
         read("docs/reference.md").replace("[codes.md](codes.md)", "`rulec explain --all`"),
         "skills/rulec/reference.md が古いです。`skills/sync.sh` で作り直してください"
+    );
+    // backends.md loses the ledger the same way, and the link to the corpus rule its worked
+    // example is built from: inside someone else's project that path leads nowhere.
+    assert_eq!(
+        read("skills/rulec/backends.md"),
+        read("docs/backends.md")
+            .replace("[`tests/corpus/ec261.rule`](../tests/corpus/ec261.rule)", "`ec261.rule`")
+            .replace("[codes.md](codes.md)", "`rulec explain --all`"),
+        "skills/rulec/backends.md が古いです。`skills/sync.sh` で作り直してください"
     );
     // The examples page loses the site's own navigation buttons.
     // Cut where the buttons point, not at what they are labelled: the label has been

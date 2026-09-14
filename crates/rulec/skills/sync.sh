@@ -21,10 +21,12 @@ body=$(sed -n '1,/^## 7\. Where to look$/p' ../AGENTS.md | sed '$d')
     -e 's|(docs/reference\.md)|(reference.md)|g' \
     -e 's|(docs/formats\.md|(formats.md|g' \
     -e 's|(docs/generated-code\.md)|(generated-code.md)|g' \
+    -e 's|(docs/backends\.md)|(backends.md)|g' \
     -e 's| (\[docs/codes\.md\](docs/codes\.md))||g' \
     -e 's|\[docs/reference\.md\]|[reference.md]|g' \
     -e 's|\[docs/formats\.md\]|[formats.md]|g' \
-    -e 's|\[docs/generated-code\.md\]|[generated-code.md]|g'
+    -e 's|\[docs/generated-code\.md\]|[generated-code.md]|g' \
+    -e 's|\[docs/backends\.md\]|[backends.md]|g'
   cat footer.md
 } > rulec/SKILL.md
 
@@ -33,6 +35,11 @@ sed -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
     ../docs/reference.md > rulec/reference.md
 cp ../docs/formats.md        rulec/formats.md
 cp ../docs/generated-code.md rulec/generated-code.md
+# The worked example points at a rule in this repository; inside someone else's project
+# that path leads nowhere, so the link becomes the plain name of the rule.
+sed -e 's|\[`tests/corpus/ec261.rule`\](../tests/corpus/ec261.rule)|`ec261.rule`|g' \
+    -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
+    ../docs/backends.md > rulec/backends.md
 # The examples page ends in the site's own navigation buttons, which lead nowhere here.
 # Matched by where they point, not by what they are labelled: the label has been renamed
 # once already, and the cut failed silently when it was.

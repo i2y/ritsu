@@ -3085,7 +3085,7 @@ pub fn round_tests_go(pkg: &str) -> String {
 // It lives here, next to the generator, on purpose. Anywhere else it would be a second
 // description of the same thing and would start drifting the first time a name changes; here
 // it is built from the same `pub_name`, `pascal`, `py_ty` and `go_ty` the emitters use, and a
-// test runs the generated Python and Go against it.
+// test runs the generated code of every language against it.
 
 impl Gen<'_> {
     /// The unit as it is written in the rule (`円`, `g`, `%`), or absent for a type that has

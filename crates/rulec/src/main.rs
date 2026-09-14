@@ -193,8 +193,8 @@ fn commands() -> Vec<Cmd> {
             name: "gen",
             args: "<file.rule>...",
             purpose: tr!(
-                "Python と Go と単体ベクタを生成する。検査を通らない規則からは生成しない",
-                "generate Python, Go and the unit vectors; nothing is generated from a rule that does not pass check"
+                "Python・TypeScript・Rust・Go と単体ベクタを生成する。検査を通らない規則からは生成しない",
+                "generate Python, TypeScript, Rust and Go, and the unit vectors; nothing is generated from a rule that does not pass check"
             ),
             params: vec![rule_files()],
             flags: vec![
@@ -538,8 +538,8 @@ fn help_all() -> String {
     let cs = commands();
     let mut o = format!("rulec {}\n\n", env!("CARGO_PKG_VERSION"));
     o.push_str(&tr!(
-        "業務ルールを一枚の表として書き、検査し、Python と Go に生成する。\n\n",
-        "Write business rules as one table, check them, and generate Python and Go.\n\n"
+        "業務ルールを一枚の表として書き、検査し、四つの言語に生成する。\n\n",
+        "Write business rules as one table, check them, and generate code for four languages.\n\n"
     ));
     o.push_str(&tr!("使い方:\n", "Usage:\n"));
     let w = cs.iter().map(|c| c.name.len() + c.args.len()).max().unwrap_or(0);

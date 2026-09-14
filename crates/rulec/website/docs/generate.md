@@ -36,6 +36,22 @@ cannot be held against the reference evaluator sits outside the claim
 this tool makes. Adding the third, TypeScript, cost about 700 lines in
 the generator.
 
+### A target that is not on the list
+
+You are not limited to the list, and waiting for a backend is not the only
+way in. A rule already publishes everything a generator needs — `rulec api`
+gives the names, units, ranges and rounding, `rulec schema` gives the wire
+— so you can emit whatever your target needs from your own tool.
+
+**The comparison comes with you.** Wrap the result in the adapter protocol
+and `rulec verify` will run it against every case built from the rule's own
+boundaries, exactly as it does for the four above. Nothing in rulec changes.
+
+[Other targets](backends.md) runs that loop end to end against SQL, which
+is not one of the four: 88 cases, all agreeing — and then one threshold
+broken on purpose, to show the report naming the rows and the case that
+proves it.
+
 ## What the output looks like
 
 Every row of every table becomes one branch, in order, with the original

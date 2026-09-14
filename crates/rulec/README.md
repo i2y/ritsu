@@ -240,7 +240,8 @@ the same job with `RULEC_LANG` set to their language.
 AGENTS.md         the procedure an agent follows
 DESIGN.md         the design record: every decision, and what was discarded with it
 docs/             reference.md (the grammar), formats.md (machine-readable output),
-                  generated-code.md, codes.md / codes.ja.md (every diagnostic, generated),
+                  generated-code.md, backends.md (targeting another language),
+                  codes.md / codes.ja.md (every diagnostic, generated),
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy it into .claude/skills/
 src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
@@ -275,6 +276,12 @@ Thirteen rules taken from real published terms are checked, generated and run on
 
 **Python, TypeScript, Rust and Go** today; **Java, Kotlin, Swift and SQL** are planned.
 
+You do not have to wait for the list, and nothing here has to change. A target outside it —
+another language, a workflow engine's expression language, SQL — can be generated from what
+`rulec api` and `rulec schema` already publish, and `rulec verify` will hold the result to the
+rule over every case built from its own boundaries, exactly as the four above are held.
+[`docs/backends.md`](docs/backends.md) runs that loop end to end against SQL.
+
 | | | |
 |---|---|---|
 | Python | shipped | `python3` |
@@ -300,9 +307,10 @@ branches, and the runner (DESIGN §15.13).
 | [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | every diagnostic code, as `rulec explain --all` prints it |
 | [`docs/formats.md`](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, manifests, the adapter protocol |
 | [`docs/generated-code.md`](docs/generated-code.md) | the shape of the output, its guarantees, and how to call it |
+| [`docs/backends.md`](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `DESIGN.md` | why each decision was made and what was discarded with it (Japanese, 1,483 lines) |
 
-The four references under `docs/` are carried into the site verbatim: holding the same text
+The five references under `docs/` are carried into the site verbatim: holding the same text
 twice is how one of the copies goes stale.
 
 ## About the design

@@ -1,4 +1,4 @@
-//! rulec — checks decision tables of business rules and generates Python and Go.
+//! rulec — checks decision tables of business rules and generates code for four languages.
 //! The design is in DESIGN.md.
 
 /// A user-facing sentence in both languages: `tr!("日本語", "English")`.
