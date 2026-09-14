@@ -1,9 +1,8 @@
 # Examples
 
 Every rule on this page is **one the repository's tests run on every commit**: it passes
-`rulec check`, its own examples execute, and the reference evaluator, the generated Python
-and the generated Go are held to the same answers byte for byte. Copy any of them and it
-works.
+`rulec check`, its own examples execute, and the reference evaluator and every generated
+language are held to the same answers byte for byte. Copy any of them and it works.
 
 They are ordered smallest first.
 

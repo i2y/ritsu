@@ -14,11 +14,12 @@ the language of the business** — Japanese, in every example here.
     material.
 
     And you are not left alone with the file when you read it. `rulec doc` renders the
-    document for approval, with the facts the checker knows that the table does not show:
-    that a group and its complement really do cover all 47 values, which rows shadow which,
-    where a rounding is a placeholder rather than a decision. For a change, how many records
-    move and by how much comes out before it ships. Both are things to ask the agent for,
-    and so is an explanation of any row. Its own procedure is in [For agents](agents.md).
+    document for approval, and adds what reading the table cannot tell you: what a single
+    word in the table actually stands for, which rows are hidden by the rows above them,
+    and which roundings are placeholders rather than decisions. For a change, how many
+    records move and by how much comes out before it ships. Both are things to ask the
+    agent for, and so is an explanation of any row. Its own procedure is in
+    [For agents](agents.md).
 
 These are all the words that may start a line.
 
