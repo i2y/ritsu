@@ -109,3 +109,85 @@ fn 読めない範囲の境界は黙って落ちない() {
     let d = ds.iter().find(|d| d.code == "E103").expect("E103 が出る");
     assert!(d.title.contains("1lb"), "どの境界かを言う: {}", d.title);
 }
+
+/// A literal inside an **expression** has to evaluate in every unit, not just the three the
+/// evaluator used to try.
+///
+/// `Expr::Lit` guessed: 円, then a rate, then a plain number. Every other unit fell through
+/// all three and the expression returned *nothing* — so a `define` over `重量 >= 500g`, or
+/// over `額 >= 250EUR`, had no value, no table fired, and the vectors came out empty or
+/// `null` while the generated code was right the whole time. `money[銭]` was worse: `500銭`
+/// matched the 円 arm and came back as 5, so the oracle answered a hundredfold low and
+/// `499銭 >= 500銭` evaluated to true.
+///
+/// This walks the whole unit table, because the bug was invisible for exactly as long as the
+/// corpus happened to write its expressions in 円.
+#[test]
+fn 式の中のリテラルはどの単位でも評価される() {
+    // (declared type, low, high, the literal the define compares against)
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("mass[mg]", "0mg", "1000mg", "500mg"),
+        ("mass[g]", "0g", "1000g", "500g"),
+        ("mass[kg]", "0kg", "1000kg", "500kg"),
+        ("mass[t]", "0t", "1000t", "500t"),
+        ("mass[lb]", "0lb", "1000lb", "500lb"),
+        ("length[mm]", "0mm", "1000mm", "500mm"),
+        ("length[cm]", "0cm", "1000cm", "500cm"),
+        ("length[m]", "0m", "1000m", "500m"),
+        ("length[km]", "0km", "1000km", "500km"),
+        ("money[円, incl_tax]", "0円", "1000円", "500円"),
+        ("money[銭, incl_tax]", "0銭", "1000銭", "500銭"),
+        ("money[EUR, incl_tax]", "0EUR", "1000EUR", "500EUR"),
+        ("money[USD, incl_tax]", "0USD", "1000USD", "500USD"),
+        ("number", "0", "1000", "500"),
+        ("rate", "0%", "100%", "50%"),
+    ];
+    for (ty, lo, hi, lit) in cases {
+        let src = format!(
+            "rule t(t) v1\n\ninputs\n  x(x) : {ty}  range >={lo} <={hi}\n\n\
+             outputs\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
+             define big(big) : bool = x >= {lit}\n\n\
+             table j(j)\npolicy first\n\
+             | big | -> fee(fee) : money[円, incl_tax] |\n\
+             | true | 100円 |\n| - | 0円 |\n\nresult fee = fee\n"
+        );
+        let (f, c) = rulec::prepare(&src, "units.rule")
+            .unwrap_or_else(|d| panic!("{ty}: 検査を通らない: {:?}", d.iter().map(|x| x.code.to_string()).collect::<Vec<_>>()));
+        let vs = rulec::vectors::generate(&f, &c);
+        assert!(!vs.is_empty(), "{ty}: ベクタが 0 件。式の中の `{lit}` が評価できていない");
+        for v in &vs {
+            for (name, val) in &v.outputs {
+                assert!(val.is_some(), "{ty}: 出力 {name} に値が無い（表が一行も発火していない）");
+            }
+        }
+        // The define's own boundary has to be reachable from both sides, or the rule is only
+        // half exercised — which is how the 銭 case would still have slipped through.
+        let hits = |want: &str| vs.iter().any(|v| v.trace.iter().any(|t| t.ends_with(want)));
+        assert!(hits("1"), "{ty}: 1 行目に当たるベクタが無い");
+        assert!(hits("2"), "{ty}: 2 行目に当たるベクタが無い");
+    }
+}
+
+/// `money[銭]` specifically: the arm that used to be *wrong* rather than missing.
+#[test]
+fn 銭のリテラルは式の中でも銭のまま読まれる() {
+    let src = "rule t(t) v1\n\ninputs\n  x(x) : money[銭, incl_tax]  range >=0銭 <=1000銭\n\n\
+               outputs\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
+               define big(big) : bool = x >= 500銭\n\n\
+               table j(j)\npolicy first\n\
+               | big | -> fee(fee) : money[円, incl_tax] |\n\
+               | true | 100円 |\n| - | 0円 |\n\nresult fee = fee\n";
+    let (f, c) = rulec::prepare(src, "units.rule").expect("検査を通る");
+    let vs = rulec::vectors::generate(&f, &c);
+    // 499銭 is below the threshold. Read as 5円 it was above it, and the oracle said 100円.
+    for v in &vs {
+        let Some(rulec::eval::Val::Num(x)) = v.input.get("x") else { continue };
+        if x.cmp_to(rulec::num::Rat::int(499)) != std::cmp::Ordering::Greater {
+            assert!(
+                v.trace.iter().any(|t| t.ends_with('2')),
+                "x={x}銭 は 500銭 未満なのに 1 行目に当たっている: {:?}",
+                v.trace
+            );
+        }
+    }
+}

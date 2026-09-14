@@ -145,15 +145,20 @@ impl<'a> Env<'a> {
     fn expr(&self, e: &Expr) -> Option<Val> {
         match e {
             Expr::Name(n, _) => self.vals.get(n).cloned(),
-            Expr::Lit(l, _) => {
-                // A literal inside an expression is lowered from the unit it is written in
-                // to the base unit.
-                lit_to_val(l, &Ty::Money { cur: "円".into(), tax: None })
-                    .or_else(|| lit_to_val(l, &Ty::Rate))
-                    // A literal with no unit at all is a plain number, which is the only
-                    // thing `× 2` can mean.
-                    .or_else(|| lit_to_val(l, &Ty::Number))
-            }
+            // A literal inside an expression is read **in its own unit**, which is the
+            // only reading that can be right: E103 refuses a literal whose unit differs
+            // from what it meets (`重量(mass[g]) - 2kg`, `額(money[銭]) >= 5円`), so by
+            // the time this runs the two agree. `codegen` reads it the same way, which is
+            // what keeps the generated code and this evaluator in step.
+            //
+            // It used to guess instead — 円, then a rate, then a plain number — and
+            // returned *nothing* for every other unit. A `define` over `重量 >= 500g` or
+            // over `額 >= 250EUR` then had no value, no table fired, and the vectors came
+            // out empty or `null` while the generated code was right all along.
+            Expr::Lit(l, _) => match l {
+                Lit::Num(n) => lit_to_val(l, &crate::types::lit_ty_pub(n)),
+                _ => lit_to_val(l, &Ty::Number),
+            },
             Expr::Call(name, args, _) => {
                 let a: Vec<Val> = args.iter().filter_map(|x| self.expr(x)).collect();
                 match (name.as_str(), a.as_slice()) {
