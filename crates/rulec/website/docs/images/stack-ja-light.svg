@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1003.8 252" role="img" aria-label="表は何段でも重ねられる。表 重さ判定 が 重量 から 区分 を出し、その 区分 が 表 帯判定 の列になり、出てきた 帯 が 表 送料表 の列になる。導出した 支払額 も列として入り、最後の表が 送料 と 倍率 を同時に出して、請求額 と 付与点 になる。色のついた欄は前の段が作った値。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1003.8 272" role="img" aria-label="表は何段でも重ねられる。表 重さ判定 が 重量 から 区分 を出し、その 区分 が 表 帯判定 の列になり、出てきた 帯 が 表 送料表 の列になる。導出した 支払額 も列として入り、最後の表が 送料 と 倍率 を同時に出して、請求額 と 付与点 になる。色のついた欄は前の段が作った値。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
@@ -32,11 +32,11 @@
 <rect x="612.0" y="125.0" width="40.0" height="22" rx="5" fill="#4457d8" fill-opacity="0.18" stroke="#4457d8" stroke-opacity="0.8"/>
 <text x="632.0" y="140.0" font-size="11" font-weight="400" text-anchor="middle" fill="#10131a">倍率</text>
 <text x="29" y="62" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">重量</text>
+<line x1="35" y1="69" x2="35" y2="80" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
 <text x="210.0" y="62" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">会員区分</text>
+<line x1="216.0" y1="69" x2="216.0" y2="80" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
 <text x="449.0" y="49" font-size="9.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">導出</text>
 <text x="449.0" y="62" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">derive 支払額 = 商品合計 - 値引</text>
-<line x1="35" y1="69" x2="35" y2="80" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
-<line x1="216.0" y1="69" x2="216.0" y2="80" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
 <line x1="455.0" y1="69" x2="455.0" y2="80" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
 <line x1="151.0" y1="136" x2="197.0" y2="136" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
 <text x="174.0" y="126" font-size="10.5" font-weight="400" text-anchor="middle" fill="#4457d8">区分</text>
@@ -48,11 +48,11 @@
 <path d="M971.8,84 V96 H983.8 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="748.0" y="116" font-size="10.5" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">result 請求額 = max(支払額, 0円) + 送料</text>
 <text x="748.0" y="136" font-size="10.5" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">define 付与点 = 基本点 × 倍率</text>
-<text x="748.0" y="186" font-size="9.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">出力</text>
-<rect x="748.0" y="196" width="51.0" height="22" rx="5" fill="#4457d8" fill-opacity="0.18" stroke="#4457d8" stroke-opacity="0.8"/>
-<text x="773.5" y="211.0" font-size="11" font-weight="400" text-anchor="middle" fill="#10131a">請求額</text>
-<rect x="806.0" y="196" width="51.0" height="22" rx="5" fill="#4457d8" fill-opacity="0.18" stroke="#4457d8" stroke-opacity="0.8"/>
-<text x="831.5" y="211.0" font-size="11" font-weight="400" text-anchor="middle" fill="#10131a">付与点</text>
-<line x1="754.0" y1="164" x2="754.0" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
-<text x="20" y="238" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6478">色のついた列は、前の段が作った値です</text>
+<text x="748.0" y="206" font-size="9.5" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">出力</text>
+<rect x="748.0" y="216" width="51.0" height="22" rx="5" fill="#4457d8" fill-opacity="0.18" stroke="#4457d8" stroke-opacity="0.8"/>
+<text x="773.5" y="231.0" font-size="11" font-weight="400" text-anchor="middle" fill="#10131a">請求額</text>
+<rect x="806.0" y="216" width="51.0" height="22" rx="5" fill="#4457d8" fill-opacity="0.18" stroke="#4457d8" stroke-opacity="0.8"/>
+<text x="831.5" y="231.0" font-size="11" font-weight="400" text-anchor="middle" fill="#10131a">付与点</text>
+<line x1="754.0" y1="164" x2="754.0" y2="192" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="20" y="258" font-size="10.5" font-weight="400" text-anchor="start" fill="#5b6478">色のついた列は、前の段が作った値です</text>
 </svg>
