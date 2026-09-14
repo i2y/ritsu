@@ -64,6 +64,11 @@ $ rulec --help
 
 ## Write a table
 
+Nothing stops you writing one by hand. But the shape this is built for is an agent
+transcribing from a published policy or a spreadsheet, and a person reading the table it
+produced and approving it — so the thing worth taking from this section is how to *read*
+one.
+
 ```rule
 rule 送料例(fee_demo) v1
 description "The README's example. Passes rulec check as written"

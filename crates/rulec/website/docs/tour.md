@@ -1,5 +1,13 @@
 # Write a table
 
+!!! note "Usually an agent writes this"
+
+    Nothing stops you writing a `.rule` by hand, and this page is also how. But the shape
+    this tool is built for is an agent transcribing from a published policy or a
+    spreadsheet, and a person reading the table it produced and approving it. So what this
+    page is most worth for is learning to **read** one — writing follows from the same
+    material. The agent's own procedure is in [For agents](agents.md).
+
 A `.rule` file **has one fixed shape, read from the top**. There is no
 forward reference, so reading downwards is reading the dependencies in
 order. **The keywords are English; the names and the cell values stay in
