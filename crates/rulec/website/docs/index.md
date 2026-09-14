@@ -336,8 +336,8 @@ longer something this tool says anything about.
 
 ### What else is out there
 
-**Decision tables are not new.** An honest look at the neighbours — none of which I have used,
-so this is from their published material.
+**Decision tables are not new.** An honest look at the neighbours — read off their published
+material, not from first-hand use.
 
 | | What it is | How rulec differs |
 |---|---|---|
