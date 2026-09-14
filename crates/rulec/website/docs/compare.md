@@ -90,7 +90,7 @@ CI, so that the tool owns the formatting and nothing else:
 ```yaml
 - run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
   env:
-    RULEC_LANG: ja
+    RULEC_LANG: ja        # the people approving this one read Japanese
 - run: gh pr comment "$PR" --body-file diff.md
 ```
 

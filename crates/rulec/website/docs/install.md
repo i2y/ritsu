@@ -65,13 +65,14 @@ it runs on.
 ```
 
 Those five are the gate. Replaying past records belongs in a separate
-job, one that has the records — and there the language is turned to
-Japanese, because what it produces is pasted in front of a person:
+job, one that has the records — and there the output language is set to
+the one the people reading the pull request use, because that is what it
+is pasted in front of:
 
 ```yaml
 - run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
   env:
-    RULEC_LANG: ja
+    RULEC_LANG: ja        # the people approving this one read Japanese
 - run: gh pr comment "$PR" --body-file diff.md
 ```
 
