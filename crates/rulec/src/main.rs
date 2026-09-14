@@ -193,8 +193,8 @@ fn commands() -> Vec<Cmd> {
             name: "gen",
             args: "<file.rule>...",
             purpose: tr!(
-                "Python・TypeScript・Rust・Go と単体ベクタを生成する。検査を通らない規則からは生成しない",
-                "generate Python, TypeScript, Rust and Go, and the unit vectors; nothing is generated from a rule that does not pass check"
+                "Python・TypeScript・Rust・Ruby・Go と単体ベクタを生成する。検査を通らない規則からは生成しない",
+                "generate Python, TypeScript, Rust, Ruby and Go, and the unit vectors; nothing is generated from a rule that does not pass check"
             ),
             params: vec![rule_files()],
             flags: vec![
@@ -538,8 +538,8 @@ fn help_all() -> String {
     let cs = commands();
     let mut o = format!("rulec {}\n\n", env!("CARGO_PKG_VERSION"));
     o.push_str(&tr!(
-        "業務ルールを一枚の表として書き、検査し、四つの言語に生成する。\n\n",
-        "Write business rules as one table, check them, and generate code for four languages.\n\n"
+        "業務ルールを一枚の表として書き、検査し、五つの言語に生成する。\n\n",
+        "Write business rules as one table, check them, and generate code for five languages.\n\n"
     ));
     o.push_str(&tr!("使い方:\n", "Usage:\n"));
     let w = cs.iter().map(|c| c.name.len() + c.args.len()).max().unwrap_or(0);
@@ -1061,6 +1061,8 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             (format!("{out_dir}/python/{alias}_runner.py"), g.python_runner()),
             (format!("{out_dir}/typescript/{alias}.ts"), g.typescript()),
             (format!("{out_dir}/typescript/{alias}_runner.ts"), g.ts_runner()),
+            (format!("{out_dir}/ruby/{alias}.rb"), g.ruby()),
+            (format!("{out_dir}/ruby/{alias}_runner.rb"), g.ruby_runner()),
             (format!("{out_dir}/rust/{alias}.rs"), g.rust()),
             (format!("{out_dir}/rust/{alias}_runner.rs"), g.rs_runner()),
             (format!("{out_dir}/go/{pkg}/{alias}.go"), g.go()),
@@ -1076,6 +1078,7 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             // agreement alone would hide.
             (format!("{out_dir}/python/_round_test.py"), rulec::codegen::round_tests_python()),
             (format!("{out_dir}/typescript/_round_test.ts"), rulec::codegen::round_tests_typescript()),
+            (format!("{out_dir}/ruby/_round_test.rb"), rulec::codegen::round_tests_ruby()),
             (format!("{out_dir}/rust/_round_test.rs"), rulec::codegen::round_tests_rust()),
             (format!("{out_dir}/go/{pkg}/round_test.go"), rulec::codegen::round_tests_go(&pkg)),
         ];

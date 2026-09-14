@@ -806,6 +806,7 @@ impl<'a> Gen<'a> {
                         Lang::Go => self.go_cell(cell, &local(col), &ty, sc),
                         Lang::Ts => self.ts_cell(cell, &local(col), &ty, sc),
                         Lang::Rs => self.rs_cell(cell, &local(col), &ty, sc),
+                        Lang::Rb => self.rb_cell(cell, &local(col), &ty, sc),
                     };
                     if let Some(c) = c {
                         if !conds.contains(&c) {
@@ -820,7 +821,7 @@ impl<'a> Gen<'a> {
             let joined = conds.join(if lang == Lang::Py { " and " } else { " && " });
             o.push_str(&format!(
                 "{indent}{} {guard}: {}\n",
-                if lang == Lang::Py { "#" } else { "//" },
+                if matches!(lang, Lang::Py | Lang::Rb) { "#" } else { "//" },
                 tr!(
                     "W114（表 {name} 行{} × 行{}）。重ならないことを静的に証明できなかった行の対",
                     "W114 (table {name}, row {} × row {}): a pair of rows whose exclusivity could not be proven statically",
@@ -833,10 +834,13 @@ impl<'a> Gen<'a> {
                 Lang::Go => o.push_str(&format!("{indent}if {joined} {{\n")),
                 Lang::Ts => o.push_str(&format!("{indent}if ({joined}) {{\n")),
                 Lang::Rs => o.push_str(&format!("{indent}if {joined} {{\n")),
+                Lang::Rb => o.push_str(&format!("{indent}if {joined}\n")),
             }
             o.push_str(&raise(&name, i + 1, j + 1));
-            if lang != Lang::Py {
-                o.push_str(&format!("{indent}}}\n"));
+            match lang {
+                Lang::Py => {}
+                Lang::Rb => o.push_str(&format!("{indent}end\n")),
+                _ => o.push_str(&format!("{indent}}}\n")),
             }
         }
         o
@@ -1849,6 +1853,7 @@ enum Lang {
     Go,
     Ts,
     Rs,
+    Rb,
 }
 
 impl<'a> Gen<'a> {
@@ -3324,6 +3329,50 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
             .finish();
 
+        // --- Ruby. The unit is not in the type here (§15.20), so the entry states it
+        // the way the others do and the generated comment repeats it for a reader.
+        let rb_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &self.rb_api_ty(&ty), &ty)
+            })
+            .collect();
+        let rb_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.rb_api_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let rb_ret = if outs.len() == 1 {
+            self.rb_api_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let rb_sig = format!(
+            "{}.{alias}({})",
+            self.rb_module(),
+            self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ")
+        );
+        let ruby = crate::json::Obj::new()
+            .str("module", &self.rb_module())
+            .str("function", &alias)
+            .str("signature", &rb_sig)
+            .raw("params", crate::json::arr(&rb_in))
+            .str("returns", &rb_ret)
+            .raw("outputs", crate::json::arr(&rb_outs))
+            // A Ruby enum member is a constant under the type's module (`Band::SHORT`).
+            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .finish();
+
         // --- Go
         let go_in: Vec<String> = self
             .f
@@ -3377,7 +3426,495 @@ impl Gen<'_> {
             .raw("python", python)
             .raw("typescript", typescript)
             .raw("rust", rust)
+            .raw("ruby", ruby)
             .raw("go", go)
             .finish()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Ruby (§15.20). The closest relative of the Python backend: dynamically typed,
+// and `/` on Integers rounds toward −∞ exactly as Python's `//` does. What is
+// different is the constant rule — a Ruby constant must begin with an uppercase
+// ASCII letter, so a Japanese name cannot be one and groups take a prefix.
+
+/// Turn a name into something Ruby will accept as a constant.
+fn rb_const(n: &str) -> String {
+    if n.starts_with(|c: char| c.is_ascii_uppercase()) {
+        n.to_string()
+    } else {
+        format!("C_{n}")
+    }
+}
+
+fn rb_expr(s: &str) -> String {
+    // `//` becomes `/`: Ruby's integer division already floors toward −∞.
+    s.replace(" // ", " / ")
+        .replace("True", "true")
+        .replace("False", "false")
+}
+
+/// The four modes of §7.3, and the two comparisons. Nothing is left to Ruby's own
+/// division: `abs` first, then the sign is carried back, so every mode means the
+/// same thing it means in the other four.
+fn round_rb() -> String {
+    format!(
+        r#"
+  def self._min(a, b)
+    a < b ? a : b
+  end
+
+  def self._max(a, b)
+    a > b ? a : b
+  end
+
+  # {down}
+  def self._round_down(x, g)
+    v = x.abs / g * g
+    x < 0 ? -v : v
+  end
+
+  # {up}
+  def self._round_up(x, g)
+    q, r = x.abs / g, x.abs % g
+    v = r.zero? ? q * g : (q + 1) * g
+    x < 0 ? -v : v
+  end
+
+  # {half}
+  def self._round_half(x, g)
+    q, r = x.abs / g, x.abs % g
+    v = 2 * r >= g ? (q + 1) * g : q * g
+    x < 0 ? -v : v
+  end
+
+  # {bankers}
+  def self._round_bankers(x, g)
+    q, r = x.abs / g, x.abs % g
+    q += 1 if 2 * r > g || (2 * r == g && q.odd?)
+    v = q * g
+    x < 0 ? -v : v
+  end
+
+  private_class_method :_min, :_max, :_round_down, :_round_up, :_round_half, :_round_bankers
+"#,
+        down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen -> -4 yen."),
+        up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen -> -5 yen."),
+        half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
+        bankers = tr!("半分ちょうどは偶数へ。", "An exact half goes to the even neighbor."),
+    )
+}
+
+impl<'a> Gen<'a> {
+    /// An enum value, written as the constant the module declares for it.
+    fn rb_value(&self, v: &str) -> String {
+        match self.value_names.get(v) {
+            Some((ty, alias)) => format!("{}::{}", rb_const(ty), rb_const(&alias.to_uppercase())),
+            None => format!("{v:?}"),
+        }
+    }
+
+    /// Render a cell as a Ruby condition. A don't-care yields None (no condition).
+    fn rb_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
+        let inner = match ty {
+            Ty::Opt(t) => t.as_ref(),
+            other => other,
+        };
+        let lit = |l: &Lit| -> String {
+            match l {
+                Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                Lit::Word(w) => self.rb_value(w),
+                Lit::Num(n) => self.int_lit(n, inner, col_scale),
+                Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                Lit::Str(s) => format!("{s:?}"),
+            }
+        };
+        let members = |ls: &Vec<Lit>| -> String {
+            let mut out: Vec<String> = Vec::new();
+            for l in ls {
+                if let Lit::Word(w) = l {
+                    if let Some((_, ms)) = self.c.groups.get(w) {
+                        out.extend(ms.iter().map(|m| self.rb_value(m)));
+                        continue;
+                    }
+                }
+                out.push(lit(l));
+            }
+            format!("[{}]", out.join(", "))
+        };
+        Some(match cell {
+            Cell::DontCare => return None,
+            Cell::Nothing => format!("{var}.nil?"),
+            // A cell naming one group calls the constant the module already declares,
+            // rather than writing the members out again.
+            Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
+                format!("GROUP_{}.include?({var})", self.ident(w))
+            }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
+            Cell::Lit(l) => format!("{var} == {}", lit(l)),
+            Cell::Set(ls) => format!("{}.include?({var})", members(ls)),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("!GROUP_{}.include?({var})", self.ident(w))
+            }
+            Cell::Not(ls) => format!("!{}.include?({var})", members(ls)),
+            Cell::Cmp(cs) => cs
+                .iter()
+                .map(|(o, l)| {
+                    let op = match o {
+                        CmpOp::Le => "<=",
+                        CmpOp::Ge => ">=",
+                        CmpOp::Lt => "<",
+                        CmpOp::Gt => ">",
+                    };
+                    format!("{var} {op} {}", lit(l))
+                })
+                .collect::<Vec<_>>()
+                .join(" && "),
+        })
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// The module name: the rule's ASCII alias in PascalCase, like the Go package.
+    fn rb_module(&self) -> String {
+        rb_const(&pascal(&pub_name(&self.f.name)))
+    }
+
+    /// How a value's type is written for a reader. Ruby has no zero-cost brand, so the
+    /// unit is documented rather than enforced (§15.20); `Integer` is exact at any size.
+    fn rb_doc_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => rb_const(&self.enum_names.get(n).cloned().unwrap_or_else(|| "String".into())),
+            Ty::Bool => "true/false".into(),
+            Ty::Str => "String".into(),
+            Ty::Opt(t) => format!("{} | nil", self.rb_doc_ty(t)),
+            _ => format!("Integer  # {ty}"),
+        }
+    }
+
+    pub fn ruby(&self) -> String {
+        let mut o = self.header("#");
+        o.insert_str(0, "# frozen_string_literal: true\n");
+        o.push_str(&format!("module {} {}\n", self.rb_module(), "".trim()));
+        // `module X` on its own line; the format above keeps it simple.
+        o = o.replace(&format!("module {} \n", self.rb_module()), &format!("module {}\n", self.rb_module()));
+
+        // Enums. A frozen constant per member, carrying the source name, which is also the
+        // wire value (§10.2) — so the runner needs no conversion in either direction.
+        let mut emitted: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if emitted.contains(ascii) {
+                continue;
+            }
+            emitted.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            o.push_str(&format!("  module {}\n", rb_const(ascii)));
+            let mut names: Vec<String> = Vec::new();
+            for v in vals {
+                let name = rb_const(
+                    &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                );
+                o.push_str(&format!("    {name} = {v:?}\n"));
+                names.push(name);
+            }
+            o.push_str(&format!("    ALL = [{}].freeze\n  end\n\n", names.join(", ")));
+        }
+
+        o.push_str(&format!(
+            "  # {}\n  class RuleInputError < ArgumentError; end\n\n",
+            tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+        ));
+        o.push_str(&format!(
+            "  # {}\n  class RuleContradictionError < RuntimeError; end\n\n",
+            tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
+        ));
+
+        // Groups. A Ruby constant has to begin with an uppercase ASCII letter, so a
+        // Japanese group name cannot be one on its own; the prefix is what makes it legal.
+        for g in &self.f.groups {
+            let ms: Vec<String> = g.members.iter().map(|m| self.rb_value(&m.text)).collect();
+            o.push_str(&format!("  GROUP_{} = [{}].freeze\n", self.ident(&g.name.text), ms.join(", ")));
+        }
+        if !self.f.groups.is_empty() {
+            o.push('\n');
+        }
+
+        o.push_str(&round_rb());
+        o.push('\n');
+        o.push_str(&self.rb_fn());
+        o.push_str("end\n");
+        o
+    }
+
+    fn rb_fn(&self) -> String {
+        let fname = pub_name(&self.f.name);
+        let outs = &self.f.outputs;
+        let mut o = String::new();
+
+        // Multiple outputs come back as a Struct; one output is the value itself (§8.5).
+        if outs.len() > 1 {
+            let fs: Vec<String> = outs.iter().map(|od| format!(":{}", pub_name(&od.name))).collect();
+            o.push_str(&format!("  Output = Struct.new({})\n\n", fs.join(", ")));
+        }
+
+        // The signature, with each parameter's declared type as a comment: this is where
+        // the unit lives, since Ruby cannot hold it (§15.20).
+        o.push_str(&format!(
+            "  # {}\n",
+            tr!("規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。", "Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.", self.f.name.text, self.f.version)
+        ));
+        for i in &self.f.inputs {
+            o.push_str(&format!(
+                "  #   {} : {}\n",
+                pub_name(&i.name),
+                self.rb_doc_ty(&self.ty_of(&i.name.text)).replace("Integer  # ", "")
+            ));
+        }
+        for od in outs {
+            o.push_str(&format!(
+                "  # -> {} : {}\n",
+                pub_name(&od.name),
+                self.rb_doc_ty(&self.ty_of(&od.name.text)).replace("Integer  # ", "")
+            ));
+        }
+
+        let params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        o.push_str(&format!("  def self.{fname}({})\n", params.join(", ")));
+
+        // Entry guards (§8.5).
+        let local = |n: &str| -> String { self.ident(n) };
+        for i in &self.f.inputs {
+            let v = pub_name(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            match &ty {
+                Ty::Enum(n) => {
+                    let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
+                    o.push_str(&format!(
+                        "    raise RuleInputError, \"{}\" unless {cls}::ALL.include?({v})\n",
+                        tr!("{} が列挙 {} の値ではありません: #{{{v}.inspect}}", "{} is not a value of enum {}: #{{{v}.inspect}}", i.name.text, cls)
+                    ));
+                }
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
+                        if let (Some(lo), Some(hi)) = (lo, hi) {
+                            let sc = self.c.wire_scale(&i.name.text);
+                            o.push_str(&format!(
+                                "    raise RuleInputError, \"{}\" unless ({}..{}).cover?({v})\n",
+                                tr!("{} が範囲の外です: #{{{v}}}", "{} is out of range: #{{{v}}}", i.name.text),
+                                crate::types::wire_int(*lo, sc),
+                                crate::types::wire_int(*hi, sc),
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, &local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("導出", "derived value")));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, &local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
+                }
+                Item::Table(t) => o.push_str(&self.rb_table(t, &local)),
+            }
+        }
+
+        // Every output: its source, brought to the wire scale, then its rounding once.
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            finals.push(match &od.rounding {
+                Some(rd) => {
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    let grid_i = g.num * res.scale / g.den;
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            "    {raw} = {}  # {}\n",
+                            rb_expr(unparen(&res.text)),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("_round_{}({raw}, {}) / {}", mode_fn(m), grid_i, res.scale / os)
+                    } else {
+                        format!("_round_{}({}, {})", mode_fn(m), rb_expr(&res.text), grid_i)
+                    }
+                }
+                None => rb_expr(&res.text),
+            });
+        }
+        if outs.len() == 1 {
+            o.push_str(&format!("    {}\n", finals[0]));
+        } else {
+            o.push_str(&format!("    Output.new({})\n", finals.join(", ")));
+        }
+        o.push_str("  end\n");
+        o
+    }
+
+    fn rb_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+        let mut o = format!("    # {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        for (ri, row) in t.rows.iter().enumerate() {
+            let conds: Vec<String> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, (col, _))| {
+                    let ty = self.ty_of(col);
+                    self.rb_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                })
+                .collect();
+            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            let kw = if ri == 0 { "if" } else { "elsif" };
+            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            o.push_str(&format!("    {kw} {cond}  # {}\n", tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "))));
+            for (oi, oc) in t.outputs.iter().enumerate() {
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => {
+                        let ty = self.ty_of(&oc.name.text);
+                        self.int_lit(n, &ty, self.scale(&oc.name.text))
+                    }
+                    Some(OutCell::Lit(l)) => match l {
+                        Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                        Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                        Lit::Word(w) => self.rb_value(w),
+                        Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        _ => "0".into(),
+                    },
+                    Some(OutCell::Name(w)) => {
+                        if w == crate::kw::TRUE {
+                            "true".into()
+                        } else if w == crate::kw::FALSE {
+                            "false".into()
+                        } else if self.value_names.contains_key(w) {
+                            self.rb_value(w)
+                        } else {
+                            rb_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                        }
+                    }
+                    None => "0".into(),
+                };
+                o.push_str(&format!("      {} = {v}\n", self.ident(&oc.name.text)));
+            }
+        }
+        o.push_str(&format!(
+            "    else\n      raise RuleContradictionError, \"{}\"\n    end\n",
+            tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
+        ));
+        o.push_str(&self.guards(t, local, Lang::Rb, "    ", |name, i, j| {
+            format!(
+                "      raise RuleContradictionError, \"{}\"\n",
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+            )
+        }));
+        o
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// A Ruby runner that reads JSONL from stdin and prints just the outputs, one record
+    /// per line. `json` and `date` are both standard library, so this needs no gem.
+    pub fn ruby_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let m = self.rb_module();
+        let mut args: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            let jp = &i.name.text;
+            args.push(match &self.ty_of(&i.name.text) {
+                // An enum member is the source string, which is what the wire carries.
+                Ty::Enum(_) | Ty::Str => format!("d[{jp:?}]"),
+                Ty::Bool => format!("d[{jp:?}] ? true : false"),
+                Ty::Date => format!("_ord(d[{jp:?}])"),
+                _ => format!("d[{jp:?}].to_i"),
+            });
+        }
+        let dump = if self.f.outputs.len() == 1 {
+            format!("{{ {:?} => r }}", self.f.outputs[0].name.text)
+        } else {
+            let fs: Vec<String> = self
+                .f
+                .outputs
+                .iter()
+                .map(|o| format!("{:?} => r.{}", o.name.text, pub_name(&o.name)))
+                .collect();
+            format!("{{ {} }}", fs.join(", "))
+        };
+        format!(
+            "# Code generated by rulec {}. DO NOT EDIT.\n\
+             # frozen_string_literal: true\n\n\
+             require \"date\"\n\
+             require \"json\"\n\
+             require_relative \"{alias}\"\n\n\
+             def _ord(s)\n  \
+               Date.iso8601(s).jd - Date.new(1970, 1, 1).jd\n\
+             end\n\n\
+             STDIN.each_line do |line|\n  \
+               line = line.strip\n  \
+               next if line.empty?\n  \
+               d = JSON.parse(line)[\"in\"]\n  \
+               r = {m}.{alias}({})\n  \
+               puts JSON.generate({dump})\n\
+             end\n",
+            env!("CARGO_PKG_VERSION"),
+            args.join(", ")
+        )
+    }
+}
+
+/// The four modes of §7.3 in Ruby, checked against the same reference cases the other
+/// others are checked against. `rulec test` runs it beside the generated module.
+pub fn round_tests_ruby() -> String {
+    let mut o = format!(
+        "# Code generated by rulec {}. DO NOT EDIT.\n\
+         # frozen_string_literal: true\n\
+         # {}\n\n\
+         module R\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The four modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    o.push_str(round_rb().trim_start_matches('\n'));
+    o.push_str("  public_class_method :_round_down, :_round_up, :_round_half, :_round_bankers\nend\n\nCASES = [\n");
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("  [{:?}, {x}, {g}, {want}],\n", mode_fn(m)));
+    }
+    o.push_str("].freeze\n\nbad = 0\nCASES.each do |mode, x, g, want|\n  ");
+    o.push_str("got = R.send(\"_round_#{mode}\", x, g)\n  next if got == want\n  ");
+    o.push_str("puts \"NG #{mode}(#{x}, #{g}) = #{got}, want #{want}\"\n  bad += 1\nend\n");
+    o.push_str("exit(1) unless bad.zero?\n");
+    o.push_str(&format!("puts \"{}\"\n", tr!("ok #{{CASES.size}} 件", "ok #{{CASES.size}} cases")));
+    o
+}
+
+impl<'a> Gen<'a> {
+    /// The type as the inventory states it for Ruby. There are no brands here (§15.20), so
+    /// a number is `Integer` and the unit travels in the entry's own `unit` field.
+    fn rb_api_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => rb_const(&self.enum_names.get(n).cloned().unwrap_or_else(|| "String".into())),
+            Ty::Bool => "Boolean".into(),
+            Ty::Str => "String".into(),
+            Ty::Opt(t) => format!("{} | nil", self.rb_api_ty(t)),
+            _ => "Integer".into(),
+        }
     }
 }

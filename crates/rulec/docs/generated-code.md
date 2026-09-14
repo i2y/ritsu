@@ -22,7 +22,8 @@ spelling each language gives them, and the errors the code can raise. The shape 
 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
 TypeScript imports nothing at all; the generated Rust imports nothing outside `std` and needs
-no `Cargo.toml`; the generated Go imports `fmt`. The `go.mod` lists nothing
+no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
+Go imports `fmt`. The `go.mod` lists nothing
 but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim.
 
@@ -162,6 +163,46 @@ Python's two exception classes: `RuleError::Input` is a contract violation by th
 
 It compiles with `rustc` alone — `rustc --edition 2021 -O coupon_step_runner.rs` builds both
 the rule and its runner through a `#[path] mod`, with no project file and nothing to fetch.
+
+### Ruby
+
+```ruby
+CouponStep.coupon_step(subtotal, applied, kind, rate, face, dup)
+```
+
+A module named after the rule, with one module method. Every number is a plain `Integer`, and
+Ruby's `Integer` is exact at any size, so the overflow the proof (E108) rules out cannot
+happen quietly here either.
+
+**The unit is not in the type.** Ruby has no zero-cost brand, so `money[円, incl_tax]` and
+`mass[g]` are both `Integer`, and which is which is stated in the comment above the method
+and in `rulec api`. This is the one guarantee Ruby gives up relative to Rust, Go and
+TypeScript — the proof still holds, but the compiler will not catch a caller that swaps two
+same-typed arguments. Python is in the same position, with `NewType` doing the job only when
+a type checker is run.
+
+```ruby
+require_relative "coupon_step"
+
+out = CouponStep.coupon_step(10000, 0, CouponStep::CouponKind::PERCENT, 10, 0, false)
+puts out.ok, out.raw          #=> true, 1000
+```
+
+An enum is a module of frozen constants named after the aliases in upper case
+(`CouponKind::PERCENT`), and each one *is* the source name as a string — which is also what
+the wire format carries, so nothing has to be converted in either direction. `CouponKind::ALL`
+is the list, and the entry guard uses it.
+
+With one output the method returns that value; with two or more it returns a `Struct` named
+`Output` whose members are the outputs. `Struct` rather than `Data` so that the module runs
+unchanged on every 3.x as well as 4.x.
+
+Errors are `RuleInputError < ArgumentError` for a contract violation by the caller and
+`RuleContradictionError < RuntimeError` for the runtime guard below — the same split as
+Python's two exception classes.
+
+It needs no gem: the module itself requires nothing, and the runner requires only `json` and
+`date`, both standard library.
 
 ### Go
 

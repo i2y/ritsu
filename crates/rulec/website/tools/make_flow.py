@@ -21,7 +21,7 @@ sentence an arrow can say. There are three colours for the three paths: grey
 for what enters and leaves the whole system, indigo for the loop between the
 agent and rulec, amber for the detour through a person.
 
-    sources -> Agent -> table -> rulec -> Python, TypeScript, Rust, Go
+    sources -> Agent -> table -> rulec -> Python, TypeScript, Rust, Ruby, Go
                  ^                |
                  +-- diagnosis <--+          round and round, until it passes
                  ^                |
@@ -51,13 +51,14 @@ from diagram import DARK, LIGHT, FONT, fit, esc, text, card, sheet, arrow, marke
 # writes into). --verify holds both halves to the tool: a backend added without touching
 # this diagram fails, and so does a name dropped from it. This drawing said "Python と Go"
 # for two releases after there were four, which is what the check is for.
-LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("Rust", "rust"), ("Go", "go")]
+LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("Rust", "rust"),
+         ("Ruby", "ruby"), ("Go", "go")]
 
 JA = dict(
     alt="エージェントが資料を読んで表（.rule）を書き、rulec check にかける。"
         "rulec は診断（どこが・どう直すか・それを起こす入力）を返し、エージェントが直して、"
         "表が通るまで繰り返す。道具では決められないことだけが具体例つきの質問として人に渡り、"
-        "人は金額と丸めの向きを答える。表が通ると rulec gen が証明済みの Python・TypeScript・Rust・Go を出す。",
+        "人は金額と丸めの向きを答える。表が通ると rulec gen が証明済みの Python・TypeScript・Rust・Ruby・Go を出す。",
     agent=("エージェント", ["資料を読む", "表を書く", "診断のとおりに直す", "決められないことは人へ"]),
     rulec=("rulec", ["7 つを証明する：", "完全性・重なり", "当てはまらない行", "単位・丸め", "オーバーフロー・例"]),
     person=("人", ["金額を決める", "丸めの向きを決める", "表を承認する", "コードは書かない"]),
@@ -66,7 +67,7 @@ JA = dict(
     diagnosis=("診断", ["どこが", "どう直すか", "それを起こす入力"], "JSON"),
     question=("具体例つきの質問", ["「山梨県あての S60 の", "運賃はいくらですか」"]),
     answer=("答え", ["金額", "丸めの向き"]),
-    code=("生成コード", ["Python・TypeScript", "Rust・Go", "証明済み・依存ゼロ", "どれも同じ答え"]),
+    code=("生成コード", ["Python・TypeScript", "Rust・Ruby・Go", "証明済み・依存ゼロ", "どれも同じ答え"]),
     check="rulec check", gen="rulec gen",
     loop="通るまで繰り返す", passed="通ったら",
     only="決められないことだけ", back="ループへ戻る",
@@ -78,7 +79,7 @@ EN = dict(
         "problem - and the agent fixes the table until it passes. Only what the tool cannot "
         "decide reaches a person, as a question with a concrete case; the person answers "
         "with an amount or a rounding direction. Once the table passes, rulec gen emits "
-        "proved Python, TypeScript, Rust and Go.",
+        "proved Python, TypeScript, Rust, Ruby and Go.",
     agent=("Agent", ["reads the sources", "writes the table", "fixes what rulec finds", "asks a person the rest"]),
     rulec=("rulec", ["proves seven things:", "completeness, overlap,", "dead rows, units,", "rounding, overflow,", "the worked examples"]),
     person=("Person", ["decides amounts", "and which way to round", "approves the table", "never writes code"]),
@@ -87,7 +88,7 @@ EN = dict(
     diagnosis=("Diagnosis", ["where", "how to fix it", "an input that shows it"], "JSON"),
     question=("A concrete question", ["“What is the fee to 山梨県", "at size S60?”"]),
     answer=("Answer", ["an amount,", "which way to round"]),
-    code=("Generated code", ["Python, TypeScript,", "Rust and Go", "proved, no dependencies,", "the same answer from each"]),
+    code=("Generated code", ["Python, TypeScript,", "Rust, Ruby and Go", "proved, no dependencies,", "the same answer from each"]),
     check="rulec check", gen="rulec gen",
     loop="until it passes", passed="once it passes",
     only="only what it cannot decide", back="back into the loop",

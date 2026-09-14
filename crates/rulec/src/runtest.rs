@@ -4,7 +4,7 @@
 //! The generated files carry the vectors and expected values of each rule. All that happens
 //! here is feeding them through the generated Python and the generated Go and checking that
 //! the output is byte-identical to the expected values attached by the reference evaluator.
-//! **This is the only stage that uses the python3 and go toolchains** (§12).
+//! **This is the only stage that reaches a toolchain** — python3, node, rustc, ruby, go (§12).
 //!
 //! The unit vectors of the rounding helpers (§8.5) run in the same place. Table agreement
 //! alone would hide a helper bug in a table that never produces fractions.
@@ -115,7 +115,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
 
-    let (py, go, ts, rs) = (have("python3"), have("go"), have("node"), have("rustc"));
+    let (py, go, ts, rs, rb) = (have("python3"), have("go"), have("node"), have("rustc"), have("ruby"));
     // Python is run with `-B` and any bytecode cache in the output directory is removed
     // first. A `.pyc` is considered fresh when the source has the same size and the same
     // mtime in whole seconds, so a same-length edit made within a second of the previous
@@ -132,13 +132,16 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     if !rs {
         out.skipped.push(tr!("rustc が無いので Rust 側を飛ばしました", "rustc not found; skipped the Rust side"));
     }
+    if !rb {
+        out.skipped.push(tr!("ruby が無いので Ruby 側を飛ばしました", "ruby not found; skipped the Ruby side"));
+    }
     if !go {
         out.skipped.push(tr!("go が無いので Go 側を飛ばしました", "go not found; skipped the Go side"));
     }
-    if !py && !go && !ts && !rs {
+    if !py && !go && !ts && !rs && !rb {
         return Err(tr!(
-            "python3 も node も rustc も go も無いので、生成物を走らせられません",
-            "none of python3, node, rustc or go is available, so the generated code cannot be run"
+            "python3 も node も rustc も ruby も go も無いので、生成物を走らせられません",
+            "none of python3, node, rustc, ruby or go is available, so the generated code cannot be run"
         ));
     }
 
@@ -204,6 +207,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             };
             one("Rust", &format!("./{alias}"), cwd, &[], pre);
         }
+        if rb {
+            one("Ruby", "ruby", dir.join("ruby"), &[&format!("{alias}_runner.rb")], None);
+        }
         if go {
             one("Go", "go", dir.join("go").join(format!("{pkg}runner")), &["run", "."], None);
         }
@@ -256,6 +262,15 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
         };
         out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Rust", vectors: 0, diff });
+    }
+    if rb {
+        let o = Command::new("ruby").current_dir(dir.join("ruby")).args(["_round_test.rb"]).output();
+        let diff = match o {
+            Ok(o) if o.status.success() => None,
+            Ok(o) => Some(Failure::Other(String::from_utf8_lossy(&o.stdout).trim().to_string())),
+            Err(e) => Some(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+        };
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: "Ruby", vectors: 0, diff });
     }
     if go {
         let o = Command::new("go")

@@ -409,3 +409,71 @@ fn typescriptは目録から組んだ呼び出しが動く() {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// Ruby, the same way: the inventory alone has to describe the module well enough to reach
+/// the method, the enum constants and the error classes. Ruby has no static check to lean
+/// on, so reflection stands in for `go vet` — `method(:x).parameters` is the real signature.
+#[test]
+fn rubyの実物の署名と一致する() {
+    if !have("ruby") {
+        eprintln!("注意: ruby が無いので飛ばした");
+        return;
+    }
+    for (tag, rule) in RULES {
+        let (dir, j) = setup(&format!("rb{tag}"), rule);
+        let rb_j = j.get("ruby").unwrap();
+        let module = s(rb_j, "module");
+        let func = s(rb_j, "function");
+        let file = s(j.get("python").unwrap(), "module");
+        let names: Vec<String> = arr(rb_j, "params").iter().map(|p| s(p, "alias")).collect();
+        let outs: Vec<String> = arr(rb_j, "outputs").iter().map(|p| s(p, "alias")).collect();
+        let enums: Vec<(String, Vec<String>)> = arr(rb_j, "enums")
+            .iter()
+            .map(|e| (s(e, "alias"), arr(e, "values").iter().map(|v| s(v, "alias").to_uppercase()).collect()))
+            .collect();
+        let errs: Vec<String> =
+            arr(rb_j, "errors").iter().map(|e| e.as_str().unwrap().to_string()).collect();
+        // Every Ruby literal is bound to a variable first: interpolating an array into a
+        // `raise` message would put a double quote inside a double-quoted string.
+        let script = format!(
+            "require_relative {file:?}\n\
+             want = {names:?}\n\
+             outs = {outs:?}\n\
+             enums = {enums}\n\
+             errs = {errs:?}\n\
+             m = Object.const_get({module:?})\n\
+             got = m.method({func:?}).parameters.map {{ |_, n| n.to_s }}\n\
+             raise \"params: #{{got}} vs #{{want}}\" unless got == want\n\
+             if outs.size > 1\n  \
+               ms = m.const_get(:Output).members.map(&:to_s)\n  \
+               raise \"members: #{{ms}} vs #{{outs}}\" unless ms == outs\n\
+             end\n\
+             enums.each do |name, vals|\n  \
+               t = m.const_get(name)\n  \
+               vals.each {{ |v| raise \"enum #{{name}}::#{{v}}\" unless t.const_defined?(v) }}\n  \
+               raise \"ALL #{{name}}\" unless t::ALL.size == vals.size\n\
+             end\n\
+             errs.each {{ |e| raise \"error #{{e}}\" unless m.const_get(e) < Exception }}\n\
+             puts 'ok'\n",
+            enums = format!(
+                "[{}]",
+                enums
+                    .iter()
+                    .map(|(n, vs)| format!("[{n:?}, {vs:?}]"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+        let o = Command::new("ruby")
+            .current_dir(dir.join("ruby"))
+            .args(["-e", &script])
+            .output()
+            .unwrap();
+        assert!(
+            o.status.success(),
+            "{rule}: api と実物の Ruby が食い違う\n{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

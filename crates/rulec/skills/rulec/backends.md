@@ -1,6 +1,6 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, Rust and Go. This page is about the fifth target — a
+`rulec gen` writes Python, TypeScript, Rust, Ruby and Go. This page is about the sixth target — a
 language nobody planned for, a workflow engine's expression language, a spreadsheet formula,
 a database.
 
@@ -206,7 +206,7 @@ signs the rule off.
 
 **Covers.** Every case rulec builds from the rule's boundaries, compared answer for answer
 against the reference evaluator. `rulec coverage` says what that suite reaches — every row,
-both sides of every boundary, every shadow pair — and it is the same suite the four built-in
+both sides of every boundary, every shadow pair — and it is the same suite the five built-in
 backends are held to.
 
 **Does not cover.** It is a comparison over a finite suite, not a proof of equivalence; the
@@ -253,9 +253,10 @@ when its output should be held by the suite rather than by you. It buys `rulec g
 `rulec test`, an entry in `rulec api`, and a place in the agreement test.
 
 What it costs, measured on TypeScript and unchanged since: **about 700 lines in
-`src/codegen.rs` and 280 elsewhere.** The per-language differences sit in four places — type
-names, zero values, branch punctuation, and the runner — so one `Lang` enum still covers them
-and no backend trait has been worth pulling out.
+`src/codegen.rs` and 280 elsewhere**, measured twice now — on TypeScript and again on Ruby.
+The per-language differences sit in four places — type names, zero values, branch punctuation,
+and the runner — so one `Lang` enum still covers them and no backend trait has been worth
+pulling out.
 
 The pieces, in the order they are usually written:
 

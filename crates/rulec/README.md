@@ -2,7 +2,7 @@
 
 **A harness for an agent turning table-shaped business rules into code.**
 
-Write the table, and out come Python, TypeScript, Rust and Go functions. **The proof is
+Write the table, and out come Python, TypeScript, Rust, Ruby and Go functions. **The proof is
 finished before the code exists.**
 
 ```rule
@@ -268,13 +268,13 @@ Thirteen rules taken from real published terms are checked, generated and run on
 | | |
 |---|---|
 | **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
-| **the generators** | Python, TypeScript, Rust and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **the generators** | Python, TypeScript, Rust, Ruby and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
-**Python, TypeScript, Rust and Go** today; **Java, Kotlin, Swift and SQL** are planned.
+**Python, TypeScript, Rust, Ruby and Go** today; **Java, Kotlin, Swift and SQL** are planned.
 
 You do not have to wait for the list, and nothing here has to change. A target outside it —
 another language, a workflow engine's expression language, SQL — can be generated from what

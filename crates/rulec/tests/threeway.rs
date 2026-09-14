@@ -1,7 +1,7 @@
 //! Agreement across every implementation (§8.5, §9.3).
 //!
-//! Feed the same vectors to all of them — the reference evaluator, the generated Python, the
-//! generated TypeScript and the generated Go — and check that the canonical JSON matches byte
+//! Feed the same vectors to all of them — the reference evaluator and the generated Python,
+//! TypeScript, Rust, Ruby and Go — and check that the canonical JSON matches byte
 //! for byte. It needs neither data nor a legacy implementation, which makes it the main
 //! guarantee of M1.
 //!
@@ -89,8 +89,9 @@ fn 評価器と生成コードが全言語で一致する() {
     let go = have("go");
     let ts = have("node");
     let rs = have("rustc");
-    assert!(py || go || ts || rs, "どの toolchain も無いので一致を確かめられない");
-    for (ok, name) in [(py, "python3"), (ts, "node"), (rs, "rustc"), (go, "go")] {
+    let rb = have("ruby");
+    assert!(py || go || ts || rs || rb, "どの toolchain も無いので一致を確かめられない");
+    for (ok, name) in [(py, "python3"), (ts, "node"), (rs, "rustc"), (rb, "ruby"), (go, "go")] {
         if !ok {
             eprintln!("注意: {name} が無いのでその言語を飛ばした");
         }
@@ -148,6 +149,17 @@ fn 評価器と生成コードが全言語で一致する() {
             assert!(o.status.success(), "{alias}: Rust が落ちた: {}", String::from_utf8_lossy(&o.stderr));
             assert_eq!(got, exp, "{alias}: 評価器と生成 Rust が食い違う");
         }
+        if rb {
+            let o = Command::new("ruby")
+                .current_dir(dir.join("ruby"))
+                .arg(format!("{alias}_runner.rb"))
+                .stdin(std::fs::File::open(&vec_path).unwrap())
+                .output()
+                .expect("ruby を起動できない");
+            let got = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(o.status.success(), "{alias}: Ruby が落ちた: {}", String::from_utf8_lossy(&o.stderr));
+            assert_eq!(got, exp, "{alias}: 評価器と生成 Ruby が食い違う");
+        }
         if go {
             let pkg = alias.replace('_', "");
             let o = Command::new("go")
@@ -162,7 +174,7 @@ fn 評価器と生成コードが全言語で一致する() {
         }
     }
     eprintln!(
-        "一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Rust {rs} / Go {go}）",
+        "一致: 規則 {} 本 / ベクタ {total} 件（Python {py} / TypeScript {ts} / Rust {rs} / Ruby {rb} / Go {go}）",
         CORPUS.len()
     );
     let _ = std::fs::remove_dir_all(&dir);

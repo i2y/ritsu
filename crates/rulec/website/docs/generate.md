@@ -13,7 +13,7 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Four are supported today — Python, TypeScript, Rust and Go — and **Java,
+Five are supported today — Python, TypeScript, Rust, Ruby and Go — and **Java,
 Kotlin, Swift and SQL are planned**. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
@@ -24,6 +24,7 @@ exists.
 | Python | supported | `python3` |
 | TypeScript | supported | just `node` — no build step, no tsconfig |
 | Rust | supported | just `rustc` — no cargo, no crates |
+| Ruby | supported | `ruby` 3.x or 4.x — `json` is standard library, so no gem |
 | Go | supported | `go` |
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |
@@ -34,7 +35,7 @@ One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
 cannot be held against the reference evaluator sits outside the claim
 this tool makes. Adding the third, TypeScript, cost about 700 lines in
-the generator.
+the generator, and the fifth, Ruby, cost the same.
 
 ### A target that is not on the list
 

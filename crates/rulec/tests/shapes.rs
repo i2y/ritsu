@@ -73,6 +73,28 @@ fn py_imports(dir: &Path, module: &str) {
     assert!(o.status.success(), "生成した Python が読み込めない:\n{}", String::from_utf8_lossy(&o.stderr));
 }
 
+/// The generated Ruby has to parse, and the module has to load — Ruby raises at load time
+/// for a constant that cannot exist, which is the failure the `GROUP_` prefix exists to
+/// avoid (§15.20).
+fn rb_loads(dir: &Path, module: &str) {
+    if !have("ruby") {
+        eprintln!("注意: ruby が無いので Ruby 側を飛ばした");
+        return;
+    }
+    let o = Command::new("ruby")
+        .current_dir(dir.join("ruby"))
+        .args(["-c", &format!("{module}.rb")])
+        .output()
+        .expect("ruby を起動できない");
+    assert!(o.status.success(), "生成した Ruby が構文として通らない:\n{}", String::from_utf8_lossy(&o.stderr));
+    let o = Command::new("ruby")
+        .current_dir(dir.join("ruby"))
+        .args(["-e", &format!("require_relative {module:?}")])
+        .output()
+        .expect("ruby を起動できない");
+    assert!(o.status.success(), "生成した Ruby が読み込めない:\n{}", String::from_utf8_lossy(&o.stderr));
+}
+
 /// One boolean output and a table column nothing downstream reads. Go refuses both a
 /// `return 0` for a boolean and a local that is never read, and neither shape is in the
 /// corpus, so both went out broken.
@@ -100,6 +122,7 @@ fn 読まれない列があっても生成物はコンパイルできる() {
     let dir = generate("unused", UNUSED);
     go_builds(&dir, "unusedcol");
     py_imports(&dir, "unused_col");
+    rb_loads(&dir, "unused_col");
     let go = std::fs::read_to_string(dir.join("go").join("unusedcol").join("unused_col.go")).unwrap();
     // The cell is still written out, so that the branch and the row stay 1:1.
     assert!(go.contains("aux = false"), "セルが省かれている:\n{go}");
@@ -147,6 +170,7 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     let dir = generate("boolonly", BOOL_ONLY);
     go_builds(&dir, "boolonly");
     py_imports(&dir, "bool_only");
+    rb_loads(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
     assert!(go.contains("return false, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -196,6 +220,7 @@ fn 全部asciiで書いた規則も生成物はコンパイルできる() {
     let dir = generate("english", ENGLISH);
     go_builds(&dir, "bulkfee");
     py_imports(&dir, "bulk_fee");
+    rb_loads(&dir, "bulk_fee");
     let py = std::fs::read_to_string(dir.join("python").join("bulk_fee.py")).unwrap();
     assert!(py.contains("def bulk_fee(weight: Gram, member: MemberKind) -> YenInclTax:"), "{py}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -243,5 +268,6 @@ result 結果 = 中間
     }
     go_builds(&dir, "aliasdemo");
     py_imports(&dir, "alias_demo");
+    rb_loads(&dir, "alias_demo");
     let _ = std::fs::remove_dir_all(&dir);
 }

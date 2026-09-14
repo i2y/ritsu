@@ -133,7 +133,7 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
         keys(r, &["rule", "lang", "vectors", "ok", "first_diff"], "result");
         let lang = r.get("lang").unwrap().as_str().unwrap();
         assert!(
-            ["python", "typescript", "rust", "go"].contains(&lang),
+            ["python", "typescript", "rust", "ruby", "go"].contains(&lang),
             "言語の名前が安定していない: {lang}"
         );
         assert_eq!(r.get("ok").unwrap(), &rulec::json::Json::Bool(true));
