@@ -1,5 +1,10 @@
 # Write a table
 
+A `.rule` file **has one fixed shape, read from the top**. There is no
+forward reference, so reading downwards is reading the dependencies in
+order. **The keywords are English; the names and the cell values stay in
+the language of the business** — Japanese, in every example here.
+
 !!! note "Usually an agent writes this"
 
     Nothing stops you writing a `.rule` by hand, and this page is also how. But the shape
@@ -14,11 +19,6 @@
     where a rounding is a placeholder rather than a decision. For a change, how many records
     move and by how much comes out before it ships. Both are things to ask the agent for,
     and so is an explanation of any row. Its own procedure is in [For agents](agents.md).
-
-A `.rule` file **has one fixed shape, read from the top**. There is no
-forward reference, so reading downwards is reading the dependencies in
-order. **The keywords are English; the names and the cell values stay in
-the language of the business** — Japanese, in every example here.
 
 These are all the words that may start a line.
 
