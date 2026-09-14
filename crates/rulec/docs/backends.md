@@ -1,8 +1,8 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, Rust, Ruby and Go. This page is about the sixth target — a
-language nobody planned for, a workflow engine's expression language, a spreadsheet formula,
-a database.
+`rulec gen` writes Python, TypeScript, Rust, Ruby, Go and Swift. This page is about the
+seventh target — a language nobody planned for, a workflow engine's expression language, a
+spreadsheet formula, a database.
 
 The short answer: **you do not have to modify rulec, and you do not have to give up the
 evidence.** A rule already publishes everything a generator needs, and `rulec verify` will
@@ -206,7 +206,7 @@ signs the rule off.
 
 **Covers.** Every case rulec builds from the rule's boundaries, compared answer for answer
 against the reference evaluator. `rulec coverage` says what that suite reaches — every row,
-both sides of every boundary, every shadow pair — and it is the same suite the five built-in
+both sides of every boundary, every shadow pair — and it is the same suite the built-in
 backends are held to.
 
 **Does not cover.** It is a comparison over a finite suite, not a proof of equivalence; the
@@ -276,7 +276,7 @@ The pieces, in the order they are usually written:
    documents to the registry starts requiring the prose to name it.
 
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
-Rust and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
+Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
 `NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
 Ruby cannot hold a unit at all, so it is documented instead, and the `.rbs` that ships with it
 says so too.

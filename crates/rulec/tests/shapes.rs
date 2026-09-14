@@ -95,6 +95,24 @@ fn rb_loads(dir: &Path, module: &str) {
     assert!(o.status.success(), "生成した Ruby が読み込めない:\n{}", String::from_utf8_lossy(&o.stderr));
 }
 
+/// The generated Swift has to type-check, module and runner together — which is how
+/// `rulec test` builds them, and the only way `@main` on the runner is exercised. A warning
+/// counts as a failure: the module is marked DO NOT EDIT, so nobody can quiet one.
+fn sw_typechecks(dir: &Path, module: &str) {
+    if !have("swiftc") {
+        eprintln!("注意: swiftc が無いので Swift 側を飛ばした");
+        return;
+    }
+    let o = Command::new("swiftc")
+        .current_dir(dir.join("swift"))
+        .args(["-typecheck", &format!("{module}.swift"), &format!("{module}_runner.swift")])
+        .output()
+        .expect("swiftc を起動できない");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "生成した Swift が通らない:\n{err}");
+    assert!(err.trim().is_empty(), "生成した Swift が警告を出している:\n{err}");
+}
+
 /// One boolean output and a table column nothing downstream reads. Go refuses both a
 /// `return 0` for a boolean and a local that is never read, and neither shape is in the
 /// corpus, so both went out broken.
@@ -123,6 +141,7 @@ fn 読まれない列があっても生成物はコンパイルできる() {
     go_builds(&dir, "unusedcol");
     py_imports(&dir, "unused_col");
     rb_loads(&dir, "unused_col");
+    sw_typechecks(&dir, "unused_col");
     let go = std::fs::read_to_string(dir.join("go").join("unusedcol").join("unused_col.go")).unwrap();
     // The cell is still written out, so that the branch and the row stay 1:1.
     assert!(go.contains("aux = false"), "セルが省かれている:\n{go}");
@@ -171,6 +190,7 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     go_builds(&dir, "boolonly");
     py_imports(&dir, "bool_only");
     rb_loads(&dir, "bool_only");
+    sw_typechecks(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
     assert!(go.contains("return false, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -221,6 +241,7 @@ fn 全部asciiで書いた規則も生成物はコンパイルできる() {
     go_builds(&dir, "bulkfee");
     py_imports(&dir, "bulk_fee");
     rb_loads(&dir, "bulk_fee");
+    sw_typechecks(&dir, "bulk_fee");
     let py = std::fs::read_to_string(dir.join("python").join("bulk_fee.py")).unwrap();
     assert!(py.contains("def bulk_fee(weight: Gram, member: MemberKind) -> YenInclTax:"), "{py}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -269,5 +290,59 @@ result 結果 = 中間
     go_builds(&dir, "aliasdemo");
     py_imports(&dir, "alias_demo");
     rb_loads(&dir, "alias_demo");
+    sw_typechecks(&dir, "alias_demo");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An alias that happens to be one of Swift's own words, at every level a rule has one:
+/// an input, an output, an enum's members, a group and a table. Swift is the only target
+/// that has to write such a name in backticks, and the rule is not the same at a call site
+/// — a keyword is taken there as it stands, and backticks around it are a warning.
+///
+/// **Rust does not survive this shape today**, which is why it is not checked here: an alias
+/// of `where` reaches `pub fn keyword_demo(where: Gram, …)` and `rustc` refuses it. Raw
+/// identifiers (`r#where`) are the fix, and it is a separate change from this one.
+#[test]
+fn swiftの予約語に当たる別名でも生成物はコンパイルできる() {
+    let dir = generate("keyword", "\
+rule 予約語(keyword_demo) v1
+description \"Swift の予約語に当たる別名を、入力・出力・列挙・グループ・表に書く\"
+
+enum 区分(kind) = 内部(class) | 外部(protocol)
+
+inputs
+  重量(where) : mass[g] range >=0g <=1000g
+  種別(kind)  : 区分
+
+outputs
+  可否(guard) : bool
+
+group 内側(internal) = 内部
+
+table 判定(switch)
+policy first
+| 種別 | 重量   | -> 可否(guard) : bool |
+| 内側 | <=500g | true                  |
+| 内側 | >500g  | false                 |
+| 外部 | -      | false                 |
+
+result 可否 = 可否
+");
+    let sw = std::fs::read_to_string(dir.join("swift").join("keyword_demo.swift")).unwrap();
+    for want in [
+        "case `class` = \"内部\"",
+        "public func keywordDemo(`where`: Gram, kind: Kind) throws -> Bool {",
+        "let `guard`: Bool",
+        // The underscore goes on before the escaping: `_`internal`` is not an identifier.
+        "private let _internal: Set<Kind>",
+    ] {
+        assert!(sw.contains(want), "`{want}` が生成 Swift に無い:\n{sw}");
+    }
+    let run = std::fs::read_to_string(dir.join("swift").join("keyword_demo_runner.swift")).unwrap();
+    assert!(run.contains("keywordDemo(where: "), "呼び出しの引数ラベルが逆に囲まれている:\n{run}");
+    py_imports(&dir, "keyword_demo");
+    rb_loads(&dir, "keyword_demo");
+    go_builds(&dir, "keyworddemo");
+    sw_typechecks(&dir, "keyword_demo");
     let _ = std::fs::remove_dir_all(&dir);
 }

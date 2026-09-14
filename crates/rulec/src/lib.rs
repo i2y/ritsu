@@ -1,4 +1,5 @@
-//! rulec — checks decision tables of business rules and generates code for five languages.
+//! rulec — checks decision tables of business rules and generates code for every target
+//! [`backend::ALL`] names.
 //! The design is in DESIGN.md.
 
 /// A user-facing sentence in both languages: `tr!("日本語", "English")`.

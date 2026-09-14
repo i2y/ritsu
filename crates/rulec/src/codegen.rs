@@ -1866,6 +1866,7 @@ pub enum Lang {
     Ts,
     Rs,
     Rb,
+    Sw,
 }
 
 /// The few spellings shared code needs to know per language. Keeping them in one row each
@@ -1903,7 +1904,7 @@ impl Lang {
                 if_head: |c| format!("if ({c}) {{"),
                 close: "}",
             },
-            Lang::Go | Lang::Rs => Spelling {
+            Lang::Go | Lang::Rs | Lang::Sw => Spelling {
                 comment: "//",
                 and: " && ",
                 if_head: |c| format!("if {c} {{"),
@@ -3432,6 +3433,56 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
+        // --- Swift. The unit is in the type here, as it is in Rust, so a param's `type`
+        // is the brand and the `unit` field beside it repeats what that brand stands for.
+        let sw_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &sw_name(&pub_name(&i.name)), &self.sw_api_ty(&ty), &ty)
+            })
+            .collect();
+        let sw_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &sw_name(&pub_name(&od.name)), &self.sw_api_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let sw_fname = sw_name(&pub_name(&self.f.name));
+        let sw_ret = if outs.len() == 1 {
+            self.sw_api_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let sw_sig = format!(
+            "func {sw_fname}({}) throws -> {sw_ret}",
+            self.f
+                .inputs
+                .iter()
+                .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let swift = crate::json::Obj::new()
+            .str("module", &format!("{alias}.swift"))
+            .str("function", &sw_fname)
+            .str("signature", &sw_sig)
+            .raw("params", crate::json::arr(&sw_in))
+            .str("returns", &sw_ret)
+            .raw("outputs", crate::json::arr(&sw_outs))
+            // A Swift enum member is the alias in the language's own spelling, on the
+            // enum's own type (`Band.short`).
+            .raw("enums", self.enums_json(|_, a| sw_name(a)))
+            .raw("errors", crate::json::strs(&["RuleError.input", "RuleError.contradiction"]))
+            .finish();
+
         // --- Go
         let go_in: Vec<String> = self
             .f
@@ -3487,6 +3538,7 @@ impl Gen<'_> {
             .raw("rust", rust)
             .raw("ruby", ruby)
             .raw("go", go)
+            .raw("swift", swift)
             .finish()
     }
 }
@@ -3988,6 +4040,7 @@ impl<'a> Gen<'a> {
             Lang::Ts => self.ts_cell(cell, var, ty, scale),
             Lang::Rs => self.rs_cell(cell, var, ty, scale),
             Lang::Rb => self.rb_cell(cell, var, ty, scale),
+            Lang::Sw => self.sw_cell(cell, var, ty, scale),
         }
     }
 }
@@ -4105,5 +4158,756 @@ fn snake(s: &str) -> String {
             o.push(c);
         }
     }
+    o
+}
+
+// ---------------------------------------------------------------------------
+// Swift (§15.20). The second target after Rust that can hold a unit in the type: a
+// single-field struct over `Int64` is laid out as the integer itself, so a compiler that
+// refuses `YenExclTax` where `YenInclTax` was meant costs nothing at run time. Integer
+// division truncates toward zero, as it does in Go, in Rust and on a JavaScript bigint, so
+// the rounding helpers are those transliterated rather than Python's.
+//
+// Two spellings are Swift's own. Identifiers are lowerCamelCase — the convention its
+// linters enforce, and the same reason the Go backend writes `pascal` — and a name that
+// lands on a keyword goes in backticks, which is the one shape a rule can declare
+// (`alias: in`) that no other target has to escape.
+
+/// The reserved words that have to be written in backticks.
+const SWIFT_KEYWORDS: &[&str] = &[
+    "Any", "Protocol", "Self", "Type", "as", "associatedtype", "await", "break", "case",
+    "catch", "class", "continue", "default", "defer", "deinit", "do", "else", "enum",
+    "extension", "fallthrough", "false", "fileprivate", "for", "func", "guard", "if",
+    "import", "in", "init", "inout", "internal", "is", "let", "nil", "operator", "private",
+    "protocol", "public", "repeat", "rethrows", "return", "self", "static", "struct",
+    "subscript", "super", "switch", "throw", "throws", "true", "try", "typealias", "var",
+    "where", "while",
+];
+
+/// Lower the leading run of capitals: all of it, unless the run is longer than one and the
+/// character after it is lowercase, in which case that last capital begins the next word.
+fn lower_lead(w: &str) -> String {
+    let cs: Vec<char> = w.chars().collect();
+    let run = cs.iter().take_while(|c| c.is_uppercase()).count();
+    let keep = if run > 1 && cs.get(run).is_some_and(|c| c.is_lowercase()) { run - 1 } else { run };
+    let mut out = String::with_capacity(w.len());
+    for (i, c) in cs.iter().enumerate() {
+        if i < keep {
+            out.extend(c.to_lowercase());
+        } else {
+            out.push(*c);
+        }
+    }
+    out
+}
+
+/// To lowerCamelCase, the way Swift's own guidelines do it: `Basic` → `basic`, `EUR` →
+/// `eur`, `URLSession` → `urlSession`, `pay_rate` → `payRate`. A name with no capitals and
+/// no underscores comes back unchanged, so an alias already written in Swift's spelling is
+/// left alone.
+///
+/// Leading and trailing underscores survive, and that is not cosmetic: [`Gen::temp`] makes
+/// a generated temporary unique by appending one, so a `camel` that dropped it would hand
+/// `raw_` and `raw` the same Swift identifier — the collision `temp` exists to prevent.
+fn camel(s: &str) -> String {
+    let lead = s.len() - s.trim_start_matches('_').len();
+    let end = s.trim_end_matches('_').len();
+    if end <= lead {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    out.push_str(&s[..lead]);
+    for (i, w) in s[lead..end].split('_').filter(|p| !p.is_empty()).enumerate() {
+        if i == 0 {
+            out.push_str(&lower_lead(w));
+            continue;
+        }
+        let mut ch = w.chars();
+        if let Some(c) = ch.next() {
+            out.extend(c.to_uppercase());
+            out.push_str(ch.as_str());
+        }
+    }
+    out.push_str(&s[end..]);
+    out
+}
+
+/// A declared name as Swift writes a value: lowerCamelCase, in backticks when that is one
+/// of the language's own words.
+fn sw_name(s: &str) -> String {
+    let c = camel(s);
+    if SWIFT_KEYWORDS.contains(&c.as_str()) {
+        format!("`{c}`")
+    } else {
+        c
+    }
+}
+
+/// The same name as an **argument label at a call site**, where the rule is the other way
+/// around: Swift takes a keyword there as it stands, and warns that the backticks were not
+/// needed. `inout` is the one that still has to be escaped, because it is also a parameter
+/// modifier and the parser cannot tell the two apart.
+fn sw_label(s: &str) -> String {
+    let c = camel(s);
+    if c == "inout" {
+        format!("`{c}`")
+    } else {
+        c
+    }
+}
+
+/// The helper for one rounding mode, named as the generated module spells it.
+fn sw_round_fn(m: RoundMode) -> String {
+    format!("_round{}", pascal(mode_fn(m)))
+}
+
+/// Turn the shared expression text into Swift. The same post-processing shape as `go_expr`,
+/// `ts_expr` and `rs_expr` — and the `//` substitution is load-bearing twice over here,
+/// since in Swift it would otherwise start a comment and swallow the rest of the line.
+///
+/// `_min` and `_max` stay our own rather than becoming the standard library's `min` and
+/// `max`. A rule may declare an input named `min` — `クーポン割引.rule` does — and a
+/// parameter shadows a global in Swift, so the call would resolve to the money the caller
+/// passed in.
+fn sw_expr(s: &str) -> String {
+    s.replace(" // ", " / ")
+        .replace("True", "true")
+        .replace("False", "false")
+        .replace("_round_down(", "_roundDown(")
+        .replace("_round_up(", "_roundUp(")
+        .replace("_round_half(", "_roundHalf(")
+        .replace("_round_bankers(", "_roundBankers(")
+}
+
+/// The error type and the four modes of §7.3. `private` at file scope in Swift is what
+/// `fileprivate` is, so the same text serves the generated module — where nothing outside
+/// may call these — and `_round_test.swift`, where the cases sit in the same file.
+fn round_sw() -> String {
+    format!(
+        r#"
+/// {err}
+public enum RuleError: Error, CustomStringConvertible {{
+    /// {input}
+    case input(String)
+    /// {contra}
+    case contradiction(String)
+
+    public var description: String {{
+        switch self {{
+        case .input(let m), .contradiction(let m): return m
+        }}
+    }}
+}}
+
+private func _min(_ a: Int64, _ b: Int64) -> Int64 {{
+    a < b ? a : b
+}}
+
+private func _max(_ a: Int64, _ b: Int64) -> Int64 {{
+    a > b ? a : b
+}}
+
+/// {down}
+private func _roundDown(_ x: Int64, _ g: Int64) -> Int64 {{
+    let v = abs(x) / g * g
+    return x < 0 ? -v : v
+}}
+
+/// {up}
+private func _roundUp(_ x: Int64, _ g: Int64) -> Int64 {{
+    let a = abs(x)
+    let v = a % g == 0 ? a / g * g : (a / g + 1) * g
+    return x < 0 ? -v : v
+}}
+
+/// {half}
+private func _roundHalf(_ x: Int64, _ g: Int64) -> Int64 {{
+    let a = abs(x)
+    let v = 2 * (a % g) >= g ? (a / g + 1) * g : a / g * g
+    return x < 0 ? -v : v
+}}
+
+/// {bankers}
+private func _roundBankers(_ x: Int64, _ g: Int64) -> Int64 {{
+    let a = abs(x)
+    var q = a / g
+    let r = a % g
+    if 2 * r > g || (2 * r == g && q % 2 == 1) {{
+        q += 1
+    }}
+    let v = q * g
+    return x < 0 ? -v : v
+}}
+"#,
+        err = tr!("この規則が返しうる誤り。", "Everything this rule can go wrong with."),
+        input = tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+        contra = tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
+        down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen -> -4 yen."),
+        up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen -> -5 yen."),
+        half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
+        bankers = tr!("半分ちょうどは偶数へ。", "An exact half goes to the even neighbor."),
+    )
+}
+
+impl<'a> Gen<'a> {
+    /// The Swift type for a value. A unit is a struct over `Int64`, which is what the
+    /// overflow proof (E108) is stated in — `Int` is the platform's word and only
+    /// happens to be 64 bits.
+    fn sw_ty(&self, ty: &Ty) -> String {
+        match ty {
+            Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "String".into()),
+            Ty::Bool => "Bool".into(),
+            Ty::Str => "String".into(),
+            Ty::Number | Ty::Date => "Int64".into(),
+            Ty::Opt(t) => format!("{}?", self.sw_ty(t)),
+            _ => brand_of(ty),
+        }
+    }
+
+    /// The identifier a declared name gets, in Swift's spelling.
+    fn sw_ident(&self, n: &str) -> String {
+        sw_name(&self.ident(n))
+    }
+
+    /// The name of the set a group is declared as. The underscore goes on *before* the
+    /// keyword escaping: `_` + `` `internal` `` is not an identifier, and `_internal` needs
+    /// no backticks in the first place.
+    fn sw_group(&self, n: &str) -> String {
+        sw_name(&format!("_{}", self.ident(n)))
+    }
+
+    /// A blank assignment for a value nothing downstream reads, the same device the Go
+    /// backend needs. The value is still computed, so the generated code and the rule stay
+    /// line for line, but Swift warns about a binding that is never read — and the module
+    /// says DO NOT EDIT, so nobody can quiet the warning afterwards. W111 has already named
+    /// the declaration.
+    fn sw_unread(&self, name: &str) -> String {
+        if self.is_read(name) {
+            String::new()
+        } else {
+            format!("    _ = {}\n", self.sw_ident(name))
+        }
+    }
+
+    fn sw_value(&self, v: &str) -> String {
+        match self.value_names.get(v) {
+            Some((ty, alias)) => format!("{ty}.{}", sw_name(alias)),
+            None => format!("{v:?}"),
+        }
+    }
+
+    /// Render a cell as a Swift condition. A don't-care yields None (no condition).
+    fn sw_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
+        let inner = match ty {
+            Ty::Opt(t) => t.as_ref(),
+            other => other,
+        };
+        let lit = |l: &Lit| -> String {
+            match l {
+                Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                Lit::Word(w) => self.sw_value(w),
+                Lit::Num(n) => self.int_lit(n, inner, col_scale),
+                Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                Lit::Str(s) => format!("{s:?}"),
+            }
+        };
+        let members = |ls: &Vec<Lit>| -> String {
+            let mut out: Vec<String> = Vec::new();
+            for l in ls {
+                if let Lit::Word(w) = l {
+                    if let Some((_, ms)) = self.c.groups.get(w) {
+                        out.extend(ms.iter().map(|m| self.sw_value(m)));
+                        continue;
+                    }
+                }
+                out.push(lit(l));
+            }
+            format!("[{}]", out.join(", "))
+        };
+        Some(match cell {
+            Cell::DontCare => return None,
+            Cell::Nothing => format!("{var} == nil"),
+            // A cell naming one group uses the set the module already declares, rather than
+            // writing the members out a second time.
+            Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
+                format!("{}.contains({var})", self.sw_group(w))
+            }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
+            Cell::Lit(l) => format!("{var} == {}", lit(l)),
+            Cell::Set(ls) => format!("{}.contains({var})", members(ls)),
+            Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
+                let Lit::Word(w) = &ls[0] else { unreachable!() };
+                format!("!{}.contains({var})", self.sw_group(w))
+            }
+            Cell::Not(ls) => format!("!{}.contains({var})", members(ls)),
+            Cell::Cmp(cs) => cs
+                .iter()
+                .map(|(o, l)| {
+                    let op = match o {
+                        CmpOp::Le => "<=",
+                        CmpOp::Ge => ">=",
+                        CmpOp::Lt => "<",
+                        CmpOp::Gt => ">",
+                    };
+                    format!("{var} {op} {}", lit(l))
+                })
+                .collect::<Vec<_>>()
+                .join(" && "),
+        })
+    }
+
+    pub fn swift(&self) -> String {
+        let mut o = self.header("//");
+        o.push('\n');
+
+        // Brands. A struct with one stored property is laid out as that property, so the
+        // type costs nothing at run time — the same bargain the Rust backend makes.
+        let mut brands: BTreeMap<String, String> = BTreeMap::new();
+        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+            let ty = self.ty_of(v);
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                brands.insert(brand_of(&ty), format!("{ty}"));
+            }
+        }
+        for (b, doc) in &brands {
+            o.push_str(&format!(
+                "/// {doc}\n\
+                 public struct {b}: Hashable, Comparable, Sendable {{\n    \
+                     public var value: Int64\n\n    \
+                     public init(_ value: Int64) {{ self.value = value }}\n\n    \
+                     public static func < (lhs: {b}, rhs: {b}) -> Bool {{ lhs.value < rhs.value }}\n\
+                 }}\n\n"
+            ));
+        }
+
+        // Enums. The raw value is the source name, which is also what the wire carries
+        // (§10.2), so `rawValue` and `init(rawValue:)` are the whole conversion and no
+        // hand-written parser is needed on either side.
+        let mut emitted: Vec<String> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if emitted.contains(ascii) {
+                continue;
+            }
+            emitted.push(ascii.clone());
+            let Some(vals) = self.c.enums.get(jp) else { continue };
+            o.push_str(&format!("public enum {ascii}: String, CaseIterable, Sendable {{\n"));
+            for v in vals {
+                let name = self
+                    .value_names
+                    .get(v)
+                    .map(|(_, a)| sw_name(a))
+                    .unwrap_or_else(|| sw_name(v));
+                o.push_str(&format!("    case {name} = {v:?}\n"));
+            }
+            o.push_str("}\n\n");
+        }
+
+        o.push_str(round_sw().trim_start_matches('\n'));
+        o.push('\n');
+
+        // Groups. A `Set` needs Hashable, which a raw-value enum already is.
+        for g in &self.f.groups {
+            let ty = self
+                .c
+                .groups
+                .get(&g.name.text)
+                .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
+                .unwrap_or_else(|| "Int64".into());
+            let ms: Vec<String> = g.members.iter().map(|m| self.sw_value(&m.text)).collect();
+            o.push_str(&format!(
+                "private let {}: Set<{ty}> = [{}]\n",
+                self.sw_group(&g.name.text),
+                ms.join(", ")
+            ));
+        }
+        if !self.f.groups.is_empty() {
+            o.push('\n');
+        }
+
+        o.push_str(&self.sw_fn());
+        o
+    }
+
+    fn sw_fn(&self) -> String {
+        let fname = sw_name(&pub_name(&self.f.name));
+        let outs = &self.f.outputs;
+        let mut o = String::new();
+
+        // Multiple outputs come back as a struct. The memberwise initializer Swift writes
+        // for a public struct is internal, so a caller in another module would not be able
+        // to build one; this one is declared.
+        if outs.len() > 1 {
+            let fields: Vec<(String, String)> = outs
+                .iter()
+                .map(|od| (sw_name(&pub_name(&od.name)), self.sw_ty(&self.ty_of(&od.name.text))))
+                .collect();
+            o.push_str("public struct Output: Hashable, Sendable {\n");
+            for (n, t) in &fields {
+                o.push_str(&format!("    public var {n}: {t}\n"));
+            }
+            o.push_str(&format!(
+                "\n    public init({}) {{\n",
+                fields.iter().map(|(n, t)| format!("{n}: {t}")).collect::<Vec<_>>().join(", ")
+            ));
+            for (n, _) in &fields {
+                o.push_str(&format!("        self.{n} = {n}\n"));
+            }
+            o.push_str("    }\n}\n\n");
+        }
+
+        let ret = if outs.len() == 1 {
+            self.sw_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
+            .collect();
+
+        o.push_str(&tr!(
+            "/// 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。\n",
+            "/// Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\n",
+            self.f.name.text,
+            self.f.version
+        ));
+        o.push_str(&format!(
+            "public func {fname}({}) throws -> {ret} {{\n",
+            params.join(", ")
+        ));
+
+        // A branded input is an Int64 inside; unwrap it once, where it is read.
+        let local = |n: &str| -> String {
+            match self.f.inputs.iter().find(|i| i.name.text == n) {
+                Some(i) => {
+                    let v = sw_name(&pub_name(&i.name));
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.value")
+                    } else {
+                        v
+                    }
+                }
+                None => self.sw_ident(n),
+            }
+        };
+        // Entry guards. An enum needs none: a value of an enum type is one of its cases by
+        // construction, so the check Python, TypeScript, Ruby and Go make at run time is
+        // already made by the compiler, exactly as in Rust.
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                continue;
+            }
+            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
+                continue;
+            };
+            let sc = self.c.wire_scale(&i.name.text);
+            let v = local(&i.name.text);
+            o.push_str(&format!(
+                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
+                crate::types::wire_int(lo, sc),
+                crate::types::wire_int(hi, sc),
+                tr!("{} が範囲の外です: \\({v})", "{} is out of range: \\({v})", i.name.text)
+            ));
+        }
+
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}  // {}\n",
+                        self.sw_ident(&d.name.text),
+                        sw_expr(unparen(&self.expr(&d.expr, &local).text)),
+                        tr!("導出", "derived value")
+                    ));
+                    o.push_str(&self.sw_unread(&d.name.text));
+                }
+                Item::Define(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}  // {}\n",
+                        self.sw_ident(&d.name.text),
+                        sw_expr(unparen(&self.expr(&d.expr, &local).text)),
+                        tr!("定義", "definition")
+                    ));
+                    o.push_str(&self.sw_unread(&d.name.text));
+                }
+                Item::Table(t) => o.push_str(&self.sw_table(t, &local)),
+            }
+        }
+
+        let wrap = |ty: &Ty, body: String| -> String {
+            match ty {
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}({body})", self.sw_ty(ty)),
+                _ => body,
+            }
+        };
+        // Every output takes the same three steps: its source — the `result` expression for
+        // the first output, the binding of its own name otherwise — brought to the wire
+        // scale, then its declared rounding applied exactly once (§15.16).
+        let mut finals: Vec<String> = Vec::new();
+        for (oi, od) in outs.iter().enumerate() {
+            let out_name = &od.name.text;
+            let res = match (&self.f.result, oi) {
+                (Some(r), 0) => self.expr(&r.expr, &local),
+                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+            };
+            let os = self.out_scale(out_name);
+            let ty = self.ty_of(out_name);
+            let body = match &od.rounding {
+                Some(rd) => {
+                    let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
+                    let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
+                    let grid_i = g.num * res.scale / g.den;
+                    if res.scale != os {
+                        let raw = self.temp(&raw_base(oi));
+                        o.push_str(&format!(
+                            "    let {} = {}  // {}\n",
+                            sw_name(&raw),
+                            sw_expr(unparen(&res.text)),
+                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                        ));
+                        format!("{}({}, {grid_i}) / {}", sw_round_fn(m), sw_name(&raw), res.scale / os)
+                    } else {
+                        format!("{}({}, {grid_i})", sw_round_fn(m), sw_expr(&res.text))
+                    }
+                }
+                None => sw_expr(&res.text),
+            };
+            finals.push(wrap(&ty, body));
+        }
+        if outs.len() == 1 {
+            o.push_str(&format!("    return {}\n}}\n", finals[0]));
+        } else {
+            let fields: Vec<String> = outs
+                .iter()
+                .zip(&finals)
+                .map(|(od, body)| format!("{}: {body}", sw_name(&pub_name(&od.name))))
+                .collect();
+            o.push_str(&format!("    return Output({})\n}}\n", fields.join(", ")));
+        }
+        o
+    }
+
+    fn sw_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+        let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        // Swift lets a `let` be assigned once on every path; the throwing `else` below is a
+        // path that assigns nothing, and the compiler accepts it because it does not return.
+        for oc in &t.outputs {
+            let ty = self.ty_of(&oc.name.text);
+            let decl = match ty {
+                Ty::Bool => "Bool".to_string(),
+                Ty::Str => "String".to_string(),
+                Ty::Enum(_) => self.sw_ty(&ty),
+                _ => "Int64".to_string(),
+            };
+            o.push_str(&format!("    let {}: {decl}\n", self.sw_ident(&oc.name.text)));
+        }
+        for (ri, row) in t.rows.iter().enumerate() {
+            let conds: Vec<String> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, (col, _))| {
+                    let ty = self.ty_of(col);
+                    self.sw_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                })
+                .collect();
+            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            let head = if ri == 0 { "    if" } else { "    } else if" };
+            o.push_str(&format!("{head} {cond} {{ // {line}\n"));
+            for (oi, oc) in t.outputs.iter().enumerate() {
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => {
+                        let oty = self.ty_of(&oc.name.text);
+                        self.int_lit(n, &oty, self.scale(&oc.name.text))
+                    }
+                    Some(OutCell::Lit(l)) => match l {
+                        Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
+                        Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
+                        Lit::Word(w) => self.sw_value(w),
+                        Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        _ => "0".into(),
+                    },
+                    Some(OutCell::Name(w)) => {
+                        if w == crate::kw::TRUE {
+                            "true".into()
+                        } else if w == crate::kw::FALSE {
+                            "false".into()
+                        } else if self.value_names.contains_key(w) {
+                            self.sw_value(w)
+                        } else {
+                            sw_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                        }
+                    }
+                    None => "0".into(),
+                };
+                o.push_str(&format!("        {} = {v}\n", self.sw_ident(&oc.name.text)));
+            }
+        }
+        o.push_str(&format!(
+            "    }} else {{\n        throw RuleError.contradiction(\"{}\")\n    }}\n",
+            tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
+        ));
+        for oc in &t.outputs {
+            o.push_str(&self.sw_unread(&oc.name.text));
+        }
+        o.push_str(&self.guards(t, local, Lang::Sw, "    ", |name, i, j| {
+            format!(
+                "        throw RuleError.contradiction(\"{}\")\n",
+                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+            )
+        }));
+        o
+    }
+
+    /// The runner. Foundation's `JSONSerialization` is to Swift what `json` is to Ruby —
+    /// part of the toolchain rather than a dependency — and it keeps an integer that fits
+    /// in `Int64` exact, which is what the vectors need. The answer is written out by hand
+    /// rather than serialized, because the comparison is byte-for-byte and the order of the
+    /// fields is the order the rule declares its outputs in.
+    ///
+    /// `@main` needs the runner not to be the module's main file, which is why it is
+    /// `{alias}_runner.swift` and not `main.swift`.
+    pub fn swift_runner(&self) -> String {
+        // The module takes its name from the binary, so the call has to be the function's
+        // own spelling: a plain `shipping_fee(...)` resolves to the *module* and fails to
+        // compile, which is how this was found.
+        let fname = sw_name(&pub_name(&self.f.name));
+        let mut args: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            let jp = &i.name.text;
+            let label = sw_label(&pub_name(&i.name));
+            let v = match &ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    format!("{cls}(rawValue: _s(d, {jp:?}))!")
+                }
+                Ty::Str => format!("_s(d, {jp:?})"),
+                Ty::Bool => format!("_b(d, {jp:?})"),
+                Ty::Date => format!("_ord(_s(d, {jp:?}))"),
+                Ty::Number => format!("_n(d, {jp:?})"),
+                _ => format!("{}(_n(d, {jp:?}))", self.sw_ty(&ty)),
+            };
+            args.push(format!("{label}: {v}"));
+        }
+        let one = |expr: &str, ty: &Ty| match ty {
+            Ty::Enum(_) => format!("_q({expr}.rawValue)"),
+            Ty::Str => format!("_q({expr})"),
+            Ty::Bool => format!("String({expr})"),
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("String({expr}.value)"),
+            _ => format!("String({expr})"),
+        };
+        let fields: Vec<String> = if self.f.outputs.len() == 1 {
+            let od = &self.f.outputs[0];
+            vec![format!("_q({:?}) + \":\" + {}", od.name.text, one("got", &self.ty_of(&od.name.text)))]
+        } else {
+            self.f
+                .outputs
+                .iter()
+                .map(|od| {
+                    format!(
+                        "_q({:?}) + \":\" + {}",
+                        od.name.text,
+                        one(&format!("got.{}", sw_name(&pub_name(&od.name))), &self.ty_of(&od.name.text))
+                    )
+                })
+                .collect()
+        };
+        format!(
+            r#"// Code generated by rulec {ver}. DO NOT EDIT.
+import Foundation
+
+@main
+enum Runner {{
+    static func main() throws {{
+        while let line = readLine(strippingNewline: true) {{
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {{
+                continue
+            }}
+            let root = try JSONSerialization.jsonObject(with: Data(line.utf8)) as! [String: Any]
+            let d = root["in"] as! [String: Any]
+            let got = try {fname}({args})
+            print("{{" + [{fields}].joined(separator: ",") + "}}")
+        }}
+    }}
+
+    /// A number, as NSNumber on both Darwin and the corelibs Foundation on Linux.
+    static func _n(_ d: [String: Any], _ k: String) -> Int64 {{
+        (d[k] as? NSNumber)?.int64Value ?? 0
+    }}
+
+    static func _s(_ d: [String: Any], _ k: String) -> String {{
+        d[k] as? String ?? ""
+    }}
+
+    static func _b(_ d: [String: Any], _ k: String) -> Bool {{
+        (d[k] as? NSNumber)?.boolValue ?? false
+    }}
+
+    /// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool
+    /// uses. Foundation's own parsers carry a calendar and a time zone; this carries none.
+    static func _ord(_ s: String) -> Int64 {{
+        let p = s.split(separator: "-").map {{ Int64($0) ?? 0 }}
+        let (y, m, d) = (p[0], p[1], p[2])
+        let y2 = m <= 2 ? y - 1 : y
+        let era = (y2 >= 0 ? y2 : y2 - 399) / 400
+        let yoe = y2 - era * 400
+        let mp = (m + 9) % 12
+        let doy = (153 * mp + 2) / 5 + d - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        return era * 146097 + doe - 719468
+    }}
+
+    /// A JSON string. The wire format keeps Japanese as itself (§10.2), so only the two
+    /// characters JSON requires are escaped.
+    static func _q(_ s: String) -> String {{
+        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }}
+}}
+"#,
+            ver = env!("CARGO_PKG_VERSION"),
+            args = args.join(", "),
+            fields = fields.join(", ")
+        )
+    }
+
+    /// The type as the inventory states it for Swift.
+    fn sw_api_ty(&self, ty: &Ty) -> String {
+        self.sw_ty(ty)
+    }
+}
+
+/// The four modes of §7.3 in Swift, checked against the same reference cases the other five
+/// are. A lone file compiled by `swiftc` is the module's main file, so this one is written
+/// as top-level code and needs no `@main`.
+pub fn round_tests_swift() -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport Foundation\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の四モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The four modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    o.push_str(round_sw().trim_start_matches('\n'));
+    o.push_str("\nlet cases: [(String, Int64, Int64, Int64)] = [\n");
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
+    }
+    o.push_str("]\n\nvar bad = 0\nfor (mode, x, g, want) in cases {\n    let got: Int64\n    switch mode {\n");
+    o.push_str("    case \"down\": got = _roundDown(x, g)\n    case \"up\": got = _roundUp(x, g)\n");
+    o.push_str("    case \"half\": got = _roundHalf(x, g)\n    default: got = _roundBankers(x, g)\n    }\n");
+    o.push_str("    if got != want {\n        print(\"NG \\(mode)(\\(x), \\(g)) = \\(got), want \\(want)\")\n        bad += 1\n    }\n}\n");
+    o.push_str("if bad > 0 {\n    exit(1)\n}\n");
+    o.push_str(&format!("print(\"{}\")\n", tr!("ok \\(cases.count) 件", "ok \\(cases.count) cases")));
     o
 }

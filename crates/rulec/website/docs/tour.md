@@ -165,8 +165,9 @@ outputs
   送料(fee) : money[円, incl_tax]  round up(10円)
 ```
 
-There may be several outputs. They become a `NamedTuple` in Python and a
-struct in Go, and **rounding applies once per output**.
+There may be several outputs. They become a `NamedTuple` in Python, an
+`interface` in TypeScript, a `Struct` in Ruby and a struct in Rust, Swift
+and Go, and **rounding applies once per output**.
 
 ```rule
 outputs
@@ -218,11 +219,11 @@ modes, each **pinned down for negative values too**.
 What is in the parentheses is the **grid**: `up(10円)` rounds to a
 multiple of 10 yen, so −4.2 yen becomes −10 yen.
 
-The negative direction is pinned because **Python's `//` rounds toward
-−∞ while Go's integer division rounds toward zero**. Left to the host
-language, one rule would answer differently in the two. The generated
-code goes through its own helper, and that the two agree is checked by
-unit vectors on every run.
+The negative direction is pinned because **integer division in Python and
+Ruby rounds toward −∞ while in Rust, Swift, Go and TypeScript it
+truncates toward zero**. Left to the host language, one rule would answer
+differently in each. The generated code goes through its own helper, and
+that they all agree is checked by unit vectors on every run.
 
 ## Tables
 

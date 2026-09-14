@@ -15,7 +15,7 @@ coloured bar is whoever makes it or takes it, indigo is the path between the
 table and rulec, amber is anything that needs a person, grey is what leaves
 the system.
 
-    table --check--> rulec --gen, once proved--> Python, TypeScript, Rust, Ruby, Go
+    table --check--> rulec --gen, once proved--> Python, TypeScript, Rust, Ruby, Go, Swift
       ^                |
       |                v  the input that falls through the gap
       +-- add the row, run again -- witness (E101)
@@ -63,7 +63,7 @@ JA = dict(
     alt="表を書く。rulec は一行を入力の組み合わせの一区画にして並べ、隙間も重なりも無いことを"
         "計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が"
         "返ってきて、行を足してもう一度。運賃がいくらかだけは人が決める。証明できた表からだけ、"
-        "依存ゼロの Python・TypeScript・Rust・Ruby・Go が出る。",
+        "依存ゼロの Python・TypeScript・Rust・Ruby・Go・Swift が出る。",
     table=("表", "業務の人が読んで、承認する", ".rule"),
     head=("あて先", "重量", "→ 運賃"),
     rows=[("近畿圏", "<=2kg", "800円"),
@@ -77,7 +77,7 @@ JA = dict(
                      "隙間も重なりも、目ではなく計算で見つける"]),
     witness=("当てはまらない例", "あて先 = 遠隔地, 重量 = 2001g",
              "運賃はいくら？ それだけは人が決める", "E101"),
-    code=("Python · TypeScript · Rust · Ruby · Go",
+    code=("Python · TypeScript · Rust · Ruby · Go · Swift",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",
            "    ...",
            "        fee = 800",
@@ -97,7 +97,7 @@ EN = dict(
         "by computation that the boxes leave no gap and no overlap. If there is a gap, "
         "back comes the input that falls through it (Destination = Overseas, Weight = 2001g): "
         "add the row and run again - only what the fee is takes a person. Only a proved "
-        "table generates, and what comes out is dependency-free Python, TypeScript, Rust, Ruby and Go.",
+        "table generates, and what comes out is dependency-free Python, TypeScript, Rust, Ruby, Go and Swift.",
     table=("Table", "a domain expert reads and approves it", ".rule"),
     head=("Destination", "Weight", "→ Fee"),
     rows=[("Domestic", "<=2kg", "8USD"),
@@ -111,7 +111,7 @@ EN = dict(
                      "gaps and overlaps are computed, not eyeballed"]),
     witness=("An input that matches no row", "Destination = Overseas, Weight = 2001g",
              "what is the fee? only a person can say", "E101"),
-    code=("Python · TypeScript · Rust · Ruby · Go",
+    code=("Python · TypeScript · Rust · Ruby · Go · Swift",
           ["def fee(dest: Zone, weight: Gram) -> USDInclTax:",
            "    ...",
            "        fee = 8",
@@ -137,7 +137,7 @@ FILES = [("overview", EN, "en"), ("overview-ja", JA, "ja")]   # (name, words, --
 #
 # The page scales the picture to its column, so the canvas width sets the
 # size of every letter on screen: 1260 units read too small there, 900 too
-# big, and this layout lands near 1090. That is why the code sheet shows
+# big, and this layout lands near 1120. That is why the code sheet shows
 # only the short lines of the generated function - a branch with its row
 # comment is 460 units wide on its own and would push the canvas back past
 # 1150 - and lets the three fees, straight from the file, carry the
@@ -148,7 +148,7 @@ Y_IN = 72                            # the pipeline's one horizontal line
 
 TABLE = (20, TOP, 236, 204)
 CARD = (TABLE[0] + TABLE[2] + 82, TOP, 314, 236)   # 82: room for "rulec check"
-CODE = (CARD[0] + CARD[2] + 76, TOP, 328, 200)     # 76: room for "once proved"
+CODE = (CARD[0] + CARD[2] + 76, TOP, 352, 200)     # 76: room for "once proved"
 STACK = 8                            # the two sheets behind the code, offset
 Y_NOTES = 179                        # where the quiet line under the code sits
 W = CODE[0] + CODE[2] + 2 * STACK + 20

@@ -2,7 +2,7 @@
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python, TypeScript, Rust, Ruby and Go.
+anyone runs it, and turned into ordinary Python, TypeScript, Rust, Ruby, Go and Swift.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the
@@ -114,12 +114,13 @@ the source: a published tariff's own worked examples are ideal.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, TypeScript, Rust, Ruby, Go, and the vectors. It refuses to generate from a rule
-that does not pass check. `rulec api <file>` tells you how to call the result — signatures, parameters with
-units and ranges, enum member spellings, errors — so you never have to read the generated
-code to integrate it ([docs/generated-code.md](docs/generated-code.md)).
+Writes Python, TypeScript, Rust, Ruby, Go, Swift, and the vectors. It refuses to generate
+from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
+signatures, parameters with units and ranges, enum member spellings, errors — so you never
+have to read the generated code to integrate it
+([docs/generated-code.md](docs/generated-code.md)).
 
-For a target none of the five covers — another language, a workflow engine's expression
+For a target none of the six covers — another language, a workflow engine's expression
 language, SQL — you do not need a backend and you do not have to give up the comparison:
 generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
 with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to end.
@@ -128,7 +129,8 @@ with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to 
 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
-`node`, `rustc`, `ruby` and `go`, and skips-and-reports the side whose toolchain is missing.
+`node`, `rustc`, `ruby`, `go` and `swiftc`, and skips-and-reports the side whose toolchain is
+missing.
 
 ### In CI
 

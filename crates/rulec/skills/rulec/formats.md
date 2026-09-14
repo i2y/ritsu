@@ -226,14 +226,20 @@ meaning is in [generated-code.md](generated-code.md).
        "input_type":"Input","input_fields":[…],
        "output_type":"Output","output_fields":[…],
        "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                 "values":[{"name":"率引き","alias":"CouponKindPercent"}]}]}}
+                 "values":[{"name":"率引き","alias":"CouponKindPercent"}]}]},
+ "swift":{"module":"coupon_step.swift","function":"couponStep",
+          "signature":"func couponStep(subtotal: YenInclTax, …) throws -> Output",
+          "params":[…],"returns":"Output","outputs":[…],
+          "enums":[{"name":"クーポン種別","alias":"CouponKind",
+                    "values":[{"name":"率引き","alias":"percent"}]}],
+          "errors":["RuleError.input","RuleError.contradiction"]}}
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
 with `--lang`. `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
-`couponstep.CouponKindPercent` in Go). `unit`, `range` and `rounding` are absent when the
+`couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift). `unit`, `range` and `rounding` are absent when the
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module.
 

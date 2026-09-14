@@ -2,8 +2,8 @@
 
 **A harness for an agent turning table-shaped business rules into code.**
 
-Write the table, and out come Python, TypeScript, Rust, Ruby and Go functions. **The proof is
-finished before the code exists.**
+Write the table, and out come Python, TypeScript, Rust, Ruby, Go and Swift functions. **The
+proof is finished before the code exists.**
 
 ```rule
 table 運賃表(fee_table)
@@ -171,10 +171,10 @@ func FeeDemo(in Input) (YenInclTax, error) {
 Four rules keep it readable. **No cell is dropped** — a condition an earlier branch already
 settled is still written out (`elif True:`), because reading the output against the table is
 the only way it is meant to be read. **Units ride in the type wherever the language has one
-to ride in**: a newtype in Rust, a defined type in Go, a branded bigint in TypeScript, a
-`NewType` in Python that `mypy --strict` is run over. Ruby has none, so there the unit is
-declared in the signature and stated in a comment, and the `.rbs` that ships with the module
-says as much. **Rounding goes through a helper of its own**, because integer division does
+to ride in**: a newtype in Rust, a one-field struct in Swift, a defined type in Go, a branded
+bigint in TypeScript, a `NewType` in Python that `mypy --strict` is run over. Ruby has none,
+so there the unit is declared in the signature and stated in a comment, and the `.rbs` that
+ships with the module says as much. **Rounding goes through a helper of its own**, because integer division does
 not agree between them — Python and Ruby floor toward −∞, Go and Rust truncate toward zero.
 **Nothing builtin is called bare**, so an input aliased `min` or `list` cannot break the
 output.
@@ -271,18 +271,18 @@ Thirteen rules taken from real published terms are checked, generated and run on
 | | |
 |---|---|
 | **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
-| **the generators** | Python, TypeScript, Rust, Ruby and Go, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **the generators** | Python, TypeScript, Rust, Ruby, Go and Swift, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
-**Python, TypeScript, Rust, Ruby and Go** today; **Java, Kotlin, Swift and SQL** are planned.
+**Python, TypeScript, Rust, Ruby, Go and Swift** today; **Java, Kotlin and SQL** are planned.
 
 You do not have to wait for the list, and nothing here has to change. A target outside it —
 another language, a workflow engine's expression language, SQL — can be generated from what
 `rulec api` and `rulec schema` already publish, and `rulec verify` will hold the result to the
-rule over every case built from its own boundaries, exactly as the four above are held.
+rule over every case built from its own boundaries, exactly as the shipped ones are held.
 [`docs/backends.md`](docs/backends.md) runs that loop end to end against SQL.
 
 | | | |
@@ -292,7 +292,8 @@ rule over every case built from its own boundaries, exactly as the four above ar
 | Rust | shipped | `rustc` alone — no cargo, no crates |
 | Ruby | shipped | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and an `.rbs` ships alongside |
 | Go | shipped | `go` |
-| Java / Kotlin / Swift | planned | a JDK / kotlinc / swiftc |
+| Swift | shipped | `swiftc` alone — no SwiftPM and no `Package.swift`; units ride in the type as they do in Rust |
+| Java / Kotlin | planned | a JDK / kotlinc |
 | SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, and there is no stdin/stdout runner, so the dialect and the shape come first |
 
 **A language that cannot join the agreement check does not get added**: output that cannot

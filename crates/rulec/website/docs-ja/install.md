@@ -27,7 +27,7 @@ $ ./target/release/rulec --help
 
 外に出るのは二つだけです。
 
-- **`rulec test`** — 生成した Python・TypeScript・Rust・Ruby・Go を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go` が要ります。無ければ「どれを飛ばしたか」を言って、落ちはしません。
+- **`rulec test`** — 生成した Python・TypeScript・Rust・Ruby・Go・Swift を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go`・`swiftc` が要ります。無ければ「どれを飛ばしたか」を言って、落ちはしません。
 - **`rulec verify`** — アダプタを子プロセスとして起動するので、そのアダプタを書いた言語が要ります。
 
 生成物を**型検査したい**場合だけ、さらに道具が要ります。生成 Python は `mypy --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どちらも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。

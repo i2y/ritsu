@@ -8,6 +8,7 @@
 //! - Python: import the module and hold `inspect.signature` to the inventory.
 //! - Go: build a calling program mechanically from the inventory alone and run `go vet`
 //!   over it. If a single name in the inventory were wrong, it would not compile.
+//! - Swift: the same, type-checked by `swiftc`.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -86,11 +87,14 @@ fn 署名とガードが生成物と一致する() {
         let ts = std::fs::read_to_string(dir.join("typescript").join(s(ts_j, "module"))).unwrap();
         let rs_j = j.get("rust").unwrap();
         let rs = std::fs::read_to_string(dir.join("rust").join(s(rs_j, "module"))).unwrap();
+        let sw_j = j.get("swift").unwrap();
+        let sw = std::fs::read_to_string(dir.join("swift").join(s(sw_j, "module"))).unwrap();
 
         assert!(py.contains(&s(py_j, "signature")), "python の署名が違う: {}", s(py_j, "signature"));
         assert!(ts.contains(&s(ts_j, "signature")), "typescript の署名が違う: {}", s(ts_j, "signature"));
         assert!(rs.contains(&s(rs_j, "signature")), "rust の署名が違う: {}", s(rs_j, "signature"));
         assert!(go.contains(&s(go_j, "signature")), "go の署名が違う: {}", s(go_j, "signature"));
+        assert!(sw.contains(&s(sw_j, "signature")), "swift の署名が違う: {}", s(sw_j, "signature"));
 
         // The entry guards. A range in the inventory that the guard does not enforce would
         // send a caller values the code then rejects.
@@ -143,6 +147,27 @@ fn 署名とガードが生成物と一致する() {
             }
         }
 
+        for p in arr(sw_j, "params") {
+            if let Some(r) = p.get("range") {
+                let (lo, hi) = (r.get("min").unwrap(), r.get("max").unwrap());
+                let a = s(p, "alias");
+                // A branded input is an Int64 inside, so the guard reads it through
+                // `.value`. `Int64` itself is capitalised, so the test cannot go by case
+                // the way the Rust one does — it goes by the three names that are not
+                // brands.
+                let t = s(p, "type");
+                let v = if matches!(t.as_str(), "Int64" | "Bool" | "String") {
+                    a.clone()
+                } else {
+                    format!("{a}.value")
+                };
+                assert!(
+                    sw.contains(&format!("if {v} < {lo} || {v} > {hi} {{")),
+                    "swift のガードが範囲と食い違う: {v} {lo}..{hi}\n{sw}"
+                );
+            }
+        }
+
         // Enum members, under the spelling each language gives them.
         for e in arr(rs_j, "enums") {
             assert!(rs.contains(&format!("pub enum {} {{", s(e, "alias"))), "{}", s(e, "alias"));
@@ -177,6 +202,21 @@ fn 署名とガードが生成物と一致する() {
         for e in arr(go_j, "enums") {
             for v in arr(e, "values") {
                 assert!(go.contains(&s(v, "alias")), "go の列挙値が違う: {}", s(v, "alias"));
+            }
+        }
+        for e in arr(sw_j, "enums") {
+            assert!(
+                sw.contains(&format!("public enum {}: String, CaseIterable, Sendable {{", s(e, "alias"))),
+                "{}",
+                s(e, "alias")
+            );
+            for v in arr(e, "values") {
+                // The raw value is the source name, which is what the wire carries.
+                assert!(
+                    sw.contains(&format!("    case {} = \"{}\"", s(v, "alias"), s(v, "name"))),
+                    "swift の列挙値が違う: {}",
+                    s(v, "alias")
+                );
             }
         }
 
@@ -472,6 +512,82 @@ fn rubyの実物の署名と一致する() {
         assert!(
             o.status.success(),
             "{rule}: api と実物の Ruby が食い違う\n{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// Swift, the way Go and TypeScript are done: assemble a caller out of the inventory alone
+/// and let `swiftc` type-check it beside the generated module. A name the inventory gets
+/// wrong — a function, an argument label, a brand, an enum case, an error — does not
+/// compile, and nothing here reads the generated file to find out what to write.
+#[test]
+fn swiftは目録から組んだ呼び出しが動く() {
+    if !have("swiftc") {
+        eprintln!("注意: swiftc が無いので飛ばした");
+        return;
+    }
+    for (tag, rule) in RULES {
+        let (dir, j) = setup(&format!("sw{tag}"), rule);
+        let sw_j = j.get("swift").unwrap();
+        let enums = arr(sw_j, "enums");
+        // One argument per parameter, built from what the inventory says about it: an enum
+        // case by its own spelling, a boolean, a number at the bottom of its range, and a
+        // brand wrapped around that number.
+        let mut args: Vec<String> = Vec::new();
+        for p in arr(sw_j, "params") {
+            let ty = s(p, "type");
+            let lo = p
+                .get("range")
+                .and_then(|r| r.get("min"))
+                .map(|v| format!("{v:?}"))
+                .unwrap_or_else(|| "0".into());
+            let lo = lo.trim_start_matches("Int(").trim_end_matches(')').to_string();
+            let v = match ty.as_str() {
+                "Bool" => "true".to_string(),
+                "Int64" => lo,
+                "String" => "\"\"".to_string(),
+                t if enums.iter().any(|e| s(e, "alias") == t) => {
+                    let e = enums.iter().find(|e| s(e, "alias") == t).unwrap();
+                    format!("{t}.{}", s(&arr(e, "values")[0], "alias"))
+                }
+                t => format!("{t}({lo})"),
+            };
+            // A keyword is taken as an argument label as it stands, so the inventory's
+            // spelling goes in unquoted.
+            args.push(format!("{}: {v}", s(p, "alias").trim_matches('`')));
+        }
+        let outs = arr(sw_j, "outputs");
+        let mut body = format!("let got = try {}({})\n", s(sw_j, "function"), args.join(", "));
+        if outs.len() == 1 {
+            body.push_str("_ = got\n");
+        } else {
+            for o in outs {
+                body.push_str(&format!("_ = got.{}\n", s(o, "alias")));
+            }
+        }
+        // Every case of every enum, and both errors, named the way the inventory spells them.
+        for e in enums {
+            for v in arr(e, "values") {
+                body.push_str(&format!("_ = {}.{}\n", s(e, "alias"), s(v, "alias")));
+            }
+        }
+        for err in arr(sw_j, "errors") {
+            body.push_str(&format!("_ = {}(\"\")\n", err.as_str().unwrap()));
+        }
+        // Top-level code is only allowed in a file called `main.swift`, so that is the name
+        // — beside the module, not in place of the runner, which is left out of this build.
+        let p = dir.join("swift").join("main.swift");
+        std::fs::write(&p, format!("do {{\n{body}}} catch {{\n    print(error)\n}}\n")).unwrap();
+        let o = Command::new("swiftc")
+            .current_dir(dir.join("swift"))
+            .args(["-typecheck", &s(sw_j, "module"), "main.swift"])
+            .output()
+            .expect("swiftc を起動できない");
+        assert!(
+            o.status.success(),
+            "{rule}: api から組んだ Swift の呼び出しが通らない\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
         let _ = std::fs::remove_dir_all(&dir);

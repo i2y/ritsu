@@ -159,6 +159,33 @@ pub const ALL: &[Backend] = &[
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
     },
+    Backend {
+        id: "swift",
+        name: "Swift",
+        tool: "swiftc",
+        lang: Lang::Sw,
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("swift/{alias}.swift"), g.swift()),
+                (format!("swift/{alias}_runner.swift"), g.swift_runner()),
+                ("swift/_round_test.swift".into(), crate::codegen::round_tests_swift()),
+            ]
+        },
+        // Two files, one module: top-level code is only allowed in `main.swift`, so the
+        // runner carries `@main` instead and the pair compiles as it stands. `-Onone` is
+        // deliberate — nothing here is measured for speed, and the optimizer is the slowest
+        // part of a build whose only job is to answer whether the vectors agree.
+        run: |alias, _| {
+            Plan::new("swift", &format!("./{alias}"), &[]).built(
+                "swiftc",
+                &["-Onone", &format!("{alias}.swift"), &format!("{alias}_runner.swift"), "-o", alias],
+            )
+        },
+        round: |_| {
+            Plan::new("swift", "./_round_test", &[])
+                .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
+        },
+    },
 ];
 
 /// The backend with this id, for the places that address one by name.
@@ -170,6 +197,16 @@ pub fn by_id(id: &str) -> Option<&'static Backend> {
 /// named with them, and the documentation lists them in this order.
 pub fn ids() -> Vec<&'static str> {
     ALL.iter().map(|b| b.id).collect()
+}
+
+/// The names as a person reads them, in the output language. Every sentence that lists the
+/// targets takes them from here, so that adding one is still a row in this file (§15.21).
+pub fn names() -> String {
+    if crate::i18n::ja() {
+        names_ja()
+    } else {
+        names_en()
+    }
 }
 
 /// The names as a person reads them, joined the way the prose does: `A, B and C`.

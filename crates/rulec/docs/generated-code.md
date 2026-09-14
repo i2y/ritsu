@@ -1,7 +1,7 @@
 # The generated code
 
-`rulec gen` writes ordinary Python, TypeScript, Rust, Ruby and Go — a module in each, and a
-package in Go's case. There is no runtime to install and nothing to configure: a function
+`rulec gen` writes ordinary Python, TypeScript, Rust, Ruby, Go and Swift — a module in each,
+and a package in Go's case. There is no runtime to install and nothing to configure: a function
 takes the declared inputs and returns the declared outputs. This file says what shape that
 code has, what it guarantees, and how to call it.
 
@@ -23,8 +23,8 @@ spelling each language gives them, and the errors the code can raise. The shape 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
 TypeScript imports nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
-Go imports `fmt`. The `go.mod` lists nothing
-but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
+Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`.
+The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim.
 
 **Deterministic.** The same `.rule` and the same rulec version produce the same bytes. The
@@ -38,9 +38,11 @@ condition that an earlier branch already settled is still written out (`elif Tru
 reading the generated code against the rule side by side is the only way it is meant to be
 read.
 
-**Units live in the type.** Python uses `NewType`, Go a defined type. `YenInclTax` and
-`YenExclTax` are different types, and mixing them fails to compile in Go and fails type
-checking in Python. Every value is an integer in its declared unit; no floating point appears
+**Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
+Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
+`NewType`; Ruby is the one target with nowhere to put a unit, so it documents it instead.
+`YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
+Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
 anywhere.
 
 **Rounding is explicit and settled for negatives too.** Python's `//` rounds toward −∞ and
@@ -153,9 +155,9 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike the other three languages. A value of a
-Rust enum type is one of its variants by construction, so the check the others have to make
-at run time is already made by the compiler.
+**There is no entry guard on an enum input**, unlike Python, TypeScript, Ruby and Go. A value
+of a Rust enum type is one of its variants by construction, so the check the others have to
+make at run time is already made by the compiler. Swift is in the same position.
 
 Errors come back as `Err(RuleError)`, whose two variants carry the same distinction as
 Python's two exception classes: `RuleError::Input` is a contract violation by the caller, and
@@ -248,6 +250,56 @@ the Japanese name) and `ParseXxx(string)`.
 
 Go returns an `error` where Python raises. A contract violation and a contradiction in the
 rule both arrive as an `error`; the message says which.
+
+### Swift
+
+```swift
+func couponStep(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: Bool) throws -> Output
+```
+
+Every number is an `Int64`, which is the type the overflow proof (E108) is stated in — `Int`
+is the platform's word and only happens to be 64 bits everywhere Swift runs today. A unit is
+a struct with one stored property over it — `public struct YenInclTax { public var value:
+Int64 }` — which Swift lays out as the integer itself, so the compiler refuses a
+tax-exclusive amount where a tax-inclusive one was meant at no run-time cost, exactly as
+Rust's newtype does. Construct one with `YenInclTax(10000)` and read it back with `.value`.
+
+```swift
+let out = try couponStep(
+    subtotal: YenInclTax(10000),
+    applied: YenInclTax(0),
+    kind: .percent,
+    rate: Rate(10),
+    face: YenInclTax(0),
+    dup: false
+)
+print(out.ok, out.raw.value)   // true 1000
+```
+
+Identifiers are in Swift's own spelling: the function, the parameters and the enum members
+are the aliases in lowerCamelCase (`shipping_fee` becomes `shippingFee`), and an alias that
+lands on one of the language's keywords is written in backticks. `rulec api` states the
+spelling it used, so nothing has to be guessed. Types keep their PascalCase.
+
+An enum is a `String`-backed Swift enum whose raw value *is* the source name — which is also
+what the wire format carries — so `.rawValue` and `init?(rawValue:)` are the whole conversion
+in both directions and no parser is generated. It is `CaseIterable`, so `.allCases` is the
+list. **There is no entry guard on an enum input**, for the reason given under Rust.
+
+With one output the function returns that value; with two or more it returns a struct named
+`Output`. Both it and the brands are `Hashable` and `Sendable`, and `Output` declares a public
+memberwise initializer, since the one Swift writes for a public struct is internal and a
+caller in another module could not reach it.
+
+Errors are thrown rather than returned: `RuleError.input` is a contract violation by the
+caller and `RuleError.contradiction` is the runtime guard described below — the same split as
+Python's two exception classes. `RuleError` is `CustomStringConvertible`, so printing one
+gives the message.
+
+It compiles with `swiftc` alone — `swiftc coupon_step.swift coupon_step_runner.swift -o
+coupon_step` builds the rule and its runner together, with no `Package.swift` and nothing to
+fetch. The runner carries `@main` rather than being called `main.swift`, because top-level
+code is only allowed in a file of that name and the rule has to be able to sit beside it.
 
 ---
 
