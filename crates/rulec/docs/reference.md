@@ -89,7 +89,7 @@ optionally followed by a multiplier and then a unit:
 | part | values |
 |---|---|
 | multiplier | `万` (10⁴), `億` (10⁸), `兆` (10¹²) |
-| unit | `円` `銭` (money) · `g` `kg` (mass) · `cm` `m` (length) · `%` (rate) |
+| unit | mass `mg` `g` `kg` `t` `oz` `lb` · length `mm` `cm` `m` `km` `in` `ft` `yd` `mi` · rate `%` · money `円` `銭`, or an ISO 4217 code, whose hundredth is that code plus `c` (`USD` and `USDc`). **Two currencies never convert**: there is no exchange rate here, so mixing them is E103 |
 
 `1000万円` is 10,000,000 yen. **A number in a cell must carry its unit**: a bare `2000` where
 a quantity is expected is an error. `2kg` and `2000g` are the same value; the stored integer

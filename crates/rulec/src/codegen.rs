@@ -27,10 +27,20 @@ fn brand_of(ty: &Ty) -> String {
             format!("{c}{t}")
         }
         Ty::Qty { unit, .. } => match unit.as_str() {
+            "mg" => "Milligram".into(),
             "g" => "Gram".into(),
             "kg" => "Kilogram".into(),
+            "t" => "Tonne".into(),
+            "oz" => "Ounce".into(),
+            "lb" => "Pound".into(),
+            "mm" => "Millimeter".into(),
             "cm" => "Cm".into(),
             "m" => "Meter".into(),
+            "km" => "Kilometer".into(),
+            "in" => "Inch".into(),
+            "ft" => "Foot".into(),
+            "yd" => "Yard".into(),
+            "mi" => "Mile".into(),
             other => other.into(),
         },
         Ty::Rate => "Rate".into(),

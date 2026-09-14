@@ -114,7 +114,11 @@ fn is_delim(c: char) -> bool {
 /// Unit suffixes a numeric literal may carry (§2.1). `万`/`億` are multipliers and
 /// are consumed before this.
 fn is_unit_char(c: char) -> bool {
-    matches!(c, '円' | '銭' | 'g' | 'k' | 'c' | 'm' | '%' | '％')
+    // Any ASCII letter, so that a currency code is one token: with a whitelist of the seven
+    // characters the metric units happened to need, `5USD` split into `5` and `USD` and
+    // stopped at E014 — as a cell with two words in it, which says nothing about the cause.
+    // An unknown run is a unit that is not known, and is reported as one.
+    c.is_ascii_alphabetic() || matches!(c, '円' | '銭' | '%' | '％')
 }
 
 pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {

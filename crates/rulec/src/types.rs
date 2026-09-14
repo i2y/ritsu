@@ -61,17 +61,89 @@ impl Ty {
     }
 }
 
-/// (dimension, factor to the dimension's base unit)
-fn unit_info(u: &str) -> Option<(&'static str, Rat)> {
-    Some(match u {
+/// The currencies a literal may be written in, as ISO 4217 codes. A closed set on purpose:
+/// with any identifier allowed, `100lbs` would pass as an amount in a currency called
+/// "lbs". Each also has a hundredth, spelled by appending `c` — `USD` and `USDc` — which is
+/// the relation `円` already had to `銭`, and `mass[kg]` to `mass[g]`.
+pub const CURRENCIES: &[&str] = &[
+    "USD", "EUR", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "HKD", "SGD", "KRW", "INR",
+    "TWD", "THB", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "TRY", "BRL", "MXN", "ZAR",
+    "AED", "SAR", "ILS", "PHP", "IDR", "MYR", "VND",
+];
+
+/// A money unit → (the currency it belongs to, its factor to that currency's main unit).
+///
+/// **Two currencies never convert into one another.** There is no exchange rate in this
+/// tool and there must not be one, so the currency is the dimension rather than a brand
+/// inside a single "money" dimension. Mixing them is E103, exactly like adding grams to
+/// yen.
+fn money_unit(u: &str) -> Option<(String, Rat)> {
+    match u {
+        "円" | "JPY" => Some(("円".into(), Rat::int(1))),
+        "銭" => Some(("円".into(), Rat::new(1, 100))),
+        _ if CURRENCIES.contains(&u) => Some((u.to_string(), Rat::int(1))),
+        _ => {
+            let base = u.strip_suffix('c')?;
+            CURRENCIES.contains(&base).then(|| (base.to_string(), Rat::new(1, 100)))
+        }
+    }
+}
+
+/// (dimension, factor to that dimension's base unit). A currency is its own dimension, so
+/// the name is `money/<currency>`; everything else is the dimension it belongs to.
+///
+/// The imperial factors are exact rationals (a pound is 453.59237 g on the nose), so they
+/// cost nothing in precision. What they do cost is scale: `1lb` in a `mass[g]` column is
+/// not a whole number of grams and is refused, which is right — a pound is not writable in
+/// a column that counts grams.
+fn unit_info(u: &str) -> Option<(String, Rat)> {
+    if let Some((cur, f)) = money_unit(u) {
+        return Some((format!("{}/{cur}", crate::kw::MONEY), f));
+    }
+    let (dim, f) = match u {
+        "mg" => (crate::kw::MASS, Rat::new(1, 1000)),
         "g" => (crate::kw::MASS, Rat::int(1)),
         "kg" => (crate::kw::MASS, Rat::int(1000)),
+        "t" => (crate::kw::MASS, Rat::int(1_000_000)),
+        "oz" => (crate::kw::MASS, Rat::new(28_349_523_125, 1_000_000_000)),
+        "lb" => (crate::kw::MASS, Rat::new(45_359_237, 100_000)),
+        "mm" => (crate::kw::LENGTH, Rat::new(1, 10)),
         "cm" => (crate::kw::LENGTH, Rat::int(1)),
         "m" => (crate::kw::LENGTH, Rat::int(100)),
-        "円" => (crate::kw::MONEY, Rat::int(1)),
-        "銭" => (crate::kw::MONEY, Rat::new(1, 100)),
+        "km" => (crate::kw::LENGTH, Rat::int(100_000)),
+        "in" => (crate::kw::LENGTH, Rat::new(254, 100)),
+        "ft" => (crate::kw::LENGTH, Rat::new(3048, 100)),
+        "yd" => (crate::kw::LENGTH, Rat::new(9144, 100)),
+        "mi" => (crate::kw::LENGTH, Rat::new(1_609_344, 10)),
         "%" => (crate::kw::RATE, Rat::new(1, 100)),
         _ => return None,
+    };
+    Some((dim.to_string(), f))
+}
+
+/// Every unit a literal may carry, for the message that names them when one is not known.
+/// The currencies are given as the rule rather than as thirty-one codes: a list that long
+/// in a diagnostic is skipped, and the rule is what the reader has to know anyway.
+pub fn units() -> String {
+    tr!(
+        "質量 mg g kg t oz lb · 長さ mm cm m km in ft yd mi · 率 % · 金額 円 銭、\
+         または ISO 4217 のコード（その 1/100 はコードに c を付ける。USD と USDc）",
+        "mass mg g kg t oz lb · length mm cm m km in ft yd mi · rate % · money 円 銭, \
+         or an ISO 4217 code (its hundredth is the code plus c: USD and USDc)"
+    )
+}
+
+/// The note a numeric literal gets when its suffix is not a unit at all. Without it, E103
+/// says only that the value does not fit the column, which for a typo in the unit is the
+/// one thing the reader already knows.
+fn unit_note(n: &crate::lex::Num) -> Option<String> {
+    let u = n.unit.as_deref()?;
+    unit_info(u).is_none().then(|| {
+        tr!(
+            "`{u}` は単位ではありません。書けるのは {} です。",
+            "`{u}` is not a unit. These are all of them: {}.",
+            units()
+        )
     })
 }
 
@@ -170,7 +242,12 @@ fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     // is not a value of `money[円]` at all.
     let whole = |v: Rat| if v.is_int() { Some(v) } else { None };
     match want {
-        Ty::Money { .. } if dim == crate::kw::MONEY => whole(v.mul(f)),
+        // Money goes through the declared unit's factor exactly as a quantity does. It did
+        // not use to, which made `money[銭]` read `5円` as 5 rather than 500.
+        Ty::Money { cur, .. } => {
+            let (d, fd) = unit_info(cur)?;
+            (dim == d).then(|| whole(v.mul(f).div(fd)))?
+        }
         Ty::Qty { dim: d, unit: du } if dim == *d => {
             let (_, fd) = unit_info(du)?;
             whole(v.mul(f).div(fd))
@@ -183,9 +260,11 @@ fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
 /// Type of a numeric literal read on its own, before any expectation.
 fn lit_ty(n: &crate::lex::Num) -> Ty {
     match n.unit.as_deref().and_then(unit_info) {
-        Some((crate::kw::MONEY, _)) => Ty::Money { cur: n.unit.clone().unwrap(), tax: None },
-        Some((crate::kw::RATE, _)) => Ty::Rate,
-        Some((d, _)) => Ty::Qty { dim: d.to_string(), unit: n.unit.clone().unwrap() },
+        Some((d, _)) if d.starts_with(crate::kw::MONEY) => {
+            Ty::Money { cur: n.unit.clone().unwrap(), tax: None }
+        }
+        Some((d, _)) if d == crate::kw::RATE => Ty::Rate,
+        Some((d, _)) => Ty::Qty { dim: d, unit: n.unit.clone().unwrap() },
         // A literal with no unit is a plain number. It used to be "unknown", which unified
         // with anything and let `3` stand where a yen amount was meant.
         None if n.unit.is_none() => Ty::Number,
@@ -301,7 +380,20 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for i in &f.inputs {
         let ty = c.resolve(&i.ty);
         if let Some(r) = &i.range {
-            c.ranges.insert(i.name.text.clone(), bounds_of(r, &ty));
+            let (b, bad) = bounds_of(r, &ty);
+            for n in bad {
+                c.diags.push(
+                    Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
+                        .at(at(i.span.line))
+                        .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                        .maybe_note(unit_note(&n))
+                        .note(tr!(
+                            "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります（§2.2）。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                            "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code (§2.2). Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
+                        )),
+                );
+            }
+            c.ranges.insert(i.name.text.clone(), b);
         }
         c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
         c.syms.insert(
@@ -897,7 +989,8 @@ impl Checked {
                         None => self.diags.push(
                             Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
                                 .at(at(row.span.line))
-                                .mark(osp.clone(), ""),
+                                .mark(osp.clone(), "")
+                                .maybe_note(unit_note(n)),
                         ),
                         Some(v) => {
                             // §2.4: a tool that silently snaps to the declared rounding defeats
@@ -1161,13 +1254,22 @@ fn fmt_val(v: Rat, ty: &Ty) -> String {
 
 /// Lower `range >=a <=b` to an interval. Open bounds are treated as closed (overestimating
 /// is the safe side).
-fn bounds_of(r: &Range, ty: &Ty) -> (Option<Rat>, Option<Rat>) {
+/// Also returns the bounds it could not read. A bound that does not fit its declared type —
+/// `<=1lb` in a column of grams, `<=0.5円` in one of yen — used to be skipped, and the range
+/// came out with one side missing. That side is the universe the completeness proof
+/// quantifies over and the entry guard of the generated code, so losing it in silence is
+/// the worst shape a mistake can take here.
+fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex::Num>) {
     let (mut lo, mut hi) = (None, None);
+    let mut bad = Vec::new();
     for (op, l) in &r.bounds {
         let v = match l {
             Lit::Num(n) => match lit_value_in(n, ty) {
                 Some(v) => v,
-                None => continue,
+                None => {
+                    bad.push(n.clone());
+                    continue;
+                }
             },
             Lit::Date(y, m, d) if *ty == Ty::Date => date_ord(*y, *m, *d),
             _ => continue,
@@ -1177,7 +1279,7 @@ fn bounds_of(r: &Range, ty: &Ty) -> (Option<Rat>, Option<Rat>) {
             CmpOp::Le | CmpOp::Lt => hi = Some(v),
         }
     }
-    (lo, hi)
+    ((lo, hi), bad)
 }
 
 impl Checked {
@@ -1187,7 +1289,15 @@ impl Checked {
     fn derived_range(&mut self, d: &DerivedDecl, ty: &Ty, path: &str) {
         let Some((rl, rh)) = self.interval(&d.expr, ty) else { return };
         let Some(rg) = &d.range else { return };
-        let (dl, dh) = bounds_of(rg, ty);
+        let ((dl, dh), bad) = bounds_of(rg, ty);
+        for n in bad {
+            self.diags.push(
+                Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
+                    .at(format!("{path}:{}", d.span.line))
+                    .mark(d.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                    .maybe_note(unit_note(&n)),
+            );
+        }
         let too_low = matches!((dl, Some(rl)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Less);
         let too_high = matches!((dh, Some(rh)), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater);
         if too_low || too_high {
@@ -1311,11 +1421,11 @@ impl Checked {
                 // The scale has to be one at which the literal is a whole number. A decimal
                 // moves it by a power of ten: `0.5%` is 1/200, so 100 would not clear it.
                 let d = 10i128.checked_pow(u32::try_from(n.frac.len()).ok()?)?;
-                Some(d * match n.unit.as_deref() {
-                    Some("%") => 100,
-                    Some("銭") => 100,
-                    _ => 1,
-                })
+                // A unit finer than its dimension's base carries its own factor: `%` and
+                // `銭` are hundredths, `USDc` too, `mm` a tenth. The denominator of that
+                // factor is the scale at which the literal is a whole number.
+                let u = n.unit.as_deref().and_then(unit_info).map_or(1, |(_, f)| f.den);
+                Some(d * u)
             }
             Expr::Bin(l, op, r, _) => {
                 let a = self.scale(l)?;

@@ -216,6 +216,14 @@ impl Diag {
         self
     }
 
+    /// A note that is only sometimes there, so the caller does not have to branch.
+    pub fn maybe_note(self, n: Option<String>) -> Self {
+        match n {
+            Some(n) => self.note(n),
+            None => self,
+        }
+    }
+
     pub fn note(mut self, n: impl Into<String>) -> Self {
         let n = n.into();
         if !n.is_empty() {
