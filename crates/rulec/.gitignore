@@ -1,1 +1,8 @@
 /target
+
+# ruff writes its own .gitignore inside this directory, so it is already
+# ignored — but only for as long as that file is there. Say it here too.
+/.ruff_cache
+
+# Finder leaves these behind, and `git add -A` would take them.
+.DS_Store
