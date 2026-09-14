@@ -38,6 +38,7 @@ const CORPUS: &[&str] = &[
     "tests/corpus/ポイント付与.rule",
     "tests/corpus/評価ランク.rule",
     "tests/corpus/会員特典.rule",
+    "tests/corpus/ec261.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row

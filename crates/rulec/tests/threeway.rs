@@ -50,6 +50,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/評価ランク.rule", "rank"),
     ("tests/corpus/値引の充当.rule", "allocate"),
     ("tests/corpus/会員特典.rule", "member_perk"),
+    ("tests/corpus/ec261.rule", "ec261"),
 ];
 
 #[test]

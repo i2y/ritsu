@@ -659,3 +659,77 @@ examples
 - **One table may produce several output columns.** `送料表` produces `送料` and `倍率` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `基本点 × 倍率` is rounded exactly once, at the end.
 - **A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.
 - **`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.
+
+## A rule written in English — EU air passenger rights
+
+Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.
+
+```rule
+rule ec261 v1
+description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km を行使する"
+
+# 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
+# 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。
+
+enum band = short | medium | long
+
+inputs
+  distance : length[km]  range >=1km <=20000km
+  intra_eu : bool
+  delay    : number      range >=0 <=48
+
+outputs
+  compensation : money[EUR, incl_tax]  round down(1EUR)
+
+# 7 条 1 項。(a) 1500km 以下、(b) 域内の 1500km 超と、域外の 1500〜3500km、(c) それ以外。
+# 「between 1500 and 3500」が両端を含むかは条文から読めない。(a) が「1500km 以下」なので
+# 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
+table band_of
+policy unique
+| distance          | intra_eu | -> band : band |
+| <=1500km          | -        | short          |
+| >1500km           | true     | medium         |
+| >1500km <=3500km  | false    | medium         |
+| >3500km           | false    | long           |
+
+table amount
+policy unique
+| band   | -> base : money[EUR, incl_tax] |
+| short  | 250EUR                         |
+| medium | 400EUR                         |
+| long   | 600EUR                         |
+
+# 7 条 2 項。代替便の到着が (a) 2 時間 (b) 3 時間 (c) 4 時間 を超えなければ 5 割にできる。
+# 条文の (a)(b)(c) は 1 項の距離の条件をそのまま書き直しているので、ここでも帯ではなく
+# 距離で引く。帯で引くと二行の表で済むが、そのぶん「どの距離なら 4 時間か」が条文から
+# 一段遠くなる。
+table reduction
+policy unique
+| distance         | intra_eu | delay | -> factor : rate[step 50%] |
+| <=1500km         | -        | <=2   | 50%                        |
+| <=1500km         | -        | >2    | 100%                       |
+| >1500km          | true     | <=3   | 50%                        |
+| >1500km          | true     | >3    | 100%                       |
+| >1500km <=3500km | false    | <=3   | 50%                        |
+| >1500km <=3500km | false    | >3    | 100%                       |
+| >3500km          | false    | <=4   | 50%                        |
+| >3500km          | false    | >4    | 100%                       |
+
+result compensation = base × factor
+
+examples
+| distance | intra_eu | delay | -> compensation |
+| 900km    | true     | 5     | 250EUR          |
+| 900km    | true     | 2     | 125EUR          |
+| 2000km   | true     | 5     | 400EUR          |
+| 3000km   | false    | 3     | 200EUR          |
+| 6000km   | false    | 5     | 600EUR          |
+| 6000km   | false    | 4     | 300EUR          |
+```
+
+**What this one shows**
+
+- **An ASCII name needs no alias.** A kanji cannot begin an exported Go identifier, which is why `運賃(fee)` carries one; `distance` does not. Write the rule in English and there are no parentheses anywhere.
+- **Two currencies never convert.** `100円` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).
+- **What the text leaves open, the table makes you decide.** Article 7(1)(b) says "between 1500 and 3500 kilometres" and does not say whether either end is included. Since (a) is "1500 kilometres or less", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.
+- **Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.

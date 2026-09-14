@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 7] = [
+const CORPUS: [&str; 8] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -14,6 +14,7 @@ const CORPUS: [&str; 7] = [
     "tests/corpus/期間区分.rule",
     "tests/corpus/適用順序.rule",
     "tests/corpus/クーポン一枚.rule",
+    "tests/corpus/ec261.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -132,11 +133,16 @@ fn 境界の義務は素朴な数え上げと一致する() {
                     continue;
                 }
                 for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                    // `number` belongs here as much as the rest. It was added to the
+                    // language (§15.11) without being added to this list, and no rule in the
+                    // corpus had a `number` column with a comparison in it, so the two
+                    // counters agreed by never looking.
                     let numeric = matches!(
                         c.ty_of(col),
                         Some(rulec::types::Ty::Money { .. })
                             | Some(rulec::types::Ty::Qty { .. })
                             | Some(rulec::types::Ty::Rate)
+                            | Some(rulec::types::Ty::Number)
                             | Some(rulec::types::Ty::Date)
                     );
                     if !numeric {
@@ -182,6 +188,7 @@ fn 義務の件数を固定する() {
         ("tests/corpus/期間区分.rule", 4, 6, 0),
         ("tests/corpus/適用順序.rule", 4, 0, 5),
         ("tests/corpus/クーポン一枚.rule", 7, 1, 3),
+        ("tests/corpus/ec261.rule", 15, 23, 0),
     ];
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
     for (rel, rows, bounds, shadows) in PINNED {

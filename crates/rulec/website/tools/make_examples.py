@@ -220,6 +220,25 @@ EXAMPLES = [
             "**`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.",
         ],
     ),
+    (
+        "ec261.rule",
+        "英語で書いた規則 — EU 旅客権利規則",
+        "名前もセルも英語なので、ASCII 別名が一つも出てきません。金額は EUR、距離は km です。公開されている法令（(EC) No 261/2004 第 7 条）の転記で、条文そのものが決定表の形をしています。",
+        [
+            "**ASCII の名前には別名が要りません。** 漢字は Go の公開識別子になれないので `運賃(fee)` のような別名が要りますが、`distance` にはその必要がありません。英語で書けば、カッコはどこにも出てきません。",
+            "**通貨どうしは換算されません。** `money[EUR]` の列に `100円` を書くと E103 で止まります。為替レートはこの道具の中に無く、あってはいけないものだからです（[単位の一覧](reference.md)）。",
+            "**条文が決めていないことを、表が決めさせます。** 第 7 条 1 項の (b) は「between 1500 and 3500 kilometres」で、両端を含むかが読めません。(a) が「1500km 以下」なので下端は開く、とここで決めています。決めなければ抜けか重なりで止まるので、**あいまいなまま先へは進めません**。",
+            "**同じ条件を二度書くほうが正しいこともあります。** 5 割引きの閾値（2 / 3 / 4 時間）は帯で引けば二列で済みますが、条文の 2 項は距離の条件を丸ごと書き直しています。ここでも距離で引いたのは、そのほうが原文と行が一対一で並ぶからです。",
+        ],
+        "A rule written in English — EU air passenger rights",
+        "Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.",
+        [
+            "**An ASCII name needs no alias.** A kanji cannot begin an exported Go identifier, which is why `運賃(fee)` carries one; `distance` does not. Write the rule in English and there are no parentheses anywhere.",
+            "**Two currencies never convert.** `100円` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).",
+            "**What the text leaves open, the table makes you decide.** Article 7(1)(b) says \"between 1500 and 3500 kilometres\" and does not say whether either end is included. Since (a) is \"1500 kilometres or less\", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.",
+            "**Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.",
+        ],
+    ),
 ]
 
 JA_HEAD = """# 例で見る
@@ -243,13 +262,13 @@ They are ordered smallest first.
 
 JA_TAIL = """---
 
-[表を書く](tour.md){ .md-button .md-button--primary }
+[表(.rule)を書く](tour.md){ .md-button .md-button--primary }
 [文法](reference.md){ .md-button }
 """
 
 EN_TAIL = """---
 
-[Write a table](tour.md){ .md-button .md-button--primary }
+[Write a table (.rule)](tour.md){ .md-button .md-button--primary }
 [Grammar](reference.md){ .md-button }
 """
 

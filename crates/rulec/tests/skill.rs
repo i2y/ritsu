@@ -59,8 +59,15 @@ fn スキルはいまの文書から組み立てたものと同じ() {
         "skills/rulec/reference.md が古いです。`skills/sync.sh` で作り直してください"
     );
     // The examples page loses the site's own navigation buttons.
+    // Cut where the buttons point, not at what they are labelled: the label has been
+    // renamed once, and matching on it made this test fail for the wrong reason.
     let want = read("website/docs/examples.md");
-    let want = want.split("\n[Write a table (.rule)](tour.md)").next().unwrap();
+    let want = want
+        .lines()
+        .take_while(|l| !(l.starts_with('[') && l.contains("](tour.md)")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let want = want.as_str();
     assert_eq!(
         read("skills/rulec/examples.md").trim_end(),
         want.trim_end().trim_end_matches("---").trim_end(),

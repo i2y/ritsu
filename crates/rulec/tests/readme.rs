@@ -103,7 +103,7 @@ fn readmeが言う件数は実物と合っている() {
     let want = format!(
         "{} rules taken from real published terms are checked, generated and run on every commit, and all {codes} diagnostics are implemented.",
         match corpus {
-            12 => "Twelve".to_string(),
+            13 => "Thirteen".to_string(),
             n => n.to_string(),
         }
     );

@@ -1,0 +1,60 @@
+rule ec261 v1
+description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km を行使する"
+
+# 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
+# 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。
+
+enum band = short | medium | long
+
+inputs
+  distance : length[km]  range >=1km <=20000km
+  intra_eu : bool
+  delay    : number      range >=0 <=48
+
+outputs
+  compensation : money[EUR, incl_tax]  round down(1EUR)
+
+# 7 条 1 項。(a) 1500km 以下、(b) 域内の 1500km 超と、域外の 1500〜3500km、(c) それ以外。
+# 「between 1500 and 3500」が両端を含むかは条文から読めない。(a) が「1500km 以下」なので
+# 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
+table band_of
+policy unique
+| distance          | intra_eu | -> band : band |
+| <=1500km          | -        | short          |
+| >1500km           | true     | medium         |
+| >1500km <=3500km  | false    | medium         |
+| >3500km           | false    | long           |
+
+table amount
+policy unique
+| band   | -> base : money[EUR, incl_tax] |
+| short  | 250EUR                         |
+| medium | 400EUR                         |
+| long   | 600EUR                         |
+
+# 7 条 2 項。代替便の到着が (a) 2 時間 (b) 3 時間 (c) 4 時間 を超えなければ 5 割にできる。
+# 条文の (a)(b)(c) は 1 項の距離の条件をそのまま書き直しているので、ここでも帯ではなく
+# 距離で引く。帯で引くと二行の表で済むが、そのぶん「どの距離なら 4 時間か」が条文から
+# 一段遠くなる。
+table reduction
+policy unique
+| distance         | intra_eu | delay | -> factor : rate[step 50%] |
+| <=1500km         | -        | <=2   | 50%                        |
+| <=1500km         | -        | >2    | 100%                       |
+| >1500km          | true     | <=3   | 50%                        |
+| >1500km          | true     | >3    | 100%                       |
+| >1500km <=3500km | false    | <=3   | 50%                        |
+| >1500km <=3500km | false    | >3    | 100%                       |
+| >3500km          | false    | <=4   | 50%                        |
+| >3500km          | false    | >4    | 100%                       |
+
+result compensation = base × factor
+
+examples
+| distance | intra_eu | delay | -> compensation |
+| 900km    | true     | 5     | 250EUR          |
+| 900km    | true     | 2     | 125EUR          |
+| 2000km   | true     | 5     | 400EUR          |
+| 3000km   | false    | 3     | 200EUR          |
+| 6000km   | false    | 5     | 600EUR          |
+| 6000km   | false    | 4     | 300EUR          |

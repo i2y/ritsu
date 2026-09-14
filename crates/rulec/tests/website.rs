@@ -196,7 +196,9 @@ fn 例のページの規則はコーパスと一字一句同じ() {
                 .lines()
                 .next()
                 .and_then(|l| l.strip_prefix("rule "))
-                .and_then(|l| l.split('(').next())
+                // `rule 送料例(fee_demo) v1`, or `rule ec261 v1` when the name is already
+                // ASCII and needs no alias.
+                .and_then(|l| l.split(['(', ' ']).next())
                 .unwrap_or_else(|| panic!("{lang}: 規則の行で始まっていない: {b}"));
             let want = read(&format!("tests/corpus/{name}.rule"));
             assert_eq!(

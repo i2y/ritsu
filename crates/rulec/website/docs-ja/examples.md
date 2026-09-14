@@ -657,6 +657,80 @@ examples
 - **`derive` が列になります。** `支払額 = 商品合計 − 値引` を宣言してあるので、「値引き後の金額で判定する」が一本の式ではなく `送料表` の一つの列になります。
 - **`result` が組み立てるのは最初の出力だけです**（E015）。二つ目からは、その出力と同じ名前の `define` から取ります — ここでは `define 付与点`。`result` を二本書くと E016 で止まります。
 
+## 英語で書いた規則 — EU 旅客権利規則
+
+名前もセルも英語なので、ASCII 別名が一つも出てきません。金額は EUR、距離は km です。公開されている法令（(EC) No 261/2004 第 7 条）の転記で、条文そのものが決定表の形をしています。
+
+```rule
+rule ec261 v1
+description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km を行使する"
+
+# 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
+# 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。
+
+enum band = short | medium | long
+
+inputs
+  distance : length[km]  range >=1km <=20000km
+  intra_eu : bool
+  delay    : number      range >=0 <=48
+
+outputs
+  compensation : money[EUR, incl_tax]  round down(1EUR)
+
+# 7 条 1 項。(a) 1500km 以下、(b) 域内の 1500km 超と、域外の 1500〜3500km、(c) それ以外。
+# 「between 1500 and 3500」が両端を含むかは条文から読めない。(a) が「1500km 以下」なので
+# 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
+table band_of
+policy unique
+| distance          | intra_eu | -> band : band |
+| <=1500km          | -        | short          |
+| >1500km           | true     | medium         |
+| >1500km <=3500km  | false    | medium         |
+| >3500km           | false    | long           |
+
+table amount
+policy unique
+| band   | -> base : money[EUR, incl_tax] |
+| short  | 250EUR                         |
+| medium | 400EUR                         |
+| long   | 600EUR                         |
+
+# 7 条 2 項。代替便の到着が (a) 2 時間 (b) 3 時間 (c) 4 時間 を超えなければ 5 割にできる。
+# 条文の (a)(b)(c) は 1 項の距離の条件をそのまま書き直しているので、ここでも帯ではなく
+# 距離で引く。帯で引くと二行の表で済むが、そのぶん「どの距離なら 4 時間か」が条文から
+# 一段遠くなる。
+table reduction
+policy unique
+| distance         | intra_eu | delay | -> factor : rate[step 50%] |
+| <=1500km         | -        | <=2   | 50%                        |
+| <=1500km         | -        | >2    | 100%                       |
+| >1500km          | true     | <=3   | 50%                        |
+| >1500km          | true     | >3    | 100%                       |
+| >1500km <=3500km | false    | <=3   | 50%                        |
+| >1500km <=3500km | false    | >3    | 100%                       |
+| >3500km          | false    | <=4   | 50%                        |
+| >3500km          | false    | >4    | 100%                       |
+
+result compensation = base × factor
+
+examples
+| distance | intra_eu | delay | -> compensation |
+| 900km    | true     | 5     | 250EUR          |
+| 900km    | true     | 2     | 125EUR          |
+| 2000km   | true     | 5     | 400EUR          |
+| 3000km   | false    | 3     | 200EUR          |
+| 6000km   | false    | 5     | 600EUR          |
+| 6000km   | false    | 4     | 300EUR          |
+```
+
+**この例が見せていること**
+
+- **ASCII の名前には別名が要りません。** 漢字は Go の公開識別子になれないので `運賃(fee)` のような別名が要りますが、`distance` にはその必要がありません。英語で書けば、カッコはどこにも出てきません。
+- **通貨どうしは換算されません。** `money[EUR]` の列に `100円` を書くと E103 で止まります。為替レートはこの道具の中に無く、あってはいけないものだからです（[単位の一覧](reference.md)）。
+- **条文が決めていないことを、表が決めさせます。** 第 7 条 1 項の (b) は「between 1500 and 3500 kilometres」で、両端を含むかが読めません。(a) が「1500km 以下」なので下端は開く、とここで決めています。決めなければ抜けか重なりで止まるので、**あいまいなまま先へは進めません**。
+- **同じ条件を二度書くほうが正しいこともあります。** 5 割引きの閾値（2 / 3 / 4 時間）は帯で引けば二列で済みますが、条文の 2 項は距離の条件を丸ごと書き直しています。ここでも距離で引いたのは、そのほうが原文と行が一対一で並ぶからです。
+
 ---
 
 [表(.rule)を書く](tour.md){ .md-button .md-button--primary }

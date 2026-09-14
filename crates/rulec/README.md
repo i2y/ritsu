@@ -245,15 +245,16 @@ website/          the documentation site (Zensical): docs/ English, docs-ja/ Jap
 skills/rulec/     an agent skill for using rulec — copy it into .claude/skills/
 src/              25 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, vectors, coverage, verify, fixtures, replay, report, doc
-tests/corpus/     12 rules transcribed from real published terms
+tests/corpus/     13 rules transcribed from real published terms
 tests/mutants/    19 files, each with one mistake planted in it
 tests/golden/     21 snapshots of diagnostic prose, in both languages
 tests/            and the properties: threeway (every language agrees), readme, docs,
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget
 ```
 
-Every one of those twelve rules comes from **public information** — Japan Post's tariff, Yamato's
-size classes, the coupon terms of Rakuten and Yahoo. None of it is private data.
+Every one of those thirteen rules comes from **public information** — Japan Post's tariff,
+Yamato's size classes, the coupon terms of Rakuten and Yahoo, and Article 7 of EU Regulation
+261/2004. None of it is private data.
 
 ```console
 $ cargo test          # 200 tests; python3, node, rustc and go are used where present
@@ -261,7 +262,7 @@ $ cargo test          # 200 tests; python3, node, rustc and go are used where pr
 
 ## Where it stands
 
-Twelve rules taken from real published terms are checked, generated and run on every commit, and all 35 diagnostics are implemented. What is built:
+Thirteen rules taken from real published terms are checked, generated and run on every commit, and all 35 diagnostics are implemented. What is built:
 
 | | |
 |---|---|
