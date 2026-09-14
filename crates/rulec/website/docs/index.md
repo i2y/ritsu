@@ -36,8 +36,8 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=209d2628#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Remote, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=209d2628#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview.svg?v=f5934725#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, Rust and Go](images/overview-light.svg?v=f5934725#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
@@ -88,9 +88,9 @@ makes it or takes it. Every arrow runs card → sheet or sheet → card, so
 **who produces what, and who consumes it** is the geometry itself rather
 than a caption.
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow.svg?v=209d2628#only-dark)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow.svg?v=f5934725#only-dark)
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow-light.svg?v=209d2628#only-light)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come proved functions in three languages, and the impact known before you deploy](images/flow-light.svg?v=f5934725#only-light)
 
 Three colours, three paths: **grey** for what enters and leaves the whole
 system, **indigo** for the loop between the agent and rulec, **amber** for
@@ -176,8 +176,8 @@ Because a cell can only see its own column, **tables stack as deep as you like**
 table produces is written as a column of the next.
 
 <div class="rc-overview" markdown>
-![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack.svg?v=209d2628#only-dark)
-![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack-light.svg?v=209d2628#only-light)
+![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack.svg?v=f5934725#only-dark)
+![Tables stack as deep as needed: 重さ判定 turns 重量 into 区分, which is a column of 帯判定, whose 帯 is a column of 送料表. The derived 支払額 comes in as a column too, and the last table produces 送料 and 倍率 at once, which become 請求額 and 付与点](images/stack-light.svg?v=f5934725#only-light)
 </div>
 
 What to look at is **the word that appears twice**. `区分` leaves the first table and arrives
@@ -223,7 +223,7 @@ A table holds **the branching and nothing else**. Arithmetic lives in three plac
 (E015); the rest are taken from a `define` of the same name as the output. A second `result`
 line stops at E016.
 
-**Most numbers you return carry a unit.** The numeric types are **quantity (g, cm),
+**Most numbers you return carry a unit.** The numeric types are **quantity (mass, length),
 money and rate**, plus `number` for the ones that carry none — a count of things, a
 number of days, a score. Numbers with a unit and numbers without do not mix, and the
 only way a unit disappears is dividing money by money: "one point per 100 yen" is a
@@ -386,8 +386,8 @@ and whether an earlier row takes a later row's stretch first. Same table in all 
 thing changed.
 
 <div class="rc-overview" markdown>
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=209d2628#only-dark)
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=209d2628#only-light)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=f5934725#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=f5934725#only-light)
 </div>
 
 The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They

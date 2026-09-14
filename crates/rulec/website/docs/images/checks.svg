@@ -10,24 +10,24 @@
 <text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy unique</text>
 <rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
 <rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">8USD</text>
 <rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">10USD</text>
 <rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">13USD</text>
 <rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">12USD</text>
 <rect x="192.0" y="104.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">20USD</text>
 <rect x="116.6" y="106.0" width="73.4" height="44.0" rx="3" fill="none" stroke="#e0b45c" stroke-width="1" stroke-dasharray="3 2.5"/>
 <circle cx="125.1" cy="128.0" r="4.5" fill="#e0b45c" stroke="#1e2331" stroke-width="1.5"/>
-<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
-<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Domestic</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Overseas</text>
 <text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
 <text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
 <text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>
 <text x="9" y="190" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">An input that matches no row:</text>
-<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Remote, Weight = 2001g</text>
+<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Overseas, Weight = 2001g</text>
 </g>
 <g transform="translate(376,20)">
 <rect x="0" y="0" width="330" height="222" rx="10" fill="#171b24" stroke="#2b3242"/>
@@ -36,26 +36,26 @@
 <text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy unique</text>
 <rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
 <rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">8USD</text>
 <rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">10USD</text>
 <rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">13USD</text>
 <rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">12USD</text>
 <rect x="114.6" y="104.0" width="206.4" height="24.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="217.8" y="120.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<text x="217.8" y="120.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">20USD</text>
 <rect x="114.6" y="128.0" width="77.4" height="24.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="153.3" y="144.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1500円</text>
+<text x="153.3" y="144.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">15USD</text>
 <rect x="114.6" y="104.0" width="77.4" height="48.0" fill="url(#both)" fill-opacity="0.42" stroke="#e0b45c" stroke-width="1"/>
 <circle cx="125.1" cy="128.0" r="4.5" fill="#e0b45c" stroke="#1e2331" stroke-width="1.5"/>
-<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
-<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Domestic</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Overseas</text>
 <text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
 <text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
 <text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>
 <text x="9" y="190" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Both rows match:</text>
-<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Remote, Weight = 2001g</text>
+<text x="9" y="207" font-size="11" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">Destination = Overseas, Weight = 2001g</text>
 </g>
 <g transform="translate(732,20)">
 <rect x="0" y="0" width="330" height="222" rx="10" fill="#171b24" stroke="#2b3242"/>
@@ -64,20 +64,20 @@
 <text x="9" y="40" font-size="10" font-weight="400" text-anchor="start" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">policy first</text>
 <rect x="63" y="56" width="258" height="96" fill="#1e2331" stroke="#3a4257"/>
 <rect x="63.0" y="56.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">800円</text>
+<text x="88.8" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">8USD</text>
 <rect x="114.6" y="56.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1000円</text>
+<text x="153.3" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">10USD</text>
 <rect x="192.0" y="56.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1300円</text>
+<text x="256.5" y="84.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">13USD</text>
 <rect x="63.0" y="104.0" width="51.599999999999994" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">1200円</text>
+<text x="88.8" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">12USD</text>
 <rect x="192.0" y="104.0" width="129.0" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
-<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">2000円</text>
+<text x="256.5" y="132.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#98a1b8">20USD</text>
 <rect x="114.6" y="104.0" width="77.4" height="48.0" fill="#8e9cff" fill-opacity="0.16" stroke="#8e9cff" stroke-opacity="0.7"/>
 <rect x="127.5" y="110.0" width="51.599999999999994" height="36.0" rx="3" fill="url(#dead)" fill-opacity="0.5" stroke="#6b7590" stroke-width="1" stroke-dasharray="3 2.5"/>
 <text x="153.3" y="131.5" font-size="10" font-weight="400" text-anchor="middle" fill="#98a1b8">row 7</text>
-<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Kinki</text>
-<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Remote</text>
+<text x="55" y="84.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Domestic</text>
+<text x="55" y="132.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">Overseas</text>
 <text x="111.6" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">2kg</text>
 <text x="189.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">5kg</text>
 <text x="318.0" y="166" font-size="10.5" font-weight="400" text-anchor="end" fill="#98a1b8">10kg</text>

@@ -3,24 +3,27 @@
 # rulec check reports the witness the picture shows; with it, rulec gen
 # writes the code on the right-hand sheet. The amount in that row is a
 # placeholder, which is the point - the tool never invents one.
+#
+# The weights are the same numbers as overview-ja.rule, because the two
+# languages draw the same boxes on the same plane; only the words differ.
 
 rule Fee(fee) v1
 
-enum Zone(zone) = Kinki(kinki) | Remote(remote)
+enum Zone(zone) = Domestic(domestic) | Overseas(overseas)
 
 inputs
   Destination(dest) : Zone
   Weight(weight)    : mass[g]  range >=1g <=10kg
 
 outputs
-  Fee(fee) : money[円, incl_tax]  round up(10円)
+  Fee(fee) : money[USD, incl_tax]  round up(1USD)
 
 table FeeTable(fee_table)
 policy unique
-| Destination | Weight     | -> Fee(fee) : money[円, incl_tax] |
-| Kinki       | <=2kg      | 800円                             |
-| Kinki       | >2kg <=5kg | 1000円                            |
-| Kinki       | >5kg       | 1300円                            |
-| Remote      | <=2kg      | 1200円                            |
-| Remote      | >5kg       | 2000円                            |
-| Remote      | >2kg <=5kg | 1500円                            |
+| Destination | Weight     | -> Fee(fee) : money[USD, incl_tax] |
+| Domestic    | <=2kg      | 8USD                               |
+| Domestic    | >2kg <=5kg | 10USD                              |
+| Domestic    | >5kg       | 13USD                              |
+| Overseas    | <=2kg      | 12USD                              |
+| Overseas    | >5kg       | 20USD                              |
+| Overseas    | >2kg <=5kg | 15USD                              |

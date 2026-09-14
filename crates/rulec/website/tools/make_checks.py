@@ -29,6 +29,7 @@ import sys
 
 from diagram import (DARK, LIGHT, FONT, PAD, LINE_W, width, fit, esc, text,
                      sheet_title)
+from make_overview import EN as OV_EN, JA as OV_JA, table_of
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -43,7 +44,7 @@ JA = dict(
         "重なり(E105)は、policy unique の表で二つの行が同じ範囲を覆っていること。"
         "当てはまらない行(E102)は、policy first の表で先の行がその行の範囲を先に全部取ること。"
         "どれも同じ区画の計算で決まり、抜けと重なりはそれを起こす入力そのものが返る。",
-    bands=("近畿圏", "遠隔地"),
+    bands=OV_JA["bands"], rule="overview-ja.rule",
     panels=[
         ("抜け", "E101", "policy unique",
          [("当てはまらない例:", False), ("あて先 = 遠隔地, 重量 = 2001g", True)]),
@@ -62,13 +63,13 @@ EN = dict(
         "unique. An unreachable row (E102) is a row whose whole stretch the earlier rows "
         "take first, under policy first. All three are decided by the same arithmetic on "
         "the same rectangles, and the first two hand back the input that causes them.",
-    bands=("Kinki", "Remote"),
+    bands=OV_EN["bands"], rule="overview.rule",
     panels=[
         ("Gap", "E101", "policy unique",
          [("An input that matches no row:", False),
-          ("Destination = Remote, Weight = 2001g", True)]),
+          ("Destination = Overseas, Weight = 2001g", True)]),
         ("Overlap", "E105", "policy unique",
-         [("Both rows match:", False), ("Destination = Remote, Weight = 2001g", True)]),
+         [("Both rows match:", False), ("Destination = Overseas, Weight = 2001g", True)]),
         ("Unreachable row", "E102", "policy first",
          [("row 7 never matches", False),
           ("the earlier rows take all of this row's range first", False)]),
@@ -85,7 +86,9 @@ FILES = [("checks", EN, "en"), ("checks-ja", JA, "ja")]      # (name, words, --l
 VARIANTS = (
     "drop the last row",                  # E101
     (">5kg", ">2kg"),                     # E105: the remote >5kg row swallows >2kg <=5kg
-    ("policy unique", "policy first", "| {remote} | >2500g <=4500g | 1600円 |"),   # E102
+    # E102. The amount is copied from the first row: the row is unreachable, so which
+    # amount it carries cannot matter, and copying keeps it in the file's own currency.
+    ("policy unique", "policy first", "| {remote} | >2500g <=4500g | {fee} |"),
 )
 
 # --- geometry ---------------------------------------------------------------
@@ -108,10 +111,37 @@ DEAD_INSET = 6                       # see dead_box
 W = MARGIN * 2 + 3 * PANEL_W + 2 * GAP
 H = MARGIN * 2 + PANEL_H
 
-# The rows of the shared table, as (band index, from kg, to kg, fee). Only the
-# remote band differs between panels, so the kinki band is written once.
-KINKI = [(0, 0, 2, "800円"), (0, 2, 5, "1000円"), (0, 5, 10, "1300円")]
-REMOTE = [(1, 0, 2, "1200円"), (1, 5, 10, "2000円"), (1, 2, 5, "1500円")]
+# The rows of the shared table, as (band index, from kg, to kg). The geometry is the same
+# in both languages — that is the point of the picture — but the amounts are not: the two
+# .rule files behind it are a yen tariff and a dollar one. So the fee of a row is looked up
+# by position in the language's own table, from the same place the opening diagram reads it.
+NEAR = [(0, 0, 2), (0, 2, 5), (0, 5, 10)]
+FAR = [(1, 0, 2), (1, 5, 10), (1, 2, 5)]
+
+
+def fee(t, band, lo, hi):
+    """The amount the language's table puts on that box.
+
+    Read out of the .rule file rather than out of the diagram's own words, because the
+    sixth row is the one the opening diagram draws as missing — its amount there is the
+    placeholder `?`, and two of these three panels are drawn from a table that has it."""
+    for r in table_of(HERE / t["rule"]):
+        b, rlo, rhi = box_of(r, t["bands"])
+        if (b, rlo, rhi) == (band, lo, hi):
+            return r[2]
+    raise KeyError((band, lo, hi))
+
+
+def box_of(row, bands):
+    """The rectangle a row is, read out of its cells — the same reading make_overview does."""
+    band = bands.index(row[0])
+    lo, hi = 0, RANGE
+    for cond in row[1].split():
+        if cond.startswith("<="):
+            hi = float(cond[2:-2])
+        elif cond.startswith(">"):
+            lo = float(cond[1:-2])
+    return band, lo, hi
 
 
 def kg(v):
@@ -198,28 +228,28 @@ def plane(t, c, which):
     px, py, pw, ph = PLANE
     o = [f'<rect x="{px}" y="{py}" width="{pw}" height="{ph}" fill="{c["sheet"]}" '
          f'stroke="{c["sheet_edge"]}"/>']
-    for b, lo, hi, fee in KINKI:
-        o += box(lo, hi, b, fee, c)
+    for b, lo, hi in NEAR:
+        o += box(lo, hi, b, fee(t, b, lo, hi), c)
 
     if which == 0:                                    # E101: the row is not there
-        for b, lo, hi, fee in REMOTE[:2]:
-            o += box(lo, hi, b, fee, c)
+        for b, lo, hi in FAR[:2]:
+            o += box(lo, hi, b, fee(t, b, lo, hi), c)
         o.append(dashed_box(2, 5, 1, c, c["human"]))
         o.append(dot(2, 5, 1, c))
     elif which == 1:                                  # E105: two rows, one stretch
-        o += box(0, 2, 1, "1200円", c)
-        o += lane(2, 10, 1, 0, "2000円", c)            # the widened row
-        o += lane(2, 5, 1, 1, "1500円", c)
+        o += box(0, 2, 1, fee(t, 1, 0, 2), c)
+        o += lane(2, 10, 1, 0, fee(t, 1, 5, 10), c)   # the widened row keeps its own amount
+        o += lane(2, 5, 1, 1, fee(t, 1, 2, 5), c)
         o.append(f'<rect x="{kg(2)}" y="{band_y(1)}" width="{kg(5) - kg(2)}" '
                  f'height="{BAND}" fill="url(#both)" fill-opacity="0.42" '
                  f'stroke="{c["human"]}" stroke-width="1"/>')
         o.append(dot(2, 5, 1, c))
     else:                                             # E102: a row nothing reaches
-        for b, lo, hi, fee in REMOTE:
+        for b, lo, hi in FAR:
             # The row that swallowed it gives up its fee label: the ghost sits
             # on top of exactly that stretch, and two labels in one place is
             # worse than one label missing.
-            o += box(lo, hi, b, "" if (lo, hi) == (2, 5) else fee, c)
+            o += box(lo, hi, b, "" if (lo, hi) == (2, 5) else fee(t, b, lo, hi), c)
         o += dead_box(2.5, 4.5, 1, t["dead"], c)
 
     for b, name in enumerate(t["bands"]):
@@ -285,7 +315,8 @@ def variants(rule):
     over = "".join(over)
 
     dead = "".join(lines).replace("policy unique", "policy first", 1)
-    dead += VARIANTS[2][2].format(remote=remote) + "\n"
+    fee = lines[rows[0]].strip("|\n").split("|")[2].strip()
+    dead += VARIANTS[2][2].format(remote=remote, fee=fee) + "\n"
     return gap, over, dead
 
 

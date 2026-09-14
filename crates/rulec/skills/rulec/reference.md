@@ -123,9 +123,9 @@ Nine, and no others.
 |---|---|---|
 | boolean | `bool` | |
 | enum | the enum's name | a **closed** finite set, declared with `enum` or brought in with `import` |
-| mass | `mass[g]`, `mass[kg]` | the unit is part of the type |
-| length | `length[cm]`, `length[m]` | |
-| money | `money[円, incl_tax]`, `money[円, excl_tax]` | currency **and** tax flag are both part of the type |
+| mass | `mass[g]`, `mass[lb]`, … | the unit is part of the type. `mg` `g` `kg` `t` `oz` `lb` |
+| length | `length[cm]`, `length[in]`, … | `mm` `cm` `m` `km` `in` `ft` `yd` `mi` |
+| money | `money[円, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate`, `rate[step 1%]`, `rate[step 0.1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** |

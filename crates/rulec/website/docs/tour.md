@@ -118,8 +118,8 @@ Eight, and no others.
 |---|---|---|
 | boolean | `bool` | |
 | enum | `会員区分` | a **closed** finite set. Declared with `enum` or brought in with `import` |
-| quantity | `mass[g]` `length[cm]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit |
-| money | `money[円, incl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add |
+| quantity | `mass[g]` `length[cm]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi` |
+| money | `money[円, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]` `rate` | an integer throughout. With a step, the integer counts steps (`10%` is 10); without one, the step comes from the literals in the column |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
