@@ -315,6 +315,24 @@ impl<'a> Gen<'a> {
     }
 }
 
+/// A local for a runner that must not shadow the function the runner has to call.
+///
+/// The TypeScript and Swift runners call the rule by its bare name, in the same scope as
+/// the locals that hold the parsed line. A rule aliased `d` therefore bound the JSON object
+/// to `d` and the call resolved to *that* — a type error in Swift, a runtime one in
+/// TypeScript. Python, Ruby, Rust and Go all qualify the call (`m.d`, `Mod.d`, `r::d`,
+/// `pkg.D`) and never had the problem.
+///
+/// Only the colliding name moves, so the output of every rule that does not collide is
+/// unchanged.
+fn runner_local(base: &str, fname: &str) -> String {
+    let mut n = base.to_string();
+    while n == fname {
+        n.push('_');
+    }
+    n
+}
+
 /// The name of the intermediate that holds one output's value before rounding. One output
 /// keeps the plain `raw` of the example in §8.2; a second needs a name of its own, or the
 /// two assignments would land on the same variable.
@@ -2289,6 +2307,10 @@ impl<'a> Gen<'a> {
 
     pub fn ts_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
+        let d = runner_local("d", &alias);
+        let r = runner_local("r", &alias);
+        let line = runner_local("line", &alias);
+        let lines = runner_local("lines", &alias);
         let mut args: Vec<String> = Vec::new();
         let mut imports: Vec<String> = vec![alias.clone()];
         // A brand is a type, and node's type stripping can only erase a whole `import type`
@@ -2303,17 +2325,17 @@ impl<'a> Gen<'a> {
                     if !imports.contains(&format!("parse{cls}")) {
                         imports.push(format!("parse{cls}"));
                     }
-                    format!("parse{cls}(String(d[{jp:?}]))")
+                    format!("parse{cls}(String({d}[{jp:?}]))")
                 }
-                Ty::Bool => format!("d[{jp:?}] === true"),
-                Ty::Date => format!("_ord(String(d[{jp:?}]))"),
-                Ty::Number => format!("BigInt(d[{jp:?}] as number)"),
+                Ty::Bool => format!("{d}[{jp:?}] === true"),
+                Ty::Date => format!("_ord(String({d}[{jp:?}]))"),
+                Ty::Number => format!("BigInt({d}[{jp:?}] as number)"),
                 _ => {
                     let brand = self.ts_ty(&ty);
                     if !type_imports.contains(&brand) {
                         type_imports.push(brand.clone());
                     }
-                    format!("BigInt(d[{jp:?}] as number) as {brand}")
+                    format!("BigInt({d}[{jp:?}] as number) as {brand}")
                 }
             });
         }
@@ -2329,7 +2351,7 @@ impl<'a> Gen<'a> {
             vec![format!(
                 "{} + \":\" + {}",
                 format!("{:?}", format!("{:?}", od.name.text)).replace("\\\"", "\\\""),
-                one("r", &self.ty_of(&od.name.text))
+                one(&r, &self.ty_of(&od.name.text))
             )]
         } else {
             self.f
@@ -2351,11 +2373,11 @@ impl<'a> Gen<'a> {
              function _ord(s: string): bigint {{\n  \
                  const [y, m, d] = s.split(\"-\").map(Number);\n  \
                  return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));\n}}\n\n\
-             const lines = readFileSync(0, \"utf8\").split(\"\\n\");\n\
-             for (const line of lines) {{\n  \
-                 if (line.trim() === \"\") {{\n    continue;\n  }}\n  \
-                 const d = JSON.parse(line).in as Record<string, unknown>;\n  \
-                 const r = {alias}({});\n  \
+             const {lines} = readFileSync(0, \"utf8\").split(\"\\n\");\n\
+             for (const {line} of {lines}) {{\n  \
+                 if ({line}.trim() === \"\") {{\n    continue;\n  }}\n  \
+                 const {d} = JSON.parse({line}).in as Record<string, unknown>;\n  \
+                 const {r} = {alias}({});\n  \
                  console.log(\"{{\" + [{}].join(\",\") + \"}}\");\n}}\n",
             env!("CARGO_PKG_VERSION"),
             imports.join(", "),
@@ -4781,6 +4803,10 @@ impl<'a> Gen<'a> {
         // own spelling: a plain `shipping_fee(...)` resolves to the *module* and fails to
         // compile, which is how this was found.
         let fname = sw_name(&pub_name(&self.f.name));
+        let d = runner_local("d", &fname);
+        let got = runner_local("got", &fname);
+        let line = runner_local("line", &fname);
+        let root = runner_local("root", &fname);
         let mut args: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
@@ -4789,13 +4815,13 @@ impl<'a> Gen<'a> {
             let v = match &ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("{cls}(rawValue: _s(d, {jp:?}))!")
+                    format!("{cls}(rawValue: _s({d}, {jp:?}))!")
                 }
-                Ty::Str => format!("_s(d, {jp:?})"),
-                Ty::Bool => format!("_b(d, {jp:?})"),
-                Ty::Date => format!("_ord(_s(d, {jp:?}))"),
-                Ty::Number => format!("_n(d, {jp:?})"),
-                _ => format!("{}(_n(d, {jp:?}))", self.sw_ty(&ty)),
+                Ty::Str => format!("_s({d}, {jp:?})"),
+                Ty::Bool => format!("_b({d}, {jp:?})"),
+                Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
+                Ty::Number => format!("_n({d}, {jp:?})"),
+                _ => format!("{}(_n({d}, {jp:?}))", self.sw_ty(&ty)),
             };
             args.push(format!("{label}: {v}"));
         }
@@ -4808,7 +4834,7 @@ impl<'a> Gen<'a> {
         };
         let fields: Vec<String> = if self.f.outputs.len() == 1 {
             let od = &self.f.outputs[0];
-            vec![format!("_q({:?}) + \":\" + {}", od.name.text, one("got", &self.ty_of(&od.name.text)))]
+            vec![format!("_q({:?}) + \":\" + {}", od.name.text, one(&got, &self.ty_of(&od.name.text)))]
         } else {
             self.f
                 .outputs
@@ -4817,7 +4843,7 @@ impl<'a> Gen<'a> {
                     format!(
                         "_q({:?}) + \":\" + {}",
                         od.name.text,
-                        one(&format!("got.{}", sw_name(&pub_name(&od.name))), &self.ty_of(&od.name.text))
+                        one(&format!("{got}.{}", sw_name(&pub_name(&od.name))), &self.ty_of(&od.name.text))
                     )
                 })
                 .collect()
@@ -4829,13 +4855,13 @@ import Foundation
 @main
 enum Runner {{
     static func main() throws {{
-        while let line = readLine(strippingNewline: true) {{
-            if line.trimmingCharacters(in: .whitespaces).isEmpty {{
+        while let {line} = readLine(strippingNewline: true) {{
+            if {line}.trimmingCharacters(in: .whitespaces).isEmpty {{
                 continue
             }}
-            let root = try JSONSerialization.jsonObject(with: Data(line.utf8)) as! [String: Any]
-            let d = root["in"] as! [String: Any]
-            let got = try {fname}({args})
+            let {root} = try JSONSerialization.jsonObject(with: Data({line}.utf8)) as! [String: Any]
+            let {d} = {root}["in"] as! [String: Any]
+            let {got} = try {fname}({args})
             print("{{" + [{fields}].joined(separator: ",") + "}}")
         }}
     }}

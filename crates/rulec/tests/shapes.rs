@@ -113,6 +113,26 @@ fn sw_typechecks(dir: &Path, module: &str) {
     assert!(err.trim().is_empty(), "生成した Swift が警告を出している:\n{err}");
 }
 
+/// The generated TypeScript runner has to at least load. It is the other half of the pair
+/// that calls the rule by its bare name, so it is the other one a rule aliased `d` broke.
+fn ts_runs(dir: &Path, module: &str) {
+    if !have("node") {
+        eprintln!("注意: node が無いので TypeScript 側を飛ばした");
+        return;
+    }
+    let o = Command::new("node")
+        .current_dir(dir.join("typescript"))
+        .args(["--no-warnings", &format!("{module}_runner.ts")])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("node を起動できない");
+    assert!(
+        o.status.success(),
+        "生成した TypeScript のランナーが走らない:\n{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+}
+
 /// One boolean output and a table column nothing downstream reads. Go refuses both a
 /// `return 0` for a boolean and a local that is never read, and neither shape is in the
 /// corpus, so both went out broken.
@@ -345,4 +365,50 @@ result 可否 = 可否
     go_builds(&dir, "keyworddemo");
     sw_typechecks(&dir, "keyword_demo");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A rule whose alias is a name the runner itself uses for a local.
+///
+/// The TypeScript and Swift runners call the rule by its bare name, in the same scope as the
+/// locals holding the parsed line — so `rule d` bound the JSON object to `d` and the call
+/// resolved to *that*: a type error in Swift, a runtime one in TypeScript. Python, Ruby,
+/// Rust and Go qualify the call (`m.d`, `Mod.d`, `r::d`, `pkg.D`) and never had it.
+///
+/// `d` is the one that actually collided; the others are the rest of the locals, checked so
+/// that the next local someone adds is not free to reintroduce it.
+#[test]
+fn ランナーの局所変数と同じ名前の規則でも生成物は動く() {
+    for name in ["d", "line", "got", "root", "r", "lines"] {
+        let dir = generate(
+            &format!("local{name}"),
+            &format!(
+                "\
+rule {name} v1
+description \"別名がランナーの局所変数と衝突する\"
+
+inputs
+  重量(weight) : mass[g] range >=0g <=1000g
+
+outputs
+  料(fee) : money[円, incl_tax] round down(1円)
+
+define 重い(heavy) : bool = 重量 >= 500g
+
+table 判定(judge)
+policy first
+| 重い | -> 料(fee) : money[円, incl_tax] |
+| true | 100円                            |
+| -    | 0円                              |
+
+result 料 = 料
+"
+            ),
+        );
+        py_imports(&dir, name);
+        rb_loads(&dir, name);
+        go_builds(&dir, name);
+        sw_typechecks(&dir, name);
+        ts_runs(&dir, name);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
