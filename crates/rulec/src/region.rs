@@ -9,7 +9,32 @@ use crate::ast::*;
 use crate::diag::{Diag, Span};
 use crate::num::Rat;
 use crate::types::{Checked, Ty};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// A closed interval with open ends, as the axes and the ranges both carry it.
+type Ival = (Option<Rat>, Option<Rat>);
+
+/// Both ends or nothing: an unbounded end makes the result unbounded.
+fn both(a: Option<Rat>, b: Option<Rat>, f: impl Fn(Rat, Rat) -> Rat) -> Option<Rat> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(f(x, y)),
+        _ => None,
+    }
+}
+
+/// The value of an interval that is a single point, which is what §5 allows on one side of `×`.
+fn point_of(v: Ival) -> Option<Rat> {
+    match v {
+        (Some(a), Some(b)) if a.cmp_to(b) == std::cmp::Ordering::Equal => Some(a),
+        _ => None,
+    }
+}
+
+/// A negative constant swaps the ends.
+fn scale(v: Ival, k: Rat) -> Ival {
+    let (lo, hi) = (v.0.map(|x| x.mul(k)), v.1.map(|x| x.mul(k)));
+    if k.num < 0 { (hi, lo) } else { (lo, hi) }
+}
 
 #[derive(Debug, Clone)]
 enum Coord {
@@ -150,6 +175,12 @@ pub struct TableRegion {
     /// If the axis is a derived value, its reachable interval and the names of the inputs it
     /// depends on.
     derived: Vec<Option<((Option<Rat>, Option<Rat>), Vec<String>)>>,
+    /// Every `derive` in the rule, by name. A derived column is a **linear combination of
+    /// inputs** (§5), so the interval it can actually reach is decidable by arithmetic on the
+    /// intervals of those inputs — which is what the per-axis sieve does not look at.
+    exprs: BTreeMap<String, Expr>,
+    /// The declared range of every name, for the ones this table has no axis for.
+    spans: BTreeMap<String, Ival>,
     /// Row → axis → whether each coordinate is selected.
     masks: Vec<Vec<Vec<bool>>>,
 }
@@ -257,7 +288,16 @@ fn coord_satisfies(c: &Coord, op: CmpOp, bound: Rat) -> bool {
 }
 
 impl TableRegion {
-    pub fn build(t: &Table, c: &Checked, inputs: &[VarDecl]) -> Option<TableRegion> {
+    pub fn build(t: &Table, c: &Checked, f: &RuleFile) -> Option<TableRegion> {
+        let inputs = &f.inputs;
+        let mut exprs: BTreeMap<String, Expr> = BTreeMap::new();
+        for it in &f.items {
+            if let Item::Derived(d) = it {
+                exprs.insert(d.name.text.clone(), d.expr.clone());
+            }
+        }
+        let spans: BTreeMap<String, Ival> =
+            c.ranges.iter().map(|(k, v)| (k.clone(), *v)).collect();
         let mut axes = Vec::new();
         let mut col_names = Vec::new();
         let mut unanalyzable: Option<(String, Ty)> = None;
@@ -467,7 +507,7 @@ impl TableRegion {
             unreachable_row.push(only_unreachable);
             masks.push(m);
         }
-        Some(TableRegion { axes, col_names, reachable, unreachable_row, display_of: cell_of, is_define, derived, masks, unanalyzable })
+        Some(TableRegion { axes, col_names, reachable, unreachable_row, display_of: cell_of, is_define, derived, exprs, spans, masks, unanalyzable })
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
@@ -811,7 +851,8 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         overlaps: Vec::new(),
         dead: Vec::new(),
     };
-    let Some(reg) = TableRegion::build(t, c, inputs) else { return empty };
+    let _ = inputs;
+    let Some(reg) = TableRegion::build(t, c, f) else { return empty };
     if reg.axes.is_empty() || t.rows.is_empty() {
         return empty;
     }
@@ -856,8 +897,9 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             }
             let w = reg.witness_text(&wpath);
             let feas = reg.feasible(&wpath);
-            // An overlap proven infeasible is not reported (§6.2).
-            if feas == Feasible::No {
+            // An overlap proven infeasible is not reported (§6.2). The point-wise sieve is
+            // joined by the arithmetic of the derived columns over the whole intersection.
+            if feas == Feasible::No || reg.derived_conflict(i, j) {
                 continue;
             }
             // §6.2 "witnesses on definition axes": the intersection box merely places its
@@ -1233,6 +1275,108 @@ impl TableRegion {
             },
             _ => None,
         }
+    }
+
+    /// A coordinate as a **closed** interval on the axis's own grid.
+    ///
+    /// `Coord::Open` excludes its ends, and the values on the axis sit on a grid, so `< 0` on a
+    /// whole-number axis is `<= -1`. Reading the end as if it were included costs exactly the
+    /// one step that decides whether two intervals touch, which is the whole question here.
+    fn coord_closed(&self, ai: usize, ci: usize) -> Option<Ival> {
+        let Axis::Num { coords, step, .. } = &self.axes[ai] else { return None };
+        match coords.get(ci)? {
+            Coord::Point(v) => Some((Some(*v), Some(*v))),
+            Coord::Open(a, b) => Some((a.map(|v| v.add(*step)), b.map(|v| v.sub(*step)))),
+        }
+    }
+
+    /// The interval an axis is allowed over the **intersection of two rows** — the hull of the
+    /// coordinates both of them select. A hull is wider than the set it covers, which is the
+    /// safe direction: every point of the intersection lies inside it.
+    fn hull(&self, ai: usize, i: usize, j: usize) -> Option<Ival> {
+        let (mut lo, mut hi): (Option<Rat>, Option<Rat>) = (None, None);
+        let (mut any, mut open_lo, mut open_hi) = (false, false, false);
+        for ci in 0..self.axes[ai].len() {
+            if !(self.masks[i][ai][ci] && self.masks[j][ai][ci]) {
+                continue;
+            }
+            let (l, h) = self.coord_closed(ai, ci)?;
+            any = true;
+            match l {
+                None => open_lo = true,
+                Some(v) => lo = Some(lo.map_or(v, |c| if v.cmp_to(c) == std::cmp::Ordering::Less { v } else { c })),
+            }
+            match h {
+                None => open_hi = true,
+                Some(v) => hi = Some(hi.map_or(v, |c| if v.cmp_to(c) == std::cmp::Ordering::Greater { v } else { c })),
+            }
+        }
+        any.then(|| (if open_lo { None } else { lo }, if open_hi { None } else { hi }))
+    }
+
+    /// The interval a name is allowed over that same intersection: what the rows pin it to when
+    /// this table has an axis for it, the derived value unfolded when they do not, and the
+    /// declared range otherwise.
+    fn name_ival(&self, n: &str, i: usize, j: usize, depth: usize) -> Option<Ival> {
+        if let Some(ai) = self.col_names.iter().position(|x| x == n) {
+            if let Some(s) = self.hull(ai, i, j) {
+                return Some(s);
+            }
+        }
+        if let Some(e) = self.exprs.get(n) {
+            if let Some(s) = self.expr_ival(e, i, j, depth + 1) {
+                return Some(s);
+            }
+        }
+        self.spans.get(n).copied()
+    }
+
+    /// A `derive`'s expression evaluated on intervals. §5 allows inputs, `+`, `-` and a constant
+    /// multiple, so this is exact for everything a rule can write; anything else gives up, which
+    /// reports rather than hides.
+    fn expr_ival(&self, e: &Expr, i: usize, j: usize, depth: usize) -> Option<Ival> {
+        if depth > 8 {
+            return None;
+        }
+        match e {
+            Expr::Name(n, _) => self.name_ival(n, i, j, depth),
+            Expr::Lit(Lit::Num(n), _) => {
+                let v = crate::types::lit_value_in_pub(n, &crate::types::lit_ty_pub(n))?;
+                Some((Some(v), Some(v)))
+            }
+            Expr::Bin(l, op, r, _) => {
+                let a = self.expr_ival(l, i, j, depth + 1)?;
+                let b = self.expr_ival(r, i, j, depth + 1)?;
+                match op {
+                    BinOp::Add => Some((both(a.0, b.0, |x, y| x.add(y)), both(a.1, b.1, |x, y| x.add(y)))),
+                    BinOp::Sub => Some((both(a.0, b.1, |x, y| x.sub(y)), both(a.1, b.0, |x, y| x.sub(y)))),
+                    BinOp::Mul => point_of(b).map(|k| scale(a, k)).or_else(|| point_of(a).map(|k| scale(b, k))),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the arithmetic of the derived columns rules the intersection of two rows out.
+    ///
+    /// The per-axis sieve holds a derived coordinate against that column's **own** declared
+    /// range and no further, so `a = 1` beside `d < 0` survives it even though `d = b - a` with
+    /// `b >= 1` leaves `d >= 0` there. What decides it is the expression over the intervals the
+    /// intersection allows its inputs. Both sides are hulls, so `true` means the intersection
+    /// really is empty — the direction §6.1 requires.
+    pub fn derived_conflict(&self, i: usize, j: usize) -> bool {
+        for ai in 0..self.axes.len() {
+            let Some(expr) = self.exprs.get(&self.col_names[ai]) else { continue };
+            let Some((cl, ch)) = self.hull(ai, i, j) else { continue };
+            let Some((el, eh)) = self.expr_ival(expr, i, j, 0) else { continue };
+            let apart = matches!((ch, el), (Some(a), Some(b)) if a.cmp_to(b) == std::cmp::Ordering::Less)
+                || matches!((cl, eh), (Some(a), Some(b)) if a.cmp_to(b) == std::cmp::Ordering::Greater);
+            if apart {
+                return true;
+            }
+        }
+        false
     }
 
     /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
