@@ -280,6 +280,30 @@ Already machine-readable and take no `--format`.
 is that shape; `--format html` is the same document as one page with a form on it, where the
 generated JavaScript runs the case the approver types in.
 
+## `mcp`
+
+`rulec mcp` speaks the Model Context Protocol over stdio: one JSON-RPC 2.0 message per line
+in and out. It is the command table in another syntax, so nothing here is a second
+implementation of a command.
+
+- **Tools.** One per command, named `rulec_<command>` (`rulec_check`, `rulec_gen`, …). The
+  positional arguments become `files` (a list) or `file`, `dir`, `code`, `old` and `new`,
+  `fixtures` and `rule`; every flag becomes a property named after it with `-` as `_`
+  (`diff_base`, `require_all`), a boolean for a flag without a value, a list for a flag that
+  may repeat (`fill`), and an `enum` where the flag's values are a closed set. `lang` is
+  accepted everywhere. The result is two texts: what the command printed (stdout, then stderr
+  if any), and `exit code N`. `isError` is true only for exit 2 — findings are exit 1 and are
+  not errors. An argument the table does not know is refused with a JSON-RPC error before
+  anything runs.
+- **Resources.** `rulec://docs/agents.md` (the procedure — read it first),
+  `rulec://docs/reference.md`, `rulec://docs/formats.md`, `rulec://docs/generated-code.md`
+  and `rulec://docs/backends.md`, embedded in the binary at build time so they can never be
+  a version other than the one the tools implement. Links between them point at the resource
+  URIs.
+
+To register it, add a stdio server whose command is `rulec mcp` — for Claude Code,
+`claude mcp add rulec -- rulec mcp`; elsewhere, `{"mcpServers":{"rulec":{"command":"rulec","args":["mcp"]}}}`.
+
 ---
 
 # The data files

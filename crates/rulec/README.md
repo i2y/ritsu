@@ -238,6 +238,7 @@ $ rulec fixtures lint | replay | diff             # against past records
 $ rulec doc rules/送料.rule --lang ja             # for whoever approves the table
 $ rulec doc rules/送料.rule --lang ja --format html  # the same, as a page they can try a case on
 $ rulec explain E101                              # when it appears, how to fix it, a repro
+$ rulec mcp                                       # the same commands as MCP tools, for an agent without a shell
 ```
 
 Transcribe a tariff, drop one prefecture out of forty-seven, and the gap comes back with the
@@ -285,7 +286,8 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
                   generated-code.md, backends.md (targeting another language),
                   codes.md / codes.ja.md (every diagnostic, generated),
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
-skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
+skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
+                  `rulec mcp` serves the same commands as MCP tools where there is no shell
 src/              26 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc
 tests/corpus/     13 rules transcribed from real published terms

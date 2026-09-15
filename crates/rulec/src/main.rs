@@ -10,6 +10,8 @@ use rulec::diag::{Severity, render, render_json};
 use rulec::tr;
 use std::process::ExitCode;
 
+mod mcp;
+
 // ── The one table ────────────────────────────────────────────────────────
 
 /// A `--flag`, and what may follow it.
@@ -461,6 +463,22 @@ fn commands() -> Vec<Cmd> {
             codes: &[],
         },
         Cmd {
+            name: "mcp",
+            args: "",
+            purpose: tr!(
+                "MCP サーバとして stdio で待つ。上のコマンド一つ一つがツール、文書がリソース",
+                "serve over stdio as an MCP server: every command above as a tool, the documents as resources"
+            ),
+            params: vec![],
+            flags: vec![],
+            exits: vec![(0, tr!("stdin が閉じた", "stdin was closed"))],
+            examples: vec![
+                "rulec mcp".into(),
+                "rulec mcp --lang ja".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "diff",
             args: "<old> <new>",
             purpose: tr!(
@@ -494,7 +512,7 @@ fn commands() -> Vec<Cmd> {
 // ── Rendering the table ──────────────────────────────────────────────────
 
 fn usage_line(c: &Cmd) -> String {
-    let mut o = format!("rulec {} {}", c.name, c.args);
+    let mut o = format!("rulec {} {}", c.name, c.args).trim_end().to_string();
     for f in &c.flags {
         o.push_str(&format!(" [{}]", f.spelled()));
     }
@@ -860,6 +878,7 @@ fn main() -> ExitCode {
             }
         }
         "vectors" => vectors(&files, a.get("--out")),
+        "mcp" => mcp::serve(),
         "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check"), json),
         _ => unreachable!("the table and the dispatch are the same list"),
     }

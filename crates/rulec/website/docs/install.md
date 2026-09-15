@@ -71,6 +71,26 @@ Ask for something it covers ("write a `.rule` for this tariff", "fix this
 E101") and it usually applies on its own. **To be certain, name it: "use
 the rulec skill".**
 
+## The MCP server
+
+Where the agent has no shell — a chat client, an IDE assistant that speaks MCP — the same
+commands are there as tools:
+
+```console
+$ claude mcp add rulec -- rulec mcp
+```
+
+or, for any client, a stdio server whose command is `rulec mcp`:
+
+```json
+{ "mcpServers": { "rulec": { "command": "rulec", "args": ["mcp"] } } }
+```
+
+One tool per command (`rulec_check`, `rulec_gen`, `rulec_doc`, …), one argument per flag,
+and the exit code at the end of every result. The procedure and the references are served
+as resources, so an agent that cannot read this repository still reads `rulec://docs/agents.md`
+first. The shape is in [Formats](formats.md#mcp).
+
 ## Language
 
 Output is **English by default**. One setting brings back Japanese —

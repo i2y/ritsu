@@ -52,6 +52,22 @@ $ cp -r /tmp/rulec/skills/rulec .claude/skills/
 
 あとは「この運賃表から `.rule` を書いて」「この E101 を直して」のように頼めば、たいていはスキルが自動で使われます。**確実に使わせたいときは「rulec のスキルを使って」と名指しで頼んでください。**
 
+## MCP サーバ
+
+エージェントにシェルが無いとき（チャットの画面、MCP で話す IDE の補助）は、同じコマンドがツールとして使えます。
+
+```console
+$ claude mcp add rulec -- rulec mcp
+```
+
+どのクライアントでも、コマンドが `rulec mcp` の stdio サーバとして登録できます。
+
+```json
+{ "mcpServers": { "rulec": { "command": "rulec", "args": ["mcp"] } } }
+```
+
+コマンド一つがツール一つ（`rulec_check`、`rulec_gen`、`rulec_doc` …）、フラグ一つが引数一つで、結果の最後に exit code が付きます。手順書とリファレンスはリソースとして出るので、このリポジトリを読めないエージェントでも、まず `rulec://docs/agents.md` を読めます。形は[形式](formats.md#mcp)にあります。
+
 ## 言語
 
 出力の**既定は英語**です。一つの設定で日本語に戻ります — 生成コードの中の文面まで含めて、全部の面が戻ります。

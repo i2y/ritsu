@@ -18,7 +18,9 @@ Two roles stay with people, and neither is yours:
 Everything you need is reachable from the command line. `rulec --help` lists the commands,
 `rulec <cmd> --help` explains one, `rulec explain <CODE>` explains a diagnostic, and
 `--format json` gives you any of it as data. There is no step where you have to read rulec's
-source.
+source. Where you have no shell, `rulec mcp` serves the same commands as MCP tools over
+stdio — one tool per command, one argument per flag, the exit code at the end of every
+result — and this document and the references as resources.
 
 ---
 

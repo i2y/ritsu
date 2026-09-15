@@ -1,0 +1,321 @@
+//! `rulec mcp`: the command table as MCP tools, over stdio (§15.38).
+//!
+//! §12.1 put every command and flag in one table, with its purpose, its values and its exit
+//! codes. An MCP server is that table in another syntax — one tool per command, one property
+//! per flag — plus the documents an agent reads first, as resources. Nothing here knows how a
+//! command works: a call runs this same binary with the arguments the table validates, and
+//! hands back what it printed and its exit code. There is no second implementation of any
+//! command to drift.
+//!
+//! The transport is the stdio one: one JSON-RPC 2.0 message per line, in and out.
+
+use super::{commands, global_flags, Cmd};
+use rulec::json::{self, Json, Obj};
+use std::io::{BufRead, Write};
+use std::process::ExitCode;
+
+/// The documents served as resources, embedded at build time so the server never serves a
+/// version of them that differs from the binary. The links between them are rewritten to the
+/// resource URIs.
+const RESOURCES: &[(&str, &str, &str, &str)] = &[
+    (
+        "rulec://docs/agents.md",
+        "agents",
+        "The procedure for an agent: write, check, fix, generate, integrate, show the impact, ask a person. Read this first.",
+        include_str!("../AGENTS.md"),
+    ),
+    ("rulec://docs/reference.md", "reference", "The complete grammar of a .rule file.", include_str!("../docs/reference.md")),
+    ("rulec://docs/formats.md", "formats", "Every machine-readable format: --format json, vectors, fixtures, the manifest, the adapter protocol.", include_str!("../docs/formats.md")),
+    ("rulec://docs/generated-code.md", "generated-code", "The shape and guarantees of the generated code in each language, and how to call it.", include_str!("../docs/generated-code.md")),
+    ("rulec://docs/backends.md", "backends", "Targeting a language rulec does not generate, without losing the comparison.", include_str!("../docs/backends.md")),
+];
+
+pub fn serve() -> ExitCode {
+    let cmds = commands();
+    let stdin = std::io::stdin();
+    let mut out = std::io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let req = match json::parse(line.trim()) {
+            Ok(j) => j,
+            Err(e) => {
+                let _ = writeln!(out, "{}", error_msg("null", -32700, &format!("parse error: {e}")));
+                let _ = out.flush();
+                continue;
+            }
+        };
+        // A notification carries no id and gets no answer.
+        let Some(id) = req.get("id") else { continue };
+        let id = json_of(id);
+        let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
+        let params = req.get("params");
+        let answer = match method {
+            "initialize" => Ok(initialize(params)),
+            "ping" => Ok("{}".to_string()),
+            "tools/list" => Ok(tools_list(&cmds)),
+            "tools/call" => tools_call(&cmds, params),
+            "resources/list" => Ok(resources_list()),
+            "resources/read" => resources_read(params),
+            "prompts/list" => Ok("{\"prompts\":[]}".to_string()),
+            _ => Err((-32601, format!("unknown method: {method}"))),
+        };
+        let msg = match answer {
+            Ok(r) => format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"result\":{r}}}"),
+            Err((code, m)) => error_msg(&id, code, &m),
+        };
+        let _ = writeln!(out, "{msg}");
+        let _ = out.flush();
+    }
+    ExitCode::from(0)
+}
+
+fn error_msg(id: &str, code: i64, m: &str) -> String {
+    format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"error\":{{\"code\":{code},\"message\":{}}}}}", json_str(m))
+}
+
+fn json_str(s: &str) -> String {
+    let mut o = String::from("\"");
+    for ch in s.chars() {
+        match ch {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            '\n' => o.push_str("\\n"),
+            '\r' => o.push_str("\\r"),
+            '\t' => o.push_str("\\t"),
+            c if (c as u32) < 32 => o.push_str(&format!("\\u{:04x}", c as u32)),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
+}
+
+/// A value back to its text. The reader keeps a fraction as the digits it was given, so it
+/// goes back out as they were.
+fn json_of(j: &Json) -> String {
+    match j {
+        Json::Null => "null".into(),
+        Json::Bool(b) => b.to_string(),
+        Json::Int(n) => n.to_string(),
+        Json::Frac(s) => s.clone(),
+        Json::Str(s) => json_str(s),
+        Json::Arr(a) => format!("[{}]", a.iter().map(json_of).collect::<Vec<_>>().join(",")),
+        Json::Obj(m) => format!(
+            "{{{}}}",
+            m.iter().map(|(k, v)| format!("{}:{}", json_str(k), json_of(v))).collect::<Vec<_>>().join(",")
+        ),
+    }
+}
+
+fn initialize(params: Option<&Json>) -> String {
+    let version = params
+        .and_then(|p| p.get("protocolVersion"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("2025-06-18");
+    Obj::new()
+        .str("protocolVersion", version)
+        .raw("capabilities", "{\"tools\":{},\"resources\":{}}")
+        .raw(
+            "serverInfo",
+            Obj::new().str("name", "rulec").str("version", env!("CARGO_PKG_VERSION")).finish(),
+        )
+        .str(
+            "instructions",
+            "rulec turns a table-shaped business rule (a .rule file) into proved, dependency-free code. \
+             Read the resource rulec://docs/agents.md first: it is the procedure, and it says what an \
+             agent must not decide on its own. Every tool is one rulec command; pass format \"json\" \
+             to get its findings as data. The result's last text says the exit code: 0 no errors, \
+             1 findings, 2 bad arguments.",
+        )
+        .finish()
+}
+
+/// The positional arguments a command takes, as (property, description, required, is a
+/// list). This is the one place that reads `Cmd::args`, which is written for a person.
+fn positionals(c: &Cmd) -> Vec<(&'static str, String, bool, bool)> {
+    let help = |i: usize| c.params.get(i).map(|(_, h)| h.clone()).unwrap_or_default();
+    match c.name {
+        "explain" => vec![("code", help(0), false, false)],
+        "test" => vec![("dir", help(0), true, false)],
+        "fixtures" => vec![("fixtures", help(1), true, false), ("rule", help(2), true, false)],
+        "diff" => vec![("old", help(0), true, false), ("new", help(1), true, false)],
+        "mcp" => vec![],
+        _ if c.args.ends_with("...") => vec![("files", help(0), true, true)],
+        _ if c.args.is_empty() => vec![],
+        _ => vec![("file", help(0), true, false)],
+    }
+}
+
+fn prop_name(flag: &str) -> String {
+    flag.trim_start_matches("--").replace('-', "_")
+}
+
+fn tools_list(cmds: &[Cmd]) -> String {
+    let globals = global_flags();
+    let tools: Vec<String> = cmds
+        .iter()
+        .filter(|c| c.name != "mcp")
+        .map(|c| {
+            let mut props: Vec<String> = Vec::new();
+            let mut required: Vec<String> = Vec::new();
+            for (name, desc, req, list) in positionals(c) {
+                let ty = if list {
+                    "\"type\":\"array\",\"items\":{\"type\":\"string\"}".to_string()
+                } else {
+                    "\"type\":\"string\"".to_string()
+                };
+                props.push(format!("{}:{{{ty},\"description\":{}}}", json_str(name), json_str(&desc)));
+                if req {
+                    required.push(name.to_string());
+                }
+            }
+            for f in c.flags.iter().chain(globals.iter().filter(|g| g.name == "--lang")) {
+                let mut o = String::new();
+                if f.value.is_none() {
+                    o.push_str("\"type\":\"boolean\"");
+                } else if f.repeat {
+                    o.push_str("\"type\":\"array\",\"items\":{\"type\":\"string\"}");
+                } else {
+                    o.push_str("\"type\":\"string\"");
+                    if !f.choices.is_empty() {
+                        o.push_str(&format!(",\"enum\":{}", json::strs(f.choices)));
+                    }
+                }
+                let mut help = f.help.clone();
+                if f.rest {
+                    help.push_str(" (one string; it is split on spaces into the command and its arguments)");
+                }
+                o.push_str(&format!(",\"description\":{}", json_str(&help)));
+                props.push(format!("{}:{{{o}}}", json_str(&prop_name(f.name))));
+            }
+            let mut desc = c.purpose.clone();
+            desc.push_str(". Exit codes: ");
+            desc.push_str(&c.exits.iter().map(|(n, h)| format!("{n} = {h}")).collect::<Vec<_>>().join("; "));
+            if !c.examples.is_empty() {
+                desc.push_str(". For example: ");
+                desc.push_str(&c.examples.join(" / "));
+            }
+            let schema = format!(
+                "{{\"type\":\"object\",\"properties\":{{{}}},\"required\":{}}}",
+                props.join(","),
+                json::strs(&required)
+            );
+            Obj::new()
+                .str("name", &format!("rulec_{}", c.name))
+                .str("description", &desc)
+                .raw("inputSchema", schema)
+                .finish()
+        })
+        .collect();
+    format!("{{\"tools\":{}}}", json::arr(&tools))
+}
+
+/// Run the command this binary would run for the same arguments, and hand back what it
+/// printed. The exit code travels as the last piece of text, since an agent is told to read
+/// it rather than the emptiness of the output.
+fn tools_call(cmds: &[Cmd], params: Option<&Json>) -> Result<String, (i64, String)> {
+    let name = params.and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+    let Some(c) = name.strip_prefix("rulec_").and_then(|n| cmds.iter().find(|c| c.name == n)) else {
+        return Err((-32602, format!("unknown tool: {name}")));
+    };
+    let empty = std::collections::BTreeMap::new();
+    let args = params.and_then(|p| p.get("arguments")).and_then(|a| a.as_obj()).unwrap_or(&empty);
+    let mut argv: Vec<String> = vec![c.name.to_string()];
+    if c.name == "fixtures" {
+        argv.push("lint".into());
+    }
+    let text = |v: &Json| -> Result<String, (i64, String)> {
+        match v {
+            Json::Str(s) => Ok(s.clone()),
+            Json::Int(n) => Ok(n.to_string()),
+            Json::Frac(s) => Ok(s.clone()),
+            Json::Bool(b) => Ok(b.to_string()),
+            other => Err((-32602, format!("a {} is not a value an argument takes", other.kind()))),
+        }
+    };
+    let pos = positionals(c);
+    for (pname, _, req, list) in &pos {
+        match args.get(*pname) {
+            Some(Json::Arr(items)) if *list => {
+                for it in items {
+                    argv.push(text(it)?);
+                }
+            }
+            Some(v) if !*list => argv.push(text(v)?),
+            Some(_) => return Err((-32602, format!("`{pname}` has the wrong shape"))),
+            None if *req => return Err((-32602, format!("`{pname}` is required"))),
+            None => {}
+        }
+    }
+    let globals = global_flags();
+    for (k, v) in args {
+        if pos.iter().any(|(p, ..)| p == k) {
+            continue;
+        }
+        let flag_name = format!("--{}", k.replace('_', "-"));
+        let Some(f) = c.flags.iter().chain(globals.iter()).find(|f| f.name == flag_name) else {
+            return Err((-32602, format!("`{k}` is not an argument of rulec {}", c.name)));
+        };
+        if f.rest {
+            argv.push(f.name.to_string());
+            argv.extend(text(v)?.split_whitespace().map(|s| s.to_string()));
+        } else if f.value.is_none() {
+            match v {
+                Json::Bool(true) => argv.push(f.name.to_string()),
+                Json::Bool(false) | Json::Null => {}
+                _ => return Err((-32602, format!("`{k}` is a boolean"))),
+            }
+        } else if let Json::Arr(items) = v {
+            for it in items {
+                argv.push(f.name.to_string());
+                argv.push(text(it)?);
+            }
+        } else {
+            argv.push(f.name.to_string());
+            argv.push(text(v)?);
+        }
+    }
+    let exe = std::env::current_exe().map_err(|e| (-32603, format!("cannot find rulec itself: {e}")))?;
+    let o = std::process::Command::new(exe)
+        .args(&argv)
+        .output()
+        .map_err(|e| (-32603, format!("cannot run rulec: {e}")))?;
+    let code = o.status.code().unwrap_or(2);
+    let mut body = String::from_utf8_lossy(&o.stdout).into_owned();
+    let err = String::from_utf8_lossy(&o.stderr);
+    if !err.trim().is_empty() {
+        if !body.is_empty() && !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push_str(&err);
+    }
+    let content = vec![
+        Obj::new().str("type", "text").str("text", &body).finish(),
+        Obj::new().str("type", "text").str("text", &format!("exit code {code}")).finish(),
+    ];
+    Ok(Obj::new().raw("content", json::arr(&content)).bool("isError", code == 2).finish())
+}
+
+fn resources_list() -> String {
+    let rs: Vec<String> = RESOURCES
+        .iter()
+        .map(|(uri, name, desc, _)| {
+            Obj::new().str("uri", uri).str("name", name).str("description", desc).str("mimeType", "text/markdown").finish()
+        })
+        .collect();
+    format!("{{\"resources\":{}}}", json::arr(&rs))
+}
+
+fn resources_read(params: Option<&Json>) -> Result<String, (i64, String)> {
+    let uri = params.and_then(|p| p.get("uri")).and_then(|u| u.as_str()).unwrap_or("");
+    let Some((_, _, _, text)) = RESOURCES.iter().find(|(u, ..)| *u == uri) else {
+        return Err((-32002, format!("no such resource: {uri}")));
+    };
+    // AGENTS.md links its companions as `docs/…`; here they are resources.
+    let text = text.replace("](docs/", "](rulec://docs/");
+    let one = Obj::new().str("uri", uri).str("mimeType", "text/markdown").str("text", &text).finish();
+    Ok(format!("{{\"contents\":[{one}]}}"))
+}
