@@ -58,15 +58,20 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
                 *rep.filled.entry(n.clone()).or_insert(0) += 1;
             }
         }
+        // A record that carries the rows that matched (the generated code's record function
+        // writes them, §15.35) is compared row by row as well: its key is the move from the
+        // recorded row to the rule's, in the shape `diff` uses, so a row that moved reads as
+        // `行2→行5`. A record without a trace is keyed on the rule's rows alone, as before.
+        let key = if r.trace.is_empty() {
+            fired.iter().map(|(t, r)| Fired::One { table: t.clone(), row: *r }).collect()
+        } else {
+            transition(&r.trace, &fired)
+        };
+        let rows_moved = !r.trace.is_empty() && r.trace != fired;
         if !same {
-            rep.mismatches.push(Mismatch {
-                id,
-                tag: r.tag.clone(),
-                input: r.input.clone(),
-                outs: pairs,
-                err: None,
-                fired: fired.iter().map(|(t, r)| Fired::One { table: t.clone(), row: *r }).collect(),
-            });
+            rep.mismatches.push(Mismatch { id, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
+        } else if rows_moved {
+            rep.moved.push(Mismatch { id, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
         }
     }
     rep

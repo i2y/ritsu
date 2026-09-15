@@ -114,6 +114,51 @@ fn 実在しない行を指す記録は種類つきで報告される() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A record that carries the rows that matched is compared row by row as well (§15.35). A
+/// record whose value agrees but whose row differs is a moved row, apart from the mismatches
+/// and clustered by the move; a mismatch's cluster names the move too.
+#[test]
+fn 記録の行が規則の行と違えば行の移動として出る() {
+    let dir = std::env::temp_dir().join(format!("rulec-m3-{}-moved", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.to_string_lossy().to_string();
+    let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
+    assert_eq!(c, 0, "{e}");
+    let exp = std::fs::read_to_string(dir.join("vectors").join("yupack_fee.expected.jsonl")).unwrap();
+    // The first three records claim size row 7 (the last row, which none of the boundary
+    // cases at the top of the file reaches); the fourth also has a different amount.
+    // Everything else is left as the rule wrote it.
+    let claim7 = |l: &str| -> String {
+        let i = l.find("{\"table\":\"サイズ判定\",\"row\":").expect("サイズ判定 の行が無い");
+        let j = i + l[i..].find('}').unwrap();
+        assert!(!l[i..j].ends_with(":7"), "{l}");
+        format!("{}{{\"table\":\"サイズ判定\",\"row\":7{}", &l[..i], &l[j..])
+    };
+    let mut lines: Vec<String> = exp.lines().map(|l| l.to_string()).collect();
+    for l in lines.iter_mut().take(3) {
+        *l = claim7(l);
+    }
+    let l3 = claim7(&lines[3]);
+    let i = l3.find("\"運賃\":").unwrap() + "\"運賃\":".len();
+    let j = i + l3[i..].find('}').unwrap();
+    let v: i64 = l3[i..j].parse().unwrap();
+    lines[3] = format!("{}{}{}", &l3[..i], v + 10, &l3[j..]);
+    let fx = dir.join("fx.jsonl");
+    std::fs::write(&fx, lines.join("\n") + "\n").unwrap();
+
+    let (c, o, e) = rulec(&["replay", RULE, "--fixtures", fx.to_str().unwrap()]);
+    // Exit 1: there is one real mismatch. The moved rows alone would not turn it on.
+    assert_eq!(c, 1, "{o}{e}");
+    assert!(o.contains("値は同じで、当てはまった行が記録と違う記録 3 件"), "{o}");
+    assert!(o.contains("表 サイズ判定 行7→行1"), "移動が 記録→規則 の向きで出る:\n{o}");
+    assert!(o.contains("影響 1 件"), "値の食い違いは一件だけ:\n{o}");
+    let (_, j, _) = rulec(&["replay", RULE, "--fixtures", fx.to_str().unwrap(), "--format", "json"]);
+    assert!(j.contains("\"moved\":[{\"rows\":[{\"table\":\"サイズ判定\",\"from\":7,\"to\":1}"), "{j}");
+    assert!(j.contains(&format!("\"matched\":{}", lines.len() - 1)), "行の移動は一致に数える:\n{j}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn 忠実な記録とは完全に一致する() {
     let dir = setup("clean");

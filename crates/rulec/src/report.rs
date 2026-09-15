@@ -128,6 +128,10 @@ pub struct Report {
     /// the reason as **prose**, and how many. The kind is what `--format json` reports, so a
     /// caller never has to match on the sentence.
     pub excluded: Vec<(&'static str, String, usize)>,
+    /// Records whose values agreed but whose recorded rows differ from the rule's (§15.35).
+    /// Only a record that carries a `trace` can land here. They count as matched — the amount
+    /// is right — and are reported apart, clustered by the move.
+    pub moved: Vec<Mismatch>,
 }
 
 impl Report {
@@ -145,6 +149,7 @@ impl Report {
             filled_total: 0,
             filled_agreed: 0,
             excluded: Vec::new(),
+            moved: Vec::new(),
         }
     }
     /// The headline match rate is computed from observed records only (§10.3).
@@ -272,9 +277,9 @@ fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
     }
 }
 
-fn cluster<'a>(rep: &'a Report) -> BTreeMap<String, Vec<&'a Mismatch>> {
+fn cluster(ms: &[Mismatch]) -> BTreeMap<String, Vec<&Mismatch>> {
     let mut out: BTreeMap<String, Vec<&Mismatch>> = BTreeMap::new();
-    for m in &rep.mismatches {
+    for m in ms {
         // §10.4: the key is the set of fired rows only; the legacy output is not part of it.
         // For table-lookup rows the set of rows already fixes the set of amounts, so nothing
         // would be gained, and for computed outputs the clusters would split once per distinct
@@ -309,9 +314,18 @@ pub struct Cluster<'a> {
     pub error: Option<String>,
 }
 
-/// Every cluster, in the order the renderings show them.
+/// Every cluster of mismatches, in the order the renderings show them.
 pub fn clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
-    cluster(rep)
+    build(&rep.mismatches, f, c)
+}
+
+/// The clusters of moved rows (§15.35): the same shape, with nothing in `deltas`.
+pub fn moved_clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    build(&rep.moved, f, c)
+}
+
+fn build<'a>(ms: &'a [Mismatch], f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    cluster(ms)
         .into_iter()
         .map(|(label, ms)| Cluster {
             label,
@@ -398,22 +412,35 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
     }
     if rep.mismatches.is_empty() {
         o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
-        return o;
-    }
-    o.push_str(&format!("\n{}\n", impact(rep, c)));
-    for cl in clusters(rep, f, c) {
-        let money = money_text(&cl.deltas, rep.multi);
-        o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
-        if let Some(q) = &cl.suspect_grid {
-            // §10.4: a cluster made up solely of differences below the output grid is most
-            // likely a difference in rounding convention, not in the values themselves. Flag
-            // it automatically.
-            o.push_str(&tr!(
-                "    丸め方の違いの疑い（出力の刻み {q} 未満の端数だけ）\n",
-                "    Suspected rounding difference (only fractions below the output grid {q})\n"
-            ));
+    } else {
+        o.push_str(&format!("\n{}\n", impact(rep, c)));
+        for cl in clusters(rep, f, c) {
+            let money = money_text(&cl.deltas, rep.multi);
+            o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
+            if let Some(q) = &cl.suspect_grid {
+                // §10.4: a cluster made up solely of differences below the output grid is most
+                // likely a difference in rounding convention, not in the values themselves. Flag
+                // it automatically.
+                o.push_str(&tr!(
+                    "    丸め方の違いの疑い（出力の刻み {q} 未満の端数だけ）\n",
+                    "    Suspected rounding difference (only fractions below the output grid {q})\n"
+                ));
+            }
+            o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
         }
-        o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+    }
+    // §15.35: the amount agreed, the row did not. Reported apart from the mismatches, so the
+    // headline stays about values, and clustered by the move so a renumbering reads as one line.
+    if !rep.moved.is_empty() {
+        o.push_str(&tr!(
+            "\n値は同じで、当てはまった行が記録と違う記録 {} 件\n",
+            "\nRecords whose values match but whose rows differ from the record: {}\n",
+            rep.moved.len()
+        ));
+        for cl in moved_clusters(rep, f, c) {
+            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.label, cl.count, records(cl.count)));
+            o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+        }
     }
     o
 }
@@ -453,28 +480,38 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
     }
     if rep.mismatches.is_empty() {
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
-        return o;
-    }
-    o.push_str(&format!("\n**{}**\n", impact(rep, c)));
-    o.push_str(&tr!(
-        "\n#### 不一致の内訳\n\n| 発火行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
-        "\n#### Mismatch breakdown\n\n| Fired rows | Count | Difference | Witness |\n|---|---:|---|---|\n"
-    ));
-    for cl in clusters(rep, f, c) {
-        let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
-        if let Some(q) = &cl.suspect_grid {
-            money.push_str(&tr!(
-                "<br>丸め方の違いの疑い（刻み {q} 未満）",
-                "<br>suspected rounding difference (below grid {q})"
+    } else {
+        o.push_str(&format!("\n**{}**\n", impact(rep, c)));
+        o.push_str(&tr!(
+            "\n#### 不一致の内訳\n\n| 当てはまった行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
+            "\n#### Mismatch breakdown\n\n| Rows that matched | Count | Difference | Witness |\n|---|---:|---|---|\n"
+        ));
+        for cl in clusters(rep, f, c) {
+            let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
+            if let Some(q) = &cl.suspect_grid {
+                money.push_str(&tr!(
+                    "<br>丸め方の違いの疑い（刻み {q} 未満）",
+                    "<br>suspected rounding difference (below grid {q})"
+                ));
+            }
+            o.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                esc(&cl.label),
+                cl.count,
+                esc(&money),
+                esc(&witness(cl.example, &rep.theirs, c))
             ));
         }
-        o.push_str(&format!(
-            "| {} | {} | {} | {} |\n",
-            esc(&cl.label),
-            cl.count,
-            esc(&money),
-            esc(&witness(cl.example, &rep.theirs, c))
+    }
+    if !rep.moved.is_empty() {
+        o.push_str(&tr!(
+            "\n#### 行の移動（値は同じ、{} 件）\n\n| 記録の行 → 規則の行 | 件数 | 入力例 |\n|---|---:|---|\n",
+            "\n#### Moved rows (values match, {})\n\n| Recorded row → rule's row | Count | Witness |\n|---|---:|---|\n",
+            rep.moved.len()
         ));
+        for cl in moved_clusters(rep, f, c) {
+            o.push_str(&format!("| {} | {} | {} |\n", esc(&cl.label), cl.count, esc(&witness(cl.example, &rep.theirs, c))));
+        }
     }
     o
 }
@@ -492,9 +529,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         }
         o.finish()
     };
-    let cls: Vec<String> = clusters(rep, f, c)
-        .iter()
-        .map(|cl| {
+    let one = |cl: &Cluster| {
             let rows: Vec<String> = cl.fired.iter().map(|x| x.json()).collect();
             let mut delta = crate::json::Obj::new();
             for (n, d) in &cl.deltas {
@@ -534,8 +569,9 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 .bool("suspect_rounding", cl.suspect_grid.is_some())
                 .opt_str("error", cl.error.as_deref())
                 .finish()
-        })
-        .collect();
+    };
+    let cls: Vec<String> = clusters(rep, f, c).iter().map(one).collect();
+    let moved: Vec<String> = moved_clusters(rep, f, c).iter().map(one).collect();
 
     let mut excluded = crate::json::Obj::new();
     for (kind, _, n) in &rep.excluded {
@@ -562,6 +598,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         .str("counterpart", &rep.impl_id)
         .int("unanswered", rep.errored as i128)
         .raw("clusters", crate::json::arr(&cls))
+        .raw("moved", crate::json::arr(&moved))
         .raw("excluded", excluded.finish())
         .raw("filled", filled)
         .finish()

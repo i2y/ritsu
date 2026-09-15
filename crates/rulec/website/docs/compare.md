@@ -66,6 +66,10 @@ shrank.
 $ rulec replay rules/ゆうパック運賃.rule --fixtures replay/2025-08.jsonl
 ```
 
+Records written by the generated code carry the rows that matched (the `_record`
+function writes them), and `replay` compares those too: a record whose amount agrees but
+whose row differs from the rule's is reported apart, as a moved row, clustered by the move.
+
 ## Between two versions
 
 ```console

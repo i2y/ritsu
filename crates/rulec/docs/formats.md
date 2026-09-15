@@ -149,6 +149,7 @@ The same shape for all three: they differ only in what the rule is compared agai
               "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},
                          "ours":{"運賃":1450},"theirs":{"運賃":1460}},
               "suspect_rounding":false}],
+ "moved":[],
  "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"unanswered":0}
 ```
 
@@ -159,13 +160,16 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `rate` | `matched / (compared − unanswered)`, as a fraction |
 | `counterpart` | who the rule was compared against: an adapter's self-reported id, a fixtures path, or `送料@v3 → 送料@v4` |
 | `unanswered` | records the counterpart declared it could not answer. Excluded from the denominator |
-| `clusters` | mismatches grouped by the rows that fired |
+| `clusters` | mismatches grouped by the rows that matched |
+| `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
 | `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format` |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
 
-A cluster's `rows` entry is `{"table":…,"row":…}` for `verify` and `replay`; for `diff` it is
-`{"table":…,"from":…,"to":…}`, the transition of the fired row between the two versions. A
-row that exists on one side only has `from` or `to` set to `null`.
+A cluster's `rows` entry is `{"table":…,"row":…}` for `verify` and for `replay` over records
+without a `trace`; for `diff` it is `{"table":…,"from":…,"to":…}`, the transition of the row
+that matched between the two versions, and `replay` uses the same transition for a record
+that carries a `trace` — `from` is the recorded row, `to` the rule's. A row that exists on one
+side only has `from` or `to` set to `null`.
 
 `delta` is keyed by output name, because a rule can have several outputs and they move
 independently. `uniform` is true when every record in the cluster moved by the same amount,

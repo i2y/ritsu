@@ -185,8 +185,10 @@ The cluster and its witness are what tell them apart.
 `fixtures lint` first, always — it reports records whose shape disagrees with the rule
 instead of quietly dropping them. Records written by the generated code's `_record` function
 are already in this shape; only a log of some other implementation has to be extracted. Then `replay` compares the rule against what actually
-happened, and `diff` compares two versions of the rule over the same records and reports
-**how many change and by how much**. That is the number a person needs before approving.
+happened — and, for records that carry the rows that matched, row by row as well: a record
+whose amount agrees but whose row differs is reported apart, as a moved row. `diff` compares
+two versions of the rule over the same records and reports **how many change and by how
+much**. That is the number a person needs before approving.
 
 ### For the person who approves: `rulec doc`
 
