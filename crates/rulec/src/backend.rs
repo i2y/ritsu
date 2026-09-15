@@ -58,6 +58,19 @@ impl Plan {
     }
 }
 
+/// The `go` line of the generated `go.mod`.
+///
+/// Since Go 1.21 that line is not only a minimum version but a **toolchain switch**: with the
+/// default `GOTOOLCHAIN=auto`, a `go` older than it downloads the named version and hands over.
+/// In a sandbox with no network that fails, and `rulec test` reports the download error as the
+/// generated code disagreeing with the reference evaluator.
+///
+/// So the line states what the output actually needs, and the output needs very little: `bufio`,
+/// `encoding/json`, `fmt`, `os`, `time`, `testing`, no generics, no `slices` or `maps`, and
+/// `min`/`max` written out by hand. 1.21 is the oldest release this was run against; asking for
+/// more would only switch toolchains on somebody's machine for nothing.
+const GO_MIN: &str = "1.21";
+
 /// Every language `rulec gen` writes, in the order they are reported.
 pub const ALL: &[Backend] = &[
     Backend {
@@ -147,11 +160,11 @@ pub const ALL: &[Backend] = &[
         files: |g, alias, pkg| {
             vec![
                 (format!("go/{pkg}/{alias}.go"), g.go()),
-                (format!("go/{pkg}/go.mod"), format!("module {pkg}\n\ngo 1.25\n")),
+                (format!("go/{pkg}/go.mod"), format!("module {pkg}\n\ngo {GO_MIN}\n")),
                 (format!("go/{pkg}runner/main.go"), g.go_runner()),
                 (
                     format!("go/{pkg}runner/go.mod"),
-                    format!("module {pkg}runner\n\ngo 1.25\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
+                    format!("module {pkg}runner\n\ngo {GO_MIN}\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
                 ),
                 (format!("go/{pkg}/round_test.go"), crate::codegen::round_tests_go(pkg)),
             ]
