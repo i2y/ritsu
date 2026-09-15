@@ -195,3 +195,51 @@ fn 銭のリテラルは式の中でも銭のまま読まれる() {
         }
     }
 }
+
+/// `number` has no unit, and a diagnostic must not invent one for it.
+///
+/// The region axis carried `unit: String`, where an empty one meant "this is a date" — so
+/// `number`, the one numeric type with nothing to write after the digits, fell into the `_` arm
+/// beside a rate and was given `%`. A witness on a count read `閾値 = 1%`, and worse, the row
+/// `fix.text` offers ready to paste came out `| 1% | 0% | true |`, which is E103 in a `number`
+/// column. The JSON `witness` was right the whole time, which is why it read as cosmetic.
+#[test]
+fn numberの診断は単位を付けない() {
+    let src = "\
+rule t(t) v1
+
+inputs
+  n(n) : number range >=0 <=10
+
+outputs
+  ok(ok) : bool
+
+derive g(g) : number = n - n  range >=-10 <=10
+
+table j(j)
+policy unique
+| n   | g | -> ok(ok) : bool |
+| >=2 | - | true             |
+| 0   | - | false            |
+";
+    let ds = rulec::check_source(src, "units.rule");
+    let d = ds.iter().find(|d| d.code == "E101").expect("完全性の欠落が出る");
+
+    for (name, v) in &d.witness.inputs {
+        let shown = format!("{v:?}");
+        assert!(!shown.contains('%'), "{name} の witness に % が付いている: {shown}");
+    }
+    let fix = d.fix.text.as_deref().expect("E101 は貼れる行を出す");
+    assert!(!fix.contains('%'), "fix.text に % が付いている: {fix}");
+
+    // The row it hands over has to parse in a `number` column. E103 there means it handed over
+    // something the rule cannot hold.
+    let patched = src.replace("| 0   | - | false            |\n", "| 0   | - | false            |\n| 1 | 0 | true |\n");
+    assert!(patched != src, "貼り付け位置が見つからない");
+    let after = rulec::check_source(&patched, "units.rule");
+    assert!(
+        !after.iter().any(|d| d.code == "E103"),
+        "fix.text を貼ると単位の誤りになる: {:?}",
+        after.iter().map(|d| d.code).collect::<Vec<_>>()
+    );
+}

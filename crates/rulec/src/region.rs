@@ -25,14 +25,17 @@ enum Axis {
     /// `values` may start with `none` (the axis of an optional column).
     Enum { values: Vec<String> },
     /// Numbers and dates. A date is held as an ordinal (its serial day number), so the interval
-    /// machinery applies unchanged. An empty `unit` means "write it back as a date".
+    /// machinery applies unchanged; `date` is what says to write it back as `YYYY-MM-DD`. It
+    /// used to be "the unit is empty", which left `number` — the one numeric type with no unit
+    /// at all — nowhere to sit, so it was given `%` and every witness on a count read as a
+    /// percentage.
     ///
     /// Coordinates are true values. A rate is written in percent and travels as a count of
     /// steps (§10.2), and those two factors differ once the step is finer than 1%, so both
     /// are carried: `shown` to write the value back into a cell, `wire` to put it in a
     /// witness. Everything else has 1 for both. `step` is the axis's own grid, which is what
     /// keeps a witness on a value the type can actually hold.
-    Num { unit: String, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat },
+    Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat },
     Bool,
 }
 
@@ -64,7 +67,7 @@ impl Axis {
         match self {
             Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
             Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
-            Axis::Num { unit, coords, step, .. } if unit.is_empty() => match coords.get(i) {
+            Axis::Num { date: true, coords, step, .. } => match coords.get(i) {
                 // For dates, prefer a boundary (an actual calendar day). The midpoint of an
                 // interval need not be one.
                 Some(Coord::Point(v)) => {
@@ -99,7 +102,7 @@ impl Axis {
             Axis::Enum { .. } => WVal::Str(self.witness(i)),
             Axis::Bool => WVal::Bool(i == 0),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
-            Axis::Num { unit, .. } if unit.is_empty() => WVal::Str(self.witness(i)),
+            Axis::Num { date: true, .. } => WVal::Str(self.witness(i)),
             Axis::Num { coords, wire, step, .. } => {
                 let v = match coords.get(i) {
                     Some(Coord::Point(v)) => *v,
@@ -284,6 +287,7 @@ impl TableRegion {
                     // differ by 1.
                     Axis::Num {
                         unit: String::new(),
+                        date: true,
                         coords: num_coords(&b, lo, hi, Rat::int(1)),
                         shown: 1,
                         wire: 1,
@@ -296,7 +300,10 @@ impl TableRegion {
                     let unit = match &ty {
                         Ty::Money { cur, .. } => cur.clone(),
                         Ty::Qty { unit, .. } => unit.clone(),
-                        _ => "%".into(),
+                        Ty::Rate => "%".into(),
+                        // `number` counts something the rule never names, so there is nothing to
+                        // write after the digits (§2.1).
+                        _ => String::new(),
                     };
                     // The runtime representation is a single integer in the declared unit
                     // (§7.1), so the step is 1 for money and quantities and the declared step
@@ -307,6 +314,7 @@ impl TableRegion {
                     };
                     Axis::Num {
                         unit,
+                        date: false,
                         coords: num_coords(&b, lo, hi, q),
                         // A rate is written in percent whatever its step is.
                         shown: if matches!(ty, Ty::Rate) { 100 } else { 1 },
