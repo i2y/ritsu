@@ -287,6 +287,221 @@ fn coord_satisfies(c: &Coord, op: CmpOp, bound: Rat) -> bool {
     }
 }
 
+/// The table that decides a column, when one does.
+fn producing_table<'a>(f: &'a RuleFile, t: &Table, k: &str) -> Option<&'a Table> {
+    f.items.iter().find_map(|it| match it {
+        Item::Table(u)
+            if u.name.as_ref().map(|n| &n.text) != t.name.as_ref().map(|n| &n.text)
+                && u.outputs.iter().any(|o| o.name.text == k) =>
+        {
+            Some(u)
+        }
+        _ => None,
+    })
+}
+
+/// A column an upstream table decides, prepared once for the whole table below it.
+struct Upstream<'a> {
+    /// The column's name.
+    name: String,
+    /// Position of the column among this table's own columns.
+    ci: usize,
+    table: &'a Table,
+    reg: TableRegion,
+    /// Position of the column among the upstream table's outputs.
+    oi: usize,
+    ty: Ty,
+}
+
+/// Every column of `t` that a table above it decides.
+fn upstreams<'a>(t: &'a Table, c: &Checked, f: &'a RuleFile) -> Vec<Upstream<'a>> {
+    let mut out = Vec::new();
+    for (ci, (k, _)) in t.inputs.iter().enumerate() {
+        let Some(u) = producing_table(f, t, k) else { continue };
+        let Some(oi) = u.outputs.iter().position(|o| o.name.text == *k) else { continue };
+        let Some(reg) = TableRegion::build(u, c, f) else { continue };
+        let Some(ty) = c.ty_of(k) else { continue };
+        out.push(Upstream { name: k.clone(), ci, table: u, reg, oi, ty });
+    }
+    out
+}
+
+/// Whether the tables **above** this row rule its combination out.
+///
+/// `reachable` asks, per column, which values an upstream table can produce **at all**. It
+/// cannot see that a value and another column exclude each other: one value of 加算種別 sends
+/// the table above to a different answer, so that answer and that value never arrive together,
+/// and a row naming both is dead however live each half looks on its own.
+///
+/// The reading is loose in the safe direction. A producing row counts as possible unless this
+/// row's own cells contradict it outright, or a **single** earlier row of that table covers
+/// whatever is left of it — a union of earlier rows is not subtracted, and the answer is not
+/// chased further upstream than one table. So "no producer" really means none, and E102 is
+/// never handed a row that is alive.
+fn upstream_dead(row: &Row, ups: &[Upstream], c: &Checked, t: &Table) -> bool {
+    upstream_blocked(ups, c, &|up: &Upstream| {
+        let kcell = row.cells.get(up.ci);
+        if matches!(kcell, None | Some(Cell::DontCare)) {
+            return None;
+        }
+        // This row's own cells, read on the axes of the table above.
+        let allowed: Vec<Vec<bool>> = up
+            .reg
+            .col_names
+            .iter()
+            .enumerate()
+            .map(|(ai, n)| {
+                let dc = t.inputs.iter().position(|(m, _)| m == n).and_then(|i| row.cells.get(i));
+                match c.ty_of(n) {
+                    Some(ty) => cell_mask(&up.reg.axes[ai], dc, &ty, c),
+                    None => vec![true; up.reg.axes[ai].len()],
+                }
+            })
+            .collect();
+        Some((kcell.cloned(), allowed))
+    })
+}
+
+/// The shared half: given, per upstream column, what the caller fixes, decide whether **no**
+/// row of the table above can produce a value the caller allows.
+///
+/// `restrict` returns `None` for a column the caller leaves free, and otherwise the cell it
+/// pins the column to together with that same restriction read on the upstream table's axes.
+fn upstream_blocked(
+    ups: &[Upstream],
+    c: &Checked,
+    restrict: &dyn Fn(&Upstream) -> Option<(Option<Cell>, Vec<Vec<bool>>)>,
+) -> bool {
+    for up in ups {
+        let Some((kcell, allowed)) = restrict(up) else { continue };
+        let kcell = kcell.as_ref();
+        let mut producible = false;
+        for ri in 0..up.table.rows.len() {
+            let v = match up.table.rows[ri].outs.get(up.oi) {
+                Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) => w.clone(),
+                _ => {
+                    // An output this reading cannot name is assumed to reach the row.
+                    producible = true;
+                    break;
+                }
+            };
+            let val = crate::eval::Val::Enum(v);
+            if !kcell.is_none_or(|cell| crate::eval::cell_matches(c, cell, &val, &up.ty)) {
+                continue;
+            }
+            // What is left of that row once this one's cells are imposed.
+            let live: Vec<Vec<bool>> = (0..up.reg.axes.len())
+                .map(|a| {
+                    (0..up.reg.axes[a].len())
+                        .map(|x| up.reg.masks[ri][a][x] && allowed[a][x])
+                        .collect()
+                })
+                .collect();
+            if live.iter().any(|m| !m.iter().any(|x| *x)) {
+                continue;
+            }
+            let blocked = up.table.policy == Policy::TopDown
+                && (0..ri).any(|e| {
+                    (0..up.reg.axes.len()).all(|a| {
+                        (0..up.reg.axes[a].len()).all(|x| !live[a][x] || up.reg.masks[e][a][x])
+                    })
+                });
+            if !blocked {
+                producible = true;
+                break;
+            }
+        }
+        if !producible {
+            return true;
+        }
+    }
+    false
+}
+
+/// Which coordinates of an axis a cell selects.
+///
+/// Pulled out of the region build so the same reading can be applied to a cell from **another**
+/// table: deciding whether an upstream table can produce a value takes holding its rows against
+/// the constraints of the row downstream, and those are cells on the same columns.
+fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool> {
+    let n = axis.len();
+    let mut v = vec![false; n];
+        match cell {
+            None | Some(Cell::DontCare) => v.iter_mut().for_each(|x| *x = true),
+            // `none` matches only the first coordinate of an optional axis.
+            Some(Cell::Nothing) => {
+                if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some(crate::kw::NONE)) {
+                    v[0] = true;
+                }
+            }
+            Some(Cell::Lit(l)) => match (axis, l) {
+                (Axis::Enum { values }, Lit::Word(w)) => {
+                    for (i, val) in values.iter().enumerate() {
+                        if val == w {
+                            v[i] = true;
+                        }
+                    }
+                    if let Some((_, members)) = c.groups.get(w) {
+                        for (i, val) in values.iter().enumerate() {
+                            if members.contains(val) {
+                                v[i] = true;
+                            }
+                        }
+                    }
+                }
+                (Axis::Bool, Lit::Word(w)) => v[if w == crate::kw::TRUE { 0 } else { 1 }] = true,
+                (Axis::Num { coords, .. }, l) => {
+                    if let Some(x) = lit_rat(l, &ty) {
+                        for (i, cd) in coords.iter().enumerate() {
+                            if matches!(cd, Coord::Point(p) if p.cmp_to(x) == std::cmp::Ordering::Equal) {
+                                v[i] = true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Some(Cell::Set(ls)) | Some(Cell::Not(ls)) => {
+                if let Axis::Enum { values } = axis {
+                    for l in ls {
+                        if let Lit::Word(w) = l {
+                            for (i, val) in values.iter().enumerate() {
+                                if val == w {
+                                    v[i] = true;
+                                }
+                            }
+                            if let Some((_, members)) = c.groups.get(w) {
+                                for (i, val) in values.iter().enumerate() {
+                                    if members.contains(val) {
+                                        v[i] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if matches!(cell, Some(Cell::Not(_))) {
+                    v.iter_mut().for_each(|x| *x = !*x);
+                }
+            }
+            Some(Cell::Cmp(cs)) => {
+                if let Axis::Num { coords, .. } = axis {
+                    v.iter_mut().for_each(|x| *x = true);
+                    for (op, l) in cs {
+                        if let Some(b) = lit_rat(l, &ty) {
+                            for (i, cd) in coords.iter().enumerate() {
+                                if !coord_satisfies(cd, *op, b) {
+                                    v[i] = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    v
+}
+
 impl TableRegion {
     pub fn build(t: &Table, c: &Checked, f: &RuleFile) -> Option<TableRegion> {
         let inputs = &f.inputs;
@@ -410,83 +625,8 @@ impl TableRegion {
         for row in &t.rows {
             let mut m = Vec::new();
             for (ai, axis) in axes.iter().enumerate() {
-                let n = axis.len();
-                let cell = row.cells.get(cell_of[ai]);
-                let mut v = vec![false; n];
                 let ty = c.ty_of(&col_names[ai])?;
-                match cell {
-                    None | Some(Cell::DontCare) => v.iter_mut().for_each(|x| *x = true),
-                    // `none` matches only the first coordinate of an optional axis.
-                    Some(Cell::Nothing) => {
-                        if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some(crate::kw::NONE)) {
-                            v[0] = true;
-                        }
-                    }
-                    Some(Cell::Lit(l)) => match (axis, l) {
-                        (Axis::Enum { values }, Lit::Word(w)) => {
-                            for (i, val) in values.iter().enumerate() {
-                                if val == w {
-                                    v[i] = true;
-                                }
-                            }
-                            if let Some((_, members)) = c.groups.get(w) {
-                                for (i, val) in values.iter().enumerate() {
-                                    if members.contains(val) {
-                                        v[i] = true;
-                                    }
-                                }
-                            }
-                        }
-                        (Axis::Bool, Lit::Word(w)) => v[if w == crate::kw::TRUE { 0 } else { 1 }] = true,
-                        (Axis::Num { coords, .. }, l) => {
-                            if let Some(x) = lit_rat(l, &ty) {
-                                for (i, cd) in coords.iter().enumerate() {
-                                    if matches!(cd, Coord::Point(p) if p.cmp_to(x) == std::cmp::Ordering::Equal) {
-                                        v[i] = true;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    },
-                    Some(Cell::Set(ls)) | Some(Cell::Not(ls)) => {
-                        if let Axis::Enum { values } = axis {
-                            for l in ls {
-                                if let Lit::Word(w) = l {
-                                    for (i, val) in values.iter().enumerate() {
-                                        if val == w {
-                                            v[i] = true;
-                                        }
-                                    }
-                                    if let Some((_, members)) = c.groups.get(w) {
-                                        for (i, val) in values.iter().enumerate() {
-                                            if members.contains(val) {
-                                                v[i] = true;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if matches!(cell, Some(Cell::Not(_))) {
-                            v.iter_mut().for_each(|x| *x = !*x);
-                        }
-                    }
-                    Some(Cell::Cmp(cs)) => {
-                        if let Axis::Num { coords, .. } = axis {
-                            v.iter_mut().for_each(|x| *x = true);
-                            for (op, l) in cs {
-                                if let Some(b) = lit_rat(l, &ty) {
-                                    for (i, cd) in coords.iter().enumerate() {
-                                        if !coord_satisfies(cd, *op, b) {
-                                            v[i] = false;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                let v = cell_mask(axis, row.cells.get(cell_of[ai]), &ty, c);
                 m.push(v);
             }
             // A row that names only values the upstream table never produces is dead
@@ -537,8 +677,8 @@ impl TableRegion {
 
     /// Return one uncovered coordinate. In the recursive split of §6.3, a branch in which some
     /// surviving row is don't-care on all remaining axes is pruned as certainly covered.
-    fn find_hole(&self, rows: &[usize], budget: &mut i64) -> Option<Vec<usize>> {
-        self.hole_rec(rows, 0, budget, &mut Vec::new())
+    fn find_hole(&self, rows: &[usize], budget: &mut i64, ups: &[Upstream], c: &Checked) -> Option<Vec<usize>> {
+        self.hole_rec(rows, 0, budget, &mut Vec::new(), ups, c)
     }
 
     fn hole_rec(
@@ -547,6 +687,8 @@ impl TableRegion {
         ai: usize,
         budget: &mut i64,
         path: &mut Vec<usize>,
+        ups: &[Upstream],
+        chk: &Checked,
     ) -> Option<Vec<usize>> {
         *budget -= 1;
         if *budget < 0 {
@@ -558,8 +700,10 @@ impl TableRegion {
                 p.push(0);
             }
             // A gap proven infeasible is not reported. An undecidable gap is kept (we only ever
-            // drop in the direction of over-reporting; §6.1).
-            if self.feasible(&p) == Feasible::No {
+            // drop in the direction of over-reporting; §6.1). The tables above count here too:
+            // demanding a row for a combination they cannot produce would contradict the E102
+            // that names such a row dead.
+            if self.feasible(&p) == Feasible::No || self.upstream_dead_at(&p, ups, chk) {
                 return None;
             }
             return Some(p);
@@ -577,7 +721,7 @@ impl TableRegion {
         for c in 0..self.axes[ai].len() {
             let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
             path.push(c);
-            if let Some(h) = self.hole_rec(&sub, ai + 1, budget, path) {
+            if let Some(h) = self.hole_rec(&sub, ai + 1, budget, path, ups, chk) {
                 path.pop();
                 return Some(h);
             }
@@ -1107,8 +1251,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     }
 
     // --- Unreachable rows
+    let ups = upstreams(t, c, f);
     for i in 0..t.rows.len() {
-        let dead = if reg.empty(i) {
+        let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
+        let dead = if reg.empty(i) || up_dead {
             true
         } else if t.policy == Policy::TopDown && i > 0 {
             // First check containment in a single earlier row. Every dead row of a staircase
@@ -1145,6 +1291,11 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .mark(t.rows[i].span.clone(), tr!("行{}: ここに到達する入力はありません", "row {}: no input reaches here", i + 1))
                     .note(if reg.unreachable_row[i] {
                         tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
+                    } else if up_dead {
+                        tr!(
+                            "上流の表は、この行が名指しする値を、ほかの列がこの行の言うとおりであるときには出しません。片方ずつなら起こりますが、同時には起こりません。",
+                            "The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not."
+                        )
                     } else if t.policy == Policy::TopDown {
                         tr!("`{} {}` のため、この行の範囲は先行する行がすべて先に取ります。", "Because of `{} {}`, the earlier rows take all of this row's range first.", crate::kw::POLICY, crate::kw::FIRST)
                     } else {
@@ -1162,7 +1313,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     // --- Completeness
     let mut left = budget;
     let all: Vec<usize> = (0..t.rows.len()).collect();
-    let hole = reg.find_hole(&all, &mut left);
+    let hole = reg.find_hole(&all, &mut left, &ups, c);
     nodes += budget - left;
     if let Some(hole) = hole {
         out.push(
@@ -1377,6 +1528,63 @@ impl TableRegion {
             }
         }
         false
+    }
+
+    /// This point's constraint on a column, read on **another table's** axis for that column.
+    ///
+    /// The two tables compress their coordinates independently, so an index cannot be carried
+    /// across: an enum goes by its value, and a number by the interval the coordinate stands
+    /// for. A column this point does not fix leaves the other axis open.
+    fn project(&self, name: &str, path: &[usize], uaxis: &Axis) -> Vec<bool> {
+        let all = vec![true; uaxis.len()];
+        let Some(ai) = self.col_names.iter().position(|x| x == name) else { return all };
+        let Some(&ci) = path.get(ai) else { return all };
+        match (&self.axes[ai], uaxis) {
+            (Axis::Enum { values }, Axis::Enum { values: uv }) => match values.get(ci) {
+                Some(v) => uv.iter().map(|x| x == v).collect(),
+                None => all,
+            },
+            (Axis::Bool, Axis::Bool) => (0..uaxis.len()).map(|x| x == ci).collect(),
+            (Axis::Num { .. }, Axis::Num { coords, step, .. }) => {
+                let Some((lo, hi)) = self.coord_closed(ai, ci) else { return all };
+                coords
+                    .iter()
+                    .map(|cd| {
+                        let (a, b) = match cd {
+                            Coord::Point(v) => (Some(*v), Some(*v)),
+                            Coord::Open(x, y) => (x.map(|v| v.add(*step)), y.map(|v| v.sub(*step))),
+                        };
+                        !(matches!((b, lo), (Some(p), Some(q)) if p.cmp_to(q) == std::cmp::Ordering::Less)
+                            || matches!((a, hi), (Some(p), Some(q)) if p.cmp_to(q) == std::cmp::Ordering::Greater))
+                    })
+                    .collect()
+            }
+            _ => all,
+        }
+    }
+
+    /// Whether the tables above rule **this point** out, the same question `upstream_dead` asks
+    /// of a row. A gap the tables above cannot produce is not a gap.
+    fn upstream_dead_at(&self, path: &[usize], ups: &[Upstream], c: &Checked) -> bool {
+        upstream_blocked(ups, c, &|up: &Upstream| {
+            let ai = self.col_names.iter().position(|x| *x == up.name)?;
+            let &ci = path.get(ai)?;
+            let v = match &self.axes[ai] {
+                Axis::Enum { values } => values.get(ci)?.clone(),
+                Axis::Bool => {
+                    if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() }
+                }
+                _ => return None,
+            };
+            let allowed = up
+                .reg
+                .col_names
+                .iter()
+                .enumerate()
+                .map(|(ua, n)| self.project(n, path, &up.reg.axes[ua]))
+                .collect();
+            Some((Some(Cell::Lit(Lit::Word(v))), allowed))
+        })
     }
 
     /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the

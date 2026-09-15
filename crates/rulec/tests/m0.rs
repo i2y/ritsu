@@ -54,7 +54,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e101.rule", &[("E101", 1)], "群から 山梨県 を落とした"),
         ("m_e101d.rule", &[("E101", 1), ("E107", 1)], "日付の境界に穴を開けた"),
         ("m_e102.rule", &[("E102", 1), ("W105", 6)], "catch-all の後ろに行を足した"),
-        ("m_e102b.rule", &[("E101", 1), ("E102", 3), ("E107", 2)], "上流が出さない値を下流が名指しした"),
+        ("m_e102b.rule", &[("E102", 3), ("E107", 2)], "上流が出さない値を下流が名指しした"),
         ("m_e103.rule", &[("E103", 1)], "長さの列に金額を書いた"),
         ("m_e104.rule", &[("E104", 1)], "出力の丸め宣言を消した"),
         ("m_e104b.rule", &[("E104", 1)], "端数の出る式から丸めを消した"),
@@ -68,6 +68,11 @@ fn 変異は決めたコードだけを出す() {
         ("m_w105.rule", &[("W105", 3)], "上からの表で出力の食い違う重なりを作った"),
         ("m_w111.rule", &[("W111", 1)], "contract_only の印を消した"),
     ];
+
+    // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
+    // value it had just been told the table above never produces, and the very rows E102 names
+    // dead in the same run. The gap search reads the tables above now, so the two no longer
+    // contradict each other.
 
     // Also close the gap of adding material but forgetting to add it to the table.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants");

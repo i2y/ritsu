@@ -232,9 +232,14 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
                 missing.push(Missing {
                     kind: ROW,
                     what: tag.clone(),
+                    // A row nothing can reach is named by E102 — including one only the
+                    // tables above rule out — and E102 rows are left out of this tally, so what
+                    // is left here is usually the generator not getting there. Usually, not
+                    // always: reading the tables above is an under-approximation, so a dead row
+                    // it could not prove dead still lands in this bucket.
                     hint: tr!(
-                        "この行が勝つ入力をベクタが一つも作れていません。",
-                        "No vector produces an input on which this row wins."
+                        "この行が勝つ入力をベクタが一つも作れていません。到達できない行は E102 が名指しするので、多くは生成器が届いていない側です。",
+                        "No vector produces an input on which this row wins. A row nothing can reach is named by E102 instead, so this is usually the generator not getting there."
                     ),
                 });
             }
