@@ -1,7 +1,7 @@
 # The rulec agent skill
 
 `rulec/` is an [Agent Skill](https://agentskills.io) for **using rulec** — writing a `.rule`,
-getting it past `rulec check`, generating the Python and Go, and showing a person what
+getting it past `rulec check`, generating the seven languages, and showing a person what
 changed. It is not about working on rulec itself.
 
 ## Install
@@ -26,9 +26,10 @@ To let it run rulec without a prompt each time, add this to the project's settin
 |---|---|
 | `SKILL.md` | when the skill applies, the loop, what not to decide alone, how to turn a diagnostic into a question for a person |
 | `reference.md` | the complete grammar |
-| `examples.md` | ten complete rules, smallest first |
+| `examples.md` | every rule in the corpus in full, smallest first, each with what it shows |
 | `formats.md` | every machine-readable format |
-| `generated-code.md` | the shape of the generated Python and Go, and how to call it |
+| `generated-code.md` | the shape of the generated code in each language, and how to call it |
+| `backends.md` | targeting a language rulec does not generate, without losing the comparison |
 
 The diagnostics are deliberately **not** bundled: `rulec explain <CODE>` prints them from the
 binary, so they can never be out of date with the binary in front of you.

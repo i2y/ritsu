@@ -278,14 +278,14 @@ EXAMPLES = [
         [
             "**期限のある特例は、日付の定義と一つの列になります。** `define 軽減期間 = 作成日 <= 2027-03-31` を列に置き、軽減の行は `true`、本則の行は `false`、期間によらない行は `-` です。`policy unique` なので、どの契約金額もどの作成日も、ちょうど一行に当たることが証明されています。",
             "**軽減の対象外は本則の行が受けます。** 軽減は契約金額が 10 万円を超えるものだけなので、1 万円未満（非課税）と 10 万円以下の行は、期間の列が `-` です。",
-            "**この規則が生成器の欠陥を一つ見つけました。** 定義の中の日付リテラルが、六言語すべてで 0 として生成されていました。参照評価器は正しく読んでいたので、`rulec test` の突き合わせで食い違いとして出ました。",
+            "**この規則が生成器の欠陥を一つ見つけました。** 定義の中の日付リテラルが、全言語で 0 として生成されていました。参照評価器は正しく読んでいたので、`rulec test` の突き合わせで食い違いとして出ました。",
         ],
         "Stamp duty on a contract, with a reduced rate that expires",
         "The stamp duty on a contract for the transfer of real estate (document type 1). The standard amounts (No.7140) and the reduced amounts for contracts made up to 31 March 2027 (No.7108) sit in one table, with the date of the contract as an input.",
         [
             "**A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.",
             "**What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.",
-            "**This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in all six languages. The reference evaluator read the date, so the disagreement showed up in `rulec test`.",
+            "**This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in every language. The reference evaluator read the date, so the disagreement showed up in `rulec test`.",
         ],
     ),
     (

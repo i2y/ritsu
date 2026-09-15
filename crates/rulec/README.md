@@ -289,15 +289,17 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
                   `rulec mcp` serves the same commands as MCP tools where there is no shell
-src/              26 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
-                  codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc
+src/              28 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+                  codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
+                  import (a draft from a CSV), mcp (the command table as MCP tools)
 tests/corpus/     18 rules transcribed from real published terms
 tests/mutants/    19 files, each with one mistake planted in it
 tests/golden/     21 snapshots of diagnostic prose, in both languages
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
-                  website, skill, codes, json_v2, formats, api, coverage, m3, budget, library
+                  website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
+                  mcp, import
 ```
 
 Every one of those eighteen rules comes from **public information** — Japan Post's tariff,
@@ -307,7 +309,7 @@ of 協会けんぽ and 日本年金機構. None of it is private data. The two p
 held, grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 200 tests; python3, node, rustc and go are used where present
+$ cargo test          # 250 tests; python3, node, rustc, ruby, go and swiftc are used where present
 ```
 
 ## Where it stands

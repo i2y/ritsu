@@ -888,7 +888,7 @@ examples
 
 - **A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.
 - **What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.
-- **This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in all six languages. The reference evaluator read the date, so the disagreement showed up in `rulec test`.
+- **This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in every language. The reference evaluator read the date, so the disagreement showed up in `rulec test`.
 
 ## The employees' pension grade table
 
