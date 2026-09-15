@@ -27,6 +27,7 @@ pub mod eval;
 pub mod fixtures;
 pub mod fmt;
 pub mod i18n;
+pub mod import;
 pub mod codegen;
 pub mod codes;
 pub mod coverage;

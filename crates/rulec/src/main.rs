@@ -463,6 +463,31 @@ fn commands() -> Vec<Cmd> {
             codes: &[],
         },
         Cmd {
+            name: "import",
+            args: "csv <file.csv>",
+            purpose: tr!(
+                "表計算の CSV から .rule の下書きを起こす。推定した箇所には全部 # 推定 が付く",
+                "make a first draft of a .rule from a spreadsheet's CSV; every guess is marked"
+            ),
+            params: vec![
+                ("csv", tr!("いま読めるのは CSV だけ", "CSV is the only format read for now")),
+                ("<file.csv>", tr!("見出し行つきの CSV。最後の列が出力（--outputs で本数を変えられる）", "a CSV with a header row; the last column is the output (--outputs changes how many)")),
+            ],
+            flags: vec![
+                flag("--name", Some("<名前>"), tr!("規則の名前。既定はファイル名", "the rule's name; the default is the file's stem")),
+                flag("--outputs", Some("<n>"), tr!("末尾の何列が出力か", "how many of the trailing columns are outputs")).default("1"),
+            ],
+            exits: vec![
+                (0, tr!("下書きを書き出した。check はまだ通していない", "the draft was written; it has not been through check")),
+                (2, tr!("読めないファイル、または表の形をしていない CSV", "a file that cannot be read, or a CSV that is not a table")),
+            ],
+            examples: vec![
+                "rulec import csv tariff.csv > rules/tariff.rule".into(),
+                "rulec import csv rates.csv --name 料率 --outputs 2".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "mcp",
             args: "",
             purpose: tr!(
@@ -879,6 +904,30 @@ fn main() -> ExitCode {
         }
         "vectors" => vectors(&files, a.get("--out")),
         "mcp" => mcp::serve(),
+        "import" => {
+            if files.first().map(|s| s.as_str()) != Some("csv") || files.len() != 2 {
+                return refuse(tr!("`rulec import csv <file.csv>` です", "it is `rulec import csv <file.csv>`"));
+            }
+            let path = files[1];
+            let Ok(src) = std::fs::read_to_string(path) else {
+                return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+            };
+            let stem = std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = a.get("--name").map(|s| s.to_string()).unwrap_or(stem);
+            let n = match a.get("--outputs").unwrap_or("1").parse::<usize>() {
+                Ok(n) => n,
+                Err(_) => return refuse(tr!("`--outputs` は正の整数です", "`--outputs` is a positive integer")),
+            };
+            // The draft names its source by the file's name, not by wherever it was read from.
+            let base = std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
+            match rulec::import::draft(&src, &name, &base, n) {
+                Ok(d) => {
+                    print!("{d}");
+                    ExitCode::from(0)
+                }
+                Err(e) => refuse(e),
+            }
+        }
         "gen" => generate(&files, a.get("--out").unwrap_or("generated"), a.has("--check"), json),
         _ => unreachable!("the table and the dispatch are the same list"),
     }

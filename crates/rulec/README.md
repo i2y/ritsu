@@ -239,6 +239,7 @@ $ rulec doc rules/送料.rule --lang ja             # for whoever approves the t
 $ rulec doc rules/送料.rule --lang ja --format html  # the same, as a page they can try a case on
 $ rulec explain E101                              # when it appears, how to fix it, a repro
 $ rulec mcp                                       # the same commands as MCP tools, for an agent without a shell
+$ rulec import csv tariff.csv > rules/tariff.rule  # a first draft from a spreadsheet; every guess is marked
 ```
 
 Transcribe a tariff, drop one prefecture out of forty-seven, and the gap comes back with the

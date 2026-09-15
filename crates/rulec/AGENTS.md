@@ -59,6 +59,12 @@ Two shapes are worth knowing before the first draft:
   called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 
+When the source is a spreadsheet, `rulec import csv <file.csv>` writes a first draft — the
+columns as inputs, the last column as the output, the values as an enum or a range, each
+guess marked `# 推定` — which is then yours to correct: a numeric column is copied as
+equalities and is usually meant as thresholds, and no range, rounding or unit in it is
+decided. It saves the typing, not the reading.
+
 One habit pays for itself at the first revision:
 
 - **Write down where each table came from.** A comment at the end of the `table` line names
