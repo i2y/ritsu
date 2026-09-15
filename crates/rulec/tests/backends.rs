@@ -86,7 +86,7 @@ fn 文書のクエリはec261と全件一致する() {
     assert_eq!(code, 0, "一致しているなら終了コードは 0:\n{out}");
     // The document prints these three lines. The count is the vector suite's own size, so a
     // suite that grows has to be reflected on the page.
-    assert!(out.contains("Compared 88 / matched 88 (100.000%)"), "文書の 88/88 と違う:\n{out}");
+    assert!(out.contains("Compared 94 / matched 94 (100.000%)"), "文書の 94/94 と違う:\n{out}");
     assert!(out.contains("Counterpart: sqlite3/ec261.sql"), "impl 名が文書と違う:\n{out}");
     assert!(out.contains("No mismatches."), "不一致が出ている:\n{out}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -102,7 +102,7 @@ fn 閾値を一つ壊すとその入力ごと報告される() {
     lay_out(&dir, true);
     let (code, out) = verify(&dir);
     assert_eq!(code, 1, "不一致があるなら終了コードは 1:\n{out}");
-    assert!(out.contains("Compared 88 / matched 87 (98.864%)"), "文書の 87/88 と違う:\n{out}");
+    assert!(out.contains("Compared 94 / matched 92 (97.872%)"), "文書の 92/94 と違う:\n{out}");
     // The point of the section: the report names the rows and carries a case that shows it.
     for want in [
         "table band_of row 4",

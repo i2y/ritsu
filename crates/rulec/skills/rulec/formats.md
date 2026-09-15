@@ -286,7 +286,7 @@ JSON Lines, one test case per line, generated from the boundaries of the rule (Â
 | `in` | the inputs, keyed by the rule's own names |
 | `out` | the outputs the reference evaluator produces |
 | `trace` | the rows that fired, in order |
-| `why` | which coverage obligation this case was generated for. **Prose** |
+| `why` | which coverage obligation this case was generated for, or `example row N` for a case the rule's own `examples` wrote. **Prose** |
 
 `gen` writes a second file, `<alias>.expected.jsonl`, holding only the `out` object of each
 line in the same order. That is what `rulec test` compares the generated code against, byte

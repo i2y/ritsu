@@ -167,15 +167,16 @@ when it cannot be done.
 
 ```console
 $ rulec verify rules/ec261.rule --adapter python3 adapter.py
-Compared 88 / matched 88 (100.000%)
+Compared 94 / matched 94 (100.000%)
 Counterpart: sqlite3/ec261.sql
 No mismatches.
 ```
 
-Those 88 cases are not hand-written. rulec builds them from the rule's own boundaries — both
-sides of every comparison, one case per row, and the pairs where one row shadows another — the
-same suite `rulec gen` writes next to the generated code and `rulec coverage` audits. You can
-also take them directly with `rulec vectors`.
+Almost none of those 94 cases is hand-written. rulec builds them from the rule's own
+boundaries — both sides of every comparison, one case per row, and the pairs where one row
+shadows another — and adds the rule's own `examples`, which are the six a person did write.
+It is the same suite `rulec gen` writes next to the generated code and `rulec coverage` audits.
+You can also take it directly with `rulec vectors`.
 
 Exit code 0 is agreement, 1 is mismatches, 2 is a bad argument or an adapter that would not
 start. `--format json` gives the same result as data.
@@ -188,11 +189,11 @@ threshold from the band above and exactly the kind of slip a transcription makes
 
 ```console
 $ rulec verify rules/ec261.rule --adapter python3 adapter.py
-Compared 88 / matched 87 (98.864%)
+Compared 94 / matched 92 (97.872%)
 Counterpart: sqlite3/ec261.sql
 
-Affected 1 (1.136%)  amount -300
-  table band_of row 4 / table amount row 3 / table reduction row 7     1 record  difference -300 uniform  total -300
+Affected 2 (2.128%)  amount -600
+  table band_of row 4 / table amount row 3 / table reduction row 7     2 records  difference -300 uniform  total -600
     Example: delay=4, distance=3501, intra_eu=false → rule compensation=300 / legacy compensation=600
 ```
 

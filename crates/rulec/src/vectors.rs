@@ -444,21 +444,77 @@ pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
     }
 }
 
+/// The `examples` as assignments.
+///
+/// They are executable specification (§1.2) and the only cases a **person** wrote, yet nothing
+/// ran them: E107 holds them to the reference evaluator and stops there. An author's worked
+/// cases — the ones taken from the published terms — never reached the generated code in any
+/// language, and counted toward no coverage obligation either, so `examples` could not close a
+/// hole the generator had left.
+///
+/// A row becomes a vector only when it names **every** input. The section is not required to
+/// (E111 demands the outputs, not the inputs), and a vector missing one would hand the runner a
+/// key that is not there.
+fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
+    let Some(ex) = &f.examples else { return Vec::new() };
+    let mut out = Vec::new();
+    for row in &ex.rows {
+        let mut a: BTreeMap<String, Val> = BTreeMap::new();
+        for (ci, (col, _)) in ex.inputs.iter().enumerate() {
+            let Some(ty) = c.ty_of(col) else { continue };
+            if let Some(Cell::Lit(l)) = row.cells.get(ci) {
+                if let Some(v) = eval::lit_to_val(l, &ty) {
+                    a.insert(col.clone(), v);
+                }
+            }
+        }
+        if f.inputs.iter().all(|i| a.contains_key(&i.name.text)) {
+            out.push(a);
+        }
+    }
+    out
+}
+
 /// Evaluate the candidate population and deterministically select a subset that satisfies
 /// coverage.
 pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     let cands = candidates(f, c);
     let raw = pool(f, c, &cands);
 
+    let key_of = |a: &BTreeMap<String, Val>| -> String {
+        a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
+    };
     let mut evaluated: Vec<Vector> = Vec::new();
-    let mut seen_in: BTreeSet<String> = BTreeSet::new();
+    let mut seen_in: BTreeMap<String, usize> = BTreeMap::new();
     for (a, why) in raw {
-        let key = a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",");
-        if !seen_in.insert(key) {
+        let key = key_of(&a);
+        if seen_in.contains_key(&key) {
+            continue;
+        }
+        seen_in.insert(key, evaluated.len());
+        let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+        evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
+    }
+
+    // The examples take part in the audit like any other vector, and are never dropped from the
+    // suite afterwards — they are the one thing in it that a person chose.
+    let mut forced: BTreeSet<usize> = BTreeSet::new();
+    for (n, a) in example_inputs(f, c).into_iter().enumerate() {
+        let key = key_of(&a);
+        if let Some(&i) = seen_in.get(&key) {
+            forced.insert(i);
             continue;
         }
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
-        evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
+        seen_in.insert(key, evaluated.len());
+        forced.insert(evaluated.len());
+        evaluated.push(Vector {
+            input: a,
+            outputs: outs,
+            trace,
+            fired,
+            why: tr!("例 {}行目", "example row {}", n + 1),
+        });
     }
 
     // Keep the vectors that actually discharged one of the three §9.2 criteria. The key is not
@@ -467,6 +523,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     // scoring would drop one.
     let audit = crate::coverage::audit(f, c, "", &evaluated);
     let mut keep: BTreeSet<usize> = audit.witness.clone();
+    keep.extend(forced.iter().copied());
 
     // The pairwise safety net (§9.2): with the three criteria satisfied, greedily add the
     // two-column combinations that have not appeared yet.

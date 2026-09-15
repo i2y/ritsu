@@ -313,3 +313,52 @@ policy first
     );
     assert!(a.ok(), "{}", coverage::render(&a, &vs));
 }
+
+/// The `examples` are part of the vector suite.
+///
+/// They are executable specification and the only cases a person wrote, yet E107 held them to
+/// the reference evaluator and stopped: nothing ran an author's worked cases through the
+/// generated code, in any language, and they counted toward no obligation — so `examples` could
+/// not close a hole the generator had left.
+///
+/// The value below is deliberately interior. The generator works from boundaries, so 37 is a
+/// point it would never pick on its own; finding it among the vectors means the example got
+/// there, not that the sweep happened to pass through.
+#[test]
+fn 例はベクタ集合に入る() {
+    let src = "\
+rule t(t) v1
+
+inputs
+  n(n) : number range >=0 <=100
+
+outputs
+  ok(ok) : bool
+
+table j(j)
+policy first
+| n    | -> ok(ok) : bool |
+| <=50 | true             |
+| -    | false            |
+
+examples
+| n  | -> ok |
+| 37 | true  |
+| 63 | false |
+";
+    let (f, c) = rulec::prepare(src, "ex.rule").expect("検査を通る");
+    let vs = vectors::generate(&f, &c);
+    for want in [37i128, 63] {
+        assert!(
+            vs.iter().any(|v| matches!(v.input.get("n"), Some(rulec::eval::Val::Num(r)) if r.num == want && r.den == 1)),
+            "例の {want} がベクタに無い: {:?}",
+            vs.iter().filter_map(|v| v.input.get("n").map(rulec::vectors::show)).collect::<Vec<_>>()
+        );
+    }
+    // And they say where they came from, so a reader of the vectors can tell them apart.
+    assert_eq!(
+        vs.iter().filter(|v| v.why.contains("example") || v.why.contains("例")).count(),
+        2,
+        "例の出どころが why に無い"
+    );
+}

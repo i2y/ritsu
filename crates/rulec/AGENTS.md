@@ -108,9 +108,13 @@ meet while transcribing:
 ### `examples`
 
 Add them as soon as the tables check clean. They are the only thing that can catch an error
-the reference evaluator, the generated Python and the generated Go all share — that really
-happened once, with rounding for multiple outputs missing in all three. Take the cases from
-the source: a published tariff's own worked examples are ideal.
+the reference evaluator and every generated language share — that really happened once, with
+rounding for multiple outputs missing in all of them. Take the cases from the source: a
+published tariff's own worked examples are ideal.
+
+**They ride in the vector suite.** `gen` writes each of them out as a case of its own, so
+`rulec test` runs them through every generated language and `rulec coverage` counts what they
+reach. A row only goes in when it names every input.
 
 ### `rulec gen <file> --out generated/ --format json`
 
