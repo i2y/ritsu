@@ -273,6 +273,14 @@ impl<'a> Gen<'a> {
             Expr::Lit(Lit::Word(w), _) if w == crate::kw::TRUE || w == crate::kw::FALSE => {
                 Expr2 { text: (if w == crate::kw::TRUE { "True" } else { "False" }).into(), scale: 1 }
             }
+            // A date in an expression is its day number, the same integer the cells use. It
+            // used to fall through to `0` with the other literals, so a definition such as
+            // `作成日 <= 2027-03-31` compiled to `made <= 0` in every language while the
+            // evaluator read the date — the first rule to compare a date with a literal in a
+            // definition found it (§15.38).
+            Expr::Lit(Lit::Date(y, m, d), _) => {
+                Expr2 { text: format!("{}", crate::types::date_ord(*y, *m, *d).num), scale: 1 }
+            }
             Expr::Lit(..) => Expr2 { text: "0".into(), scale: 1 },
             Expr::Call(name, args, _) => {
                 let a: Vec<Expr2> = args.iter().map(|x| self.expr(x, local)).collect();

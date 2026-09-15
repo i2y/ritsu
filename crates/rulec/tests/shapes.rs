@@ -451,3 +451,42 @@ result 料 = 料
 "
     )
 }
+
+/// A date literal inside a definition is its day number in the generated code, the same
+/// integer a cell's date becomes. It used to come out as `0`, so `作成日 <= 2027-03-31`
+/// read `made <= 0` in every language while the evaluator read the date; the first corpus
+/// rule to compare a date with a literal in a definition found it (§15.38).
+#[test]
+fn 定義の中の日付リテラルは通算日になる() {
+    let dir = generate(
+        "datelit",
+        "\
+rule 期限(deadline) v1
+
+inputs
+  作成日(made) : date range >=2020-01-01 <=2030-12-31
+
+outputs
+  可否(ok) : bool
+
+define 期間内(within) : bool = 作成日 <= 2027-03-31
+
+table 判定(judge)
+policy unique
+| 期間内 | -> 可否(ok) : bool |
+| true   | true               |
+| false  | false              |
+
+examples
+| 作成日     | -> 可否 |
+| 2027-03-31 | true    |
+| 2027-04-01 | false   |
+",
+    );
+    // 2027-03-31 is day 20908 from 1970-01-01.
+    let py = std::fs::read_to_string(dir.join("python").join("deadline.py")).unwrap();
+    assert!(py.contains("made <= 20908"), "日付が通算日になっていない:\n{py}");
+    let go = std::fs::read_to_string(dir.join("go").join("deadline").join("deadline.go")).unwrap();
+    assert!(go.contains("<= 20908"), "{go}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
