@@ -241,8 +241,12 @@ impl<'a> Gen<'a> {
             Expr::Lit(Lit::Num(n), _) => {
                 let ty = crate::types::lit_ty_pub(n);
                 let v = crate::types::lit_value_in_pub(n, &ty).unwrap_or(Rat::zero());
-                let s = if v.den == 1 { 1 } else { v.den };
-                Expr2 { text: format!("{}", v.num * (s / v.den)), scale: s }
+                // Not the reduced denominator: the scale `types` records for a name defined
+                // over this literal. Storing `3.6%` at 250 and reading the name back at 1000
+                // is a silent factor of four (§7.1).
+                let den = v.den.max(1);
+                let s = crate::types::lit_scale(n).filter(|s| s % den == 0).unwrap_or(den);
+                Expr2 { text: format!("{}", v.num * (s / den)), scale: s }
             }
             Expr::Lit(Lit::Word(w), _) if w == crate::kw::TRUE || w == crate::kw::FALSE => {
                 Expr2 { text: (if w == crate::kw::TRUE { "True" } else { "False" }).into(), scale: 1 }

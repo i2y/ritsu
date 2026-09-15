@@ -291,3 +291,60 @@ fn 単位のある数とない数は混ざらない() {
     assert_eq!(c, 1, "単位のない数が金額の位置に通ってしまう:\n{out}");
     assert!(out.contains("E103"), "{out}");
 }
+
+/// A rate written as a literal inside a `define`. No corpus rule has this shape: every rate
+/// in the corpus is a column, so it reaches the generator as a *name*, and a name carries
+/// whatever scale `types` recorded for it.
+///
+/// A literal used to be different. `3.6%` reduces to 9/250, and the generator stored the
+/// reduced denominator — while `types` recorded 1000 for the name, the power of ten the
+/// decimal asks for times the hundredth `%` stands for. So the value was written at one
+/// scale and read back at another: a silent factor of four. Neither net that usually holds
+/// catches it. `check` passes, because the reference evaluator is a separate path; and the
+/// six languages agree with each other, because they share the generator's text. Only the
+/// comparison against the evaluator says anything, and only if someone runs it.
+///
+/// It bites whenever the literal reduces at all — every rate sharing a factor with 100, so
+/// `8%` and `50%` as much as `3.6%`. `7%` was fine, which is why a spot check could miss it.
+const RATE_IN_DEFINE: &str = "\
+rule 率の定義(rate_def) v1
+description \"define の本体に率のリテラルを書く\"
+
+inputs
+  元金(src) : money[円, incl_tax] range >=0円 <=100万円
+
+outputs
+  結果(out) : money[円, incl_tax] round half_up(1円)
+
+define 割合分(part) : money[円, incl_tax] = 元金 × 3.6%
+
+result 結果 = 割合分
+
+examples
+| 元金    | -> 結果 |
+| 10000円 | 360円   |
+";
+
+#[test]
+fn defineの中の率のリテラルは名前と同じ尺度で保管される() {
+    let p = write_tmp("ratedef", RATE_IN_DEFINE);
+    let p = p.to_string_lossy().to_string();
+    let (c, out) = run(&["check", &p]);
+    assert_eq!(c, 0, "{out}");
+
+    let dir = std::env::temp_dir().join(format!("rulec-wire-ratedef-gen-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let o = dir.to_string_lossy().to_string();
+    let (c, msg) = run(&["gen", &p, "--out", &o]);
+    assert_eq!(c, 0, "{msg}");
+    let py = std::fs::read_to_string(dir.join("python").join("rate_def.py")).unwrap();
+    // 36/1000, not the reduced 9/250 — because 1000 is what every later read assumes.
+    assert!(py.contains("part = src * 36"), "率のリテラルが約分された尺度で保管されている:\n{py}");
+    assert!(py.contains("1/1000 money"), "定義の単位が名前の尺度と食い違っている:\n{py}");
+    assert!(py.contains("_round_half(raw, 1000) // 1000"), "尺度が戻されていない:\n{py}");
+    // The example says 10000円 → 360円, and the evaluator agrees; the point of the test is
+    // that the generated code agrees too. That is what the factor of four broke.
+    let want = std::fs::read_to_string(dir.join("vectors").join("rate_def.expected.jsonl")).unwrap();
+    assert!(want.contains("{\"結果\":360}"), "参照評価器の期待値が変わっている:\n{want}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

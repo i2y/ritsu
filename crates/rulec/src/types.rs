@@ -1204,6 +1204,21 @@ pub fn lit_value_in_pub(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
     lit_value_in(n, want)
 }
 
+/// The scale at which a numeric literal is a whole number (§7.1).
+///
+/// A decimal moves it by a power of ten: `0.5%` is 1/200, so 100 would not clear it. A unit
+/// finer than its dimension's base carries its own factor: `%` and `銭` are hundredths,
+/// `USDc` too, `mm` a tenth.
+///
+/// Deliberately *not* the reduced denominator of the value. `3.6%` is 9/250, but a name
+/// defined as `× 3.6%` is recorded at 1000 — so a generator that stored it at 250 would
+/// write at one scale and read back at another. One definition, used by both sides.
+pub fn lit_scale(n: &crate::lex::Num) -> Option<i128> {
+    let d = 10i128.checked_pow(u32::try_from(n.frac.len()).ok()?)?;
+    let u = n.unit.as_deref().and_then(unit_info).map_or(1, |(_, f)| f.den);
+    d.checked_mul(u)
+}
+
 /// The §1.6 rendering uses the same write-back. Showing an approver `1000000円` forces a
 /// mental conversion before it can be matched against the `100万円` in the rule source.
 pub fn fmt_big_pub(v: Rat) -> String {
@@ -1417,16 +1432,7 @@ impl Checked {
         }
         match e {
             Expr::Name(n, _) => Some(*self.scales.get(n).unwrap_or(&1)),
-            Expr::Lit(Lit::Num(n), _) => {
-                // The scale has to be one at which the literal is a whole number. A decimal
-                // moves it by a power of ten: `0.5%` is 1/200, so 100 would not clear it.
-                let d = 10i128.checked_pow(u32::try_from(n.frac.len()).ok()?)?;
-                // A unit finer than its dimension's base carries its own factor: `%` and
-                // `銭` are hundredths, `USDc` too, `mm` a tenth. The denominator of that
-                // factor is the scale at which the literal is a whole number.
-                let u = n.unit.as_deref().and_then(unit_info).map_or(1, |(_, f)| f.den);
-                Some(d * u)
-            }
+            Expr::Lit(Lit::Num(n), _) => lit_scale(n),
             Expr::Bin(l, op, r, _) => {
                 let a = self.scale(l)?;
                 let b = self.scale(r)?;
@@ -1436,7 +1442,7 @@ impl Checked {
                     // Dividing by the constant k does not shrink the stored integer: it
                     // multiplies the scale by k, so the division is exact and no language's
                     // rounding convention gets a say (§7.1). The divisor is a constant —
-                    // §2.3 forbids dividing by a variable, and E103 says so.
+                    // §2.3 forbids dividing by a variable, and E115 says so.
                     BinOp::Div => a.checked_mul(const_value(r)?)?,
                     _ => 1,
                 })
