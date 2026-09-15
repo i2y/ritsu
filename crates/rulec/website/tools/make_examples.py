@@ -2,8 +2,8 @@
 """Build the examples page from the corpus, so the sources on the page cannot drift.
 
 Every rule shown here is one of the files the test suite runs: `rulec check` passes on it,
-its examples execute, and the reference evaluator, the generated Python and the generated Go
-agree on it byte for byte. Run this after editing a corpus rule or the prose below:
+its examples execute, and the reference evaluator and every generated language agree on it
+byte for byte. Run this after editing a corpus rule or the prose below:
 
     python3 tools/make_examples.py
 
@@ -243,7 +243,7 @@ EXAMPLES = [
 
 JA_HEAD = """# 例で見る
 
-ここにあるのは全部、**このリポジトリのテストが毎回走らせている規則**です。`rulec check` を通り、書いてある例が実行され、参照評価器・生成した Python・生成した Go の三つが同じ答えを返すことまで確かめられています。そのままコピーして動かせます。
+ここにあるのは全部、**このリポジトリのテストが毎回走らせている規則**です。`rulec check` を通り、書いてある例が実行され、参照評価器と生成したどの言語も同じ答えを返すことまで確かめられています。そのままコピーして動かせます。
 
 小さいものから順に並べてあります。
 
@@ -252,9 +252,8 @@ JA_HEAD = """# 例で見る
 EN_HEAD = """# Examples
 
 Every rule on this page is **one the repository's tests run on every commit**: it passes
-`rulec check`, its own examples execute, and the reference evaluator, the generated Python
-and the generated Go are held to the same answers byte for byte. Copy any of them and it
-works.
+`rulec check`, its own examples execute, and the reference evaluator and every generated
+language are held to the same answers byte for byte. Copy any of them and it works.
 
 They are ordered smallest first.
 
