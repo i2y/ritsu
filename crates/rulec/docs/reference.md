@@ -214,13 +214,14 @@ Without it, an input no table uses is W111.
   送料(fee) : money[円, incl_tax]  round up(10円)
 ```
 
-Four modes, each pinned down for negative values:
+Five modes, each pinned down for negative values:
 
 | mode | direction | at grid 1 |
 |---|---|---|
 | `up` | away from zero | −4.2 → −5 |
 | `down` | toward zero | −4.8 → −4 |
 | `half_up` | an exact half goes away from zero | −4.5 → −5 |
+| `half_down` | an exact half goes toward zero | 4.5 → 4, 4.6 → 5 |
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
 The value in parentheses is the **grid**: `up(10円)` rounds to a multiple of 10 yen. Rounding
@@ -375,7 +376,7 @@ which is why it is caught at parse time.
 | line heads | `rule` `description` `import` `enum` `group` `inputs` `outputs` `derive` `define` `table` `policy` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
-| rounding | `up` `down` `half_up` `half_even` |
+| rounding | `up` `down` `half_up` `half_down` `half_even` |
 | functions | `min` `max` |
 <!-- /RESERVED -->
 

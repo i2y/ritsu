@@ -766,7 +766,7 @@ impl Checked {
             Expr::Call(name, args, sp) => {
                 let ats: Vec<Ty> = args.iter().map(|a| self.expr_ty(a, path)).collect();
                 match name.as_str() {
-                    crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN => {
+                    crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN | crate::kw::HALF_DOWN => {
                         ats.first().cloned().unwrap_or(Ty::Unknown)
                     }
                     crate::kw::MIN | crate::kw::MAX => {

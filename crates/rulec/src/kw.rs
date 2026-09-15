@@ -66,6 +66,7 @@ pub const UP: &str = "up";
 pub const DOWN: &str = "down";
 pub const HALF_UP: &str = "half_up";
 pub const HALF_EVEN: &str = "half_even";
+pub const HALF_DOWN: &str = "half_down";
 
 // --- Functions allowed in the result expression
 pub const MIN: &str = "min";
@@ -80,7 +81,7 @@ pub const STD: &str = "std";
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, OUTPUTS, DERIVE, DEFINE, TABLE, POLICY, RESULT,
     EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
-    HALF_UP, HALF_EVEN,
+    HALF_UP, HALF_EVEN, HALF_DOWN,
 ];
 
 /// Lists the words that may follow `policy`, for use in diagnostic text.

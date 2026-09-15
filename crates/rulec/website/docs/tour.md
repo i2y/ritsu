@@ -215,6 +215,7 @@ modes, each **pinned down for negative values too**.
 | `up` | away from zero | −4.2 → −5 |
 | `down` | toward zero | −4.8 → −4 |
 | `half_up` | an exact half goes away from zero | −4.5 → −5 |
+| `half_down` | an exact half goes toward zero — the payroll deduction rule of the social insurance tables (50銭以下切り捨て) | 4.5 → 4, 4.6 → 5 |
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
 What is in the parentheses is the **grid**: `up(10円)` rounds to a
@@ -317,7 +318,7 @@ result 送料 = 基本送料 × 負担率
 ```
 
 The operations are addition and subtraction, multiplication by a
-constant, multiplication by a rate, `min`, `max`, and the four rounding
+constant, multiplication by a rate, `min`, `max`, and the five rounding
 modes. **There is no loop and no recursion.**
 
 ## Examples

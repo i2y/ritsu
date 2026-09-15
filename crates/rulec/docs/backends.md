@@ -75,7 +75,7 @@ canonical unit** — no decimals anywhere. Two consequences bite generators:
 - **Rounding is the last thing that happens**, on the value in its own scale, and the
   direction is declared in the rule. `round down` is toward zero, not toward negative
   infinity: `-4.8 EUR` rounds down to `-4 EUR`. [generated-code.md](generated-code.md) has the
-  four modes.
+  five modes.
 
 ### 3. Emit whatever your target needs
 
@@ -269,7 +269,7 @@ The pieces, in the order they are usually written:
    entry guards, one branch per row with the row quoted in a comment.
 3. `Gen::<lang>_runner()` — reads the wire JSON on stdin, writes the canonical JSON on
    stdout. This is what lets the target join the agreement test.
-4. `round_tests_<lang>()` — the four rounding modes against the reference values.
+4. `round_tests_<lang>()` — the five rounding modes against the reference values.
 5. An arm in `Gen::cell()`, and an entry in `Gen::api()`.
 6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, and
    how to run them. Nothing else has to be told about the language — `rulec gen` writes it,

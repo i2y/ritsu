@@ -504,7 +504,7 @@ Related codes: [E108](#e108), [E112](#e112)
 
 **When.** A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
 
-**Fix.** Add rounding to the output declaration, e.g. `round up(10円)`. There are four directions (`up`, `down`, `half_up`, `half_even`), pinned down for negative values as well (§7.3).
+**Fix.** Add rounding to the output declaration, e.g. `round up(10円)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3).
 
 **Smallest reproduction**:
 

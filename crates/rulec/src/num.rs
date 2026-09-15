@@ -102,6 +102,9 @@ pub enum RoundMode {
     Half,
     /// Exactly half goes to the even neighbor
     Bankers,
+    /// Exactly half goes toward 0. The payroll rule of the social insurance tables
+    /// (50銭以下は切り捨て、50銭を超えるときは切り上げ) is this one (§15.39).
+    HalfDown,
 }
 
 impl RoundMode {
@@ -111,6 +114,7 @@ impl RoundMode {
             crate::kw::DOWN => RoundMode::Down,
             crate::kw::HALF_UP => RoundMode::Half,
             crate::kw::HALF_EVEN => RoundMode::Bankers,
+            crate::kw::HALF_DOWN => RoundMode::HalfDown,
             _ => return None,
         })
     }
@@ -120,6 +124,7 @@ impl RoundMode {
             RoundMode::Down => crate::kw::DOWN,
             RoundMode::Half => crate::kw::HALF_UP,
             RoundMode::Bankers => crate::kw::HALF_EVEN,
+            RoundMode::HalfDown => crate::kw::HALF_DOWN,
         }
     }
 }
@@ -149,6 +154,9 @@ impl Rat {
             RoundMode::Up => away,
             RoundMode::Half => {
                 if 2 * rn >= rd { away } else { t }
+            }
+            RoundMode::HalfDown => {
+                if 2 * rn > rd { away } else { t }
             }
             RoundMode::Bankers => {
                 if 2 * rn > rd {
@@ -183,6 +191,10 @@ mod tests {
         // Exactly half
         assert_eq!(r(5, 10).round_to(RoundMode::Half, one), Rat::int(1));
         assert_eq!(r(-5, 10).round_to(RoundMode::Half, one), Rat::int(-1));
+        assert_eq!(r(5, 10).round_to(RoundMode::HalfDown, one), Rat::int(0));
+        assert_eq!(r(-5, 10).round_to(RoundMode::HalfDown, one), Rat::int(0));
+        assert_eq!(r(6, 10).round_to(RoundMode::HalfDown, one), Rat::int(1));
+        assert_eq!(r(-6, 10).round_to(RoundMode::HalfDown, one), Rat::int(-1));
         assert_eq!(r(5, 10).round_to(RoundMode::Bankers, one), Rat::int(0));
         assert_eq!(r(15, 10).round_to(RoundMode::Bankers, one), Rat::int(2));
         assert_eq!(r(-15, 10).round_to(RoundMode::Bankers, one), Rat::int(-2));
@@ -213,6 +225,8 @@ mod readme_tests {
             (RoundMode::Half, -45, 10, 1, -5),
             (RoundMode::Bankers, 25, 10, 1, 2),
             (RoundMode::Bankers, 35, 10, 1, 4),
+            (RoundMode::HalfDown, 45, 10, 1, 4),
+            (RoundMode::HalfDown, 46, 10, 1, 5),
             // The grid is what is in the parentheses: with `round up(10円)`, −4.2 yen becomes
             // −10 yen.
             (RoundMode::Up, -42, 10, 10, -10),

@@ -493,8 +493,8 @@ pub fn ledger() -> Vec<Entry> {
                 "A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer."
             ),
             tr!(
-                "出力の宣言に丸めを書いてください。例: `round up(10円)`。向きは四種（`up` `down` `half_up` `half_even`）で、負の側まで固定されています（§7.3）。",
-                "Add rounding to the output declaration, e.g. `round up(10円)`. There are four directions (`up`, `down`, `half_up`, `half_even`), pinned down for negative values as well (§7.3)."
+                "出力の宣言に丸めを書いてください。例: `round up(10円)`。向きは五種（`up` `down` `half_up` `half_down` `half_even`）で、負の側まで固定されています（§7.3）。",
+                "Add rounding to the output declaration, e.g. `round up(10円)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3)."
             ),
             X_E104,
             &["E106", "E103"],

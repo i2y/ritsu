@@ -226,7 +226,7 @@ A table holds **the branching and nothing else**. Arithmetic lives in three plac
 |---|---|---|
 | `derive` | a linear combination of inputs — `+`, `-`, multiplication by a constant | **yes**, and it stays a quantity |
 | `define` | a boolean (two shapes), or a computed intermediate value | a boolean or an enum one can |
-| `result` | `+ - * /`, parentheses, `min` and `max`, and the four rounding modes as functions | — |
+| `result` | `+ - * /`, parentheses, `min` and `max`, and the five rounding modes as functions | — |
 
 - **Division is by a constant only.** Dividing by a variable stops at E115. Dividing money by
   a money constant — `税込金額 ÷ 100円` — cancels the unit and leaves a `number`.
