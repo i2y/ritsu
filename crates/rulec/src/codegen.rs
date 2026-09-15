@@ -3445,6 +3445,58 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
+        // --- JavaScript: the TypeScript names without the types (§15.36). A value is what it
+        // is at run time there: a bigint for every number and date, a string for an enum
+        // member (its name) and for a string, a boolean.
+        let js_ty = |ty: &Ty| -> String {
+            match ty {
+                Ty::Enum(_) | Ty::Str => "string".into(),
+                Ty::Bool => "boolean".into(),
+                Ty::Opt(t) => format!("{} | null", match **t {
+                    Ty::Enum(_) | Ty::Str => "string",
+                    Ty::Bool => "boolean",
+                    _ => "bigint",
+                }),
+                _ => "bigint".into(),
+            }
+        };
+        let js_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &js_ty(&ty), &ty)
+            })
+            .collect();
+        let js_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &js_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let js_params = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ");
+        let js_ret = if outs.len() == 1 { js_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
+        let javascript = crate::json::Obj::new()
+            .str("module", &format!("{alias}.mjs"))
+            .str("function", &alias)
+            .str("signature", &format!("export function {alias}({js_params})"))
+            .str("traced", &format!("{alias}_traced"))
+            .str("traced_signature", &format!("export function {alias}_traced({js_params})"))
+            .str("record", &format!("{alias}_record"))
+            .str("record_signature", &format!("export function {alias}_record({js_params}, {r_out}, {r_trace}, {r_tag} = \"\")"))
+            .raw("params", crate::json::arr(&js_in))
+            .str("returns", &js_ret)
+            .raw("outputs", crate::json::arr(&js_outs))
+            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .finish();
+
         // --- Rust
         let rs_in: Vec<String> = self
             .f
@@ -3687,6 +3739,7 @@ impl Gen<'_> {
             .str("source_sha256", &self.src_hash)
             .raw("python", python)
             .raw("typescript", typescript)
+            .raw("javascript", javascript)
             .raw("rust", rust)
             .raw("ruby", ruby)
             .raw("go", go)
@@ -5451,5 +5504,142 @@ impl<'a> Gen<'a> {
         ));
         o
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// JavaScript (§15.36): the TypeScript with its types taken off.
+// ---------------------------------------------------------------------------
+
+/// The generated TypeScript is erasable syntax by design (§8.3), so the JavaScript target
+/// is the same file with the annotations removed: the same branches, the same helpers, held
+/// to the same vectors by `rulec test`. A transform rather than a second emitter, because
+/// two emitters of the same code drift apart; the agreement check is what keeps the
+/// transform honest.
+pub fn strip_types(ts: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut in_interface = false;
+    for line in ts.lines() {
+        if in_interface {
+            if line == "}" {
+                in_interface = false;
+            }
+            continue;
+        }
+        let t = line.trim_start();
+        if t.starts_with("export type ") || t.starts_with("import type ") {
+            continue;
+        }
+        if t.starts_with("export interface ") {
+            in_interface = true;
+            continue;
+        }
+        // Comment lines carry prose, and prose says "as" too.
+        if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" {
+            out.push(line.to_string());
+            continue;
+        }
+        let mut l = line.replace(" as const;", ";");
+        l = strip_signature(&l);
+        l = strip_declaration(&l);
+        l = strip_casts(&l);
+        out.push(l);
+    }
+    out.join("\n") + "\n"
+}
+
+/// `function f(a: T, b: U): R {` → `function f(a, b) {`. Also a class constructor.
+fn strip_signature(l: &str) -> String {
+    let t = l.trim_start();
+    if !(t.contains("function ") || t.starts_with("constructor(")) {
+        return l.to_string();
+    }
+    let Some(open) = l.find('(') else { return l.to_string() };
+    let Some(close) = l.rfind(')') else { return l.to_string() };
+    if close < open {
+        return l.to_string();
+    }
+    let params: Vec<String> = l[open + 1..close]
+        .split(", ")
+        .filter(|p| !p.is_empty())
+        .map(|p| match p.find(": ") {
+            Some(i) => p[..i].to_string(),
+            None => p.to_string(),
+        })
+        .collect();
+    let mut rest = &l[close + 1..];
+    if let Some(r) = rest.strip_prefix(": ") {
+        // The return type runs up to the block's brace.
+        rest = match r.rfind(" {") {
+            Some(i) => &r[i..],
+            None => "",
+        };
+    }
+    format!("{}({}){}", &l[..open], params.join(", "), rest)
+}
+
+/// `let x: T;`, `const x: T = …` → without the annotation. Destructuring has none.
+fn strip_declaration(l: &str) -> String {
+    let t = l.trim_start();
+    let indent = &l[..l.len() - t.len()];
+    let Some(rest) = t.strip_prefix("let ").or_else(|| t.strip_prefix("const ")) else {
+        return l.to_string();
+    };
+    let kw = if t.starts_with("let ") { "let " } else { "const " };
+    let name_end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$')).unwrap_or(rest.len());
+    if name_end == 0 {
+        return l.to_string();
+    }
+    let after = &rest[name_end..];
+    let Some(a) = after.strip_prefix(": ") else { return l.to_string() };
+    // The annotation ends at the assignment or at the semicolon, whichever comes first.
+    let end = match (a.find(" = "), a.find(';')) {
+        (Some(i), Some(j)) => i.min(j),
+        (Some(i), None) => i,
+        (None, Some(j)) => j,
+        (None, None) => return l.to_string(),
+    };
+    format!("{indent}{kw}{}{}", &rest[..name_end], &a[end..])
+}
+
+/// ` as YenInclTax`, ` as number`, ` as Record<string, unknown>` → gone.
+fn strip_casts(l: &str) -> String {
+    let mut o = String::new();
+    let mut rest = l;
+    while let Some(i) = rest.find(" as ") {
+        o.push_str(&rest[..i]);
+        let after = &rest[i + 4..];
+        let mut n = after.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(after.len());
+        if n == 0 {
+            // Not a cast (nothing that looks like a type follows); keep the text.
+            o.push_str(" as ");
+            rest = after;
+            continue;
+        }
+        if after[n..].starts_with('<') {
+            if let Some(k) = after[n..].find('>') {
+                n += k + 1;
+            }
+        }
+        rest = &after[n..];
+    }
+    o.push_str(rest);
+    o
+}
+
+impl<'a> Gen<'a> {
+    /// The JavaScript module: the TypeScript one without its types (§15.36).
+    pub fn javascript(&self) -> String {
+        strip_types(&self.typescript())
+    }
+
+    /// The runner, likewise. The import points at the `.mjs` beside it.
+    pub fn js_runner(&self) -> String {
+        strip_types(&self.ts_runner()).replace(".ts\";", ".mjs\";")
+    }
+}
+
+pub fn round_tests_javascript() -> String {
+    strip_types(&round_tests_typescript())
 }
 

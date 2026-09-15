@@ -4,7 +4,7 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, Rust, Ruby and Swift,
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby and Swift,
 and an ordinary Go package. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
@@ -13,7 +13,7 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Six are supported today — Python, TypeScript, Rust, Ruby, Go and Swift — and **Java,
+Seven are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift — and **Java,
 Kotlin and SQL are planned**. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
@@ -23,6 +23,7 @@ exists.
 |---|---|---|
 | Python | supported | `python3` |
 | TypeScript | supported | just `node` — no build step, no tsconfig |
+| JavaScript | supported | just `node`, or a browser — the TypeScript with its types taken off, as an ES module |
 | Rust | supported | just `rustc` — no cargo, no crates |
 | Ruby | supported | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and a `.rbs` ships beside the module |
 | Go | supported | `go` |
@@ -133,8 +134,8 @@ Four rules keep it readable.
 - **Units live in the type** wherever there is a type to hold them: a
   newtype in Rust, a one-field struct in Swift, a defined type in Go, a
   branded `bigint` in TypeScript, a `NewType` in Python. Confusing
-  `YenInclTax` with `YenExclTax` stops at compile time. Ruby has nowhere to
-  put a unit, so there it is documented instead.
+  `YenInclTax` with `YenExclTax` stops at compile time. Ruby and JavaScript have
+  nowhere to put a unit, so there it is documented instead.
 - **Rounding goes through its own helper**, because Python's and Ruby's
   integer division rounds toward −∞ while Rust, Swift, Go and TypeScript
   truncate toward zero.

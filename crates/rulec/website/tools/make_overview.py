@@ -63,7 +63,7 @@ JA = dict(
     alt="表を書く。rulec は一行を入力の組み合わせの一区画にして並べ、隙間も重なりも無いことを"
         "計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が"
         "返ってきて、行を足してもう一度。運賃がいくらかだけは人が決める。証明できた表からだけ、"
-        "依存ゼロの Python・TypeScript・Rust・Ruby・Go・Swift が出る。",
+        "依存ゼロの Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift が出る。",
     table=("表", "業務の人が読んで、承認する", ".rule"),
     head=("あて先", "重量", "→ 運賃"),
     rows=[("近畿圏", "<=2kg", "800円"),
@@ -98,7 +98,7 @@ EN = dict(
         "by computation that the boxes leave no gap and no overlap. If there is a gap, "
         "back comes the input that falls through it (Destination = Overseas, Weight = 2001g): "
         "add the row and run again - only what the fee is takes a person. Only a proved "
-        "table generates, and what comes out is dependency-free Python, TypeScript, Rust, Ruby, Go and Swift.",
+        "table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift.",
     table=("Table", "a domain expert reads and approves it", ".rule"),
     head=("Destination", "Weight", "→ Fee"),
     rows=[("Domestic", "<=2kg", "8USD"),

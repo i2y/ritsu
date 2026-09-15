@@ -1,6 +1,6 @@
 # The generated code
 
-`rulec gen` writes ordinary Python, TypeScript, Rust, Ruby, Go and Swift — a module in each,
+`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift — a module in each,
 and a package in Go's case. There is no runtime to install and nothing to configure: a function
 takes the declared inputs and returns the declared outputs. This file says what shape that
 code has, what it guarantees, and how to call it.
@@ -21,7 +21,7 @@ spelling each language gives them, and the errors the code can raise. The shape 
 ## What it guarantees
 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
-TypeScript imports nothing at all; the generated Rust imports nothing outside `std` and needs
+TypeScript and JavaScript import nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
 Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`.
 The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
@@ -41,7 +41,7 @@ read. The branches are written once, in the twin that also returns
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
-`NewType`; Ruby is the one target with nowhere to put a unit, so it documents it instead.
+`NewType`; Ruby and JavaScript have nowhere to put a unit, so they document it instead.
 `YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
 Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
 anywhere.
@@ -127,6 +127,26 @@ a `tsc` build works just as well. The member spelling is the alias in upper case
 The two error classes are `RuleInputError` and `RuleContradictionError`, with the same
 meanings as in Python.
 
+### JavaScript
+
+```js
+export function coupon_step(subtotal, applied, kind, rate, face, dup)
+```
+
+The TypeScript with its types taken off, as an ES module (`coupon_step.mjs`): the same
+branches, the same helpers, the same `bigint` for every number, held to the same vectors by
+`rulec test`. It runs with `node` alone and in a browser as it stands. The enum objects,
+`parseCouponKind`, and the two error classes are the same as in TypeScript; what is gone is
+the brand, so nothing catches a tax-exclusive amount passed where a tax-inclusive one was
+meant — the position Ruby is in.
+
+```js
+import { coupon_step, CouponKind } from "./coupon_step.mjs";
+
+const out = coupon_step(10000n, 0n, CouponKind.PERCENT, 10n, 0n, false);
+console.log(out.ok, out.raw);
+```
+
 ### Rust
 
 ```rust
@@ -156,7 +176,7 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike Python, TypeScript, Ruby and Go. A value
+**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby and Go. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
 make at run time is already made by the compiler. Swift is in the same position.
 
@@ -315,6 +335,7 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 |---|---|---|
 | Python | `def coupon_step_traced(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> tuple[Output, list[Fired]]:` | `Fired`, a `NamedTuple` of `table` and `row` |
 | TypeScript | `coupon_step_traced(…): [Output, Fired[]]` | `{ table: string; row: number }` |
+| JavaScript | `coupon_step_traced(…)`, returning `[out, trace]` | `{ table, row }` |
 | Rust | `coupon_step_traced(…) -> Result<(Output, Vec<Fired>), RuleError>` | `Fired { table: &'static str, row: u32 }` |
 | Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table` and `row` |
 | Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row}` |
@@ -346,6 +367,7 @@ for it.
 |---|---|
 | Python | `def coupon_step_record(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool, out: Output, trace: _Trace, tag: str = "") -> str:` |
 | TypeScript | `coupon_step_record(…, out: Output, trace: Fired[], tag = ""): string` |
+| JavaScript | `coupon_step_record(…, out, trace, tag = "")` |
 | Rust | `coupon_step_record(…, out: Output, trace: &[Fired], tag: &str) -> String` |
 | Ruby | `CouponStep.coupon_step_record(…, out, trace, tag = "")` |
 | Go | `func CouponStepRecord(in Input, out Output, trace []Fired, tag string) string` |

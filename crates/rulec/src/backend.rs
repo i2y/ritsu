@@ -109,6 +109,23 @@ pub const ALL: &[Backend] = &[
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
     },
     Backend {
+        id: "javascript",
+        name: "JavaScript",
+        tool: "node",
+        lang: Lang::Ts,
+        // The TypeScript with its types taken off (§15.36). `.mjs`, so that node reads it
+        // as a module without a package.json, and a browser takes it as it stands.
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("javascript/{alias}.mjs"), g.javascript()),
+                (format!("javascript/{alias}_runner.mjs"), g.js_runner()),
+                ("javascript/_round_test.mjs".into(), crate::codegen::round_tests_javascript()),
+            ]
+        },
+        run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
+        round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
+    },
+    Backend {
         id: "rust",
         name: "Rust",
         tool: "rustc",

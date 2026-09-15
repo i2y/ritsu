@@ -224,6 +224,10 @@ meaning is in [generated-code.md](generated-code.md).
                "enums":[{"name":"クーポン種別","alias":"CouponKind",
                          "values":[{"name":"率引き","alias":"PERCENT"}]}],
                "errors":["RuleInputError","RuleContradictionError"]},
+ "javascript":{"module":"coupon_step.mjs","function":"coupon_step",
+               "signature":"export function coupon_step(subtotal, applied, kind, rate, face, dup)",
+               "params":[…],"returns":"Output","outputs":[…],"enums":[…],
+               "errors":["RuleInputError","RuleContradictionError"]},
  "rust":{"module":"coupon_step.rs","function":"coupon_step",
          "signature":"pub fn coupon_step(subtotal: YenInclTax, …) -> Result<Output, RuleError>",
          "params":[…],"returns":"Output","outputs":[…],
@@ -257,7 +261,7 @@ one does — the twin that returns the rows that matched beside the outputs — 
 and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
-`CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
+`CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
 `couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift). `unit`, `range` and `rounding` are absent when the
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module.

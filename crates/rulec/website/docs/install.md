@@ -32,7 +32,7 @@ Nothing, for the checks. `rulec check`, `fmt`, `gen`, `vectors`,
 
 Two steps reach outside:
 
-- **`rulec test`** runs the generated Python, TypeScript, Rust, Ruby, Go and
+- **`rulec test`** runs the generated Python, TypeScript, JavaScript, Rust, Ruby, Go and
   Swift and compares them with the reference evaluator. It needs `python3`,
   `node`, `rustc`, `ruby`, `go` and `swiftc` on the path; without one it says which side it skipped and
   does not fail.

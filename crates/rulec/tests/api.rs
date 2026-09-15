@@ -85,6 +85,8 @@ fn 署名とガードが生成物と一致する() {
 
         let ts_j = j.get("typescript").unwrap();
         let ts = std::fs::read_to_string(dir.join("typescript").join(s(ts_j, "module"))).unwrap();
+        let js_j = j.get("javascript").unwrap();
+        let js = std::fs::read_to_string(dir.join("javascript").join(s(js_j, "module"))).unwrap();
         let rs_j = j.get("rust").unwrap();
         let rs = std::fs::read_to_string(dir.join("rust").join(s(rs_j, "module"))).unwrap();
         let sw_j = j.get("swift").unwrap();
@@ -97,7 +99,8 @@ fn 署名とガードが生成物と一致する() {
         assert!(sw.contains(&s(sw_j, "signature")), "swift の署名が違う: {}", s(sw_j, "signature"));
         // The traced twin (§15.33) is part of the inventory too, and has to be in the file
         // exactly as the inventory spells it.
-        for (lang, file, j) in [("python", &py, py_j), ("typescript", &ts, ts_j), ("rust", &rs, rs_j), ("go", &go, go_j), ("swift", &sw, sw_j)] {
+        assert!(js.contains(&s(js_j, "signature")), "javascript の署名が違う: {}", s(js_j, "signature"));
+        for (lang, file, j) in [("python", &py, py_j), ("typescript", &ts, ts_j), ("javascript", &js, js_j), ("rust", &rs, rs_j), ("go", &go, go_j), ("swift", &sw, sw_j)] {
             let sig = s(j, "traced_signature");
             assert!(file.contains(&sig), "{lang} の traced の署名が違う: {sig}");
             assert!(sig.contains(&s(j, "traced")), "{lang}: traced の名前が署名に無い: {sig}");
