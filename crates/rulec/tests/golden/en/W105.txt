@@ -7,6 +7,7 @@ warning[W105]: Overlapping rows: the same input matches row 1 and row 3
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
    |
  Both rows match: 期限内 = false, 同商品適用済 = true, クーポン範囲 = 店内全商品, クーポン種別 = 率引き, 最低差 = -1円, 支払差 = -1円
+ An input producing this example: クーポン種別 = 率引き, クーポン範囲 = 店内全商品, 上限額 = 0, 元価 = 0, 割引率 = 0%, 割引額面 = 0, 同商品適用済 = true, 最低購入額 = 1000000, 期限内 = false, 現在残額 = 0
  Because of `policy first`, row 1 wins. Is this intended?
  If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.
 
@@ -19,6 +20,7 @@ warning[W105]: Overlapping rows: the same input matches row 2 and row 3
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
    |
  Both rows match: 期限内 = true, 同商品適用済 = true, クーポン範囲 = 対象商品, クーポン種別 = 率引き, 最低差 = -1円, 支払差 = -1円
+ An input producing this example: クーポン種別 = 率引き, クーポン範囲 = 対象商品, 上限額 = 0, 元価 = 0, 割引率 = 0%, 割引額面 = 0, 同商品適用済 = true, 最低購入額 = 1000000, 期限内 = true, 現在残額 = 0
  Because of `policy first`, row 2 wins. Is this intended?
  If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.
 
@@ -31,5 +33,6 @@ warning[W105]: Overlapping rows: the same input matches row 3 and row 4
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4
    |
  Both rows match: 期限内 = true, 同商品適用済 = true, クーポン範囲 = 店内全商品, クーポン種別 = 額引き, 最低差 = -1円, 支払差 = -1円
+ An input producing this example: クーポン種別 = 額引き, クーポン範囲 = 店内全商品, 上限額 = 0, 元価 = 0, 割引率 = 0%, 割引額面 = 0, 同商品適用済 = true, 最低購入額 = 1000000, 期限内 = true, 現在残額 = 0
  Because of `policy first`, row 3 wins. Is this intended?
  If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.

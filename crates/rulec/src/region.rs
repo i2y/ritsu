@@ -858,13 +858,24 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             // evaluator compute the definitions too, and treat **only the overlaps we could
             // construct** as real contradictions. Failing to construct one is not a proof of
             // non-existence, so instead of asserting anything we demote to W114.
+            // A box places its coordinate freely on any axis that is not a free input — a
+            // definition's truth value, and a derived value too. The sieve only holds a derived
+            // axis against *its own* declared range, so `a = 1` next to `d < 0` survives it even
+            // though `d = b - a` and `b >= 1` leave `d >= 0` there. Both kinds
+            // therefore go through the same door: construct a real input, let the evaluator
+            // compute the definitions and the derived values, and treat only what could be
+            // constructed as real.
+            let free_axis = (0..reg.axes.len()).any(|ai| {
+                (reg.is_define[ai] || reg.derived[ai].is_some())
+                    && (0..reg.axes[ai].len()).any(|cc| reg.masks[i][ai][cc] && reg.masks[j][ai][cc])
+            });
             let touches_define = (0..reg.axes.len()).any(|ai| {
                 reg.is_define[ai]
                     && (0..reg.axes[ai].len()).any(|cc| reg.masks[i][ai][cc] && reg.masks[j][ai][cc])
             });
             let mut feas = feas;
             let mut built: Option<String> = None;
-            if touches_define && feas != Feasible::No {
+            if free_axis && feas != Feasible::No {
                 nodes += (reg.axes.len() * 8) as i64;
                 match crate::vectors::pair_witness(f, c, t, i, j) {
                     Some(a) => {
@@ -987,8 +998,15 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     );
                 }
                 Policy::TopDown => {
-                    shadowed[j] = true;
-                    overlaps.push((i, j));
+                    // A pair whose point could not be constructed is not presented as a shadow:
+                    // no witness, and no coverage obligation to reach a point that may not
+                    // exist. Under `first` the earlier row wins either way, so there is nothing
+                    // to guard — the demotion costs the reader nothing here.
+                    let confirmed = feas != Feasible::Unknown;
+                    if confirmed {
+                        shadowed[j] = true;
+                        overlaps.push((i, j));
+                    }
                     // The three kinds of §4. Containment is decided on regions (whether row i's
                     // region minus row j's region is empty, not per-axis projections). The sieve
                     // is not applied.
@@ -1003,14 +1021,22 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .table(tname.clone())
                     .rowref(tname.clone(), i + 1)
                     .rowref(tname.clone(), j + 1)
-                    .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                     .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
-                    .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
-                    .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
-                    .note(match &built {
-                        Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
-                        None => String::new(),
-                    })
+                    .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1));
+                    let d = if confirmed {
+                        d.wit(pairs_to_witness(reg.witness_pairs(&wpath)))
+                            .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
+                            .note(match &built {
+                                Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
+                                None => String::new(),
+                            })
+                    } else {
+                        d.note(tr!(
+                            "両方に当てはまる入力は構成できませんでした。存在しないことの証明ではありません。",
+                            "No input matching both could be constructed. This is not a proof that none exists."
+                        ))
+                    };
+                    let d = d
                     .note(tr!("`{} {}` のため 行{} が勝ちます。意図通りですか。", "Because of `{} {}`, row {} wins. Is this intended?", crate::kw::POLICY, crate::kw::FIRST, i + 1))
                     .key(pair_key(&t.rows[i], &t.rows[j]));
                     if contained {
