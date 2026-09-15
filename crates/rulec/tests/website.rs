@@ -1,6 +1,6 @@
 //! The documentation site must not promise what the tool does not do either.
 //!
-//! `website/docs/` and `website/docs-ja/` hold six authored pages each; the rest
+//! `website/docs/` and `website/docs-ja/` hold eight authored pages each; the rest
 //! are copied in from this repository by `website/sync.sh` and are not committed,
 //! so they are checked where they live (`tests/docs.rs`, `tests/codes.rs`,
 //! `tests/formats.rs`, `tests/api.rs`). What is checked here is the site's own
@@ -23,7 +23,7 @@ const SYNCED: &[&str] =
 
 /// The pages written for the site itself, in both languages.
 const AUTHORED: &[&str] =
-    &["index.md", "install.md", "tour.md", "checks.md", "generate.md", "compare.md", "examples.md"];
+    &["index.md", "install.md", "tour.md", "checks.md", "generate.md", "compare.md", "examples.md", "fit.md"];
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))

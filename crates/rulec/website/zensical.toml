@@ -26,6 +26,7 @@ nav = [
   { "Generate and call" = "generate.md" },
   { "Compare and replay" = "compare.md" },
   { Examples = "examples.md" },
+  { "Does your rule fit" = "fit.md" },
   { "For agents" = "agents.md" },
   { Reference = [
     { Grammar = "reference.md" },

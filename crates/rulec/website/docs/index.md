@@ -46,6 +46,21 @@ shows a gap, but **the same computation decides overlaps and rows nothing reache
 three are set side by side further down.
 
 
+---
+
+## Where to start, by what you have
+
+What you already have decides the first move. None of the three changes anything that
+runs today, and the second is the one to start with when there is code already: nothing
+is deployed, and what comes back is a match rate and the disagreements, clustered.
+
+| you have | the first move | the command |
+|---|---|---|
+| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec check` — [What it proves](checks.md) |
+| **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](compare.md#against-a-legacy-implementation) |
+| **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
+
+
 ## What this is — a harness for an agent turning table-shaped rules into code
 
 A great many business rules **can be written as a table**. Some already are — a shipping
@@ -265,74 +280,9 @@ approves, the **subject** the checker proves things about, and the **source** th
 generated code comes from. The moment those become three files, one of them rots — and
 it is almost always the specification.
 
-### Does your rule fit
-
-If all five are **yes**, it fits. Whether money is involved is not one of them.
-
-1. Is the **number of inputs fixed** (not a list of variable length)?
-2. Are the inputs **flat values** (you can pass the prefecture itself, not
-   `order.destination.prefecture`)?
-3. Is it **one decision** (iteration and ordering can live in the caller)?
-4. Does the **same input always give the same answer** ("today" and the stock level are
-   arguments too)?
-5. Does **a person approve** the answer, or is the rule **revised on a date**?
-
-If any of 1–4 is no, it does not fit structurally. If only 5 is no, it will work, but
-the tool is more than you need.
-
-### Apportionment depends on how you apportion
-
-Spreading a discount across the lines of an order can or cannot be written, depending on
-how the split is decided.
-
-**It can — when you fill each line in turn.** "Apply the discount to the lines in order,
-up to each line's own value." Make the rule decide one line, and leave the loop to the
-caller.
-
-```rule
-inputs
-  明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
-  残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
-  対象(eligible)      : bool
-
-outputs
-  充当額(applied) : money[円, incl_tax]  round down(1円)
-
-define 充てられる額(cap) : money[円, incl_tax] = min(明細定価, 残り値引)
-
-table 充当可否(applies)
-policy unique
-| 対象  | -> 充当(on) : money[円, incl_tax] |
-| true  | 充てられる額                      |
-| false | 0円                               |
-
-result 充当額 = 充当
-```
-
-The caller walks the lines and subtracts from `残り値引`. Done this way **the total
-always comes out exact** — nothing is over- or under-allocated (checked over 2,000
-different sets of lines).
-
-**It cannot — when you split by ratio.** "Apportion by each line's share of the list
-price" needs `line ÷ total`, and **division is only allowed by a constant**:
-`注文金額 ÷ 100円` is fine, `明細 ÷ 合計` is not — dividing by a variable stops at E115. You can work around it by computing
-the ratio in the caller and passing it in as a rate — a rate step goes as fine as you
-declare it, `rate[step 0.1%]` and beyond — but then whether that ratio is right is no
-longer something this tool says anything about.
-
-### What it is not for
-
-- **Workflows** — several steps, carrying state
-- **Judgements about a collection itself** — "any line is refrigerated", "three or more
-  items in the cart". Flatten those at the boundary and pass the scalar in
-- **Branching on a string** — `string` cannot be a table column (E110). A value that
-  decides a branch belongs in an `enum`, where the closed set makes the completeness check
-  work. No prefix match and no regular expressions either
-- **Deciding the weights or the thresholds themselves** — that is optimisation and
-  machine learning. **Adding up scores with weights that are already agreed and turning
-  the total into a rank is writable** — see "評価ランク" in the [examples](examples.md),
-  where no money appears anywhere. What can be proved is which row fires, never whether a
-  weight is the right one
+Whether a rule of yours is one of these — the five questions, the shape of apportionment
+that fits and the one that does not, and what the language is not for — has a page of its
+own: [Does your rule fit](fit.md).
 
 ### What else is out there
 

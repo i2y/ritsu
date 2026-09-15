@@ -18,8 +18,8 @@ website/
 
 ## One source of truth
 
-Seven pages are **authored here**, in both languages: `index`, `install`,
-`tour`, `checks`, `generate`, `compare`, `examples`. They are the tour,
+Eight pages are **authored here**, in both languages: `index`, `install`,
+`tour`, `checks`, `generate`, `compare`, `examples`, `fit`. They are the tour,
 written for a reader arriving at the site.
 
 `examples.md` is **generated** by `tools/make_examples.py` from

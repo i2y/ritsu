@@ -55,6 +55,18 @@ No runtime and no configuration: what comes out is ordinary dependency-free func
 
 ---
 
+## Where to start, by what you have
+
+What you already have decides the first move. None of the three changes anything that
+runs today, and the second is the one to start with when there is code already: nothing
+is deployed, and what comes back is a match rate and the disagreements, clustered.
+
+| you have | the first move | the command |
+|---|---|---|
+| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec check` — [What it proves](https://i2y.github.io/rulec/checks/) |
+| **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
+| **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
+
 ## Install
 
 ```console
