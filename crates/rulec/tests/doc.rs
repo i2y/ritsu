@@ -217,6 +217,31 @@ fn 承認者が知るべきことが載る() {
     assert!(d.contains("down(1円)"), "丸めを列に畳む: {d}");
 }
 
+/// Where a table came from is written as a comment at the end of the `table` line, and a row
+/// taken from somewhere else carries its own (§15.32). Both are source text, so the rendering
+/// may show them — and the approver is who they are for.
+#[test]
+fn 出典のコメントが承認者に届く() {
+    let src = "rule t(t) v1\n\nenum 色(color) = 赤(r) | 青(b)\n\ninputs\n  c(c) : 色\n\n\
+               outputs\n  n(n) : number  round down(1)\n\n\
+               table x(x)  # 出典: 料金表 2026-04 版 p.3\npolicy unique\n\
+               | c  | -> n(n) : number |\n| 赤 | 1                |\n\
+               | 青 | 2                |  # 出典: 改定のお知らせ 2026-06\n\n\
+               examples\n| c  | -> n |\n| 赤 | 1    |  # 料金表の計算例 1\n";
+    let d = doc_of(src, "source");
+    // The table's own source sits right under its heading, before anything the rendering adds.
+    assert!(d.contains("## 表 x（policy unique）\n\n出典: 料金表 2026-04 版 p.3\n\n| 列 |"), "{d}");
+    // A row's comment becomes a notes column; a row without one has an empty cell there.
+    assert!(d.contains("| 2 | 青 | 2 | 出典: 改定のお知らせ 2026-06 |\n"), "{d}");
+    assert!(d.contains("| 1 | 赤 | 1 |  |\n"), "{d}");
+    assert!(d.contains("| 赤 | 1 | 料金表の計算例 1 |\n"), "{d}");
+
+    // No comment, no column: a table without any renders exactly as before.
+    let d = doc_of(&groups_rule("赤", "青, 緑"), "plain");
+    assert!(d.contains("| # | c | b | → r（bool） |\n"), "{d}");
+    assert!(!d.contains("| 注記 |\n|---|---|---|---|---|"), "コメントの無い表に注記の列が出ている:\n{d}");
+}
+
 #[test]
 fn out_で書き出せる() {
     let dir = std::env::temp_dir().join(format!("rulec-doc-out-{}", std::process::id()));

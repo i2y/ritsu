@@ -24,22 +24,28 @@ use crate::region;
 use crate::types::{Checked, Ty};
 use std::collections::BTreeMap;
 
-/// Take only the trailing comment from one line of the source file.
-/// This is the only place where the origin of a provisional rounding (the §7.2 convention)
-/// reaches the approver's eyes. It is also the breakwater against §16 item three (a placeholder
-/// becoming the authority).
-fn trailing_comment(lines: &[&str], line: usize) -> Option<String> {
-    let l = lines.get(line.checked_sub(1)?)?;
-    // A `#` inside a string literal is not picked up.
+/// Split one source line into its body and its trailing comment. The comment starts at the
+/// first `#` outside a string literal, which is where the parser starts it too, so the two
+/// never disagree about where the body ends.
+fn split_comment(l: &str) -> (&str, Option<String>) {
     let mut in_str = false;
     for (i, ch) in l.char_indices() {
         match ch {
             '"' => in_str = !in_str,
-            '#' if !in_str => return Some(l[i + 1..].trim().to_string()),
+            '#' if !in_str => return (&l[..i], Some(l[i + 1..].trim().to_string())),
             _ => {}
         }
     }
-    None
+    (l, None)
+}
+
+/// Take only the trailing comment from one line of the source file.
+/// This is where the origin of a provisional rounding (the §7.2 convention) reaches the
+/// approver's eyes, and where the source a table or a row was transcribed from does (§15.32).
+/// It is also the breakwater against §16 item three (a placeholder becoming the authority).
+fn trailing_comment(lines: &[&str], line: usize) -> Option<String> {
+    let l = lines.get(line.checked_sub(1)?)?;
+    split_comment(l).1.filter(|c| !c.is_empty())
 }
 
 /// Use the source line as it is. Rebuilding the cells from the AST could let the rendering
@@ -47,10 +53,7 @@ fn trailing_comment(lines: &[&str], line: usize) -> Option<String> {
 /// from the source file.
 fn source_cells(lines: &[&str], line: usize) -> Vec<String> {
     let Some(l) = lines.get(line.saturating_sub(1)) else { return Vec::new() };
-    let body = match l.find('#') {
-        Some(i) if l[..i].matches('|').count() >= 2 => &l[..i],
-        _ => l,
-    };
+    let (body, _) = split_comment(l);
     let t = body.trim();
     let t = t.strip_prefix('|').unwrap_or(t);
     let t = t.strip_suffix('|').unwrap_or(t);
@@ -414,8 +417,11 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         if let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) {
             // The source spells the output marker `->`; the rendering shows it as `→`, like
             // every other arrow in this document.
-            let head: Vec<String> = source_cells(&lines, h).into_iter().map(|c| c.replacen("->", "→", 1)).collect();
-            o.push_str(&md_table(&head, &ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect::<Vec<_>>(), false));
+            let mut head: Vec<String> = source_cells(&lines, h).into_iter().map(|c| c.replacen("->", "→", 1)).collect();
+            let mut rows: Vec<Vec<String>> = ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect();
+            let row_lines: Vec<usize> = ex.rows.iter().map(|r| r.span.line).collect();
+            with_notes(&mut head, &mut rows, &lines, &row_lines);
+            o.push_str(&md_table(&head, &rows, false));
         }
         o.push_str(&tr!(
             "\nこの {} 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。\n",
@@ -430,10 +436,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
 /// The right-hand side of `=` on a declaration line, verbatim from the source file.
 fn expr_src(lines: &[&str], line: usize) -> String {
     let Some(l) = lines.get(line.saturating_sub(1)) else { return String::new() };
-    let body = match l.find('#') {
-        Some(i) => &l[..i],
-        None => l,
-    };
+    let (body, _) = split_comment(l);
     let rhs = match body.split_once('=') {
         Some((_, rhs)) => rhs,
         None => body,
@@ -444,6 +447,23 @@ fn expr_src(lines: &[&str], line: usize) -> String {
         Some(i) => rhs[..i].trim().to_string(),
         None => rhs.trim().to_string(),
     }
+}
+
+/// The rows of a table with the trailing comment of each, as a notes column. The column is
+/// there only when some row has a comment, so a table without any renders as it always has.
+/// A row's comment is where the source it was taken from is written when it differs from the
+/// table's (§15.32); it is source text, so showing it keeps every cell traceable.
+fn with_notes(head: &mut Vec<String>, rows: &mut [Vec<String>], lines: &[&str], row_lines: &[usize]) {
+    let notes: Vec<String> = row_lines.iter().map(|&l| trailing_comment(lines, l).unwrap_or_default()).collect();
+    if notes.iter().all(|n| n.is_empty()) {
+        return;
+    }
+    let width = head.len();
+    for (r, n) in rows.iter_mut().zip(notes) {
+        r.resize(width, String::new());
+        r.push(n);
+    }
+    head.push(tr!("注記", "Notes"));
 }
 
 fn md_table(head: &[String], rows: &[Vec<String>], numbered: bool) -> String {
@@ -476,6 +496,12 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
     let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
     let mut o = tr!("\n## 表 {name}（{} {policy}）\n\n", "\n## Table {name} ({} {policy})\n\n", crate::kw::POLICY);
+
+    // The comment at the end of the `table` line is where the source of the table is written
+    // (AGENTS.md §1). It goes right under the heading, before anything this rendering adds.
+    if let Some(cm) = trailing_comment(lines, t.span.line) {
+        o.push_str(&format!("{}\n\n", md_esc(&cm)));
+    }
 
     // Where each value comes from, and where it flows to.
     o.push_str(&tr!("| 列 | 出どころ |\n|---|---|\n", "| Column | Source |\n|---|---|\n"));
@@ -531,7 +557,9 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
             tr!("→ {n}（{}）", "→ {n} ({})", bits.join(" / "))
         };
     }
-    let rows: Vec<Vec<String>> = t.rows.iter().map(|r| source_cells(lines, r.span.line)).collect();
+    let mut rows: Vec<Vec<String>> = t.rows.iter().map(|r| source_cells(lines, r.span.line)).collect();
+    let row_lines: Vec<usize> = t.rows.iter().map(|r| r.span.line).collect();
+    with_notes(&mut head, &mut rows, lines, &row_lines);
     o.push('\n');
     o.push_str(&md_table(&head, &rows, true));
 

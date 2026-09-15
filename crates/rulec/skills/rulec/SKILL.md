@@ -95,6 +95,16 @@ Two shapes are worth knowing before the first draft:
   called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 
+One habit pays for itself at the first revision:
+
+- **Write down where each table came from.** A comment at the end of the `table` line names
+  the source — the document, its edition or date, the page — and a row taken from somewhere
+  else (a later notice, a correction, an answer from a person) carries its own comment at the
+  end of the row. `rulec doc` shows both to the approver, so a review becomes "compare this
+  row with that cell" rather than "read the whole table again", and when the source is
+  revised, the rows to re-read are the ones that cite it. The `description` line stays a
+  one-line summary of what the rule decides.
+
 ### `rulec fmt <file>`
 
 Run it before `check`, every time. It aligns the columns and rewrites `→ ・ 、 ≦` to ASCII,
@@ -313,9 +323,10 @@ Three things make such a question answerable: **a concrete case** (the witness),
 on the answer** (the amount that moves), and **what you assumed in the meantime** so that
 silence does not read as agreement.
 
-Keep the assumption in the file, as a `#` comment where the declaration is. `rulec doc`
-surfaces those comments to the approver, which is the only place an assumed rounding is seen
-by the person who can overrule it.
+Keep the assumption in the file, as a `#` comment where the declaration is — and an amount
+you took from somewhere other than the table's own source, as a comment at the end of its
+row. `rulec doc` surfaces those comments to the approver, which is the only place an assumed
+rounding or an unsourced amount is seen by the person who can overrule it.
 
 ---
 
