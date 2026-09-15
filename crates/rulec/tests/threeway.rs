@@ -51,6 +51,11 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/値引の充当.rule", "allocate"),
     ("tests/corpus/会員特典.rule", "member_perk"),
     ("tests/corpus/ec261.rule", "ec261"),
+    ("tests/corpus/健康保険料.rule", "kenpo_premium"),
+    ("tests/corpus/厚生年金保険料.rule", "pension_premium"),
+    ("tests/corpus/所得税.rule", "income_tax"),
+    ("tests/corpus/領収書の印紙税.rule", "receipt_stamp"),
+    ("tests/corpus/印紙税.rule", "stamp_duty"),
 ];
 
 #[test]

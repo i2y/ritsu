@@ -46,7 +46,7 @@ needed to use what comes out — it runs as it stands.
 ## The agent skill
 
 The first user of this tool is an agent, and `skills/rulec/` is the
-skill that drives it: the procedure, the grammar, thirteen worked
+skill that drives it: the procedure, the grammar, eighteen worked
 rules, the data formats, and how to target a language rulec does not
 generate. It does not copy the tool's own details down: it asks, through
 `--help`, `--format json` and `rulec explain`, so it does not go stale

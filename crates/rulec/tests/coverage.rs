@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 8] = [
+const CORPUS: [&str; 13] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -15,6 +15,11 @@ const CORPUS: [&str; 8] = [
     "tests/corpus/適用順序.rule",
     "tests/corpus/クーポン一枚.rule",
     "tests/corpus/ec261.rule",
+    "tests/corpus/健康保険料.rule",
+    "tests/corpus/厚生年金保険料.rule",
+    "tests/corpus/所得税.rule",
+    "tests/corpus/領収書の印紙税.rule",
+    "tests/corpus/印紙税.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -35,9 +40,11 @@ fn コーパスは三基準を全部満たす() {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(met, req, "{rel} の {k}");
         }
-        // The guideline is a few hundred per rule (§9.2). An order of magnitude more means the
-        // folding of candidates is broken.
-        assert!(vs.len() < 600, "{rel}: ベクタが {} 件と多すぎる", vs.len());
+        // The guideline is a few hundred per rule (§9.2), and an order of magnitude more means
+        // the folding of candidates is broken. The 50-grade premium table with three more
+        // inputs is the largest rule here at about 1,200, most of them pairwise cases, so the
+        // bound sits above that and below where "an order of magnitude" begins.
+        assert!(vs.len() < 2000, "{rel}: ベクタが {} 件と多すぎる", vs.len());
     }
 }
 
@@ -189,6 +196,11 @@ fn 義務の件数を固定する() {
         ("tests/corpus/適用順序.rule", 4, 0, 5),
         ("tests/corpus/クーポン一枚.rule", 7, 1, 3),
         ("tests/corpus/ec261.rule", 15, 23, 0),
+        ("tests/corpus/健康保険料.rule", 52, 98, 0),
+        ("tests/corpus/厚生年金保険料.rule", 32, 62, 0),
+        ("tests/corpus/所得税.rule", 7, 12, 0),
+        ("tests/corpus/領収書の印紙税.rule", 17, 28, 0),
+        ("tests/corpus/印紙税.rule", 23, 41, 0),
     ];
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
     for (rel, rows, bounds, shadows) in PINNED {

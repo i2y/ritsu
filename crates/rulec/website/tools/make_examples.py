@@ -239,6 +239,89 @@ EXAMPLES = [
             "**Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.",
         ],
     ),
+    (
+        "領収書の印紙税.rule",
+        "領収書の印紙税",
+        "国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。",
+        [
+            "**非課税は 0 円の行です。** 5 万円未満と、営業に関しないものは非課税で、表はそれを `0円` の行として持ちます。「課税されない」も規則の答えのひとつです。",
+            "**金額の記載が無いものは金額を見ません。** `金額の記載あり` が false の行は受取金額の列が `-` で、いくらでも 200 円です。三つの入力のどの組み合わせもちょうど一行に当たることを、検査が証明しています。",
+        ],
+        "Stamp duty on a receipt",
+        "The table for document type 17 (a receipt for the proceeds of a sale) from NTA tax answer No.7141. Besides the amount received, whether an amount is stated and whether the receipt is in the course of business decide it.",
+        [
+            "**Exempt is a row of 0 yen.** Under 50,000 yen, and receipts not in the course of business, are exempt, and the table holds that as `0円` rows: \"not taxed\" is an answer of the rule too.",
+            "**A receipt with no amount stated does not look at the amount.** The row with `金額の記載あり` false has `-` in the amount column and is 200 yen whatever the amount. The checker proves that every combination of the three inputs hits exactly one row.",
+        ],
+    ),
+    (
+        "所得税.rule",
+        "所得税の速算表",
+        "国税庁タックスアンサー No.2260 の速算表です。課税される所得金額の段ごとに税率と控除額があり、`課税所得 × 税率 − 控除額` で所得税が出ます。復興特別所得税はその 2.1% です。",
+        [
+            "**一つの表が率と金額を同時に出します。** 税率の列は `rate[step 1%]`、控除額の列は `money[円]` で、`define` がその二つを掛けて引きます。ページの計算例（7,000,000円 × 0.23 − 636,000円 = 974,000円）が、そのまま `examples` の行です。",
+            "**段の境目は「次の段の始まり未満」で書いています。** ページは「1,000円 から 1,949,000円まで」「1,950,000円 から」と書きますが、課税所得は 1,000円 単位なので同じことです。整数の全体で完全性を証明するには、隙間の無い書き方のほうが要ります。",
+            "**書いていないことは仮置きと明記します。** 復興特別所得税に 1 円未満の端数が出たときの扱いは、このページにはありません。`round down` に仮置きして、宣言の横のコメントに出典が無いことを残しています。承認する人は `rulec doc` でそれを読みます。",
+        ],
+        "The income-tax bracket table",
+        "The quick-calculation table of NTA tax answer No.2260. Each bracket of taxable income carries a rate and a deduction, and `taxable × rate − deduction` is the tax; the reconstruction surtax is 2.1% of it.",
+        [
+            "**One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[円]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.",
+            "**Bracket edges are written as \"below the start of the next bracket\".** The page says \"from 1,000 to 1,949,000 yen\" and \"from 1,950,000 yen\"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.",
+            "**What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.",
+        ],
+    ),
+    (
+        "印紙税.rule",
+        "契約書の印紙税と、期限つきの軽減税率",
+        "不動産の譲渡に関する契約書（第1号文書）の印紙税額です。本則（No.7140）と、令和9年3月31日までに作成された契約書の軽減税率（No.7108）を一つの表に持ちます。作成日が入力です。",
+        [
+            "**期限のある特例は、日付の定義と一つの列になります。** `define 軽減期間 = 作成日 <= 2027-03-31` を列に置き、軽減の行は `true`、本則の行は `false`、期間によらない行は `-` です。`policy unique` なので、どの契約金額もどの作成日も、ちょうど一行に当たることが証明されています。",
+            "**軽減の対象外は本則の行が受けます。** 軽減は契約金額が 10 万円を超えるものだけなので、1 万円未満（非課税）と 10 万円以下の行は、期間の列が `-` です。",
+            "**この規則が生成器の欠陥を一つ見つけました。** 定義の中の日付リテラルが、六言語すべてで 0 として生成されていました。参照評価器は正しく読んでいたので、`rulec test` の突き合わせで食い違いとして出ました。",
+        ],
+        "Stamp duty on a contract, with a reduced rate that expires",
+        "The stamp duty on a contract for the transfer of real estate (document type 1). The standard amounts (No.7140) and the reduced amounts for contracts made up to 31 March 2027 (No.7108) sit in one table, with the date of the contract as an input.",
+        [
+            "**A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.",
+            "**What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.",
+            "**This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in all six languages. The reference evaluator read the date, so the disagreement showed up in `rulec test`.",
+        ],
+    ),
+    (
+        "厚生年金保険料.rule",
+        "厚生年金保険料の等級表",
+        "日本年金機構の厚生年金保険料額表（令和8年度版）です。32 等級で、料率は一般の被保険者なら 18.3% ですが、厚生年金基金の加入員は基金ごとに違うので入力にしてあります。",
+        [
+            "**健康保険料と同じ形です。** 表が 50 等級から 32 等級になり、上限が 650,000 円になるだけで、折半と二つの端数処理はそのままです。同じ形の規則は、同じ形に写せます。",
+            "**この表では二つの端数処理が同じ答えになります。** 18.3% × 標準報酬月額は必ず偶数の円なので、折半額に端数が出ません。規則には二つの丸め方が書いてありますが、この料率では表に現れない、ということまで `examples` が示しています。",
+            "**印刷された 32 等級すべてと突き合わせてあります。** 表の折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、全件一致することをテストが確かめます。",
+        ],
+        "The employees' pension grade table",
+        "The premium table for employees' pension from 日本年金機構 (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.",
+        [
+            "**The same shape as the health-insurance rule.** Fifty grades become thirty-two and the ceiling is 650,000 yen; the halving and the two ways of settling the sen are unchanged. Rules of one shape transcribe into rules of one shape.",
+            "**Here the two ways agree.** 18.3% of a standard remuneration is always an even number of yen, so the half has no fraction. The rule states both roundings; the `examples` show that at this rate the difference never appears.",
+            "**All 32 printed grades are held to the rule.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over them and requires every one to agree.",
+        ],
+    ),
+    (
+        "健康保険料.rule",
+        "保険料額表を写して、二つの端数処理を出す",
+        "協会けんぽの保険料額表（東京支部、令和8年3月分から）です。報酬月額から 50 等級の標準報酬月額を引き、料率を掛けて折半します。円未満の端数は、給与から控除するときと現金で納めるときで丸め方が違います。この表を写すために `half_down` が言語に入りました。",
+        [
+            "**同じ折半額から、丸め方の違う二つの出力を返します。** 表の注記は、給与から控除するなら「50銭以下は切り捨て、50銭を超える場合は切り上げ」、現金で納めるなら「50銭未満は切り捨て、50銭以上は切り上げ」と書いています。後者は `half_up`、前者は `half_down` です。折半額が 6,599.5 円の等級で、二つの出力は 1 円違います。",
+            "**料率は入力です。** 都道府県ごと、年度ごとに変わるものを規則に焼き込むと、改定のたびに表を書き換えることになります。`derive` で健康保険料率と介護保険料率を足し、介護保険第2号被保険者かどうかで、表が使う率を選びます。",
+            "**表の全等級と突き合わせてあります。** 印刷された折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、100 件すべてで一致することをテストが確かめます。",
+        ],
+        "A premium table, with two ways to settle the sen",
+        "The 協会けんぽ premium table (Tokyo branch, from March 2026). Monthly pay picks one of 50 grades of standard remuneration, the rate is applied and the amount halved. Fractions of a yen are settled two different ways — one when the premium is deducted from salary, another when it is paid in cash — and transcribing this table is what put `half_down` into the language.",
+        [
+            "**Two outputs from one halved amount, rounded two ways.** The table's notes say: deducted from salary, half a yen or less is dropped and more than half is carried up; paid in cash, less than half is dropped and half or more is carried up. The second is `half_up`; the first is `half_down`. At the grade whose half is 6,599.5 yen the two outputs differ by one yen.",
+            "**The rates are inputs.** They change by prefecture and by year; baking them into the rule would mean rewriting the table at every revision. A `derive` adds the care-insurance rate to the health-insurance rate, and a table picks which applies by whether the person is a category-2 care insured.",
+            "**Every grade is held to the printed table.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over all 100 of them and requires every one to agree.",
+        ],
+    ),
 ]
 
 JA_HEAD = """# 例で見る

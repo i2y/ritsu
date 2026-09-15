@@ -733,6 +733,332 @@ examples
 - **What the text leaves open, the table makes you decide.** Article 7(1)(b) says "between 1500 and 3500 kilometres" and does not say whether either end is included. Since (a) is "1500 kilometres or less", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.
 - **Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.
 
+## Stamp duty on a receipt
+
+The table for document type 17 (a receipt for the proceeds of a sale) from NTA tax answer No.7141. Besides the amount received, whether an amount is stated and whether the receipt is in the course of business decide it.
+
+```rule
+rule 領収書の印紙税(receipt_stamp) v1
+description "売上代金に係る金銭又は有価証券の受取書（第17号の1文書）の印紙税額。5万円未満と、営業に関しないものは非課税"
+
+inputs
+  受取金額(amount)       : money[円]  range >=0円 <=10000億円
+  金額の記載あり(stated) : bool
+  営業に関する(business) : bool
+
+outputs
+  印紙税額(tax) : money[円]  round down(1円)
+
+table 税額(tax_table)  # 出典: 国税庁 タックスアンサー No.7141 印紙税額の一覧表（その2）第17号文書（令和8年4月1日現在法令等）
+policy unique
+| 営業に関する | 金額の記載あり | 受取金額             | -> 印紙税額(tax) : money[円] |
+| false        | -              | -                    | 0円                          |  # 営業に関しないものは非課税
+| true         | false          | -                    | 200円                        |  # 受取金額の記載のないもの
+| true         | true           | <5万円               | 0円                          |  # 非課税
+| true         | true           | >=5万円 <=100万円    | 200円                        |
+| true         | true           | >100万円 <=200万円   | 400円                        |
+| true         | true           | >200万円 <=300万円   | 600円                        |
+| true         | true           | >300万円 <=500万円   | 1000円                       |
+| true         | true           | >500万円 <=1000万円  | 2000円                       |
+| true         | true           | >1000万円 <=2000万円 | 4000円                       |
+| true         | true           | >2000万円 <=3000万円 | 6000円                       |
+| true         | true           | >3000万円 <=5000万円 | 10000円                      |
+| true         | true           | >5000万円 <=1億円    | 20000円                      |
+| true         | true           | >1億円 <=2億円       | 40000円                      |
+| true         | true           | >2億円 <=3億円       | 60000円                      |
+| true         | true           | >3億円 <=5億円       | 100000円                     |
+| true         | true           | >5億円 <=10億円      | 150000円                     |
+| true         | true           | >10億円              | 200000円                     |
+
+examples
+| 受取金額  | 金額の記載あり | 営業に関する | -> 印紙税額 |
+| 49999円   | true           | true         | 0円         |  # 5万円未満は非課税
+| 50000円   | true           | true         | 200円       |
+| 1000000円 | true           | true         | 200円       |  # 100万円以下
+| 1000001円 | true           | true         | 400円       |  # 100万円を超え
+| 0円       | false          | true         | 200円       |  # 記載のないもの
+| 3000000円 | true           | false        | 0円         |  # 営業に関しないもの
+```
+
+**What this one shows**
+
+- **Exempt is a row of 0 yen.** Under 50,000 yen, and receipts not in the course of business, are exempt, and the table holds that as `0円` rows: "not taxed" is an answer of the rule too.
+- **A receipt with no amount stated does not look at the amount.** The row with `金額の記載あり` false has `-` in the amount column and is 200 yen whatever the amount. The checker proves that every combination of the three inputs hits exactly one row.
+
+## The income-tax bracket table
+
+The quick-calculation table of NTA tax answer No.2260. Each bracket of taxable income carries a rate and a deduction, and `taxable × rate − deduction` is the tax; the reconstruction surtax is 2.1% of it.
+
+```rule
+rule 所得税(income_tax) v1
+description "所得税の速算表。課税される所得金額に税率を掛けて控除額を引き、復興特別所得税を上乗せする"
+
+inputs
+  課税所得(taxable) : money[円]  range >=1000円 <=100億円  # 1,000円未満の端数を切り捨てた後の金額。速算表は 1,000円 から始まる
+
+outputs
+  所得税(tax)            : money[円]  round down(1円)  # 課税所得が 1,000円 単位で税率が整数の % なので、端数は出ない
+  復興特別所得税(surtax) : money[円]  round down(1円)  # 基準所得税額の 2.1%。1円未満の端数の扱いはこのページに無いので、切り捨てに仮置き
+
+# 速算表は「1,000円 から 1,949,000円まで」「1,950,000円 から」のように書く。課税所得は 1,000円 単位なので、
+# 各段の上端は次の段の始まりの手前と同じこと。ここではそのまま「次の段の始まり未満」と書く。
+table 速算表(brackets)  # 出典: 国税庁 タックスアンサー No.2260 所得税の税率（令和8年4月1日現在法令等）
+policy unique
+| 課税所得                 | -> 税率(rate) : rate[step 1%] | 控除額(deduction) : money[円] |
+| <1950000円               | 5%                            | 0円                           |
+| >=1950000円 <3300000円   | 10%                           | 97500円                       |
+| >=3300000円 <6950000円   | 20%                           | 427500円                      |
+| >=6950000円 <9000000円   | 23%                           | 636000円                      |
+| >=9000000円 <18000000円  | 33%                           | 1536000円                     |
+| >=18000000円 <40000000円 | 40%                           | 2796000円                     |
+| >=40000000円             | 45%                           | 4796000円                     |
+
+define 所得税(tax) : money[円] = 課税所得 × 税率 − 控除額
+define 復興特別所得税(surtax) : money[円] = 所得税 × 2.1%  # 出典: 同ページ「基準所得税額の2.1パーセント」
+
+examples
+| 課税所得  | -> 所得税 | 復興特別所得税 |
+| 7000000円 | 974000円  | 20454円        |  # 同ページの計算例: 7,000,000円 × 0.23 − 636,000円 = 974,000円
+| 1949000円 | 97450円   | 2046円         |  # 5% の段の上端。2,046.45円 → 切り捨て（仮置き）
+| 1950000円 | 97500円   | 2047円         |  # 10% の段の下端。控除額のおかげで上の行と 50円 しか違わない
+```
+
+**What this one shows**
+
+- **One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[円]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.
+- **Bracket edges are written as "below the start of the next bracket".** The page says "from 1,000 to 1,949,000 yen" and "from 1,950,000 yen"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.
+- **What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.
+
+## Stamp duty on a contract, with a reduced rate that expires
+
+The stamp duty on a contract for the transfer of real estate (document type 1). The standard amounts (No.7140) and the reduced amounts for contracts made up to 31 March 2027 (No.7108) sit in one table, with the date of the contract as an input.
+
+```rule
+rule 印紙税(stamp_duty) v1
+description "不動産の譲渡に関する契約書（第1号文書）の印紙税額。記載された契約金額と作成日で決まり、令和9年3月31日までに作成されたものは軽減税率"
+
+inputs
+  契約金額(amount)       : money[円]  range >=0円 <=10000億円
+  金額の記載あり(stated) : bool
+  作成日(made)           : date  range >=2014-04-01 <=2030-12-31  # 軽減措置の始まり（平成26年4月1日）から
+
+outputs
+  印紙税額(tax) : money[円]  round down(1円)
+
+define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  # 出典: No.7108。平成26年4月1日から令和9年3月31日までの間に作成される契約書。始まりは入力の範囲の下端
+
+# 軽減税率は契約金額が 10万円 を超えるものだけ（No.7108）。10万円以下は期間によらず本則で、記載のないものは 200円。
+table 税額(tax_table)  # 出典: 国税庁 タックスアンサー No.7140 印紙税額の一覧表（その1）第1号文書、No.7108 不動産の譲渡契約書等の印紙税の軽減措置（令和8年4月1日現在法令等）
+policy unique
+| 金額の記載あり | 軽減期間 | 契約金額             | -> 印紙税額(tax) : money[円] |
+| false          | -        | -                    | 200円                        |  # 契約金額の記載のないもの
+| true           | -        | <1万円               | 0円                          |  # 非課税
+| true           | -        | >=1万円 <=10万円     | 200円                        |
+| true           | true     | >10万円 <=50万円     | 200円                        |  # ここから軽減後の税額（No.7108）
+| true           | true     | >50万円 <=100万円    | 500円                        |
+| true           | true     | >100万円 <=500万円   | 1000円                       |
+| true           | true     | >500万円 <=1000万円  | 5000円                       |
+| true           | true     | >1000万円 <=5000万円 | 10000円                      |
+| true           | true     | >5000万円 <=1億円    | 30000円                      |
+| true           | true     | >1億円 <=5億円       | 60000円                      |
+| true           | true     | >5億円 <=10億円      | 160000円                     |
+| true           | true     | >10億円 <=50億円     | 320000円                     |
+| true           | true     | >50億円              | 480000円                     |
+| true           | false    | >10万円 <=50万円     | 400円                        |  # ここから本則の税額（No.7140）
+| true           | false    | >50万円 <=100万円    | 1000円                       |
+| true           | false    | >100万円 <=500万円   | 2000円                       |
+| true           | false    | >500万円 <=1000万円  | 10000円                      |
+| true           | false    | >1000万円 <=5000万円 | 20000円                      |
+| true           | false    | >5000万円 <=1億円    | 60000円                      |
+| true           | false    | >1億円 <=5億円       | 100000円                     |
+| true           | false    | >5億円 <=10億円      | 200000円                     |
+| true           | false    | >10億円 <=50億円     | 400000円                     |
+| true           | false    | >50億円              | 600000円                     |
+
+examples
+| 契約金額   | 金額の記載あり | 作成日     | -> 印紙税額 |
+| 30000000円 | true           | 2026-09-16 | 10000円     |  # 3,000万円の売買契約。軽減期間なので 1万円（本則は 2万円）
+| 30000000円 | true           | 2027-04-01 | 20000円     |  # 軽減期間が終わった翌日
+| 100000円   | true           | 2026-09-16 | 200円       |  # 10万円ちょうどは軽減の対象外で、本則も 200円
+| 5000円     | true           | 2026-09-16 | 0円         |  # 1万円未満は非課税
+| 0円        | false          | 2026-09-16 | 200円       |  # 契約金額の記載のないもの
+```
+
+**What this one shows**
+
+- **A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.
+- **What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.
+- **This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in all six languages. The reference evaluator read the date, so the disagreement showed up in `rulec test`.
+
+## The employees' pension grade table
+
+The premium table for employees' pension from 日本年金機構 (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.
+
+```rule
+rule 厚生年金保険料(pension_premium) v1
+description "厚生年金保険料。報酬月額から標準報酬月額を引き、料率を掛けて折半し、給与から控除する額と現金で納める額を出す"
+
+inputs
+  報酬月額(monthly) : money[円]  range >=0円 <=1000万円
+  料率(rate)        : rate[step 0.1%]  range >=0% <=30%   # 一般・坑内員・船員は 18.3%。厚生年金基金の加入員は基金ごとに 13.3%〜15.9% なので入力にする
+
+outputs
+  標準報酬月額(std)  : money[円]  round down(1円)
+  給与控除額(deduct) : money[円]  round half_down(1円)  # 出典: 保険料額表の注記①。給与から控除するとき、50銭以下は切り捨て、50銭を超えれば切り上げ
+  現金納付額(cash)   : money[円]  round half_up(1円)    # 出典: 保険料額表の注記②。現金で納めるとき、50銭未満は切り捨て、50銭以上は切り上げ
+
+table 等級(grade)  # 出典: 日本年金機構 令和2年9月分（10月納付分）からの厚生年金保険料額表（令和8年度版）
+policy unique
+| 報酬月額             | -> 標準報酬月額(std) : money[円] |
+| <93000円             | 88000円                          |
+| >=93000円 <101000円  | 98000円                          |
+| >=101000円 <107000円 | 104000円                         |
+| >=107000円 <114000円 | 110000円                         |
+| >=114000円 <122000円 | 118000円                         |
+| >=122000円 <130000円 | 126000円                         |
+| >=130000円 <138000円 | 134000円                         |
+| >=138000円 <146000円 | 142000円                         |
+| >=146000円 <155000円 | 150000円                         |
+| >=155000円 <165000円 | 160000円                         |
+| >=165000円 <175000円 | 170000円                         |
+| >=175000円 <185000円 | 180000円                         |
+| >=185000円 <195000円 | 190000円                         |
+| >=195000円 <210000円 | 200000円                         |
+| >=210000円 <230000円 | 220000円                         |
+| >=230000円 <250000円 | 240000円                         |
+| >=250000円 <270000円 | 260000円                         |
+| >=270000円 <290000円 | 280000円                         |
+| >=290000円 <310000円 | 300000円                         |
+| >=310000円 <330000円 | 320000円                         |
+| >=330000円 <350000円 | 340000円                         |
+| >=350000円 <370000円 | 360000円                         |
+| >=370000円 <395000円 | 380000円                         |
+| >=395000円 <425000円 | 410000円                         |
+| >=425000円 <455000円 | 440000円                         |
+| >=455000円 <485000円 | 470000円                         |
+| >=485000円 <515000円 | 500000円                         |
+| >=515000円 <545000円 | 530000円                         |
+| >=545000円 <575000円 | 560000円                         |
+| >=575000円 <605000円 | 590000円                         |
+| >=605000円 <635000円 | 620000円                         |
+| >=635000円           | 650000円                         |
+
+define 折半額(half) : money[円] = 標準報酬月額 × 料率 ÷ 2  # 全額の折半。円未満の端数は上の二つの出力の丸めで決まる
+define 給与控除額(deduct) : money[円] = 折半額
+define 現金納付額(cash) : money[円] = 折半額
+
+examples
+| 報酬月額 | 料率  | -> 標準報酬月額 | 給与控除額 | 現金納付額 |
+| 90000円  | 18.3% | 88000円         | 8052円     | 8052円     |  # 表の 1 等級。全額 16,104.00円、折半額 8,052.00円
+| 250000円 | 18.3% | 260000円        | 23790円    | 23790円    |  # 表の 17 等級。250,000円以上 270,000円未満
+| 700000円 | 18.3% | 650000円        | 59475円    | 59475円    |  # 表の 32 等級（上限）。折半額 59,475.00円
+```
+
+**What this one shows**
+
+- **The same shape as the health-insurance rule.** Fifty grades become thirty-two and the ceiling is 650,000 yen; the halving and the two ways of settling the sen are unchanged. Rules of one shape transcribe into rules of one shape.
+- **Here the two ways agree.** 18.3% of a standard remuneration is always an even number of yen, so the half has no fraction. The rule states both roundings; the `examples` show that at this rate the difference never appears.
+- **All 32 printed grades are held to the rule.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over them and requires every one to agree.
+
+## A premium table, with two ways to settle the sen
+
+The 協会けんぽ premium table (Tokyo branch, from March 2026). Monthly pay picks one of 50 grades of standard remuneration, the rate is applied and the amount halved. Fractions of a yen are settled two different ways — one when the premium is deducted from salary, another when it is paid in cash — and transcribing this table is what put `half_down` into the language.
+
+```rule
+rule 健康保険料(kenpo_premium) v1
+description "協会けんぽの健康保険料。報酬月額から標準報酬月額を引き、料率を掛けて折半し、給与から控除する額と現金で納める額を出す"
+
+inputs
+  報酬月額(monthly)       : money[円]  range >=0円 <=1000万円
+  健康保険料率(rate)      : rate[step 0.01%]  range >=0% <=20%   # 都道府県ごと、年度ごとに変わるので入力にする
+  介護保険料率(care_rate) : rate[step 0.01%]  range >=0% <=5%    # 介護保険第2号被保険者（40〜64歳）に加わる分
+  介護該当(care)          : bool
+
+outputs
+  標準報酬月額(std)  : money[円]  round down(1円)
+  給与控除額(deduct) : money[円]  round half_down(1円)  # 出典: 保険料額表の注記①。給与から控除するとき、50銭以下は切り捨て、50銭を超えれば切り上げ
+  現金納付額(cash)   : money[円]  round half_up(1円)    # 出典: 保険料額表の注記②。現金で納めるとき、50銭未満は切り捨て、50銭以上は切り上げ
+
+derive 合算率(both) : rate[step 0.01%] = 健康保険料率 + 介護保険料率  range >=0% <=25%
+
+table 等級(grade)  # 出典: 全国健康保険協会 令和8年3月分（4月納付分）からの健康保険・厚生年金保険の保険料額表（東京支部）
+policy unique
+| 報酬月額               | -> 標準報酬月額(std) : money[円] |
+| <63000円               | 58000円                          |
+| >=63000円 <73000円     | 68000円                          |
+| >=73000円 <83000円     | 78000円                          |
+| >=83000円 <93000円     | 88000円                          |
+| >=93000円 <101000円    | 98000円                          |
+| >=101000円 <107000円   | 104000円                         |
+| >=107000円 <114000円   | 110000円                         |
+| >=114000円 <122000円   | 118000円                         |
+| >=122000円 <130000円   | 126000円                         |
+| >=130000円 <138000円   | 134000円                         |
+| >=138000円 <146000円   | 142000円                         |
+| >=146000円 <155000円   | 150000円                         |
+| >=155000円 <165000円   | 160000円                         |
+| >=165000円 <175000円   | 170000円                         |
+| >=175000円 <185000円   | 180000円                         |
+| >=185000円 <195000円   | 190000円                         |
+| >=195000円 <210000円   | 200000円                         |
+| >=210000円 <230000円   | 220000円                         |
+| >=230000円 <250000円   | 240000円                         |
+| >=250000円 <270000円   | 260000円                         |
+| >=270000円 <290000円   | 280000円                         |
+| >=290000円 <310000円   | 300000円                         |
+| >=310000円 <330000円   | 320000円                         |
+| >=330000円 <350000円   | 340000円                         |
+| >=350000円 <370000円   | 360000円                         |
+| >=370000円 <395000円   | 380000円                         |
+| >=395000円 <425000円   | 410000円                         |
+| >=425000円 <455000円   | 440000円                         |
+| >=455000円 <485000円   | 470000円                         |
+| >=485000円 <515000円   | 500000円                         |
+| >=515000円 <545000円   | 530000円                         |
+| >=545000円 <575000円   | 560000円                         |
+| >=575000円 <605000円   | 590000円                         |
+| >=605000円 <635000円   | 620000円                         |
+| >=635000円 <665000円   | 650000円                         |
+| >=665000円 <695000円   | 680000円                         |
+| >=695000円 <730000円   | 710000円                         |
+| >=730000円 <770000円   | 750000円                         |
+| >=770000円 <810000円   | 790000円                         |
+| >=810000円 <855000円   | 830000円                         |
+| >=855000円 <905000円   | 880000円                         |
+| >=905000円 <955000円   | 930000円                         |
+| >=955000円 <1005000円  | 980000円                         |
+| >=1005000円 <1055000円 | 1030000円                        |
+| >=1055000円 <1115000円 | 1090000円                        |
+| >=1115000円 <1175000円 | 1150000円                        |
+| >=1175000円 <1235000円 | 1210000円                        |
+| >=1235000円 <1295000円 | 1270000円                        |
+| >=1295000円 <1355000円 | 1330000円                        |
+| >=1355000円            | 1390000円                        |
+
+table 適用料率(applied)  # 介護保険第2号被保険者は、健康保険料率に介護保険料率を足した率になる
+policy unique
+| 介護該当 | -> 料率(applied_rate) : rate[step 0.01%] |
+| true     | 合算率                                   |
+| false    | 健康保険料率                             |
+
+define 折半額(half) : money[円] = 標準報酬月額 × 料率 ÷ 2  # 全額の折半。円未満の端数は上の二つの出力の丸めで決まる
+define 給与控除額(deduct) : money[円] = 折半額
+define 現金納付額(cash) : money[円] = 折半額
+
+examples
+| 報酬月額 | 健康保険料率 | 介護保険料率 | 介護該当 | -> 標準報酬月額 | 給与控除額 | 現金納付額 |
+| 60000円  | 9.85%        | 1.62%        | false    | 58000円         | 2856円     | 2857円     |  # 折半額 2,856.5円。給与控除は切り捨て、現金納付は切り上げ
+| 134000円 | 9.85%        | 1.62%        | false    | 134000円        | 6599円     | 6600円     |  # 折半額 6,599.5円
+| 134000円 | 9.85%        | 1.62%        | true     | 134000円        | 7685円     | 7685円     |  # 折半額 7,684.9円。どちらも切り上げ
+| 300000円 | 9.85%        | 1.62%        | true     | 300000円        | 17205円    | 17205円    |  # 折半額 17,205.0円
+```
+
+**What this one shows**
+
+- **Two outputs from one halved amount, rounded two ways.** The table's notes say: deducted from salary, half a yen or less is dropped and more than half is carried up; paid in cash, less than half is dropped and half or more is carried up. The second is `half_up`; the first is `half_down`. At the grade whose half is 6,599.5 yen the two outputs differ by one yen.
+- **The rates are inputs.** They change by prefecture and by year; baking them into the rule would mean rewriting the table at every revision. A `derive` adds the care-insurance rate to the health-insurance rate, and a table picks which applies by whether the person is a category-2 care insured.
+- **Every grade is held to the printed table.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over all 100 of them and requires every one to agree.
+
 ---
 
 [Write a table (.rule)](tour.md){ .md-button .md-button--primary }
