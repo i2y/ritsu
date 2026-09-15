@@ -169,7 +169,9 @@ with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `go` and `swiftc`, and skips-and-reports the side whose toolchain is
-missing.
+missing. A skipped language narrows what the run proved, so the summary says how many were
+skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
+to mean the agreement held across all of them.
 
 ### In CI
 
@@ -178,7 +180,7 @@ missing.
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
 - run: rulec coverage rules/
-- run: rulec test generated/
+- run: rulec test generated/ --require-all
 ```
 
 `--diff-base` reports only findings that are new since that revision, so pre-existing

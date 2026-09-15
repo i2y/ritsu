@@ -116,18 +116,26 @@ One object per rule file.
 One object for the run.
 
 ```json
-{"results":[{"rule":"shipping_fee","lang":"python","vectors":68,"ok":true,"first_diff":null},
-             {"rule":"shipping_fee","lang":"typescript","vectors":68,"ok":true,"first_diff":null},
-             {"rule":"shipping_fee","lang":"rust","vectors":68,"ok":true,"first_diff":null},
-             {"rule":"shipping_fee","lang":"ruby","vectors":68,"ok":true,"first_diff":null},
-             {"rule":"shipping_fee","lang":"go","vectors":68,"ok":true,"first_diff":null}],
+{"results":[{"rule":"shipping_fee","lang":"python","vectors":68,
+              "ok":true,"ran":true,"first_diff":null,"error":null},
+             {"rule":"shipping_fee","lang":"go","vectors":68,
+              "ok":false,"ran":false,"first_diff":null,
+              "error":"does not compile:\n…"}],
  "skipped":[]}
 ```
 
-`first_diff` is `null` when the run matched, and otherwise
-`{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON on which
-the generated code and the reference evaluator disagreed. `skipped` holds **prose** reasons a
-language was not run at all (no toolchain).
+| field | meaning |
+|---|---|
+| `ok` | the generated code and the reference evaluator agreed on every vector |
+| `ran` | whether the generated code ran far enough to be compared **at all** |
+| `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
+| `error` | `null`, or **prose** for a failure with no single line to point at |
+| `skipped` | **prose** reasons a language was not run at all (no toolchain) |
+
+**`ran` is the field to branch on.** `ok:false` with `ran:false` is a machine that could not
+build or start the code — a missing toolchain, a compile error, a process that died — and says
+nothing about the rule. `ok:false` with `ran:true` is a real disagreement. The text rendering
+splits them the same way: `disagrees with the reference evaluator` against `could not be run`.
 
 ## `verify`, `replay`, `diff`
 

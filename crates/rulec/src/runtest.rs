@@ -12,14 +12,28 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Why one run failed. The first case is the one a caller can act on, so it is kept apart
-/// from the prose (docs/formats.md).
+/// Why one run failed, in the two kinds a reader has to tell apart (docs/formats.md).
+///
+/// A disagreement is about the rule and its generated code. **Not being able to run at all** is
+/// about the machine — a toolchain that is missing or would not fetch, code that did not
+/// compile, a process that died. Both used to be printed under "disagrees with the reference
+/// evaluator", which told a reader the comparison had happened and come out badly when it had
+/// never happened at all.
 pub enum Failure {
     /// The first line of the canonical JSON on which the two sides disagreed.
     Diff { line: usize, generated: String, expected: String },
-    /// Anything else: the process would not start, it crashed, the line counts differ.
-    /// **Prose.**
-    Other(String),
+    /// Both sides ran and answered a different number of times. A disagreement with no single
+    /// line to point at. **Prose.**
+    Lines(String),
+    /// The comparison never happened. **Prose.**
+    Broken(String),
+}
+
+impl Failure {
+    /// Whether the generated code ran far enough to be compared at all.
+    pub fn ran(&self) -> bool {
+        !matches!(self, Failure::Broken(_))
+    }
 }
 
 impl Failure {
@@ -30,7 +44,7 @@ impl Failure {
                 "{line} 行目\n      生成: {generated}\n      期待: {expected}",
                 "line {line}\n      generated: {generated}\n      expected: {expected}"
             ),
-            Failure::Other(s) => s.clone(),
+            Failure::Lines(s) | Failure::Broken(s) => s.clone(),
         }
     }
 }
@@ -83,7 +97,7 @@ fn first_diff(got: &str, want: &str) -> Failure {
             };
         }
     }
-    Failure::Other(tr!(
+    Failure::Lines(tr!(
         "行数が違います（生成 {} 行 / 期待 {} 行）",
         "line counts differ (generated {} lines / expected {} lines)",
         got.lines().count(),
@@ -153,31 +167,31 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             match Command::new(cmd).current_dir(&cwd).args(args).envs(closed()).output() {
                 Ok(o) if o.status.success() => {}
                 Ok(o) => {
-                    return Err(Failure::Other(tr!(
+                    return Err(Failure::Broken(tr!(
                         "コンパイルできません:\n{}",
                         "does not compile:\n{}",
                         String::from_utf8_lossy(&o.stderr).trim()
                     )))
                 }
-                Err(e) => return Err(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+                Err(e) => return Err(Failure::Broken(tr!("起動できません: {e}", "cannot start: {e}"))),
             }
         }
         let mut c = Command::new(&plan.cmd);
         c.current_dir(&cwd).args(&plan.args).envs(closed());
         if let Some(p) = stdin {
             let Ok(f) = std::fs::File::open(p) else {
-                return Err(Failure::Other(tr!("ベクタが読めません", "cannot read the vectors")));
+                return Err(Failure::Broken(tr!("ベクタが読めません", "cannot read the vectors")));
             };
             c.stdin(f);
         }
         match c.output() {
-            Err(e) => Err(Failure::Other(tr!("起動できません: {e}", "cannot start: {e}"))),
+            Err(e) => Err(Failure::Broken(tr!("起動できません: {e}", "cannot start: {e}"))),
             Ok(o) if !o.status.success() => {
                 // A round-test script reports on stdout and exits non-zero; a runner that
                 // crashes says so on stderr. Show whichever is not empty.
                 let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
                 let msg = if err.is_empty() { String::from_utf8_lossy(&o.stdout).trim().to_string() } else { err };
-                Err(Failure::Other(tr!("落ちました:\n{}", "failed:\n{}", msg)))
+                Err(Failure::Broken(tr!("落ちました:\n{}", "failed:\n{}", msg)))
             }
             Ok(o) => Ok(String::from_utf8_lossy(&o.stdout).into_owned()),
         }
@@ -234,20 +248,42 @@ pub fn render(r: &Run) -> String {
             }
             Some(d) => {
                 bad += 1;
-                let d = d.text();
-                o.push_str(&tr!(
-                    "FAIL  {} ({}) 参照評価器と食い違います\n    {d}\n",
-                    "FAIL  {} ({}) disagrees with the reference evaluator\n    {d}\n",
-                    shown(&x.rule),
-                    x.lang
-                ));
+                let text = d.text();
+                o.push_str(&if d.ran() {
+                    tr!(
+                        "FAIL  {} ({}) 参照評価器と食い違います\n    {text}\n",
+                        "FAIL  {} ({}) disagrees with the reference evaluator\n    {text}\n",
+                        shown(&x.rule),
+                        x.lang
+                    )
+                } else {
+                    tr!(
+                        "FAIL  {} ({}) 走らせられませんでした\n    {text}\n",
+                        "FAIL  {} ({}) could not be run\n    {text}\n",
+                        shown(&x.rule),
+                        x.lang
+                    )
+                });
             }
         }
     }
-    if bad == 0 {
-        o.push_str(&tr!("\n{} 件すべて一致しました。\n", "\nAll {} matched.\n", r.results.len()));
+    // What the run covered belongs in the summary. "All 2 matched." after four languages were
+    // skipped reads as the whole claim holding, when the claim is that the reference evaluator
+    // and **every** generated language agree.
+    let scope = if r.skipped.is_empty() {
+        String::new()
     } else {
-        o.push_str(&tr!("\n{bad} 件が食い違いました。\n", "\n{bad} disagreed.\n"));
+        tr!(
+            "（{} 言語中 {} 言語を飛ばしました）",
+            " ({} of {} languages skipped)",
+            r.skipped.len(),
+            crate::backend::ALL.len()
+        )
+    };
+    if bad == 0 {
+        o.push_str(&tr!("\n{} 件すべて一致しました{scope}。\n", "\nAll {} matched{scope}.\n", r.results.len()));
+    } else {
+        o.push_str(&tr!("\n{bad} 件が食い違いました{scope}。\n", "\n{bad} disagreed{scope}.\n"));
     }
     o
 }
@@ -264,17 +300,24 @@ pub fn render_json(r: &Run) -> String {
                     .str("generated", generated)
                     .str("expected", expected)
                     .finish(),
-                // A failure that is not a line disagreement still has to be visible; it goes
-                // into the prose field rather than pretending to be a diff.
-                Some(Failure::Other(e)) => crate::json::Obj::new().str("error", e).finish(),
-                None => "null".into(),
+                // A failure with no single line to point at is prose, and it goes in `error`
+                // rather than pretending to be a diff.
+                Some(_) | None => "null".into(),
+            };
+            let err = match &x.diff {
+                Some(Failure::Lines(e)) | Some(Failure::Broken(e)) => crate::json::quote(e),
+                _ => "null".into(),
             };
             crate::json::Obj::new()
                 .str("rule", &x.rule)
                 .str("lang", x.lang.to_lowercase())
                 .int("vectors", x.vectors as i128)
                 .bool("ok", x.diff.is_none())
+                // Whether the generated code ran at all. `ok:false` with `ran:false` is a
+                // machine that could not build or start it, not a rule that answered wrongly.
+                .bool("ran", x.diff.as_ref().is_none_or(|d| d.ran()))
                 .raw("first_diff", first)
+                .raw("error", err)
                 .finish()
         })
         .collect();

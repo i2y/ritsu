@@ -227,13 +227,24 @@ fn commands() -> Vec<Cmd> {
             )],
             flags: vec![
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
+                flag(
+                    "--require-all",
+                    None,
+                    tr!(
+                        "toolchain が無くて飛ばした言語があれば落とす。一致の主張を全言語ぶん要求する",
+                        "fail when any language was skipped for a missing toolchain, demanding the agreement across all of them"
+                    ),
+                ),
             ],
             exits: vec![
-                (0, tr!("全部一致した、または toolchain が無くて飛ばした", "everything matched, or the toolchain is absent and it was skipped")),
+                (0, tr!("全部一致した、または toolchain が無くて飛ばした（--require-all を付けると飛ばした時点で 1）", "everything matched, or the toolchain is absent and it was skipped (with --require-all, skipping is 1)")),
                 (1, tr!("食い違いがある", "something disagreed")),
                 (2, tr!("引数の誤り、読めないディレクトリ", "bad arguments, or a directory that cannot be read")),
             ],
-            examples: vec!["rulec test generated/".into(), "rulec test generated/ --lang ja".into()],
+            examples: vec![
+                "rulec test generated/".into(),
+                "rulec test generated/ --require-all".into(),
+            ],
             codes: &[],
         },
         Cmd {
@@ -832,7 +843,11 @@ fn main() -> ExitCode {
                     } else {
                         print!("{}", rulec::runtest::render(&r));
                     }
-                    ExitCode::from(u8::from(!r.ok()))
+                    // A language skipped for a missing toolchain narrows what the run proved.
+                    // The default stays lenient, because not every machine carries six
+                    // toolchains; `--require-all` is what CI uses to demand the whole claim.
+                    let short = a.has("--require-all") && !r.skipped.is_empty();
+                    ExitCode::from(u8::from(!r.ok() || short))
                 }
                 Err(e) => {
                     eprintln!("error: {e}");

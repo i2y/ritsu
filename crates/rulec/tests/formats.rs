@@ -130,7 +130,7 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!() };
     assert!(!rs.is_empty(), "{out}");
     for r in rs {
-        keys(r, &["rule", "lang", "vectors", "ok", "first_diff"], "result");
+        keys(r, &["rule", "lang", "vectors", "ok", "ran", "first_diff", "error"], "result");
         let lang = r.get("lang").unwrap().as_str().unwrap();
         // The stable ids are src/backend.rs's; a language added there without a name here
         // used to fail for the wrong reason.
@@ -139,7 +139,9 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
             "言語の名前が安定していない: {lang}"
         );
         assert_eq!(r.get("ok").unwrap(), &rulec::json::Json::Bool(true));
+        assert_eq!(r.get("ran").unwrap(), &rulec::json::Json::Bool(true));
         assert_eq!(r.get("first_diff").unwrap(), &rulec::json::Json::Null);
+        assert_eq!(r.get("error").unwrap(), &rulec::json::Json::Null);
     }
     // The rounding helpers are reported under a stable id, not under a translated name.
     let rules: Vec<&str> = rs.iter().map(|r| r.get("rule").unwrap().as_str().unwrap()).collect();
@@ -300,4 +302,91 @@ fn 形式の文書が全コマンドを載せている() {
     for cmd in ["check", "explain", "fmt", "gen", "coverage", "test", "verify", "replay", "diff", "fixtures lint"] {
         assert!(doc.contains(&format!("## `{cmd}`")) || doc.contains(cmd), "docs/formats.md に {cmd} が無い");
     }
+}
+
+fn have(cmd: &str) -> bool {
+    ["--version", "version"]
+        .iter()
+        .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+}
+
+/// A run that never happened must not be reported as a disagreement.
+///
+/// Both used to print under `disagrees with the reference evaluator`, which tells a reader the
+/// comparison ran and came out badly when it never ran at all — a missing toolchain, a compile
+/// error, a process that died. `ran` is the field to branch on, and the heading splits with it.
+#[test]
+fn 走らなかった実行は食い違いとして報告されない() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let dir = gen_dir("broken", "tests/corpus/期間区分.rule");
+    // Break the module the runner imports, so the run cannot produce a line to compare.
+    let module = dir.join("python").join("period.py");
+    std::fs::write(&module, "this is not python\n").unwrap();
+
+    let (c, out) = run(&["test", dir.to_str().unwrap()]);
+    assert_eq!(c, 1, "{out}");
+    assert!(out.contains("could not be run") || out.contains("走らせられません"), "{out}");
+    assert!(
+        !out.contains("disagrees with the reference evaluator") && !out.contains("食い違います"),
+        "走らなかった実行が食い違い扱いのまま: {out}"
+    );
+
+    let (_, out) = run(&["test", dir.to_str().unwrap(), "--format", "json"]);
+    let j = obj(&out);
+    let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!() };
+    let py = rs.iter().find(|r| r.get("lang").unwrap().as_str().unwrap() == "python").unwrap();
+    assert_eq!(py.get("ok").unwrap(), &rulec::json::Json::Bool(false));
+    assert_eq!(py.get("ran").unwrap(), &rulec::json::Json::Bool(false));
+    assert_eq!(py.get("first_diff").unwrap(), &rulec::json::Json::Null);
+    assert!(py.get("error").unwrap().as_str().is_some(), "prose が error に無い: {out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A language skipped for a missing toolchain narrows what the run proved, so the summary says
+/// so and `--require-all` refuses to call it green.
+///
+/// Without that, CI passes on one language out of six while the claim being made is that the
+/// reference evaluator and **every** generated language agree.
+#[test]
+fn 飛ばした言語があると要求時に落ちる() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let dir = gen_dir("skipped", "tests/corpus/期間区分.rule");
+    // A PATH holding python3 and nothing else, so the other five are skipped.
+    let bin = dir.join("_bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let py = String::from_utf8_lossy(
+        &Command::new("sh").args(["-c", "command -v python3"]).output().unwrap().stdout,
+    )
+    .trim()
+    .to_string();
+    std::os::unix::fs::symlink(&py, bin.join("python3")).unwrap();
+
+    let run_with_path = |extra: &[&str]| -> (i32, String) {
+        let mut args = vec!["test", dir.to_str().unwrap()];
+        args.extend_from_slice(extra);
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .current_dir(root())
+            .args(&args)
+            .env("PATH", &bin)
+            .output()
+            .expect("rulec を起動できない");
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+
+    let (c, out) = run_with_path(&[]);
+    assert_eq!(c, 0, "既定は寛容なまま: {out}");
+    assert!(
+        out.contains("languages skipped") || out.contains("言語を飛ばしました"),
+        "要約が範囲を言っていない: {out}"
+    );
+
+    let (c, out) = run_with_path(&["--require-all"]);
+    assert_eq!(c, 1, "--require-all が飛ばしを見逃した: {out}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

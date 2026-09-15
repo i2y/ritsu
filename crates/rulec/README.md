@@ -230,7 +230,7 @@ and [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` outp
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
 - run: rulec coverage rules/
-- run: rulec test generated/        # the only step that needs python3, node, rustc and go
+- run: rulec test generated/ --require-all   # the only step that needs the toolchains
 ```
 
 Those logs are read by machines and developers, so they stay in the default English. What

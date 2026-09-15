@@ -152,7 +152,7 @@ fn agentsとreadmeのciが同じ行を言う() {
         "rulec check rules/ --diff-base origin/main",
         "rulec gen rules/ --out generated/ --check",
         "rulec coverage rules/",
-        "rulec test generated/",
+        "rulec test generated/ --require-all",
     ] {
         assert!(agents.contains(line), "AGENTS.md の CI に `{line}` が無い");
         assert!(readme.contains(line), "README の CI に `{line}` が無い");
