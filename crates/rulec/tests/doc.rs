@@ -263,6 +263,8 @@ fn html版は表の行に名前と番号を持ち_生成したjavascriptを積�
     assert!(html.contains("const FN = { run: shipping_fee_traced, record: shipping_fee_record };"), "{html}");
     assert!(html.contains("\"inputs\":[{\"name\":\"届け先\",\"alias\":\"dest\",\"kind\":\"enum\""), "{html}");
     assert!(html.contains("\"examples\":[{\"届け先\":\"沖縄県\",\"重量\":\"2500\""), "例がワイヤ形式で入る: {html}");
+    // A case is a link: `?example=2` and `?dest=…&weight=…` open the page on it.
+    assert!(html.contains("params.get(\"example\")") && html.contains("history.replaceState"), "住所に件が乗らない: {html}");
     // Every cell of every data table is on the page, as in the markdown.
     let (_, md, _) = run(&["doc", "tests/corpus/送料.rule"]);
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");

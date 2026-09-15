@@ -950,6 +950,16 @@ function run() {
       if (tr) tr.classList.add("hit");
     }
     $("#try-record").textContent = FN.record(...args, out, trace, "");
+    try {
+      const q = new URLSearchParams();
+      for (const inp of RULE.inputs) {
+        const el = form.elements[inp.alias];
+        q.set(inp.alias, inp.kind === "bool" ? String(el.checked) : inp.kind === "rate" ? String(toWire(inp, el)) : inp.kind === "date" ? el.value : el.value);
+      }
+      history.replaceState(null, "", "?" + q.toString() + location.hash);
+    } catch (_) {
+      // A page opened somewhere the address cannot be rewritten still works; it just cannot be linked.
+    }
   } catch (e) {
     $("#try-result").textContent = e.message;
     $("#try-record").textContent = "";
@@ -961,14 +971,17 @@ go.type = "button";
 go.textContent = RULE.text.run;
 go.addEventListener("click", run);
 buttons.appendChild(go);
+function fill(ex) {
+  for (const inp of RULE.inputs) {
+    if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
+  }
+}
 RULE.examples.forEach((ex, i) => {
   const b = document.createElement("button");
   b.type = "button";
   b.textContent = RULE.text.example + " " + (i + 1);
   b.addEventListener("click", () => {
-    for (const inp of RULE.inputs) {
-      if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
-    }
+    fill(ex);
     run();
   });
   buttons.appendChild(b);
@@ -977,6 +990,24 @@ form.addEventListener("submit", (e) => {
   e.preventDefault();
   run();
 });
+// The case is in the address: `?example=2` opens the page on the second example, and
+// `?<alias>=<wire value>&…` on any case, so a link is enough to show someone one.
+const params = new URLSearchParams(location.search);
+const ex = RULE.examples[Number(params.get("example")) - 1];
+if (ex) {
+  fill(ex);
+  run();
+} else if (RULE.inputs.some((inp) => params.has(inp.alias))) {
+  for (const inp of RULE.inputs) {
+    if (params.has(inp.alias)) fromWire(inp, form.elements[inp.alias], params.get(inp.alias));
+  }
+  run();
+}
+// `#t-基本送料` lands on that table, after the run above has settled the page's height.
+if (location.hash) {
+  const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (target) target.scrollIntoView();
+}
 "##;
 
 fn html_esc(s: &str) -> String {
@@ -1116,7 +1147,12 @@ fn md_to_html(md: &str) -> String {
                 .strip_prefix("表 ")
                 .map(|r| r.split('（').next().unwrap_or(r).to_string())
                 .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()));
-            o.push_str(&format!("<h2>{}</h2>\n", inline_html(h)));
+            // A table's heading can be linked to (`#t-基本送料`), which is also how a
+            // screenshot lands on it.
+            match &table_name {
+                Some(t) => o.push_str(&format!("<h2 id=\"t-{}\">{}</h2>\n", html_esc(t), inline_html(h))),
+                None => o.push_str(&format!("<h2>{}</h2>\n", inline_html(h))),
+            }
             continue;
         }
         if t.starts_with('|') {
