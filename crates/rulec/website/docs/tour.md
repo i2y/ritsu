@@ -16,10 +16,12 @@ the language of the business** — Japanese, in every example here.
     And you are not left alone with the file when you read it. `rulec doc` renders the
     document for approval, and adds what reading the table cannot tell you: what a single
     word in the table actually stands for, which rows are hidden by the rows above them,
-    and which roundings are placeholders rather than decisions. For a change, how many
-    records move and by how much comes out before it ships. Both are things to ask the
-    agent for, and so is an explanation of any row. Its own procedure is in
-    [For agents](agents.md).
+    and which roundings are placeholders rather than decisions. The same document comes
+    as one HTML page too (`--format html`), where typing a case lights up the rows that
+    matched and shows the result. For a change, how many records move and by how much
+    comes out before it ships. Both are things to ask the agent for, and so is an
+    explanation of any row. From a spreadsheet, `rulec import csv` writes the first draft,
+    with every guess marked. Its own procedure is in [For agents](agents.md).
 
 These are all the words that may start a line.
 

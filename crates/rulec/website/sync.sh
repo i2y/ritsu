@@ -50,8 +50,8 @@ for f in agents reference formats generated-code backends; do
   { banner; cat "docs/$f.md"; } > "docs-ja/$f.md"
 done
 
-# One stylesheet and one set of images, two docs trees: zensical does not
-# follow a symlinked directory, so they are real copies.
+# One stylesheet and one set of images (the diagrams and the screenshots), two docs
+# trees: zensical does not follow a symlinked directory, so they are real copies.
 cp docs/stylesheets/extra.css docs-ja/stylesheets/extra.css
-cp docs/images/*.svg          docs-ja/images/
+cp docs/images/*.svg docs/images/*.png docs-ja/images/
 echo "synced: agents, reference, formats, generated-code, backends, codes (en + ja)"

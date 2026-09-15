@@ -124,7 +124,9 @@ The function you call is `fee_demo`, and its signature does not change. The bran
 `fee_demo_traced`, which returns the rows that matched beside the value — one per table, in
 order, as the table's name and its row number — which is what a log line or an answer to
 "why this fee" needs. The agreement check holds those rows to the reference evaluator as
-well as the values.
+well as the values. A third function, `fee_demo_record`, writes one call as one line of the
+fixtures format that `replay` and `diff` read, so a log written by the generated code is
+already the records the next revision is diffed over.
 
 Four rules keep it readable.
 

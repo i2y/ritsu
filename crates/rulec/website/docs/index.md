@@ -80,12 +80,12 @@ rulec is **a harness for handing that rewrite to an AI agent**. It has four side
 | **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
 | **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
 | **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift that nobody edits by hand. **A target outside those six — another language, a workflow engine's expressions, SQL — can be generated today by asking an agent**, with the comparison against the rule coming along ([other targets](backends.md)) |
-| **There is something to hand a person** | A document to approve, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
+| **There is something to hand a person** | A document to approve, a page to try a case on, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
 The agent's own instructions are in [For agents](agents.md), and the
 [agent skill](https://github.com/i2y/rulec/tree/main/skills) built from them ships in the
 repository — copy the `skills/rulec/` folder into your project's `.claude/skills/` and it
-works as it stands ([how](install.md#the-agent-skill)). Every rulec command has `--format json`, so an agent never parses prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
+works as it stands ([how](install.md#the-agent-skill)). Where there is no shell, `rulec mcp` offers the same commands as tools ([how](install.md#the-mcp-server)). Every rulec command has `--format json`, so an agent never parses prose. Diagnostic codes are fixed symbols like `E101`: **the wording improves, the code and
 the JSON shape do not**.
 
 In one line: **for business rules that can be written as a table, a tool that lets an agent

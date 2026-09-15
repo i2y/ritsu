@@ -110,3 +110,15 @@ $ python3 tools/make_overview.py --verify ../target/release/rulec
 - a unicode-preserving `toc.slugify`, so a Japanese heading anchors the
   way GitHub anchors it and a link written against the repository still
   lands.
+
+## The screenshots
+
+`docs/images/try-ja.png` and `try-en.png` are the page `rulec doc --format html` renders,
+opened on one of the rule's own examples and photographed by headless Chrome:
+
+```console
+$ website/tools/shots.sh            # needs Google Chrome; uses ../target/debug/rulec
+```
+
+Re-run it after anything that changes the page. They are pictures of real output, not
+mock-ups.

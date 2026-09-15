@@ -179,10 +179,31 @@ This is what `rulec doc` writes (excerpt; the command above asked for Japanese).
 …
 ```
 
-`--format html` renders the same document as one page with a form on it: the approver
-types a case, the rows that matched light up, the outputs appear, and the line the
-generated code would write to a log is shown. What runs in the page is the generated
-JavaScript itself, so the page says nothing the code does not.
+Write `# 出典: 日本郵便 基本運賃表（東京）` at the end of a row or of the `table` line, and
+those words appear in the document too. The approver's job turns from "read the whole table
+again" into "compare this row with that cell".
+
+### A page the approver can try a case on
+
+```console
+$ rulec doc rules/送料.rule --lang ja --format html > 送料.html
+```
+
+`--format html` renders the same document as one HTML page with a form at the top. The
+approver types a case: the rows that matched light up, the outputs appear, and the line the
+generated code would write to a log is shown as it is. The example buttons fill in the
+rule's own verified examples.
+
+![The top of the page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form, the result reads 送料 = 400円, and under it is the line the generated code would write to a log](images/try-en.png)
+
+Further down the same page, the rows that matched are highlighted: row 3 of 基本送料 (not
+a remote area, up to 2000g) and row 2 of 負担判定 (platinum).
+
+![The two tables of the same page, with row 3 of 基本送料 and row 2 of 負担判定 highlighted](images/try-rows-en.png)
+
+What runs in the page is the generated JavaScript itself, so the page says nothing the code
+does not. The case stays in the page's address (`?dest=東京都&weight=1999&…`), so "look at
+this one" is a link.
 
 
 There is one prohibition. **It writes no sentence that is not in the
