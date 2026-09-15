@@ -321,7 +321,10 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
                 let q = crate::coverage::quantum(c, col, &ty);
                 for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
                     let (Some(ain), Some(aout)) =
-                        (place(f, c, &seed, col, inside), place(f, c, &seed, col, outside))
+                        (
+                            place(f, c, &seed, col, inside, &BTreeSet::new()),
+                            place(f, c, &seed, col, outside, &BTreeSet::new()),
+                        )
                     else {
                         continue;
                     };
@@ -342,7 +345,10 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
         if t.policy == Policy::TopDown {
             for j in 1..t.rows.len() {
                 for i in 0..j {
-                    let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j]) else { continue };
+                    let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j], &BTreeSet::new())
+                    else {
+                        continue;
+                    };
                     let Some(a) = win_row(f, c, cands, &a, t, i) else { continue };
                     if row_holds(f, c, t, &t.rows[j], &a) {
                         out.push((
@@ -363,7 +369,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
         for d in [-1i128, 0, 1] {
             let Some(xv) = base.get(&x).and_then(as_rat) else { continue };
             let t = xv.add(q.mul(Rat::int(d)));
-            if let Some(a) = place(f, c, &base, &y, t) {
+            if let Some(a) = place(f, c, &base, &y, t, &BTreeSet::new()) {
                 out.push((a, tr!("同着: {x} と {y} の {d:+}", "tie: {x} and {y}, offset {d:+}")));
             }
         }
@@ -596,18 +602,26 @@ fn within(c: &Checked, col: &str, v: Rat) -> bool {
 }
 
 /// Build from `seed` an assignment that sets column `col` to `target`. An input is set directly;
-/// a derived value is solved through one chosen input. **Exactly one input changes**, and the
-/// choice is fixed to the declaration order of the inputs, so the same input moves for the
-/// inside and the outside point. The "boundary-pair coverage" of §9.2 demands a vector pair,
-/// which is why this is needed.
+/// a derived value is solved through one chosen input. The choice is fixed to the declaration
+/// order of the inputs, so the same input moves for the inside and the outside point. The
+/// "boundary-pair coverage" of §9.2 demands a vector pair, which is why this is needed.
+///
+/// `frozen` names inputs that must not move. Solving a derived value takes the first input in
+/// declaration order that shifts it, which is the wrong one when another constraint is already
+/// holding that input down: `d = b - a` is reached by lowering `a`, undoing the very move that
+/// was made to miss an earlier row. Freezing `a` sends the solver to `b` instead.
 fn place(
     f: &RuleFile,
     c: &Checked,
     seed: &BTreeMap<String, Val>,
     col: &str,
     target: Rat,
+    frozen: &BTreeSet<String>,
 ) -> Option<BTreeMap<String, Val>> {
     let ty = c.ty_of(col)?;
+    if frozen.contains(col) {
+        return None;
+    }
     if seed.contains_key(col) {
         if !within(c, col, target) {
             return None;
@@ -629,6 +643,9 @@ fn place(
         }
         let mut moved = false;
         for x in f.inputs.iter().map(|i| i.name.text.clone()) {
+            if frozen.contains(&x) {
+                continue;
+            }
             let xty = c.ty_of(&x)?;
             let Some(x0) = a.get(&x).and_then(as_rat) else { continue };
             let e0 = as_rat(bind(f, c, &a).get(col)?)?;
@@ -708,6 +725,7 @@ fn satisfy_cell(
     seed: &BTreeMap<String, Val>,
     col: &str,
     cell: &Cell,
+    frozen: &BTreeSet<String>,
 ) -> Option<BTreeMap<String, Val>> {
     let ty = c.ty_of(col)?;
     let binds = bind(f, c, seed);
@@ -720,7 +738,7 @@ fn satisfy_cell(
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
         let q = crate::coverage::quantum(c, col, &ty);
         for (_, inside, _) in crate::coverage::thresholds_pub(cell, &ty, q) {
-            if let Some(a) = place(f, c, seed, col, inside) {
+            if let Some(a) = place(f, c, seed, col, inside, frozen) {
                 return Some(a);
             }
         }
@@ -730,7 +748,7 @@ fn satisfy_cell(
     // deterministic order).
     if let Some(vs) = cands.get(col) {
         for v in vs {
-            if eval::cell_matches(c, cell, v, &ty) {
+            if eval::cell_matches(c, cell, v, &ty) && !frozen.contains(col) {
                 let mut a = seed.clone();
                 a.insert(col.into(), v.clone());
                 return Some(a);
@@ -739,6 +757,9 @@ fn satisfy_cell(
         return None;
     }
     for x in f.inputs.iter().map(|i| i.name.text.clone()) {
+        if frozen.contains(&x) {
+            continue;
+        }
         for v in cands.get(&x).into_iter().flatten() {
             let mut a = seed.clone();
             a.insert(x.clone(), v.clone());
@@ -758,17 +779,31 @@ fn reach_row(
     seed: &BTreeMap<String, Val>,
     t: &Table,
     row: &Row,
+    frozen: &BTreeSet<String>,
 ) -> Option<BTreeMap<String, Val>> {
     let mut a = seed.clone();
     // Two passes: fixing an earlier column can break a later one, so confirm that one pass was
     // enough before returning.
     for _ in 0..2 {
+        // An input this row has already pinned is held while the rest is solved. With
+        // `d = b - a`, reaching `d >= 0` by lowering `a` undoes the `a >= 2` two columns to its
+        // left, and the second pass only puts it back: the passes oscillate instead of
+        // converging, and the row comes out unreachable however reachable it is. Held, the
+        // solver goes to `b`. The unfrozen solve is still tried when holding leaves no way
+        // through.
+        let mut held: BTreeSet<String> = frozen.clone();
         for (ci, (col, _)) in t.inputs.iter().enumerate() {
             let Some(cell) = row.cells.get(ci) else { continue };
             if matches!(cell, Cell::DontCare) {
                 continue;
             }
-            a = satisfy_cell(f, c, cands, &a, col, cell)?;
+            a = satisfy_cell(f, c, cands, &a, col, cell, &held)
+                .or_else(|| satisfy_cell(f, c, cands, &a, col, cell, frozen))?;
+            // An input is in the assignment; a derived column is not. Only the former can be
+            // held, and only the former is what a later solve would reach for.
+            if a.contains_key(col) {
+                held.insert(col.clone());
+            }
         }
         if row_holds(f, c, t, row, &a) {
             return Some(a);
@@ -790,8 +825,14 @@ fn row_holds(f: &RuleFile, c: &Checked, t: &Table, row: &Row, a: &BTreeMap<Strin
 }
 
 /// An assignment that makes row `ri` **win**. Under `first` satisfying its cells is not enough:
-/// the earlier rows must be knocked out, and only through columns this row leaves as `-` while
-/// the earlier row names them (moving a column row `ri` names would break `ri` itself).
+/// the earlier rows must be knocked out too.
+///
+/// A column this row names is fair game for that. It used to be skipped, on the reasoning that
+/// moving a column row `ri` names would break `ri` itself — which holds only when the cell is a
+/// single point. `>=1` against an earlier `1` has room: 2 satisfies this row and misses that
+/// one. A row that names *every* column therefore could never be won at all, however reachable
+/// it was, and `coverage` reported a hole no author could close. What decides now is whether
+/// the row still holds afterwards, which is checked either way.
 fn win_row(
     f: &RuleFile,
     c: &Checked,
@@ -801,7 +842,7 @@ fn win_row(
     ri: usize,
 ) -> Option<BTreeMap<String, Val>> {
     let tag = eval::row_tag(&t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), ri + 1);
-    let mut a = reach_row(f, c, cands, seed, t, &t.rows[ri])?;
+    let mut a = reach_row(f, c, cands, seed, t, &t.rows[ri], &BTreeSet::new())?;
     for _ in 0..t.rows.len() + 1 {
         let (_, fired, _) = eval::run_bindings(f, c, a.clone().into_iter().collect());
         if fired.contains(&tag) {
@@ -814,18 +855,25 @@ fn win_row(
                 continue;
             }
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
-                if matches!(t.rows[ri].cells.get(ci), Some(Cell::DontCare) | None) {
-                    let Some(ecell) = t.rows[e].cells.get(ci) else { continue };
-                    if matches!(ecell, Cell::DontCare) {
-                        continue;
-                    }
-                    if let Some(b) = violate_cell(f, c, cands, &a, col, ecell) {
-                        if row_holds(f, c, t, &t.rows[ri], &b) {
-                            a = b;
-                            moved = true;
-                            break;
-                        }
-                    }
+                let Some(ecell) = t.rows[e].cells.get(ci) else { continue };
+                if matches!(ecell, Cell::DontCare) {
+                    continue;
+                }
+                // Moving one input can break another of this row's own cells: raising the one
+                // that misses the earlier row can push a derived value out of its own cell while
+                // the other input stays put. So a candidate is judged *after* the row has been
+                // rebuilt around it, and it is the rebuilt assignment that is taken — provided
+                // the rebuild did not put the earlier row back.
+                let held: BTreeSet<String> = std::iter::once(col.clone()).collect();
+                let repair = |b: &BTreeMap<String, Val>| -> Option<BTreeMap<String, Val>> {
+                    let r = reach_row(f, c, cands, b, t, &t.rows[ri], &held)?;
+                    (!row_holds(f, c, t, &t.rows[e], &r)).then_some(r)
+                };
+                let keep = |b: &BTreeMap<String, Val>| repair(b).is_some();
+                if let Some(b) = violate_cell(f, c, cands, &a, col, ecell, &keep).and_then(|b| repair(&b)) {
+                    a = b;
+                    moved = true;
+                    break;
                 }
             }
             if moved {
@@ -841,6 +889,9 @@ fn win_row(
 
 /// Move one step toward **violating** a cell: solve for the outside of a boundary, or put in a
 /// candidate that does not match.
+///
+/// `keep` says which of those the caller can use. Every way out of the cell is tried until one
+/// of them passes it, rather than the first being taken and the caller left to reject it.
 fn violate_cell(
     f: &RuleFile,
     c: &Checked,
@@ -848,13 +899,14 @@ fn violate_cell(
     seed: &BTreeMap<String, Val>,
     col: &str,
     cell: &Cell,
+    keep: &dyn Fn(&BTreeMap<String, Val>) -> bool,
 ) -> Option<BTreeMap<String, Val>> {
     let ty = c.ty_of(col)?;
     if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
         let q = crate::coverage::quantum(c, col, &ty);
         for (_, _, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
-            if let Some(a) = place(f, c, seed, col, outside) {
-                if !eval::cell_matches(c, cell, &to_val(outside, &ty), &ty) {
+            if let Some(a) = place(f, c, seed, col, outside, &BTreeSet::new()) {
+                if !eval::cell_matches(c, cell, &to_val(outside, &ty), &ty) && keep(&a) {
                     return Some(a);
                 }
             }
@@ -866,7 +918,9 @@ fn violate_cell(
             if !eval::cell_matches(c, cell, v, &ty) {
                 let mut a = seed.clone();
                 a.insert(col.into(), v.clone());
-                return Some(a);
+                if keep(&a) {
+                    return Some(a);
+                }
             }
         }
         return None;
@@ -875,7 +929,9 @@ fn violate_cell(
         for v in cands.get(&x).into_iter().flatten() {
             let mut a = seed.clone();
             a.insert(x.clone(), v.clone());
-            if bind(f, c, &a).get(col).is_some_and(|got| !eval::cell_matches(c, cell, got, &ty)) {
+            if bind(f, c, &a).get(col).is_some_and(|got| !eval::cell_matches(c, cell, got, &ty))
+                && keep(&a)
+            {
                 return Some(a);
             }
         }
@@ -998,7 +1054,7 @@ fn satisfy_all(
             }
         }
         for target in [lo, hi].into_iter().flatten() {
-            if let Some(a) = place(f, c, seed, col, target) {
+            if let Some(a) = place(f, c, seed, col, target, &BTreeSet::new()) {
                 if bind(f, c, &a).get(col).is_some_and(hit) {
                     return Some(a);
                 }

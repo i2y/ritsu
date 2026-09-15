@@ -202,3 +202,114 @@ fn 義務の件数を固定する() {
         );
     }
 }
+
+/// Build a rule from source and audit it, for shapes the corpus does not have.
+fn audit_src(tag: &str, src: &str) -> (coverage::Audit, Vec<Vector>) {
+    let (f, c) = rulec::prepare(src, tag).unwrap_or_else(|d| {
+        panic!("{tag} は検査を通らない: {:?}", d.iter().map(|x| x.code.to_string()).collect::<Vec<_>>())
+    });
+    let vs = vectors::generate(&f, &c);
+    let a = coverage::audit(&f, &c, tag, &vs);
+    (a, vs)
+}
+
+/// A row that names **every** column, under `policy first`, which has to beat an earlier row on
+/// a column it names itself.
+///
+/// Row 4 wants `a >= 1`; row 2 takes `a = 1` before it. The way through is `a = 2`, which
+/// satisfies row 4 and misses row 2 — but the search would only move a column row 4 left as `-`,
+/// and row 4 leaves none, so it gave up. Raising `a` also drops `d` below zero while `b` stays
+/// put, so the row has to be rebuilt around the move as well.
+///
+/// The shape needs this many columns: with two or three, the pool's own sweep stumbles on the
+/// witness by accident and the hole never appears.
+///
+/// Only row coverage is asserted here, since the rest of the audit answers to a different part
+/// of the machinery.
+#[test]
+fn 全列を名指しする行でも勝たせられる() {
+    let (a, _) = audit_src(
+        "win.rule",
+        "\
+rule 形(shape) v1
+
+enum 区域(zone) = 甲(a) | 乙(b)
+enum 種別(kind) = 壱(one) | 弐(two)
+enum 札(verdict) = 白(w) | 黒(k) | 赤(r) | 青(bl) | 緑(g)
+
+inputs
+  区域(zone) : 区域
+  種別(kind) : 種別
+  a : number range >=0 <=99999
+  b : number range >=1 <=99999
+  c : money[円, incl_tax] range >=0円 <=100万円
+
+outputs
+  結果(v) : 札
+
+derive d : number = b - a  range >=-99998 <=99999
+
+table x(x)
+policy first
+| 区域 | 種別 | a   | c   | d   | -> 結果(v) : 札 |
+| 乙   | -    | -   | -   | -   | 白              |
+| 甲   | -    | 1   | 0円 | -   | 黒              |
+| 甲   | 壱   | -   | -   | -   | 赤              |
+| 甲   | 弐   | >=1 | 0円 | >=0 | 青              |
+| 甲   | 弐   | -   | -   | <0  | 緑              |
+| 甲   | 弐   | -   | -   | -   | 赤              |
+",
+    );
+    let (met, req) = a.tally.get(ROW).copied().unwrap_or((0, 0));
+    assert_eq!(met, req, "行カバーが満たせていない（行4 が勝てない）");
+}
+
+/// A row whose derived cell can only be repaired through the input another of its own cells is
+/// holding down.
+///
+/// Row 5 wants `a >= 2` and `d >= 0`, where `d = b - a`. Reaching `d >= 0` takes the first input
+/// that shifts it, which is `a` — and lowering it undoes the `>= 2` two columns to its left. The
+/// next pass put `a` back and the one after lowered it again: the passes oscillated, and the row
+/// came out unreachable however reachable it was. Held, the solve goes to `b` instead, and the
+/// boundary and shadow obligations that hung off the same row come back with it.
+#[test]
+fn 導出列の直しが同じ行の別のセルを壊さない() {
+    let (a, vs) = audit_src(
+        "derive.rule",
+        "\
+rule 形二(shape2) v1
+
+enum 種別(kind) = 壱(one) | 弐(two) | 丙(three)
+enum 札(verdict) = 白(w) | 青(bl) | 赤(r)
+
+inputs
+  種別(kind) : 種別
+  旗一(f1)   : bool
+  旗二(f2)   : bool
+  旗三(f3)   : bool
+  a : number range >=0 <=99999
+  b : number range >=1 <=99999
+  c : money[円, incl_tax] range >=0円 <=100万円
+
+outputs
+  結果(v) : 札
+
+derive d : number = b - a  range >=-99998 <=99999
+
+table x(x)
+policy first
+| 種別 | 旗一  | 旗二  | 旗三  | a   | c   | d   | -> 結果(v) : 札 |
+| 丙   | -     | -     | -     | -   | -   | -   | 白              |
+| -    | false | -     | -     | -   | -   | -   | 白              |
+| -    | -     | false | -     | -   | -   | -   | 白              |
+| 弐   | -     | -     | false | -   | -   | -   | 白              |
+| 弐   | -     | -     | -     | >=2 | 0円 | >=0 | 青              |
+| 弐   | -     | -     | -     | -   | 0円 | -   | 白              |
+| 弐   | -     | -     | -     | -   | -   | <0  | 白              |
+| 弐   | -     | -     | -     | -   | -   | -   | 赤              |
+| 壱   | -     | -     | -     | 1   | -   | -   | 赤              |
+| 壱   | -     | -     | -     | -   | -   | -   | 白              |
+",
+    );
+    assert!(a.ok(), "{}", coverage::render(&a, &vs));
+}
