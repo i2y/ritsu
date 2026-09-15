@@ -366,6 +366,19 @@ fn 検査を通らない規則からは目録を出さない() {
     assert_eq!(c, 1, "{e}");
 }
 
+/// The range the inventory states for an output that comes from a rate column is the
+/// column's own — its cells run to 150%, so the output runs to 15,000 (§15.34). An assumed
+/// 0..100% used to put 10,000 here.
+#[test]
+fn 出力の範囲は表の列のセルから来る() {
+    let j = api("tests/corpus/会員特典.rule");
+    let py = j.get("python").unwrap();
+    let pts = arr(py, "outputs").iter().find(|o| s(o, "name") == "付与点").expect("付与点 が無い");
+    let r = pts.get("range").expect("付与点 に範囲が無い");
+    assert_eq!(r.get("min").and_then(|v| v.as_int()), Some(0));
+    assert_eq!(r.get("max").and_then(|v| v.as_int()), Some(15000), "{}", r.get("max").map(|v| v.as_int()).flatten().unwrap_or(-1));
+}
+
 /// `docs/generated-code.md` is the prose companion; it must not promise a name the tool does
 /// not emit.
 #[test]

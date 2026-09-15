@@ -243,3 +243,21 @@ policy unique
         after.iter().map(|d| d.code).collect::<Vec<_>>()
     );
 }
+
+/// A table's rate column is bounded by its cells, not by an assumed 0..100% (§15.34). With
+/// the assumption, 9 × 10¹⁸ yen times a column holding 200% "fitted" in int64 and E108 stayed
+/// silent; with the cells, it does not fit and E108 says so. The same amount times a column
+/// holding only 100% does fit, so the input alone is not what trips it.
+#[test]
+fn 率の列の範囲はセルから決まる() {
+    let rule = |top: &str| {
+        format!(
+            "rule t(t) v1\n\ninputs\n  x(x) : money[円, incl_tax]  range >=0円 <=9_000_000_000_000_000_000円\n  k(k) : bool\n\n\
+             outputs\n  y(y) : number  round down(1)\n\n\
+             table j(j)\npolicy unique\n| k | -> r(r) : rate[step 100%] |\n| true | {top} |\n| false | 100% |\n\n\
+             define y(y) : number = x ÷ 1円 × r\n"
+        )
+    };
+    assert!(check(&rule("200%")).contains(&"E108".to_string()), "200% の列で 9×10¹⁸ 円が int64 に収まると言っている");
+    assert!(!check(&rule("100%")).contains(&"E108".to_string()), "100% の列では収まるはず");
+}

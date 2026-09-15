@@ -82,7 +82,8 @@ declare `inputs` and `outputs` with their units, write one `table` per decision,
 Two declarations are mandatory and are where most first drafts fail:
 
 - **`range` on every numeric input and every `derive`.** It is the universe the completeness
-  proof quantifies over, and the entry guard of the generated code.
+  proof quantifies over, and the entry guard of the generated code. A rate may leave it out
+  and is then 0% to 100%, guard included; a rate that can go above 100% declares its range.
 - **`round` on every numeric output.** Without it the generated code would settle fractions
   silently.
 

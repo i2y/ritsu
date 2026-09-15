@@ -195,7 +195,10 @@ One declaration does three jobs.
 
 The form is `range` followed by one or two bounds: `range >=0円 <=1000万円`, `range >=1g`.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
-message states the interval to widen to.
+message states the interval to widen to. A rate input may leave `range` out: it is then
+`>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
+like any other number. A table's numeric output column needs no range of its own — its cells
+are its range.
 
 `contract_only` marks an input that is only ever an entry check and appears in no table:
 

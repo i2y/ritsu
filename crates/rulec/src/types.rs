@@ -394,6 +394,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             c.ranges.insert(i.name.text.clone(), b);
+        } else if matches!(ty, Ty::Rate) {
+            // A rate input that declares no range is 0%..100%. The overflow proof always
+            // assumed as much; recording it here is what makes the entry guard, the
+            // inventory and the vectors say the same thing (§15.34). A rate that can exceed
+            // 100% declares its range like any other number.
+            c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
         }
         c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
         c.syms.insert(
@@ -940,6 +946,35 @@ impl Checked {
                         }
                     }
                     self.scales.insert(oc.name.text.clone(), sc);
+
+                    // The column's range, likewise fixed by its cells: the smallest and the
+                    // largest literal, widened by the range of anything a cell names. A cell
+                    // that names something without a range leaves the column without one —
+                    // no range rather than a guessed one. A rate column used to be assumed to
+                    // lie within 0..100%, and a column holding 150% put a wrong bound into the
+                    // overflow proof and into `rulec api` (§15.34).
+                    let mut bounds: Vec<(Rat, Rat)> = Vec::new();
+                    let mut known = true;
+                    for row in &t.rows {
+                        match row.outs.get(oi) {
+                            Some(OutCell::Lit(Lit::Num(n))) => {
+                                match lit_value_in(n, &ty).or_else(|| lit_value_in(n, &lit_ty(n))) {
+                                    Some(v) => bounds.push((v, v)),
+                                    None => known = false,
+                                }
+                            }
+                            Some(OutCell::Name(w)) => match self.ranges.get(w) {
+                                Some((Some(a), Some(b))) => bounds.push((*a, *b)),
+                                _ => known = false,
+                            },
+                            _ => known = false,
+                        }
+                    }
+                    if known && !bounds.is_empty() {
+                        let lo = bounds.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b)).unwrap();
+                        let hi = bounds.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b)).unwrap();
+                        self.ranges.insert(oc.name.text.clone(), (Some(lo), Some(hi)));
+                    }
                 }
                 self.syms.insert(
                     oc.name.text.clone(),
@@ -1340,16 +1375,13 @@ impl Checked {
     /// multiples are all that is needed (§5.2).
     fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
         match e {
+            // A name without a range bounds nothing. A rate used to be assumed to lie within
+            // 0..100% here, which a table column holding 150% quietly contradicted (§15.34);
+            // a column's range now comes from its cells, and a name that still has none
+            // leaves the expression unbounded rather than bounded wrongly.
             Expr::Name(n, _) => {
-                if let Some((lo, hi)) = self.ranges.get(n) {
-                    return Some(((*lo)?, (*hi)?));
-                }
-                // A rate is taken to lie within 0..100%. No range declaration is required for
-                // it, so this is the conservative view.
-                match self.syms.get(n).map(|s| s.ty.clone()) {
-                    Some(Ty::Rate) => Some((Rat::zero(), Rat::int(1))),
-                    _ => None,
-                }
+                let (lo, hi) = self.ranges.get(n)?;
+                Some(((*lo)?, (*hi)?))
             }
             Expr::Lit(Lit::Num(n), _) => {
                 // The expression's own type is only a hint: `商品合計 × 10%` and
