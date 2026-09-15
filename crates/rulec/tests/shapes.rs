@@ -394,7 +394,6 @@ fn runner_locals(dir: &Path, alias: &str) -> Vec<String> {
 }
 
 /// A rule whose alias is a name the runner itself uses for a local.
-/// A rule whose alias is a name the runner itself uses for a local.
 ///
 /// The TypeScript and Swift runners call the rule by its bare name, in the same scope as the
 /// locals holding the parsed line — so `rule d` bound the JSON object to `d` and the call

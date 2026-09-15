@@ -156,9 +156,6 @@ pub enum Feasible {
 pub struct TableRegion {
     axes: Vec<Axis>,
     col_names: Vec<String>,
-    /// Axis → the coordinates of the values an upstream table can produce. `None` means
-    /// unrestricted (an input or derived axis).
-    reachable: Vec<Option<Vec<bool>>>,
     /// The name and type of a column whose type cannot be analyzed, if there is one. Rather
     /// than skipping the check, we stop with E110.
     unanalyzable: Option<(String, Ty)>,
@@ -197,7 +194,7 @@ fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {
 /// boundaries too, which closes the universe into a finite one.
 fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec<Rat>, Option<Rat>, Option<Rat>) {
     let mut set: BTreeSet<(i128, i128)> = BTreeSet::new();
-    let mut push = |r: Rat, s: &mut BTreeSet<(i128, i128)>| {
+    let push = |r: Rat, s: &mut BTreeSet<(i128, i128)>| {
         s.insert((r.num, r.den));
     };
     let (mut lo, mut hi) = (None, None);
@@ -647,7 +644,7 @@ impl TableRegion {
             unreachable_row.push(only_unreachable);
             masks.push(m);
         }
-        Some(TableRegion { axes, col_names, reachable, unreachable_row, display_of: cell_of, is_define, derived, exprs, spans, masks, unanalyzable })
+        Some(TableRegion { axes, col_names, unreachable_row, display_of: cell_of, is_define, derived, exprs, spans, masks, unanalyzable })
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
