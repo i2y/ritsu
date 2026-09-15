@@ -275,6 +275,54 @@ fn 図が見せている出力は本物と一致する() {
     }
 }
 
+/// The examples page is generated too, prose and all, and nothing else holds that prose to
+/// the script that writes it.
+///
+/// The rule sources are checked above, against the corpus. The sentences around them are
+/// not, and they carry claims that go stale: the page said the reference evaluator, Python
+/// and Go agree byte for byte, which stopped being the whole list when the fourth target
+/// landed. The committed pages were corrected by hand; the generator was not, so running it
+/// put the old sentence back over the fix. A generator that silently undoes a correction is
+/// worse than no generator, so it is held to its own output the same way the diagrams are.
+#[test]
+fn 例のページは作り直しても変わらない() {
+    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let pages = ["website/docs/examples.md", "website/docs-ja/examples.md"];
+    let before: Vec<(std::path::PathBuf, Vec<u8>)> =
+        pages.iter().map(|r| root().join(r)).map(|p| (p.clone(), std::fs::read(&p).unwrap())).collect();
+
+    let o = Command::new("python3")
+        .current_dir(root().join("website"))
+        .arg("tools/make_examples.py")
+        .output()
+        .expect("python3 を起動できない");
+
+    let stale: Vec<String> = before
+        .iter()
+        .filter(|(p, was)| std::fs::read(p).ok().as_ref() != Some(was))
+        .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    // Put the bytes back before asserting: a test has no business leaving the working tree
+    // different from how it found it, least of all when it is about to fail.
+    for (p, was) in &before {
+        let _ = std::fs::write(p, was);
+    }
+
+    assert!(
+        o.status.success(),
+        "make_examples.py が失敗しました:\n{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(
+        stale.is_empty(),
+        "例のページと、それを書くスクリプトがずれています（どちらが古いかは差分を見てください）: {stale:?}"
+    );
+}
+
 /// The two generated diagrams: the script that draws one, and the stem its four files share.
 const DIAGRAMS: [(&str, &str); 4] = [
     ("tools/make_overview.py", "overview"),
