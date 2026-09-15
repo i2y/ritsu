@@ -95,6 +95,13 @@ fn 署名とガードが生成物と一致する() {
         assert!(rs.contains(&s(rs_j, "signature")), "rust の署名が違う: {}", s(rs_j, "signature"));
         assert!(go.contains(&s(go_j, "signature")), "go の署名が違う: {}", s(go_j, "signature"));
         assert!(sw.contains(&s(sw_j, "signature")), "swift の署名が違う: {}", s(sw_j, "signature"));
+        // The traced twin (§15.33) is part of the inventory too, and has to be in the file
+        // exactly as the inventory spells it.
+        for (lang, file, j) in [("python", &py, py_j), ("typescript", &ts, ts_j), ("rust", &rs, rs_j), ("go", &go, go_j), ("swift", &sw, sw_j)] {
+            let sig = s(j, "traced_signature");
+            assert!(file.contains(&sig), "{lang} の traced の署名が違う: {sig}");
+            assert!(sig.contains(&s(j, "traced")), "{lang}: traced の名前が署名に無い: {sig}");
+        }
 
         // The entry guards. A range in the inventory that the guard does not enforce would
         // send a caller values the code then rejects.
@@ -370,6 +377,8 @@ fn 生成物の文書が実物の名前を使っている() {
     for want in [
         s(py_j, "signature"),
         s(go_j, "signature"),
+        s(py_j, "traced_signature"),
+        s(go_j, "traced_signature"),
         "RuleInputError".into(),
         "RuleContradictionError".into(),
         "rulec api".into(),

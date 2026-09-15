@@ -171,7 +171,10 @@ Writes Python, TypeScript, Rust, Ruby, Go, Swift, and the vectors. It refuses to
 from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
 signatures, parameters with units and ranges, enum member spellings, errors — so you never
 have to read the generated code to integrate it
-([generated-code.md](generated-code.md)).
+([generated-code.md](generated-code.md)). Beside each function is a twin with
+`_traced` on its name that also returns the rows that matched, one per table in order — the
+row numbers `rulec doc` prints — which is what a log line or an answer to "why this amount"
+needs. `rulec test` holds those rows to the reference evaluator as well as the values.
 
 For a target none of the six covers — another language, a workflow engine's expression
 language, SQL — you do not need a backend and you do not have to give up the comparison:

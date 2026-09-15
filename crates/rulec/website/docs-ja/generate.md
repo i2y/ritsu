@@ -42,44 +42,64 @@ $ rulec gen rules/ --out generated/
 
 ```python
 def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
-    """Rule 送料例 v1. Each branch corresponds 1:1 to a row of the rule source."""
+    """Rule 送料例 v1: the same decision as fee_demo_traced, without the rows that matched."""
+    out, _ = fee_demo_traced(dest, girth, weight)
+    return out
+
+
+def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
         raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
     if not 1 <= girth <= 100:
         raise RuleInputError(f"三辺合計 is out of range: {girth}")
+    trace: _Trace = []
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
         size = SizeClass.S60
+        trace.append(Fired("サイズ判定", 1))
     elif girth <= 80:  # row 2: <=80cm | S80
         size = SizeClass.S80
+        trace.append(Fired("サイズ判定", 2))
     elif True:  # row 3: - | S100
         size = SizeClass.S100
+        trace.append(Fired("サイズ判定", 3))
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return YenInclTax(_round_up(fee, 10))
+    return YenInclTax(_round_up(fee, 10)), trace
 ```
 
 ```go
 func FeeDemo(in Input) (YenInclTax, error) {
+	out, _, err := FeeDemoTraced(in)
+	return out, err
+}
+
+func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 	if !in.Dest.Valid() {
-		return 0, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
+		return 0, nil, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
 	}
+	var trace []Fired
 	// table サイズ判定 (policy first)
 	var size SizeClass
 	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
 		size = SizeClassS60
+		trace = append(trace, Fired{"サイズ判定", 1})
 	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
 		size = SizeClassS80
+		trace = append(trace, Fired{"サイズ判定", 2})
 	} else if true { // row 3: - | S100
 		size = SizeClassS100
+		trace = append(trace, Fired{"サイズ判定", 3})
 	} else {
 		panic("unreachable: completeness was statically checked by rulec")
 	}
 	...
-	return YenInclTax(roundUp(int64(fee), 10)), nil
+	return YenInclTax(roundUp(int64(fee), 10)), trace, nil
 }
 ```
+
+呼ぶのは `fee_demo` で、その形は変わりません。分岐があるのは `fee_demo_traced` のほうで、こちらは値と一緒に、当てはまった行を表ごとに一つ、順に返します（表の名前と行番号）。ログの一行や「なぜこの送料か」への答えに要るのはこれです。下の一致検査は、値だけでなくこの行も参照評価器と突き合わせます。
 
 読める形であることを、生成器は四つで守っています。
 

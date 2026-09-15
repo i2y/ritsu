@@ -56,25 +56,26 @@
 <text x="517.0" y="242" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">5kg</text>
 <text x="637.0" y="242" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">10kg</text>
 <circle cx="458.5" cy="203.0" r="4.5" fill="#9c6508" stroke="#ffffff" stroke-width="1.5"/>
-<path d="M744,36 H1084 L1096,48 V236 H744 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M744,36 H1084 L1096,48 V272 H744 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1084,36 V48 H1096 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
-<path d="M736,28 H1076 L1088,40 V228 H736 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M736,28 H1076 L1088,40 V264 H736 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1076,28 V40 H1088 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
-<path d="M728,20 H1068 L1080,32 V220 H728 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M728,20 H1068 L1080,32 V256 H728 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1068,20 V32 H1080 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="737" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Python · TypeScript · Rust · Ruby · Go · Swift</text>
 <text x="1071" y="42" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.py</text>
 <text x="737" y="60" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">def fee(dest: Zone, weight: Gram) -&gt; USDInclTax:</text>
-<text x="737" y="75" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="737" y="90" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 8</text>
-<text x="737" y="105" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="737" y="120" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 10</text>
-<text x="737" y="135" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="737" y="150" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 13</text>
-<text x="737" y="165" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="737" y="180" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    return USDInclTax(_round_up(fee, 1))</text>
-<text x="737" y="199" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">zero dependencies, no engine,</text>
-<text x="737" y="214" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the same answer from every one</text>
+<text x="737" y="75" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    out, _ = fee_traced(dest, weight)</text>
+<text x="737" y="90" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="737" y="105" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 8</text>
+<text x="737" y="120" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="737" y="135" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 10</text>
+<text x="737" y="150" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="737" y="165" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 13</text>
+<text x="737" y="180" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="737" y="195" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    return USDInclTax(_round_up(fee, 1)), trace</text>
+<text x="737" y="235" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">zero dependencies, no engine,</text>
+<text x="737" y="250" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the same answer from every one</text>
 <path d="M323.5,286 H581.5 L593.5,298 V348 H323.5 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M581.5,286 V298 H593.5 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="332.5" y="308" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">An input that matches no row</text>

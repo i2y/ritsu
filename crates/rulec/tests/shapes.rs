@@ -212,7 +212,7 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     rb_loads(&dir, "bool_only");
     sw_typechecks(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
-    assert!(go.contains("return false, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
+    assert!(go.contains("return false, nil, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -359,7 +359,9 @@ result 可否 = 可否
         assert!(sw.contains(want), "`{want}` が生成 Swift に無い:\n{sw}");
     }
     let run = std::fs::read_to_string(dir.join("swift").join("keyword_demo_runner.swift")).unwrap();
-    assert!(run.contains("keywordDemo(where: "), "呼び出しの引数ラベルが逆に囲まれている:\n{run}");
+    assert!(run.contains("keywordDemoTraced(where: "), "呼び出しの引数ラベルが逆に囲まれている:\n{run}");
+    // The public function hands its arguments on the same way: label bare, value escaped.
+    assert!(sw.contains("try keywordDemoTraced(where: `where`, kind: kind).0"), "{sw}");
     py_imports(&dir, "keyword_demo");
     rb_loads(&dir, "keyword_demo");
     go_builds(&dir, "keyworddemo");

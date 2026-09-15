@@ -611,10 +611,14 @@ fn out_object(c: &Checked, v: &Vector) -> String {
     format!("{{{}}}", body.join(","))
 }
 
-/// Only the expected values, in the same shape the runner emits. Three-way agreement is judged
-/// on these bytes.
+/// The expected values and the rows that matched, in the same shape the runner emits.
+/// Agreement is judged on these bytes, so it is row-level: a generated function that gives
+/// the right value from the wrong row fails here (§15.33).
 pub fn expected_json(_f: &RuleFile, c: &Checked, v: &Vector) -> String {
-    out_object(c, v)
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let fired: Vec<String> =
+        v.fired.iter().map(|(t, r)| format!("{{\"table\":\"{}\",\"row\":{r}}}", esc(t))).collect();
+    format!("{{\"out\":{},\"trace\":[{}]}}", out_object(c, v), fired.join(","))
 }
 
 // ── The mapping of §9.1 ─────────────────────────────────────────────────────

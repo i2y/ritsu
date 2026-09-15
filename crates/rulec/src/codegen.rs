@@ -161,8 +161,24 @@ impl<'a> Gen<'a> {
     /// collided the day an output declared the alias `raw` — Python quietly rebound it and
     /// TypeScript refused to parse.
     fn temp(&self, base: &str) -> String {
+        let f = self.f;
+        let declared: Vec<&crate::ast::Name> = f
+            .inputs
+            .iter()
+            .map(|i| &i.name)
+            .chain(f.outputs.iter().map(|o| &o.name))
+            .chain(f.groups.iter().map(|g| &g.name))
+            .chain(f.items.iter().flat_map(|it| -> Vec<&crate::ast::Name> {
+                match it {
+                    Item::Derived(d) => vec![&d.name],
+                    Item::Define(d) => vec![&d.name],
+                    Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
+                }
+            }))
+            .collect();
         let mut n = base.to_string();
-        while self.idents.contains_key(&n) || self.idents.values().any(|v| *v == n) {
+        // A name declared without an alias is its own identifier, so the text counts too.
+        while declared.iter().any(|d| d.text == n || pub_name(d) == n) {
             n.push('_');
         }
         n
@@ -340,6 +356,28 @@ fn runner_local(base: &str, fname: &str) -> String {
 /// The name of the intermediate that holds one output's value before rounding. One output
 /// keeps the plain `raw` of the example in §8.2; a second needs a name of its own, or the
 /// two assignments would land on the same variable.
+/// The doc line of the public function, which decides the same thing as its traced twin
+/// and drops the rows that matched.
+fn plain_doc(name: &str, version: &str, twin: &str) -> String {
+    tr!(
+        "規則 {name} v{version}。{twin} と同じ判定で、当てはまった行を返さない。",
+        "Rule {name} v{version}: the same decision as {twin}, without the rows that matched."
+    )
+}
+
+/// The doc line of the traced function, which holds the branches.
+fn traced_doc(name: &str, version: &str) -> String {
+    tr!(
+        "規則 {name} v{version}。分岐はもとの表の行と 1:1 に対応する。出力と、当てはまった行（表ごとに一つ、順に）を返す。",
+        "Rule {name} v{version}. Each branch corresponds 1:1 to a row of the rule source. Returns the outputs and the rows that matched, one per table, in order."
+    )
+}
+
+/// The doc line of the `Fired` type.
+fn fired_doc() -> String {
+    tr!("当てはまった行。表の名前と、1 から数えた行番号。", "A row that matched: the table's name and its 1-based row number.")
+}
+
 fn raw_base(oi: usize) -> String {
     if oi == 0 {
         "raw".into()
@@ -455,8 +493,7 @@ impl<'a> Gen<'a> {
     pub fn python(&self) -> String {
         let mut o = self.header("#");
         // Import from typing only what is used. NamedTuple is needed only with multiple outputs.
-        let typing = if self.f.outputs.len() > 1 { "NamedTuple, NewType" } else { "NewType" };
-        o.push_str(&format!("from __future__ import annotations\n\nimport enum\nfrom typing import {typing}\n\n"));
+        o.push_str("from __future__ import annotations\n\nimport enum\nfrom typing import NamedTuple, NewType\n\n");
 
         // Brands. They work with mypy and pyright and cost nothing at runtime.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
@@ -499,6 +536,14 @@ impl<'a> Gen<'a> {
             "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
+        o.push_str(&format!(
+            "class Fired(NamedTuple):\n    \"\"\"{}\"\"\"\n\n    table: str\n    row: int\n\n",
+            fired_doc()
+        ));
+        // The alias exists so that the local inside the function can be annotated without
+        // naming `list`: an input aliased `list` shadows the builtin there, and mypy then
+        // reads the annotation as the parameter (§15.33).
+        o.push_str("_Trace = list[Fired]\n\n");
 
         // Groups
         for g in &self.f.groups {
@@ -621,12 +666,15 @@ impl<'a> Gen<'a> {
             o.push('\n');
         }
 
+        // The public function keeps the plain signature; the branches live in its traced
+        // twin, which also returns the rows that matched (§15.33).
+        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let traced = format!("{fname}_traced");
         o.push_str(&format!("def {fname}({}) -> {ret}:\n", params.join(", ")));
-        o.push_str(&tr!(
-            "    \"\"\"規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。\"\"\"\n",
-            "    \"\"\"Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\"\"\"\n",
-            self.f.name.text, self.f.version
-        ));
+        o.push_str(&format!("    \"\"\"{}\"\"\"\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
+        o.push_str(&format!("    out, _ = {traced}({})\n    return out\n\n\n", args.join(", ")));
+        o.push_str(&format!("def {traced}({}) -> tuple[{ret}, list[Fired]]:\n", params.join(", ")));
+        o.push_str(&format!("    \"\"\"{}\"\"\"\n", traced_doc(&self.f.name.text, &self.f.version)));
 
         // Entry guards (§8.5). They enforce at runtime what the proof assumes: inputs lie within
         // their declared domains.
@@ -670,6 +718,9 @@ impl<'a> Gen<'a> {
             }
         }
 
+        let trace = self.temp("trace");
+        o.push_str(&format!("    {trace}: _Trace = []\n"));
+
         // Derived values and definitions, in declaration order (define-before-use, §5.1).
         for it in &self.f.items {
             match it {
@@ -681,7 +732,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, &local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
-                Item::Table(t) => o.push_str(&self.py_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.py_table(t, &local, &trace)),
             }
         }
 
@@ -741,15 +792,15 @@ impl<'a> Gen<'a> {
             })
             .collect();
         if outs.len() == 1 {
-            o.push_str(&format!("    return {}\n", branded[0]));
+            o.push_str(&format!("    return {}, {trace}\n", branded[0]));
         } else {
             // Multiple outputs are a NamedTuple (§8.5); each carries its own rounding.
-            o.push_str(&format!("    return Output({})\n", branded.join(", ")));
+            o.push_str(&format!("    return Output({}), {trace}\n", branded.join(", ")));
         }
         o
     }
 
-    fn py_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn py_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("    # {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -802,6 +853,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v}\n", self.ident(&oc.name.text)));
             }
+            o.push_str(&format!("        {trace}.append(Fired({name:?}, {}))\n", ri + 1));
         }
         o.push_str(&format!(
             "    else:\n        raise AssertionError(\"{}\")\n",
@@ -1106,6 +1158,7 @@ impl<'a> Gen<'a> {
             o.push_str(":\n\t\treturn true\n\t}\n\treturn false\n}\n\n");
         }
 
+        o.push_str(&format!("// Fired {}\ntype Fired struct {{\n\tTable{CELL}string\n\tRow{CELL}int\n}}\n\n", fired_doc()));
         o.push_str(&round_go());
         let body = self.go_fn();
         let needs_fmt = body.contains("fmt.Errorf");
@@ -1177,26 +1230,29 @@ impl<'a> Gen<'a> {
             }
         };
 
-        o.push_str(&tr!(
-            "// {fname} は規則 {} v{} を評価する。分岐はもとの表の行と 1:1 に対応する。\n",
-            "// {fname} evaluates rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\n",
-            self.f.name.text, self.f.version
+        // The public function keeps the plain signature; the branches live in its traced
+        // twin, which also returns the rows that matched (§15.33).
+        let traced = format!("{fname}Traced");
+        o.push_str(&format!("// {fname} {}\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
+        o.push_str(&format!(
+            "func {fname}(in Input) ({ret}, error) {{\n\tout, _, err := {traced}(in)\n\treturn out, err\n}}\n\n"
         ));
-        o.push_str(&format!("func {fname}(in Input) ({ret}, error) {{\n"));
+        o.push_str(&format!("// {traced} {}\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!("func {traced}(in Input) ({ret}, []Fired, error) {{\n"));
 
         for i in &self.f.inputs {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
-                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
                     tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
                             crate::types::wire_int(*lo, sc),
                             crate::types::wire_int(*hi, sc),
                             tr!("{} が範囲の外です: %d", "{} is out of range: %d", i.name.text)
@@ -1206,6 +1262,9 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
+
+        let trace = self.temp("trace");
+        o.push_str(&format!("\tvar {trace} []Fired\n"));
 
         for it in &self.f.items {
             match it {
@@ -1219,7 +1278,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
-                Item::Table(t) => o.push_str(&self.go_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.go_table(t, &local, &trace)),
             }
         }
 
@@ -1260,7 +1319,7 @@ impl<'a> Gen<'a> {
             });
         }
         if outs.len() == 1 {
-            o.push_str(&format!("\treturn {ret}({}), nil\n}}\n", finals[0]));
+            o.push_str(&format!("\treturn {ret}({}), {trace}, nil\n}}\n", finals[0]));
         } else {
             // Each output gets its own rounding, applied exactly once (§7.2).
             let fields: Vec<String> = outs
@@ -1270,12 +1329,12 @@ impl<'a> Gen<'a> {
                     format!("{}: {}({body})", pascal(&pub_name(&od.name)), self.go_ty(&self.ty_of(&od.name.text)))
                 })
                 .collect();
-            o.push_str(&format!("\treturn Output{{{}}}, nil\n}}\n", fields.join(", ")));
+            o.push_str(&format!("\treturn Output{{{}}}, {trace}, nil\n}}\n", fields.join(", ")));
         }
         o
     }
 
-    fn go_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn go_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("\t// {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -1335,6 +1394,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("\t\t{} = {v}\n", self.ident(&oc.name.text)));
             }
+            o.push_str(&format!("\t\t{trace} = append({trace}, Fired{{{name:?}, {}}})\n", ri + 1));
         }
         o.push_str(&format!(
             "\t}} else {{\n\t\tpanic(\"{}\")\n\t}}\n",
@@ -1345,7 +1405,7 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&self.guards(t, local, Lang::Go, "\t", |name, i, j| {
             format!(
-                "\t\treturn {}, fmt.Errorf(\"{}\")\n",
+                "\t\treturn {}, nil, fmt.Errorf(\"{}\")\n",
                 if self.f.outputs.len() == 1 {
                     self.go_zero(&self.ty_of(&self.f.outputs[0].name.text))
                 } else {
@@ -1665,8 +1725,8 @@ impl<'a> Gen<'a> {
                  if not line:\n        \
                      continue\n    \
                  d = json.loads(line)[\"in\"]\n    \
-                 r = m.{alias}({})\n    \
-                 print(json.dumps({dump}, ensure_ascii=False, separators=(\",\", \":\")))\n",
+                 r, trace = m.{alias}_traced({})\n    \
+                 print(json.dumps({{\"out\": {dump}, \"trace\": [{{\"table\": f.table, \"row\": f.row}} for f in trace]}}, ensure_ascii=False, separators=(\",\", \":\")))\n",
             env!("CARGO_PKG_VERSION"),
             args.join(", ")
         )
@@ -1740,6 +1800,14 @@ impl<'a> Gen<'a> {
                      v, _ := json.Marshal(kv[i+1])\n\t\t\
                      s += string(k) + \":\" + string(v)\n\t}}\n\t\
                  return s + \"}}\"\n}}\n\n\
+             // The rows that matched, in the shape the expected values record them.\n\
+             func fired(ts []r.Fired) string {{\n\t\
+                 s := \"[\"\n\t\
+                 for i, t := range ts {{\n\t\t\
+                     if i > 0 {{\n\t\t\ts += \",\"\n\t\t}}\n\t\t\
+                     k, _ := json.Marshal(t.Table)\n\t\t\
+                     s += \"{{\\\"table\\\":\" + string(k) + \",\\\"row\\\":\" + fmt.Sprint(t.Row) + \"}}\"\n\t}}\n\t\
+                 return s + \"]\"\n}}\n\n\
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
                  sc.Buffer(make([]byte, 1<<20), 1<<20)\n\t\
@@ -1749,9 +1817,9 @@ impl<'a> Gen<'a> {
                      if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
                      d := rec.In\n\t\t\
                      var in r.Input\n{}\t\t\
-                     got, err := r.{fname}(in)\n\t\t\
+                     got, trace, err := r.{fname}Traced(in)\n\t\t\
                      if err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     fmt.Println(obj({wire}))\n\t}}\n}}\n",
+                     fmt.Println(\"{{\\\"out\\\":\" + obj({wire}) + \",\\\"trace\\\":\" + fired(trace) + \"}}\")\n\t}}\n}}\n",
             env!("CARGO_PKG_VERSION"),
             fields.join("")
         )
@@ -2041,6 +2109,8 @@ impl<'a> Gen<'a> {
             o.push('\n');
         }
 
+        o.push_str(&format!("/** {} */\nexport type Fired = {{ readonly table: string; readonly row: number }};\n\n", fired_doc()));
+
         // The error classes come first: the enum parsers below throw them.
         o.push_str(&round_ts());
         o.push('\n');
@@ -2117,13 +2187,18 @@ impl<'a> Gen<'a> {
             o.push_str("}\n\n");
         }
 
-        o.push_str(&tr!(
-            "/** 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。 */\n",
-            "/** Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source. */\n",
-            self.f.name.text,
-            self.f.version
+        // The public function keeps the plain signature; the branches live in its traced
+        // twin, which also returns the rows that matched (§15.33).
+        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let traced = format!("{fname}_traced");
+        o.push_str(&format!("/** {} */\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
+        o.push_str(&format!(
+            "export function {fname}({}): {ret} {{\n  return {traced}({})[0];\n}}\n\n",
+            params.join(", "),
+            args.join(", ")
         ));
-        o.push_str(&format!("export function {fname}({}): {ret} {{\n", params.join(", ")));
+        o.push_str(&format!("/** {} */\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!("export function {traced}({}): [{ret}, Fired[]] {{\n", params.join(", ")));
 
         let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
@@ -2157,6 +2232,9 @@ impl<'a> Gen<'a> {
             }
         }
 
+        let trace = self.temp("trace");
+        o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
+
         for it in &self.f.items {
             match it {
                 Item::Derived(d) => {
@@ -2177,7 +2255,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
-                Item::Table(t) => o.push_str(&self.ts_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.ts_table(t, &local, &trace)),
             }
         }
 
@@ -2221,19 +2299,19 @@ impl<'a> Gen<'a> {
             finals.push(cast(&ty, body));
         }
         if outs.len() == 1 {
-            o.push_str(&format!("  return {};\n}}\n", finals[0]));
+            o.push_str(&format!("  return [{}, {trace}];\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
-            o.push_str(&format!("  return {{ {} }};\n}}\n", fields.join(", ")));
+            o.push_str(&format!("  return [{{ {} }}, {trace}];\n}}\n", fields.join(", ")));
         }
         o
     }
 
-    fn ts_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn ts_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("  // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -2295,6 +2373,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("    {} = {v};\n", self.ident(&oc.name.text)));
             }
+            o.push_str(&format!("    {trace}.push({{ table: {name:?}, row: {} }});\n", ri + 1));
         }
         o.push_str(&format!(
             "  }} else {{\n    throw new Error(\"{}\");\n  }}\n",
@@ -2315,8 +2394,9 @@ impl<'a> Gen<'a> {
         let r = runner_local("r", &alias);
         let line = runner_local("line", &alias);
         let lines = runner_local("lines", &alias);
+        let trace = runner_local("trace", &alias);
         let mut args: Vec<String> = Vec::new();
-        let mut imports: Vec<String> = vec![alias.clone()];
+        let mut imports: Vec<String> = vec![format!("{alias}_traced")];
         // A brand is a type, and node's type stripping can only erase a whole `import type`
         // statement — a type name mixed into a value import is a syntax error there.
         let mut type_imports: Vec<String> = Vec::new();
@@ -2381,8 +2461,8 @@ impl<'a> Gen<'a> {
              for (const {line} of {lines}) {{\n  \
                  if ({line}.trim() === \"\") {{\n    continue;\n  }}\n  \
                  const {d} = JSON.parse({line}).in as Record<string, unknown>;\n  \
-                 const {r} = {alias}({});\n  \
-                 console.log(\"{{\" + [{}].join(\",\") + \"}}\");\n}}\n",
+                 const [{r}, {trace}] = {alias}_traced({});\n  \
+                 console.log(\"{{\\\"out\\\":{{\" + [{}].join(\",\") + \"}},\\\"trace\\\":[\" + {trace}.map((f) => \"{{\\\"table\\\":\" + JSON.stringify(f.table) + \",\\\"row\\\":\" + String(f.row) + \"}}\").join(\",\") + \"]}}\");\n}}\n",
             env!("CARGO_PKG_VERSION"),
             imports.join(", "),
             if type_imports.is_empty() {
@@ -2589,6 +2669,10 @@ impl<'a> Gen<'a> {
                 "/// {doc}\n#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]\npub struct {b}(pub i64);\n\n"
             ));
         }
+        o.push_str(&format!(
+            "/// {}\n#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Fired {{\n    pub table: &'static str,\n    pub row: u32,\n}}\n\n",
+            fired_doc()
+        ));
 
         // Enums. Each carries its Japanese name, which is what the wire format uses (§10).
         let mut emitted: Vec<String> = Vec::new();
@@ -2669,14 +2753,19 @@ impl<'a> Gen<'a> {
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
 
-        o.push_str(&tr!(
-            "/// 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。\n",
-            "/// Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\n",
-            self.f.name.text,
-            self.f.version
-        ));
+        // The public function keeps the plain signature; the branches live in its traced
+        // twin, which also returns the rows that matched (§15.33).
+        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let traced = format!("{fname}_traced");
+        o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
         o.push_str(&format!(
-            "pub fn {fname}({}) -> Result<{ret}, RuleError> {{\n",
+            "pub fn {fname}({}) -> Result<{ret}, RuleError> {{\n    {traced}({}).map(|(out, _)| out)\n}}\n\n",
+            params.join(", "),
+            args.join(", ")
+        ));
+        o.push_str(&format!("/// {}\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!(
+            "pub fn {traced}({}) -> Result<({ret}, Vec<Fired>), RuleError> {{\n",
             params.join(", ")
         ));
 
@@ -2717,6 +2806,10 @@ impl<'a> Gen<'a> {
             ));
         }
 
+        let trace = self.temp("trace");
+        let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
+        o.push_str(&format!("    let {}{trace}: Vec<Fired> = Vec::new();\n", if has_table { "mut " } else { "" }));
+
         for it in &self.f.items {
             match it {
                 Item::Derived(d) => o.push_str(&format!(
@@ -2731,7 +2824,7 @@ impl<'a> Gen<'a> {
                     rs_expr(unparen(&self.expr(&d.expr, &local).text)),
                     tr!("定義", "definition")
                 )),
-                Item::Table(t) => o.push_str(&self.rs_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.rs_table(t, &local, &trace)),
             }
         }
 
@@ -2775,19 +2868,19 @@ impl<'a> Gen<'a> {
             finals.push(wrap(&ty, body));
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    Ok({})\n}}\n", finals[0]));
+            o.push_str(&format!("    Ok(({}, {trace}))\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
-            o.push_str(&format!("    Ok(Output {{ {} }})\n}}\n", fields.join(", ")));
+            o.push_str(&format!("    Ok((Output {{ {} }}, {trace}))\n}}\n", fields.join(", ")));
         }
         o
     }
 
-    fn rs_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn rs_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -2848,6 +2941,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v};\n", self.ident(&oc.name.text)));
             }
+            o.push_str(&format!("        {trace}.push(Fired {{ table: {name:?}, row: {} }});\n", ri + 1));
         }
         o.push_str(&format!(
             "    }} else {{\n        unreachable!(\"{}\");\n    }}\n",
@@ -3020,8 +3114,8 @@ fn main() {{
             continue;
         }}
         let d = fields(line);
-        let got = r::{alias}({args}).unwrap();
-        println!("{{{{{{}}}}}}", [{fields}].join(","));
+        let (got, trace) = r::{alias}_traced({args}).unwrap();
+        println!("{{{{\"out\":{{{{{{}}}}}},\"trace\":[{{}}]}}}}", [{fields}].join(","), trace.iter().map(|f| format!("{{{{\"table\":{{}},\"row\":{{}}}}}}", q(f.table), f.row)).collect::<Vec<_>>().join(","));
     }}
 }}
 "#,
@@ -3306,10 +3400,15 @@ impl Gen<'_> {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        let py_traced = py_sig
+            .replacen(&format!("def {alias}("), &format!("def {alias}_traced("), 1)
+            .replace(&format!(") -> {py_ret}:"), &format!(") -> tuple[{py_ret}, list[Fired]]:"));
         let python = crate::json::Obj::new()
             .str("module", &alias)
             .str("function", &alias)
             .str("signature", &py_sig)
+            .str("traced", &format!("{alias}_traced"))
+            .str("traced_signature", &py_traced)
             .raw("params", crate::json::arr(&params))
             .str("returns", &py_ret)
             .raw("outputs", crate::json::arr(&py_outs))
@@ -3353,10 +3452,15 @@ impl Gen<'_> {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        let ts_traced = ts_sig
+            .replacen(&format!("export function {alias}("), &format!("export function {alias}_traced("), 1)
+            .replace(&format!("): {ts_ret}"), &format!("): [{ts_ret}, Fired[]]"));
         let typescript = crate::json::Obj::new()
             .str("module", &format!("{alias}.ts"))
             .str("function", &alias)
             .str("signature", &ts_sig)
+            .str("traced", &format!("{alias}_traced"))
+            .str("traced_signature", &ts_traced)
             .raw("params", crate::json::arr(&ts_in))
             .str("returns", &ts_ret)
             .raw("outputs", crate::json::arr(&ts_outs))
@@ -3401,10 +3505,15 @@ impl Gen<'_> {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        let rs_traced = rs_sig
+            .replacen(&format!("pub fn {alias}("), &format!("pub fn {alias}_traced("), 1)
+            .replace(&format!(") -> Result<{rs_ret}, RuleError>"), &format!(") -> Result<({rs_ret}, Vec<Fired>), RuleError>"));
         let rust = crate::json::Obj::new()
             .str("module", &format!("{alias}.rs"))
             .str("function", &alias)
             .str("signature", &rs_sig)
+            .str("traced", &format!("{alias}_traced"))
+            .str("traced_signature", &rs_traced)
             .raw("params", crate::json::arr(&rs_in))
             .str("returns", &rs_ret)
             .raw("outputs", crate::json::arr(&rs_outs))
@@ -3445,10 +3554,13 @@ impl Gen<'_> {
             self.rb_module(),
             self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ")
         );
+        let rb_traced = rb_sig.replacen(&format!(".{alias}("), &format!(".{alias}_traced("), 1);
         let ruby = crate::json::Obj::new()
             .str("module", &self.rb_module())
             .str("function", &alias)
             .str("signature", &rb_sig)
+            .str("traced", &format!("{alias}_traced"))
+            .str("traced_signature", &rb_traced)
             // The signature file that ships with it; `steep` reads this, not the entry.
             .str("rbs", &format!("sig/{alias}.rbs"))
             .raw("params", crate::json::arr(&rb_in))
@@ -3496,10 +3608,15 @@ impl Gen<'_> {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        let sw_traced = sw_sig
+            .replacen(&format!("func {sw_fname}("), &format!("func {sw_fname}Traced("), 1)
+            .replace(&format!(") throws -> {sw_ret}"), &format!(") throws -> ({sw_ret}, [Fired])"));
         let swift = crate::json::Obj::new()
             .str("module", &format!("{alias}.swift"))
             .str("function", &sw_fname)
             .str("signature", &sw_sig)
+            .str("traced", &format!("{sw_fname}Traced"))
+            .str("traced_signature", &sw_traced)
             .raw("params", crate::json::arr(&sw_in))
             .str("returns", &sw_ret)
             .raw("outputs", crate::json::arr(&sw_outs))
@@ -3542,10 +3659,13 @@ impl Gen<'_> {
             "Output".into()
         };
         let go_sig = format!("func {go_fn}(in Input) ({go_ret}, error)");
+        let go_traced = format!("func {go_fn}Traced(in Input) ({go_ret}, []Fired, error)");
         let go = crate::json::Obj::new()
             .str("package", &pkg)
             .str("func", &go_fn)
             .str("signature", &go_sig)
+            .str("traced", &format!("{go_fn}Traced"))
+            .str("traced_signature", &go_traced)
             .str("input_type", "Input")
             .raw("input_fields", crate::json::arr(&go_in))
             .str("output_type", &go_ret)
@@ -3768,6 +3888,7 @@ impl<'a> Gen<'a> {
             "  # {}\n  class RuleContradictionError < RuntimeError; end\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
+        o.push_str(&format!("  # {}\n  Fired = Struct.new(:table, :row)\n\n", fired_doc()));
 
         // Groups. A Ruby constant has to begin with an uppercase ASCII letter, so a
         // Japanese group name cannot be one on its own; the prefix is what makes it legal.
@@ -3799,10 +3920,8 @@ impl<'a> Gen<'a> {
 
         // The signature, with each parameter's declared type as a comment: this is where
         // the unit lives, since Ruby cannot hold it (§15.20).
-        o.push_str(&format!(
-            "  # {}\n",
-            tr!("規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。", "Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.", self.f.name.text, self.f.version)
-        ));
+        let traced = format!("{fname}_traced");
+        o.push_str(&format!("  # {}\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
         for i in &self.f.inputs {
             o.push_str(&format!(
                 "  #   {} : {}\n",
@@ -3818,8 +3937,16 @@ impl<'a> Gen<'a> {
             ));
         }
 
+        // The public method keeps the plain shape; the branches live in its traced twin,
+        // which also returns the rows that matched (§15.33).
         let params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        o.push_str(&format!("  def self.{fname}({})\n", params.join(", ")));
+        o.push_str(&format!(
+            "  def self.{fname}({})\n    {traced}({})[0]\n  end\n\n",
+            params.join(", "),
+            params.join(", ")
+        ));
+        o.push_str(&format!("  # {}\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!("  def self.{traced}({})\n", params.join(", ")));
 
         // Entry guards (§8.5).
         let local = |n: &str| -> String { self.ident(n) };
@@ -3851,6 +3978,9 @@ impl<'a> Gen<'a> {
             }
         }
 
+        let trace = self.temp("trace");
+        o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
+
         for it in &self.f.items {
             match it {
                 Item::Derived(d) => {
@@ -3861,7 +3991,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, &local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
                 }
-                Item::Table(t) => o.push_str(&self.rb_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.rb_table(t, &local, &trace)),
             }
         }
 
@@ -3896,15 +4026,15 @@ impl<'a> Gen<'a> {
             });
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    {}\n", finals[0]));
+            o.push_str(&format!("    [{}, {trace}]\n", finals[0]));
         } else {
-            o.push_str(&format!("    Output.new({})\n", finals.join(", ")));
+            o.push_str(&format!("    [Output.new({}), {trace}]\n", finals.join(", ")));
         }
         o.push_str("  end\n");
         o
     }
 
-    fn rb_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn rb_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("    # {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -3950,6 +4080,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("      {} = {v}\n", self.ident(&oc.name.text)));
             }
+            o.push_str(&format!("      {trace} << Fired.new({name:?}, {})\n", ri + 1));
         }
         o.push_str(&format!(
             "    else\n      raise RuleContradictionError, \"{}\"\n    end\n",
@@ -4006,8 +4137,8 @@ impl<'a> Gen<'a> {
                line = line.strip\n  \
                next if line.empty?\n  \
                d = JSON.parse(line)[\"in\"]\n  \
-               r = {m}.{alias}({})\n  \
-               puts JSON.generate({dump})\n\
+               r, trace = {m}.{alias}_traced({})\n  \
+               puts JSON.generate({{ \"out\" => {dump}, \"trace\" => trace.map {{ |f| {{ \"table\" => f.table, \"row\" => f.row }} }} }})\n\
              end\n",
             env!("CARGO_PKG_VERSION"),
             args.join(", ")
@@ -4146,6 +4277,10 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("    def self.new: ({}) -> Output\n  end\n\n", tys.join(", ")));
         }
 
+        o.push_str(
+            "  class Fired < Struct[untyped]\n    attr_reader table: String\n    attr_reader row: Integer\n    def self.new: (String, Integer) -> Fired\n  end\n\n",
+        );
+
         // The rounding helpers are private at run time; declaring them keeps `steep` from
         // warning about a method the module defines and the signature does not mention.
         o.push_str(&format!("  # {}\n", tr!("丸めの補助。実行時は私有。", "The rounding helpers, private at run time.")));
@@ -4166,6 +4301,7 @@ impl<'a> Gen<'a> {
             "Output".into()
         };
         o.push_str(&format!("  def self.{}: ({}) -> {ret}\n", pub_name(&self.f.name), params.join(", ")));
+        o.push_str(&format!("  def self.{}_traced: ({}) -> [{ret}, Array[Fired]]\n", pub_name(&self.f.name), params.join(", ")));
         o.push_str("end\n");
         o
     }
@@ -4507,6 +4643,11 @@ impl<'a> Gen<'a> {
                  }}\n\n"
             ));
         }
+        o.push_str(&format!(
+            "/// {}\npublic struct Fired: Hashable, Sendable {{\n    public let table: String\n    public let row: Int\n\n    \
+             public init(table: String, row: Int) {{\n        self.table = table\n        self.row = row\n    }}\n}}\n\n",
+            fired_doc()
+        ));
 
         // Enums. The raw value is the source name, which is also what the wire carries
         // (§10.2), so `rawValue` and `init(rawValue:)` are the whole conversion and no
@@ -4595,14 +4736,24 @@ impl<'a> Gen<'a> {
             .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
             .collect();
 
-        o.push_str(&tr!(
-            "/// 規則 {} v{}。分岐はもとの表の行と 1:1 に対応する。\n",
-            "/// Rule {} v{}. Each branch corresponds 1:1 to a row of the rule source.\n",
-            self.f.name.text,
-            self.f.version
-        ));
+        // The public function keeps the plain signature; the branches live in its traced
+        // twin, which also returns the rows that matched (§15.33).
+        let args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", sw_label(&pub_name(&i.name)), sw_name(&pub_name(&i.name))))
+            .collect();
+        let traced = format!("{fname}Traced");
+        o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
         o.push_str(&format!(
-            "public func {fname}({}) throws -> {ret} {{\n",
+            "public func {fname}({}) throws -> {ret} {{\n    try {traced}({}).0\n}}\n\n",
+            params.join(", "),
+            args.join(", ")
+        ));
+        o.push_str(&format!("/// {}\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!(
+            "public func {traced}({}) throws -> ({ret}, [Fired]) {{\n",
             params.join(", ")
         ));
 
@@ -4641,6 +4792,10 @@ impl<'a> Gen<'a> {
             ));
         }
 
+        let trace = self.temp("trace");
+        let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
+        o.push_str(&format!("    {} {trace}: [Fired] = []\n", if has_table { "var" } else { "let" }));
+
         for it in &self.f.items {
             match it {
                 Item::Derived(d) => {
@@ -4661,7 +4816,7 @@ impl<'a> Gen<'a> {
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
-                Item::Table(t) => o.push_str(&self.sw_table(t, &local)),
+                Item::Table(t) => o.push_str(&self.sw_table(t, &local, &trace)),
             }
         }
 
@@ -4706,19 +4861,19 @@ impl<'a> Gen<'a> {
             finals.push(wrap(&ty, body));
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    return {}\n}}\n", finals[0]));
+            o.push_str(&format!("    return ({}, {trace})\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", sw_name(&pub_name(&od.name))))
                 .collect();
-            o.push_str(&format!("    return Output({})\n}}\n", fields.join(", ")));
+            o.push_str(&format!("    return (Output({}), {trace})\n}}\n", fields.join(", ")));
         }
         o
     }
 
-    fn sw_table(&self, t: &Table, local: &dyn Fn(&str) -> String) -> String {
+    fn sw_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
         let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
@@ -4777,6 +4932,7 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v}\n", self.sw_ident(&oc.name.text)));
             }
+            o.push_str(&format!("        {trace}.append(Fired(table: {name:?}, row: {}))\n", ri + 1));
         }
         o.push_str(&format!(
             "    }} else {{\n        throw RuleError.contradiction(\"{}\")\n    }}\n",
@@ -4811,6 +4967,10 @@ impl<'a> Gen<'a> {
         let got = runner_local("got", &fname);
         let line = runner_local("line", &fname);
         let root = runner_local("root", &fname);
+        let trace = runner_local("trace", &fname);
+        // Interpolation rather than a chain of `+`: the type checker gave up on the chain.
+        let outs = runner_local("outs", &fname);
+        let rows = runner_local("rows", &fname);
         let mut args: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
@@ -4865,8 +5025,10 @@ enum Runner {{
             }}
             let {root} = try JSONSerialization.jsonObject(with: Data({line}.utf8)) as! [String: Any]
             let {d} = {root}["in"] as! [String: Any]
-            let {got} = try {fname}({args})
-            print("{{" + [{fields}].joined(separator: ",") + "}}")
+            let ({got}, {trace}) = try {fname}Traced({args})
+            let {outs} = [{fields}].joined(separator: ",")
+            let {rows} = {trace}.map {{ "{{\"table\":\(_q($0.table)),\"row\":\($0.row)}}" }}.joined(separator: ",")
+            print("{{\"out\":{{\({outs})}},\"trace\":[\({rows})]}}")
         }}
     }}
 

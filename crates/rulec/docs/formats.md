@@ -202,6 +202,8 @@ meaning is in [generated-code.md](generated-code.md).
 {"rule":"クーポン一枚","alias":"coupon_step","version":"1","source_sha256":"…",
  "python":{"module":"coupon_step","function":"coupon_step",
            "signature":"def coupon_step(subtotal: YenInclTax, …) -> Output:",
+           "traced":"coupon_step_traced",
+           "traced_signature":"def coupon_step_traced(subtotal: YenInclTax, …) -> tuple[Output, list[Fired]]:",
            "params":[{"name":"商品合計","alias":"subtotal","type":"YenInclTax","unit":"円",
                       "range":{"min":0,"max":1000000},"optional":false}],
            "returns":"Output",
@@ -244,7 +246,9 @@ meaning is in [generated-code.md](generated-code.md).
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
-with `--lang`. `range` states the bounds **the entry guard enforces**, and `alias` states the
+with `--lang`. Every language's entry carries `traced` and `traced_signature` as the Python
+one does: the twin that returns the rows that matched beside the outputs
+([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
 `couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift). `unit`, `range` and `rounding` are absent when the
@@ -288,9 +292,11 @@ JSON Lines, one test case per line, generated from the boundaries of the rule (�
 | `trace` | the rows that fired, in order |
 | `why` | which coverage obligation this case was generated for, or `example row N` for a case the rule's own `examples` wrote. **Prose** |
 
-`gen` writes a second file, `<alias>.expected.jsonl`, holding only the `out` object of each
-line in the same order. That is what `rulec test` compares the generated code against, byte
-for byte.
+`gen` writes a second file, `<alias>.expected.jsonl`, holding for each line, in the same
+order, the `out` object and the rows that matched as `trace` — each `{"table":…,"row":…}`,
+the shape a `verify` cluster reports its `rows` in. That is what `rulec test` compares the
+generated code against, byte for byte, so the agreement is checked row by row as well as
+value by value.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 

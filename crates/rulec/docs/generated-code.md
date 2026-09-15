@@ -36,7 +36,8 @@ output depend on the version of a tool installed on the machine. `gofmt -l` bein
 order, with the original cells quoted in a comment (`# row 3: 近畿圏 | S100 | 1620円`). A
 condition that an earlier branch already settled is still written out (`elif True:`), because
 reading the generated code against the rule side by side is the only way it is meant to be
-read.
+read. The branches are written once, in the twin that also returns
+[the rows that matched](#the-rows-that-matched); the function you call delegates to it.
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
@@ -302,6 +303,28 @@ fetch. The runner carries `@main` rather than being called `main.swift`, because
 code is only allowed in a file of that name and the rule has to be able to sit beside it.
 
 ---
+
+## The rows that matched
+
+Beside every function there is a twin with `_traced` on its name (`Traced` in Go and Swift).
+It takes the same inputs and returns, beside the outputs, the rows that matched: one per
+table, in order, each as the table's name and its 1-based row number. The plain function
+calls it and drops the trace, so the branches exist once, in the traced one.
+
+| | the twin | the row |
+|---|---|---|
+| Python | `def coupon_step_traced(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> tuple[Output, list[Fired]]:` | `Fired`, a `NamedTuple` of `table` and `row` |
+| TypeScript | `coupon_step_traced(…): [Output, Fired[]]` | `{ table: string; row: number }` |
+| Rust | `coupon_step_traced(…) -> Result<(Output, Vec<Fired>), RuleError>` | `Fired { table: &'static str, row: u32 }` |
+| Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table` and `row` |
+| Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row}` |
+| Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:)` |
+
+The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
+`replay` report clusters by, so a trace taken from a log reads against the approved document
+directly. `rulec test` compares these rows as well as the values: a generated function that
+produced the right amount from the wrong row fails there. `rulec api` names the twin under
+`traced` and gives its signature under `traced_signature`.
 
 ## The two guards
 

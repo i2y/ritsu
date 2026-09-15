@@ -79,6 +79,7 @@ JA = dict(
              "運賃はいくら？ それだけは人が決める", "E101"),
     code=("Python · TypeScript · Rust · Ruby · Go · Swift",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",
+           "    out, _ = fee_traced(dest, weight)",
            "    ...",
            "        fee = 800",
            "    ...",
@@ -86,7 +87,7 @@ JA = dict(
            "    ...",
            "        fee = 1300",
            "    ...",
-           "    return YenInclTax(_round_up(fee, 10))"],
+           "    return YenInclTax(_round_up(fee, 10)), trace"],
           ["依存ゼロ・エンジンなし", "どれも同じ答え"], ".py"),
     check="rulec check", gen="rulec gen", proved="証明できたら",
     falls="それを起こす入力", again="行を足して、もう一度",
@@ -113,6 +114,7 @@ EN = dict(
              "what is the fee? only a person can say", "E101"),
     code=("Python · TypeScript · Rust · Ruby · Go · Swift",
           ["def fee(dest: Zone, weight: Gram) -> USDInclTax:",
+           "    out, _ = fee_traced(dest, weight)",
            "    ...",
            "        fee = 8",
            "    ...",
@@ -120,7 +122,7 @@ EN = dict(
            "    ...",
            "        fee = 13",
            "    ...",
-           "    return USDInclTax(_round_up(fee, 1))"],
+           "    return USDInclTax(_round_up(fee, 1)), trace"],
           ["zero dependencies, no engine,", "the same answer from every one"], ".py"),
     check="rulec check", gen="rulec gen", proved="once proved",
     falls="the input that causes it", again="add the row, run again",
@@ -148,9 +150,9 @@ Y_IN = 72                            # the pipeline's one horizontal line
 
 TABLE = (20, TOP, 236, 204)
 CARD = (TABLE[0] + TABLE[2] + 82, TOP, 314, 236)   # 82: room for "rulec check"
-CODE = (CARD[0] + CARD[2] + 76, TOP, 352, 200)     # 76: room for "once proved"
+CODE = (CARD[0] + CARD[2] + 76, TOP, 352, 236)     # 76: room for "once proved"; as tall as the card
 STACK = 8                            # the two sheets behind the code, offset
-Y_NOTES = 179                        # where the quiet line under the code sits
+Y_NOTES = 215                        # where the quiet line under the code sits
 W = CODE[0] + CODE[2] + 2 * STACK + 20
 
 COLS = (TABLE[0] + PAD, TABLE[0] + PAD + 72, TABLE[0] + TABLE[2] - PAD)
