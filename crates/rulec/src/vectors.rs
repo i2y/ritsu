@@ -571,6 +571,18 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
 /// Canonical JSON. Three-way agreement is judged on these bytes (§8.5).
 pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    format!(
+        "{{\"in\":{},\"out\":{},\"trace\":[{}],\"why\":\"{}\"}}",
+        in_object(f, c, v),
+        out_object(c, v),
+        v.trace.iter().map(|t| format!("\"{}\"", esc(t))).collect::<Vec<_>>().join(","),
+        esc(&v.why)
+    )
+}
+
+/// The JSON object of the inputs, in declaration order, in the wire form of §10.2.
+fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let mut ins: Vec<String> = Vec::new();
     for i in &f.inputs {
         let Some(val) = v.input.get(&i.name.text) else { continue };
@@ -585,13 +597,7 @@ pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
         };
         ins.push(format!("\"{}\":{body}", esc(&i.name.text)));
     }
-    format!(
-        "{{\"in\":{{{}}},\"out\":{},\"trace\":[{}],\"why\":\"{}\"}}",
-        ins.join(","),
-        out_object(c, v),
-        v.trace.iter().map(|t| format!("\"{}\"", esc(t))).collect::<Vec<_>>().join(","),
-        esc(&v.why)
-    )
+    format!("{{{}}}", ins.join(","))
 }
 
 /// The JSON object of the outputs, in declaration order (not the name order of a BTreeMap),
@@ -611,14 +617,16 @@ fn out_object(c: &Checked, v: &Vector) -> String {
     format!("{{{}}}", body.join(","))
 }
 
-/// The expected values and the rows that matched, in the same shape the runner emits.
-/// Agreement is judged on these bytes, so it is row-level: a generated function that gives
-/// the right value from the wrong row fails here (§15.33).
-pub fn expected_json(_f: &RuleFile, c: &Checked, v: &Vector) -> String {
+/// One vector as a record in the fixtures format (docs/formats.md): the inputs, the expected
+/// values as `observed`, and the rows that matched. It is what the generated runner prints
+/// through the module's own record function, so agreement is judged on the whole record —
+/// row-level, and over the wire form of every input, dates included (§15.33, §15.35). The
+/// file is also a valid fixtures file, which `rulec fixtures lint` and `replay` accept.
+pub fn expected_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let fired: Vec<String> =
         v.fired.iter().map(|(t, r)| format!("{{\"table\":\"{}\",\"row\":{r}}}", esc(t))).collect();
-    format!("{{\"out\":{},\"trace\":[{}]}}", out_object(c, v), fired.join(","))
+    format!("{{\"in\":{},\"observed\":{},\"trace\":[{}]}}", in_object(f, c, v), out_object(c, v), fired.join(","))
 }
 
 // ── The mapping of §9.1 ─────────────────────────────────────────────────────

@@ -189,7 +189,7 @@ One object for the run.
 ```
 
 `kind` is one of `not_json`, `no_in`, `no_observed`, `unknown_field`, `bad_input`,
-`bad_observed`, `missing_observed`. `field` is the field of the record at fault, or absent
+`bad_observed`, `missing_observed`, `bad_trace`. `field` is the field of the record at fault, or absent
 when the problem is about the record as a whole. `what` and `hint` are **prose**; `kind`,
 `field`, `count` and `example` are not.
 
@@ -204,6 +204,8 @@ meaning is in [generated-code.md](generated-code.md).
            "signature":"def coupon_step(subtotal: YenInclTax, …) -> Output:",
            "traced":"coupon_step_traced",
            "traced_signature":"def coupon_step_traced(subtotal: YenInclTax, …) -> tuple[Output, list[Fired]]:",
+           "record":"coupon_step_record",
+           "record_signature":"def coupon_step_record(subtotal: YenInclTax, …, out: Output, trace: _Trace, tag: str = \"\") -> str:",
            "params":[{"name":"商品合計","alias":"subtotal","type":"YenInclTax","unit":"円",
                       "range":{"min":0,"max":1000000},"optional":false}],
            "returns":"Output",
@@ -247,7 +249,8 @@ meaning is in [generated-code.md](generated-code.md).
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
 with `--lang`. Every language's entry carries `traced` and `traced_signature` as the Python
-one does: the twin that returns the rows that matched beside the outputs
+one does — the twin that returns the rows that matched beside the outputs — and `record`
+and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
@@ -292,11 +295,12 @@ JSON Lines, one test case per line, generated from the boundaries of the rule (�
 | `trace` | the rows that fired, in order |
 | `why` | which coverage obligation this case was generated for, or `example row N` for a case the rule's own `examples` wrote. **Prose** |
 
-`gen` writes a second file, `<alias>.expected.jsonl`, holding for each line, in the same
-order, the `out` object and the rows that matched as `trace` — each `{"table":…,"row":…}`,
-the shape a `verify` cluster reports its `rows` in. That is what `rulec test` compares the
-generated code against, byte for byte, so the agreement is checked row by row as well as
-value by value.
+`gen` writes a second file, `<alias>.expected.jsonl`, with one **fixtures record** per
+vector in the same order — `in`, the expected values as `observed`, and the rows that
+matched as `trace` (below). The generated runner prints the same record through the module's
+own record function, and that is what `rulec test` compares, byte for byte: the agreement is
+checked row by row, and over the wire form of every input. Being a fixtures file, it is also
+what `rulec fixtures lint` and `replay` accept.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 
@@ -306,7 +310,8 @@ rulec only validates types and ranges (§10.2).
 ```json
 {"ts":"2025-08-14T09:12:33+09:00","tag":"order:1234567",
  "in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},
- "observed":{"送料":800}}
+ "observed":{"送料":800},
+ "trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
 ```
 
 | field | required | meaning |
@@ -315,6 +320,12 @@ rulec only validates types and ranges (§10.2).
 | `observed` | yes | the values that actually came out. **Every output is required** |
 | `tag` | no | a label for the record, shown in witnesses |
 | `ts` | no | when it happened |
+| `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |
+
+The generated code writes this line itself: every module has a record function that takes
+the inputs, the outputs and the rows that matched and returns the record, so a log of the
+generated code needs no extraction. What still has to be extracted is a log of an
+implementation rulec did not generate.
 
 A number must be an integer in the canonical unit; a decimal is refused, naming the field.
 A field the rule does not know is an error, not something to ignore — discarding it silently

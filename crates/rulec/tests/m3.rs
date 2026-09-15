@@ -66,6 +66,54 @@ fn tweak(src: &str, from: &str, to: &str, want: usize) -> String {
     src.replace(from, to)
 }
 
+/// The expected file `gen` writes beside the vectors is in the fixtures format (§15.34):
+/// `fixtures lint` accepts it without a problem, and `replay` over it agrees with the rule
+/// on every record — every vector is a record of the reference evaluator's own answer.
+#[test]
+fn 期待値のファイルはそのまま記録として通る() {
+    let dir = std::env::temp_dir().join(format!("rulec-m3-{}-expected", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.to_string_lossy().to_string();
+    for (rule, alias) in [(RULE, "yupack_fee"), ("tests/corpus/期間区分.rule", "period"), ("tests/corpus/会員特典.rule", "member_perk")] {
+        let (c, _, e) = rulec(&["gen", rule, "--out", &out]);
+        assert_eq!(c, 0, "{e}");
+        let exp = dir.join("vectors").join(format!("{alias}.expected.jsonl"));
+        let exp = exp.to_str().unwrap();
+        let (c, o, e) = rulec(&["fixtures", "lint", exp, rule, "--format", "json"]);
+        assert_eq!(c, 0, "{alias}: 期待値のファイルが記録として通らない: {o}{e}");
+        assert!(o.contains("\"problems\":[]"), "{alias}: {o}");
+        let (c, o, e) = rulec(&["replay", rule, "--fixtures", exp]);
+        assert_eq!(c, 0, "{alias}: {o}{e}");
+        assert!(o.contains("(100.000%)"), "{alias}: 期待値の再生が全件一致しない:\n{o}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A `trace` that names a table or a row the rule does not have is a record of some other
+/// version, and it is reported by kind rather than read.
+#[test]
+fn 実在しない行を指す記録は種類つきで報告される() {
+    let dir = setup("badtrace");
+    let fx = std::fs::read_to_string(dir.join("fx.jsonl")).unwrap();
+    let mut lines: Vec<String> = fx.lines().map(|l| l.to_string()).collect();
+    let l0 = lines[0].strip_suffix('}').unwrap().to_string();
+    lines[0] = format!("{l0},\"trace\":[{{\"table\":\"運賃表\",\"row\":99}}]}}");
+    let l1 = lines[1].strip_suffix('}').unwrap().to_string();
+    lines[1] = format!("{l1},\"trace\":[{{\"table\":\"存在しない表\",\"row\":1}}]}}");
+    let l2 = lines[2].strip_suffix('}').unwrap().to_string();
+    lines[2] = format!("{l2},\"trace\":[{{\"table\":\"運賃表\",\"row\":1}}]}}");
+    std::fs::write(dir.join("fx.jsonl"), lines.join("\n") + "\n").unwrap();
+    let fx = dir.join("fx.jsonl");
+    let (_, out, _) = rulec(&["fixtures", "lint", fx.to_str().unwrap(), RULE, "--format", "json"]);
+    assert!(out.contains("\"kind\":\"bad_trace\""), "{out}");
+    assert!(out.contains("行99 はありません"), "{out}");
+    assert!(out.contains("存在しない表 はこの規則にありません"), "{out}");
+    // The third one is a real row, so it is read, not reported: only two problems.
+    assert!(out.contains("\"count\":1"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn 忠実な記録とは完全に一致する() {
     let dir = setup("clean");

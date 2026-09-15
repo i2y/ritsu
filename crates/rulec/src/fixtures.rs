@@ -32,6 +32,10 @@ pub struct Record {
     /// The fields filled in with default values. If non-empty, this record is a "filled
     /// record" (§10.3).
     pub filled: Vec<String>,
+    /// The rows that matched when the record was made, as `(table, 1-based row)`, when the
+    /// record carries them. The generated code's record function writes them (§15.35); a
+    /// record made by hand may leave them out, and then this is empty.
+    pub trace: Vec<(String, usize)>,
 }
 
 pub struct Problem {
@@ -346,7 +350,60 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
         if broken {
             continue;
         }
-        out.records.push(Record { line, tag, ts, input, observed, filled });
+
+        // `trace` is optional. When it is there, every table must be one of the rule's and
+        // every row one the table has — a trace that names nothing real is a record from
+        // some other version of the rule, and it is reported rather than read.
+        let mut trace: Vec<(String, usize)> = Vec::new();
+        if let Some(t) = j.get("trace") {
+            let hint = tr!(
+                "`trace` は `{{\"table\":表名,\"row\":行番号}}` の並びです。生成コードの record 関数が書きます。",
+                "`trace` is a list of `{{\"table\":name,\"row\":number}}`; the generated code's record function writes it."
+            );
+            let mut ok = true;
+            match t {
+                Json::Arr(items) => {
+                    for it in items {
+                        let table = it.get("table").and_then(|x| x.as_str());
+                        let row = it.get("row").and_then(|x| x.as_int());
+                        let rows = table.and_then(|name| {
+                            f.items.iter().find_map(|i| match i {
+                                crate::ast::Item::Table(tb) if tb.name.as_ref().is_some_and(|n| n.text == name) => Some(tb.rows.len()),
+                                _ => None,
+                            })
+                        });
+                        match (table, row, rows) {
+                            (Some(name), Some(r), Some(n)) if r >= 1 && (r as usize) <= n => {
+                                trace.push((name.to_string(), r as usize));
+                            }
+                            (Some(name), _, None) => {
+                                bad("bad_trace", "trace", tr!("`trace`: 表 {name} はこの規則にありません", "`trace`: table {name} is not in this rule"), &hint);
+                                ok = false;
+                            }
+                            (Some(name), Some(r), Some(n)) => {
+                                bad("bad_trace", "trace", tr!("`trace`: 表 {name} に 行{r} はありません（{n} 行）", "`trace`: table {name} has no row {r} (it has {n})"), &hint);
+                                ok = false;
+                            }
+                            _ => {
+                                bad("bad_trace", "trace", tr!("`trace` の要素が `table` と `row` を持っていません", "an entry of `trace` lacks `table` or `row`"), &hint);
+                                ok = false;
+                            }
+                        }
+                        if !ok {
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    bad("bad_trace", "trace", tr!("`trace` が配列ではありません", "`trace` is not an array"), &hint);
+                    ok = false;
+                }
+            }
+            if !ok {
+                continue;
+            }
+        }
+        out.records.push(Record { line, tag, ts, input, observed, filled, trace });
     }
     out
 }

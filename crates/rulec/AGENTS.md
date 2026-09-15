@@ -136,7 +136,9 @@ have to read the generated code to integrate it
 ([docs/generated-code.md](docs/generated-code.md)). Beside each function is a twin with
 `_traced` on its name that also returns the rows that matched, one per table in order — the
 row numbers `rulec doc` prints — which is what a log line or an answer to "why this amount"
-needs. `rulec test` holds those rows to the reference evaluator as well as the values.
+needs. `rulec test` holds those rows to the reference evaluator as well as the values. A
+third function, `_record`, turns one call into one line of the fixtures format, so the
+records that `replay` and `diff` need come out of the generated code itself.
 
 For a target none of the six covers — another language, a workflow engine's expression
 language, SQL — you do not need a backend and you do not have to give up the comparison:
@@ -181,7 +183,8 @@ The cluster and its witness are what tell them apart.
 ### If there are past records: `rulec fixtures lint`, `replay`, `diff`
 
 `fixtures lint` first, always — it reports records whose shape disagrees with the rule
-instead of quietly dropping them. Then `replay` compares the rule against what actually
+instead of quietly dropping them. Records written by the generated code's `_record` function
+are already in this shape; only a log of some other implementation has to be extracted. Then `replay` compares the rule against what actually
 happened, and `diff` compares two versions of the rule over the same records and reports
 **how many change and by how much**. That is the number a person needs before approving.
 

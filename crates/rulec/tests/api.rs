@@ -101,6 +101,10 @@ fn 署名とガードが生成物と一致する() {
             let sig = s(j, "traced_signature");
             assert!(file.contains(&sig), "{lang} の traced の署名が違う: {sig}");
             assert!(sig.contains(&s(j, "traced")), "{lang}: traced の名前が署名に無い: {sig}");
+            // And the record function (§15.35), the same way.
+            let sig = s(j, "record_signature");
+            assert!(file.contains(&sig), "{lang} の record の署名が違う: {sig}");
+            assert!(sig.contains(&s(j, "record")), "{lang}: record の名前が署名に無い: {sig}");
         }
 
         // The entry guards. A range in the inventory that the guard does not enforce would

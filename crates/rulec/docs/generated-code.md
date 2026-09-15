@@ -326,6 +326,37 @@ directly. `rulec test` compares these rows as well as the values: a generated fu
 produced the right amount from the wrong row fails there. `rulec api` names the twin under
 `traced` and gives its signature under `traced_signature`.
 
+## A record of one call
+
+Every module also has a function with `_record` on its name (`Record` in Go and Swift). It
+takes the inputs, what the rule returned, the rows that matched and a tag, and gives back
+one line in the fixtures format of [formats.md](formats.md#fixtures-rulec-fixtures-lint-replay-diff):
+
+```json
+{"tag":"order:1234567","in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},"observed":{"送料":800},"trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
+```
+
+Write that line to a log and the records `replay` and `diff` need come out of the generated
+code itself, in the wire form of §10.2 — an enum as its name, a date as `YYYY-MM-DD`, a
+number as an integer in its declared unit — with nothing to extract or convert afterwards.
+An empty tag is left out. The function builds the line itself, so no language gains an import
+for it.
+
+| | the function |
+|---|---|
+| Python | `def coupon_step_record(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool, out: Output, trace: _Trace, tag: str = "") -> str:` |
+| TypeScript | `coupon_step_record(…, out: Output, trace: Fired[], tag = ""): string` |
+| Rust | `coupon_step_record(…, out: Output, trace: &[Fired], tag: &str) -> String` |
+| Ruby | `CouponStep.coupon_step_record(…, out, trace, tag = "")` |
+| Go | `func CouponStepRecord(in Input, out Output, trace []Fired, tag string) string` |
+| Swift | `couponStepRecord(…, out: Output, trace: [Fired], tag: String = "") -> String` |
+
+The generated runner prints exactly this line for every vector, and the expected file `gen`
+writes beside the vectors is in the same format, so `rulec test` holds the record function
+— the wire form of every input, dates included — to the reference evaluator in every language.
+`rulec api` names the function under `record` and gives its signature under
+`record_signature`.
+
 ## The two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
