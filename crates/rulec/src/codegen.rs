@@ -72,6 +72,12 @@ fn pascal(s: &str) -> String {
 }
 
 /// The public surface uses the ASCII alias; internals keep the Japanese name (§8.1).
+/// The public spelling of a declared name, for the callers outside this module that have
+/// to say the same thing (the approver's page names the inputs by their aliases).
+pub fn pub_name_of(n: &Name) -> String {
+    pub_name(n)
+}
+
 fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
 }

@@ -242,6 +242,59 @@ fn 出典のコメントが承認者に届く() {
     assert!(!d.contains("| 注記 |\n|---|---|---|---|---|"), "コメントの無い表に注記の列が出ている:\n{d}");
 }
 
+/// The page the approver can try a case on (§15.37): the same document, with every table row
+/// carrying its table's name and number so the script can light it up, the generated
+/// JavaScript module inside it, and a description of the inputs for the form. The module is
+/// the one `rulec gen` writes, so node has to accept it as it stands.
+#[test]
+fn html版は表の行に名前と番号を持ち_生成したjavascriptを積む() {
+    let (c, html, e) = run(&["doc", "tests/corpus/送料.rule", "--format", "html"]);
+    assert_eq!(c, 0, "{e}");
+    assert!(html.starts_with("<!doctype html>"), "{}", &html[..60]);
+    assert!(html.contains("<tr data-t=\"基本送料\" data-r=\"1\">"), "{html}");
+    assert!(html.contains("<tr data-t=\"負担判定\" data-r=\"3\">"), "{html}");
+    assert!(html.contains("<section id=\"try\">"), "試す欄が無い");
+    assert!(html.contains("export function shipping_fee_traced("), "生成 JavaScript が入っていない");
+    assert!(html.contains("const FN = { run: shipping_fee_traced, record: shipping_fee_record };"), "{html}");
+    assert!(html.contains("\"inputs\":[{\"name\":\"届け先\",\"alias\":\"dest\",\"kind\":\"enum\""), "{html}");
+    assert!(html.contains("\"examples\":[{\"届け先\":\"沖縄県\",\"重量\":\"2500\""), "例がワイヤ形式で入る: {html}");
+    // Every cell of every data table is on the page, as in the markdown.
+    let (_, md, _) = run(&["doc", "tests/corpus/送料.rule"]);
+    let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    for l in md.lines().filter(|l| l.starts_with("| ") && !l.contains("→")) {
+        for cell in l.trim_matches('|').split('|').map(|c| c.trim()).filter(|c| !c.is_empty()) {
+            // A code span or bold in a cell becomes markup around the same text.
+            let plain = cell.replace("\\|", "|").replace('`', "").replace("**", "");
+            assert!(html.contains(&esc(&plain)), "セル `{cell}` が HTML に無い");
+        }
+    }
+    // The module inside the page is what node runs: a syntax error here is a broken page.
+    if have("node") {
+        let start = html.find("<script type=\"module\">\n").expect("script が無い") + "<script type=\"module\">\n".len();
+        let end = html[start..].find("</script>").unwrap() + start;
+        let dir = std::env::temp_dir().join(format!("rulec-doc-html-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("page.mjs");
+        std::fs::write(&p, &html[start..end]).unwrap();
+        let o = Command::new("node").args(["--check"]).arg(&p).output().expect("node を起動できない");
+        assert!(o.status.success(), "ページの script を node が読めない:\n{}", String::from_utf8_lossy(&o.stderr));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    // `--out` writes `<alias>.html`.
+    let dir = std::env::temp_dir().join(format!("rulec-doc-html-out-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let d = dir.to_string_lossy().to_string();
+    let (c, out, _) = run(&["doc", "tests/corpus/送料.rule", "--format", "html", "--out", &d]);
+    assert_eq!(c, 0, "{out}");
+    assert!(dir.join("shipping_fee.html").exists(), "shipping_fee.html が出ていない");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn have(cmd: &str) -> bool {
+    Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+}
+
 #[test]
 fn out_で書き出せる() {
     let dir = std::env::temp_dir().join(format!("rulec-doc-out-{}", std::process::id()));

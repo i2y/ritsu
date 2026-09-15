@@ -196,7 +196,11 @@ much**. That is the number a person needs before approving.
 that the text does not show — that a group of six values and its complement of 41 really do
 cover all 47, which rows shadow which, where a rounding was assumed rather than sourced. It
 is rendered in CI and pasted into the PR, never committed: a stale rendering that still looks
-authoritative is the danger it is designed against.
+authoritative is the danger it is designed against. `--format html` renders the same document
+as one page with a form on it: the approver types a case, the rows that matched light up, the
+outputs appear, and the line the generated code would log is shown — it is the generated
+JavaScript itself that runs, so the page says nothing the code does not. Same rule: built in
+CI per change, never committed.
 
 ---
 

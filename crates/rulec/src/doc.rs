@@ -707,3 +707,451 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     }
     o
 }
+
+// ---------------------------------------------------------------------------
+// The page the approver can try a case on (§15.37).
+// ---------------------------------------------------------------------------
+
+/// The same document as `render`, as one HTML file the approver can open and type a case
+/// into. The markdown is converted here (it is our own, and a small subset), the rows of
+/// every table get the table's name and their number on them, and the generated JavaScript
+/// module — the same code `rulec gen` writes — runs in the page: type the inputs, and the
+/// rows that matched light up, the outputs appear, and the record line the generated code
+/// would log is shown. Nothing on the page is computed by anything but the generated code,
+/// so it says nothing the code does not.
+pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -> String {
+    let md = render(f, c, src, path);
+    let body = md_to_html(&md);
+    let title = tr!("規則 {} v{}", "Rule {} v{}", f.name.text, f.version);
+    let lang = if crate::i18n::ja() { "ja" } else { "en" };
+    let mut o = String::new();
+    o.push_str(&format!(
+        "<!doctype html>\n<html lang=\"{lang}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n",
+        html_esc(&title)
+    ));
+    o.push_str(&body.replace("<!--TRY-->", &try_panel()));
+    o.push_str("</main>\n<script type=\"module\">\n");
+    o.push_str(js);
+    o.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
+    let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+    o.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
+    o.push_str(PAGE_JS);
+    o.push_str("</script>\n</body>\n</html>\n");
+    o
+}
+
+const CSS: &str = "\
+body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #222; background: #fff; }
+table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
+th, td { border: 1px solid #c8c8c8; padding: 2px 10px; text-align: left; vertical-align: top; }
+th { background: #f2f2f2; }
+tr.hit td { background: #ffe9a8; }
+code { background: #f4f4f4; padding: 0 3px; }
+#try { border: 1px solid #c8c8c8; border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: #fafafa; }
+#try h2 { margin-top: 0; }
+#try-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; max-width: 36rem; }
+#try-form label { display: contents; }
+#try-form input, #try-form select { font: inherit; padding: 2px 6px; }
+#try-buttons { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+#try-buttons button { font: inherit; padding: 4px 12px; }
+#try-result { font-weight: 600; margin: 8px 0; min-height: 1.5em; }
+#try-record { font-family: ui-monospace, monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; color: #555; margin: 0; }
+";
+
+/// The panel's static part; the fields are built by the script from the rule's own
+/// description, so the page never carries a second copy of the inputs.
+fn try_panel() -> String {
+    tr!(
+        "<section id=\"try\">\n<h2>試してみる</h2>\n<p>入力を入れると、当てはまった行に色が付き、結果が出ます。動くのは生成コードそのもので、ログに書かれる一行もそのまま出ます。</p>\n<form id=\"try-form\"></form>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n",
+        "<section id=\"try\">\n<h2>Try a case</h2>\n<p>Enter the inputs: the rows that match light up and the outputs appear. What runs is the generated code itself, and the line it would write to a log is shown as it is.</p>\n<form id=\"try-form\"></form>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n"
+    )
+}
+
+/// What the script needs to know about the rule, as JSON: the inputs (kind, unit, range,
+/// enum values, the wire scale of a rate), the outputs, and the examples in wire form.
+fn rule_json(f: &RuleFile, c: &Checked) -> String {
+    use crate::json::Obj;
+    let kind_of = |ty: &Ty| -> &'static str {
+        match ty {
+            Ty::Enum(_) => "enum",
+            Ty::Bool => "bool",
+            Ty::Date => "date",
+            Ty::Str => "string",
+            Ty::Rate => "rate",
+            Ty::Opt(_) => "string",
+            _ => "number",
+        }
+    };
+    let unit_of = |ty: &Ty| -> Option<String> {
+        match ty {
+            Ty::Money { cur, .. } => Some(cur.clone()),
+            Ty::Qty { unit, .. } => Some(unit.clone()),
+            Ty::Rate => Some("%".into()),
+            _ => None,
+        }
+    };
+    let one = |name: &str, alias: &str| -> String {
+        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+        let mut o = Obj::new().str("name", name).str("alias", alias).str("kind", kind_of(&ty));
+        if let Some(u) = unit_of(&ty) {
+            o = o.str("unit", &u);
+        }
+        let sc = c.wire_scale(name);
+        o = o.int("scale", sc);
+        if let Some((Some(lo), Some(hi))) = c.ranges.get(name) {
+            o = o.raw(
+                "range",
+                Obj::new()
+                    .int("min", crate::types::wire_int(*lo, sc))
+                    .int("max", crate::types::wire_int(*hi, sc))
+                    .finish(),
+            );
+        }
+        if let Ty::Enum(e) = &ty {
+            if let Some(vs) = c.enums.get(e) {
+                let vs: Vec<String> = vs.iter().map(|v| format!("{v:?}")).collect();
+                o = o.raw("values", crate::json::arr(&vs));
+            }
+        }
+        o.finish()
+    };
+    let ins: Vec<String> = f.inputs.iter().map(|i| one(&i.name.text, &crate::codegen::pub_name_of(&i.name))).collect();
+    let outs: Vec<String> = f.outputs.iter().map(|o| one(&o.name.text, &crate::codegen::pub_name_of(&o.name))).collect();
+    // The examples, as the wire values the script puts into the fields.
+    let mut exs: Vec<String> = Vec::new();
+    if let Some(t) = &f.examples {
+        for row in &t.rows {
+            let mut o = Obj::new();
+            let mut complete = true;
+            for (k, (col, _)) in t.inputs.iter().enumerate() {
+                let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
+                let v = match row.cells.get(k) {
+                    Some(Cell::Lit(l)) => crate::eval::lit_to_val(l, &ty),
+                    _ => None,
+                };
+                match v.and_then(|v| crate::report::wire(c, col, Some(&v))) {
+                    Some(w) => o = o.str(col, &w),
+                    None => complete = false,
+                }
+            }
+            if complete {
+                exs.push(o.finish());
+            }
+        }
+    }
+    Obj::new()
+        .raw("inputs", crate::json::arr(&ins))
+        .raw("outputs", crate::json::arr(&outs))
+        .raw("examples", crate::json::arr(&exs))
+        .raw(
+            "text",
+            Obj::new()
+                .str("run", &tr!("計算する", "Compute"))
+                .str("example", &tr!("例", "Example"))
+                .finish(),
+        )
+        .finish()
+}
+
+/// The script that drives the panel. It knows nothing about the rule beyond `RULE`.
+const PAGE_JS: &str = r##"
+const $ = (s) => document.querySelector(s);
+const form = $("#try-form");
+const dateOf = (days) => new Date(Number(days) * 86400000).toISOString().slice(0, 10);
+for (const inp of RULE.inputs) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = inp.name + (inp.unit ? " (" + inp.unit + ")" : "");
+  let el;
+  if (inp.kind === "enum") {
+    el = document.createElement("select");
+    for (const v of inp.values) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v;
+      el.appendChild(o);
+    }
+  } else if (inp.kind === "bool") {
+    el = document.createElement("input");
+    el.type = "checkbox";
+  } else if (inp.kind === "date") {
+    el = document.createElement("input");
+    el.type = "date";
+  } else if (inp.kind === "string") {
+    el = document.createElement("input");
+    el.type = "text";
+  } else {
+    el = document.createElement("input");
+    el.type = "number";
+    el.step = inp.kind === "rate" ? "any" : "1";
+    if (inp.range) {
+      const show = (v) => (inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
+      el.min = show(inp.range.min);
+      el.max = show(inp.range.max);
+      el.placeholder = show(inp.range.min) + " … " + show(inp.range.max);
+    }
+  }
+  el.name = inp.alias;
+  label.appendChild(span);
+  label.appendChild(el);
+  form.appendChild(label);
+}
+function toWire(inp, el) {
+  switch (inp.kind) {
+    case "enum":
+    case "string":
+      return el.value;
+    case "bool":
+      return el.checked;
+    case "date": {
+      const [y, m, d] = el.value.split("-").map(Number);
+      return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));
+    }
+    case "rate":
+      return BigInt(Math.round((Number(el.value) * inp.scale) / 100));
+    default:
+      return BigInt(el.value === "" ? 0 : el.value);
+  }
+}
+function fromWire(inp, el, v) {
+  switch (inp.kind) {
+    case "enum":
+    case "string":
+      el.value = v;
+      break;
+    case "bool":
+      el.checked = v === "true";
+      break;
+    case "date":
+      el.value = v;
+      break;
+    case "rate":
+      el.value = String((Number(v) * 100) / inp.scale);
+      break;
+    default:
+      el.value = v;
+  }
+}
+function shown(o, v) {
+  if (o.kind === "rate") return String((Number(v) * 100) / o.scale) + "%";
+  if (o.kind === "bool") return v ? "true" : "false";
+  if (o.kind === "date") return dateOf(v);
+  return String(v) + (o.unit ? o.unit : "");
+}
+function run() {
+  const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
+  for (const tr of document.querySelectorAll("tr.hit")) tr.classList.remove("hit");
+  try {
+    const [out, trace] = FN.run(...args);
+    const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
+    $("#try-result").textContent = RULE.outputs.map((o, i) => o.name + " = " + shown(o, vals[i])).join("   ");
+    for (const f of trace) {
+      const tr = document.querySelector('tr[data-t="' + CSS.escape(f.table) + '"][data-r="' + f.row + '"]');
+      if (tr) tr.classList.add("hit");
+    }
+    $("#try-record").textContent = FN.record(...args, out, trace, "");
+  } catch (e) {
+    $("#try-result").textContent = e.message;
+    $("#try-record").textContent = "";
+  }
+}
+const buttons = $("#try-buttons");
+const go = document.createElement("button");
+go.type = "button";
+go.textContent = RULE.text.run;
+go.addEventListener("click", run);
+buttons.appendChild(go);
+RULE.examples.forEach((ex, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = RULE.text.example + " " + (i + 1);
+  b.addEventListener("click", () => {
+    for (const inp of RULE.inputs) {
+      if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
+    }
+    run();
+  });
+  buttons.appendChild(b);
+});
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  run();
+});
+"##;
+
+fn html_esc(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// Inline markdown of the subset the rendering uses: `code` and **bold**, over escaped text.
+/// One pass, so that bold may hold a code span (`**`rulec check` が確かめたこと**` does).
+fn inline_html(s: &str) -> String {
+    let mut o = String::new();
+    let mut code = false;
+    let mut strong = false;
+    let cs: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < cs.len() {
+        let ch = cs[i];
+        if ch == '`' {
+            o.push_str(if code { "</code>" } else { "<code>" });
+            code = !code;
+            i += 1;
+            continue;
+        }
+        if !code && ch == '*' && cs.get(i + 1) == Some(&'*') {
+            o.push_str(if strong { "</strong>" } else { "<strong>" });
+            strong = !strong;
+            i += 2;
+            continue;
+        }
+        match ch {
+            '&' => o.push_str("&amp;"),
+            '<' => o.push_str("&lt;"),
+            '>' => o.push_str("&gt;"),
+            '"' => o.push_str("&quot;"),
+            c => o.push(c),
+        }
+        i += 1;
+    }
+    if code {
+        o.push_str("</code>");
+    }
+    if strong {
+        o.push_str("</strong>");
+    }
+    o
+}
+
+/// The markdown `render` writes, as HTML. Headings, paragraphs, bullet lists (one level of
+/// nesting) and pipe tables are all it uses. A data table under a `表`/`Table` heading gets
+/// the table's name and the row number on each row, which is what the script highlights.
+fn md_to_html(md: &str) -> String {
+    let mut o = String::new();
+    let mut table_name: Option<String> = None;
+    let mut first_h2 = true;
+    let mut para: Vec<String> = Vec::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut list: Vec<(usize, String)> = Vec::new();
+
+    fn flush_para(o: &mut String, para: &mut Vec<String>) {
+        if !para.is_empty() {
+            o.push_str(&format!("<p>{}</p>\n", inline_html(&para.join("\n"))));
+            para.clear();
+        }
+    }
+    fn flush_list(o: &mut String, list: &mut Vec<(usize, String)>) {
+        if list.is_empty() {
+            return;
+        }
+        o.push_str("<ul>\n");
+        let mut nested = false;
+        for (depth, text) in list.iter() {
+            if *depth > 0 && !nested {
+                o.push_str("<ul>\n");
+                nested = true;
+            } else if *depth == 0 && nested {
+                o.push_str("</ul>\n");
+                nested = false;
+            }
+            o.push_str(&format!("<li>{}</li>\n", inline_html(text)));
+        }
+        if nested {
+            o.push_str("</ul>\n");
+        }
+        o.push_str("</ul>\n");
+        list.clear();
+    }
+    fn flush_table(o: &mut String, rows: &mut Vec<Vec<String>>, table_name: &Option<String>) {
+        if rows.is_empty() {
+            return;
+        }
+        let numbered = rows[0].first().is_some_and(|h| h == "#");
+        o.push_str("<table>\n<thead><tr>");
+        for h in &rows[0] {
+            o.push_str(&format!("<th>{}</th>", inline_html(h)));
+        }
+        o.push_str("</tr></thead>\n<tbody>\n");
+        for r in rows.iter().skip(1) {
+            let attrs = match (numbered, table_name, r.first()) {
+                (true, Some(t), Some(n)) if n.chars().all(|c| c.is_ascii_digit()) => {
+                    format!(" data-t=\"{}\" data-r=\"{n}\"", html_esc(t))
+                }
+                _ => String::new(),
+            };
+            o.push_str(&format!("<tr{attrs}>"));
+            for cell in r {
+                o.push_str(&format!("<td>{}</td>", inline_html(cell)));
+            }
+            o.push_str("</tr>\n");
+        }
+        o.push_str("</tbody>\n</table>\n");
+        rows.clear();
+    }
+
+    for line in md.lines() {
+        let t = line.trim_end();
+        if t.starts_with("<!--") {
+            o.push_str(t);
+            o.push('\n');
+            continue;
+        }
+        if let Some(h) = t.strip_prefix("# ") {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            flush_table(&mut o, &mut rows, &table_name);
+            o.push_str(&format!("<h1>{}</h1>\n", inline_html(h)));
+            continue;
+        }
+        if let Some(h) = t.strip_prefix("## ") {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            flush_table(&mut o, &mut rows, &table_name);
+            if first_h2 {
+                o.push_str("<!--TRY-->\n");
+                first_h2 = false;
+            }
+            // `## 表 X（policy …）` / `## Table X (policy …)` — the name is what the rows carry.
+            table_name = h
+                .strip_prefix("表 ")
+                .map(|r| r.split('（').next().unwrap_or(r).to_string())
+                .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()));
+            o.push_str(&format!("<h2>{}</h2>\n", inline_html(h)));
+            continue;
+        }
+        if t.starts_with('|') {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            if t.starts_with("|---") {
+                continue;
+            }
+            let cells: Vec<String> = t
+                .trim_matches('|')
+                .split('|')
+                .map(|c| c.trim().replace("\\|", "|"))
+                .collect();
+            rows.push(cells);
+            continue;
+        }
+        flush_table(&mut o, &mut rows, &table_name);
+        let stripped = t.trim_start();
+        if let Some(item) = stripped.strip_prefix("- ") {
+            flush_para(&mut o, &mut para);
+            let depth = if t.starts_with(' ') { 1 } else { 0 };
+            list.push((depth, item.to_string()));
+            continue;
+        }
+        if t.is_empty() {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            continue;
+        }
+        flush_list(&mut o, &mut list);
+        para.push(t.to_string());
+    }
+    flush_para(&mut o, &mut para);
+    flush_list(&mut o, &mut list);
+    flush_table(&mut o, &mut rows, &table_name);
+    o
+}
+

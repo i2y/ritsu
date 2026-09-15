@@ -294,7 +294,10 @@ fn commands() -> Vec<Cmd> {
                 "the rendering for the person who approves: the facts the checker knows that the text does not show"
             ),
             params: vec![rule_files()],
-            flags: vec![out_flag(&tr!("資料", "rendering"))],
+            flags: vec![
+                out_flag(&tr!("資料", "rendering")),
+                flag("--format", Some("html"), tr!("承認する人が自分の件を試せる一枚の HTML。生成した JavaScript がその場で動く", "one HTML page the approver can try a case on; the generated JavaScript runs in it")).choices(&["html"]),
+            ],
             exits: vec![
                 (0, tr!("資料を書き出した", "rendered")),
                 (1, tr!("規則が検査を通らない（壊れた規則からは書き出さない）", "the rule does not pass check (a broken rule is not rendered)")),
@@ -302,6 +305,7 @@ fn commands() -> Vec<Cmd> {
             ],
             examples: vec![
                 "rulec doc rules/送料.rule --lang ja > doc.md".into(),
+                "rulec doc rules/送料.rule --lang ja --format html > doc.html".into(),
                 "rulec doc rules/ --out docs/".into(),
             ],
             codes: &[],
@@ -821,7 +825,7 @@ fn main() -> ExitCode {
             verify(&files, &a.rest, json)
         }
         "coverage" => coverage(&files, json),
-        "doc" => doc(&files, a.get("--out")),
+        "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html")),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {
@@ -1157,7 +1161,7 @@ fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
 /// direction. **Not treated as a generated file** — it is never committed; CI renders it and
 /// pastes it into the PR. The biggest danger is a stale rendering that lingers looking
 /// authoritative, so no long-lived artifact is produced.
-fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
+fn doc(files: &[&String], out_dir: Option<&str>, html: bool) -> ExitCode {
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1179,11 +1183,17 @@ fn doc(files: &[&String], out_dir: Option<&str>) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
             return ExitCode::from(1);
         };
-        let body = rulec::doc::render(&f, &c, &src, path);
+        let body = if html {
+            // The page runs the generated JavaScript — the same code `rulec gen` writes.
+            let js = rulec::codegen::Gen::new(&f, &c, &src).javascript();
+            rulec::doc::render_html(&f, &c, &src, path, &js)
+        } else {
+            rulec::doc::render(&f, &c, &src, path)
+        };
         match out_dir {
             Some(d) => {
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-                let p = format!("{d}/{alias}.md");
+                let p = format!("{d}/{alias}.{}", if html { "html" } else { "md" });
                 if let Some(dir) = std::path::Path::new(&p).parent() {
                     let _ = std::fs::create_dir_all(dir);
                 }

@@ -179,6 +179,12 @@ This is what `rulec doc` writes (excerpt; the command above asked for Japanese).
 …
 ```
 
+`--format html` renders the same document as one page with a form on it: the approver
+types a case, the rows that matched light up, the outputs appear, and the line the
+generated code would write to a log is shown. What runs in the page is the generated
+JavaScript itself, so the page says nothing the code does not.
+
+
 There is one prohibition. **It writes no sentence that is not in the
 checker's output** — every line traces back to the source or to a check
 result, and the two are named apart ("rulec check confirmed" versus

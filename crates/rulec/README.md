@@ -236,6 +236,7 @@ $ rulec vectors | coverage | test                 # the test cases, their covera
 $ rulec adapter | schema | verify                 # against a legacy implementation
 $ rulec fixtures lint | replay | diff             # against past records
 $ rulec doc rules/送料.rule --lang ja             # for whoever approves the table
+$ rulec doc rules/送料.rule --lang ja --format html  # the same, as a page they can try a case on
 $ rulec explain E101                              # when it appears, how to fix it, a repro
 ```
 

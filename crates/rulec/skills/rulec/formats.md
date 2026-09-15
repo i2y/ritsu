@@ -277,7 +277,8 @@ Already machine-readable and take no `--format`.
 ## `doc`
 
 `doc` has no `--format json`. It renders for the person who approves a change, and markdown
-is that shape.
+is that shape; `--format html` is the same document as one page with a form on it, where the
+generated JavaScript runs the case the approver types in.
 
 ---
 
