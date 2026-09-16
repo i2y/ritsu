@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 400" width="1080" height="400" role="img" aria-label="The agent reads the sources and writes the table (.rule), then runs rulec check. rulec returns a diagnosis - where, how to fix it, and an input that shows the problem - and the agent fixes the table until it passes. Only what the tool cannot decide reaches a person, as a question with a concrete case; the person answers with an amount or a rounding direction. Once the table passes, rulec gen emits proved Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 400" width="1080" height="400" role="img" aria-label="The agent reads the sources and writes the table (.rule), then runs rulec check. rulec returns a diagnosis - where, how to fix it, and an input that shows the problem - and the agent fixes the table until it passes. Only what the tool cannot decide reaches a person, as a question with a concrete case; the person answers with an amount or a rounding direction. Once the table passes, rulec gen emits Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL from the proved table." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#6b7590"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8e9cff"/></marker>
@@ -52,7 +52,7 @@
 <text x="869" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Generated code</text>
 <text x="869" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Python, TypeScript, JavaScript,</text>
 <text x="869" y="75" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Rust, Ruby, Go, Swift and SQL</text>
-<text x="869" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">proved, no dependencies,</text>
+<text x="869" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">from a proved table, no runtime,</text>
 <text x="869" y="105" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">the same answer from each</text>
 <path d="M601,271 H759 L771,283 V341 H601 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M759,271 V283 H771 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>

@@ -15,7 +15,7 @@ coloured bar is whoever makes it or takes it, indigo is the path between the
 table and rulec, amber is anything that needs a person, grey is what leaves
 the system.
 
-    table --check--> rulec --gen, once proved--> Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL
+    table --check--> rulec --gen, once it passes--> Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL
       ^                |
       |                v  the input that falls through the gap
       +-- add the row, run again -- witness (E101)
@@ -89,7 +89,7 @@ JA = dict(
            "    ...",
            "    return YenInclTax(_round_up(fee, 10)), trace"],
           ["依存ゼロ・エンジンなし", "どれも同じ答え"], ".py"),
-    check="rulec check", gen="rulec gen", proved="証明できたら",
+    check="rulec check", gen="rulec gen", proved="通ったら",
     falls="それを起こす入力", again="行を足して、もう一度",
 )
 
@@ -124,7 +124,7 @@ EN = dict(
            "    ...",
            "    return USDInclTax(_round_up(fee, 1)), trace"],
           ["zero dependencies, no engine,", "the same answer from every one"], ".py"),
-    check="rulec check", gen="rulec gen", proved="once proved",
+    check="rulec check", gen="rulec gen", proved="once it passes",
     falls="the input that causes it", again="add the row, run again",
 )
 
@@ -150,7 +150,7 @@ Y_IN = 72                            # the pipeline's one horizontal line
 
 TABLE = (20, TOP, 236, 204)
 CARD = (TABLE[0] + TABLE[2] + 82, TOP, 314, 236)   # 82: room for "rulec check"
-CODE = (CARD[0] + CARD[2] + 76, TOP, 352, 236)     # 76: room for "once proved"; as tall as the card
+CODE = (CARD[0] + CARD[2] + 82, TOP, 352, 236)     # 82: room for "once it passes"; as tall as the card
 STACK = 8                            # the two sheets behind the code, offset
 Y_NOTES = 215                        # where the quiet line under the code sits
 W = CODE[0] + CODE[2] + 2 * STACK + 20
@@ -329,7 +329,7 @@ def draw(t, c):
     fit(t["check"], 10.5, x2 - x1 - 12, mono=True)
     o.append(text((x1 + x2) / 2, Y_IN - 9, t["check"], 10.5, c["dim"], mono=True))
 
-    # -- out: once proved, the code
+    # -- out: once it passes, the code
     x1, x2 = CARD[0] + CARD[2], CODE[0]
     o.append(arrow(x1, Y_IN, x2, Y_IN, "neutral", c))
     fit(t["gen"], 10.5, x2 - x1 - 12, mono=True)
