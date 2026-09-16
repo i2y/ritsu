@@ -59,6 +59,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 # output for the .rule file of the same name, so change the table there and
 # here together, and let --verify say whether they still agree.
 
+# The languages `rulec gen` writes, as (the name the diagram shows, the directory it
+# writes into). --verify holds both halves to the tool, the way make_flow.py does: a
+# backend added without touching this diagram fails, and so does a name dropped from it.
+# This sheet said six languages for two releases after there were eight.
+LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("JavaScript", "javascript"),
+         ("Rust", "rust"), ("Ruby", "ruby"), ("Go", "go"), ("Swift", "swift"), ("SQL", "sql")]
+
 JA = dict(
     alt="表を書く。rulec は一行を入力の組み合わせの一区画にして並べ、隙間も重なりも無いことを"
         "計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が"
@@ -77,18 +84,17 @@ JA = dict(
                      "隙間も重なりも、目ではなく計算で見つける"]),
     witness=("当てはまらない例", "あて先 = 遠隔地, 重量 = 2001g",
              "運賃はいくら？ それだけは人が決める", "E101"),
-    code=("Python · TypeScript · Rust · Ruby · Go · Swift",
+    code=("生成コード",
           ["def fee(dest: Zone, weight: Gram) -> YenInclTax:",
-           "    out, _ = fee_traced(dest, weight)",
            "    ...",
            "        fee = 800",
            "    ...",
            "        fee = 1000",
            "    ...",
            "        fee = 1300",
-           "    ...",
            "    return YenInclTax(_round_up(fee, 10)), trace"],
           ["依存ゼロ・エンジンなし", "どれも同じ答え"], ".py"),
+    langs=["Python・TypeScript・JavaScript", "Rust・Ruby・Go・Swift・SQL"],
     check="rulec check", gen="rulec gen", proved="通ったら",
     falls="それを起こす入力", again="行を足して、もう一度",
 )
@@ -112,18 +118,17 @@ EN = dict(
                      "gaps and overlaps are computed, not eyeballed"]),
     witness=("An input that matches no row", "Destination = Overseas, Weight = 2001g",
              "what is the fee? only a person can say", "E101"),
-    code=("Python · TypeScript · Rust · Ruby · Go · Swift",
+    code=("Generated code",
           ["def fee(dest: Zone, weight: Gram) -> USDInclTax:",
-           "    out, _ = fee_traced(dest, weight)",
            "    ...",
            "        fee = 8",
            "    ...",
            "        fee = 10",
            "    ...",
            "        fee = 13",
-           "    ...",
            "    return USDInclTax(_round_up(fee, 1)), trace"],
           ["zero dependencies, no engine,", "the same answer from every one"], ".py"),
+    langs=["Python, TypeScript, JavaScript,", "Rust, Ruby, Go, Swift and SQL"],
     check="rulec check", gen="rulec gen", proved="once it passes",
     falls="the input that causes it", again="add the row, run again",
 )
@@ -143,7 +148,9 @@ FILES = [("overview", EN, "en"), ("overview-ja", JA, "ja")]   # (name, words, --
 # only the short lines of the generated function - a branch with its row
 # comment is 460 units wide on its own and would push the canvas back past
 # 1150 - and lets the three fees, straight from the file, carry the
-# correspondence with the table and the plane.
+# correspondence with the table and the plane. The names of the eight
+# languages sit under the title rather than in it for the same reason: on
+# the title's line they need 434 units and the sheet has 309.
 
 TOP = 20
 Y_IN = 72                            # the pipeline's one horizontal line
@@ -152,6 +159,7 @@ TABLE = (20, TOP, 236, 204)
 CARD = (TABLE[0] + TABLE[2] + 82, TOP, 314, 236)   # 82: room for "rulec check"
 CODE = (CARD[0] + CARD[2] + 82, TOP, 352, 236)     # 82: room for "once it passes"; as tall as the card
 STACK = 8                            # the two sheets behind the code, offset
+Y_LANGS = 38                         # the two lines of language names, under the title
 Y_NOTES = 215                        # where the quiet line under the code sits
 W = CODE[0] + CODE[2] + 2 * STACK + 20
 
@@ -272,7 +280,12 @@ def rulec_card(t, c):
 
 
 def code_sheets(t, c):
-    """Three sheets in a stack - one per language - with the front one open."""
+    """Three sheets in a stack - one per language - with the front one open.
+
+    The eight names do not fit on the title's line at any size a reader would
+    call readable (434 units against the 309 the sheet has), so the title says
+    what the sheet is and the languages are two quiet lines under it. That is
+    also how the flow diagram writes them."""
     title, code, notes, tag = t["code"]
     x, y, w, h = CODE
     o = []
@@ -280,12 +293,16 @@ def code_sheets(t, c):
         o += sheet_frame((x + k * STACK, y + k * STACK, w, h), c)
     o += sheet_frame(CODE, c) + sheet_title(CODE, title, tag, c)
     inner = w - 2 * PAD
+    for i, line in enumerate(t["langs"]):
+        fit(line, 11.5, inner)
+        o.append(text(x + PAD, y + Y_LANGS + i * 15, line, 11.5, c["dim"], anchor="start"))
+    top = Y_LANGS + len(t["langs"]) * 15 + 2
     keep = ' xml:space="preserve" style="white-space:pre"'   # indentation is the point
     for i, line in enumerate(code):
         fit(line, 10, inner, mono=True)
-        o.append(text(x + PAD, y + 40 + i * 15, line, 10, c["ink"], anchor="start",
+        o.append(text(x + PAD, y + top + i * 15, line, 10, c["ink"], anchor="start",
                       mono=True, extra=keep))
-    if 40 + len(code) * 15 > Y_NOTES:
+    if top + len(code) * 15 > Y_NOTES:
         raise ValueError(f"{title}: {len(code)} lines of code run into the notes")
     for i, line in enumerate(notes):
         fit(line, 11.5, inner)
@@ -392,6 +409,15 @@ def verify(rulec):
             for line in t["code"][1]:
                 if line.strip() != "..." and line not in written.splitlines():
                     raise SystemExit(f"{name}: rulec gen does not write {line!r}")
+            # `gen` also writes the vectors, which are not a language.
+            wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors"}
+            if wrote != {d for _, d in LANGS}:
+                raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn "
+                                 f"for {sorted(d for _, d in LANGS)}")
+            said = " ".join([*t["langs"], t["alt"]])
+            for lang_name, _ in LANGS:
+                if lang_name not in said:
+                    raise SystemExit(f"{name}: the diagram does not name {lang_name}")
             gapped = pathlib.Path(tmp) / rule.name
             lines = rule.read_text(encoding="utf-8").splitlines(keepends=True)
             gapped.write_text("".join(lines[:-1]), encoding="utf-8")

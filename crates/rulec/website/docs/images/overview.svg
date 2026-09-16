@@ -62,17 +62,17 @@
 <path d="M1082,28 V40 H1094 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M734,20 H1074 L1086,32 V256 H734 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M1074,20 V32 H1086 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
-<text x="743" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Python · TypeScript · Rust · Ruby · Go · Swift</text>
+<text x="743" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Generated code</text>
 <text x="1077" y="42" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.py</text>
-<text x="743" y="60" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">def fee(dest: Zone, weight: Gram) -&gt; USDInclTax:</text>
-<text x="743" y="75" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    out, _ = fee_traced(dest, weight)</text>
-<text x="743" y="90" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="743" y="105" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 8</text>
-<text x="743" y="120" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="743" y="135" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 10</text>
-<text x="743" y="150" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
-<text x="743" y="165" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 13</text>
-<text x="743" y="180" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="58" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Python, TypeScript, JavaScript,</text>
+<text x="743" y="73" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Rust, Ruby, Go, Swift and SQL</text>
+<text x="743" y="90" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">def fee(dest: Zone, weight: Gram) -&gt; USDInclTax:</text>
+<text x="743" y="105" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="120" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 8</text>
+<text x="743" y="135" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="150" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 10</text>
+<text x="743" y="165" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="180" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 13</text>
 <text x="743" y="195" font-size="10" font-weight="400" text-anchor="start" fill="#e8ebf4" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    return USDInclTax(_round_up(fee, 1)), trace</text>
 <text x="743" y="235" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">zero dependencies, no engine,</text>
 <text x="743" y="250" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">the same answer from every one</text>

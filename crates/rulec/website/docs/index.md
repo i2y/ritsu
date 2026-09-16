@@ -28,7 +28,8 @@ cannot be proved does not generate.
 </p>
 
 <div class="rc-hero__cta" markdown>
-[Install](install.md){ .md-button .md-button--primary }
+[Try it in the browser](playground.md){ .md-button .md-button--primary }
+[Install](install.md){ .md-button }
 [Write a table (.rule)](tour.md){ .md-button }
 [For agents](agents.md){ .md-button }
 [GitHub](https://github.com/i2y/rulec){ .md-button }
@@ -36,8 +37,8 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL](images/overview.svg?v=d4594288#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL](images/overview-light.svg?v=d4594288#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL](images/overview.svg?v=7709cde9#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL](images/overview-light.svg?v=7709cde9#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
@@ -103,9 +104,9 @@ makes it or takes it. Every arrow runs card → sheet or sheet → card, so
 **who produces what, and who consumes it** is the geometry itself rather
 than a caption.
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions generated from the proved table, and the impact known before you deploy](images/flow.svg?v=d4594288#only-dark)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions generated from the proved table, and the impact known before you deploy](images/flow.svg?v=7709cde9#only-dark)
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions generated from the proved table, and the impact known before you deploy](images/flow-light.svg?v=d4594288#only-light)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions generated from the proved table, and the impact known before you deploy](images/flow-light.svg?v=7709cde9#only-light)
 
 Three colours, three paths: **grey** for what enters and leaves the whole
 system, **indigo** for the loop between the agent and rulec, **amber** for
@@ -191,8 +192,8 @@ Because a cell can only see its own column, **tables stack as deep as you like**
 table produces is written as a column of the next.
 
 <div class="rc-overview" markdown>
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=d4594288#only-dark)
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=d4594288#only-light)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=7709cde9#only-dark)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=7709cde9#only-light)
 </div>
 
 What to look at is **the word that appears twice**. `band` leaves the first table and arrives
@@ -337,8 +338,8 @@ and whether an earlier row takes a later row's stretch first. Same table in all 
 thing changed.
 
 <div class="rc-overview" markdown>
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=d4594288#only-dark)
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=d4594288#only-light)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=7709cde9#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=7709cde9#only-light)
 </div>
 
 The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They
