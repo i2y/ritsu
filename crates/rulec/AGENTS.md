@@ -169,7 +169,7 @@ to mean the agreement held across all of them.
 ### In CI
 
 ```yaml
-- uses: i2y/rulec@v0.1.0                     # the release binary, verified against its checksum
+- uses: i2y/rulec@v0.2.0                     # the release binary, verified against its checksum
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
