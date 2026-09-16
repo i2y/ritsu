@@ -9,8 +9,9 @@
 //! The unit vectors of the rounding helpers (§8.5) run in the same place. Table agreement
 //! alone would hide a helper bug in a table that never produces fractions.
 
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// Why one run failed, in the two kinds a reader has to tell apart (docs/formats.md).
 ///
@@ -57,6 +58,10 @@ pub struct Outcome {
     /// The rule's ASCII alias, or `_round` for the rounding helpers.
     pub rule: String,
     pub lang: &'static str,
+    /// How the generated code was reached: `runner` (the vectors piped through the
+    /// generated runner) or `mcp` (the same vectors, one `tools/call` each, through the
+    /// generated server; §15.44).
+    pub via: &'static str,
     pub vectors: usize,
     /// Why it failed. None when everything matched.
     pub diff: Option<Failure>,
@@ -208,7 +213,16 @@ pub fn run(dir: &Path) -> Result<Run, String> {
                 Err(f) => Some(f),
                 Ok(got) => (got != want).then(|| first_diff(&got, &want)),
             };
-            out.results.push(Outcome { rule: alias.clone(), lang: b.name, vectors: n, diff });
+            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, diff });
+            // The rule as an MCP tool answers the same vectors through `tools/call`, and its
+            // answer is held to the same expected records (§15.44).
+            if let Some(mcp) = b.mcp {
+                let diff = match via_mcp(&dir.join(&mcp(alias).cwd), &mcp(alias), alias, &want) {
+                    Err(f) => Some(f),
+                    Ok(got) => (got != want).then(|| first_diff(&got, &want)),
+                };
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "mcp", vectors: n, diff });
+            }
         }
     }
 
@@ -216,10 +230,103 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     let pkg0 = aliases[0].replace('_', "");
     for b in &present {
         let diff = exec(&(b.round)(&pkg0), None).err();
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, vectors: 0, diff });
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, diff });
     }
 
     Ok(out)
+}
+
+/// Drive the generated MCP server as a client would: `initialize`, `tools/list`, then one
+/// `tools/call` per expected record with its `in` as the arguments. The text of every result
+/// is the record line the runner would have printed, so the caller compares the two the
+/// same way.
+fn via_mcp(cwd: &Path, plan: &crate::backend::Plan, alias: &str, want: &str) -> Result<String, Failure> {
+    let broken = |m: String| Failure::Broken(m);
+    let mut child = Command::new(&plan.cmd)
+        .current_dir(cwd)
+        .args(&plan.args)
+        .envs(closed())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
+    let mut si = child.stdin.take().ok_or_else(|| broken("stdin".into()))?;
+    let mut so = BufReader::new(child.stdout.take().ok_or_else(|| broken("stdout".into()))?);
+    let ask = |si: &mut std::process::ChildStdin, so: &mut BufReader<std::process::ChildStdout>, req: &str| -> Result<crate::json::Json, Failure> {
+        writeln!(si, "{req}").map_err(|e| broken(e.to_string()))?;
+        si.flush().ok();
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if so.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
+                return Err(broken(tr!("MCP サーバが答えずに終わりました", "the MCP server ended without answering")));
+            }
+            if !line.trim().is_empty() {
+                break;
+            }
+        }
+        let j = crate::json::parse(line.trim())
+            .map_err(|e| broken(tr!("MCP サーバの答えが JSON ではありません: {e}\n{line}", "the MCP server's answer is not JSON: {e}\n{line}")))?;
+        if let Some(e) = j.get("error") {
+            return Err(broken(tr!("MCP サーバが断りました: {}", "the MCP server refused: {}", crate::json::unparse(e))));
+        }
+        match j.get("result") {
+            Some(r) => Ok(r.clone()),
+            None => Err(broken(tr!("MCP サーバの答えに result がありません", "the MCP server's answer has no result"))),
+        }
+    };
+    let init = ask(
+        &mut si,
+        &mut so,
+        "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"rulec test\",\"version\":\"0\"}}}",
+    )?;
+    if init.get("serverInfo").is_none() {
+        return Err(broken(tr!("initialize の答えに serverInfo がありません", "the initialize answer has no serverInfo")));
+    }
+    writeln!(si, "{{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}").map_err(|e| broken(e.to_string()))?;
+    let tools = ask(&mut si, &mut so, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}")?;
+    let one = match tools.get("tools") {
+        Some(crate::json::Json::Arr(ts)) if ts.len() == 1 => ts[0].get("name").and_then(|n| n.as_str()) == Some(alias),
+        _ => false,
+    };
+    if !one {
+        return Err(broken(tr!(
+            "tools/list が `{alias}` 一つを出していません: {}",
+            "tools/list does not list `{alias}` alone: {}",
+            crate::json::unparse(&tools)
+        )));
+    }
+    let mut got = String::new();
+    for (k, line) in want.lines().enumerate() {
+        let exp = crate::json::parse(line).map_err(broken)?;
+        let Some(inp) = exp.get("in") else {
+            return Err(broken(tr!("期待値に in がありません", "an expected record has no in")));
+        };
+        let r = ask(&mut si, &mut so, &format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
+            k + 2,
+            crate::json::quote(alias),
+            crate::json::unparse(inp)
+        ))?;
+        let text = r
+            .get("content")
+            .and_then(|c| match c {
+                crate::json::Json::Arr(a) => a.first(),
+                _ => None,
+            })
+            .and_then(|c| c.get("text"))
+            .and_then(|t| t.as_str())
+            .ok_or_else(|| broken(tr!("tools/call の答えに本文がありません", "the tools/call answer has no text")))?;
+        if r.get("isError") == Some(&crate::json::Json::Bool(true)) {
+            return Err(broken(tr!("tools/call が {} 件目で断りました: {text}", "tools/call refused record {}: {text}", k + 1)));
+        }
+        got.push_str(text);
+        got.push('\n');
+    }
+    drop(si);
+    let _ = child.wait();
+    Ok(got)
 }
 
 fn shown(rule: &str) -> String {
@@ -244,24 +351,26 @@ pub fn render(r: &Run) -> String {
                 } else {
                     tr!("単体ベクタ", "unit vectors")
                 };
-                o.push_str(&format!("ok    {} ({}) {n}\n", shown(&x.rule), x.lang));
+                o.push_str(&format!("ok    {} ({}{}) {n}\n", shown(&x.rule), x.lang, via(x)));
             }
             Some(d) => {
                 bad += 1;
                 let text = d.text();
                 o.push_str(&if d.ran() {
                     tr!(
-                        "FAIL  {} ({}) 参照評価器と食い違います\n    {text}\n",
-                        "FAIL  {} ({}) disagrees with the reference evaluator\n    {text}\n",
+                        "FAIL  {} ({}{}) 参照評価器と食い違います\n    {text}\n",
+                        "FAIL  {} ({}{}) disagrees with the reference evaluator\n    {text}\n",
                         shown(&x.rule),
-                        x.lang
+                        x.lang,
+                        via(x)
                     )
                 } else {
                     tr!(
-                        "FAIL  {} ({}) 走らせられませんでした\n    {text}\n",
-                        "FAIL  {} ({}) could not be run\n    {text}\n",
+                        "FAIL  {} ({}{}) 走らせられませんでした\n    {text}\n",
+                        "FAIL  {} ({}{}) could not be run\n    {text}\n",
                         shown(&x.rule),
-                        x.lang
+                        x.lang,
+                        via(x)
                     )
                 });
             }
@@ -288,6 +397,11 @@ pub fn render(r: &Run) -> String {
     o
 }
 
+/// The suffix that says a result came through the generated MCP server.
+fn via(x: &Outcome) -> &'static str {
+    if x.via == "mcp" { ", MCP" } else { "" }
+}
+
 /// `--format json` (docs/formats.md). One object for the run.
 pub fn render_json(r: &Run) -> String {
     let results: Vec<String> = r
@@ -311,6 +425,7 @@ pub fn render_json(r: &Run) -> String {
             crate::json::Obj::new()
                 .str("rule", &x.rule)
                 .str("lang", x.lang.to_lowercase())
+                .str("via", x.via)
                 .int("vectors", x.vectors as i128)
                 .bool("ok", x.diff.is_none())
                 // Whether the generated code ran at all. `ok:false` with `ran:false` is a

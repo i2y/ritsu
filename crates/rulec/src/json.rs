@@ -329,6 +329,23 @@ pub fn quote(s: &str) -> String {
     format!("\"{}\"", esc(s))
 }
 
+/// A value back to its text, compact. The reader keeps a fraction as the digits it was
+/// given, so it goes back out as they were.
+pub fn unparse(j: &Json) -> String {
+    match j {
+        Json::Null => "null".into(),
+        Json::Bool(b) => b.to_string(),
+        Json::Int(n) => n.to_string(),
+        Json::Frac(s) => s.clone(),
+        Json::Str(s) => quote(s),
+        Json::Arr(a) => format!("[{}]", a.iter().map(unparse).collect::<Vec<_>>().join(",")),
+        Json::Obj(m) => format!(
+            "{{{}}}",
+            m.iter().map(|(k, v)| format!("{}:{}", quote(k), unparse(v))).collect::<Vec<_>>().join(",")
+        ),
+    }
+}
+
 /// A JSON array of already-encoded values.
 pub fn arr<S: AsRef<str>>(items: &[S]) -> String {
     format!("[{}]", items.iter().map(|s| s.as_ref()).collect::<Vec<_>>().join(","))

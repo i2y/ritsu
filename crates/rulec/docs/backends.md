@@ -1,13 +1,15 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift. This page is about the
+`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL. This page is about the
 eighth target — a language nobody planned for, a workflow engine's expression language, a
 spreadsheet formula, a database.
 
 The short answer: **you do not have to modify rulec, and you do not have to give up the
 evidence.** A rule already publishes everything a generator needs, and `rulec verify` will
 stand any process up and hold it to the rule over every generated case. The rest of this page
-is that loop, run end to end against SQL — a target rulec does not support.
+is that loop, run end to end against SQL by hand — as it was done before SQL had a backend of
+its own (`rulec gen` writes one now, in a different shape); the loop is the same for any
+target.
 
 ---
 
@@ -279,7 +281,7 @@ The pieces, in the order they are usually written:
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
 Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
 `NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
-Ruby and JavaScript cannot hold a unit at all, so there it is documented instead, and the
+Ruby, JavaScript and SQL cannot hold a unit at all, so there it is documented instead, and the
 `.rbs` that ships with the Ruby module says so too.
 
 The rule that decides whether a target may be built in has not moved: **it must be able to

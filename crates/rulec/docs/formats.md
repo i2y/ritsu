@@ -116,9 +116,11 @@ One object per rule file.
 One object for the run.
 
 ```json
-{"results":[{"rule":"shipping_fee","lang":"python","vectors":68,
+{"results":[{"rule":"shipping_fee","lang":"python","via":"runner","vectors":68,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"shipping_fee","lang":"go","vectors":68,
+             {"rule":"shipping_fee","lang":"python","via":"mcp","vectors":68,
+              "ok":true,"ran":true,"first_diff":null,"error":null},
+             {"rule":"shipping_fee","lang":"go","via":"runner","vectors":68,
               "ok":false,"ran":false,"first_diff":null,
               "error":"does not compile:\n…"}],
  "skipped":[]}
@@ -126,6 +128,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner, or `mcp`, one `tools/call` per vector through the generated server ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)) |
 | `ok` | the generated code and the reference evaluator agreed on every vector |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
@@ -204,7 +207,7 @@ meaning is in [generated-code.md](generated-code.md).
 
 ```json
 {"rule":"クーポン一枚","alias":"coupon_step","version":"1","source_sha256":"…",
- "python":{"module":"coupon_step","function":"coupon_step",
+ "python":{"module":"coupon_step","mcp":"coupon_step_mcp.py","function":"coupon_step",
            "signature":"def coupon_step(subtotal: YenInclTax, …) -> Output:",
            "traced":"coupon_step_traced",
            "traced_signature":"def coupon_step_traced(subtotal: YenInclTax, …) -> tuple[Output, list[Fired]]:",
@@ -218,13 +221,13 @@ meaning is in [generated-code.md](generated-code.md).
            "enums":[{"name":"クーポン種別","alias":"CouponKind",
                      "values":[{"name":"率引き","alias":"PERCENT"}]}],
            "errors":["RuleInputError","RuleContradictionError"]},
- "typescript":{"module":"coupon_step.ts","function":"coupon_step",
+ "typescript":{"module":"coupon_step.ts","mcp":"coupon_step_mcp.ts","function":"coupon_step",
                "signature":"export function coupon_step(subtotal: YenInclTax, …): Output",
                "params":[…],"returns":"Output","outputs":[…],
                "enums":[{"name":"クーポン種別","alias":"CouponKind",
                          "values":[{"name":"率引き","alias":"PERCENT"}]}],
                "errors":["RuleInputError","RuleContradictionError"]},
- "javascript":{"module":"coupon_step.mjs","function":"coupon_step",
+ "javascript":{"module":"coupon_step.mjs","mcp":"coupon_step_mcp.mjs","function":"coupon_step",
                "signature":"export function coupon_step(subtotal, applied, kind, rate, face, dup)",
                "params":[…],"returns":"Output","outputs":[…],"enums":[…],
                "errors":["RuleInputError","RuleContradictionError"]},
@@ -252,7 +255,12 @@ meaning is in [generated-code.md](generated-code.md).
           "params":[…],"returns":"Output","outputs":[…],
           "enums":[{"name":"クーポン種別","alias":"CouponKind",
                     "values":[{"name":"率引き","alias":"percent"}]}],
-          "errors":["RuleError.input","RuleError.contradiction"]}}
+          "errors":["RuleError.input","RuleError.contradiction"]},
+ "sql":{"file":"coupon_step.sql","input":"coupon_step_input","id":"_id","guard":"_input_error",
+        "dialect":"postgresql","runs_on":["postgresql","sqlite"],
+        "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
+                    "range":{"min":0,"max":1000000},"optional":false}],
+        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}]}}
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
@@ -262,15 +270,27 @@ and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
-`couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift). `unit`, `range` and `rounding` are absent when the
+`couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift; SQL spells no member, an
+enum being its own name there). `unit`, `range` and `rounding` are absent when the
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
-with the module.
+with the module, and an entry whose language gets a server carries `mcp`, the file beside the
+module that serves the rule as one MCP tool
+([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)). The `sql` entry has no
+function to name: it gives the file, the relation the query reads (`input`) and its `id`
+column, the `guard` column that carries the entry guard's sentence, the `columns` of that
+relation as the query declares them, the `outputs`, and under `rows` the column that carries
+each table's matched row ([generated-code.md](generated-code.md#sql)).
 
 ## `schema` and `adapter`
 
 Already machine-readable and take no `--format`.
 
-- `schema` prints one JSON Schema for the wire an adapter speaks (see below).
+- `schema` prints one JSON Schema for the wire an adapter speaks (see below). The
+  description of an integer property says its unit and, for a rate, its step, so that a
+  caller who never reads the rule knows that 18.3% at a step of 0.1% travels as 183.
+  `--keys alias` names every property by its ASCII alias instead of the rule's name, with
+  the name as the property's `title`, which is the shape an HTTP request body or a form
+  wants; the wire itself, and the tool built on it, keep the names.
 - `adapter` prints a Python or Go source template, 20 to 30 lines, to wrap a legacy
   implementation.
 
@@ -303,6 +323,14 @@ implementation of a command.
 
 To register it, add a stdio server whose command is `rulec mcp` — for Claude Code,
 `claude mcp add rulec -- rulec mcp`; elsewhere, `{"mcpServers":{"rulec":{"command":"rulec","args":["mcp"]}}}`.
+
+**The rule as a tool** is the other direction, and it is generated code rather than this
+server: `gen` writes `<alias>_mcp.py` and `<alias>_mcp.mjs` beside the module, a stdio
+server with one tool named after the alias. Its `inputSchema` is the `in` object of `schema`
+above; its result is one fixtures record (below), as text and as `structuredContent`; a call
+the rule cannot take comes back with `isError` and the argument named; and `--record
+<file.jsonl>` appends every answered call to that file as a record.
+[generated-code.md](generated-code.md#the-rule-as-an-mcp-tool) has it.
 
 ---
 

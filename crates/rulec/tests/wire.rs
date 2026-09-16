@@ -60,9 +60,25 @@ fn スキーマの上下限は刻みの個数で書かれる() {
     assert_eq!(c, 0, "{out}");
     // `range >=0% <=100%` with `step 1%` is 0..100 steps, not 0..1.
     assert!(
-        out.contains("\"割引率\":{\"type\":\"integer\",\"description\":\"単位: 率（刻み単位の整数）\",\"minimum\":0,\"maximum\":100}"),
+        out.contains("\"割引率\":{\"type\":\"integer\",\"description\":\"整数。率を 1% 刻みの個数で書く（100% なら 100）\",\"minimum\":0,\"maximum\":100}"),
         "率の上下限がワイヤの単位になっていない:\n{out}"
     );
+}
+
+/// §15.45: an API's request body wants the ASCII aliases; the rule's own name rides along as
+/// the property's title, and the wire's names stay the default.
+#[test]
+fn スキーマは別名でも出せる() {
+    let (c, out) = run(&["schema", COUPON, "--keys", "alias"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("\"rate\":{\"title\":\"割引率\",\"type\":\"integer\""), "別名で出ていない:\n{out}");
+    assert!(out.contains("\"required\":[\"subtotal\""), "required も別名で:\n{out}");
+    assert!(!out.contains("\"割引率\":{"), "元の名前がキーに残っている:\n{out}");
+    let (c, plain) = run(&["schema", COUPON]);
+    assert_eq!(c, 0);
+    assert!(plain.contains("\"割引率\":{") && !plain.contains("\"title\":\"割引率\""), "既定は規則の名前:\n{plain}");
+    let (c, _) = run(&["schema", COUPON, "--keys", "camel"]);
+    assert_eq!(c, 2, "閉じた集合の外を通した");
 }
 
 #[test]
@@ -181,7 +197,7 @@ fn 一パーセントより細かい刻みが書ける() {
 
     // 0.5% at a step of 0.1% is 5 steps, and the whole range is 100 of them.
     let (_, sc) = run(&["schema", &p]);
-    assert!(sc.contains("\"手数料率\":{\"type\":\"integer\",\"description\":\"単位: 率（刻み単位の整数）\",\"minimum\":0,\"maximum\":100}"), "{sc}");
+    assert!(sc.contains("\"手数料率\":{\"type\":\"integer\",\"description\":\"整数。率を 0.1% 刻みの個数で書く（100% なら 1000）\",\"minimum\":0,\"maximum\":100}"), "{sc}");
 
     // The vectors have to step on both sides of 0.5%, which they cannot do if every rate
     // under 100% collapses to the same value.

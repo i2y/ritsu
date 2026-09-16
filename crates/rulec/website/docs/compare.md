@@ -82,21 +82,31 @@ Affected 17 (8.213%)  amount +5,300
     Example: あて先=北海道, 三辺合計=60, 重量=1 → rule 運賃=1710 / old version 運賃=1410
 ```
 
-`ゆうパック運賃@v2` is sugar for the git tag `rules/ゆうパック運賃/v2`.
+`ゆうパック運賃@v2` is sugar for the git tag `rules/ゆうパック運賃/v2`, or,
+when there is no such tag, for `v2` as a git revision. A path at a
+revision — `rules/ゆうパック運賃.rule@origin/main` — is the file as it is on
+that branch, which is what a pull request compares against.
 A diff clusters on **the transition of the fired row** — `row 1→row 2`
 says where the decision moved — and each cluster carries the count, the
 total amount, the minimum and maximum, and a witness. A uniform shift
 folds into one line.
 
-`--format markdown` produces what goes into a PR. Posting is one line of
-CI, so that the tool owns the formatting and nothing else:
+`--format markdown` produces what goes into a PR, and `--terse` leaves the
+witness column out of it, because a comment is read by everyone with
+access to the repository and the values of a production record are not
+for it. Posting is one line of CI, so that the tool owns the formatting
+and nothing else. `diff` exits 1 when there is an impact, which is the
+information here and not a failure, so the step goes on after 1:
 
 ```yaml
-- run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
+- run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
   env:
     RULEC_LANG: ja        # the people approving this one read Japanese
 - run: gh pr comment "$PR" --body-file diff.md
 ```
+
+The whole job, checkout and install included, is on the
+[install page](install.md#in-ci).
 
 ## Filling in a missing field is always stamped
 

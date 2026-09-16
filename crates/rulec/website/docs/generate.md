@@ -4,7 +4,7 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby and Swift,
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift, and one query in SQL,
 and an ordinary Go package. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
@@ -13,8 +13,8 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Seven are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift — and **Java,
-Kotlin and SQL are planned**. The point is that one table should be able to give the
+Eight are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL — and **Java
+and Kotlin are planned**. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
 exists.
@@ -30,7 +30,7 @@ exists.
 | Swift | supported | just `swiftc` — no SwiftPM, no `Package.swift`; units ride in the type as they do in Rust |
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |
-| SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, so the dialect and the shape get settled first |
+| SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL |
 
 One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
@@ -51,10 +51,31 @@ gives the names, units, ranges and rounding, `rulec schema` gives the wire
 and `rulec verify` will run it against every case built from the rule's own
 boundaries, exactly as it does for the supported ones. Nothing in rulec changes.
 
-[Other targets](backends.md) runs that loop end to end against SQL, which
-is not one of them: 88 cases, all agreeing — and then one threshold
-broken on purpose, to show the report naming the rows and the case that
-proves it.
+[Other targets](backends.md) runs that loop end to end against SQL, by
+hand, as it was done before SQL had a backend of its own: 88 cases, all
+agreeing — and then one threshold broken on purpose, to show the report
+naming the rows and the case that proves it.
+
+### SQL is a query, not a function
+
+The seven others give you a function. SQL gives you **one query over a
+relation of inputs**: provide `shipping_fee_input` with a column `_id`
+and one column per input under its alias, and out come `_id`, the
+inputs, the outputs, and one column per table with the number of the row
+that matched. A row of the table is a `WHEN`; the rounding is arithmetic
+in the final `SELECT`; a million rows go through in one statement, which
+is what a closing batch, a recalculation or an analyst's figures need and
+what the per-row functions cannot do. Make it a view and the rule is a
+table in the database.
+
+The query is written for PostgreSQL and kept inside what SQLite also
+runs, which is how `rulec test` holds it to the reference evaluator with
+nothing but `python3`. The values are the wire's — integers in the
+declared unit, an enum as its name, a date as days since 1970-01-01 —
+and the header of the file says which for every column. A query cannot
+stop, so the entry guard is a column too: `_input_error` is NULL for a
+row inside the declared domain and carries the sentence for one outside
+it.
 
 ## What the output looks like
 
@@ -176,7 +197,10 @@ Python imports the module and compares `inspect.signature`; and Go
 numeric input is checked against its declared range and every enum input
 against its values. Without it, a caller outside the declared domain
 would get a silently wrong number — and the completeness proof says
-nothing about inputs that were never declared.
+nothing about inputs that were never declared. A number that is not an
+integer is refused before the range is looked at, in the languages where
+a caller can pass one: a float sits inside any range, and 18.3 for a
+rate in steps of 0.1% would otherwise be taken as 1.83%.
 
 **The contradiction guard** is the other half of W114. Where the checker
 could not decide whether two rows of a `unique` table can overlap, the
@@ -187,6 +211,75 @@ generated code stops rather than silently picking one:
 if 残高A <= 1000 and 残高B >= 3980:
     raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
 ```
+
+## The rule as a tool for an agent
+
+`rulec mcp` is for the agent that writes a rule. For the agent that
+**calls** one — "may this order be returned", "what is this member's
+fee rate", asked in the middle of something else — the answer should
+not be a judgement the model makes afresh each time, wavering at the
+boundaries and leaving nothing to audit. It should be the table.
+
+So `gen` writes the rule as one MCP server beside the module:
+`shipping_fee_mcp.py` next to the Python one, `shipping_fee_mcp.mjs`
+next to the JavaScript one. Register it and the rule is one tool named
+after its alias:
+
+```console
+$ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
+```
+
+The tool speaks the wire: its `inputSchema` is the `in` object of
+`rulec schema`, with the unit of every integer and the step of every
+rate in its description, and its answer is the record line the module
+writes — the inputs, the outputs, and **the rows that decided it**:
+
+```json
+{"in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},"observed":{"送料":800},"trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
+```
+
+Two things follow. An answer can be audited, because it names the rows.
+And one call is one fixtures record: started with `--record calls.jsonl`,
+the server keeps every answered call in a file that `replay` and `diff`
+read as it stands, so what the agent asked becomes what the next
+revision is measured against.
+
+A call the rule cannot take is refused with the argument named — a value
+outside its range, a name that is not in the enum, a number that is not
+an integer. 18.3 for a rate declared in steps of 0.1% is refused, not
+read as 1.83%.
+
+The server is generated code like everything else here: nothing to
+install beyond `python3` or `node`, and `rulec test` drives it over the
+same vectors as the runner and holds its answers to the reference
+evaluator.
+
+[The generated code in detail](generated-code.md#the-rule-as-an-mcp-tool){ .md-button }
+
+## The input checked from the same table
+
+The generated function guards its own entry, but a value usually
+arrives earlier: at a form, at an HTTP endpoint, at a queue. `rulec
+schema` prints the JSON Schema of the wire — every input with its type,
+unit, range and enum members — so that check can be built from the
+table as well, and cannot drift from the guard:
+
+```console
+$ rulec schema rules/送料.rule                # keyed by the rule's own names (届け先)
+$ rulec schema rules/送料.rule --keys alias   # keyed by the ASCII aliases (dest), each with its name as title
+```
+
+JSON Schema is what an OpenAPI parameter or request body takes as it
+stands. For a typed model, the usual converters read it — `datamodel-codegen`
+for pydantic, `json-schema-to-zod` for zod — so none of that is a rulec
+backend: the schema is the source, and a generator that already reads
+JSON Schema is not something this tool needs to carry.
+
+Two things about the wire matter on the way in. Every number is an
+integer in the declared unit — 円 as yen, a rate as a count of its
+steps — and the property's description says which, so a form that shows
+18.3% has to send 183. And an enum travels as its name, the one written
+in the rule.
 
 ## Running the generated code
 

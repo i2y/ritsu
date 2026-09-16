@@ -2,7 +2,7 @@
 
 **A harness for an agent turning table-shaped business rules into code.**
 
-Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift functions. **The
+Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions. **The
 proof is finished before the code exists.**
 
 ```rule
@@ -69,10 +69,21 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 ## Install
 
+One binary, no runtime. Every release publishes a static binary for macOS (arm64, x64) and
+Linux (x64, arm64), with the SHA-256 of each beside it:
+
 ```console
-$ cargo install --path .
-$ rulec --help
+$ v=v0.1.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
+$ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
+$ rulec --version
+rulec 0.1.0
 ```
+
+Or from source, with a recent stable Rust: `cargo install --path .` fetches nothing, because
+there are no dependencies. In CI, `uses: i2y/rulec@v0.1.0` does the download and the check
+([In CI](#in-ci)).
 
 ## Write a table (.rule)
 
@@ -149,6 +160,8 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
         raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+    if not _isinstance(girth, int) or _isinstance(girth, bool):
+        raise RuleInputError(f"三辺合計 is not an integer: {girth!r}")
     if not 1 <= girth <= 100:
         raise RuleInputError(f"三辺合計 is out of range: {girth}")
     trace: _Trace = []
@@ -204,14 +217,22 @@ order, as the table's name and its row number — which is what a log line or an
 "why this fee" needs. The agreement check holds those rows to the reference evaluator as
 well as the values. A third function, `fee_demo_record`, writes one call as one line of the
 fixtures format, so the records `replay` and `diff` need come out of the generated code
-itself rather than out of an extraction job.
+itself rather than out of an extraction job. A fourth file, `fee_demo_mcp.py` beside the
+Python module and `fee_demo_mcp.mjs` beside the JavaScript one, serves the rule as one MCP
+tool for an agent that calls it rather than the application that embeds it: the arguments are
+the wire, the answer is that record line, rows included, and `rulec test` drives the server
+over the same vectors as the runner.
+
+In SQL the same rule is one query over a relation of inputs — a row of the table is a `WHEN`,
+the rows that matched come back as columns — which is what a closing batch or an analyst's
+recalculation needs: many rows in one statement.
 
 Four rules keep it readable. **No cell is dropped** — a condition an earlier branch already
 settled is still written out (`elif True:`), because reading the output against the table is
 the only way it is meant to be read. **Units ride in the type wherever the language has one
 to ride in**: a newtype in Rust, a one-field struct in Swift, a defined type in Go, a branded
-bigint in TypeScript, a `NewType` in Python that `mypy --strict` is run over. Ruby and JavaScript have
-none, so there the unit is declared in the signature and stated in a comment, and the `.rbs`
+bigint in TypeScript, a `NewType` in Python that `mypy --strict` is run over. Ruby, JavaScript and SQL have
+none, so there the unit is declared in the signature, or in the header of the query, and stated in a comment, and the `.rbs`
 that ships with the Ruby module says as much. **Rounding goes through a helper of its own**, because integer division does
 not agree between them — Python and Ruby floor toward −∞, Go and Rust truncate toward zero.
 **Nothing builtin is called bare**, so an input aliased `min` or `list` cannot break the
@@ -267,6 +288,7 @@ and [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` outp
 ## In CI
 
 ```yaml
+- uses: i2y/rulec@v0.1.0                     # the release binary, verified against its checksum
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
@@ -276,7 +298,10 @@ and [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` outp
 
 Those logs are read by machines and developers, so they stay in the default English. What
 goes to a person — `rulec diff` on a pull request, `rulec doc` for an approver — is built in
-the same job with `RULEC_LANG` set to their language.
+the same job with `RULEC_LANG` set to their language. The job that puts the diff on the pull
+request is on the [install page](https://i2y.github.io/rulec/install/#in-ci): the old
+version is `rules/送料.rule@origin/main`, the file as it is on the base branch, and `--terse`
+keeps the values of the records out of the comment.
 
 ## What is in this repository
 
@@ -291,7 +316,8 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
                   `rulec mcp` serves the same commands as MCP tools where there is no shell
 src/              28 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
-                  import (a draft from a CSV), mcp (the command table as MCP tools)
+                  import (a draft from a CSV), mcp (the command table as MCP tools),
+                  codegen/tool (the rule as an MCP tool), codegen/sql (the rule as one query)
 tests/corpus/     18 rules transcribed from real published terms
 tests/mutants/    19 files, each with one mistake planted in it
 tests/golden/     21 snapshots of diagnostic prose, in both languages
@@ -299,7 +325,7 @@ tests/oracle/     two premium tables transcribed grade by grade from their publi
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
-                  mcp, import
+                  mcp, import, tool (the rule as an MCP tool), sql
 ```
 
 Every one of those eighteen rules comes from **public information** — Japan Post's tariff,
@@ -319,19 +345,20 @@ $ cargo test          # 250 tests; python3, node, rustc, ruby, go and swiftc are
 | | |
 |---|---|
 | **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
-| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
-**Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift** today; **Java, Kotlin and SQL** are planned.
+**Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL** today; **Java and Kotlin** are planned.
 
 You do not have to wait for the list, and nothing here has to change. A target outside it —
-another language, a workflow engine's expression language, SQL — can be generated from what
-`rulec api` and `rulec schema` already publish, and `rulec verify` will hold the result to the
-rule over every case built from its own boundaries, exactly as the shipped ones are held.
-[`docs/backends.md`](docs/backends.md) runs that loop end to end against SQL.
+another language, a workflow engine's expression language, a spreadsheet formula — can be
+generated from what `rulec api` and `rulec schema` already publish, and `rulec verify` will
+hold the result to the rule over every case built from its own boundaries, exactly as the
+shipped ones are held. [`docs/backends.md`](docs/backends.md) runs that loop end to end
+against SQL, by hand, as it was done before SQL had a backend of its own.
 
 | | | |
 |---|---|---|
@@ -343,7 +370,7 @@ rule over every case built from its own boundaries, exactly as the shipped ones 
 | Go | shipped | `go` |
 | Swift | shipped | `swiftc` alone — no SwiftPM and no `Package.swift`; units ride in the type as they do in Rust |
 | Java / Kotlin | planned | a JDK / kotlinc |
-| SQL | planned, shape undecided | a row becomes a `CASE` arm rather than a branch, and there is no stdin/stdout runner, so the dialect and the shape come first |
+| SQL | shipped | `python3`, whose standard-library `sqlite3` is where the agreement check runs the query. Written for PostgreSQL. Not a function but one query over a relation of inputs: a row of the table is a `WHEN`, the rows that matched are columns, and a million rows go through in one statement |
 
 **A language that cannot join the agreement check does not get added**: output that cannot
 be compared byte for byte against the reference evaluator sits outside the word "proved".

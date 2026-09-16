@@ -377,6 +377,22 @@ fn 版の参照はgitタグを引く() {
     assert!(out.contains("ゆうパック運賃@v1 → ゆうパック運賃@v2"), "{out}");
     assert!(out.contains("影響 7 件"), "{out}");
 
+    // §15.42: a path at any revision, which is what a pull request compares against, and the
+    // name with a revision that is not a tag.
+    let (c, out, e) = rulec_in(&repo, &["diff", "rules/ゆうパック運賃.rule@HEAD~1", rel, "--fixtures", "fx.jsonl"]);
+    assert_eq!(c, 1, "{out}{e}");
+    assert!(out.contains("影響 7 件"), "{out}");
+    let (c, out, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@HEAD~1", "ゆうパック運賃@HEAD", "--fixtures", "fx.jsonl"]);
+    assert_eq!(c, 1, "{out}{e}");
+    assert!(out.contains("影響 7 件"), "{out}");
+    // Neither a tag nor a revision: the message names both attempts.
+    let (c, _, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@v9", rel, "--fixtures", "fx.jsonl"]);
+    assert_eq!(c, 2, "{e}");
+    assert!(e.contains("rules/ゆうパック運賃/v9") && e.contains("リビジョン `v9`"), "{e}");
+    let (c, _, e) = rulec_in(&repo, &["diff", "rules/なし.rule@HEAD", rel, "--fixtures", "fx.jsonl"]);
+    assert_eq!(c, 2, "{e}");
+    assert!(e.contains("`HEAD` に `rules/なし.rule` が無い"), "{e}");
+
     // Trying to compare two different rules is stopped.
     std::fs::write(repo.join("other.rule"), std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap()).unwrap();
     let (c, _, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@v1", "other.rule", "--fixtures", "fx.jsonl"]);
@@ -409,6 +425,22 @@ fn markdownで貼れる形が出る() {
     for l in out.lines().filter(|l| l.starts_with("| 表 ")) {
         assert_eq!(l.matches(" | ").count(), 3, "列がずれている: {l}");
     }
+
+    // §15.42: `--terse` leaves the witness column out altogether, so no value of a record is
+    // in what gets pasted into a pull request; the counts and amounts stay.
+    let fx = dir.join("fx.jsonl");
+    let (c, terse, _) = rulec(&["diff", RULE, v2.to_str().unwrap(), "--fixtures", fx.to_str().unwrap(), "--format", "markdown", "--terse"]);
+    assert_eq!(c, 1);
+    assert!(terse.contains("#### 不一致の内訳") && terse.contains("影響 7 件"), "{terse}");
+    assert!(!terse.contains("入力例") && !terse.contains("あて先="), "{terse}");
+    for l in terse.lines().filter(|l| l.starts_with("| 表 ")) {
+        assert_eq!(l.matches(" | ").count(), 2, "列がずれている: {l}");
+    }
+    let (c, plain, _) = rulec(&["diff", RULE, v2.to_str().unwrap(), "--fixtures", fx.to_str().unwrap(), "--terse"]);
+    assert_eq!(c, 1);
+    assert!(plain.contains("影響 7 件") && !plain.contains("例:"), "{plain}");
+    let (c, _, e) = rulec(&["diff", RULE, v2.to_str().unwrap(), "--fixtures", fx.to_str().unwrap(), "--format", "json", "--terse"]);
+    assert_eq!(c, 2, "{e}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

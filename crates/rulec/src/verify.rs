@@ -4,7 +4,7 @@
 //! stdin/stdout. No FFI and no network: "a process and line-oriented JSON" is the smallest
 //! surface shared across languages, and it is written the same way in Python and in Go.
 
-use crate::ast::RuleFile;
+use crate::ast::{Name, RuleFile};
 use crate::eval::Val;
 use crate::types::{Checked, Ty};
 use crate::report::{Mismatch, Report, wire};
@@ -227,82 +227,119 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
     }
 }
 
-/// §10.1: emits the wire format as a JSON Schema. Names are the canonical (Japanese) names;
-/// values are integers in the canonical unit.
-pub fn schema(f: &RuleFile, c: &Checked) -> String {
-    let prop = |name: &str, ty: &Ty| -> String {
-        let body = match ty {
-            Ty::Enum(en) => {
-                let vs: Vec<String> = c
-                    .enums
-                    .get(en)
-                    .cloned()
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|v| format!("{v:?}"))
-                    .collect();
-                format!("{{\"type\":\"string\",\"enum\":[{}]}}", vs.join(","))
-            }
-            Ty::Bool => "{\"type\":\"boolean\"}".into(),
-            Ty::Date => "{\"type\":\"string\",\"format\":\"date\"}".into(),
-            Ty::Str => "{\"type\":\"string\"}".into(),
-            Ty::Opt(t) => format!("{{\"oneOf\":[{},{{\"type\":\"null\"}}]}}", {
-                let inner = prop_inner(t, c);
-                inner
-            }),
-            _ => {
-                let unit = match ty {
-                    Ty::Money { cur, tax } => format!("{cur}, {}", tax.clone().unwrap_or_default()),
-                    Ty::Qty { unit, .. } => unit.clone(),
-                    Ty::Rate => tr!("率（刻み単位の整数）", "rate (integer in units of the step)"),
-                    Ty::Number => tr!("なし（個数や日数のような数）", "none (a plain count of things or days)"),
-                    _ => String::new(),
-                };
-                let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
-                // The schema describes the wire, so the bounds are converted the same way a
-                // value is: a rate's 100% is 100 steps, not 1 (§10.2).
-                let sc = c.wire_scale(name);
-                let mut s = tr!(
-                    "{{\"type\":\"integer\",\"description\":\"単位: {unit}\"",
-                    "{{\"type\":\"integer\",\"description\":\"Unit: {unit}\""
-                );
-                if let Some(l) = lo {
-                    s.push_str(&format!(",\"minimum\":{}", crate::types::wire_int(l, sc)));
+/// One property of the wire (§10.1): the canonical (Japanese) name, an integer in the
+/// canonical unit, and a description that says which unit and, for a rate, what one step
+/// is. That sentence is what a caller who never reads the rule — an agent handed the tool
+/// (§15.44) — decides the value from, so it names the trap: 18.3% at a step of 0.1% is 183.
+fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
+    let key = if alias { name.ascii.clone().unwrap_or_else(|| name.text.clone()) } else { name.text.clone() };
+    let name = name.text.as_str();
+    let body = match ty {
+        Ty::Enum(en) => {
+            let vs: Vec<String> = c
+                .enums
+                .get(en)
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|v| format!("{v:?}"))
+                .collect();
+            format!("{{\"type\":\"string\",\"enum\":[{}]}}", vs.join(","))
+        }
+        Ty::Bool => "{\"type\":\"boolean\"}".into(),
+        Ty::Date => tr!(
+            "{{\"type\":\"string\",\"format\":\"date\",\"description\":\"日付。YYYY-MM-DD\"}}",
+            "{{\"type\":\"string\",\"format\":\"date\",\"description\":\"a date, YYYY-MM-DD\"}}"
+        ),
+        Ty::Str => "{\"type\":\"string\"}".into(),
+        Ty::Opt(t) => format!("{{\"oneOf\":[{},{{\"type\":\"null\"}}]}}", prop_inner(t, c)),
+        _ => {
+            // The schema describes the wire, so the bounds are converted the same way a
+            // value is: a rate's 100% is 100 steps, not 1 (§10.2).
+            let sc = c.wire_scale(name);
+            let unit = match ty {
+                Ty::Money { cur, tax } => {
+                    let t = match tax.as_deref() {
+                        Some("incl_tax") => tr!("（税込）", " (tax included)"),
+                        Some("excl_tax") => tr!("（税抜）", " (tax excluded)"),
+                        _ => String::new(),
+                    };
+                    tr!("整数。単位は {cur}{t}", "an integer, in {cur}{t}")
                 }
-                if let Some(h) = hi {
-                    s.push_str(&format!(",\"maximum\":{}", crate::types::wire_int(h, sc)));
+                Ty::Qty { unit, .. } => tr!("整数。単位は {unit}", "an integer, in {unit}"),
+                Ty::Rate => {
+                    let step = if 100 % sc == 0 { format!("{}%", 100 / sc) } else { format!("{}%", 100.0 / sc as f64) };
+                    tr!(
+                        "整数。率を {step} 刻みの個数で書く（100% なら {sc}）",
+                        "an integer: the rate as a count of {step} steps (100% is {sc})"
+                    )
                 }
-                s.push('}');
-                s
+                Ty::Number => tr!("整数（個数や日数のような、単位の無い数）", "an integer (a plain count of things or days)"),
+                _ => String::new(),
+            };
+            let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+            let mut s = format!("{{\"type\":\"integer\",\"description\":\"{unit}\"");
+            if let Some(l) = lo {
+                s.push_str(&format!(",\"minimum\":{}", crate::types::wire_int(l, sc)));
             }
-        };
-        format!("\"{name}\":{body}")
+            if let Some(h) = hi {
+                s.push_str(&format!(",\"maximum\":{}", crate::types::wire_int(h, sc)));
+            }
+            s.push('}');
+            s
+        }
     };
+    // Keyed by alias, the rule's own name still travels, as the property's title.
+    let body = if alias && key != name {
+        format!("{{\"title\":{},{}", crate::json::quote(name), &body[1..])
+    } else {
+        body
+    };
+    format!("{}:{body}", crate::json::quote(&key))
+}
+
+/// The `in` object of the wire: every input, all required, nothing else allowed. This is
+/// also the `inputSchema` of the rule as an MCP tool (§15.44). `alias` keys the properties
+/// by their ASCII aliases instead of the rule's names (§15.45).
+pub fn schema_in(f: &RuleFile, c: &Checked, alias: bool) -> String {
     let ins: Vec<String> = f
         .inputs
         .iter()
-        .map(|i| prop(&i.name.text, &c.ty_of(&i.name.text).unwrap_or(Ty::Unknown)))
+        .map(|i| prop(&i.name, &c.ty_of(&i.name.text).unwrap_or(Ty::Unknown), c, alias))
         .collect();
+    let key = |n: &Name| if alias { n.ascii.clone().unwrap_or_else(|| n.text.clone()) } else { n.text.clone() };
+    let req: Vec<String> = f.inputs.iter().map(|i| crate::json::quote(&key(&i.name))).collect();
+    format!(
+        "{{\"type\":\"object\",\"properties\":{{{}}},\"required\":[{}],\"additionalProperties\":false}}",
+        ins.join(","),
+        req.join(",")
+    )
+}
+
+/// The `out` object of the wire: every output, with its range and unit.
+pub fn schema_out(f: &RuleFile, c: &Checked, alias: bool) -> String {
     let outs: Vec<String> = f
         .outputs
         .iter()
-        .map(|o| prop(&o.name.text, &c.ty_of(&o.name.text).unwrap_or(Ty::Unknown)))
+        .map(|o| prop(&o.name, &c.ty_of(&o.name.text).unwrap_or(Ty::Unknown), c, alias))
         .collect();
-    let req: Vec<String> = f.inputs.iter().map(|i| format!("{:?}", i.name.text)).collect();
+    format!("{{\"type\":\"object\",\"properties\":{{{}}}}}", outs.join(","))
+}
+
+/// §10.1: emits the wire format as a JSON Schema. Names are the canonical (Japanese) names,
+/// or the ASCII aliases with `alias` (§15.45); values are integers in the canonical unit.
+pub fn schema(f: &RuleFile, c: &Checked, alias: bool) -> String {
     tr!(
         "{{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \
          \"title\": \"規則 {} v{}\",\n  \"type\": \"object\",\n  \
-         \"properties\": {{\n    \"in\": {{\"type\":\"object\",\"properties\":{{{}}},\"required\":[{}],\"additionalProperties\":false}},\n    \
-         \"out\": {{\"type\":\"object\",\"properties\":{{{}}}}}\n  }}\n}}\n",
+         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}\n}}\n",
         "{{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \
          \"title\": \"Rule {} v{}\",\n  \"type\": \"object\",\n  \
-         \"properties\": {{\n    \"in\": {{\"type\":\"object\",\"properties\":{{{}}},\"required\":[{}],\"additionalProperties\":false}},\n    \
-         \"out\": {{\"type\":\"object\",\"properties\":{{{}}}}}\n  }}\n}}\n",
+         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}\n}}\n",
         f.name.text,
         f.version,
-        ins.join(","),
-        req.join(","),
-        outs.join(",")
+        schema_in(f, c, alias),
+        schema_out(f, c, alias)
     )
 }
 

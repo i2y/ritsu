@@ -342,7 +342,9 @@ fn commands() -> Vec<Cmd> {
                 "emit the JSON Schema of the wire an adapter speaks"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
-            flags: vec![],
+            flags: vec![
+                flag("--keys", Some("name|alias"), tr!("プロパティの名前を、規則の名前（届け先）にするか、ASCII の別名（dest）にするか。別名のときは元の名前が title に入る", "name each property by the rule's own name (届け先) or by its ASCII alias (dest); with alias, the rule's name goes in title")).choices(&["name", "alias"]).default("name"),
+            ],
             exits: vec![
                 (0, tr!("出した", "emitted")),
                 (1, tr!("規則が検査を通らない", "the rule does not pass check")),
@@ -350,7 +352,7 @@ fn commands() -> Vec<Cmd> {
             ],
             examples: vec![
                 "rulec schema rules/送料.rule".into(),
-                "rulec schema rules/送料.rule > wire.schema.json".into(),
+                "rulec schema rules/送料.rule --keys alias > request.schema.json".into(),
             ],
             codes: &[],
         },
@@ -444,12 +446,13 @@ fn commands() -> Vec<Cmd> {
                 "過去の記録に規則を当て、そのとき出た値と突き合わせる",
                 "apply the rule to past records and compare with the values that came out at the time"
             ),
-            params: vec![("<file.rule>", tr!("規則ファイル、または 送料@v3", "the rule file, or 送料@v3"))],
+            params: vec![("<file.rule>", tr!("規則ファイル、または 送料@v3 や rules/送料.rule@origin/main（git の中の版）", "the rule file, or 送料@v3 or rules/送料.rule@origin/main (a version inside git)"))],
             flags: vec![
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
+                flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
@@ -511,7 +514,7 @@ fn commands() -> Vec<Cmd> {
                 "apply two versions to the same records and report how many change and by how much"
             ),
             params: vec![
-                ("<old>", tr!("旧の規則。file.rule か 送料@v3（git タグ rules/送料/v3）", "the old rule: file.rule or 送料@v3 (the git tag rules/送料/v3)")),
+                ("<old>", tr!("旧の規則。file.rule、送料@v3（git タグ rules/送料/v3）、または rules/送料.rule@origin/main（そのリビジョンのそのパス）", "the old rule: file.rule, 送料@v3 (the git tag rules/送料/v3), or rules/送料.rule@origin/main (that path at that revision)")),
                 ("<new>", tr!("新の規則。同じ書き方", "the new rule, written the same way")),
             ],
             flags: vec![
@@ -519,6 +522,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
+                flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
             ],
             exits: vec![
                 (0, tr!("全件同じ答え（影響なし）", "both versions answered the same everywhere (no impact)")),
@@ -527,7 +531,7 @@ fn commands() -> Vec<Cmd> {
             ],
             examples: vec![
                 "rulec diff 送料@v3 送料@v4 --fixtures replay/2025-08.jsonl".into(),
-                "rulec diff rules/送料.rule 送料@v4 --fixtures \"$FIXTURES\" --format markdown".into(),
+                "rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures \"$FIXTURES\" --format markdown --terse".into(),
             ],
             codes: &[],
         },
@@ -737,6 +741,14 @@ fn refuse(msg: String) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// `--terse` shortens what a person reads; the JSON is already the machine-facing shape.
+fn terse_with_json() -> ExitCode {
+    refuse(tr!(
+        "`--format json` と `--terse` は一緒に書けません。JSON は既に機械向けの形です",
+        "`--format json` and `--terse` cannot be combined; the JSON is already the machine-facing shape"
+    ))
+}
+
 /// A command that needs files but was given none.
 fn need_args(c: &Cmd) -> ExitCode {
     refuse(tr!(
@@ -841,16 +853,16 @@ fn main() -> ExitCode {
                 None => rulec::region::DEFAULT_BUDGET,
             };
             if json && a.has("--terse") {
-                return refuse(tr!(
-                    "`--format json` と `--terse` は一緒に書けません。JSON は既に機械向けの形です",
-                    "`--format json` and `--terse` cannot be combined; the JSON is already the machine-facing shape"
-                ));
+                return terse_with_json();
             }
             check(&files, json, a.has("--terse"), a.has("--show-shadow"), a.get("--diff-base"), budget)
         }
         "explain" => explain(&files, &a),
         "fmt" => fmt(&files, a.has("--check"), json),
-        "schema" => one(&files, |f, c, _| Some(rulec::verify::schema(f, c))),
+        "schema" => {
+            let alias = a.get("--keys") == Some("alias");
+            one(&files, move |f, c, _| Some(rulec::verify::schema(f, c, alias)))
+        }
         // `api` needs the source text (the generator stamps its hash), so it does not go
         // through `one`.
         "api" => api(&files),
@@ -1279,42 +1291,56 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool) -> ExitCode {
 
 // ── M3 replay ────────────────────────────────────────────────────────────
 
-/// Load a rule and run it through check. `送料@v3` is sugar for the git tag `rules/送料/v3`
-/// (§1.4).
+/// Load a rule and run it through check. A spelling with `@` reads the rule out of git rather
+/// than the working tree (§1.4, §15.42): `送料@v3` is the tag `rules/送料/v3`, or failing that
+/// `v3` as any revision with `送料.rule` looked up in its tree; `rules/送料.rule@origin/main` is
+/// that path at that revision, which is what a pull request compares against.
 fn load_rule(spec: &str) -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked), String> {
     let src = match spec.split_once('@') {
-        Some((name, ver)) if !std::path::Path::new(spec).exists() => {
-            let tag = format!("rules/{name}/{ver}");
-            // Fetch it with `git show <tag>:<path>`; which path it lives at is looked up inside
-            // the tag. `-z` makes the listing NUL-separated: by default git quotes non-ASCII
-            // paths in octal, so a file with a Japanese name would not be found by plain
-            // string comparison.
-            let ls = std::process::Command::new("git")
-                .args(["ls-tree", "-r", "-z", "--name-only", &tag])
-                .output()
-                .map_err(|e| tr!("git を起動できません: {e}", "cannot run git: {e}"))?;
-            if !ls.status.success() {
-                return Err(tr!("git タグ `{tag}` が引けません", "cannot resolve git tag `{tag}`"));
-            }
-            let listing = String::from_utf8_lossy(&ls.stdout).into_owned();
-            let path = listing
-                .split('\0')
-                .find(|p| p.ends_with(&format!("{name}.rule")))
-                .ok_or_else(|| tr!("`{tag}` の中に {name}.rule がありません", "no {name}.rule in `{tag}`"))?;
-            let o = std::process::Command::new("git")
-                .arg("show")
-                .arg(format!("{tag}:{path}"))
-                .output()
-                .map_err(|e| tr!("git を起動できません: {e}", "cannot run git: {e}"))?;
-            if !o.status.success() {
-                return Err(tr!("`{tag}:{path}` が読めません", "cannot read `{tag}:{path}`"));
-            }
-            String::from_utf8_lossy(&o.stdout).into_owned()
-        }
+        Some((left, rev)) if !std::path::Path::new(spec).exists() => git_source(left, rev)?,
         _ => std::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?,
     };
     let (f, c) = rulec::prepare(&src, spec).map_err(|_| tr!("`{spec}` は検査を通っていません", "`{spec}` does not pass check"))?;
     Ok((src, f, c))
+}
+
+/// Run git and hand back what it printed, or `None` when it refused (an unknown revision, a
+/// path that is not there). Only a git that cannot be started is an error of its own.
+fn git(args: &[&str]) -> Result<Option<String>, String> {
+    let o = std::process::Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| tr!("git を起動できません: {e}", "cannot run git: {e}"))?;
+    Ok(o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned()))
+}
+
+/// The text of a rule at a revision. `left` is either a path (it ends in `.rule`), read as
+/// `git show <rev>:<path>`, or a rule's name, looked up first in the tag `rules/<name>/<rev>`
+/// and then in `<rev>` itself.
+fn git_source(left: &str, rev: &str) -> Result<String, String> {
+    if left.ends_with(".rule") {
+        return git(&["show", &format!("{rev}:{left}")])?.ok_or_else(|| {
+            tr!("`{rev}` に `{left}` が無いか、`{rev}` が引けません", "no `{left}` at `{rev}`, or `{rev}` cannot be resolved")
+        });
+    }
+    let file = format!("{left}.rule");
+    let tag = format!("rules/{left}/{rev}");
+    for r in [tag.as_str(), rev] {
+        // Which path the rule lives at is looked up inside the tree. `-z` makes the listing
+        // NUL-separated: by default git quotes non-ASCII paths in octal, so a file with a
+        // Japanese name would not be found by plain string comparison.
+        let Some(listing) = git(&["ls-tree", "-r", "-z", "--name-only", r])? else { continue };
+        let path = listing
+            .split('\0')
+            .find(|p| *p == file || p.ends_with(&format!("/{file}")))
+            .ok_or_else(|| tr!("`{r}` の中に {file} がありません", "no {file} in `{r}`"))?;
+        return git(&["show", &format!("{r}:{path}")])?
+            .ok_or_else(|| tr!("`{r}:{path}` が読めません", "cannot read `{r}:{path}`"));
+    }
+    Err(tr!(
+        "`{left}@{rev}`: git タグ `{tag}` も、リビジョン `{rev}` も引けません",
+        "`{left}@{rev}`: neither the git tag `{tag}` nor the revision `{rev}` can be resolved"
+    ))
 }
 
 /// Assemble the default values used for filling from `--manifest` and `--fill` (§10.3).
@@ -1382,6 +1408,10 @@ fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
 fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     let Some(rule) = files.first() else { return refuse(tr!("規則が要ります", "a rule is required")) };
+    let terse = a.has("--terse");
+    if json && terse {
+        return terse_with_json();
+    }
     let r = (|| -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
         let (_, f, c) = load_rule(rule)?;
         let m = build_manifest(a, &f, &c)?;
@@ -1400,9 +1430,9 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     if json {
         println!("{}", rulec::report::render_json(&rep, &f, &c));
     } else if md {
-        print!("{}", rulec::report::markdown(&rep, &f, &c, &tr!("過去再生", "Replay")));
+        print!("{}", rulec::report::markdown(&rep, &f, &c, &tr!("過去再生", "Replay"), terse));
     } else {
-        print!("{}", rulec::report::render(&rep, &f, &c));
+        print!("{}", rulec::report::render(&rep, &f, &c, terse));
     }
     ExitCode::from(u8::from(!rep.mismatches.is_empty()))
 }
@@ -1413,6 +1443,10 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
         eprintln!("{}", tr!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
         return ExitCode::from(2);
     };
+    let terse = opts.has("--terse");
+    if json && terse {
+        return terse_with_json();
+    }
     let r = (|| -> Result<_, String> {
         let (_, of, oc) = load_rule(a)?;
         let (_, nf, nc) = load_rule(b)?;
@@ -1440,9 +1474,9 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     if json {
         println!("{}", rulec::report::render_json(&rep, &nf, &nc));
     } else if md {
-        print!("{}", rulec::report::markdown(&rep, &nf, &nc, &tr!("版の差分", "Version diff")));
+        print!("{}", rulec::report::markdown(&rep, &nf, &nc, &tr!("版の差分", "Version diff"), terse));
     } else {
-        print!("{}", rulec::report::render(&rep, &nf, &nc));
+        print!("{}", rulec::report::render(&rep, &nf, &nc, terse));
     }
     ExitCode::from(u8::from(!rep.mismatches.is_empty()))
 }
@@ -1568,7 +1602,7 @@ fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
                 if json {
                     println!("{}", rulec::report::render_json(&rep, &f, &c));
                 } else {
-                    print!("{}", rulec::report::render(&rep, &f, &c));
+                    print!("{}", rulec::report::render(&rep, &f, &c, false));
                 }
                 if !rep.mismatches.is_empty() {
                     worst = 1;

@@ -395,7 +395,9 @@ fn impact(rep: &Report, c: &Checked) -> String {
     )
 }
 
-pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
+/// `terse` leaves the witnesses out (§15.42): the counts and the amounts are the finding, and
+/// the values of a production record are not for a pull request everyone can read.
+pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
     let mut o = tr!(
         "照合 {} 件 / 一致 {} ({:.3}%)\n",
         "Compared {} / matched {} ({:.3}%)\n",
@@ -426,7 +428,9 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                     "    Suspected rounding difference (only fractions below the output grid {q})\n"
                 ));
             }
-            o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            if !terse {
+                o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            }
         }
     }
     // §15.35: the amount agreed, the row did not. Reported apart from the mismatches, so the
@@ -439,7 +443,9 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         ));
         for cl in moved_clusters(rep, f, c) {
             o.push_str(&format!("  {:<48} {:>5} {}\n", cl.label, cl.count, records(cl.count)));
-            o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            if !terse {
+                o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            }
         }
     }
     o
@@ -447,8 +453,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked) -> String {
 
 /// Markdown to paste into a PR (§12). Posting is left to one line of CI; the tool owns only
 /// the formatting.
-pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String {
+pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: bool) -> String {
     let esc = |s: &str| s.replace('|', "\\|");
+    // With `terse` the witness column is not blanked but absent, so the table stays a table.
+    let ex = |m: &Mismatch| if terse { String::new() } else { format!(" {} |", esc(&witness(m, &rep.theirs, c))) };
     let mut o = tr!(
         "### 規則 {} v{} — {title}\n\n",
         "### Rule {} v{} — {title}\n\n",
@@ -482,10 +490,16 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
     } else {
         o.push_str(&format!("\n**{}**\n", impact(rep, c)));
-        o.push_str(&tr!(
-            "\n#### 不一致の内訳\n\n| 当てはまった行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
-            "\n#### Mismatch breakdown\n\n| Rows that matched | Count | Difference | Witness |\n|---|---:|---|---|\n"
-        ));
+        o.push_str(&tr!("\n#### 不一致の内訳\n\n", "\n#### Mismatch breakdown\n\n"));
+        o.push_str(if terse {
+            tr!("| 当てはまった行 | 件数 | 差 |\n|---|---:|---|\n", "| Rows that matched | Count | Difference |\n|---|---:|---|\n")
+        } else {
+            tr!(
+                "| 当てはまった行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
+                "| Rows that matched | Count | Difference | Witness |\n|---|---:|---|---|\n"
+            )
+        }
+        .as_str());
         for cl in clusters(rep, f, c) {
             let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
             if let Some(q) = &cl.suspect_grid {
@@ -494,23 +508,26 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str) -> String 
                     "<br>suspected rounding difference (below grid {q})"
                 ));
             }
-            o.push_str(&format!(
-                "| {} | {} | {} | {} |\n",
-                esc(&cl.label),
-                cl.count,
-                esc(&money),
-                esc(&witness(cl.example, &rep.theirs, c))
-            ));
+            o.push_str(&format!("| {} | {} | {} |{}\n", esc(&cl.label), cl.count, esc(&money), ex(cl.example)));
         }
     }
     if !rep.moved.is_empty() {
         o.push_str(&tr!(
-            "\n#### 行の移動（値は同じ、{} 件）\n\n| 記録の行 → 規則の行 | 件数 | 入力例 |\n|---|---:|---|\n",
-            "\n#### Moved rows (values match, {})\n\n| Recorded row → rule's row | Count | Witness |\n|---|---:|---|\n",
+            "\n#### 行の移動（値は同じ、{} 件）\n\n",
+            "\n#### Moved rows (values match, {})\n\n",
             rep.moved.len()
         ));
+        o.push_str(if terse {
+            tr!("| 記録の行 → 規則の行 | 件数 |\n|---|---:|\n", "| Recorded row → rule's row | Count |\n|---|---:|\n")
+        } else {
+            tr!(
+                "| 記録の行 → 規則の行 | 件数 | 入力例 |\n|---|---:|---|\n",
+                "| Recorded row → rule's row | Count | Witness |\n|---|---:|---|\n"
+            )
+        }
+        .as_str());
         for cl in moved_clusters(rep, f, c) {
-            o.push_str(&format!("| {} | {} | {} |\n", esc(&cl.label), cl.count, esc(&witness(cl.example, &rep.theirs, c))));
+            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.label), cl.count, ex(cl.example)));
         }
     }
     o

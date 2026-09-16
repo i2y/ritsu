@@ -152,7 +152,7 @@ fn 雛形とスキーマが出る() {
 
     // The schema is the wire shape (canonical names, integers in canonical units).
     let sc = run(&["schema", RULE]);
-    assert!(sc.contains("\"単位: cm\""), "単位を書く: {sc}");
+    assert!(sc.contains("\"整数。単位は cm\""), "単位を書く: {sc}");
     assert!(sc.contains("\"minimum\":1"), "範囲を書く: {sc}");
     assert!(sc.contains("\"北海道\""), "列挙を書く: {sc}");
 }

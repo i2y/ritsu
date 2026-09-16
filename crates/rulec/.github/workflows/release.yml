@@ -1,0 +1,89 @@
+name: release
+
+# A tag `v*` builds one static binary per platform, checks that the tag is the
+# crate's own version, and publishes the archives with their SHA-256 sums as a
+# GitHub Release (DESIGN §12, §15.42). `action.yml` at the root of the
+# repository installs one of them onto a runner, and the install page says
+# which lines to run by hand.
+#
+#   rulec-v0.1.0-x86_64-unknown-linux-musl.tar.gz
+#   rulec-v0.1.0-aarch64-unknown-linux-musl.tar.gz
+#   rulec-v0.1.0-x86_64-apple-darwin.tar.gz
+#   rulec-v0.1.0-aarch64-apple-darwin.tar.gz
+#   SHA256SUMS
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl,  runner: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm }
+          - { target: x86_64-apple-darwin,        runner: macos-15-intel }
+          - { target: aarch64-apple-darwin,       runner: macos-latest }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A release named v0.2.0 that says `rulec 0.1.0` would mislead everyone
+      # who runs `--version`, so the tag has to be the version in Cargo.toml.
+      - name: The tag is the crate's version
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME, but Cargo.toml says $v"; exit 1; }
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: musl linker
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q musl-tools
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      # Not the test suite — that needs six toolchains — but the binary has to
+      # start, and the corpus has to check clean with it.
+      - name: The binary runs and the corpus checks clean
+        run: |
+          bin=target/${{ matrix.target }}/release/rulec
+          "$bin" --version
+          "$bin" check tests/corpus/
+
+      - name: Archive
+        run: tar -czf "rulec-$GITHUB_REF_NAME-${{ matrix.target }}.tar.gz" -C target/${{ matrix.target }}/release rulec
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rulec-${{ github.ref_name }}-${{ matrix.target }}
+          path: rulec-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum rulec-*.tar.gz | tee SHA256SUMS
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "rulec $GITHUB_REF_NAME" \
+            --notes "One static binary per platform, no runtime. Verify an archive against SHA256SUMS before running it; the install page says how." \
+            dist/rulec-*.tar.gz dist/SHA256SUMS

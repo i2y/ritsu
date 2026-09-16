@@ -49,7 +49,7 @@ pub fn serve() -> ExitCode {
         };
         // A notification carries no id and gets no answer.
         let Some(id) = req.get("id") else { continue };
-        let id = json_of(id);
+        let id = json::unparse(id);
         let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
         let params = req.get("params");
         let answer = match method {
@@ -91,23 +91,6 @@ fn json_str(s: &str) -> String {
     }
     o.push('"');
     o
-}
-
-/// A value back to its text. The reader keeps a fraction as the digits it was given, so it
-/// goes back out as they were.
-fn json_of(j: &Json) -> String {
-    match j {
-        Json::Null => "null".into(),
-        Json::Bool(b) => b.to_string(),
-        Json::Int(n) => n.to_string(),
-        Json::Frac(s) => s.clone(),
-        Json::Str(s) => json_str(s),
-        Json::Arr(a) => format!("[{}]", a.iter().map(json_of).collect::<Vec<_>>().join(",")),
-        Json::Obj(m) => format!(
-            "{{{}}}",
-            m.iter().map(|(k, v)| format!("{}:{}", json_str(k), json_of(v))).collect::<Vec<_>>().join(",")
-        ),
-    }
 }
 
 fn initialize(params: Option<&Json>) -> String {

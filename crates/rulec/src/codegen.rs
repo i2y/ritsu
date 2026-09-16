@@ -100,6 +100,10 @@ pub struct Gen<'a> {
     src_hash: String,
 }
 
+mod sql;
+pub use sql::round_tests_sql;
+mod tool;
+
 impl<'a> Gen<'a> {
     pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str) -> Self {
         let mut enum_names = BTreeMap::new();
@@ -251,7 +255,7 @@ pub fn hash(s: &str) -> String {
 
 /// An expression rendered as text together with its scale. Both languages get the same integer
 /// arithmetic.
-struct Expr2 {
+pub(crate) struct Expr2 {
     text: String,
     scale: i128,
 }
@@ -755,6 +759,14 @@ impl<'a> Gen<'a> {
                 // this, a date outside the declared range falls into whichever branch happens
                 // to catch it and the caller gets a silently wrong answer.
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    // Not an integer is refused before the range is looked at (§15.43): a
+                    // float sits inside any range, and 18.3 for a rate declared in steps of
+                    // 0.1% would otherwise be taken as 1.83% and answered without a word.
+                    // `bool` is an `int` in Python, and a bool here is a mistake too.
+                    o.push_str(&format!(
+                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(f\"{}\")\n",
+                        tr!("{} が整数ではありません: {{{v}!r}}", "{} is not an integer: {{{v}!r}}", i.name.text)
+                    ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             // The bound has to be in the units the argument arrives in, which
@@ -1981,6 +1993,7 @@ pub enum Lang {
     Rs,
     Rb,
     Sw,
+    Sql,
 }
 
 /// The few spellings shared code needs to know per language. Keeping them in one row each
@@ -2017,6 +2030,12 @@ impl Lang {
                 and: " && ",
                 if_head: |c| format!("if ({c}) {{"),
                 close: "}",
+            },
+            Lang::Sql => Spelling {
+                comment: "--",
+                and: " AND ",
+                if_head: |c| format!("WHEN {c} THEN"),
+                close: "",
             },
             Lang::Go | Lang::Rs | Lang::Sw => Spelling {
                 comment: "//",
@@ -2244,6 +2263,13 @@ impl<'a> Gen<'a> {
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    // The type says bigint, but a JavaScript caller can pass anything, and a
+                    // number would fail somewhere inside the arithmetic instead of here
+                    // (§15.43).
+                    o.push_str(&format!(
+                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                        tr!("{} が整数ではありません: ${{{v}}}", "{} is not an integer: ${{{v}}}", i.name.text)
+                    ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
@@ -3412,6 +3438,7 @@ impl Gen<'_> {
             .replace(&format!(") -> {py_ret}:"), &format!(") -> tuple[{py_ret}, list[Fired]]:"));
         let python = crate::json::Obj::new()
             .str("module", &alias)
+            .str("mcp", &format!("{alias}_mcp.py"))
             .str("function", &alias)
             .str("signature", &py_sig)
             .str("traced", &format!("{alias}_traced"))
@@ -3474,6 +3501,7 @@ impl Gen<'_> {
             .replace(&format!("): {ts_ret}"), &format!("): [{ts_ret}, Fired[]]"));
         let typescript = crate::json::Obj::new()
             .str("module", &format!("{alias}.ts"))
+            .str("mcp", &format!("{alias}_mcp.ts"))
             .str("function", &alias)
             .str("signature", &ts_sig)
             .str("traced", &format!("{alias}_traced"))
@@ -3536,6 +3564,7 @@ impl Gen<'_> {
         let js_ret = if outs.len() == 1 { js_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let javascript = crate::json::Obj::new()
             .str("module", &format!("{alias}.mjs"))
+            .str("mcp", &format!("{alias}_mcp.mjs"))
             .str("function", &alias)
             .str("signature", &format!("export function {alias}({js_params})"))
             .str("traced", &format!("{alias}_traced"))
@@ -3796,6 +3825,7 @@ impl Gen<'_> {
             .raw("ruby", ruby)
             .raw("go", go)
             .raw("swift", swift)
+            .raw("sql", self.api_sql())
             .finish()
     }
 }
@@ -4083,6 +4113,12 @@ impl<'a> Gen<'a> {
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    // `cover?` is true of a Float inside the range, so the kind is checked
+                    // first (§15.43).
+                    o.push_str(&format!(
+                        "    raise RuleInputError, \"{}\" unless {v}.is_a?(Integer)\n",
+                        tr!("{} が整数ではありません: #{{{v}.inspect}}", "{} is not an integer: #{{{v}.inspect}}", i.name.text)
+                    ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             let sc = self.c.wire_scale(&i.name.text);
@@ -4309,6 +4345,7 @@ impl<'a> Gen<'a> {
             Lang::Rs => self.rs_cell(cell, var, ty, scale),
             Lang::Rb => self.rb_cell(cell, var, ty, scale),
             Lang::Sw => self.sw_cell(cell, var, ty, scale),
+            Lang::Sql => self.sql_cell(cell, var, ty, scale),
         }
     }
 }
@@ -5602,8 +5639,9 @@ pub fn strip_types(ts: &str) -> String {
             in_interface = true;
             continue;
         }
-        // Comment lines carry prose, and prose says "as" too.
-        if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" {
+        // Comment lines carry prose, and prose says "as" too. An import's `as` is a
+        // binding, not a cast, and stays.
+        if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" || t.starts_with("import ") {
             out.push(line.to_string());
             continue;
         }

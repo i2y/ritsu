@@ -1,6 +1,20 @@
 # インストール
 
-rulec はランタイムも外部依存も持たない一つのバイナリです。いまはソースからビルドします。公開されたリリースはまだありません。
+rulec はランタイムも外部依存も持たない一つのバイナリです。リリースごとに macOS（arm64、x64）と Linux（x64、arm64）の静的バイナリを、それぞれの SHA-256 と一緒に[リリースのページ](https://github.com/i2y/rulec/releases)に置いています。
+
+## リリースのバイナリ
+
+```console
+$ v=v0.1.0; t=aarch64-apple-darwin
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
+rulec-v0.1.0-aarch64-apple-darwin.tar.gz: OK
+$ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
+$ rulec --version
+rulec 0.1.0
+```
+
+`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では検査は `sha256sum -c` です。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
 
 ## ソースから
 
@@ -27,7 +41,7 @@ $ ./target/release/rulec --help
 
 外に出るのは二つだけです。
 
-- **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go`・`swiftc` が要ります。無ければ「どれを飛ばしたか」を言って、落ちはしません。
+- **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go`・`swiftc` が要ります（SQL は同じ `python3` の中の `sqlite3` で走ります）。無ければ「どれを飛ばしたか」を言って、落ちはしません。
 - **`rulec verify`** — アダプタを子プロセスとして起動するので、そのアダプタを書いた言語が要ります。
 
 生成物を**型検査したい**場合だけ、さらに道具が要ります。生成 Python は `mypy --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どちらも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
@@ -68,6 +82,8 @@ $ claude mcp add rulec -- rulec mcp
 
 コマンド一つがツール一つ（`rulec_check`、`rulec_gen`、`rulec_doc` …）、フラグ一つが引数一つで、結果の最後に exit code が付きます。手順書とリファレンスはリソースとして出るので、このリポジトリを読めないエージェントでも、まず `rulec://docs/agents.md` を読めます。形は[形式](formats.md#mcp)にあります。
 
+これは規則を書くエージェントのためのツールです。規則を呼ぶエージェントには、`gen` が規則そのものを MCP サーバとしてモジュールの隣に書きます: [規則をエージェントのツールにする](generate.md#規則をエージェントのツールにする)。
+
 ## 言語
 
 出力の**既定は英語**です。一つの設定で日本語に戻ります — 生成コードの中の文面まで含めて、全部の面が戻ります。
@@ -81,7 +97,10 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 ## CI に置く
 
+`uses: i2y/rulec@v0.1.0` の一行で、そのリリースのバイナリが検査済みで runner の `PATH` に入ります。action を指す ref がそのままリリースなので、二つがずれることはありません。`SHA256SUMS` を信用するのではなくアーカイブそのものを固定したいなら、`with: { sha256: … }` を足します。
+
 ```yaml
+- uses: i2y/rulec@v0.1.0
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
@@ -89,14 +108,36 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 - run: rulec test generated/
 ```
 
-この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。そちらは**人に見せるものを作る**ので、言語を日本語に倒します。
+この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。四つ、わざとそうしている所があります。
+
+- 旧の版は `rules/送料.rule@origin/main`、つまり base ブランチにあるままのファイルです。checkout でそのブランチを取ってきておきます。
+- `diff` は影響があると exit 1 を返します。ここではそれは失敗ではなく情報なので、1 では先へ進み、2 でだけ止めます。
+- `--terse` は入力例の列を出しません。コメントはリポジトリを読める全員が見るもので、本番の記録の値を置く場所ではないからです。
+- 文面の言語は、その PR を読む人の言語にします。貼る先がそこだからです。
 
 ```yaml
-- run: rulec diff 送料@v3 送料@v4 --fixtures "$FIXTURES" --format markdown > diff.md
-  env:
-    RULEC_LANG: ja
-- run: gh pr comment "$PR" --body-file diff.md
+replay:
+  if: github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    pull-requests: write
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0                   # 旧の版は origin/main から読む
+    - uses: i2y/rulec@v0.1.0
+    # 記録を $FIXTURES に置く段はご自身で: アーティファクトか、守られた置き場から
+    - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
+      env:
+        RULEC_LANG: ja
+    - run: gh pr comment "$PR" --body-file diff.md
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
 ```
+
+規則が複数あるなら、`git diff --name-only --diff-filter=M origin/main...HEAD -- 'rules/*.rule'` がこの PR で変わったものを並べるので、同じ二行を規則ごとに回します。
 
 ## 次に読むもの
 

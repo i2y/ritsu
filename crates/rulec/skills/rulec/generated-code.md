@@ -1,9 +1,10 @@
 # The generated code
 
-`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift — a module in each,
-and a package in Go's case. There is no runtime to install and nothing to configure: a function
-takes the declared inputs and returns the declared outputs. This file says what shape that
-code has, what it guarantees, and how to call it.
+`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL — a module in each,
+a package in Go's case, and one query in SQL's. There is no runtime to install and nothing to
+configure: a function takes the declared inputs and returns the declared outputs, and the
+query takes a relation of them. This file says what shape that code has, what it guarantees,
+and how to call it.
 
 To get the calling convention without reading the code at all, ask for it:
 
@@ -25,7 +26,10 @@ TypeScript and JavaScript import nothing at all; the generated Rust imports noth
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
 Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`.
 The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
-is a checked property rather than a claim.
+is a checked property rather than a claim. The server that offers the rule as an MCP tool
+([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
+own modules alone in JavaScript, and the generated SQL defines no function: its rounding is
+arithmetic inside the query.
 
 **Deterministic.** The same `.rule` and the same rulec version produce the same bytes. The
 formatter is built in — no `gofmt` or `black` runs afterwards, because that would make the
@@ -33,7 +37,8 @@ output depend on the version of a tool installed on the machine. `gofmt -l` bein
 `ruff check --select E,W` being silent (line length aside) are both tested.
 
 **Branches match the rule line for line.** Every row of every table becomes one branch, in
-order, with the original cells quoted in a comment (`# row 3: 近畿圏 | S100 | 1620円`). A
+order, with the original cells quoted in a comment (`# row 3: 近畿圏 | S100 | 1620円`) — in
+SQL, one `WHEN` of one `CASE`, with the same comment. A
 condition that an earlier branch already settled is still written out (`elif True:`), because
 reading the generated code against the rule side by side is the only way it is meant to be
 read. The branches are written once, in the twin that also returns
@@ -41,7 +46,7 @@ read. The branches are written once, in the twin that also returns
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
-`NewType`; Ruby and JavaScript have nowhere to put a unit, so they document it instead.
+`NewType`; Ruby, JavaScript and SQL have nowhere to put a unit, so they document it instead.
 `YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
 Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
 anywhere.
@@ -50,7 +55,9 @@ anywhere.
 Go's integer division toward zero, so neither language's division is used. Each side carries
 its own `_round_up` / `_round_down` / `_round_half` / `_round_bankers` (`roundUp`, … in Go),
 and a unit-vector file next to the generated code checks them against the reference on every
-run.
+run. The query carries no helper: each mode is arithmetic over the bound value — `CASE`,
+`ABS` and `%`, which mean the same in both dialects — and the same unit vectors run over
+those expressions.
 
 ---
 
@@ -176,7 +183,7 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby and Go. A value
+**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby, Go and SQL. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
 make at run time is already made by the compiler. Swift is in the same position.
 
@@ -307,6 +314,42 @@ what the wire format carries — so `.rawValue` and `init?(rawValue:)` are the w
 in both directions and no parser is generated. It is `CaseIterable`, so `.allCases` is the
 list. **There is no entry guard on an enum input**, for the reason given under Rust.
 
+### SQL
+
+```sql
+CREATE VIEW shipping_fee AS
+WITH "_c0" AS (SELECT "_id", "dest", CAST("weight" AS BIGINT) AS "weight", … FROM "shipping_fee_input"),
+…
+SELECT "_id", "dest", "weight", "total", "member", … AS "fee", "base_fee_row", "payer_row" FROM "_c5" ORDER BY "_id";
+```
+
+SQL gets no function. `shipping_fee.sql` is **one query over a relation of inputs**: provide
+`shipping_fee_input` with a column `_id` (anything that identifies the row; it comes back
+unchanged) and one column per input under its alias, and out come `_id`, the inputs, the
+outputs, and one column per table with the number of the row that matched (`base_fee_row`).
+The header of the file lists every column with its type and what goes in it. A row of the
+table is a `WHEN`; the rows that matched are columns rather than a list; the rounding is
+arithmetic in the final `SELECT`. Many rows go through in one statement, which is what a
+closing batch or a recalculation needs and what the per-row functions cannot do.
+
+The values are the wire's: every number is an integer in its declared unit, a rate a count
+of its steps, an enum its name as text, a boolean a boolean, and a date the number of days
+since 1970-01-01 (`some_date - DATE '1970-01-01'` in PostgreSQL). The query is written for
+PostgreSQL — the inputs are cast to `BIGINT` on the way in, because the product of two
+`int4` columns overflows where the proof (E108) assumed int64 — and it stays inside what
+SQLite runs as well, which is how `rulec test` holds it to the reference evaluator with
+nothing but `python3`: the runner beside it loads the vectors into an in-memory SQLite and
+prints the same records the other runners print. `min` and `max` are `LEAST` and `GREATEST`,
+which the runner registers for SQLite.
+
+A query cannot stop, so what the other languages raise, this one returns as a column. The
+entry guard is `_input_error`: NULL for a row inside the declared domain, and otherwise the
+same sentence the others raise — a missing input, a value outside its range, a name that is
+not a member of the enum, a number that is not an integer (18.3 in a column of steps is
+refused, not truncated to 18). Where two rows of a `unique` table could not be proved
+exclusive (W114), a `_contradiction` column names them when both match. The runner stops on
+either, as the other languages raise.
+
 With one output the function returns that value; with two or more it returns a struct named
 `Output`. Both it and the brands are `Hashable` and `Sendable`, and `Output` declares a public
 memberwise initializer, since the one Swift writes for a public struct is internal and a
@@ -340,6 +383,7 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 | Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table` and `row` |
 | Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row}` |
 | Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:)` |
+| SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number |
 
 The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
 `replay` report clusters by, so a trace taken from a log reads against the approved document
@@ -372,6 +416,7 @@ for it.
 | Ruby | `CouponStep.coupon_step_record(…, out, trace, tag = "")` |
 | Go | `func CouponStepRecord(in Input, out Output, trace []Fired, tag string) string` |
 | Swift | `couponStepRecord(…, out: Output, trace: [Fired], tag: String = "") -> String` |
+| SQL | none: the answer is the row, and the runner writes the record from it |
 
 The generated runner prints exactly this line for every vector, and the expected file `gen`
 writes beside the vectors is in the same format, so `rulec test` holds the record function
@@ -392,6 +437,18 @@ if not 0 <= subtotal <= 1000000:
     raise RuleInputError(f"商品合計 is out of range: {subtotal}")
 ```
 
+A number that is not an integer is refused before the range is looked at, in every language
+where a caller can pass one. A float sits inside any range: 18.3 for a rate declared in steps
+of 0.1% would pass the check above, be taken as 1.83%, and be answered without a word. The
+three statically typed targets need no such line; their types are the line. In SQL the guard
+is a column, `_input_error`, because a query cannot stop: NULL inside the domain, the
+sentence outside it ([below](#sql)).
+
+```python
+if not _isinstance(rate, int) or _isinstance(rate, bool):
+    raise RuleInputError(f"料率 is not an integer: {rate!r}")
+```
+
 `rulec api` states the same bounds, taken from the same place, so an integration built from
 the inventory cannot send values the guard rejects.
 
@@ -408,6 +465,44 @@ if 残高A <= 1000 and 残高B >= 3980:
 
 If this ever fires in production, it is evidence — the overlap the checker could not decide is
 real, and the rule needs fixing.
+
+---
+
+## The rule as an MCP tool
+
+Beside the module, `gen` writes the rule as one MCP server: `<alias>_mcp.py` next to the
+Python module, `<alias>_mcp.mjs` next to the JavaScript one, and the same server with its
+types on in the `typescript` directory. It is for the agent that **calls** the rule, where
+`rulec mcp` is for the agent that writes one. Registered as a stdio server, the rule is one
+tool named after its alias:
+
+```console
+$ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
+```
+
+The tool speaks the wire. Its `inputSchema` is the `in` object `rulec schema` prints — every
+input, required, nothing extra; an integer in the declared unit, with the unit and, for a
+rate, the step in its description; an enum as its listed names; a date as `YYYY-MM-DD` — and
+its result is the line the record function writes, as text and as `structuredContent`:
+
+```json
+{"in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},"observed":{"送料":800},"trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
+```
+
+So an answer carries the rows that decided it, and one call is one fixtures record. Started
+with `--record calls.jsonl`, the server appends every answered call to that file, which
+`rulec fixtures lint`, `replay` and `diff` read as it stands: what the agent asked becomes
+the record the next revision is measured against.
+
+A call the rule cannot take is refused, not answered: `isError` is set and the text names the
+argument — one missing, one extra, a value outside its range, a name that is not a member of
+the enum, a number that is not an integer (18.3 for a rate in steps of 0.1% is refused, not
+read as 1.83%). The module's two error classes are what reach the caller, under their names.
+
+`rulec test` drives the server as a client would — `initialize`, `tools/list`, then one
+`tools/call` per vector — and holds what comes back to the same expected records the runner
+is held to, so the server sits inside the same claim as the module. Nothing beyond `python3`
+or `node` is needed to run it.
 
 ---
 

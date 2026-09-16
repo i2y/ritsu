@@ -130,7 +130,9 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!() };
     assert!(!rs.is_empty(), "{out}");
     for r in rs {
-        keys(r, &["rule", "lang", "vectors", "ok", "ran", "first_diff", "error"], "result");
+        keys(r, &["rule", "lang", "via", "vectors", "ok", "ran", "first_diff", "error"], "result");
+        let via = r.get("via").unwrap().as_str().unwrap();
+        assert!(via == "runner" || via == "mcp", "via が安定していない: {via}");
         let lang = r.get("lang").unwrap().as_str().unwrap();
         // The stable ids are src/backend.rs's; a language added there without a name here
         // used to fail for the wrong reason.

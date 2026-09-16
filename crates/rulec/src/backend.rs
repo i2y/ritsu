@@ -30,6 +30,10 @@ pub struct Backend {
     pub run: fn(&str, &str) -> Plan,
     /// How to run the unit vectors of the rounding helpers.
     pub round: fn(&str) -> Plan,
+    /// How to start the rule as an MCP server (§15.44), for the languages that get one.
+    /// `rulec test` drives it over the vectors like the runner and holds its answers to the
+    /// same expected records.
+    pub mcp: Option<fn(&str) -> Plan>,
 }
 
 /// One command to run, with an optional build that has to succeed first.
@@ -82,6 +86,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("python/{alias}.py"), g.python()),
                 (format!("python/{alias}_runner.py"), g.python_runner()),
+                (format!("python/{alias}_mcp.py"), g.py_mcp()),
                 ("python/_round_test.py".into(), crate::codegen::round_tests_python()),
             ]
         },
@@ -90,6 +95,7 @@ pub const ALL: &[Backend] = &[
         // the last run would otherwise execute the old module and report it as ok.
         run: |alias, _| Plan::new("python", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("python", "python3", &["-B", "_round_test.py"]),
+        mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
     },
     Backend {
         id: "typescript",
@@ -100,6 +106,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("typescript/{alias}.ts"), g.typescript()),
                 (format!("typescript/{alias}_runner.ts"), g.ts_runner()),
+                (format!("typescript/{alias}_mcp.ts"), g.ts_mcp()),
                 ("typescript/_round_test.ts".into(), crate::codegen::round_tests_typescript()),
             ]
         },
@@ -107,6 +114,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_runner.ts")])
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
+        mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
     },
     Backend {
         id: "javascript",
@@ -119,11 +127,13 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("javascript/{alias}.mjs"), g.javascript()),
                 (format!("javascript/{alias}_runner.mjs"), g.js_runner()),
+                (format!("javascript/{alias}_mcp.mjs"), g.js_mcp()),
                 ("javascript/_round_test.mjs".into(), crate::codegen::round_tests_javascript()),
             ]
         },
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
+        mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
     },
     Backend {
         id: "rust",
@@ -151,6 +161,7 @@ pub const ALL: &[Backend] = &[
                 &["--edition", "2021", "-O", "_round_test.rs", "-o", "_round_test"],
             )
         },
+        mcp: None,
     },
     Backend {
         id: "ruby",
@@ -168,6 +179,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
+        mcp: None,
     },
     Backend {
         id: "go",
@@ -188,6 +200,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
+        mcp: None,
     },
     Backend {
         id: "swift",
@@ -215,6 +228,25 @@ pub const ALL: &[Backend] = &[
             Plan::new("swift", "./_round_test", &[])
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
+        mcp: None,
+    },
+    Backend {
+        id: "sql",
+        name: "SQL",
+        // The query runs on PostgreSQL; the agreement check runs it on the SQLite that ships
+        // inside python3, so that is the tool it needs (§15.46).
+        tool: "python3",
+        lang: Lang::Sql,
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("sql/{alias}.sql"), g.sql()),
+                (format!("sql/{alias}_runner.py"), g.sql_runner()),
+                ("sql/_round_test.py".into(), crate::codegen::round_tests_sql()),
+            ]
+        },
+        run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
+        round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
+        mcp: None,
     },
 ];
 
