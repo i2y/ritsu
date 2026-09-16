@@ -302,16 +302,23 @@ never produces fractions.
 
 ```console
 $ rulec coverage rules/送料.rule
-68 vectors
+70 vectors
   row coverage              7 / 7     satisfied
   boundary-pair coverage    4 / 4     satisfied
   shadow-pair coverage      3 / 3     satisfied
+  rounding-tie coverage     0 / 0     satisfied
 ```
 
-`coverage` is **a completeness check on the test suite**. The three
+`coverage` is **a completeness check on the test suite**. The four
 obligations are derived from the rule rather than from the generated
 vectors, and anything missing is named — which row, which boundary,
-which shadow pair — with exit 1.
+which shadow pair, which rounding tie — with exit 1.
+
+A rounding tie is the value exactly half a step off the grid, the one
+point where `half_up` and `half_down` part company. It raises an
+obligation only where the rule can actually reach it: 18.3% of a standard
+monthly remuneration is always an even number of yen, so the halved
+amount has no fraction, and that rule shows 0 / 0.
 
 ## Keeping it in step
 

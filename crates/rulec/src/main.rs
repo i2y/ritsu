@@ -254,14 +254,14 @@ fn commands() -> Vec<Cmd> {
             args: "<file.rule>...",
             purpose: tr!(
                 "作ったテストケースの側を検査する。行・境界の両側・隠れ対の三つ",
-                "check the vector suite itself against three criteria: rows, both sides of a boundary, shadow pairs"
+                "check the vector suite itself against four criteria: rows, both sides of a boundary, shadow pairs, rounding ties"
             ),
             params: vec![rule_files()],
             flags: vec![
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
-                (0, tr!("三基準すべてを満たす", "all three criteria are met")),
+                (0, tr!("四基準すべてを満たす", "all four criteria are met")),
                 (1, tr!("欠けている義務がある（名指しされる）", "an obligation is missing (it is named)")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],

@@ -31,7 +31,7 @@ fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>)
 }
 
 #[test]
-fn コーパスは三基準を全部満たす() {
+fn コーパスは四基準を全部満たす() {
     for rel in CORPUS {
         let (f, c, vs) = load(rel);
         let a = coverage::audit(&f, &c, rel, &vs);

@@ -1,6 +1,6 @@
 //! Completeness audit of the vector suite (§9.2).
 //!
-//! The three coverage criteria are derived **from the rule first**, not from the generated
+//! The four coverage criteria are derived **from the rule first**, not from the generated
 //! vector set. The list of obligations is built independently of the generator, so that an
 //! obligation the candidate population failed to reach cannot be written off as "never
 //! needed in the first place". The point of the separation is the one-way relation: when the
@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const ROW: &str = "行カバー";
 pub const BOUND: &str = "境界の両側カバー";
 pub const SHADOW: &str = "隠れ対カバー";
+pub const TIE: &str = "丸めの同着カバー";
 
 /// The name of a criterion in the output language. The constants above stay Japanese: they
 /// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
@@ -27,6 +28,7 @@ fn label(k: &'static str) -> &'static str {
             ROW => "row coverage",
             BOUND => "boundary-pair coverage",
             SHADOW => "shadow-pair coverage",
+            TIE => "rounding-tie coverage",
             other => other,
         }
     }
@@ -175,7 +177,7 @@ pub fn show_rat(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// Judge whether a vector set satisfies the three criteria of §9.2.
+/// Judge whether a vector set satisfies the four criteria of §9.2.
 pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
     let checks = crate::table_checks(f, c, path);
     // Re-run every vector to get bindings that include the derived values and definitions.
@@ -188,10 +190,10 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
         .collect();
     let fired: Vec<BTreeSet<String>> = vs.iter().map(|v| v.trace.iter().cloned().collect()).collect();
 
-    // All three criteria are always reported. If a criterion with no obligations were left
+    // All four criteria are always reported. If a criterion with no obligations were left
     // out, the tallying side could not tell that apart from "the criterion was not checked".
     let mut tally: BTreeMap<&'static str, (usize, usize)> =
-        [ROW, BOUND, SHADOW].into_iter().map(|k| (k, (0, 0))).collect();
+        [ROW, BOUND, SHADOW, TIE].into_iter().map(|k| (k, (0, 0))).collect();
     let mut missing: Vec<Missing> = Vec::new();
     let mut witness: BTreeSet<usize> = BTreeSet::new();
     let mut pruned_bounds = 0usize;
@@ -346,6 +348,31 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
             }
         }
     }
+
+    // The rounding tie (§9.2). `round` is mandatory on a numeric output (E104), and this is the
+    // only criterion that looks at whether the declaration was ever exercised: at a tie the five
+    // modes give different answers, anywhere else `half_up` and `half_down` agree. An output the
+    // rule can never take off the grid raises no obligation, the way an unrealizable boundary
+    // does not — `tie_plan` answers that, and the generator aims at the same targets.
+    for (name, grid, _) in vectors::tie_plan(f, c) {
+        let hit = binds
+            .iter()
+            .position(|b| b.get(&name).and_then(ord).is_some_and(|v| vectors::is_tie(v, grid)));
+        bump(TIE, hit.is_some(), &mut tally);
+        match hit {
+            Some(i) => {
+                witness.insert(i);
+            }
+            None => missing.push(Missing {
+                kind: TIE,
+                what: tr!("出力 {name} の丸めの同着", "the rounding tie of output {name}"),
+                hint: tr!(
+                    "同着に載る入力が無いと、`half_up` と `half_down` を入れ替えても期待値が変わりません。",
+                    "Without an input that lands on the tie, swapping `half_up` for `half_down` changes no expected value."
+                ),
+            }),
+        }
+    }
     Audit { tally, missing, witness, pruned_bounds }
 }
 
@@ -354,7 +381,7 @@ pub fn render(a: &Audit, vs: &[Vector]) -> String {
     // The Japanese column is 12 characters wide (the tests pin that output); the English
     // labels are longer, so the column widens to the longest of them.
     let w = if crate::i18n::ja() { 12 } else { 22 };
-    for k in [ROW, BOUND, SHADOW] {
+    for k in [ROW, BOUND, SHADOW, TIE] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
         let k = label(k);
@@ -383,7 +410,7 @@ pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>)
 
 /// `--format json` (docs/formats.md). One object per rule file.
 pub fn render_json(a: &Audit, vs: &[Vector], path: &str) -> String {
-    let criteria: Vec<String> = [ROW, BOUND, SHADOW]
+    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE]
         .iter()
         .map(|k| {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
@@ -413,6 +440,7 @@ fn json_name(k: &str) -> &'static str {
     match k {
         ROW => "row",
         BOUND => "boundary_pair",
+        TIE => "rounding_tie",
         _ => "shadow_pair",
     }
 }

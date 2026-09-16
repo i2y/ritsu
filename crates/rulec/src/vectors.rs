@@ -2,7 +2,8 @@
 //!
 //! Candidate values are chosen per column, the candidate population built from them is run
 //! through the reference evaluator, and a subset satisfying row coverage, boundary-pair
-//! coverage and shadow-pair coverage is selected deterministically. The evaluator attaches
+//! coverage, shadow-pair coverage and rounding-tie coverage is selected deterministically.
+//! The evaluator attaches
 //! the expected values and the fired rows.
 
 use crate::ast::*;
@@ -278,12 +279,81 @@ fn satisfying(cell: &Cell, cands: &[Val], ty: &Ty, c: &Checked) -> Option<Val> {
 
 /// Build the candidate population: row targeting, then one column at a time, then pairs of
 /// columns, added in that order.
+/// Every input at its first candidate. One column at a time is moved off it (§9.1), so a value
+/// here that annihilates the arithmetic downstream — a rate of 0% — leaves the whole boundary
+/// family computing zero. That is what `tie_plan` is for: it does not sweep from the baseline.
+fn baseline(f: &RuleFile, cands: &BTreeMap<String, Vec<Val>>) -> BTreeMap<String, Val> {
+    f.inputs
+        .iter()
+        .map(|i| i.name.text.clone())
+        .map(|n| (n.clone(), cands[&n].first().cloned().unwrap()))
+        .collect()
+}
+
+/// How far out from the baseline a tie is looked for before giving up.
+const TIE_REACH: i128 = 64;
+
+/// The rounding tie of each output that declares one: the value exactly half a step off the
+/// grid, which is the single point where `half_up`, `half_down` and `half_even` disagree, and
+/// where `up` and `down` disagree too. `round` is mandatory (E104) yet none of the three §9.2
+/// criteria aims at it, so a rule may carry two different modes on two outputs and no vector
+/// ever tell them apart — the 50銭 of the social insurance tables is exactly that case.
+///
+/// Returns the assignment that reaches the tie, or nothing for an output the rule can never
+/// take off the grid (18.3% of a standard monthly remuneration is always an even number of yen,
+/// so the halved amount has no fraction and there is no tie to reach). The auditor asks the
+/// same question, so the two sides agree on which obligations exist.
+pub fn tie_plan(f: &RuleFile, c: &Checked) -> Vec<(String, Rat, BTreeMap<String, Val>)> {
+    let cands = candidates(f, c);
+    let base = baseline(f, &cands);
+    let mut out = Vec::new();
+    for od in &f.outputs {
+        let Some(rd) = &od.rounding else { continue };
+        let name = od.name.text.clone();
+        let Some(ty) = c.ty_of(&name) else { continue };
+        let Some(g) = crate::types::lit_value_in_pub(&rd.grid, &ty) else { continue };
+        if g.cmp_to(Rat::zero()) == std::cmp::Ordering::Equal {
+            continue;
+        }
+        let half = g.div(Rat::int(2));
+        let Some(v0) = bind(f, c, &base).get(&name).and_then(as_rat) else { continue };
+        // Start at the tie nearest the value the baseline already produces and walk outward.
+        // Every candidate is confirmed by `place`, which re-evaluates the rule, so a non-linear
+        // expression fails to place rather than placing wrongly.
+        let floor0 = v0.round_to(crate::num::RoundMode::Down, g);
+        let mut found = None;
+        'search: for step in 0..TIE_REACH {
+            for dir in [1i128, -1] {
+                if step == 0 && dir == -1 {
+                    continue;
+                }
+                let t = floor0.add(g.mul(Rat::int(dir * step))).add(half);
+                if let Some(a) = place(f, c, &base, &name, t, &BTreeSet::new()) {
+                    found = Some((t, a));
+                    break 'search;
+                }
+            }
+        }
+        if let Some((_, a)) = found {
+            out.push((name, g, a));
+        }
+    }
+    out
+}
+
+/// Is `v` exactly half a step off `grid`? The auditor's question, and the one place the five
+/// rounding modes are told apart.
+pub fn is_tie(v: Rat, grid: Rat) -> bool {
+    if grid.cmp_to(Rat::zero()) == std::cmp::Ordering::Equal {
+        return false;
+    }
+    let below = v.round_to(crate::num::RoundMode::Down, grid);
+    v.sub(below).cmp_to(grid.div(Rat::int(2))) == std::cmp::Ordering::Equal
+}
+
 fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    let base: BTreeMap<String, Val> = names
-        .iter()
-        .map(|n| (n.clone(), cands[n].first().cloned().unwrap()))
-        .collect();
+    let base = baseline(f, cands);
     let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
 
     // Row coverage: build an assignment that makes each row win. Columns holding derived or
@@ -383,6 +453,12 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
             a.insert(n.clone(), v.clone());
             out.push((a, tr!("境界: {n}", "boundary: {n}")));
         }
+    }
+
+    // The rounding tie (§9.2). Unlike the sweep above, this does not hold the other columns at
+    // the baseline: `place` moves whatever it needs to land the value half a step off the grid.
+    for (name, _, a) in tie_plan(f, c) {
+        out.push((a, tr!("丸めの同着: {name}", "rounding tie: {name}")));
     }
 
     // Pairwise: greedily add combinations of two columns (the safety net of §9.2).
@@ -525,7 +601,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     let mut keep: BTreeSet<usize> = audit.witness.clone();
     keep.extend(forced.iter().copied());
 
-    // The pairwise safety net (§9.2): with the three criteria satisfied, greedily add the
+    // The pairwise safety net (§9.2): with the four criteria satisfied, greedily add the
     // two-column combinations that have not appeared yet.
     let mut seen2: BTreeSet<(String, String, String, String)> = BTreeSet::new();
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
