@@ -20,8 +20,8 @@ the language of the business** — Japanese, in every example here.
     as one HTML page too (`--format html`), where typing a case lights up the rows that
     matched and shows the result. For a change, how many records move and by how much
     comes out before it ships. Both are things to ask the agent for, and so is an
-    explanation of any row. From a spreadsheet, `rulec import csv` writes the first draft,
-    with every guess marked. Its own procedure is in [For agents](agents.md).
+    explanation of any row. From a spreadsheet, `rulec import xlsx` writes the first
+    draft out of the workbook itself, with every guess marked. Its own procedure is in [For agents](agents.md).
 
 These are all the words that may start a line.
 

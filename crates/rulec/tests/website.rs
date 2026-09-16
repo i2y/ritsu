@@ -22,8 +22,17 @@ const SYNCED: &[&str] =
     &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md"];
 
 /// The pages written for the site itself, in both languages.
-const AUTHORED: &[&str] =
-    &["index.md", "install.md", "tour.md", "checks.md", "generate.md", "compare.md", "examples.md", "fit.md"];
+const AUTHORED: &[&str] = &[
+    "index.md",
+    "playground.md",
+    "install.md",
+    "tour.md",
+    "checks.md",
+    "generate.md",
+    "compare.md",
+    "examples.md",
+    "fit.md",
+];
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
@@ -486,4 +495,29 @@ fn 規則のコード片には札が付いている() {
         bare.is_empty(),
         "規則のコード片に ```rule の札がありません（付けると色が付きます）: {bare:?}"
     );
+}
+
+/// The playground opens on the table the front page's first picture is about
+/// (`website/tools/overview.rule`), so the two must be the same table. A page showing a
+/// different one would be a second source for the same example — the failure `examples.md`
+/// is held to, one page over.
+#[test]
+fn playgroundの表は絵の表と同じ() {
+    let js = read("website/docs/playground/playground.js");
+    for (key, rule) in
+        [("en", "website/tools/overview.rule"), ("ja", "website/tools/overview-ja.rule")]
+    {
+        let open = format!("  {key}: `");
+        let start = js.find(&open).unwrap_or_else(|| panic!("playground.js に {key} の表が無い"))
+            + open.len();
+        let got = &js[start..start + js[start..].find("`,").expect("表が閉じていない")];
+        // The file opens with a comment block about the diagram; the page shows the table.
+        let want: String = read(rule)
+            .lines()
+            .skip_while(|l| l.starts_with('#') || l.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        assert_eq!(got, want, "playground.js の {key} の表が {rule} と違う");
+    }
 }

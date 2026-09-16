@@ -19,6 +19,7 @@ docs-ja/backends.md
 docs-ja/codes.md
 docs-ja/stylesheets/
 docs-ja/images/
+docs-ja/playground/
 
 # Left behind by the diagram scripts importing tools/diagram.py.
 tools/__pycache__/

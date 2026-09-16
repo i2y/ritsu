@@ -480,6 +480,26 @@ tool named after its alias:
 $ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
 ```
 
+**The same server speaks MCP's Streamable HTTP**, which is what the places that only accept a
+URL need — a chat client's custom connectors, an agent builder, a workflow product's MCP
+node:
+
+```console
+$ python3 generated/python/shipping_fee_mcp.py --http 8000
+http://127.0.0.1:8000/mcp
+```
+
+One `POST` carries one message and the answer comes back as `application/json`; a message
+with no id is answered with `202` and nothing else; `GET` is `405`, because the server never
+sends anything unasked; `DELETE` ends the session it was given. The session id handed out at
+`initialize` comes back on every later message.
+
+Two things it does **not** carry, and they are the caller's to put in front of it: **TLS and
+authentication**. It listens on `127.0.0.1` alone unless a host is given (`--http 0.0.0.0:8000`),
+and it refuses a request whose `Origin` is not local unless that origin is named with
+`--origin https://example.com` — the check that keeps a page open in somebody's browser from
+reaching a server running on their machine.
+
 The tool speaks the wire. Its `inputSchema` is the `in` object `rulec schema` prints — every
 input, required, nothing extra; an integer in the declared unit, with the unit and, for a
 rate, the step in its description; an enum as its listed names; a date as `YYYY-MM-DD` — and
@@ -499,10 +519,38 @@ argument — one missing, one extra, a value outside its range, a name that is n
 the enum, a number that is not an integer (18.3 for a rate in steps of 0.1% is refused, not
 read as 1.83%). The module's two error classes are what reach the caller, under their names.
 
+### The answer, with the table beside it
+
+A host that renders **MCP Apps** ([SEP-1865](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/))
+gets more than the record. Beside the server, `gen` writes `<alias>_page.html` — the page
+`rulec doc --format html` renders, byte for byte — and the server offers it as the tool's
+view:
+
+```json
+{"uri":"ui://shipping_fee/table","name":"shipping_fee","mimeType":"text/html;profile=mcp-app"}
+```
+
+The tool carries `_meta.ui.resourceUri` pointing at it, the host reads it with
+`resources/read`, and renders it in a sandboxed frame. The page then **opens on the case the
+tool was just called with**: the fields filled in, the answer shown, and the rows that
+decided it lit up — the same page a person opens from a file, running the same generated
+JavaScript. So the reader of a chat sees what the agent asked, what came back, and *which
+rows of which table* said so.
+
+It is a view and not a client: it needs no network and declares no external origin, so the
+restrictive default CSP a host applies is enough for it.
+
+Two things follow the specification rather than taste. The view is offered **only to a host
+that said it can render one** (the `io.modelcontextprotocol/ui` extension in the client's
+capabilities); to anything else the tool is what it was, and the record is the whole answer.
+And the page is a file: delete it and the server keeps serving the tool, without a view.
+
 `rulec test` drives the server as a client would — `initialize`, `tools/list`, then one
 `tools/call` per vector — and holds what comes back to the same expected records the runner
-is held to, so the server sits inside the same claim as the module. Nothing beyond `python3`
-or `node` is needed to run it.
+is held to, so the server sits inside the same claim as the module. **It does that twice, once
+over each transport** (`via` is `mcp` and `mcp-http`): the conversation is the same, so an
+answer that changed with the carrying would be a disagreement. Nothing beyond `python3` or
+`node` is needed to run it.
 
 ---
 

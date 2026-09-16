@@ -229,6 +229,30 @@ after its alias:
 $ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
 ```
 
+That is the agent on this machine. The places that only accept a URL —
+a chat client's custom connectors, an agent builder, a workflow
+product's MCP node — want MCP's Streamable HTTP, and it is **the same
+server**:
+
+```console
+$ python3 generated/python/shipping_fee_mcp.py --http 8000
+http://127.0.0.1:8000/mcp
+```
+
+It listens on `127.0.0.1` alone unless told otherwise, and refuses a
+request whose `Origin` is not local unless that origin is named with
+`--origin`. **TLS and authentication are not in it**; put them in
+front. `rulec test` drives both transports over every vector, so an
+answer that changed with the carrying would be a disagreement.
+
+Where the host renders **MCP Apps**, the same server hands over one
+thing more: the approver's page, as the tool's view. `gen` writes it
+beside the server (`shipping_fee_page.html`, the page
+`rulec doc --format html` renders), and the host shows it opened on the
+case that was just asked — the fields filled in, the answer, and the
+rows that decided it lit up. The reader of the chat sees which rows of
+which table said so, not only the number.
+
 The tool speaks the wire: its `inputSchema` is the `in` object of
 `rulec schema`, with the unit of every integer and the step of every
 rate in its description, and its answer is the record line the module

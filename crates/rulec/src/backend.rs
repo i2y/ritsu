@@ -88,6 +88,7 @@ pub const ALL: &[Backend] = &[
                 (format!("python/{alias}_runner.py"), g.python_runner()),
                 (format!("python/{alias}_mcp.py"), g.py_mcp()),
                 ("python/_round_test.py".into(), crate::codegen::round_tests_python()),
+                (format!("python/{alias}_page.html"), g.page()),
             ]
         },
         // `-B` and a cleared cache: a `.pyc` counts as fresh when the source has the same
@@ -108,6 +109,7 @@ pub const ALL: &[Backend] = &[
                 (format!("typescript/{alias}_runner.ts"), g.ts_runner()),
                 (format!("typescript/{alias}_mcp.ts"), g.ts_mcp()),
                 ("typescript/_round_test.ts".into(), crate::codegen::round_tests_typescript()),
+                (format!("typescript/{alias}_page.html"), g.page()),
             ]
         },
         run: |alias, _| {
@@ -129,6 +131,7 @@ pub const ALL: &[Backend] = &[
                 (format!("javascript/{alias}_runner.mjs"), g.js_runner()),
                 (format!("javascript/{alias}_mcp.mjs"), g.js_mcp()),
                 ("javascript/_round_test.mjs".into(), crate::codegen::round_tests_javascript()),
+                (format!("javascript/{alias}_page.html"), g.page()),
             ]
         },
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),

@@ -467,25 +467,27 @@ fn commands() -> Vec<Cmd> {
         },
         Cmd {
             name: "import",
-            args: "csv <file.csv>",
+            args: "csv|xlsx <file>",
             purpose: tr!(
-                "表計算の CSV から .rule の下書きを起こす。推定した箇所には全部 # 推定 が付く",
-                "make a first draft of a .rule from a spreadsheet's CSV; every guess is marked"
+                "表計算のシートから .rule の下書きを起こす。推定した箇所には全部 # 推定 が付く",
+                "make a first draft of a .rule from a spreadsheet; every guess is marked"
             ),
             params: vec![
-                ("csv", tr!("いま読めるのは CSV だけ", "CSV is the only format read for now")),
-                ("<file.csv>", tr!("見出し行つきの CSV。最後の列が出力（--outputs で本数を変えられる）", "a CSV with a header row; the last column is the output (--outputs changes how many)")),
+                ("csv|xlsx", tr!("CSV か、Excel の .xlsx。xlsx は書き出さずにそのまま読む", "a CSV, or an Excel .xlsx — the workbook is read as it is, with no export step")),
+                ("<file>", tr!("見出し行つきの表。最後の列が出力（--outputs で本数を変えられる）", "a table with a header row; the last column is the output (--outputs changes how many)")),
             ],
             flags: vec![
                 flag("--name", Some("<名前>"), tr!("規則の名前。既定はファイル名", "the rule's name; the default is the file's stem")),
                 flag("--outputs", Some("<n>"), tr!("末尾の何列が出力か", "how many of the trailing columns are outputs")).default("1"),
+                flag("--sheet", Some("<名前>"), tr!("xlsx のどのシートを読むか。既定は最初のシート", "which sheet of an xlsx to read; the default is the first")),
             ],
             exits: vec![
                 (0, tr!("下書きを書き出した。check はまだ通していない", "the draft was written; it has not been through check")),
-                (2, tr!("読めないファイル、または表の形をしていない CSV", "a file that cannot be read, or a CSV that is not a table")),
+                (2, tr!("読めないファイル、または表の形をしていないシート", "a file that cannot be read, or a sheet that is not a table")),
             ],
             examples: vec![
                 "rulec import csv tariff.csv > rules/tariff.rule".into(),
+                "rulec import xlsx 運賃表.xlsx --sheet 本則 > rules/運賃.rule".into(),
                 "rulec import csv rates.csv --name 料率 --outputs 2".into(),
             ],
             codes: &[],
@@ -932,13 +934,14 @@ fn main() -> ExitCode {
         "vectors" => vectors(&files, a.get("--out")),
         "mcp" => mcp::serve(),
         "import" => {
-            if files.first().map(|s| s.as_str()) != Some("csv") || files.len() != 2 {
-                return refuse(tr!("`rulec import csv <file.csv>` です", "it is `rulec import csv <file.csv>`"));
+            let kind = files.first().map(|s| s.as_str()).unwrap_or("");
+            if !matches!(kind, "csv" | "xlsx") || files.len() != 2 {
+                return refuse(tr!(
+                    "`rulec import csv <file.csv>` か `rulec import xlsx <file.xlsx>` です",
+                    "it is `rulec import csv <file.csv>` or `rulec import xlsx <file.xlsx>`"
+                ));
             }
             let path = files[1];
-            let Ok(src) = std::fs::read_to_string(path) else {
-                return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
-            };
             let stem = std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             let name = a.get("--name").map(|s| s.to_string()).unwrap_or(stem);
             let n = match a.get("--outputs").unwrap_or("1").parse::<usize>() {
@@ -947,7 +950,26 @@ fn main() -> ExitCode {
             };
             // The draft names its source by the file's name, not by wherever it was read from.
             let base = std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
-            match rulec::import::draft(&src, &name, &base, n) {
+            let drafted = if kind == "csv" {
+                let Ok(src) = std::fs::read_to_string(path) else {
+                    return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+                };
+                rulec::import::draft(&src, &name, &base, n)
+            } else {
+                let Ok(bytes) = std::fs::read(path) else {
+                    return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+                };
+                // A workbook has several sheets; the draft says which one it came from,
+                // because "the tariff.xlsx" is not an answer to "which table is this".
+                match rulec::xlsx::grid(&bytes, a.get("--sheet")) {
+                    Ok((sheet, rows)) => {
+                        let from = tr!("{base}（シート {sheet}）", "{base} (sheet {sheet})");
+                        rulec::import::draft_rows(rows, &name, &from, n)
+                    }
+                    Err(e) => return refuse(e),
+                }
+            };
+            match drafted {
                 Ok(d) => {
                     print!("{d}");
                     ExitCode::from(0)
@@ -1096,41 +1118,17 @@ fn check(
                 println!("{}", render_json(d, path));
             } else if terse {
                 print!("{}", rulec::diag::render_terse(d));
-            } else {
-                print!("{}", render(d, &lines));
-                println!();
             }
         }
         if json {
             continue;
         }
-        if suppressed > 0 && !json {
-            println!(
-                "{}",
-                tr!(
-                    "note {path}: 基準リビジョンに既にあった発見 {suppressed} 件は伏せました（--diff-base）",
-                    "note {path}: suppressed {suppressed} findings already present at the base revision (--diff-base)"
-                )
-            );
+        // The default rendering and everything after the findings are shared with the
+        // playground (§15.48), so the page and the terminal cannot answer differently.
+        if !terse {
+            print!("{}", rulec::findings_text(&diags, &lines));
         }
-        // §4: only the pairs that need review are listed; the rest is a single count line.
-        let s = r.shadow;
-        if s.total() > 0 {
-            println!(
-                "{}",
-                tr!(
-                    "note {path}: 隠れ {} 対（階段 {}、同じ答え {}、要確認 {}）",
-                    "note {path}: {} shadow pairs ({} structural, {} equivalent, {} needs review)",
-                    s.total(),
-                    s.structural,
-                    s.equivalent,
-                    s.confirm
-                )
-            );
-        }
-        if !rulec::has_error(&diags) {
-            println!("ok {path}");
-        }
+        print!("{}", rulec::check_tail(&r.shadow, &diags, path, suppressed));
     }
     // §11 principle 3 still has to reach the reader; in terse mode it reaches them once,
     // as a pointer, instead of once per finding.
@@ -1151,19 +1149,27 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
+        // Nothing is generated from a rule that does not pass (README, AGENTS.md, the
+        // generate page). `prepare` only gets as far as the types, so the checks the tables
+        // themselves carry — completeness, overlap, dead rows, overflow and the examples —
+        // are run here, the way `doc` runs them (§1.6).
+        let rep = rulec::report(&src, path);
+        if rulec::has_error(&rep.diags) {
+            let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+            print!("{}", rulec::findings_text(&rep.diags, &lines));
+            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
+            return ExitCode::from(1);
+        }
         let (f, c) = match rulec::prepare(&src, path) {
             Ok(v) => v,
             Err(ds) => {
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
-                for d in &ds {
-                    print!("{}", render(d, &lines));
-                    println!();
-                }
+                print!("{}", rulec::findings_text(&ds, &lines));
                 eprintln!("{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
                 return ExitCode::from(1);
             }
         };
-        let g = rulec::codegen::Gen::new(&f, &c, &src);
+        let g = rulec::codegen::Gen::new(&f, &c, &src).at(path);
         let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
         let pkg = alias.replace('_', "").to_lowercase();
         // Also emit the vectors and the expected values. Of the three uses in §9.3, the

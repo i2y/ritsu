@@ -44,6 +44,10 @@ pub mod runtest;
 pub mod types;
 pub mod vectors;
 pub mod verify;
+pub mod xlsx;
+/// The library as a web page. Only built for the target the site loads (§15.48).
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 use diag::{Diag, Severity};
 
@@ -118,6 +122,49 @@ pub fn table_checks(
 
 pub fn has_error(ds: &[Diag]) -> bool {
     ds.iter().any(|d| d.severity == Severity::Error)
+}
+
+/// Every finding of one file, in the frame §11 fixes, with a blank line between them.
+///
+/// `main` walks the list itself (it also counts, and `--format json` and `--terse` are
+/// other renderings of the same list), and prints this for the default one; the wasm
+/// playground (§15.48) returns it. Two implementations would be two sets of answers to
+/// keep true.
+pub fn findings_text(diags: &[Diag], lines: &[String]) -> String {
+    let mut out = String::new();
+    for d in diags {
+        out.push_str(&diag::render(d, lines));
+        out.push('\n');
+    }
+    out
+}
+
+/// What `check` prints after the findings: the count of findings the base revision already
+/// had (`--diff-base`), the count of shadowing pairs (§4), and the `ok` line when nothing
+/// is an error. `--format json` prints none of it; `--terse` prints all of it.
+pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppressed: usize) -> String {
+    let mut out = String::new();
+    if suppressed > 0 {
+        out.push_str(&tr!(
+            "note {path}: 基準リビジョンに既にあった発見 {suppressed} 件は伏せました（--diff-base）\n",
+            "note {path}: suppressed {suppressed} findings already present at the base revision (--diff-base)\n"
+        ));
+    }
+    // §4: only the pairs that need review are listed; the rest is a single count line.
+    if shadow.total() > 0 {
+        out.push_str(&tr!(
+            "note {path}: 隠れ {} 対（階段 {}、同じ答え {}、要確認 {}）\n",
+            "note {path}: {} shadow pairs ({} structural, {} equivalent, {} needs review)\n",
+            shadow.total(),
+            shadow.structural,
+            shadow.equivalent,
+            shadow.confirm
+        ));
+    }
+    if !has_error(diags) {
+        out.push_str(&format!("ok {path}\n"));
+    }
+    out
 }
 
 /// Splits the E104 wording in two. The branch is not a guess: witnesses are actually

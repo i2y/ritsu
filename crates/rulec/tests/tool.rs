@@ -182,3 +182,178 @@ fn サーバは生成物の一つとして数えられる() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The HTTP side of the same server (§15.51). `rulec test` already holds its answers to the
+/// reference evaluator over every vector, on both transports; what is checked here is what
+/// the transport itself has to do — the session, the codes, and the origin check that keeps
+/// a page open in a browser from reaching a server on the reader's own machine.
+fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
+    let mut child = Command::new(cmd)
+        .current_dir(dir.join(cwd))
+        .args(args)
+        .args(["--http", "127.0.0.1:0"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("サーバを起動できない");
+    let mut so = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    assert!(so.read_line(&mut line).unwrap() > 0, "待ち受けを言わずに終わった");
+    let at = line.trim().trim_start_matches("http://").trim_end_matches("/mcp").to_string();
+
+    // (status, headers as one lowercase blob, body)
+    let call = |method: &str, headers: &str, body: &str| -> (u16, String, String) {
+        let mut s = std::net::TcpStream::connect(&at).expect("繋げない");
+        let req = format!(
+            "{method} /mcp HTTP/1.1\r\nHost: {at}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        s.write_all(req.as_bytes()).unwrap();
+        s.flush().unwrap();
+        let mut all = String::new();
+        std::io::Read::read_to_string(&mut s, &mut all).unwrap();
+        let (head, body) = all.split_once("\r\n\r\n").unwrap_or((all.as_str(), ""));
+        let code: u16 = head.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        (code, head.to_lowercase(), body.to_string())
+    };
+
+    let init = r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}"#;
+    let (code, head, body) = call("POST", "", init);
+    assert_eq!(code, 200, "{cwd}: initialize が 200 でない");
+    assert!(head.contains("mcp-session-id:"), "{cwd}: セッションを渡していない: {head}");
+    assert!(body.contains("\"serverInfo\""), "{cwd}: {body}");
+    let session = head
+        .lines()
+        .find_map(|l| l.strip_prefix("mcp-session-id:"))
+        .map(|v| v.trim().to_string())
+        .expect("セッション");
+
+    // A message with no id is answered with 202 and nothing else.
+    let (code, _, body) = call("POST", "", r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    assert_eq!((code, body.as_str()), (202, ""), "{cwd}: 通知の扱い");
+
+    // The session that was handed out is accepted; one that was not is 404, which is how a
+    // client is told to start again.
+    let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    let (code, _, _) = call("POST", &format!("Mcp-Session-Id: {session}\r\n"), ping);
+    assert_eq!(code, 200, "{cwd}: 渡したセッションを断った");
+    let (code, _, _) = call("POST", "Mcp-Session-Id: 0123456789abcdef\r\n", ping);
+    assert_eq!(code, 404, "{cwd}: 知らないセッションを通した");
+
+    // Nothing is ever sent unasked, so there is no stream to open.
+    let (code, _, _) = call("GET", "", "");
+    assert_eq!(code, 405, "{cwd}: GET の扱い");
+    let (code, _, _) = call("DELETE", &format!("Mcp-Session-Id: {session}\r\n"), "");
+    assert_eq!(code, 204, "{cwd}: DELETE の扱い");
+
+    // The origin check: a page in a browser must not be able to reach this.
+    let (code, _, _) = call("POST", "Origin: https://evil.example\r\n", ping);
+    assert_eq!(code, 403, "{cwd}: 外の Origin を通した");
+    let (code, _, _) = call("POST", "Origin: http://localhost:5173\r\n", ping);
+    assert_eq!(code, 200, "{cwd}: 手元の Origin を断った");
+
+    // A batch is not part of this protocol version, and is refused rather than half-read.
+    let (code, _, _) = call("POST", "", "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}]");
+    assert_eq!(code, 400, "{cwd}: まとめ送りの扱い");
+    let (code, _, _) = call("POST", "", "{not json");
+    assert_eq!(code, 400, "{cwd}: JSON でない本文の扱い");
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn pythonのサーバはhttpでも同じ約束を守る() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let dir = generate("pyhttp");
+    http_contract(&dir, "python", "python3", &["-B", "pension_premium_mcp.py"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn nodeのサーバはhttpでも同じ約束を守る() {
+    if !have("node") {
+        eprintln!("注意: node が無いので飛ばした");
+        return;
+    }
+    let dir = generate("jshttp");
+    http_contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
+    http_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The tool's view (SEP-1865, §15.52): the page an approver reads, served as a `ui://`
+/// resource, and offered only to a host that said it can render one.
+fn ui_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
+    let with_ui = r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2026-01-26","capabilities":{"extensions":{"io.modelcontextprotocol/ui":{"mimeTypes":["text/html;profile=mcp-app"]}}}}}"#;
+    let plain = r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}"#;
+    let list = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#;
+    let resources = r#"{"jsonrpc":"2.0","id":2,"method":"resources/list","params":{}}"#;
+    let read = r#"{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://pension_premium/table"}}"#;
+    let missing = r#"{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"ui://nope"}}"#;
+
+    let a = talk(&dir.join(cwd), cmd, args, &[with_ui, list, resources, read, missing]);
+    // The server says it serves resources now.
+    let caps = a[0].get("result").and_then(|r| r.get("capabilities")).expect("capabilities");
+    assert!(caps.get("resources").is_some(), "{cwd}: resources を出していない");
+    // The tool carries its view.
+    let rulec::json::Json::Arr(tools) = a[1].get("result").unwrap().get("tools").unwrap() else {
+        panic!("tools")
+    };
+    let uri = tools[0]
+        .get("_meta")
+        .and_then(|m| m.get("ui"))
+        .and_then(|u| u.get("resourceUri"))
+        .and_then(|u| u.as_str());
+    assert_eq!(uri, Some("ui://pension_premium/table"), "{cwd}: ツールに view が付いていない");
+    // The resource is listed, and reading it gives the page with the profile the spec fixes.
+    let rulec::json::Json::Arr(rs) = a[2].get("result").unwrap().get("resources").unwrap() else {
+        panic!("resources")
+    };
+    assert_eq!(rs.len(), 1, "{cwd}: 資源が一つでない");
+    assert_eq!(rs[0].get("mimeType").and_then(|m| m.as_str()), Some("text/html;profile=mcp-app"));
+    let rulec::json::Json::Arr(cs) = a[3].get("result").unwrap().get("contents").unwrap() else {
+        panic!("contents")
+    };
+    let html = cs[0].get("text").and_then(|t| t.as_str()).expect("text");
+    // It is the page `rulec doc --format html` renders — the same renderer, not a second one.
+    let want = std::fs::read_to_string(dir.join(cwd).join("pension_premium_page.html")).unwrap();
+    assert_eq!(html, want, "{cwd}: 出している資源がページと違う");
+    assert!(html.contains("ui/notifications/tool-result"), "{cwd}: ページに橋が無い");
+    // A resource that is not there is refused by name.
+    assert!(a[4].get("error").is_some(), "{cwd}: 知らない資源を答えた");
+
+    // A host that did not say it can render one is not told about a view (the UI is an
+    // enhancement, and a tool that promises one where none can be shown is a lie).
+    let b = talk(&dir.join(cwd), cmd, args, &[plain, list]);
+    let rulec::json::Json::Arr(tools) = b[1].get("result").unwrap().get("tools").unwrap() else {
+        panic!("tools")
+    };
+    assert!(tools[0].get("_meta").is_none(), "{cwd}: 描けない相手に view を出した");
+}
+
+#[test]
+fn pythonのサーバはページをviewとして出す() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let dir = generate("pyui");
+    ui_contract(&dir, "python", "python3", &["-B", "pension_premium_mcp.py"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn nodeのサーバはページをviewとして出す() {
+    if !have("node") {
+        eprintln!("注意: node が無いので飛ばした");
+        return;
+    }
+    let dir = generate("jsui");
+    ui_contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
+    ui_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

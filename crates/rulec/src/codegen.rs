@@ -98,6 +98,10 @@ pub struct Gen<'a> {
     /// Enum value → (type name, ASCII alias).
     value_names: BTreeMap<String, (String, String)>,
     src_hash: String,
+    /// The source itself and where it was read from, for the approver's page the MCP server
+    /// serves (§15.52). The page is rendered from the rule, not from the generated code.
+    src: String,
+    path: String,
 }
 
 mod sql;
@@ -151,7 +155,31 @@ impl<'a> Gen<'a> {
                 idents.insert(n.text.clone(), pub_name(n));
             }
         }
-        Gen { f, c, w114, enum_names, value_names, idents, src_hash: hash(src) }
+        Gen {
+            f,
+            c,
+            w114,
+            enum_names,
+            value_names,
+            idents,
+            src_hash: hash(src),
+            src: src.to_string(),
+            path: String::new(),
+        }
+    }
+
+    /// Where the rule was read from. The approver's page names its source, so a caller that
+    /// has a file says which; one that has none (the playground) says nothing, and the page
+    /// is the same either way apart from that line.
+    pub fn at(mut self, path: &str) -> Self {
+        self.path = path.to_string();
+        self
+    }
+
+    /// The page an approver reads, as `rulec doc --format html` renders it: the same
+    /// renderer, running the same generated JavaScript (§15.37, §15.52).
+    pub fn page(&self) -> String {
+        crate::doc::render_html(self.f, self.c, &self.src, &self.path, &self.javascript())
     }
 
     fn ty_of(&self, n: &str) -> Ty {
@@ -3439,6 +3467,7 @@ impl Gen<'_> {
         let python = crate::json::Obj::new()
             .str("module", &alias)
             .str("mcp", &format!("{alias}_mcp.py"))
+            .str("page", &format!("{alias}_page.html"))
             .str("function", &alias)
             .str("signature", &py_sig)
             .str("traced", &format!("{alias}_traced"))
@@ -3502,6 +3531,7 @@ impl Gen<'_> {
         let typescript = crate::json::Obj::new()
             .str("module", &format!("{alias}.ts"))
             .str("mcp", &format!("{alias}_mcp.ts"))
+            .str("page", &format!("{alias}_page.html"))
             .str("function", &alias)
             .str("signature", &ts_sig)
             .str("traced", &format!("{alias}_traced"))
@@ -3565,6 +3595,7 @@ impl Gen<'_> {
         let javascript = crate::json::Obj::new()
             .str("module", &format!("{alias}.mjs"))
             .str("mcp", &format!("{alias}_mcp.mjs"))
+            .str("page", &format!("{alias}_page.html"))
             .str("function", &alias)
             .str("signature", &format!("export function {alias}({js_params})"))
             .str("traced", &format!("{alias}_traced"))
@@ -5665,8 +5696,8 @@ fn strip_signature(l: &str) -> String {
     if close < open {
         return l.to_string();
     }
-    let params: Vec<String> = l[open + 1..close]
-        .split(", ")
+    let params: Vec<String> = split_params(&l[open + 1..close])
+        .into_iter()
         .filter(|p| !p.is_empty())
         .map(|p| match p.find(": ") {
             Some(i) => p[..i].to_string(),
@@ -5685,6 +5716,26 @@ fn strip_signature(l: &str) -> String {
 }
 
 /// `let x: T;`, `const x: T = …` → without the annotation. Destructuring has none.
+/// A parameter list, cut at the commas that separate parameters — not at the ones inside a
+/// type. `Record<string, string>` is one type and not two parameters.
+fn split_params(list: &str) -> Vec<&str> {
+    let (mut depth, mut start) = (0i32, 0usize);
+    let mut out = Vec::new();
+    for (i, c) in list.char_indices() {
+        match c {
+            '<' | '(' | '[' | '{' => depth += 1,
+            '>' | ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(list[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(list[start..].trim());
+    out
+}
+
 fn strip_declaration(l: &str) -> String {
     let t = l.trim_start();
     let indent = &l[..l.len() - t.len()];

@@ -840,6 +840,10 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         }
     }
     Obj::new()
+        // The rule names itself: the page says who it is when it introduces itself to a
+        // host that is rendering it (SEP-1865).
+        .str("name", &f.name.text)
+        .str("version", &f.version)
         .raw("inputs", crate::json::arr(&ins))
         .raw("outputs", crate::json::arr(&outs))
         .raw("examples", crate::json::arr(&exs))
@@ -1007,6 +1011,41 @@ if (ex) {
 if (location.hash) {
   const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
   if (target) target.scrollIntoView();
+}
+// MCP Apps (SEP-1865). Inside a host's frame this page is the view of one call, so it says
+// hello and then opens on the case the host hands it: the same fields, the same rows lit up,
+// the same record line. Opened as a file it is the page it always was — nothing below runs.
+if (window.parent !== window) {
+  const post = (m) => window.parent.postMessage(m, "*");
+  const open = (args) => {
+    if (!args) return;
+    fill(args);
+    run();
+  };
+  window.addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id === 1 && (m.result || m.error)) {
+      // The handshake is answered; the host may send the call from here on.
+      post({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+      return;
+    }
+    if (m.method === "ui/notifications/tool-input") open(m.params && m.params.arguments);
+    if (m.method === "ui/notifications/tool-result") {
+      const rec = m.params && m.params.structuredContent;
+      open(rec && rec.in);
+    }
+  });
+  post({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "ui/initialize",
+    params: {
+      protocolVersion: "2026-01-26",
+      appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+      clientInfo: { name: RULE.name, version: RULE.version },
+    },
+  });
 }
 "##;
 

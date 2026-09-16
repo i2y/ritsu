@@ -1,0 +1,101 @@
+/* The playground's own styling. Everything borrows the theme's variables, so it follows
+   the palette and the dark-mode switch without a second set of colours to keep in step. */
+
+.pg {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .2rem;
+  margin: 1.2em 0;
+}
+
+.pg-bar,
+.pg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  padding: .4rem .6rem;
+  background: var(--md-code-bg-color);
+}
+
+.pg-bar { border-bottom: 1px solid var(--md-default-fg-color--lightest); }
+.pg-tabs { border-top: 1px solid var(--md-default-fg-color--lightest); }
+
+.pg button {
+  font: inherit;
+  font-size: .68rem;
+  padding: .2rem .55rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .15rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  cursor: pointer;
+}
+
+.pg button:hover { border-color: var(--md-accent-fg-color); color: var(--md-accent-fg-color); }
+.pg button.on { background: var(--md-primary-fg-color); border-color: var(--md-primary-fg-color); color: var(--md-primary-bg-color); }
+
+/* The status line says which version answered, how long it took and what it found. A
+   stale rulec.wasm in a cache is visible there rather than answering quietly. */
+.pg-status {
+  margin-left: auto;
+  font-size: .62rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.pg-src,
+.pg-pre {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .68rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.pg-src {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 22em;
+  padding: .7rem .8rem;
+  border: 0;
+  resize: vertical;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.pg-src:focus { outline: 2px solid var(--md-accent-fg-color); outline-offset: -2px; }
+
+.pg-out {
+  max-height: 32em;
+  overflow: auto;
+  background: var(--md-code-bg-color);
+}
+
+.pg-pre {
+  margin: 0;
+  padding: .7rem .8rem;
+  white-space: pre;
+  color: var(--md-code-fg-color);
+}
+
+.pg-picker {
+  font: inherit;
+  font-size: .66rem;
+  max-width: 100%;
+  padding: .2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .15rem;
+}
+
+/* The approver's page is a whole document; it gets a frame its own size. */
+.pg-frame {
+  display: block;
+  width: 100%;
+  height: 32em;
+  border: 0;
+  background: #fff;
+}

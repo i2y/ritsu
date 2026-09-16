@@ -106,8 +106,8 @@ impl<'a> Gen<'a> {
             }
         }
         let doc = tr!(
-            "規則 {} v{} を、stdio の MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]\n\nツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。",
-            "Rule {} v{} as one MCP tool, over stdio.\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]\n\nThe tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\na rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\nresult is the line the module's record function writes: in, observed, trace. With --record\nthat line is also appended to a file, so what the agent asked is what rulec replay and rulec\ndiff read later.",
+            "規則 {} v{} を、MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n\nstdio は手元のエージェント（Claude Code、IDE）が使う。--http は、HTTPS の口しか受け付けない\n連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
+            "Rule {} v{} as one MCP tool.\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nThe tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\na rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\nresult is the line the module's record function writes: in, observed, trace. With --record\nthat line is also appended to a file, so what the agent asked is what rulec replay and rulec\ndiff read later.\n\nStdio is for an agent on the same machine (Claude Code, an IDE). --http is for the places\nthat only accept an HTTPS endpoint (a chat client's connectors, a workflow product, a\nbusiness agent); it listens on 127.0.0.1 alone unless told otherwise. Put TLS and\nauthentication in front of it: this server carries neither.",
             self.f.name.text,
             self.f.version
         );
@@ -142,6 +142,26 @@ impl<'a> Gen<'a> {
             .replace("@M_ENUM@", &tr!("f\"{{name}}: {{cls.__name__}} に無い: {{v!r}}\"", "f\"{{name}}: not in {{cls.__name__}}: {{v!r}}\""))
             .replace("@D_CALL@", &tr!("入力を一つの辞書で受け、規則を当てて、記録の一行を返す。", "Take the inputs as one dict, apply the rule, and return the record line."))
             .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
+            .replace("@D_HANDLE@", &tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here."))
+            .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのは手元からの呼び出しだけで、ブラウザが開いているページに\n    このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
+            .replace("@D_HTTP@", &tr!("MCP の Streamable HTTP で待つ。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer."))
+            .replace("@D_QUIET@", &tr!("アクセスログは出さない。運びの話であって、この道具の声ではない。", "No access log: that is the transport talking, not this tool."))
+            .replace("@D_POST@", &tr!("メッセージを一つ読んで、答えを JSON で返す。", "Read one message and answer it in JSON."))
+            .replace("@D_GET@", &tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open."))
+            .replace("@D_DELETE@", &tr!("セッションを終える。", "End the session."))
+            .replace("@D_MAIN@", &tr!("引数を読んで、stdio か HTTP のどちらかで待つ。", "Read the arguments and listen, on stdio or on HTTP."))
+            .replace("@D_PAGE@", &tr!("隣にある承認者向けのページ。無ければ None で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or None — and then the tool answers with the record alone."))
+            .replace("@UI_DESC@", &py_str(&self.ui_description()))
+    }
+
+    /// What a host shows about the view before it renders it.
+    fn ui_description(&self) -> String {
+        tr!(
+            "規則 {} v{} の表。呼び出した件が入った状態で開き、当てはまった行に色が付く。",
+            "The table of rule {} v{}, opened on the case it was called with, and the rows that decided it lit up.",
+            self.f.name.text,
+            self.f.version
+        )
     }
 
     /// `typescript/<alias>_mcp.ts`: the same server, in erasable TypeScript, node alone.
@@ -208,8 +228,8 @@ impl<'a> Gen<'a> {
             .replace("@NAMES@", &names.join(", "))
             .replace("@CONVS@", &convs.iter().map(|c| format!("    {c},\n")).collect::<String>());
         let doc = tr!(
-            "規則 {} v{} を、stdio の MCP ツール一つとして出す。\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]\n *\n * ツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n * 結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n * --record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。",
-            "Rule {} v{} as one MCP tool, over stdio.\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]\n *\n * The tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\n * a rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\n * result is the line the module's record function writes: in, observed, trace. With --record\n * that line is also appended to a file, so what the agent asked is what rulec replay and rulec\n * diff read later.",
+            "規則 {} v{} を、MCP ツール一つとして出す。\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * ツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n * 結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n * --record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n *\n * stdio は手元のエージェント（Claude Code、IDE）が使う。--http は、HTTPS の口しか受け付けない\n * 連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n * 既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
+            "Rule {} v{} as one MCP tool.\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * The tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\n * a rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\n * result is the line the module's record function writes: in, observed, trace. With --record\n * that line is also appended to a file, so what the agent asked is what rulec replay and rulec\n * diff read later.\n *\n * Stdio is for an agent on the same machine (Claude Code, an IDE). --http is for the places\n * that only accept an HTTPS endpoint (a chat client's connectors, a workflow product, a\n * business agent); it listens on 127.0.0.1 alone unless told otherwise. Put TLS and\n * authentication in front of it: this server carries neither.",
             self.f.name.text,
             self.f.version
         );
@@ -226,6 +246,13 @@ impl<'a> Gen<'a> {
             ("@M_DATE@", tr!("`${{name}}: 日付は YYYY-MM-DD で渡す。${{JSON.stringify(v)}} は読めない`", "`${{name}}: a date as YYYY-MM-DD is expected, not ${{JSON.stringify(v)}}`")),
             ("@D_CALL@", tr!("入力を一つのオブジェクトで受け、規則を当てて、記録の一行を返す。", "Take the inputs as one object, apply the rule, and return the record line.")),
             ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
+            ("@D_HANDLE@", tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here.")),
+            ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのは手元からの呼び出しだけで、ブラウザが開いているページに\n * このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
+            ("@D_HTTP@", tr!("MCP の Streamable HTTP で待つ。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
+            ("@D_GET@", tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open.")),
+            ("@D_PORT@", tr!("0 を渡せば空いている番号が選ばれるので、どこで待っているかを一行出す。", "A port of 0 means any free one, so where it is listening is printed as one line.")),
+            ("@D_PAGE@", tr!("隣にある承認者向けのページ。無ければ null で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or null — and then the tool answers with the record alone.")),
+            ("@UI_DESC@", quote(&self.ui_description())),
         ];
         (code, prose)
     }
@@ -245,13 +272,36 @@ from __future__ import annotations
 
 import datetime
 import enum
+import http.server
 import json
+import os
 import sys
+import uuid
 from typing import BinaryIO, TypeVar
 
 import @ALIAS@ as m
 
 TOOL: dict[str, object] = json.loads(r'''@TOOL@''')
+
+# MCP Apps (SEP-1865): the tool's view is the page an approver reads, written beside this
+# server by the same `rulec gen`. A host that renders one gets the table, the case it was
+# called with, and the rows that decided it; a host that does not gets the record alone.
+UI_URI = "ui://@ALIAS@/table"
+UI_MIME = "text/html;profile=mcp-app"
+UI_EXT = "io.modelcontextprotocol/ui"
+UI_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "@ALIAS@_page.html")
+# Whether the client said it can render one. Set at initialize; the tool is offered without
+# a view until it does (§SEP-1865: the UI is an enhancement, never a requirement).
+_ui = False
+
+
+def page() -> str | None:
+    """@D_PAGE@"""
+    try:
+        with open(UI_FILE, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
 
 E = TypeVar("E", bound=enum.Enum)
 
@@ -314,14 +364,66 @@ def call(d: object, tag: str = "") -> str:
     return m.@ALIAS@_record(*a, out, trace, tag)
 
 
-def _reply(out: BinaryIO, id_: object, result: object = None, error: object = None) -> None:
-    msg: dict[str, object] = {"jsonrpc": "2.0", "id": id_}
-    if error is not None:
-        msg["error"] = error
-    else:
-        msg["result"] = result
-    out.write((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
-    out.flush()
+def _ok(id_: object, result: object) -> dict[str, object]:
+    return {"jsonrpc": "2.0", "id": id_, "result": result}
+
+
+def _err(id_: object, code: int, message: str) -> dict[str, object]:
+    return {"jsonrpc": "2.0", "id": id_, "error": {"code": code, "message": message}}
+
+
+def handle(req: object, record: BinaryIO | None = None) -> dict[str, object] | None:
+    """@D_HANDLE@"""
+    if not isinstance(req, dict) or "id" not in req:
+        return None
+    id_ = req["id"]
+    method = req.get("method")
+    params = req.get("params")
+    if not isinstance(params, dict):
+        params = {}
+    if method == "initialize":
+        global _ui
+        caps = params.get("capabilities")
+        ext = caps.get("extensions") if isinstance(caps, dict) else None
+        _ui = isinstance(ext, dict) and UI_EXT in ext and page() is not None
+        return _ok(
+            id_,
+            {
+                "protocolVersion": params.get("protocolVersion", "2025-06-18"),
+                "capabilities": {"tools": {}, "resources": {}},
+                "serverInfo": {"name": TOOL["name"], "version": "@VERSION@"},
+                "instructions": @INSTRUCTIONS@,
+            },
+        )
+    if method == "ping":
+        return _ok(id_, {})
+    if method == "tools/list":
+        tool = dict(TOOL)
+        if _ui:
+            tool["_meta"] = {"ui": {"resourceUri": UI_URI}}
+        return _ok(id_, {"tools": [tool]})
+    if method == "resources/list":
+        listed = [] if page() is None else [{"uri": UI_URI, "name": TOOL["name"], "description": @UI_DESC@, "mimeType": UI_MIME}]
+        return _ok(id_, {"resources": listed})
+    if method == "resources/read":
+        html = page()
+        if params.get("uri") != UI_URI or html is None:
+            return _err(id_, -32602, f"unknown resource: {params.get('uri')!r}")
+        return _ok(id_, {"contents": [{"uri": UI_URI, "mimeType": UI_MIME, "text": html}]})
+    if method == "tools/call":
+        if params.get("name") != TOOL["name"]:
+            return _err(id_, -32602, f"unknown tool: {params.get('name')!r}")
+        try:
+            rec = call(params.get("arguments") or {})
+        except m.RuleInputError as e:
+            return _ok(id_, {"content": [{"type": "text", "text": f"RuleInputError: {e}"}], "isError": True})
+        except m.RuleContradictionError as e:
+            return _ok(id_, {"content": [{"type": "text", "text": f"RuleContradictionError: {e}"}], "isError": True})
+        if record is not None:
+            record.write((rec + "\n").encode("utf-8"))
+            record.flush()
+        return _ok(id_, {"content": [{"type": "text", "text": rec}], "structuredContent": json.loads(rec)})
+    return _err(id_, -32601, f"unknown method: {method}")
 
 
 def serve(record: BinaryIO | None = None) -> None:
@@ -334,70 +436,171 @@ def serve(record: BinaryIO | None = None) -> None:
         try:
             req = json.loads(line)
         except ValueError:
-            _reply(out, None, error={"code": -32700, "message": "parse error"})
-            continue
-        if not isinstance(req, dict) or "id" not in req:
-            continue
-        id_ = req["id"]
-        method = req.get("method")
-        params = req.get("params") or {}
-        if method == "initialize":
-            _reply(
-                out,
-                id_,
-                {
-                    "protocolVersion": params.get("protocolVersion", "2025-06-18"),
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": TOOL["name"], "version": "@VERSION@"},
-                    "instructions": @INSTRUCTIONS@,
-                },
-            )
-        elif method == "ping":
-            _reply(out, id_, {})
-        elif method == "tools/list":
-            _reply(out, id_, {"tools": [TOOL]})
-        elif method == "tools/call":
-            if params.get("name") != TOOL["name"]:
-                _reply(out, id_, error={"code": -32602, "message": f"unknown tool: {params.get('name')!r}"})
-                continue
-            try:
-                rec = call(params.get("arguments") or {})
-            except m.RuleInputError as e:
-                _reply(out, id_, {"content": [{"type": "text", "text": f"RuleInputError: {e}"}], "isError": True})
-                continue
-            except m.RuleContradictionError as e:
-                _reply(out, id_, {"content": [{"type": "text", "text": f"RuleContradictionError: {e}"}], "isError": True})
-                continue
-            if record is not None:
-                record.write((rec + "\n").encode("utf-8"))
-                record.flush()
-            _reply(out, id_, {"content": [{"type": "text", "text": rec}], "structuredContent": json.loads(rec)})
+            msg: dict[str, object] | None = _err(None, -32700, "parse error")
         else:
-            _reply(out, id_, error={"code": -32601, "message": f"unknown method: {method}"})
+            msg = handle(req, record)
+        if msg is None:
+            continue
+        out.write((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
+        out.flush()
+
+
+def _origin_ok(origin: str | None, allowed: tuple[str, ...]) -> bool:
+    """@D_ORIGIN@"""
+    if origin is None or origin in allowed:
+        return True
+    return origin.startswith(("http://localhost", "http://127.0.0.1", "http://[::1]"))
+
+
+def serve_http(
+    host: str, port: int, record: BinaryIO | None = None, allowed: tuple[str, ...] = ()
+) -> None:
+    """@D_HTTP@"""
+    sessions: set[str] = set()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        server_version = "@ALIAS@/@VERSION@"
+
+        def log_message(self, format: str, *args: object) -> None:
+            """@D_QUIET@"""
+
+        def _send(self, code: int, body: bytes = b"", extra: dict[str, str] | None = None) -> None:
+            self.send_response(code)
+            if body:
+                self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+        def _json(self, code: int, msg: object, extra: dict[str, str] | None = None) -> None:
+            self._send(code, json.dumps(msg, ensure_ascii=False).encode("utf-8"), extra)
+
+        def do_POST(self) -> None:
+            """@D_POST@"""
+            if not _origin_ok(self.headers.get("Origin"), allowed):
+                self._json(403, _err(None, -32000, "origin not allowed"))
+                return
+            sid = self.headers.get("Mcp-Session-Id")
+            if sid is not None and sid not in sessions:
+                self._json(404, _err(None, -32001, "no such session"))
+                return
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                req = json.loads(self.rfile.read(n).decode("utf-8"))
+            except ValueError:
+                self._json(400, _err(None, -32700, "parse error"))
+                return
+            if isinstance(req, list):
+                self._json(400, _err(None, -32600, "a batch is not accepted"))
+                return
+            msg = handle(req, record)
+            if msg is None:
+                self._send(202)
+                return
+            extra: dict[str, str] = {}
+            if isinstance(req, dict) and req.get("method") == "initialize":
+                new = uuid.uuid4().hex
+                sessions.add(new)
+                extra["Mcp-Session-Id"] = new
+            self._json(200, msg, extra)
+
+        def do_GET(self) -> None:
+            """@D_GET@"""
+            self._send(405)
+
+        def do_DELETE(self) -> None:
+            """@D_DELETE@"""
+            sid = self.headers.get("Mcp-Session-Id")
+            if sid is not None:
+                sessions.discard(sid)
+            self._send(204)
+
+    srv = http.server.ThreadingHTTPServer((host, port), Handler)
+    # The port is printed because 0 means "any free one", and because a caller that started
+    # this process needs to know where to send the first request.
+    print(f"http://{host}:{srv.socket.getsockname()[1]}/mcp", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+USAGE = "usage: python3 @ALIAS@_mcp.py [--record <file.jsonl>] [--http [<host>:]<port>] [--origin <origin>]\n"
+
+
+def main(argv: list[str]) -> int:
+    """@D_MAIN@"""
+    record_path: str | None = None
+    listen: str | None = None
+    allowed: list[str] = []
+    rest = list(argv)
+    while rest:
+        flag = rest.pop(0)
+        if flag == "--record" and rest:
+            record_path = rest.pop(0)
+        elif flag == "--http" and rest:
+            listen = rest.pop(0)
+        elif flag == "--origin" and rest:
+            allowed.append(rest.pop(0))
+        else:
+            sys.stderr.write(USAGE)
+            return 2
+    host, _, port = listen.rpartition(":") if listen is not None else ("", "", "")
+    if listen is not None and not port.isdigit():
+        sys.stderr.write(USAGE)
+        return 2
+    f = open(record_path, "ab") if record_path is not None else None
+    try:
+        if listen is None:
+            serve(f)
+        else:
+            serve_http(host or "127.0.0.1", int(port), f, tuple(allowed))
+    finally:
+        if f is not None:
+            f.close()
+    return 0
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    if argv[:1] == ["--record"] and len(argv) == 2:
-        with open(argv[1], "ab") as f:
-            serve(f)
-    elif argv:
-        sys.stderr.write("usage: python3 @ALIAS@_mcp.py [--record <file.jsonl>]\n")
-        sys.exit(2)
-    else:
-        serve()
+    sys.exit(main(sys.argv[1:]))
 "#;
 
 const TS_MCP: &str = r#"@HEADER@
 /** @DOC@
  */
-import { appendFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { appendFileSync, readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { createInterface } from "node:readline";
 import * as m from "./@ALIAS@.ts";
 @TYPE_IMPORTS@
 const TOOL = @TOOL@;
 
 const INSTRUCTIONS = @INSTRUCTIONS@;
+
+// MCP Apps (SEP-1865): the tool's view is the page an approver reads, written beside this
+// server by the same `rulec gen`. A host that renders one gets the table, the case it was
+// called with, and the rows that decided it; a host that does not gets the record alone.
+const UI_URI = "ui://@ALIAS@/table";
+const UI_MIME = "text/html;profile=mcp-app";
+const UI_EXT = "io.modelcontextprotocol/ui";
+const UI_DESC = @UI_DESC@;
+// Whether the client said it can render one. Set at initialize; the tool is offered without
+// a view until it does — the UI is an enhancement, never a requirement.
+let ui = false;
+
+/** @D_PAGE@ */
+function page(): string | null {
+  try {
+    return readFileSync(new URL("@ALIAS@_page.html", import.meta.url), "utf8");
+  } catch {
+    return null;
+  }
+}
 
 function _object(d: unknown, names: readonly string[]): Record<string, unknown> {
   if (typeof d !== "object" || d === null || Array.isArray(d)) {
@@ -460,14 +663,72 @@ export function call(d: unknown, tag = ""): string {
 
 let record: string | null = null;
 
-function _reply(id: unknown, result: unknown, error: unknown): void {
-  const msg: Record<string, unknown> = { jsonrpc: "2.0", id };
-  if (error !== undefined) {
-    msg.error = error;
-  } else {
-    msg.result = result;
+function _ok(id: unknown, result: unknown): Record<string, unknown> {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function _err(id: unknown, code: number, message: string): Record<string, unknown> {
+  return { jsonrpc: "2.0", id, error: { code, message } };
+}
+
+/** @D_HANDLE@ */
+export function handle(req: unknown): Record<string, unknown> | null {
+  if (typeof req !== "object" || req === null || !("id" in req)) {
+    return null;
   }
-  process.stdout.write(JSON.stringify(msg) + "\n");
+  const r = req as Record<string, unknown>;
+  const id = r.id;
+  const method = r.method;
+  const params = (r.params ?? {}) as Record<string, unknown>;
+  if (method === "initialize") {
+    const caps = (params.capabilities ?? {}) as Record<string, unknown>;
+    const ext = (caps.extensions ?? {}) as Record<string, unknown>;
+    ui = UI_EXT in ext && page() !== null;
+    return _ok(id, {
+      protocolVersion: params.protocolVersion ?? "2025-06-18",
+      capabilities: { tools: {}, resources: {} },
+      serverInfo: { name: TOOL.name, version: "@VERSION@" },
+      instructions: INSTRUCTIONS,
+    });
+  }
+  if (method === "ping") {
+    return _ok(id, {});
+  }
+  if (method === "tools/list") {
+    const tool = ui ? { ...TOOL, _meta: { ui: { resourceUri: UI_URI } } } : TOOL;
+    return _ok(id, { tools: [tool] });
+  }
+  if (method === "resources/list") {
+    const listed =
+      page() === null ? [] : [{ uri: UI_URI, name: TOOL.name, description: UI_DESC, mimeType: UI_MIME }];
+    return _ok(id, { resources: listed });
+  }
+  if (method === "resources/read") {
+    const html = page();
+    if (params.uri !== UI_URI || html === null) {
+      return _err(id, -32602, `unknown resource: ${String(params.uri)}`);
+    }
+    return _ok(id, { contents: [{ uri: UI_URI, mimeType: UI_MIME, text: html }] });
+  }
+  if (method === "tools/call") {
+    if (params.name !== TOOL.name) {
+      return _err(id, -32602, `unknown tool: ${String(params.name)}`);
+    }
+    let rec: string;
+    try {
+      rec = call(params.arguments ?? {});
+    } catch (e) {
+      if (e instanceof m.RuleInputError || e instanceof m.RuleContradictionError) {
+        return _ok(id, { content: [{ type: "text", text: `${e.name}: ${e.message}` }], isError: true });
+      }
+      throw e;
+    }
+    if (record !== null) {
+      appendFileSync(record, rec + "\n");
+    }
+    return _ok(id, { content: [{ type: "text", text: rec }], structuredContent: JSON.parse(rec) });
+  }
+  return _err(id, -32601, `unknown method: ${String(method)}`);
 }
 
 /** @D_SERVE@ */
@@ -477,64 +738,133 @@ function onLine(raw: string): void {
     return;
   }
   let req: unknown;
+  let msg: Record<string, unknown> | null;
   try {
     req = JSON.parse(line);
   } catch {
-    _reply(null, undefined, { code: -32700, message: "parse error" });
+    msg = _err(null, -32700, "parse error");
+    process.stdout.write(JSON.stringify(msg) + "\n");
     return;
   }
-  if (typeof req !== "object" || req === null || !("id" in req)) {
-    return;
-  }
-  const r = req as Record<string, unknown>;
-  const id = r.id;
-  const method = r.method;
-  const params = (r.params ?? {}) as Record<string, unknown>;
-  if (method === "initialize") {
-    _reply(
-      id,
-      {
-        protocolVersion: params.protocolVersion ?? "2025-06-18",
-        capabilities: { tools: {} },
-        serverInfo: { name: TOOL.name, version: "@VERSION@" },
-        instructions: INSTRUCTIONS,
-      },
-      undefined,
-    );
-  } else if (method === "ping") {
-    _reply(id, {}, undefined);
-  } else if (method === "tools/list") {
-    _reply(id, { tools: [TOOL] }, undefined);
-  } else if (method === "tools/call") {
-    if (params.name !== TOOL.name) {
-      _reply(id, undefined, { code: -32602, message: `unknown tool: ${String(params.name)}` });
-      return;
-    }
-    let rec: string;
-    try {
-      rec = call(params.arguments ?? {});
-    } catch (e) {
-      if (e instanceof m.RuleInputError || e instanceof m.RuleContradictionError) {
-        _reply(id, { content: [{ type: "text", text: `${e.name}: ${e.message}` }], isError: true }, undefined);
-        return;
-      }
-      throw e;
-    }
-    if (record !== null) {
-      appendFileSync(record, rec + "\n");
-    }
-    _reply(id, { content: [{ type: "text", text: rec }], structuredContent: JSON.parse(rec) }, undefined);
-  } else {
-    _reply(id, undefined, { code: -32601, message: `unknown method: ${String(method)}` });
+  msg = handle(req);
+  if (msg !== null) {
+    process.stdout.write(JSON.stringify(msg) + "\n");
   }
 }
 
-const argv = process.argv.slice(2);
-if (argv.length === 2 && argv[0] === "--record") {
-  record = argv[1];
-} else if (argv.length > 0) {
-  process.stderr.write("usage: node @ALIAS@_mcp.ts [--record <file.jsonl>]\n");
-  process.exit(2);
+/** @D_ORIGIN@ */
+function originOk(origin: string | null, allowed: readonly string[]): boolean {
+  if (origin === null || allowed.includes(origin)) {
+    return true;
+  }
+  return ["http://localhost", "http://127.0.0.1", "http://[::1]"].some((p) => origin.startsWith(p));
 }
-createInterface({ input: process.stdin, crlfDelay: Infinity }).on("line", onLine);
+
+/** @D_HTTP@ */
+function serveHttp(host: string, port: number, allowed: readonly string[]): void {
+  const sessions: Set<string> = new Set();
+  const srv = createServer((req, res) => {
+    function send(code: number, body: string, extra: Record<string, string>): void {
+      const head: Record<string, string | number> = { "Content-Length": Buffer.byteLength(body) };
+      if (body !== "") {
+        head["Content-Type"] = "application/json";
+      }
+      res.writeHead(code, { ...head, ...extra });
+      res.end(body);
+    }
+    const origin = req.headers.origin;
+    const sid = req.headers["mcp-session-id"];
+    if (req.method === "DELETE") {
+      if (typeof sid === "string") {
+        sessions.delete(sid);
+      }
+      send(204, "", {});
+      return;
+    }
+    if (req.method !== "POST") {
+      // @D_GET@
+      send(405, "", {});
+      return;
+    }
+    if (!originOk(typeof origin === "string" ? origin : null, allowed)) {
+      send(403, JSON.stringify(_err(null, -32000, "origin not allowed")), {});
+      return;
+    }
+    if (typeof sid === "string" && !sessions.has(sid)) {
+      send(404, JSON.stringify(_err(null, -32001, "no such session")), {});
+      return;
+    }
+    let body = "";
+    req.on("data", (chunk) => {
+      body += String(chunk);
+    });
+    req.on("end", () => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        send(400, JSON.stringify(_err(null, -32700, "parse error")), {});
+        return;
+      }
+      if (Array.isArray(parsed)) {
+        send(400, JSON.stringify(_err(null, -32600, "a batch is not accepted")), {});
+        return;
+      }
+      const msg = handle(parsed);
+      if (msg === null) {
+        send(202, "", {});
+        return;
+      }
+      const extra: Record<string, string> = {};
+      if ((parsed as Record<string, unknown>).method === "initialize") {
+        const fresh = randomUUID().replace(/-/g, "");
+        sessions.add(fresh);
+        extra["Mcp-Session-Id"] = fresh;
+      }
+      send(200, JSON.stringify(msg), extra);
+    });
+  });
+  srv.listen(port, host, () => {
+    // @D_PORT@
+    const a = srv.address();
+    const bound = typeof a === "object" && a !== null ? a.port : port;
+    process.stdout.write(`http://${host}:${bound}/mcp\n`);
+  });
+}
+
+const USAGE =
+  "usage: node @ALIAS@_mcp.ts [--record <file.jsonl>] [--http [<host>:]<port>] [--origin <origin>]\n";
+
+const argv = process.argv.slice(2);
+let listen: string | null = null;
+const allowed: string[] = [];
+while (argv.length > 0) {
+  const flag = argv.shift();
+  const value = argv.shift();
+  if (value === undefined) {
+    process.stderr.write(USAGE);
+    process.exit(2);
+  } else if (flag === "--record") {
+    record = value;
+  } else if (flag === "--http") {
+    listen = value;
+  } else if (flag === "--origin") {
+    allowed.push(value);
+  } else {
+    process.stderr.write(USAGE);
+    process.exit(2);
+  }
+}
+if (listen === null) {
+  createInterface({ input: process.stdin, crlfDelay: Infinity }).on("line", onLine);
+} else {
+  const cut = listen.lastIndexOf(":");
+  const host = cut < 0 ? "127.0.0.1" : listen.slice(0, cut) || "127.0.0.1";
+  const port = Number(cut < 0 ? listen : listen.slice(cut + 1));
+  if (!Number.isInteger(port)) {
+    process.stderr.write(USAGE);
+    process.exit(2);
+  }
+  serveHttp(host, port, allowed);
+}
 "#;

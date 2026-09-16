@@ -175,11 +175,22 @@ fn named(text: &str, alias: &str) -> String {
     if ascii_ok(text) { text.to_string() } else { format!("{text}({alias})") }
 }
 
-/// The draft. `outputs` is how many of the trailing columns are outputs.
+/// The draft, from a CSV. `outputs` is how many of the trailing columns are outputs.
 pub fn draft(csv: &str, name: &str, source: &str, outputs: usize) -> Result<String, String> {
-    let rows = parse_csv(csv);
+    draft_rows(parse_csv(csv), name, source, outputs)
+}
+
+/// The same draft from a grid that came from somewhere else — a sheet of an `.xlsx`
+/// (§15.50). Everything below the reading of the file is shared: one importer, whichever
+/// door the table came through.
+pub fn draft_rows(
+    rows: Vec<Vec<String>>,
+    name: &str,
+    source: &str,
+    outputs: usize,
+) -> Result<String, String> {
     let Some(header) = rows.first() else {
-        return Err(tr!("CSV が空です", "the CSV is empty"));
+        return Err(tr!("表が空です", "the table is empty"));
     };
     let ncol = header.len();
     if ncol < 2 {
@@ -209,8 +220,8 @@ pub fn draft(csv: &str, name: &str, source: &str, outputs: usize) -> Result<Stri
     let mut o = String::new();
     o.push_str(&format!("rule {} v1\n", named(name, "imported")));
     o.push_str(&tr!(
-        "description \"{source} から rulec import csv が起こした下書き。「{guess}」と書いた行は全部、人が確かめること\"\n",
-        "description \"A draft that rulec import csv made from {source}. Every line marked {guess} is for a person to confirm\"\n"
+        "description \"{source} から rulec import が起こした下書き。「{guess}」と書いた行は全部、人が確かめること\"\n",
+        "description \"A draft that rulec import made from {source}. Every line marked {guess} is for a person to confirm\"\n"
     ));
 
     // Enums, one per column of words.

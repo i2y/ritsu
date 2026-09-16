@@ -20,6 +20,7 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "ホーム" = "index.md" },
+  { "ブラウザで試す" = "playground.md" },
   { "インストール" = "install.md" },
   { "表(.rule)を書く" = "tour.md" },
   { "何を証明するか" = "checks.md" },

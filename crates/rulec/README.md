@@ -52,6 +52,11 @@ No runtime and no configuration: what comes out is ordinary dependency-free func
 > **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**
 > Everything below at length, in English and Japanese.
 > 日本語のドキュメントは **[i2y.github.io/rulec/ja/](https://i2y.github.io/rulec/ja/)** にあります。
+>
+> **Try it first — [i2y.github.io/rulec/playground/](https://i2y.github.io/rulec/playground/)**
+> The checker itself, compiled to wasm and running in the page: paste a table and the gap
+> comes back with the input that falls through it. Nothing is sent anywhere, and nothing
+> is installed.
 
 ---
 
@@ -221,7 +226,11 @@ itself rather than out of an extraction job. A fourth file, `fee_demo_mcp.py` be
 Python module and `fee_demo_mcp.mjs` beside the JavaScript one, serves the rule as one MCP
 tool for an agent that calls it rather than the application that embeds it: the arguments are
 the wire, the answer is that record line, rows included, and `rulec test` drives the server
-over the same vectors as the runner.
+over the same vectors as the runner — over **stdio and over Streamable HTTP**, because the
+places that would call a rule (a chat client's connectors, an agent builder, a workflow
+product) only accept a URL. A fifth file, `fee_demo_page.html`, is the page an approver
+reads; where the host renders MCP Apps the server offers it as the tool's view, **opened on
+the case that was just asked**, with the rows that decided it lit up.
 
 In SQL the same rule is one query over a relation of inputs — a row of the table is a `WHEN`,
 the rows that matched come back as columns — which is what a closing batch or an analyst's
@@ -260,7 +269,8 @@ $ rulec doc rules/送料.rule --lang ja             # for whoever approves the t
 $ rulec doc rules/送料.rule --lang ja --format html  # the same, as a page they can try a case on
 $ rulec explain E101                              # when it appears, how to fix it, a repro
 $ rulec mcp                                       # the same commands as MCP tools, for an agent without a shell
-$ rulec import csv tariff.csv > rules/tariff.rule  # a first draft from a spreadsheet; every guess is marked
+$ rulec import xlsx 運賃表.xlsx --sheet 本則    # a first draft from the workbook itself; every guess is marked
+$ rulec import csv tariff.csv > rules/tariff.rule  # the same from a CSV
 ```
 
 Transcribe a tariff, drop one prefecture out of forty-seven, and the gap comes back with the
@@ -314,10 +324,12 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
                   `rulec mcp` serves the same commands as MCP tools where there is no shell
-src/              28 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+src/              30 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
-                  import (a draft from a CSV), mcp (the command table as MCP tools),
-                  codegen/tool (the rule as an MCP tool), codegen/sql (the rule as one query)
+                  import (a draft from a sheet), xlsx (reading the workbook: ZIP, deflate,
+                  the number formats), mcp (the command table as MCP tools),
+                  codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query),
+                  wasm (the checker as the site's playground)
 tests/corpus/     18 rules transcribed from real published terms
 tests/mutants/    19 files, each with one mistake planted in it
 tests/golden/     21 snapshots of diagnostic prose, in both languages
@@ -325,7 +337,8 @@ tests/oracle/     two premium tables transcribed grade by grade from their publi
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
-                  mcp, import, tool (the rule as an MCP tool), sql
+                  mcp, import, xlsx, tool (the rule as an MCP tool), sql, wasm (the site's
+                  playground answers what the binary answers)
 ```
 
 Every one of those eighteen rules comes from **public information** — Japan Post's tariff,
@@ -335,7 +348,7 @@ of 協会けんぽ and 日本年金機構. None of it is private data. The two p
 held, grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 250 tests; python3, node, rustc, ruby, go and swiftc are used where present
+$ cargo test          # 278 tests; python3, node, rustc, ruby, go and swiftc are used where present
 ```
 
 ## Where it stands

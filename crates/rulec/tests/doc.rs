@@ -409,3 +409,30 @@ fn 以外のグループには件数を添える() {
     assert!(d.contains("**近畿圏**（6 値）"), "グループの値数は出す:\n{d}");
     assert!(!d.contains("`not: 近畿圏` は残り"), "使っていない形の件数を出している");
 }
+
+/// The page is also the tool's view (SEP-1865, §15.52). Inside a host's frame it introduces
+/// itself and opens on the case the tool was called with; the handshake is what makes that
+/// happen, and nothing else in the suite would notice if it were dropped.
+#[test]
+fn ページはホストの枠の中で名乗る() {
+    let dir = std::env::temp_dir().join(format!("rulec-doc-ui-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
+        .args(["doc", "tests/corpus/送料.rule", "--format", "html"])
+        .output()
+        .expect("rulec を起動できない");
+    let html = String::from_utf8_lossy(&o.stdout).into_owned();
+    for needle in [
+        "window.parent !== window",
+        "\"ui/initialize\"",
+        "ui/notifications/initialized",
+        "ui/notifications/tool-input",
+        "ui/notifications/tool-result",
+        "structuredContent",
+    ] {
+        assert!(html.contains(needle), "ページに {needle} が無い");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

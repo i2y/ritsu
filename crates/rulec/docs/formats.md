@@ -129,7 +129,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner, or `mcp`, one `tools/call` per vector through the generated server ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)) |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; or `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)) |
 | `ok` | the generated code and the reference evaluator agreed on every vector |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
@@ -208,7 +208,7 @@ meaning is in [generated-code.md](generated-code.md).
 
 ```json
 {"rule":"クーポン一枚","alias":"coupon_step","version":"1","source_sha256":"…",
- "python":{"module":"coupon_step","mcp":"coupon_step_mcp.py","function":"coupon_step",
+ "python":{"module":"coupon_step","mcp":"coupon_step_mcp.py","page":"coupon_step_page.html","function":"coupon_step",
            "signature":"def coupon_step(subtotal: YenInclTax, …) -> Output:",
            "traced":"coupon_step_traced",
            "traced_signature":"def coupon_step_traced(subtotal: YenInclTax, …) -> tuple[Output, list[Fired]]:",
@@ -222,13 +222,13 @@ meaning is in [generated-code.md](generated-code.md).
            "enums":[{"name":"クーポン種別","alias":"CouponKind",
                      "values":[{"name":"率引き","alias":"PERCENT"}]}],
            "errors":["RuleInputError","RuleContradictionError"]},
- "typescript":{"module":"coupon_step.ts","mcp":"coupon_step_mcp.ts","function":"coupon_step",
+ "typescript":{"module":"coupon_step.ts","mcp":"coupon_step_mcp.ts","page":"coupon_step_page.html","function":"coupon_step",
                "signature":"export function coupon_step(subtotal: YenInclTax, …): Output",
                "params":[…],"returns":"Output","outputs":[…],
                "enums":[{"name":"クーポン種別","alias":"CouponKind",
                          "values":[{"name":"率引き","alias":"PERCENT"}]}],
                "errors":["RuleInputError","RuleContradictionError"]},
- "javascript":{"module":"coupon_step.mjs","mcp":"coupon_step_mcp.mjs","function":"coupon_step",
+ "javascript":{"module":"coupon_step.mjs","mcp":"coupon_step_mcp.mjs","page":"coupon_step_page.html","function":"coupon_step",
                "signature":"export function coupon_step(subtotal, applied, kind, rate, face, dup)",
                "params":[…],"returns":"Output","outputs":[…],"enums":[…],
                "errors":["RuleInputError","RuleContradictionError"]},

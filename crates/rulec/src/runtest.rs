@@ -9,7 +9,8 @@
 //! The unit vectors of the rounding helpers (§8.5) run in the same place. Table agreement
 //! alone would hide a helper bug in a table that never produces fractions.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -217,11 +218,14 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
             if let Some(mcp) = b.mcp {
-                let diff = match via_mcp(&dir.join(&mcp(alias).cwd), &mcp(alias), alias, &want) {
-                    Err(f) => Some(f),
-                    Ok(got) => (got != want).then(|| first_diff(&got, &want)),
-                };
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "mcp", vectors: n, diff });
+                for (via, http) in [("mcp", false), ("mcp-http", true)] {
+                    let cwd = dir.join(&mcp(alias).cwd);
+                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, http) {
+                        Err(f) => Some(f),
+                        Ok(got) => (got != want).then(|| first_diff(&got, &want)),
+                    };
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via, vectors: n, diff });
+                }
             }
         }
     }
@@ -240,52 +244,51 @@ pub fn run(dir: &Path) -> Result<Run, String> {
 /// `tools/call` per expected record with its `in` as the arguments. The text of every result
 /// is the record line the runner would have printed, so the caller compares the two the
 /// same way.
-fn via_mcp(cwd: &Path, plan: &crate::backend::Plan, alias: &str, want: &str) -> Result<String, Failure> {
-    let broken = |m: String| Failure::Broken(m);
-    let mut child = Command::new(&plan.cmd)
-        .current_dir(cwd)
+///
+/// `http` picks the transport (§15.51). The conversation below is the same either way, which
+/// is the whole point of running both: what differs is the carrying, and the answers must
+/// not differ with it.
+fn via_mcp(
+    cwd: &Path,
+    plan: &crate::backend::Plan,
+    alias: &str,
+    want: &str,
+    http: bool,
+) -> Result<String, Failure> {
+    let mut cmd = Command::new(&plan.cmd);
+    cmd.current_dir(cwd)
         .args(&plan.args)
         .envs(closed())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
-    let mut si = child.stdin.take().ok_or_else(|| broken("stdin".into()))?;
+        .stderr(Stdio::piped());
+    if http {
+        // Port 0: the server takes a free one and says which.
+        cmd.arg("--http").arg("127.0.0.1:0");
+    }
+    let mut child = cmd.spawn().map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
+    let si = child.stdin.take().ok_or_else(|| broken("stdin".into()))?;
     let mut so = BufReader::new(child.stdout.take().ok_or_else(|| broken("stdout".into()))?);
-    let ask = |si: &mut std::process::ChildStdin, so: &mut BufReader<std::process::ChildStdout>, req: &str| -> Result<crate::json::Json, Failure> {
-        writeln!(si, "{req}").map_err(|e| broken(e.to_string()))?;
-        si.flush().ok();
+
+    let mut wire: Box<dyn Wire> = if http {
         let mut line = String::new();
-        loop {
-            line.clear();
-            if so.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
-                return Err(broken(tr!("MCP サーバが答えずに終わりました", "the MCP server ended without answering")));
-            }
-            if !line.trim().is_empty() {
-                break;
-            }
+        if so.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
+            return Err(broken(tr!("HTTP の MCP サーバが待ち受けませんでした", "the HTTP MCP server never started listening")));
         }
-        let j = crate::json::parse(line.trim())
-            .map_err(|e| broken(tr!("MCP サーバの答えが JSON ではありません: {e}\n{line}", "the MCP server's answer is not JSON: {e}\n{line}")))?;
-        if let Some(e) = j.get("error") {
-            return Err(broken(tr!("MCP サーバが断りました: {}", "the MCP server refused: {}", crate::json::unparse(e))));
-        }
-        match j.get("result") {
-            Some(r) => Ok(r.clone()),
-            None => Err(broken(tr!("MCP サーバの答えに result がありません", "the MCP server's answer has no result"))),
-        }
+        let at = line.trim().trim_start_matches("http://").trim_end_matches("/mcp").to_string();
+        Box::new(HttpWire::connect(&at)?)
+    } else {
+        Box::new(StdioWire { si, so })
     };
-    let init = ask(
-        &mut si,
-        &mut so,
+
+    let init = wire.ask(
         "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"rulec test\",\"version\":\"0\"}}}",
     )?;
     if init.get("serverInfo").is_none() {
         return Err(broken(tr!("initialize の答えに serverInfo がありません", "the initialize answer has no serverInfo")));
     }
-    writeln!(si, "{{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}").map_err(|e| broken(e.to_string()))?;
-    let tools = ask(&mut si, &mut so, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}")?;
+    wire.notify("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")?;
+    let tools = wire.ask("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}")?;
     let one = match tools.get("tools") {
         Some(crate::json::Json::Arr(ts)) if ts.len() == 1 => ts[0].get("name").and_then(|n| n.as_str()) == Some(alias),
         _ => false,
@@ -303,7 +306,7 @@ fn via_mcp(cwd: &Path, plan: &crate::backend::Plan, alias: &str, want: &str) -> 
         let Some(inp) = exp.get("in") else {
             return Err(broken(tr!("期待値に in がありません", "an expected record has no in")));
         };
-        let r = ask(&mut si, &mut so, &format!(
+        let r = wire.ask(&format!(
             "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
             k + 2,
             crate::json::quote(alias),
@@ -324,9 +327,151 @@ fn via_mcp(cwd: &Path, plan: &crate::backend::Plan, alias: &str, want: &str) -> 
         got.push_str(text);
         got.push('\n');
     }
-    drop(si);
+    drop(wire);
+    // Closing stdin is what ends the stdio server; the HTTP one waits for connections until
+    // it is told to stop.
+    let _ = child.kill();
     let _ = child.wait();
     Ok(got)
+}
+
+fn broken(m: String) -> Failure {
+    Failure::Broken(m)
+}
+
+/// The `result` of one answer, or the refusal as a failure.
+fn result_of(line: &str) -> Result<crate::json::Json, Failure> {
+    let j = crate::json::parse(line.trim()).map_err(|e| {
+        broken(tr!(
+            "MCP サーバの答えが JSON ではありません: {e}\n{line}",
+            "the MCP server's answer is not JSON: {e}\n{line}"
+        ))
+    })?;
+    if let Some(e) = j.get("error") {
+        return Err(broken(tr!("MCP サーバが断りました: {}", "the MCP server refused: {}", crate::json::unparse(e))));
+    }
+    match j.get("result") {
+        Some(r) => Ok(r.clone()),
+        None => Err(broken(tr!("MCP サーバの答えに result がありません", "the MCP server's answer has no result"))),
+    }
+}
+
+/// How a request reaches the server and how the answer comes back.
+trait Wire {
+    fn ask(&mut self, req: &str) -> Result<crate::json::Json, Failure>;
+    /// A message with no id: the server must not answer it.
+    fn notify(&mut self, req: &str) -> Result<(), Failure>;
+}
+
+struct StdioWire {
+    si: std::process::ChildStdin,
+    so: BufReader<std::process::ChildStdout>,
+}
+
+impl Wire for StdioWire {
+    fn ask(&mut self, req: &str) -> Result<crate::json::Json, Failure> {
+        self.notify(req)?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if self.so.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
+                return Err(broken(tr!("MCP サーバが答えずに終わりました", "the MCP server ended without answering")));
+            }
+            if !line.trim().is_empty() {
+                return result_of(&line);
+            }
+        }
+    }
+
+    fn notify(&mut self, req: &str) -> Result<(), Failure> {
+        writeln!(self.si, "{req}").map_err(|e| broken(e.to_string()))?;
+        self.si.flush().ok();
+        Ok(())
+    }
+}
+
+/// MCP's Streamable HTTP, written out: one POST per message, the answer's length stated, so
+/// the same connection carries the whole conversation.
+struct HttpWire {
+    out: TcpStream,
+    inn: BufReader<TcpStream>,
+    at: String,
+    session: Option<String>,
+}
+
+impl HttpWire {
+    fn connect(at: &str) -> Result<HttpWire, Failure> {
+        let out = TcpStream::connect(at).map_err(|e| broken(tr!("{at} に繋げません: {e}", "cannot connect to {at}: {e}")))?;
+        let inn = BufReader::new(out.try_clone().map_err(|e| broken(e.to_string()))?);
+        Ok(HttpWire { out, inn, at: at.to_string(), session: None })
+    }
+
+    fn post(&mut self, body: &str) -> Result<(u16, String), Failure> {
+        let mut head = format!(
+            "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-06-18\r\nContent-Length: {}\r\n",
+            self.at,
+            body.len()
+        );
+        // The session the server handed out at initialize goes back on every later message.
+        if let Some(s) = &self.session {
+            head.push_str(&format!("Mcp-Session-Id: {s}\r\n"));
+        }
+        head.push_str("\r\n");
+        self.out
+            .write_all(head.as_bytes())
+            .and_then(|()| self.out.write_all(body.as_bytes()))
+            .and_then(|()| self.out.flush())
+            .map_err(|e| broken(tr!("送れません: {e}", "cannot send: {e}")))?;
+
+        let mut line = String::new();
+        if self.inn.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
+            return Err(broken(tr!("HTTP の答えがありません", "there was no HTTP answer")));
+        }
+        let status: u16 = line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|c| c.parse().ok())
+            .ok_or_else(|| broken(tr!("HTTP の一行目が読めません: {line}", "the first line of the answer is not HTTP: {line}")))?;
+        let mut len = 0usize;
+        loop {
+            let mut h = String::new();
+            if self.inn.read_line(&mut h).map_err(|e| broken(e.to_string()))? == 0 {
+                return Err(broken(tr!("HTTP の見出しが途中で切れました", "the HTTP headers ended in the middle")));
+            }
+            let h = h.trim_end();
+            if h.is_empty() {
+                break;
+            }
+            let Some((k, v)) = h.split_once(':') else { continue };
+            match k.to_ascii_lowercase().as_str() {
+                "content-length" => len = v.trim().parse().unwrap_or(0),
+                "mcp-session-id" => self.session = Some(v.trim().to_string()),
+                _ => {}
+            }
+        }
+        let mut buf = vec![0u8; len];
+        self.inn.read_exact(&mut buf).map_err(|e| broken(e.to_string()))?;
+        Ok((status, String::from_utf8_lossy(&buf).into_owned()))
+    }
+}
+
+impl Wire for HttpWire {
+    fn ask(&mut self, req: &str) -> Result<crate::json::Json, Failure> {
+        let (status, body) = self.post(req)?;
+        if status != 200 {
+            return Err(broken(tr!("HTTP {status} が返りました: {body}", "the server answered HTTP {status}: {body}")));
+        }
+        result_of(&body)
+    }
+
+    fn notify(&mut self, req: &str) -> Result<(), Failure> {
+        let (status, body) = self.post(req)?;
+        // A message with no id has no answer, and the protocol says so with 202.
+        if status != 202 {
+            return Err(broken(tr!("通知に HTTP {status} が返りました: {body}", "a notification was answered with HTTP {status}: {body}")));
+        }
+        Ok(())
+    }
 }
 
 fn shown(rule: &str) -> String {
@@ -399,7 +544,11 @@ pub fn render(r: &Run) -> String {
 
 /// The suffix that says a result came through the generated MCP server.
 fn via(x: &Outcome) -> &'static str {
-    if x.via == "mcp" { ", MCP" } else { "" }
+    match x.via {
+        "mcp" => ", MCP",
+        "mcp-http" => ", MCP/HTTP",
+        _ => "",
+    }
 }
 
 /// `--format json` (docs/formats.md). One object for the run.

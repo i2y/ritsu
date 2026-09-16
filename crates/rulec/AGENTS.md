@@ -59,11 +59,14 @@ Two shapes are worth knowing before the first draft:
   called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 
-When the source is a spreadsheet, `rulec import csv <file.csv>` writes a first draft — the
-columns as inputs, the last column as the output, the values as an enum or a range, each
-guess marked `# 推定` — which is then yours to correct: a numeric column is copied as
-equalities and is usually meant as thresholds, and no range, rounding or unit in it is
-decided. It saves the typing, not the reading.
+When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
+the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
+one by default; `rulec import csv <file.csv>` does the same from a CSV. The columns become
+inputs, the last column the output, the values an enum or a range, and each guess is marked
+`# 推定` — which is then yours to correct: a numeric column is copied as equalities and is
+usually meant as thresholds, and no range, rounding or unit in it is decided. A date, a
+percentage and a unit that lived in the cell's number format are read back out of it. It
+saves the typing, not the reading.
 
 One habit pays for itself at the first revision:
 
@@ -149,7 +152,11 @@ third function, `_record`, turns one call into one line of the fixtures format, 
 records that `replay` and `diff` need come out of the generated code itself. A fourth file
 beside the module, `<alias>_mcp.py` (`.mjs` in the JavaScript directory), serves the rule as
 one MCP tool for an agent that will *call* it: the arguments are the wire form, the answer is
-the record line, and `--record <file.jsonl>` keeps every call as a fixtures record
+the record line, and `--record <file.jsonl>` keeps every call as a fixtures record. It speaks
+stdio for an agent on the same machine and, with `--http <port>`, MCP's Streamable HTTP for
+the places that only accept a URL — put TLS and authentication in front of that one. Where
+the host renders MCP Apps, the server also offers the approver's page (`<alias>_page.html`,
+written beside it) as the tool's view, opened on the case that was just asked
 ([docs/generated-code.md](docs/generated-code.md)).
 
 For a target none of the eight covers — another language, a workflow engine's expression

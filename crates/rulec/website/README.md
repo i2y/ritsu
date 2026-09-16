@@ -111,6 +111,31 @@ $ python3 tools/make_overview.py --verify ../target/release/rulec
   way GitHub anchors it and a link written against the repository still
   lands.
 
+## The playground
+
+`docs/playground.md` (and its Japanese twin) is the checker itself, compiled to
+wasm32 and running in the page: `check`, everything `gen` writes, and the
+approver's page, with nothing sent anywhere. Three files sit beside it in
+`docs/playground/`, and `sync.sh` copies them into `docs-ja/playground/` the way
+it copies the images:
+
+| file | what it is |
+|---|---|
+| `playground.js` | the page's side of the boundary — allocate, write, call, read the length out of the header. It finds the other two from its own URL |
+| `playground.css` | borrows the theme's variables, so the palette and the dark-mode switch need no second set of colours |
+| `rulec.wasm` | **a build product, committed**, so that building the site needs no Rust toolchain — the same bargain as the SVGs and Python |
+
+Re-build it after anything that changes what `check`, `gen` or `doc` answer:
+
+```console
+$ website/tools/make_wasm.sh
+```
+
+`tests/wasm.rs` drives the committed file through node and holds its answers to
+the binary's, byte for byte, in both languages — and holds `rulec_version` to the
+crate's version. A stale `rulec.wasm` is a failing test, not a page that quietly
+answers an old way.
+
 ## The screenshots
 
 `docs/images/try-ja.png` and `try-en.png` are the page `rulec doc --format html` renders,
