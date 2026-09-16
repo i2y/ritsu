@@ -6,10 +6,10 @@ name: release
 # repository installs one of them onto a runner, and the install page says
 # which lines to run by hand.
 #
-#   rulec-v0.2.0-x86_64-unknown-linux-musl.tar.gz
-#   rulec-v0.2.0-aarch64-unknown-linux-musl.tar.gz
-#   rulec-v0.2.0-x86_64-apple-darwin.tar.gz
-#   rulec-v0.2.0-aarch64-apple-darwin.tar.gz
+#   rulec-v0.3.0-x86_64-unknown-linux-musl.tar.gz
+#   rulec-v0.3.0-aarch64-unknown-linux-musl.tar.gz
+#   rulec-v0.3.0-x86_64-apple-darwin.tar.gz
+#   rulec-v0.3.0-aarch64-apple-darwin.tar.gz
 #   SHA256SUMS
 
 on:
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # A release named v0.3.0 that says `rulec 0.2.0` would mislead everyone
+      # A release named v0.3.0 that says `rulec 0.3.0` would mislead everyone
       # who runs `--version`, so the tag has to be the version in Cargo.toml.
       - name: The tag is the crate's version
         run: |
