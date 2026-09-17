@@ -357,13 +357,27 @@ verdict**, and the verdict's type is a finite enum. The walk is therefore a redu
 string over a finite alphabet — a small automaton — and how many elements there are at run
 time does not change what can be said about it.
 
+### What a fold generates
+
+`rulec gen` writes the walk in **Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift** —
+every target but SQL, which is refused by name below.
+The sequence is an argument like any other input — an array of objects on the wire (§10.2),
+each element's fields integers in their canonical unit — and every field gets the same entry
+guard an input gets. `rulec test` runs the generated walk over the vectors and holds it to the
+reference evaluator, the same as for any rule.
+
+**SQL is refused by name.** One query has nowhere to carry a value from row to row and stop
+early. A window function or a recursive CTE can be made to look like a walk, but only by
+giving up the 1:1 between a branch of the generated query and a row of the rule — which is the
+reason the SQL backend exists. So `rulec gen` names SQL, skips it, and writes the other seven.
+
 ### What is not built yet
 
-The checks above are; **generation is not**. `rulec gen` refuses a rule with a fold by name,
-and `examples` cannot be written for one yet (E025), because an example is a row of cells and
-the shape for writing a sequence into one is not decided. The wire that carries a sequence,
-the vectors that cover one and the eight backends that run one are one piece of work, and
-they arrive together.
+`examples` cannot be written for a rule with a fold (E025): an example is a row of cells, and
+the shape for writing a sequence into one is not decided. A sequence where `take_unique`
+matches twice has no expected record either — the generated code raises, and there is no shape
+for "an error" in the expected records yet — so `rulec coverage` names that transition as
+uncovered rather than rounding the score up.
 
 ## 7. Tables
 

@@ -730,14 +730,191 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// Indent a block that was emitted at the base level, so it can go inside a loop. The
+    /// emitters write their own indentation into the format strings, so the body of a walk is
+    /// built first and moved in afterwards — one place instead of a parameter threaded
+    /// through every line of six backends (§15.56).
+    fn indent_block(body: &str, by: &str) -> String {
+        body.lines()
+            .map(|l| if l.trim().is_empty() { l.to_string() } else { format!("{by}{l}") })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + if body.ends_with('\n') { "\n" } else { "" }
+    }
+
+    /// The fields of one element, in declaration order.
+    fn element_fields(&self) -> Vec<&crate::ast::VarDecl> {
+        self.f.elements.iter().flat_map(|e| &e.fields).collect()
+    }
+
+    /// Names a walk binds itself: the accumulators, and `held` inside `exhausted`.
+    fn fold_locals(&self) -> (String, String, String, String, String) {
+        (
+            self.temp("answer"),
+            self.temp("stopped"),
+            self.temp("taken"),
+            self.temp("kept"),
+            self.temp("best"),
+        )
+    }
+
+    /// The rule's items — derived values, definitions and tables — as Python, at the base
+    /// indentation. `local` decides how a name is spelled, which is where a walk puts the
+    /// element's own fields.
+    fn py_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("導出", "derived value")));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
+                }
+                Item::Table(t) => o.push_str(&self.py_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
+    /// The walk itself (§15.56): the accumulators, one pass per element with the body inside
+    /// it, and the answer bound to the output's own name so that the rounding and the return
+    /// below are the ones every rule uses.
+    fn py_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let e = self.temp("elem");
+        let held = self.temp("held");
+        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let out_ty = self.ty_of(&out_name);
+        let acc_ty = if out_ty.is_numeric() { "int".to_string() } else { self.py_ty(&out_ty) };
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| unparen(&self.expr(x, &local).text).to_string()).unwrap_or_else(|| "0".to_string())
+        };
+
+        let mut o = String::new();
+        o.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("    {stopped} = False\n"));
+        o.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
+        o.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
+        o.push_str(&format!("    {best}: int | None = None\n"));
+        o.push_str(&format!("    for {e} in {seq}:\n"));
+
+        let mut body = self.py_element_guards(&local);
+        body.push_str(&self.py_items(&local, trace));
+        // The verdict the table wrote for this element, and what the walk does about it.
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            let cls = self.py_ty(&self.ty_of(&fold.verdict));
+            let member = self.value_names.get(&name.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
+            body.push_str(&format!("    if {v} is {cls}.{member}:  # {}\n", name.text));
+            match arm {
+                Arm::Next => body.push_str("        pass\n"),
+                Arm::Stop(None) => body.push_str("        break\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("        {answer} = {}\n", unparen(&self.expr(x, &local).text)));
+                    body.push_str(&format!("        {stopped} = True\n        break\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!("        if {taken} is not None:\n"));
+                        body.push_str(&format!(
+                            "            raise RuleContradictionError(\"{}\")\n",
+                            tr!(
+                                "畳み込み {}: take_unique に二件当たりました",
+                                "fold {}: two elements matched a take_unique",
+                                fold.verdict
+                            )
+                        ));
+                        body.push_str(&format!("        {taken} = {}\n", unparen(&self.expr(expr, &local).text)));
+                    } else {
+                        body.push_str(&format!("        if {taken} is None:\n"));
+                        body.push_str(&format!("            {taken} = {}\n", unparen(&self.expr(expr, &local).text)));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = self.temp("key");
+                    body.push_str(&format!("        {k} = {}\n", unparen(&self.expr(key, &local).text)));
+                    body.push_str(&format!("        if {best} is None or {k} > {best}:\n"));
+                    body.push_str(&format!("            {best} = {k}\n"));
+                    body.push_str(&format!("            {kept} = {}\n", unparen(&self.expr(expr, &local).text)));
+                }
+            }
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+
+        // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
+        // that ended on `stop with` has its answer already.
+        o.push_str(&format!("    if {seq} and not {stopped}:\n"));
+        o.push_str(&format!(
+            "        {held} = {taken} if {taken} is not None else ({kept} if {kept} is not None else {})\n",
+            text(&fold.empty)
+        ));
+        o.push_str(&format!("        {answer} = {}\n", text(&fold.exhausted)));
+        o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk: the same checks an input gets, on the
+    /// values the caller filled in for this element.
+    fn py_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let v = local(&i.name.text);
+            let ty = self.ty_of(&i.name.text);
+            match &ty {
+                Ty::Enum(_) => o.push_str(&format!(
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(f\"{}\")\n",
+                    self.py_ty(&ty),
+                    tr!("{} が列挙 {} の値ではありません: {{{v}!r}}", "{} is not a value of enum {}: {{{v}!r}}", i.name.text, self.py_ty(&ty))
+                )),
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    o.push_str(&format!(
+                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(f\"{}\")\n",
+                        tr!("{} が整数ではありません: {{{v}!r}}", "{} is not an integer: {{{v}!r}}", i.name.text)
+                    ));
+                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                        let sc = self.c.wire_scale(&i.name.text);
+                        o.push_str(&format!(
+                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(f\"{}\")\n",
+                            crate::types::wire_int(lo, sc),
+                            crate::types::wire_int(hi, sc),
+                            tr!("{} が範囲の外です: {{{v}}}", "{} is out of range: {{{v}}}", i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o
+    }
+
     fn py_fn(&self) -> String {
         let fname = pub_name(&self.f.name);
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
             .collect();
+        // The sequence a walk reads comes last, after the values that hold for the whole call
+        // (§15.56).
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: list[Element]", pub_name(&el.name)));
+        }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 {
             self.py_ty(&self.ty_of(&outs[0].name.text))
@@ -745,6 +922,20 @@ impl<'a> Gen<'a> {
             "Output".into()
         };
         let mut o = String::new();
+
+        // One element is a row of inputs, so it is the same NamedTuple an `Output` is.
+        if let Some(el) = &self.f.elements {
+            o.push_str("class Element(NamedTuple):\n");
+            o.push_str(&format!("    \"\"\"{}\"\"\"\n\n", tr!("{} の一件", "one of {}", el.name.text)));
+            for fd in &el.fields {
+                o.push_str(&format!(
+                    "    {}: {}\n",
+                    pub_name(&fd.name),
+                    self.py_ty(&self.ty_of(&fd.name.text))
+                ));
+            }
+            o.push_str("\n\n");
+        }
 
         // Multiple outputs are a NamedTuple (§8.5).
         if outs.len() > 1 {
@@ -757,7 +948,10 @@ impl<'a> Gen<'a> {
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            args.push(pub_name(&el.name));
+        }
         let traced = format!("{fname}_traced");
         o.push_str(&format!("def {fname}({}) -> {ret}:\n", params.join(", ")));
         o.push_str(&format!("    \"\"\"{}\"\"\"\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
@@ -823,18 +1017,11 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {trace}: _Trace = []\n"));
 
         // Derived values and definitions, in declaration order (define-before-use, §5.1).
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("導出", "derived value")));
-                }
-                Item::Define(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
-                }
-                Item::Table(t) => o.push_str(&self.py_table(t, &local, &trace)),
-            }
+        // A walk runs the same body once per element, so it is written once and moved in
+        // (§15.56).
+        match &self.f.fold {
+            None => o.push_str(&self.py_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.py_walk(fold, &trace)),
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -1306,6 +1493,177 @@ impl<'a> Gen<'a> {
         align(&o)
     }
 
+    /// The rule's items as Go, at the base indentation (§15.56).
+    fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&self.go_unread(&d.name.text));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
+                    o.push_str(&self.go_unread(&d.name.text));
+                }
+                Item::Table(t) => o.push_str(&self.go_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
+    /// The walk, in Go (§15.56).
+    fn go_walk(&self, fold: &crate::ast::FoldDecl, trace: &str, zero: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = format!("in.{}", pascal(&pub_name(&el.name)));
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let e = self.temp("elem");
+        let held = self.temp("held");
+        // Go has no `None`, so each accumulator carries its own "was it ever set" flag.
+        let has_taken = self.temp("tookOne");
+        let has_kept = self.temp("keptOne");
+        let has_best = self.temp("bestSet");
+        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                        format!("int64({v})")
+                    } else {
+                        v
+                    }
+                }
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let out_ty = self.ty_of(&out_name);
+        let acc_ty = if out_ty.is_numeric() { "int64".to_string() } else { self.go_ty(&out_ty) };
+        let acc_zero = if out_ty.is_numeric() { "0".to_string() } else { self.go_zero(&out_ty) };
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| go_expr(&self.expr(x, &local).text)).unwrap_or_else(|| "0".to_string())
+        };
+        // Go refuses to compile a local nothing reads, so only the arms that are written get one.
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
+
+        let mut o = String::new();
+        o.push_str(&format!("\tvar {answer} {acc_ty} = {}{CELL}// {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("\t{stopped} := false\n"));
+        if takes {
+            o.push_str(&format!("\tvar {taken} {acc_ty} = {acc_zero}\n\t{has_taken} := false\n"));
+        }
+        if keeps {
+            o.push_str(&format!("\tvar {kept} {acc_ty} = {acc_zero}\n\t{has_kept} := false\n"));
+            o.push_str(&format!("\tvar {best} int64 = 0\n\t{has_best} := false\n"));
+        }
+        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
+
+        let mut body = self.go_element_guards(&local, zero);
+        body.push_str(&self.go_items(&local, trace));
+        // The verdict the table wrote for this element, and what the walk does about it.
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            body.push_str(&format!("\tif {} == {} {{ // {}\n", v, self.go_value(&name.text), name.text));
+            match arm {
+                Arm::Next => body.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
+                Arm::Stop(None) => body.push_str("\t\tbreak\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("\t\t{answer} = {}\n", go_expr(&self.expr(x, &local).text)));
+                    body.push_str(&format!("\t\t{stopped} = true\n\t\tbreak\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!("\t\tif {has_taken} {{\n"));
+                        body.push_str(&format!(
+                            "\t\t\treturn {zero}, nil, fmt.Errorf(\"{}\")\n\t\t}}\n",
+                            tr!(
+                                "畳み込み {}: take_unique に二件当たりました",
+                                "fold {}: two elements matched a take_unique",
+                                fold.verdict
+                            )
+                        ));
+                        body.push_str(&format!("\t\t{taken} = {}\n\t\t{has_taken} = true\n", go_expr(&self.expr(expr, &local).text)));
+                    } else {
+                        body.push_str(&format!("\t\tif !{has_taken} {{\n"));
+                        body.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{has_taken} = true\n\t\t}}\n", go_expr(&self.expr(expr, &local).text)));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = self.temp("key");
+                    body.push_str(&format!("\t\t{k} := {}\n", go_expr(&self.expr(key, &local).text)));
+                    body.push_str(&format!("\t\tif !{has_best} || {k} > {best} {{\n"));
+                    body.push_str(&format!("\t\t\t{best} = {k}\n\t\t\t{has_best} = true\n"));
+                    body.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{has_kept} = true\n\t\t}}\n", go_expr(&self.expr(expr, &local).text)));
+                }
+            }
+            body.push_str("\t}\n");
+        }
+        o.push_str(&Self::indent_block(&body, "\t"));
+        o.push_str("\t}\n");
+
+        // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
+        // that ended on `stop with` has its answer already.
+        o.push_str(&format!("\tif len({seq}) > 0 && !{stopped} {{\n"));
+        o.push_str(&format!("\t\tvar {held} {acc_ty} = {}\n", text(&fold.empty)));
+        if takes {
+            o.push_str(&format!("\t\tif {has_taken} {{\n\t\t\t{held} = {taken}\n\t\t}}\n"));
+        }
+        if keeps {
+            let els = if takes { " else" } else { "" };
+            if takes {
+                // Chain onto the `if` just written, so a taken value wins over a kept one.
+                o = o.trim_end_matches("\t\t}\n").to_string();
+                o.push_str(&format!("\t\t}}{els} if {has_kept} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
+            } else {
+                o.push_str(&format!("\t\tif {has_kept} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
+            }
+        }
+        let ex = text(&fold.exhausted);
+        if !ex.contains(&held) {
+            o.push_str(&format!("\t\t_ = {held}\n"));
+        }
+        o.push_str(&format!("\t\t{answer} = {ex}\n\t}}\n"));
+        o.push_str(&format!("\t{} := {answer}\n", self.ident(&out_name)));
+        o.push_str(&self.go_unread(&out_name));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk: the same checks an input gets, on the
+    /// values the caller filled in for this element.
+    fn go_element_guards(&self, local: &dyn Fn(&str) -> String, zero: &str) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let v = local(&i.name.text);
+            let ty = self.ty_of(&i.name.text);
+            match &ty {
+                Ty::Enum(_) => o.push_str(&format!(
+                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                    tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
+                )),
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                        let sc = self.c.wire_scale(&i.name.text);
+                        o.push_str(&format!(
+                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                            crate::types::wire_int(lo, sc),
+                            crate::types::wire_int(hi, sc),
+                            tr!("{} が範囲の外です: %d", "{} is out of range: %d", i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o
+    }
+
     fn go_fn(&self) -> String {
         let fname = pascal(&pub_name(&self.f.name));
         let outs = &self.f.outputs;
@@ -1334,7 +1692,28 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("\t{}{CELL}{}{CELL}{doc}\n", pascal(&pub_name(&i.name)), self.go_ty(&self.ty_of(&i.name.text))));
         }
+        // The sequence a walk reads is a field like the rest (§15.56).
+        if let Some(el) = &self.f.elements {
+            o.push_str(&format!(
+                "\t{}{CELL}[]Element{CELL}// {}\n",
+                pascal(&pub_name(&el.name)),
+                el.name.text
+            ));
+        }
         o.push_str("}\n\n");
+        // One element is a row of inputs, so it is a struct like `Input`.
+        if let Some(el) = &self.f.elements {
+            o.push_str(&format!("// {}\ntype Element struct {{\n", tr!("{} の一件", "one of {}", el.name.text)));
+            for fd in &el.fields {
+                o.push_str(&format!(
+                    "\t{}{CELL}{}{CELL}// {}\n",
+                    pascal(&pub_name(&fd.name)),
+                    self.go_ty(&self.ty_of(&fd.name.text)),
+                    fd.name.text
+                ));
+            }
+            o.push_str("}\n\n");
+        }
 
         let ret = if outs.len() == 1 {
             self.go_ty(&self.ty_of(&outs[0].name.text))
@@ -1409,20 +1788,9 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("\tvar {trace} []Fired\n"));
 
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("導出", "derived value")));
-                    o.push_str(&self.go_unread(&d.name.text));
-                }
-                Item::Define(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
-                    o.push_str(&self.go_unread(&d.name.text));
-                }
-                Item::Table(t) => o.push_str(&self.go_table(t, &local, &trace)),
-            }
+        match &self.f.fold {
+            None => o.push_str(&self.go_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.go_walk(fold, &trace, &zero)),
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -1832,6 +2200,21 @@ impl<'a> Gen<'a> {
     pub fn python_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut args: Vec<String> = Vec::new();
+        let read = |ty: &Ty, expr: String| -> String {
+            match ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    format!("m.{cls}({expr})")
+                }
+                Ty::Bool => format!("bool({expr})"),
+                Ty::Date => format!("_ord({expr})"),
+                Ty::Str => format!("str({expr})"),
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                    format!("m.{}(int({expr}))", brand_of(ty))
+                }
+                _ => format!("int({expr})"),
+            }
+        };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             let jp = &i.name.text;
@@ -1850,6 +2233,21 @@ impl<'a> Gen<'a> {
                 _ => format!("int(d[{jp:?}])"),
             });
         }
+        // The sequence a walk reads is built the same way, one element at a time (§15.56).
+        let mut prelude = String::new();
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| read(&self.ty_of(&fd.name.text), format!("e[{:?}]", fd.name.text)))
+                .collect();
+            prelude = format!(
+                "    rows = [m.Element({}) for e in d[{jp:?}]]\n",
+                if fields.len() == 1 { format!("{},", fields[0]) } else { fields.join(", ") }
+            );
+            args.push("rows".to_string());
+        }
         // The runner prints the record the module itself writes, so the agreement test
         // holds the record function — the wire form of every input, dates included — to
         // the reference evaluator in every language (§15.35).
@@ -1866,11 +2264,13 @@ impl<'a> Gen<'a> {
                  line = line.strip()\n    \
                  if not line:\n        \
                      continue\n    \
-                 d = json.loads(line)[\"in\"]\n    \
+                 d = json.loads(line)[\"in\"]\n\
+                 {}    \
                  args = ({})\n    \
                  r, trace = m.{alias}_traced(*args)\n    \
                  print(m.{alias}_record(*args, r, trace))\n",
             env!("CARGO_PKG_VERSION"),
+            prelude,
             if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") }
         )
     }
@@ -1880,24 +2280,38 @@ impl<'a> Gen<'a> {
         let alias = pub_name(&self.f.name);
         let pkg = alias.replace('_', "").to_lowercase();
         let fname = pascal(&alias);
-        let mut fields: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
-            let g = pascal(&pub_name(&i.name));
-            let conv = match &ty {
+        // One field of a JSON object into one field of a struct. The element loop below reads
+        // the same shapes out of its own object, so the two stay one piece of code.
+        let field = |name: &crate::ast::Name, ty: &Ty, into: &str, src: &str, ind: &str| -> String {
+            let jp = &name.text;
+            let g = pascal(&pub_name(name));
+            match ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("\t\tv{g}, _ := r.Parse{cls}(str(d[{jp:?}]))\n\t\tin.{g} = v{g}\n")
+                    format!("{ind}v{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n{ind}{into}.{g} = v{g}\n")
                 }
-                Ty::Bool => format!("\t\tin.{g} = d[{jp:?}] == true\n"),
-                Ty::Date => format!("\t\tin.{g} = ord(str(d[{jp:?}]))\n"),
+                Ty::Bool => format!("{ind}{into}.{g} = {src}[{jp:?}] == true\n"),
+                Ty::Date => format!("{ind}{into}.{g} = ord(str({src}[{jp:?}]))\n"),
                 // A number is a plain int64, not a type the package declares, so it must not
                 // be qualified with the package name.
-                Ty::Number => format!("\t\tin.{g} = int64(num(d[{jp:?}]))\n"),
-                _ => format!("\t\tin.{g} = r.{}(num(d[{jp:?}]))\n", self.go_ty(&ty)),
-            };
-            fields.push(conv);
+                Ty::Number => format!("{ind}{into}.{g} = int64(num({src}[{jp:?}]))\n"),
+                _ => format!("{ind}{into}.{g} = r.{}(num({src}[{jp:?}]))\n", self.go_ty(ty)),
+            }
+        };
+        let mut fields: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t"));
+        }
+        // The sequence arrives as an array of objects (§10.2), one per element.
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let g = pascal(&pub_name(&el.name));
+            let mut body = format!("\t\tfor _, ev := range arr(d[{jp:?}]) {{\n\t\t\te := obj(ev)\n\t\t\tvar el r.Element\n");
+            for fd in &el.fields {
+                body.push_str(&field(&fd.name, &self.ty_of(&fd.name.text), "el", "e", "\t\t\t"));
+            }
+            body.push_str(&format!("\t\t\tin.{g} = append(in.{g}, el)\n\t\t}}\n"));
+            fields.push(body);
         }
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -1905,6 +2319,8 @@ impl<'a> Gen<'a> {
              import (\n\t\"bufio\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n\t\"time\"\n\n\tr \"{pkg}\"\n)\n\n\
              func str(v any) string {{ s, _ := v.(string); return s }}\n\n\
              func num(v any) int64 {{ f, _ := v.(float64); return int64(f) }}\n\n\
+             func arr(v any) []any {{ a, _ := v.([]any); return a }}\n\n\
+             func obj(v any) map[string]any {{ m, _ := v.(map[string]any); return m }}\n\n\
              func ord(s string) int64 {{\n\t\
                  t, _ := time.Parse(\"2006-01-02\", s)\n\t\
                  return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)\n}}\n\n\
@@ -2285,14 +2701,166 @@ impl<'a> Gen<'a> {
         o
     }
 
+
+    /// The rule's items as TypeScript, at the base indentation. `local` decides how a name
+    /// is spelled, which is where a walk puts the element's own fields (§15.56).
+    /// The walk, in TypeScript (§15.56). The shape is the one `py_walk` writes: accumulators,
+    /// one pass per element with the body inside it, and the answer bound to the output's own
+    /// name so the rounding and the return below are the ones every rule uses.
+    fn ts_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let e = self.temp("elem");
+        let held = self.temp("held");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let out_ty = self.ty_of(&out_name);
+        let acc_ty = if out_ty.is_numeric() { "bigint".to_string() } else { self.ts_ty(&out_ty) };
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| ts_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0n".to_string())
+        };
+
+        let mut o = String::new();
+        o.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("  let {stopped} = false;\n"));
+        o.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
+        o.push_str(&format!("  let {kept}: {acc_ty} | null = null;\n"));
+        o.push_str(&format!("  let {best}: bigint | null = null;\n"));
+        o.push_str(&format!("  for (const {e} of {seq}) {{\n"));
+
+        let mut body = self.ts_element_guards(&local);
+        body.push_str(&self.ts_items(&local, trace));
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            let cls = self.ts_ty(&self.ty_of(&fold.verdict));
+            let member = self.value_names.get(&name.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
+            body.push_str(&format!("  if ({v} === {cls}.{member}) {{ // {}\n", name.text));
+            match arm {
+                Arm::Next => body.push_str("    // next\n"),
+                Arm::Stop(None) => body.push_str("    break;\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("    {answer} = {};\n", ts_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("    {stopped} = true;\n    break;\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!("    if ({taken} !== null) {{\n"));
+                        body.push_str(&format!(
+                            "      throw new RuleContradictionError(`{}`);\n    }}\n",
+                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                        ));
+                        body.push_str(&format!("    {taken} = {};\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                    } else {
+                        body.push_str(&format!("    if ({taken} === null) {{\n"));
+                        body.push_str(&format!("      {taken} = {};\n    }}\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = self.temp("key");
+                    body.push_str(&format!("    const {k} = {};\n", ts_expr(unparen(&self.expr(key, &local).text))));
+                    body.push_str(&format!("    if ({best} === null || {k} > {best}) {{\n"));
+                    body.push_str(&format!("      {best} = {k};\n"));
+                    body.push_str(&format!("      {kept} = {};\n    }}\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                }
+            }
+            body.push_str("  }\n");
+        }
+        o.push_str(&Self::indent_block(&body, "  "));
+        o.push_str("  }\n");
+
+        o.push_str(&format!("  if ({seq}.length > 0 && !{stopped}) {{\n"));
+        o.push_str(&format!(
+            "    const {held} = {taken} !== null ? {taken} : ({kept} !== null ? {kept} : {});\n",
+            text(&fold.empty)
+        ));
+        o.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
+        o.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk.
+    fn ts_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let v = local(&i.name.text);
+            let ty = self.ty_of(&i.name.text);
+            match &ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    o.push_str(&format!(
+                        "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                        tr!("{} が列挙 {cls} の値ではありません: ${{{v}}}", "{} is not a value of enum {cls}: ${{{v}}}", i.name.text)
+                    ));
+                }
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+                    o.push_str(&format!(
+                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                        tr!("{} が整数ではありません: ${{{v}}}", "{} is not an integer: ${{{v}}}", i.name.text)
+                    ));
+                    if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                        let sc = self.c.wire_scale(&i.name.text);
+                        o.push_str(&format!(
+                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                            crate::types::wire_int(lo, sc),
+                            crate::types::wire_int(hi, sc),
+                            tr!("{} が範囲の外です: ${{{v}}}", "{} is out of range: ${{{v}}}", i.name.text)
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        o
+    }
+
+    fn ts_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!(
+                        "  const {} = {}; // {}\n",
+                        self.ident(&d.name.text),
+                        ts_expr(unparen(&e.text)),
+                        tr!("導出", "derived value")
+                    ));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!(
+                        "  const {} = {}; // {}\n",
+                        self.ident(&d.name.text),
+                        ts_expr(unparen(&e.text)),
+                        tr!("定義", "definition")
+                    ));
+                }
+                Item::Table(t) => o.push_str(&self.ts_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
     fn ts_fn(&self) -> String {
         let fname = pub_name(&self.f.name);
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: readonly Element[]", pub_name(&el.name)));
+        }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 {
             self.ts_ty(&self.ty_of(&outs[0].name.text))
@@ -2300,6 +2868,20 @@ impl<'a> Gen<'a> {
             "Output".into()
         };
         let mut o = String::new();
+
+        // One element is a row of inputs, so it gets the same shape an `Output` gets.
+        if let Some(el) = &self.f.elements {
+            o.push_str(&format!("/** {} */\n", tr!("{} の一件", "one of {}", el.name.text)));
+            o.push_str("export interface Element {\n");
+            for fd in &el.fields {
+                o.push_str(&format!(
+                    "  {}: {};\n",
+                    pub_name(&fd.name),
+                    self.ts_ty(&self.ty_of(&fd.name.text))
+                ));
+            }
+            o.push_str("}\n\n");
+        }
 
         if outs.len() > 1 {
             o.push_str("export interface Output {\n");
@@ -2315,7 +2897,10 @@ impl<'a> Gen<'a> {
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            args.push(pub_name(&el.name));
+        }
         let traced = format!("{fname}_traced");
         o.push_str(&format!("/** {} */\n", plain_doc(&self.f.name.text, &self.f.version, &traced)));
         o.push_str(&format!(
@@ -2372,28 +2957,9 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
 
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!(
-                        "  const {} = {}; // {}\n",
-                        self.ident(&d.name.text),
-                        ts_expr(unparen(&e.text)),
-                        tr!("導出", "derived value")
-                    ));
-                }
-                Item::Define(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!(
-                        "  const {} = {}; // {}\n",
-                        self.ident(&d.name.text),
-                        ts_expr(unparen(&e.text)),
-                        tr!("定義", "definition")
-                    ));
-                }
-                Item::Table(t) => o.push_str(&self.ts_table(t, &local, &trace)),
-            }
+        match &self.f.fold {
+            None => o.push_str(&self.ts_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.ts_walk(fold, &trace)),
         }
 
         let cast = |ty: &Ty, body: String| -> String {
@@ -2538,28 +3104,53 @@ impl<'a> Gen<'a> {
         // A brand is a type, and node's type stripping can only erase a whole `import type`
         // statement — a type name mixed into a value import is a syntax error there.
         let mut type_imports: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
-            args.push(match &ty {
+        let read = |ty: &Ty, src: String, imports: &mut Vec<String>, type_imports: &mut Vec<String>| -> String {
+            match ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     if !imports.contains(&format!("parse{cls}")) {
                         imports.push(format!("parse{cls}"));
                     }
-                    format!("parse{cls}(String({d}[{jp:?}]))")
+                    format!("parse{cls}(String({src}))")
                 }
-                Ty::Bool => format!("{d}[{jp:?}] === true"),
-                Ty::Date => format!("_ord(String({d}[{jp:?}]))"),
-                Ty::Number => format!("BigInt({d}[{jp:?}] as number)"),
+                Ty::Bool => format!("{src} === true"),
+                Ty::Date => format!("_ord(String({src}))"),
+                Ty::Number => format!("BigInt({src} as number)"),
                 _ => {
-                    let brand = self.ts_ty(&ty);
+                    let brand = self.ts_ty(ty);
                     if !type_imports.contains(&brand) {
                         type_imports.push(brand.clone());
                     }
-                    format!("BigInt({d}[{jp:?}] as number) as {brand}")
+                    format!("BigInt({src} as number) as {brand}")
                 }
-            });
+            }
+        };
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            let jp = &i.name.text;
+            let src = format!("{d}[{jp:?}]");
+            args.push(read(&ty, src, &mut imports, &mut type_imports));
+        }
+        // The sequence a walk reads, one element at a time (§15.56).
+        let mut prelude = String::new();
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let e = runner_local("e", &alias);
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    let src = format!("({e} as Record<string, unknown>)[{:?}]", fd.name.text);
+                    format!("{}: {}", pub_name(&fd.name), read(&ty, src, &mut imports, &mut type_imports))
+                })
+                .collect();
+            let rows = runner_local("rows", &alias);
+            prelude = format!(
+                "  const {rows} = ({d}[{jp:?}] as unknown[]).map(({e}) => ({{ {} }}));\n",
+                fields.join(", ")
+            );
+            args.push(rows);
         }
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -2571,7 +3162,8 @@ impl<'a> Gen<'a> {
              const {lines} = readFileSync(0, \"utf8\").split(\"\\n\");\n\
              for (const {line} of {lines}) {{\n  \
                  if ({line}.trim() === \"\") {{\n    continue;\n  }}\n  \
-                 const {d} = JSON.parse({line}).in as Record<string, unknown>;\n  \
+                 const {d} = JSON.parse({line}).in as Record<string, unknown>;\n\
+                 {}  \
                  const {a} = [{}] as const;\n  \
                  const [{r}, {trace}] = {alias}_traced(...{a});\n  \
                  console.log({alias}_record(...{a}, {r}, {trace}));\n}}\n",
@@ -2582,6 +3174,7 @@ impl<'a> Gen<'a> {
             } else {
                 format!("import type {{ {} }} from \"./{alias}.ts\";\n", type_imports.join(", "))
             },
+            prelude,
             args.join(", ")
         )
     }
@@ -2845,10 +3438,159 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The rule's items as Rust, at the base indentation (§15.56).
+    fn rs_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => o.push_str(&format!(
+                    "    let {} = {}; // {}\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, local).text)),
+                    tr!("導出", "derived value")
+                )),
+                Item::Define(d) => o.push_str(&format!(
+                    "    let {} = {}; // {}\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, local).text)),
+                    tr!("定義", "definition")
+                )),
+                Item::Table(t) => o.push_str(&self.rs_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
+    /// The walk, in Rust (§15.56). Same shape as the other backends: accumulators, one pass
+    /// per element, and the answer bound to the output's own name.
+    fn rs_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let e = self.temp("elem");
+        let held = self.temp("held");
+        // A unit is a newtype here, so a field read in an expression is unwrapped exactly as
+        // an input is (§8.1).
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.0")
+                    } else {
+                        v
+                    }
+                }
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let out_ty = self.ty_of(&out_name);
+        let acc_ty = if out_ty.is_numeric() { "i64".to_string() } else { self.rs_ty(&out_ty) };
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| rs_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0".to_string())
+        };
+
+        let mut o = String::new();
+        o.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("    let mut {stopped} = false;\n"));
+        o.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
+        o.push_str(&format!("    let mut {kept}: Option<{acc_ty}> = None;\n"));
+        o.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+
+        let mut body = self.rs_element_guards(&local);
+        body.push_str(&self.rs_items(&local, trace));
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            let cls = self.rs_ty(&self.ty_of(&fold.verdict));
+            let member = self.value_names.get(&name.text).map(|(_, a)| a.clone()).unwrap_or_else(|| name.text.clone());
+            body.push_str(&format!("    if {v} == {cls}::{member} {{ // {}\n", name.text));
+            match arm {
+                Arm::Next => body.push_str("        // next\n"),
+                Arm::Stop(None) => body.push_str("        break;\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("        {answer} = {};\n", rs_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("        {stopped} = true;\n        break;\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!("        if {taken}.is_some() {{\n"));
+                        body.push_str(&format!(
+                            "            return Err(RuleError::Contradiction(\"{}\".to_string()));\n        }}\n",
+                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                        ));
+                        body.push_str(&format!("        {taken} = Some({});\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                    } else {
+                        body.push_str(&format!("        if {taken}.is_none() {{\n"));
+                        body.push_str(&format!("            {taken} = Some({});\n        }}\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = self.temp("key");
+                    body.push_str(&format!("        let {k} = {};\n", rs_expr(unparen(&self.expr(key, &local).text))));
+                    body.push_str(&format!("        if {best}.is_none() || {k} > {best}.unwrap() {{\n"));
+                    body.push_str(&format!("            {best} = Some({k});\n"));
+                    body.push_str(&format!("            {kept} = Some({});\n        }}\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                }
+            }
+            body.push_str("    }\n");
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+
+        o.push_str(&format!("    if !{seq}.is_empty() && !{stopped} {{\n"));
+        o.push_str(&format!(
+            "        let {held} = {taken}.or({kept}).unwrap_or({});\n",
+            text(&fold.empty)
+        ));
+        o.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
+        o.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk.
+    fn rs_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let v = local(&i.name.text);
+            let ty = self.ty_of(&i.name.text);
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                    let sc = self.c.wire_scale(&i.name.text);
+                    o.push_str(&format!(
+                        "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input(format!(\"{}\", {v})));\n    }}\n",
+                        crate::types::wire_int(lo, sc),
+                        crate::types::wire_int(hi, sc),
+                        tr!("{} が範囲の外です: {{}}", "{} is out of range: {{}}", i.name.text)
+                    ));
+                }
+            }
+        }
+        o
+    }
+
     fn rs_fn(&self) -> String {
         let fname = pub_name(&self.f.name);
         let outs = &self.f.outputs;
         let mut o = String::new();
+
+        // One element is a row of inputs, so it is a struct like `Output`.
+        if let Some(el) = &self.f.elements {
+            o.push_str(&format!("/// {}\n", tr!("{} の一件", "one of {}", el.name.text)));
+            o.push_str("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Element {\n");
+            for fd in &el.fields {
+                o.push_str(&format!(
+                    "    pub {}: {},\n",
+                    pub_name(&fd.name),
+                    self.rs_ty(&self.ty_of(&fd.name.text))
+                ));
+            }
+            o.push_str("}\n\n");
+        }
 
         if outs.len() > 1 {
             o.push_str("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Output {\n");
@@ -2867,16 +3609,22 @@ impl<'a> Gen<'a> {
         } else {
             "Output".into()
         };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: &[Element]", pub_name(&el.name)));
+        }
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            args.push(pub_name(&el.name));
+        }
         let traced = format!("{fname}_traced");
         o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
         o.push_str(&format!(
@@ -2935,22 +3683,9 @@ impl<'a> Gen<'a> {
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
         o.push_str(&format!("    let {}{trace}: Vec<Fired> = Vec::new();\n", if has_table { "mut " } else { "" }));
 
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => o.push_str(&format!(
-                    "    let {} = {}; // {}\n",
-                    self.ident(&d.name.text),
-                    rs_expr(unparen(&self.expr(&d.expr, &local).text)),
-                    tr!("導出", "derived value")
-                )),
-                Item::Define(d) => o.push_str(&format!(
-                    "    let {} = {}; // {}\n",
-                    self.ident(&d.name.text),
-                    rs_expr(unparen(&self.expr(&d.expr, &local).text)),
-                    tr!("定義", "definition")
-                )),
-                Item::Table(t) => o.push_str(&self.rs_table(t, &local, &trace)),
-            }
+        match &self.f.fold {
+            None => o.push_str(&self.rs_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.rs_walk(fold, &trace)),
         }
 
         let wrap = |ty: &Ty, body: String| -> String {
@@ -3102,11 +3837,42 @@ impl<'a> Gen<'a> {
                 _ => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(&ty)),
             });
         }
+        // The sequence a walk reads, one element at a time (§15.56).
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let k = &fd.name.text;
+                    let ty = self.ty_of(k);
+                    let body = match &ty {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
+                        }
+                        Ty::Bool => format!("b(e, {k:?})"),
+                        Ty::Date => format!("ord(s(e, {k:?}))"),
+                        Ty::Number => format!("n(e, {k:?})"),
+                        Ty::Str => format!("s(e, {k:?}).to_string()"),
+                        _ => format!("r::{}(n(e, {k:?}))", self.rs_ty(&ty)),
+                    };
+                    format!("{}: {body}", pub_name(&fd.name))
+                })
+                .collect();
+            args.push(format!(
+                "rows(s(&d, {jp:?})).iter().map(|e| r::Element {{ {} }}).collect::<Vec<_>>()",
+                fields.join(", ")
+            ));
+        }
         // The inputs are bound once and handed to both calls. Everything is `Copy` except a
         // string, which the first call takes as a clone.
         let binds: String = args.iter().enumerate().map(|(i, a)| format!("        let a{i} = {a};\n")).collect();
+        let n_ins = self.f.inputs.len();
+        let has_seq = self.f.elements.is_some();
         let pass = |clone: bool| -> String {
-            self.f
+            let mut v: Vec<String> = self
+                .f
                 .inputs
                 .iter()
                 .enumerate()
@@ -3117,8 +3883,11 @@ impl<'a> Gen<'a> {
                         format!("a{i}")
                     }
                 })
-                .collect::<Vec<_>>()
-                .join(", ")
+                .collect();
+            if has_seq {
+                v.push(format!("&a{n_ins}"));
+            }
+            v.join(", ")
         };
         let (first, second) = (pass(true), pass(false));
         format!(
@@ -3133,11 +3902,18 @@ use std::io::Read;
 /// One flat JSON object as (key, value) pairs, values kept as their source text.
 fn fields(line: &str) -> Vec<(String, String)> {{
     let b: Vec<char> = line.chars().collect();
-    let (mut i, mut out) = (0usize, Vec::new());
+    let mut i = 0usize;
     // Step into the object under "in" and read the pairs of the one level below it.
     while i < b.len() && !(b[i] == '"' && b[i..].starts_with(&['"', 'i', 'n', '"'])) {{
         i += 1;
     }}
+    pairs_from(&b, i).0
+}}
+
+/// The pairs of the object starting at or after `i`, and the index just past its closing
+/// brace. A value that is itself an object or an array is kept whole, as its source text.
+fn pairs_from(b: &[char], mut i: usize) -> (Vec<(String, String)>, usize) {{
+    let mut out = Vec::new();
     while i < b.len() && b[i] != '{{' {{
         i += 1;
     }}
@@ -3149,7 +3925,7 @@ fn fields(line: &str) -> Vec<(String, String)> {{
         if i >= b.len() || b[i] == '}}' {{
             break;
         }}
-        let (k, ni) = string_at(&b, i);
+        let (k, ni) = string_at(b, i);
         i = ni;
         while i < b.len() && b[i] != ':' {{
             i += 1;
@@ -3159,7 +3935,11 @@ fn fields(line: &str) -> Vec<(String, String)> {{
             i += 1;
         }}
         let v = if b[i] == '"' {{
-            let (v, ni) = string_at(&b, i);
+            let (v, ni) = string_at(b, i);
+            i = ni;
+            v
+        }} else if b[i] == '[' || b[i] == '{{' {{
+            let (v, ni) = balanced(b, i);
             i = ni;
             v
         }} else {{
@@ -3170,6 +3950,47 @@ fn fields(line: &str) -> Vec<(String, String)> {{
             b[s..i].iter().collect::<String>().trim().to_string()
         }};
         out.push((k, v));
+    }}
+    (out, i + 1)
+}}
+
+/// The source text of one bracketed value, quotes respected.
+fn balanced(b: &[char], i: usize) -> (String, usize) {{
+    let (open, close) = if b[i] == '[' {{ ('[', ']') }} else {{ ('{{', '}}') }};
+    let (mut depth, mut j) = (0i32, i);
+    while j < b.len() {{
+        if b[j] == '"' {{
+            let (_, nj) = string_at(b, j);
+            j = nj;
+            continue;
+        }}
+        if b[j] == open {{
+            depth += 1;
+        }}
+        if b[j] == close {{
+            depth -= 1;
+            if depth == 0 {{
+                j += 1;
+                break;
+            }}
+        }}
+        j += 1;
+    }}
+    (b[i..j].iter().collect(), j)
+}}
+
+/// An array of flat objects, as the pairs of each (§15.56).
+fn rows(v: &str) -> Vec<Vec<(String, String)>> {{
+    let b: Vec<char> = v.chars().collect();
+    let (mut i, mut out) = (0usize, Vec::new());
+    while i < b.len() {{
+        if b[i] == '{{' {{
+            let (p, ni) = pairs_from(&b, i);
+            out.push(p);
+            i = ni;
+        }} else {{
+            i += 1;
+        }}
     }}
     out
 }}
@@ -3443,6 +4264,33 @@ impl Gen<'_> {
             .finish()
     }
 
+    /// The sequence a walk reads, as one entry of the inventory's parameter list: the
+    /// parameter itself, and the fields one element carries, each stated the way an input is
+    /// (§15.56). A caller that reads the inventory rather than the code needs both.
+    fn elements_json(
+        &self,
+        ty_name: &str,
+        alias: impl Fn(&crate::ast::Name) -> String,
+        fty: impl Fn(&Ty) -> String,
+    ) -> Option<String> {
+        let el = self.f.elements.as_ref()?;
+        let fields: Vec<String> = el
+            .fields
+            .iter()
+            .map(|fd| {
+                let ty = self.ty_of(&fd.name.text);
+                self.value_json(&fd.name.text, &alias(&fd.name), &fty(&ty), &ty)
+            })
+            .collect();
+        let head = crate::json::Obj::new()
+            .str("name", &el.name.text)
+            .str("alias", &alias(&el.name))
+            .str("type", ty_name)
+            .bool("optional", false)
+            .finish();
+        Some(format!("{},\"elements\":{}}}", head.trim_end_matches('}'), crate::json::arr(&fields)))
+    }
+
     /// The enums, under the spelling each language gives their members.
     fn enums_json(&self, member: impl Fn(&str, &str) -> String) -> String {
         let mut out: Vec<String> = Vec::new();
@@ -3494,6 +4342,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &pub_name(&i.name), &self.py_ty(&ty), &ty)
             })
+            .chain(self.elements_json("list[Element]", |n| pub_name(n), |t| self.py_ty(t)))
             .collect();
         let py_outs: Vec<String> = outs
             .iter()
@@ -3513,15 +4362,16 @@ impl Gen<'_> {
         } else {
             "Output".into()
         };
-        let py_sig = format!(
-            "def {alias}({}) -> {py_ret}:",
-            self.f
-                .inputs
-                .iter()
-                .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        // The sequence a walk reads is the last parameter (§15.56), in the inventory as in
+        // the code, so an argument list built from here is the one the module takes.
+        let py_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
+            .chain(self.f.elements.iter().map(|el| format!("{}: list[Element]", pub_name(&el.name))))
+            .collect();
+        let py_sig = format!("def {alias}({}) -> {py_ret}:", py_args.join(", "));
         let py_traced = py_sig
             .replacen(&format!("def {alias}("), &format!("def {alias}_traced("), 1)
             .replace(&format!(") -> {py_ret}:"), &format!(") -> tuple[{py_ret}, list[Fired]]:"));
@@ -3536,12 +4386,7 @@ impl Gen<'_> {
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
                 "def {alias}_record({}, {r_out}: {py_ret}, {r_trace}: _Trace, {r_tag}: str = \"\") -> str:",
-                self.f
-                    .inputs
-                    .iter()
-                    .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                py_args.join(", ")
             ))
             .raw("params", crate::json::arr(&params))
             .str("returns", &py_ret)
@@ -3560,6 +4405,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &pub_name(&i.name), &self.ts_ty(&ty), &ty)
             })
+            .chain(self.elements_json("readonly Element[]", |n| pub_name(n), |t| self.ts_ty(t)))
             .collect();
         let ts_outs: Vec<String> = outs
             .iter()
@@ -3577,15 +4423,14 @@ impl Gen<'_> {
         } else {
             "Output".into()
         };
-        let ts_sig = format!(
-            "export function {alias}({}): {ts_ret}",
-            self.f
-                .inputs
-                .iter()
-                .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        let ts_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
+            .chain(self.f.elements.iter().map(|el| format!("{}: readonly Element[]", pub_name(&el.name))))
+            .collect();
+        let ts_sig = format!("export function {alias}({}): {ts_ret}", ts_args.join(", "));
         let ts_traced = ts_sig
             .replacen(&format!("export function {alias}("), &format!("export function {alias}_traced("), 1)
             .replace(&format!("): {ts_ret}"), &format!("): [{ts_ret}, Fired[]]"));
@@ -3600,12 +4445,7 @@ impl Gen<'_> {
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
                 "export function {alias}_record({}, {r_out}: {ts_ret}, {r_trace}: Fired[], {r_tag} = \"\"): string",
-                self.f
-                    .inputs
-                    .iter()
-                    .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                ts_args.join(", ")
             ))
             .raw("params", crate::json::arr(&ts_in))
             .str("returns", &ts_ret)
@@ -3639,6 +4479,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &pub_name(&i.name), &js_ty(&ty), &ty)
             })
+            .chain(self.elements_json("Element[]", |n| pub_name(n), &js_ty))
             .collect();
         let js_outs: Vec<String> = outs
             .iter()
@@ -3651,7 +4492,14 @@ impl Gen<'_> {
                 }
             })
             .collect();
-        let js_params = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ");
+        let js_params = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| pub_name(&i.name))
+            .chain(self.f.elements.iter().map(|el| pub_name(&el.name)))
+            .collect::<Vec<_>>()
+            .join(", ");
         let js_ret = if outs.len() == 1 { js_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let javascript = crate::json::Obj::new()
             .str("module", &format!("{alias}.mjs"))
@@ -3679,6 +4527,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &pub_name(&i.name), &self.rs_ty(&ty), &ty)
             })
+            .chain(self.elements_json("&[Element]", |n| pub_name(n), |t| self.rs_ty(t)))
             .collect();
         let rs_outs: Vec<String> = outs
             .iter()
@@ -3696,15 +4545,14 @@ impl Gen<'_> {
         } else {
             "Output".into()
         };
-        let rs_sig = format!(
-            "pub fn {alias}({}) -> Result<{rs_ret}, RuleError>",
-            self.f
-                .inputs
-                .iter()
-                .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        let rs_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
+            .chain(self.f.elements.iter().map(|el| format!("{}: &[Element]", pub_name(&el.name))))
+            .collect();
+        let rs_sig = format!("pub fn {alias}({}) -> Result<{rs_ret}, RuleError>", rs_args.join(", "));
         let rs_traced = rs_sig
             .replacen(&format!("pub fn {alias}("), &format!("pub fn {alias}_traced("), 1)
             .replace(&format!(") -> Result<{rs_ret}, RuleError>"), &format!(") -> Result<({rs_ret}, Vec<Fired>), RuleError>"));
@@ -3717,12 +4565,7 @@ impl Gen<'_> {
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
                 "pub fn {alias}_record({}, {r_out}: {rs_ret}, {r_trace}: &[Fired], {r_tag}: &str) -> String",
-                self.f
-                    .inputs
-                    .iter()
-                    .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                rs_args.join(", ")
             ))
             .raw("params", crate::json::arr(&rs_in))
             .str("returns", &rs_ret)
@@ -3742,6 +4585,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &pub_name(&i.name), &self.rb_api_ty(&ty), &ty)
             })
+            .chain(self.elements_json("Array[Element]", |n| pub_name(n), |t| self.rb_api_ty(t)))
             .collect();
         let rb_outs: Vec<String> = outs
             .iter()
@@ -3759,11 +4603,15 @@ impl Gen<'_> {
         } else {
             "Output".into()
         };
-        let rb_sig = format!(
-            "{}.{alias}({})",
-            self.rb_module(),
-            self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ")
-        );
+        let rb_args = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| pub_name(&i.name))
+            .chain(self.f.elements.iter().map(|el| pub_name(&el.name)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let rb_sig = format!("{}.{alias}({rb_args})", self.rb_module());
         let rb_traced = rb_sig.replacen(&format!(".{alias}("), &format!(".{alias}_traced("), 1);
         let ruby = crate::json::Obj::new()
             .str("module", &self.rb_module())
@@ -3773,9 +4621,8 @@ impl Gen<'_> {
             .str("traced_signature", &rb_traced)
             .str("record", &format!("{alias}_record"))
             .str("record_signature", &format!(
-                "{}.{alias}_record({}, {r_out}, {r_trace}, {r_tag} = \"\")",
-                self.rb_module(),
-                self.f.inputs.iter().map(|i| pub_name(&i.name)).collect::<Vec<_>>().join(", ")
+                "{}.{alias}_record({rb_args}, {r_out}, {r_trace}, {r_tag} = \"\")",
+                self.rb_module()
             ))
             // The signature file that ships with it; `steep` reads this, not the entry.
             .str("rbs", &format!("sig/{alias}.rbs"))
@@ -3797,6 +4644,7 @@ impl Gen<'_> {
                 let ty = self.ty_of(&i.name.text);
                 self.value_json(&i.name.text, &sw_name(&pub_name(&i.name)), &self.sw_api_ty(&ty), &ty)
             })
+            .chain(self.elements_json("[Element]", |n| sw_name(&pub_name(n)), |t| self.sw_api_ty(t)))
             .collect();
         let sw_outs: Vec<String> = outs
             .iter()
@@ -3815,15 +4663,14 @@ impl Gen<'_> {
         } else {
             "Output".into()
         };
-        let sw_sig = format!(
-            "func {sw_fname}({}) throws -> {sw_ret}",
-            self.f
-                .inputs
-                .iter()
-                .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        let sw_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
+            .chain(self.f.elements.iter().map(|el| format!("{}: [Element]", sw_name(&pub_name(&el.name)))))
+            .collect();
+        let sw_sig = format!("func {sw_fname}({}) throws -> {sw_ret}", sw_args.join(", "));
         let sw_traced = sw_sig
             .replacen(&format!("func {sw_fname}("), &format!("func {sw_fname}Traced("), 1)
             .replace(&format!(") throws -> {sw_ret}"), &format!(") throws -> ({sw_ret}, [Fired])"));
@@ -3836,12 +4683,7 @@ impl Gen<'_> {
             .str("record", &format!("{sw_fname}Record"))
             .str("record_signature", &format!(
                 "func {sw_fname}Record({}, {}: {sw_ret}, {}: [Fired], {}: String = \"\") -> String",
-                self.f
-                    .inputs
-                    .iter()
-                    .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
-                    .collect::<Vec<_>>()
-                    .join(", "),
+                sw_args.join(", "),
                 sw_name(&r_out),
                 sw_name(&r_trace),
                 sw_name(&r_tag)
@@ -3869,6 +4711,7 @@ impl Gen<'_> {
                     &ty,
                 )
             })
+            .chain(self.elements_json("[]Element", |n| pascal(&pub_name(n)), |t| self.go_ty(t)))
             .collect();
         let go_outs: Vec<String> = outs
             .iter()
@@ -4150,10 +4993,132 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The rule's items as Ruby, at the base indentation (§15.56).
+    fn rb_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("導出", "derived value")));
+                }
+                Item::Define(d) => {
+                    let e = self.expr(&d.expr, local);
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
+                }
+                Item::Table(t) => o.push_str(&self.rb_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
+    /// The walk, in Ruby (§15.56).
+    fn rb_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let e = self.temp("elem");
+        let held = self.temp("held");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| rb_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0".to_string())
+        };
+
+        let mut o = String::new();
+        o.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("    {stopped} = false\n"));
+        o.push_str(&format!("    {taken} = nil\n    {kept} = nil\n    {best} = nil\n"));
+        o.push_str(&format!("    {seq}.each do |{e}|\n"));
+
+        let mut body = self.rb_element_guards(&local);
+        body.push_str(&self.rb_items(&local, trace));
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            let val = self.rb_value(&name.text);
+            body.push_str(&format!("    if {v} == {val}  # {}\n", name.text));
+            match arm {
+                Arm::Next => body.push_str("      # next\n"),
+                Arm::Stop(None) => body.push_str("      break\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("      {answer} = {}\n", rb_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("      {stopped} = true\n      break\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!(
+                            "      raise RuleContradictionError, \"{}\" unless {taken}.nil?\n",
+                            tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
+                        ));
+                        body.push_str(&format!("      {taken} = {}\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                    } else {
+                        body.push_str(&format!("      {taken} = {} if {taken}.nil?\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = self.temp("key");
+                    body.push_str(&format!("      {k} = {}\n", rb_expr(unparen(&self.expr(key, &local).text))));
+                    body.push_str(&format!("      if {best}.nil? || {k} > {best}\n"));
+                    body.push_str(&format!("        {best} = {k}\n"));
+                    body.push_str(&format!("        {kept} = {}\n      end\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                }
+            }
+            body.push_str("    end\n");
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    end\n");
+
+        o.push_str(&format!("    unless {seq}.empty? || {stopped}\n"));
+        o.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
+        o.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
+        o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk.
+    fn rb_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let v = local(&i.name.text);
+            let ty = self.ty_of(&i.name.text);
+            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                o.push_str(&format!(
+                    "    raise RuleInputError, \"{}\" unless {v}.is_a?(Integer)\n",
+                    tr!("{} が整数ではありません: #{{{v}.inspect}}", "{} is not an integer: #{{{v}.inspect}}", i.name.text)
+                ));
+                if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
+                    let sc = self.c.wire_scale(&i.name.text);
+                    o.push_str(&format!(
+                        "    raise RuleInputError, \"{}\" unless ({}..{}).cover?({v})\n",
+                        tr!("{} が範囲の外です: #{{{v}}}", "{} is out of range: #{{{v}}}", i.name.text),
+                        crate::types::wire_int(lo, sc),
+                        crate::types::wire_int(hi, sc),
+                    ));
+                }
+            }
+        }
+        o
+    }
+
     fn rb_fn(&self) -> String {
         let fname = pub_name(&self.f.name);
         let outs = &self.f.outputs;
         let mut o = String::new();
+
+        // One element is a row of inputs, so it is a Struct like `Output`.
+        if let Some(el) = &self.f.elements {
+            let fs: Vec<String> = el.fields.iter().map(|fd| format!(":{}", pub_name(&fd.name))).collect();
+            o.push_str(&format!("  # {}\n", tr!("{} の一件", "one of {}", el.name.text)));
+            o.push_str(&format!("  Element = Struct.new({})\n\n", fs.join(", ")));
+        }
 
         // Multiple outputs come back as a Struct; one output is the value itself (§8.5).
         if outs.len() > 1 {
@@ -4182,7 +5147,10 @@ impl<'a> Gen<'a> {
 
         // The public method keeps the plain shape; the branches live in its traced twin,
         // which also returns the rows that matched (§15.33).
-        let params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            params.push(pub_name(&el.name));
+        }
         o.push_str(&format!(
             "  def self.{fname}({})\n    {traced}({})[0]\n  end\n\n",
             params.join(", "),
@@ -4234,18 +5202,9 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
 
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("導出", "derived value")));
-                }
-                Item::Define(d) => {
-                    let e = self.expr(&d.expr, &local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
-                }
-                Item::Table(t) => o.push_str(&self.rb_table(t, &local, &trace)),
-            }
+        match &self.f.fold {
+            None => o.push_str(&self.rb_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.rb_walk(fold, &trace)),
         }
 
         // Every output: its source, brought to the wire scale, then its rounding once.
@@ -4365,6 +5324,27 @@ impl<'a> Gen<'a> {
                 Ty::Date => format!("_ord(d[{jp:?}])"),
                 _ => format!("d[{jp:?}].to_i"),
             });
+        }
+        // The sequence a walk reads, one element at a time (§15.56).
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let k = &fd.name.text;
+                    match &self.ty_of(k) {
+                        Ty::Enum(_) | Ty::Str => format!("e[{k:?}]"),
+                        Ty::Bool => format!("e[{k:?}] ? true : false"),
+                        Ty::Date => format!("_ord(e[{k:?}])"),
+                        _ => format!("e[{k:?}].to_i"),
+                    }
+                })
+                .collect();
+            args.push(format!(
+                "d[{jp:?}].map {{ |e| {m}::Element.new({}) }}",
+                fields.join(", ")
+            ));
         }
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
@@ -4961,10 +5941,195 @@ impl<'a> Gen<'a> {
         o
     }
 
+    /// The rule's items as Swift, at the base indentation (§15.56).
+    fn sw_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}  // {}\n",
+                        self.sw_ident(&d.name.text),
+                        sw_expr(unparen(&self.expr(&d.expr, local).text)),
+                        tr!("導出", "derived value")
+                    ));
+                    o.push_str(&self.sw_unread(&d.name.text));
+                }
+                Item::Define(d) => {
+                    o.push_str(&format!(
+                        "    let {} = {}  // {}\n",
+                        self.sw_ident(&d.name.text),
+                        sw_expr(unparen(&self.expr(&d.expr, local).text)),
+                        tr!("定義", "definition")
+                    ));
+                    o.push_str(&self.sw_unread(&d.name.text));
+                }
+                Item::Table(t) => o.push_str(&self.sw_table(t, local, trace)),
+            }
+        }
+        o
+    }
+
+    /// The walk, in Swift (§15.56).
+    fn sw_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a fold has elements");
+        let seq = sw_name(&pub_name(&el.name));
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
+        let (answer, stopped, taken, kept, best) = self.fold_locals();
+        let (answer, stopped, taken, kept, best) =
+            (sw_name(&answer), sw_name(&stopped), sw_name(&taken), sw_name(&kept), sw_name(&best));
+        let e = sw_name(&self.temp("elem"));
+        let held = sw_name(&self.temp("held"));
+        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.value")
+                    } else {
+                        v
+                    }
+                }
+                None if n == crate::kw::HELD => held.clone(),
+                None => self.sw_ident(n),
+            }
+        };
+        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let out_ty = self.ty_of(&out_name);
+        let acc_ty = if out_ty.is_numeric() { "Int64".to_string() } else { self.sw_ty(&out_ty) };
+        let text = |x: &Option<Expr>| -> String {
+            x.as_ref().map(|x| sw_expr(unparen(&self.expr(x, &local).text))).unwrap_or_else(|| "0".to_string())
+        };
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
+
+        let mut o = String::new();
+        o.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        o.push_str(&format!("    var {stopped} = false\n"));
+        if takes {
+            o.push_str(&format!("    var {taken}: {acc_ty}? = nil\n"));
+        }
+        if keeps {
+            o.push_str(&format!("    var {kept}: {acc_ty}? = nil\n    var {best}: Int64? = nil\n"));
+        }
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+
+        let mut body = self.sw_element_guards(&local);
+        body.push_str(&self.sw_items(&local, trace));
+        // The verdict the table wrote for this element, and what the walk does about it.
+        let v = local(&fold.verdict);
+        for (name, arm, _) in &fold.arms {
+            body.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text), name.text));
+            match arm {
+                Arm::Next => body.push_str(&format!("        // {}\n", crate::kw::NEXT)),
+                Arm::Stop(None) => body.push_str("        break\n"),
+                Arm::Stop(Some(x)) => {
+                    body.push_str(&format!("        {answer} = {}\n", sw_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("        {stopped} = true\n        break\n"));
+                }
+                Arm::Take { expr, unique } => {
+                    if *unique {
+                        body.push_str(&format!("        if {taken} != nil {{\n"));
+                        body.push_str(&format!(
+                            "            throw RuleError.contradiction(\"{}\")\n        }}\n",
+                            tr!(
+                                "畳み込み {}: take_unique に二件当たりました",
+                                "fold {}: two elements matched a take_unique",
+                                fold.verdict
+                            )
+                        ));
+                        body.push_str(&format!("        {taken} = {}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                    } else {
+                        body.push_str(&format!("        if {taken} == nil {{\n"));
+                        body.push_str(&format!("            {taken} = {}\n        }}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                    }
+                }
+                Arm::KeepMax { expr, key } => {
+                    let k = sw_name(&self.temp("key"));
+                    body.push_str(&format!("        let {k} = {}\n", sw_expr(unparen(&self.expr(key, &local).text))));
+                    body.push_str(&format!("        if {best} == nil || {k} > {best}! {{\n"));
+                    body.push_str(&format!("            {best} = {k}\n"));
+                    body.push_str(&format!("            {kept} = {}\n        }}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                }
+            }
+            body.push_str("    }\n");
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+
+        // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
+        // that ended on `stop with` has its answer already.
+        o.push_str(&format!("    if !{seq}.isEmpty && !{stopped} {{\n"));
+        let mut fallback = text(&fold.empty);
+        if keeps {
+            fallback = format!("({kept} ?? {fallback})");
+        }
+        if takes {
+            fallback = format!("({taken} ?? {fallback})");
+        }
+        o.push_str(&format!("        let {held}: {acc_ty} = {fallback}\n"));
+        let ex = text(&fold.exhausted);
+        if !ex.contains(&held) {
+            o.push_str(&format!("        _ = {held}\n"));
+        }
+        o.push_str(&format!("        {answer} = {ex}\n    }}\n"));
+        o.push_str(&format!("    let {} = {answer}\n", self.sw_ident(&out_name)));
+        o.push_str(&self.sw_unread(&out_name));
+        o
+    }
+
+    /// The entry guards of one element, inside the walk. An enum needs none, for the reason
+    /// the inputs' own guards give.
+    fn sw_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+        let mut o = String::new();
+        for i in self.element_fields() {
+            let ty = self.ty_of(&i.name.text);
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                continue;
+            }
+            let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) else {
+                continue;
+            };
+            let sc = self.c.wire_scale(&i.name.text);
+            let v = local(&i.name.text);
+            o.push_str(&format!(
+                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
+                crate::types::wire_int(lo, sc),
+                crate::types::wire_int(hi, sc),
+                tr!("{} が範囲の外です: \\({v})", "{} is out of range: \\({v})", i.name.text)
+            ));
+        }
+        o
+    }
+
     fn sw_fn(&self) -> String {
         let fname = sw_name(&pub_name(&self.f.name));
         let outs = &self.f.outputs;
         let mut o = String::new();
+
+        // One element is a row of inputs, so it is a struct like an `Output`, and needs its
+        // initializer declared for the same reason.
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<(String, String)> = el
+                .fields
+                .iter()
+                .map(|fd| (sw_name(&pub_name(&fd.name)), self.sw_ty(&self.ty_of(&fd.name.text))))
+                .collect();
+            o.push_str(&format!("/// {}\npublic struct Element: Hashable, Sendable {{\n", tr!("{} の一件", "one of {}", el.name.text)));
+            for (n, t) in &fields {
+                o.push_str(&format!("    public var {n}: {t}\n"));
+            }
+            o.push_str(&format!(
+                "\n    public init({}) {{\n",
+                fields.iter().map(|(n, t)| format!("{n}: {t}")).collect::<Vec<_>>().join(", ")
+            ));
+            for (n, _) in &fields {
+                o.push_str(&format!("        self.{n} = {n}\n"));
+            }
+            o.push_str("    }\n}\n\n");
+        }
 
         // Multiple outputs come back as a struct. The memberwise initializer Swift writes
         // for a public struct is internal, so a caller in another module would not be able
@@ -4993,7 +6158,7 @@ impl<'a> Gen<'a> {
         } else {
             "Output".into()
         };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
@@ -5002,12 +6167,17 @@ impl<'a> Gen<'a> {
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
-        let args: Vec<String> = self
+        let mut args: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", sw_label(&pub_name(&i.name)), sw_name(&pub_name(&i.name))))
             .collect();
+        // The sequence a walk reads is a parameter like the rest (§15.56).
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: [Element]", sw_name(&pub_name(&el.name))));
+            args.push(format!("{}: {}", sw_label(&pub_name(&el.name)), sw_name(&pub_name(&el.name))));
+        }
         let traced = format!("{fname}Traced");
         o.push_str(&format!("/// {}\n", plain_doc(&self.f.name.text, &self.f.version, &format!("`{traced}`"))));
         o.push_str(&format!(
@@ -5064,28 +6234,9 @@ impl<'a> Gen<'a> {
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
         o.push_str(&format!("    {} {trace}: [Fired] = []\n", if has_table { "var" } else { "let" }));
 
-        for it in &self.f.items {
-            match it {
-                Item::Derived(d) => {
-                    o.push_str(&format!(
-                        "    let {} = {}  // {}\n",
-                        self.sw_ident(&d.name.text),
-                        sw_expr(unparen(&self.expr(&d.expr, &local).text)),
-                        tr!("導出", "derived value")
-                    ));
-                    o.push_str(&self.sw_unread(&d.name.text));
-                }
-                Item::Define(d) => {
-                    o.push_str(&format!(
-                        "    let {} = {}  // {}\n",
-                        self.sw_ident(&d.name.text),
-                        sw_expr(unparen(&self.expr(&d.expr, &local).text)),
-                        tr!("定義", "definition")
-                    ));
-                    o.push_str(&self.sw_unread(&d.name.text));
-                }
-                Item::Table(t) => o.push_str(&self.sw_table(t, &local, &trace)),
-            }
+        match &self.f.fold {
+            None => o.push_str(&self.sw_items(&local, &trace)),
+            Some(fold) => o.push_str(&self.sw_walk(fold, &trace)),
         }
 
         let wrap = |ty: &Ty, body: String| -> String {
@@ -5257,6 +6408,38 @@ impl<'a> Gen<'a> {
             binds.push(format!("            let {local} = {v}\n"));
             args.push(format!("{label}: {local}"));
         }
+        // The sequence arrives as an array of objects (§10.2), one per element.
+        if let Some(el) = &self.f.elements {
+            let jp = &el.name.text;
+            let label = sw_label(&pub_name(&el.name));
+            let local = runner_local(&format!("a{}", args.len()), &fname);
+            let ev = runner_local("e", &fname);
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    let jf = &fd.name.text;
+                    let v = match &ty {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
+                        }
+                        Ty::Str => format!("_s({ev}, {jf:?})"),
+                        Ty::Bool => format!("_b({ev}, {jf:?})"),
+                        Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
+                        Ty::Number => format!("_n({ev}, {jf:?})"),
+                        _ => format!("{}(_n({ev}, {jf:?}))", self.sw_ty(&ty)),
+                    };
+                    format!("{}: {v}", sw_name(&pub_name(&fd.name)))
+                })
+                .collect();
+            binds.push(format!(
+                "            let {local} = ({d}[{jp:?}] as! [[String: Any]]).map {{ {ev} in Element({}) }}\n",
+                inner.join(", ")
+            ));
+            args.push(format!("{label}: {local}"));
+        }
         // The record function's own parameter names, which are the call's labels.
         let (p_out, p_trace) = (sw_name(&self.temp("out")), sw_name(&self.temp("trace")));
         format!(
@@ -5406,12 +6589,15 @@ impl<'a> Gen<'a> {
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
         let ret = if single { self.py_ty(&self.ty_of(&self.f.outputs[0].name.text)) } else { "Output".into() };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: list[Element]", pub_name(&el.name)));
+        }
         let mut o = String::new();
         o.push_str(
             "def _json_str(s: str) -> str:\n    o = '\"'\n    for ch in s:\n        if ch == '\"' or ch == \"\\\\\":\n            o += \"\\\\\" + ch\n        elif ord(ch) < 32:\n            o += \"\\\\u%04x\" % ord(ch)\n        else:\n            o += ch\n    return o + '\"'\n\n\n",
@@ -5428,7 +6614,32 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        '\"{jp}\":' + {},\n", Self::py_wire(e, w));
-        o.push_str(&format!("    {v_ins} = [\n{}    ]\n", ins.iter().map(field).collect::<String>()));
+        // The sequence goes in first, and one element is written the way one record's inputs
+        // are: the same wire, one level in (§15.56).
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let seq = self.temp("seq");
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "'\"{}\":' + {}",
+                        fd.name.text,
+                        Self::py_wire(&format!("e.{}", pub_name(&fd.name)), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            o.push_str(&format!(
+                "    {seq} = '\"{}\":[' + \",\".join(\"{{\" + {} + \"}}\" for e in {}) + \"]\"\n",
+                el.name.text,
+                inner.join(" + \",\" + "),
+                pub_name(&el.name)
+            ));
+            seq_first = format!("        {seq},\n");
+        }
+        o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ]\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + \"}}\" for f in {trace}]\n"
@@ -5459,12 +6670,15 @@ impl<'a> Gen<'a> {
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
         let ret = if single { self.ts_ty(&self.ty_of(&self.f.outputs[0].name.text)) } else { "Output".into() };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: readonly Element[]", pub_name(&el.name)));
+        }
         let mut o = String::new();
         if civil_needed(self.f, self.c) {
             o.push_str(
@@ -5478,7 +6692,30 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("    '\"{jp}\":' + {},\n", Self::ts_wire(e, w));
-        o.push_str(&format!("  const {v_ins} = [\n{}  ].join(\",\");\n", ins.iter().map(field).collect::<String>()));
+        // The sequence goes in first, written the way one record's inputs are (§15.56).
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let e = self.temp("elem");
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "'\"{}\":' + {}",
+                        fd.name.text,
+                        Self::ts_wire(&format!("{e}.{}", pub_name(&fd.name)), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            seq_first = format!(
+                "    '\"{}\":[' + {}.map(({e}) => \"{{\" + {} + \"}}\").join(\",\") + \"]\",\n",
+                el.name.text,
+                pub_name(&el.name),
+                inner.join(" + \",\" + ")
+            );
+        }
+        o.push_str(&format!("  const {v_ins} = [\n{seq_first}{}  ].join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("  const {v_obs} = [\n{}  ].join(\",\");\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "  const {v_rows} = {trace}.map((f) => '{{\"table\":' + JSON.stringify(f.table) + ',\"row\":' + String(f.row) + \"}}\").join(\",\");\n"
@@ -5511,12 +6748,15 @@ impl<'a> Gen<'a> {
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
         let ret = if single { self.rs_ty(&self.ty_of(&self.f.outputs[0].name.text)) } else { "Output".into() };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: &[Element]", pub_name(&el.name)));
+        }
         let mut o = String::new();
         o.push_str(
             "fn json_str(s: &str) -> String {\n    let mut o = String::from(\"\\\"\");\n    for ch in s.chars() {\n        match ch {\n            '\"' => o.push_str(\"\\\\\\\"\"),\n            '\\\\' => o.push_str(\"\\\\\\\\\"),\n            c if (c as u32) < 32 => o.push_str(&format!(\"\\\\u{:04x}\", c as u32)),\n            c => o.push(c),\n        }\n    }\n    o.push('\"');\n    o\n}\n\n",
@@ -5533,7 +6773,29 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        String::from(\"\\\"{jp}\\\":\") + &{},\n", Self::rs_wire(e, w));
-        o.push_str(&format!("    let {v_ins} = [\n{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
+        // The sequence goes in first, each element written the way one record's inputs are.
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "String::from(\"\\\"{}\\\":\") + &{}",
+                        fd.name.text,
+                        Self::rs_wire(&format!("e.{}", pub_name(&fd.name)), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            seq_first = format!(
+                "        String::from(\"\\\"{}\\\":[\") + &{}.iter().map(|e| String::from(\"{{\") + &({}) + \"}}\").collect::<Vec<_>>().join(\",\") + \"]\",\n",
+                el.name.text,
+                pub_name(&el.name),
+                inner.join(" + \",\" + &")
+            );
+        }
+        o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ]\n    .join(\",\");\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    let {v_rows} = {trace}\n        .iter()\n        .map(|f| String::from(\"{{\\\"table\\\":\") + &json_str(f.table) + \",\\\"row\\\":\" + &f.row.to_string() + \"}}\")\n        .collect::<Vec<_>>()\n        .join(\",\");\n"
@@ -5580,8 +6842,35 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("// {fname}Record {}\n", record_doc()));
         o.push_str(&format!("func {fname}Record(in Input, out {ret}, trace []Fired, tag string) string {{\n"));
+        // The sequence goes in first, and one element is written the way one record's inputs
+        // are: the same wire, one level in (§15.56).
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let seq = self.temp("seq");
+            let g = pascal(&pub_name(&el.name));
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "\"\\\"{}\\\":\" + {}",
+                        fd.name.text,
+                        Self::go_wire(&format!("e.{}", pascal(&pub_name(&fd.name))), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            o.push_str(&format!("\t{seq} := \"\\\"{}\\\":[\"\n", el.name.text));
+            o.push_str(&format!("\tfor i, e := range in.{g} {{\n\t\tif i > 0 {{\n\t\t\t{seq} += \",\"\n\t\t}}\n"));
+            o.push_str(&format!("\t\t{seq} += \"{{\" + {} + \"}}\"\n\t}}\n", inner.join(" + \",\" + ")));
+            o.push_str(&format!("\t{seq} += \"]\"\n"));
+            seq_first = seq;
+        }
         let mut list = |name: &str, fields: &[(String, String, Wire)]| {
             o.push_str(&format!("\t{name} := []string{{}}\n"));
+            if name == "ins" && !seq_first.is_empty() {
+                o.push_str(&format!("\tins = append(ins, {seq_first})\n"));
+            }
             for (jp, e, w) in fields {
                 match w {
                     Wire::Opt(_) => o.push_str(&format!(
@@ -5618,7 +6907,10 @@ impl<'a> Gen<'a> {
             |a, _| a.to_string(),
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
-        let params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            params.push(pub_name(&el.name));
+        }
         let mut o = String::new();
         o.push_str(
             "  def self._json_str(s)\n    o = +\"\\\"\"\n    s.each_char do |ch|\n      if ch == \"\\\"\" || ch == \"\\\\\"\n        o << \"\\\\\" << ch\n      elsif ch.ord < 32\n        o << format(\"\\\\u%04x\", ch.ord)\n      else\n        o << ch\n      end\n    end\n    o << \"\\\"\"\n  end\n\n",
@@ -5635,7 +6927,29 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("      \"\\\"{jp}\\\":#{{{}}}\",\n", Self::rb_wire(e, w));
-        o.push_str(&format!("    {v_ins} = [\n{}    ].join(\",\")\n", ins.iter().map(field).collect::<String>()));
+        // The sequence goes in first (§15.56).
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "\\\"{}\\\":#{{{}}}",
+                        fd.name.text,
+                        Self::rb_wire(&format!("e.{}", pub_name(&fd.name)), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            seq_first = format!(
+                "      \"\\\"{}\\\":[\" + {}.map {{ |e| \"{{{}}}\" }}.join(\",\") + \"]\",\n",
+                el.name.text,
+                pub_name(&el.name),
+                inner.join(",")
+            );
+        }
+        o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ].join(\",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ].join(\",\")\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    {v_rows} = {trace}.map {{ |f| \"{{\\\"table\\\":#{{_json_str(f.table)}},\\\"row\\\":#{{f.row}}}}\" }}.join(\",\")\n"
@@ -5668,12 +6982,15 @@ impl<'a> Gen<'a> {
             |_, a, _| if single { sw_name(&out) } else { format!("{}.{}", sw_name(&out), sw_name(a)) },
         );
         let ret = if single { self.sw_ty(&self.ty_of(&self.f.outputs[0].name.text)) } else { "Output".into() };
-        let params: Vec<String> = self
+        let mut params: Vec<String> = self
             .f
             .inputs
             .iter()
             .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
             .collect();
+        if let Some(el) = &self.f.elements {
+            params.push(format!("{}: [Element]", sw_name(&pub_name(&el.name))));
+        }
         let mut o = String::new();
         o.push_str(
             "func _jsonStr(_ s: String) -> String {\n    var o = \"\\\"\"\n    for u in s.unicodeScalars {\n        if u == \"\\\"\" {\n            o += \"\\\\\\\"\"\n        } else if u == \"\\\\\" {\n            o += \"\\\\\\\\\"\n        } else if u.value < 32 {\n            let h = String(u.value, radix: 16)\n            o += \"\\\\u\" + String(repeating: \"0\", count: 4 - h.count) + h\n        } else {\n            o.unicodeScalars.append(u)\n        }\n    }\n    return o + \"\\\"\"\n}\n\n",
@@ -5693,7 +7010,32 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        \"\\\"{jp}\\\":\\({})\",\n", Self::sw_wire(e, w));
-        o.push_str(&format!("    let {v_ins} = [\n{}    ].joined(separator: \",\")\n", ins.iter().map(field).collect::<String>()));
+        // The sequence goes in first, and one element is written the way one record's inputs
+        // are: the same wire, one level in (§15.56).
+        let mut seq_first = String::new();
+        if let Some(el) = &self.f.elements {
+            let seq = sw_name(&self.temp("seq"));
+            let inner: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    format!(
+                        "\\\"{}\\\":\\({})",
+                        fd.name.text,
+                        Self::sw_wire(&format!("$0.{}", sw_name(&pub_name(&fd.name))), &wire_of(&ty))
+                    )
+                })
+                .collect();
+            o.push_str(&format!(
+                "    let {seq} = \"\\\"{}\\\":[\" + {}.map {{ \"{{{}}}\" }}.joined(separator: \",\") + \"]\"\n",
+                el.name.text,
+                sw_name(&pub_name(&el.name)),
+                inner.join(",")
+            ));
+            seq_first = format!("        {seq},\n");
+        }
+        o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ].joined(separator: \",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ].joined(separator: \",\")\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
             "    let {v_rows} = {}.map {{ \"{{\\\"table\\\":\\(_jsonStr($0.table)),\\\"row\\\":\\($0.row)}}\" }}.joined(separator: \",\")\n",
@@ -5846,6 +7188,10 @@ fn strip_casts(l: &str) -> String {
             if let Some(k) = after[n..].find('>') {
                 n += k + 1;
             }
+        }
+        // An array type (`as unknown[]`) is one more pair of brackets on the end of the name.
+        while after[n..].starts_with("[]") {
+            n += 2;
         }
         rest = &after[n..];
     }

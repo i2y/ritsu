@@ -367,6 +367,30 @@ code is only allowed in a file of that name and the rule has to be able to sit b
 
 ---
 
+## A rule that walks a sequence
+
+A rule with `elements` and `fold` ([reference §6.2](reference.md#62-elements-and-fold)) takes
+one more argument, last: the sequence, as a list of `Element`. `Element` is a record of the
+element's own fields, generated beside `Output`, and each field carries the same entry guard
+an input of that type carries.
+
+```python
+class Element(NamedTuple):
+    row_zone: Zone
+    threshold: YenInclTax
+    row_fee: YenInclTax
+
+
+def freight(dest: Zone, total: YenInclTax, freight_rows: list[Element]) -> YenInclTax: ...
+```
+
+The body is a loop over that list, with the rule's own tables inside it and one branch per
+verdict. What comes out of the loop goes through the same rounding and the same return the
+rule would have had without it. `rulec api` lists the sequence as the last parameter, with the
+element's fields under `elements`, and the record written for one call carries the sequence as
+an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift are generated;
+SQL is refused by name, because one query has nowhere to carry a value from row to row.
+
 ## The rows that matched
 
 Beside every function there is a twin with `_traced` on its name (`Traced` in Go and Swift).

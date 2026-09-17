@@ -770,6 +770,9 @@ code { background: #f4f4f4; padding: 0 3px; }
 #try-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; max-width: 36rem; }
 #try-form label { display: contents; }
 #try-form input, #try-form select { font: inherit; padding: 2px 6px; }
+#try-rows { margin: 10px 0; }
+#try-rows table { margin: 4px 0; }
+#try-rows input, #try-rows select, #try-rows button { font: inherit; padding: 2px 6px; }
 #try-buttons { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
 #try-buttons button { font: inherit; padding: 4px 12px; }
 #try-result { font-weight: 600; margin: 8px 0; min-height: 1.5em; }
@@ -780,8 +783,8 @@ code { background: #f4f4f4; padding: 0 3px; }
 /// description, so the page never carries a second copy of the inputs.
 fn try_panel() -> String {
     tr!(
-        "<section id=\"try\">\n<h2>試してみる</h2>\n<p>入力を入れると、当てはまった行に色が付き、結果が出ます。動くのは生成コードそのもので、ログに書かれる一行もそのまま出ます。</p>\n<form id=\"try-form\"></form>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n",
-        "<section id=\"try\">\n<h2>Try a case</h2>\n<p>Enter the inputs: the rows that match light up and the outputs appear. What runs is the generated code itself, and the line it would write to a log is shown as it is.</p>\n<form id=\"try-form\"></form>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n"
+        "<section id=\"try\">\n<h2>試してみる</h2>\n<p>入力を入れると、当てはまった行に色が付き、結果が出ます。動くのは生成コードそのもので、ログに書かれる一行もそのまま出ます。</p>\n<form id=\"try-form\"></form>\n<div id=\"try-rows\"></div>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n",
+        "<section id=\"try\">\n<h2>Try a case</h2>\n<p>Enter the inputs: the rows that match light up and the outputs appear. What runs is the generated code itself, and the line it would write to a log is shown as it is.</p>\n<form id=\"try-form\"></form>\n<div id=\"try-rows\"></div>\n<div id=\"try-buttons\"></div>\n<div id=\"try-result\"></div>\n<pre id=\"try-record\"></pre>\n</section>\n"
     )
 }
 
@@ -857,7 +860,18 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             }
         }
     }
-    Obj::new()
+    // The sequence a walk reads (§15.56): the panel builds a small editor for it, one row
+    // per element, from the same field description an input gets.
+    let elements = f.elements.as_ref().map(|el| {
+        let fields: Vec<String> =
+            el.fields.iter().map(|fd| one(&fd.name.text, &crate::codegen::pub_name_of(&fd.name))).collect();
+        Obj::new()
+            .str("name", &el.name.text)
+            .str("alias", &crate::codegen::pub_name_of(&el.name))
+            .raw("fields", crate::json::arr(&fields))
+            .finish()
+    });
+    let mut o = Obj::new()
         // The rule names itself: the page says who it is when it introduces itself to a
         // host that is rendering it (SEP-1865).
         .str("name", &f.name.text)
@@ -870,9 +884,14 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             Obj::new()
                 .str("run", &tr!("計算する", "Compute"))
                 .str("example", &tr!("例", "Example"))
+                .str("add", &tr!("行を足す", "Add a row"))
+                .str("remove", &tr!("この行を消す", "Remove this row"))
                 .finish(),
-        )
-        .finish()
+        );
+    if let Some(e) = elements {
+        o = o.raw("elements", e);
+    }
+    o.finish()
 }
 
 /// The script that drives the panel. It knows nothing about the rule beyond `RULE`.
@@ -880,10 +899,7 @@ const PAGE_JS: &str = r##"
 const $ = (s) => document.querySelector(s);
 const form = $("#try-form");
 const dateOf = (days) => new Date(Number(days) * 86400000).toISOString().slice(0, 10);
-for (const inp of RULE.inputs) {
-  const label = document.createElement("label");
-  const span = document.createElement("span");
-  span.textContent = inp.name + (inp.unit ? " (" + inp.unit + ")" : "");
+function widget(inp) {
   let el;
   if (inp.kind === "enum") {
     el = document.createElement("select");
@@ -913,10 +929,71 @@ for (const inp of RULE.inputs) {
       el.placeholder = show(inp.range.min) + " … " + show(inp.range.max);
     }
   }
+  return el;
+}
+for (const inp of RULE.inputs) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = inp.name + (inp.unit ? " (" + inp.unit + ")" : "");
+  const el = widget(inp);
   el.name = inp.alias;
   label.appendChild(span);
   label.appendChild(el);
   form.appendChild(label);
+}
+// A rule that walks a sequence gets an editor for it: one row per element, with the same
+// field widgets an input gets. The rows live outside the form so that a field name repeated
+// down the column does not collide with `form.elements`.
+let rows = [];
+if (RULE.elements) {
+  const box = $("#try-rows");
+  const caption = document.createElement("div");
+  caption.textContent = RULE.elements.name;
+  box.appendChild(caption);
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const fd of RULE.elements.fields) {
+    const th = document.createElement("th");
+    th.textContent = fd.name + (fd.unit ? " (" + fd.unit + ")" : "");
+    head.appendChild(th);
+  }
+  head.appendChild(document.createElement("th"));
+  const body = document.createElement("tbody");
+  table.appendChild(head);
+  table.appendChild(body);
+  box.appendChild(table);
+  const addRow = () => {
+    const tr = document.createElement("tr");
+    const cells = {};
+    for (const fd of RULE.elements.fields) {
+      const td = document.createElement("td");
+      const el = widget(fd);
+      td.appendChild(el);
+      tr.appendChild(td);
+      cells[fd.alias] = el;
+    }
+    const td = document.createElement("td");
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "×";
+    rm.title = RULE.text.remove;
+    rm.addEventListener("click", () => {
+      tr.remove();
+      rows = rows.filter((r) => r.tr !== tr);
+    });
+    td.appendChild(rm);
+    tr.appendChild(td);
+    body.appendChild(tr);
+    rows.push({ tr, cells });
+  };
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = RULE.text.add;
+  add.addEventListener("click", addRow);
+  box.appendChild(add);
+  // One row to start with, so the shape is visible; removing it is the empty sequence,
+  // which is a case of its own.
+  addRow();
 }
 function toWire(inp, el) {
   switch (inp.kind) {
@@ -962,6 +1039,15 @@ function shown(o, v) {
 }
 function run() {
   const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
+  if (RULE.elements) {
+    args.push(
+      rows.map((r) => {
+        const e = {};
+        for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+        return e;
+      })
+    );
+  }
   for (const tr of document.querySelectorAll("tr.hit")) tr.classList.remove("hit");
   try {
     const [out, trace] = FN.run(...args);
@@ -973,6 +1059,7 @@ function run() {
     }
     $("#try-record").textContent = FN.record(...args, out, trace, "");
     try {
+      // The sequence is not put in the address: a link carries the scalar inputs.
       const q = new URLSearchParams();
       for (const inp of RULE.inputs) {
         const el = form.elements[inp.alias];

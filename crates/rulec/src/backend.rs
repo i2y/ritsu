@@ -121,7 +121,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_runner.ts")])
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
-        folds: false,
+        folds: true,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
     },
     Backend {
@@ -142,7 +142,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
-        folds: false,
+        folds: true,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
     },
     Backend {
@@ -171,7 +171,7 @@ pub const ALL: &[Backend] = &[
                 &["--edition", "2021", "-O", "_round_test.rs", "-o", "_round_test"],
             )
         },
-        folds: false,
+        folds: true,
         mcp: None,
     },
     Backend {
@@ -190,7 +190,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
-        folds: false,
+        folds: true,
         mcp: None,
     },
     Backend {
@@ -212,7 +212,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
-        folds: false,
+        folds: true,
         mcp: None,
     },
     Backend {
@@ -241,7 +241,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("swift", "./_round_test", &[])
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
-        folds: false,
+        folds: true,
         mcp: None,
     },
     Backend {

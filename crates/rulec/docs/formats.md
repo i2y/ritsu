@@ -277,7 +277,19 @@ enum being its own name there). `unit`, `range` and `rounding` are absent when t
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
 module that serves the rule as one MCP tool
-([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)). The `sql` entry has no
+([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)). A rule that walks a
+sequence (§15.56) has one more parameter, last in the list and last in every signature, with
+the fields one element carries under `elements`:
+
+```json
+{"name":"運賃行","alias":"freight_rows","type":"list[Element]","optional":false,
+ "elements":[{"name":"閾値","alias":"threshold","type":"YenInclTax","unit":"円",
+              "range":{"min":0,"max":1000000},"optional":false}]}
+```
+
+Those fields get the same entry guards the inputs get, so their `range` means what a
+parameter's `range` means. SQL has no entry for such a rule — `rulec gen` does not write one
+(§15.56). The `sql` entry has no
 function to name: it gives the file, the relation the query reads (`input`) and its `id`
 column, the `guard` column that carries the entry guard's sentence, the `columns` of that
 relation as the query declares them, the `outputs`, and under `rows` the column that carries

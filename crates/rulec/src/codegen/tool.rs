@@ -74,7 +74,7 @@ impl<'a> Gen<'a> {
     /// `python/<alias>_mcp.py`: the module as one MCP tool, over stdio, python3 alone.
     pub fn py_mcp(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let names: Vec<String> = self.f.inputs.iter().map(|i| format!("{:?}", i.name.text)).collect();
+        let mut names: Vec<String> = self.f.inputs.iter().map(|i| format!("{:?}", i.name.text)).collect();
         let mut convs: Vec<String> = Vec::new();
         let mut tys: Vec<String> = Vec::new();
         for i in &self.f.inputs {
@@ -104,6 +104,33 @@ impl<'a> Gen<'a> {
                     tys.push(qualified(t));
                 }
             }
+        }
+        // The sequence a walk reads is one more argument, and one element is converted the way
+        // one call's inputs are (§15.56).
+        if let Some(el) = &self.f.elements {
+            let jp = format!("{:?}", el.name.text);
+            names.push(jp.clone());
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let k = format!("{:?}", fd.name.text);
+                    let t = self.ty_of(&fd.name.text);
+                    match &t {
+                        Ty::Enum(n) => format!("_enum({k}, m.{}, _el({k}, e)[{k}])", self.enum_names.get(n).cloned().unwrap_or_default()),
+                        Ty::Bool => format!("_bool({k}, _el({k}, e)[{k}])"),
+                        Ty::Date => format!("_date({k}, _el({k}, e)[{k}])"),
+                        Ty::Str => format!("_str({k}, _el({k}, e)[{k}])"),
+                        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({k}, _el({k}, e)[{k}]))", brand_of(&t)),
+                        _ => format!("_int({k}, _el({k}, e)[{k}])"),
+                    }
+                })
+                .collect();
+            convs.push(format!(
+                "[m.Element({}) for e in _seq({jp}, o[{jp}])]",
+                if fields.len() == 1 { format!("{},", fields[0]) } else { fields.join(", ") }
+            ));
+            tys.push("list[m.Element]".to_string());
         }
         let doc = tr!(
             "規則 {} v{} を、MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n\nstdio は手元のエージェント（Claude Code、IDE）が使う。--http は、HTTPS の口しか受け付けない\n連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
@@ -149,6 +176,10 @@ impl<'a> Gen<'a> {
             .replace("@D_POST@", &tr!("メッセージを一つ読んで、答えを JSON で返す。", "Read one message and answer it in JSON."))
             .replace("@D_GET@", &tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open."))
             .replace("@D_DELETE@", &tr!("セッションを終える。", "End the session."))
+            .replace("@D_SEQ@", &tr!("列は配列で渡す。", "The sequence is passed as an array."))
+            .replace("@D_EL@", &tr!("要素はオブジェクトで渡す。", "An element is passed as an object."))
+            .replace("@M_SEQ@", &tr!("f\"{{name}}: 配列で渡す。{{v!r}} は配列ではない\"", "f\"{{name}}: an array is expected, not {{v!r}}\""))
+            .replace("@M_EL@", &tr!("f\"{{name}}: 要素はオブジェクトで渡す。{{v!r}} はオブジェクトではない\"", "f\"{{name}}: an element must be an object, not {{v!r}}\""))
             .replace("@D_MAIN@", &tr!("引数を読んで、stdio か HTTP のどちらかで待つ。", "Read the arguments and listen, on stdio or on HTTP."))
             .replace("@D_PAGE@", &tr!("隣にある承認者向けのページ。無ければ None で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or None — and then the tool answers with the record alone."))
             .replace("@UI_DESC@", &py_str(&self.ui_description()))
@@ -186,7 +217,7 @@ impl<'a> Gen<'a> {
     /// prose to put in.
     fn ts_mcp_parts(&self) -> (String, Vec<(&'static str, String)>) {
         let alias = pub_name(&self.f.name);
-        let names: Vec<String> = self.f.inputs.iter().map(|i| format!("{:?}", i.name.text)).collect();
+        let mut names: Vec<String> = self.f.inputs.iter().map(|i| format!("{:?}", i.name.text)).collect();
         let mut convs: Vec<String> = Vec::new();
         let mut brands: Vec<String> = Vec::new();
         for i in &self.f.inputs {
@@ -212,6 +243,36 @@ impl<'a> Gen<'a> {
                 Ty::Opt(t) => convs.push(format!("o[{jp}] === null ? null : {}", conv(t))),
                 t => convs.push(conv(t)),
             }
+        }
+        // The sequence a walk reads, one element at a time (§15.56).
+        if let Some(el) = &self.f.elements {
+            let jp = format!("{:?}", el.name.text);
+            names.push(jp.clone());
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let k = format!("{:?}", fd.name.text);
+                    let t = self.ty_of(&fd.name.text);
+                    let src = format!("_el({k}, e)[{k}]");
+                    let body = match &t {
+                        Ty::Enum(n) => format!("m.parse{}(_str({k}, {src}))", self.enum_names.get(n).cloned().unwrap_or_default()),
+                        Ty::Bool => format!("_bool({k}, {src})"),
+                        Ty::Date => format!("_date({k}, {src})"),
+                        Ty::Str => format!("_str({k}, {src})"),
+                        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                            let b = brand_of(&t);
+                            if !brands.contains(&b) {
+                                brands.push(b.clone());
+                            }
+                            format!("_int({k}, {src}) as {b}")
+                        }
+                        _ => format!("_int({k}, {src})"),
+                    };
+                    format!("{}: {body}", pub_name(&fd.name))
+                })
+                .collect();
+            convs.push(format!("_seq({jp}, o[{jp}]).map((e) => ({{ {} }}))", fields.join(", ")));
         }
         let code = TS_MCP
             .replace("@HEADER@", self.header("//").trim_end())
@@ -250,6 +311,10 @@ impl<'a> Gen<'a> {
             ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのは手元からの呼び出しだけで、ブラウザが開いているページに\n * このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
             ("@D_HTTP@", tr!("MCP の Streamable HTTP で待つ。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
             ("@D_GET@", tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open.")),
+            ("@D_SEQ@", tr!("列は配列で渡す。", "The sequence is passed as an array.")),
+            ("@D_EL@", tr!("要素はオブジェクトで渡す。", "An element is passed as an object.")),
+            ("@M_SEQ@", tr!("`${{name}}: 配列で渡す。${{JSON.stringify(v)}} は配列ではない`", "`${{name}}: an array is expected, not ${{JSON.stringify(v)}}`")),
+            ("@M_EL@", tr!("`${{name}}: 要素はオブジェクトで渡す。${{JSON.stringify(v)}} はオブジェクトではない`", "`${{name}}: an element must be an object, not ${{JSON.stringify(v)}}`")),
             ("@D_PORT@", tr!("0 を渡せば空いている番号が選ばれるので、どこで待っているかを一行出す。", "A port of 0 means any free one, so where it is listening is printed as one line.")),
             ("@D_PAGE@", tr!("隣にある承認者向けのページ。無ければ null で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or null — and then the tool answers with the record alone.")),
             ("@UI_DESC@", quote(&self.ui_description())),
@@ -350,6 +415,20 @@ def _enum(name: str, cls: type[E], v: object) -> E:
         return cls(_str(name, v))
     except ValueError:
         raise m.RuleInputError(@M_ENUM@) from None
+
+
+def _seq(name: str, v: object) -> list[object]:
+    """@D_SEQ@"""
+    if not isinstance(v, list):
+        raise m.RuleInputError(@M_SEQ@)
+    return v
+
+
+def _el(name: str, v: object) -> dict[str, object]:
+    """@D_EL@"""
+    if not isinstance(v, dict):
+        raise m.RuleInputError(@M_EL@)
+    return v
 
 
 def _args(d: object) -> tuple[@TYPES@]:
@@ -646,6 +725,22 @@ function _date(name: string, v: unknown): bigint {
   }
   const [y, mo, d] = parts;
   return BigInt(Math.round(Date.UTC(y, mo - 1, d) / 86400000));
+}
+
+/** @D_SEQ@ */
+function _seq(name: string, v: unknown): unknown[] {
+  if (!Array.isArray(v)) {
+    throw new m.RuleInputError(@M_SEQ@);
+  }
+  return v;
+}
+
+/** @D_EL@ */
+function _el(name: string, v: unknown): Record<string, unknown> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new m.RuleInputError(@M_EL@);
+  }
+  return v as Record<string, unknown>;
 }
 
 function _args(d: unknown) {

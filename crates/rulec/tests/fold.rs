@@ -70,6 +70,11 @@ fn write(d: &PathBuf, name: &str, body: &str) -> String {
     p.to_str().unwrap().to_string()
 }
 
+/// Whether a toolchain is on the PATH, so a missing one skips rather than fails.
+fn have(cmd: &str) -> bool {
+    Command::new("sh").args(["-c", &format!("command -v {cmd} >/dev/null 2>&1")]).status().map(|s| s.success()).unwrap_or(false)
+}
+
 fn codes(out: &str) -> Vec<String> {
     out.lines()
         .filter_map(|l| rulec::json::parse(l).ok())
@@ -148,21 +153,194 @@ fn takeは一意か先頭かを書かせる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// What is not built yet is refused by name, not by silence (§15.56).
+/// A walk is written where it can be written, and the rest are named rather than left to
+/// produce a file that cannot run (§15.56). SQL is the one that cannot: a single query has
+/// nowhere to carry a value from row to row and stop early.
 #[test]
-fn 生成はまだできないと名指しで断る() {
+fn 七言語に生成し_SQLは名指しで断る() {
     let d = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
-    let (code, _, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
-    assert_eq!(code, 2, "{e}");
-    assert!(e.contains("fold") || e.contains("畳み込み"), "{e}");
-    assert!(!out.exists(), "断ったのに書き出している");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+    for lang in ["python", "typescript", "javascript", "rust", "ruby", "go", "swift"] {
+        assert!(out.join(lang).exists(), "{lang} に生成されていない");
+    }
+    assert!(!out.join("sql").exists(), "SQL は書けないはず");
+    assert!(said.contains("SQL"), "書けない言語を名指ししていない: {said}");
 
     let p = write(&d, "ex.rule", &format!("{RULE}\nexamples\n| 行ゾーン | 閾値 | 行運賃 | -> 運賃 |\n| 近畿圏 | 500円 | 800円 | 800円 |\n"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(codes(&out).contains(&"E025".to_string()), "{out}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// The inventory has to say the sequence is there, and say it the way the generated file
+/// spells it — a caller that reads `rulec api` rather than the code would otherwise build a
+/// call with one argument missing.
+#[test]
+fn 目録は列を欄として載せる() {
+    let d = dir("api");
+    let p = write(&d, "r.rule", RULE);
+    let out = d.join("out");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+    let (code, said, e) = run(&["api", &p]);
+    assert_eq!(code, 0, "{e}");
+    let j = rulec::json::parse(said.trim()).unwrap();
+
+    for (lang, file) in [
+        ("python", out.join("python/freight.py")),
+        ("typescript", out.join("typescript/freight.ts")),
+        ("javascript", out.join("javascript/freight.mjs")),
+        ("rust", out.join("rust/freight.rs")),
+        ("go", out.join("go/freight/freight.go")),
+        ("swift", out.join("swift/freight.swift")),
+    ] {
+        let e = j.get(lang).unwrap();
+        let src = std::fs::read_to_string(&file).unwrap();
+        for k in ["signature", "traced_signature", "record_signature"] {
+            let sig = e.get(k).and_then(|v| v.as_str()).unwrap();
+            assert!(src.contains(sig), "{lang} の {k} が生成物に無い: {sig}");
+        }
+        // The sequence is a parameter of the inventory too, with the fields one element
+        // carries — not just a name in a signature string.
+        let key = if lang == "go" { "input_fields" } else { "params" };
+        let rulec::json::Json::Arr(ps) = e.get(key).unwrap() else { panic!() };
+        let seq = ps.iter().find(|p| p.get("name").and_then(|v| v.as_str()) == Some("運賃行")).expect("列が欄に無い");
+        let rulec::json::Json::Arr(fs) = seq.get("elements").expect("要素の欄が無い") else { panic!() };
+        assert_eq!(fs.len(), 3, "{lang}: 要素の欄が三つでない");
+        let th = fs.iter().find(|f| f.get("name").and_then(|v| v.as_str()) == Some("閾値")).unwrap();
+        assert!(th.get("range").is_some(), "{lang}: 要素の欄に範囲が無い");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A DOM small enough to run the panel the page carries: elements, the five ids the script
+/// looks up, and the listeners it attaches. Nothing here is a browser — what is being tested
+/// is the generated script, not the rendering.
+const DOM: &str = r##"
+class El {
+  constructor(tag) {
+    this.tagName = tag.toUpperCase();
+    this.children = [];
+    this.listeners = {};
+    this.classList = { add() {}, remove() {}, contains: () => false };
+    this.style = {};
+    this.value = "";
+    this.checked = false;
+    this._text = "";
+    this.name = "";
+  }
+  get textContent() { return this._text; }
+  set textContent(v) { this._text = String(v); }
+  appendChild(c) { this.children.push(c); c.parentNode = this; return c; }
+  remove() { const p = this.parentNode; if (p) p.children = p.children.filter((x) => x !== this); }
+  addEventListener(k, f) { (this.listeners[k] ||= []).push(f); }
+  click() { for (const f of this.listeners.click || []) f(); }
+  querySelectorAll() { return []; }
+  get elements() {
+    const o = {};
+    const walk = (n) => { if (n.name) o[n.name] = n; n.children.forEach(walk); };
+    this.children.forEach(walk);
+    return o;
+  }
+}
+const ids = {};
+for (const id of ["try-form", "try-rows", "try-buttons", "try-result", "try-record"]) {
+  ids["#" + id] = new El(id === "try-form" ? "form" : "div");
+}
+globalThis.document = { createElement: (t) => new El(t), querySelector: (s) => ids[s] ?? null, querySelectorAll: () => [] };
+globalThis.CSS = { escape: (s) => s };
+globalThis.history = { replaceState() {} };
+globalThis.location = { hash: "" };
+globalThis.window = { addEventListener() {} };
+globalThis.window.parent = globalThis.window;
+export { ids };
+"##;
+
+/// Driving that panel: two rows, then Compute, then both rows removed and Compute again.
+const DRIVE: &str = r##"
+const box = ids["#try-rows"];
+box.children[box.children.length - 1].click();  // one more row
+const body = box.children[1].children[1];
+const set = (r, vals) => { const tds = body.children[r].children; vals.forEach((v, i) => { tds[i].children[0].value = v; }); };
+set(0, ["近畿圏", "500", "800"]);
+set(1, ["近畿圏", "2000", "1500"]);
+ids["#try-buttons"].children[0].click();
+console.log(JSON.stringify({ result: ids["#try-result"].textContent, record: ids["#try-record"].textContent }));
+body.children.slice().forEach((tr) => tr.children[tr.children.length - 1].children[0].click());
+ids["#try-buttons"].children[0].click();
+console.log(JSON.stringify({ result: ids["#try-result"].textContent, record: ids["#try-record"].textContent }));
+"##;
+
+/// The page an approver reads is generated for a walk too, and a page that cannot run is
+/// worse than no page: the panel has to build an editor for the sequence and pass it as the
+/// argument the module takes (§15.52, §15.56).
+#[test]
+fn ページの試用欄は列を編集して走る() {
+    if !have("node") {
+        eprintln!("注意: node が無いので飛ばした");
+        return;
+    }
+    let d = dir("page");
+    let p = write(&d, "r.rule", RULE);
+    let out = d.join("out");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+
+    // The page's own module script, with the stub in front of it and the driver behind.
+    let html = std::fs::read_to_string(out.join("javascript/freight_page.html")).unwrap();
+    let head = html.find("<script type=\"module\">").expect("ページに script が無い") + "<script type=\"module\">".len();
+    let body = &html[head..head + html[head..].find("</script>").expect("script が閉じていない")];
+    write(&d, "dom.mjs", DOM);
+    let p = write(&d, "page.mjs", &format!("import {{ ids }} from \"./dom.mjs\";\n{body}\n{DRIVE}"));
+
+    let o = Command::new("node").arg(&p).output().expect("node を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(o.status.success(), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    let mut lines = said.lines();
+    let two = rulec::json::parse(lines.next().expect("一行目が無い")).unwrap();
+    let none = rulec::json::parse(lines.next().expect("二行目が無い")).unwrap();
+
+    // 500円 is 確定 and 2000円 is 持ち越し, so the taken value wins.
+    assert!(two.get("result").and_then(|v| v.as_str()).unwrap().contains("800"), "{said}");
+    let rec = two.get("record").and_then(|v| v.as_str()).unwrap();
+    assert!(rec.contains("\"運賃行\":[{"), "列が記録に無い: {rec}");
+    assert!(rec.contains("\"閾値\":2000"), "二行目が記録に無い: {rec}");
+    // Both rows removed: the empty sequence is its own answer, not a crash.
+    assert!(none.get("result").and_then(|v| v.as_str()).unwrap().contains("0"), "{said}");
+    assert!(none.get("record").and_then(|v| v.as_str()).unwrap().contains("\"運賃行\":[]"), "{said}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// The seven generated walks answer what the reference evaluator answered, over the whole
+/// vector suite. A language whose toolchain is missing is skipped by `rulec test` itself.
+#[test]
+fn 生成された歩きは参照評価器と一致する() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let d = dir("agree");
+    let p = write(&d, "r.rule", RULE);
+    let out = d.join("out");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+
+    let (_, said, _) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
+    let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();
+    let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!("{said}") };
+    let mut ran = 0;
+    for r in rs {
+        if r.get("ran") != Some(&rulec::json::Json::Bool(true)) {
+            continue;
+        }
+        ran += 1;
+        assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
+    }
+    assert!(ran >= 1, "どの言語も走らなかった: {said}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

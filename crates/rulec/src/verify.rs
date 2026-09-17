@@ -302,13 +302,31 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
 /// also the `inputSchema` of the rule as an MCP tool (§15.44). `alias` keys the properties
 /// by their ASCII aliases instead of the rule's names (§15.45).
 pub fn schema_in(f: &RuleFile, c: &Checked, alias: bool) -> String {
-    let ins: Vec<String> = f
+    let mut ins: Vec<String> = f
         .inputs
         .iter()
         .map(|i| prop(&i.name, &c.ty_of(&i.name.text).unwrap_or(Ty::Unknown), c, alias))
         .collect();
     let key = |n: &Name| if alias { n.ascii.clone().unwrap_or_else(|| n.text.clone()) } else { n.text.clone() };
-    let req: Vec<String> = f.inputs.iter().map(|i| crate::json::quote(&key(&i.name))).collect();
+    let mut req: Vec<String> = f.inputs.iter().map(|i| crate::json::quote(&key(&i.name))).collect();
+    // The sequence a walk reads: an array of objects, each of them the element's own fields
+    // in the same wire (§15.56). It is required like any other input — a caller that sends
+    // no sequence has not sent an empty one.
+    if let Some(el) = &f.elements {
+        let fields: Vec<String> = el
+            .fields
+            .iter()
+            .map(|fd| prop(&fd.name, &c.ty_of(&fd.name.text).unwrap_or(Ty::Unknown), c, alias))
+            .collect();
+        let freq: Vec<String> = el.fields.iter().map(|fd| crate::json::quote(&key(&fd.name))).collect();
+        ins.push(format!(
+            "{}:{{\"type\":\"array\",\"items\":{{\"type\":\"object\",\"properties\":{{{}}},\"required\":[{}],\"additionalProperties\":false}}}}",
+            crate::json::quote(&key(&el.name)),
+            fields.join(","),
+            freq.join(",")
+        ));
+        req.push(crate::json::quote(&key(&el.name)));
+    }
     format!(
         "{{\"type\":\"object\",\"properties\":{{{}}},\"required\":[{}],\"additionalProperties\":false}}",
         ins.join(","),

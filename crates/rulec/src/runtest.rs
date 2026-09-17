@@ -210,6 +210,12 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let n = std::fs::read_to_string(&vec_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
         for b in &present {
+            // Not every rule is generated for every backend: a rule that walks a sequence is
+            // written only where the walk can be (§15.56). What is not there is not run, and
+            // saying "cannot start" about a file nobody wrote would read as a broken machine.
+            if !wrote(dir, b.id, alias) {
+                continue;
+            }
             let diff = match exec(&(b.run)(alias, &pkg), Some(&vec_path)) {
                 Err(f) => Some(f),
                 Ok(got) => (got != want).then(|| first_diff(&got, &want)),
@@ -233,6 +239,10 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one.
     let pkg0 = aliases[0].replace('_', "");
     for b in &present {
+        // Same reason as above: a backend nothing was written for has no helpers either.
+        if !dir.join(b.id).exists() {
+            continue;
+        }
         let diff = exec(&(b.round)(&pkg0), None).err();
         out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, diff });
     }
@@ -333,6 +343,20 @@ fn via_mcp(
     let _ = child.kill();
     let _ = child.wait();
     Ok(got)
+}
+
+/// Whether this backend has anything for this rule under the output directory.
+fn wrote(dir: &Path, id: &str, alias: &str) -> bool {
+    let d = dir.join(id);
+    let named = |p: &Path| -> bool {
+        p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(alias))
+    };
+    let Ok(rd) = std::fs::read_dir(&d) else { return false };
+    rd.flatten().any(|e| {
+        let p = e.path();
+        // Go puts the module in a directory of its own, named after the package.
+        named(&p) || (p.is_dir() && std::fs::read_dir(&p).map(|r| r.flatten().any(|x| named(&x.path()))).unwrap_or(false))
+    })
 }
 
 fn broken(m: String) -> Failure {
