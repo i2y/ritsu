@@ -134,9 +134,11 @@ it runs on.
 
 `uses: i2y/rulec@v0.3.0` puts that release on the runner's `PATH`,
 verified against the checksums published with it. The ref the action is
-referenced with is the release, so the two cannot drift apart. To pin the
-archive itself rather than trust the checksums file, add
-`with: { sha256: … }`.
+referenced with is the release, so by default the two cannot drift apart
+(`with: { version: v0.2.0 }` is how you ask for another one on purpose).
+The check against `SHA256SUMS` **always runs** — a missing line for the
+archive is itself a failure. To pin the archive's hash in the workflow as
+well, add `with: { sha256: … }`: one more check, not a different one.
 
 ```yaml
 - uses: i2y/rulec@v0.3.0

@@ -97,7 +97,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 ## CI に置く
 
-`uses: i2y/rulec@v0.3.0` の一行で、そのリリースのバイナリが検査済みで runner の `PATH` に入ります。action を指す ref がそのままリリースなので、二つがずれることはありません。`SHA256SUMS` を信用するのではなくアーカイブそのものを固定したいなら、`with: { sha256: … }` を足します。
+`uses: i2y/rulec@v0.3.0` の一行で、そのリリースのバイナリが検査済みで runner の `PATH` に入ります。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: v0.2.0 }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。
 
 ```yaml
 - uses: i2y/rulec@v0.3.0
