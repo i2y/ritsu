@@ -157,11 +157,11 @@ Four rules keep it readable.
 - **Units live in the type** wherever there is a type to hold them: a
   newtype in Rust, a one-field struct in Swift, a defined type in Go, a
   branded `bigint` in TypeScript, a `NewType` in Python. Confusing
-  `YenInclTax` with `YenExclTax` stops at compile time. Ruby and JavaScript have
-  nowhere to put a unit, so there it is documented instead.
+  `YenInclTax` with `YenExclTax` stops at compile time. Ruby, JavaScript
+  and SQL have nowhere to put a unit, so there it is documented instead.
 - **Rounding goes through its own helper**, because Python's and Ruby's
-  integer division rounds toward −∞ while Rust, Swift, Go and TypeScript
-  truncate toward zero.
+  integer division rounds toward −∞ while Rust, Swift, Go, TypeScript,
+  JavaScript and SQL truncate toward zero.
 - **No builtin is called bare.** An input aliased `min` or `list` does
   not break the output: `_min`, `_max` and `_isinstance` are generated.
 
@@ -216,9 +216,16 @@ if 残高A <= 1000 and 残高B >= 3980:
 
 `rulec mcp` is for the agent that writes a rule. For the agent that
 **calls** one — "may this order be returned", "what is this member's
-fee rate", asked in the middle of something else — the answer should
-not be a judgement the model makes afresh each time, wavering at the
-boundaries and leaving nothing to audit. It should be the table.
+fee rate", asked in the middle of something else — the answer should be
+the table.
+
+This is not "do not let a model decide". It is that a decision which is
+**already made** — written in the terms, printed in the tariff, signed
+off — should not be re-derived on every call, wavering at the
+boundaries and leaving nothing to audit. What is *not* decided yet —
+which class this is, how severe that is — is a person's to settle or a
+model's; hand that answer in **as a value** and the table takes it from
+there.
 
 So `gen` writes the rule as one MCP server beside the module:
 `shipping_fee_mcp.py` next to the Python one, `shipping_fee_mcp.mjs`

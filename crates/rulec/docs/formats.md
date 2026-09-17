@@ -382,6 +382,7 @@ rulec only validates types and ranges (§10.2).
 | `observed` | yes | the values that actually came out. **Every output is required** |
 | `tag` | no | a label for the record, shown in witnesses |
 | `ts` | no | when it happened |
+| `by` | no | where an input came from, when it was not read as it stood ([below](#where-a-value-came-from-by)). **rulec does not read it** |
 | `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |
 
 The generated code writes this line itself: every module has a record function that takes
@@ -396,6 +397,36 @@ move.
 
 **Fixtures are not committed to a repository**: they hold order amounts. Pass them to CI as
 an artifact or from protected storage.
+
+### Where a value came from (`by`)
+
+Not every input is read from a system. Some are **decided**: a class picked out of the input's
+own enum by a model, a yes/no that came back as a probability, a grade somebody typed. The rule
+is a pure function either way — what was decided is passed in as a value, the way the time and
+the stock are (§10.3) — so the record already keeps *what* the value was. `by` keeps **who gave
+it**, and how sure they were:
+
+```json
+{"ts":"2026-09-17T09:12:33+09:00","tag":"ticket:88231",
+ "in":{"確信度":934,"区分":"請求"},
+ "by":{"区分":{"src":"jev","ver":"2026-09-16","conf":934}},
+ "observed":{"扱い":"自動"},
+ "trace":[{"table":"振り分け表","row":2}]}
+```
+
+| key | meaning |
+|---|---|
+| `src` | what decided the value: a short, stable identifier — `jev`, `agent`, `ops` — not prose |
+| `ver` | the version of that thing, spelled the way it spells its own versions |
+| `conf` | how sure it was, as **an integer count of 0.1% steps**: 934 is 93.4%. The same wire a rate uses (§10.2), so a record carries one kind of number and not two. Leave it out for anything that has no confidence, such as a person |
+
+Only the inputs that were decided need an entry; an input with none was read as it stood.
+
+**rulec reads none of this.** `lint` does not check it, `replay` does not filter on it, and the
+match rate does not account for it. It is a place to put provenance that survives the pipeline
+unchanged, so that "the records whose class the model was less than 90% sure of" is a line of
+`jq` a month later instead of a guess — and it is deliberately not a claim the tool makes about
+those records.
 
 ## The replay manifest (`--manifest`)
 

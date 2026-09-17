@@ -30,6 +30,25 @@ Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.
 
+## Proved is not type-checked
+
+Type checking says a **value has the right shape**: a member of the enum, an integer, the unit
+it claims. APIs and models that return typed values are common now, which makes the two easy to
+run together. **A right shape says nothing about a right answer.**
+
+What `rulec check` proves is not a shape but a **property of the table**: every input in the
+declared range matches some row; no input matches two; every row can be reached; units never
+mix; every intermediate fits in int64. Those five are shown exhaustively — not sampled.
+
+Three things it does **not** prove, and they are kept beside the word:
+
+1. **That the table matches reality.** Transcribe the tariff wrong and everything stays green.
+   What is proved is what can be said about the table *as written*
+2. **That the generated code answers like the table.** That is a *test*: cases built from the
+   boundaries run through the reference evaluator and every generated language, compared byte
+   for byte. Strong evidence, not an equivalence proof
+3. **The row pairs W114 could not settle.** Those move to a guard at run time
+
 ## Reading a diagnostic
 
 ```

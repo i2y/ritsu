@@ -34,6 +34,11 @@ there** — how fractions are settled, because which way is right is a business 
 the tool does not make it. **One is run** — every worked example holds. If any of the seven
 cannot be shown, nothing is generated.
 
+None of that is type checking. A type says a value **has the right shape** — a member of the
+enum, an integer, the unit it claims — and a right shape says nothing about a right answer.
+What is proved here is a property of the table, shown exhaustively over the declared input
+space rather than sampled.
+
 What is **not** proved matters just as much.
 
 1. **That the table matches reality.** Transcribe the tariff wrong and everything stays

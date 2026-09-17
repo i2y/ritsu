@@ -68,6 +68,13 @@ longer something this tool says anything about.
 - **Branching on a string** — `string` cannot be a table column (E110). A value that
   decides a branch belongs in an `enum`, where the closed set makes the completeness check
   work. No prefix match and no regular expressions either
+- **Deciding an input itself** — "is this ticket billing or technical", "is this damage
+  minor". Turning a messy state into a value is a person's work, or a model's, not this
+  tool's. Hand the value in **as an argument**: the rule stays a pure function, and replay
+  and diff keep meaning what they meant. **Whether to act on a confidence** is itself a
+  business decision, so it can be a table — a column of `rate[step 0.1%]` and the gaps and
+  overlaps in your thresholds come back as findings. Who decided the value can be kept in
+  the record ([`by`](formats.md))
 - **Deciding the weights or the thresholds themselves** — that is optimisation and
   machine learning. **Adding up scores with weights that are already agreed and turning
   the total into a rank is writable** — see "評価ランク" in the [examples](examples.md),
