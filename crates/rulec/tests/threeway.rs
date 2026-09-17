@@ -56,6 +56,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/所得税.rule", "income_tax"),
     ("tests/corpus/領収書の印紙税.rule", "receipt_stamp"),
     ("tests/corpus/印紙税.rule", "stamp_duty"),
+    ("tests/corpus/全国運賃.rule", "freight"),
 ];
 
 #[test]
@@ -102,7 +103,7 @@ fn 評価器と生成コードが全言語で一致する() {
     assert!(!present.is_empty(), "どの toolchain も無いので一致を確かめられない");
 
     let mut total = 0usize;
-    for (_, alias) in CORPUS {
+    for (file, alias) in CORPUS {
         let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
         let exp = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
             .expect("期待値が無い");
@@ -111,7 +112,14 @@ fn 評価器と生成コードが全言語で一致する() {
         total += vectors.lines().count();
         let pkg = alias.replace('_', "");
 
-        for b in &present {
+        // A rule that walks a sequence is not generated for a backend that has no folds
+        // (SQL: one query has no place to carry a value from row to row, §15.56).
+        let walks = std::fs::read_to_string(root().join(file))
+            .unwrap_or_default()
+            .lines()
+            .any(|l| l.starts_with("fold "));
+
+        for b in present.iter().filter(|b| b.folds || !walks) {
             let plan = (b.run)(alias, &pkg);
             let cwd = dir.join(&plan.cwd);
             if let Some((cmd, args)) = &plan.build {

@@ -5036,7 +5036,18 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         o.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("    {stopped} = false\n"));
-        o.push_str(&format!("    {taken} = nil\n    {kept} = nil\n    {best} = nil\n"));
+        // steep reads the first assignment as the whole type of a local, so a `nil` that
+        // later holds a value needs the annotation (§15.23). The value is the rule's first
+        // output; a `keep_max` key is ordered, so it is always an integer.
+        let acc = self
+            .f
+            .outputs
+            .first()
+            .map(|od| self.rbs_ty(&self.ty_of(&od.name.text)))
+            .unwrap_or_else(|| "untyped".into());
+        o.push_str(&format!(
+            "    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n    {best} = nil #: Integer?\n"
+        ));
         o.push_str(&format!("    {seq}.each do |{e}|\n"));
 
         let mut body = self.rb_element_guards(&local);
@@ -5501,6 +5512,18 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("    def self.new: ({}) -> Output\n  end\n\n", tys.join(", ")));
         }
 
+        // One element is a row of inputs, and the Ruby module makes it a Struct; without
+        // this the signature has no name for what the caller passes (§15.56).
+        if let Some(el) = &self.f.elements {
+            let tys: Vec<String> =
+                el.fields.iter().map(|fd| self.rbs_ty(&self.ty_of(&fd.name.text))).collect();
+            o.push_str("  class Element < Struct[untyped]\n");
+            for (fd, t) in el.fields.iter().zip(&tys) {
+                o.push_str(&format!("    attr_reader {}: {t}\n", pub_name(&fd.name)));
+            }
+            o.push_str(&format!("    def self.new: ({}) -> Element\n  end\n\n", tys.join(", ")));
+        }
+
         o.push_str(
             "  class Fired < Struct[untyped]\n    attr_reader table: String\n    attr_reader row: Integer\n    def self.new: (String, Integer) -> Fired\n  end\n\n",
         );
@@ -5518,6 +5541,7 @@ impl<'a> Gen<'a> {
             .inputs
             .iter()
             .map(|i| format!("{} {}", self.rbs_ty(&self.ty_of(&i.name.text)), pub_name(&i.name)))
+            .chain(self.f.elements.iter().map(|el| format!("Array[Element] {}", pub_name(&el.name))))
             .collect();
         let ret = if outs.len() == 1 {
             self.rbs_ty(&self.ty_of(&outs[0].name.text))

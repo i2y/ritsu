@@ -44,6 +44,7 @@ const CORPUS: &[&str] = &[
     "tests/corpus/所得税.rule",
     "tests/corpus/領収書の印紙税.rule",
     "tests/corpus/印紙税.rule",
+    "tests/corpus/全国運賃.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
