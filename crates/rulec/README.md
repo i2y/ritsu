@@ -303,6 +303,7 @@ and [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` outp
 ## In CI
 
 ```yaml
+- uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
 - uses: i2y/rulec@v0.3.0                     # the release binary, verified against its checksum
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main

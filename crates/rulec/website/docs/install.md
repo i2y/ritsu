@@ -140,16 +140,29 @@ The check against `SHA256SUMS` **always runs** — a missing line for the
 archive is itself a failure. To pin the archive's hash in the workflow as
 well, add `with: { sha256: … }`: one more check, not a different one.
 
+**That one line is the whole install**, but it needs `actions/checkout`
+before it: what rulec reads is the `rules/` in your repository. As a job:
+
 ```yaml
-- uses: i2y/rulec@v0.3.0
-- run: rulec fmt --check rules/
-- run: rulec check rules/ --diff-base origin/main
-- run: rulec gen rules/ --out generated/ --check
-- run: rulec coverage rules/
-- run: rulec test generated/
+check:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0                   # --diff-base reads origin/main
+    - uses: i2y/rulec@v0.3.0
+    - run: rulec fmt --check rules/
+    - run: rulec check rules/ --diff-base origin/main
+    - run: rulec gen rules/ --out generated/ --check
+    - run: rulec coverage rules/
+    - run: rulec test generated/
 ```
 
-Those five are the gate. Replaying past records belongs in a separate
+It runs on the Linux (x86_64, aarch64) and macOS (x86_64, arm64) runners.
+Those are the four releases there are, so any other runner stops with
+`no rulec release is built for …`.
+
+Those five `run:` lines are the gate. Replaying past records belongs in a separate
 job, one that has the records, and it is the job that makes a change
 visible: the pull request gets a comment saying how many records move and
 by how much. Four things about it are deliberate.

@@ -99,16 +99,26 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 `uses: i2y/rulec@v0.3.0` の一行で、そのリリースのバイナリが検査済みで runner の `PATH` に入ります。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: v0.2.0 }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。
 
+**入れるのに要るのはその一行だけ**ですが、その前に `actions/checkout` が要ります — rulec が読むのは、あなたのリポジトリの `rules/` だからです。ジョブ全体ではこうなります。
+
 ```yaml
-- uses: i2y/rulec@v0.3.0
-- run: rulec fmt --check rules/
-- run: rulec check rules/ --diff-base origin/main
-- run: rulec gen rules/ --out generated/ --check
-- run: rulec coverage rules/
-- run: rulec test generated/
+check:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0                   # --diff-base が origin/main を読む
+    - uses: i2y/rulec@v0.3.0
+    - run: rulec fmt --check rules/
+    - run: rulec check rules/ --diff-base origin/main
+    - run: rulec gen rules/ --out generated/ --check
+    - run: rulec coverage rules/
+    - run: rulec test generated/
 ```
 
-この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。わざとそうしている所が四つあります。
+走るのは Linux（x86_64 / aarch64）と macOS（x86_64 / arm64）の runner です。リリースがその四つしか無いので、ほかの runner では `no rulec release is built for …` と言って止まります。
+
+この五つの `run:` がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。わざとそうしている所が四つあります。
 
 - 旧の版は `rules/送料.rule@origin/main`、つまり base ブランチにあるままのファイルです。checkout でそのブランチを取ってきておきます。
 - `diff` は影響があると exit 1 を返します。ここではそれは失敗ではなく情報なので、1 では先へ進み、2 でだけ止めます。
