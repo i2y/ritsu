@@ -30,7 +30,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E022](#e022) | error | The answer for a sequence with no elements is not declared |
 | [E023](#e023) | error | The answer for a walk that reached the end is not declared |
 | [E024](#e024) | error | Some verdict has no arm |
-| [E025](#e025) | error | A rule with a fold cannot carry examples yet |
+| [E025](#e025) | error | The examples have no column for the sequence |
+| [E026](#e026) | error | The `sequence` is not written correctly |
+| [E027](#e027) | error | The example names a sequence that is not there |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -49,6 +51,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
+| [W116](#w116) | warning | No example uses this sequence |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 
@@ -111,7 +114,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -129,7 +132,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -686,11 +689,11 @@ Related codes: [E022](#e022), [E023](#e023), [W115](#w115)
 
 ## E025
 
-`error` — **A rule with a fold cannot carry examples yet**
+`error` — **The examples have no column for the sequence**
 
-**When.** A rule with a `fold` has an `examples` block. An example is a row of cells, and there is no shape yet for writing a sequence into one (§15.56).
+**When.** A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56).
 
-**Fix.** Take the examples out for now. The table's own checks — completeness, overlap, units, overflow — and the fold's four checks hold without them. Generation is at the same stage: `gen` refuses such a rule by name.
+**Fix.** Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it.
 
 **Smallest reproduction**:
 
@@ -718,11 +721,91 @@ fold d over xs
   exhausted -> held
 
 examples
-| k | -> r |
-| 3円 | 3円 |
+| -> r |
+| 0円 |
 ```
 
-Related codes: [E021](#e021)
+Related codes: [E026](#e026), [E027](#e027)
+
+## E026
+
+`error` — **The `sequence` is not written correctly**
+
+**When.** The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`).
+
+**Fix.** Make the header the fields of `elements` as they are, and write one element's values per row. This is not a table: it is the list of values as they would really be passed.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+sequence s(s)
+| m |
+| 3円 |
+```
+
+Related codes: [E025](#e025), [E020](#e020)
+
+## E027
+
+`error` — **The example names a sequence that is not there**
+
+**When.** The cell in the sequence column names a `sequence` that is not declared, or holds something that is not a name at all.
+
+**Fix.** Write a `sequence` under that name, or correct the cell to one that is written.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+examples
+| xs | -> r |
+| nope | 0円 |
+```
+
+Related codes: [E025](#e025), [E026](#e026)
 
 ## E101
 
@@ -1263,6 +1346,46 @@ policy unique
 ```
 
 Related codes: [E101](#e101), [E012](#e012)
+
+## W116
+
+`warning` — **No example uses this sequence**
+
+**When.** A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs (§15.56).
+
+**Fix.** Add the example that walks it, or drop the sequence. Written and unused is usually the trace of an example left unwritten.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+sequence s(s)
+| k |
+| 3円 |
+```
+
+Related codes: [E027](#e027), [W111](#w111)
 
 ## W115
 

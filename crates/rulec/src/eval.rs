@@ -503,6 +503,47 @@ pub fn cell_matches(c: &Checked, cell: &Cell, v: &Val, ty: &Ty) -> bool {
 
 /// The `examples` section is executable specification (§1.2). A miss is E107, reported with
 /// the fired rows.
+/// The value of a named `sequence`: one map per row, keyed by the element's fields (§15.56).
+/// A block with no rows is the empty sequence, which is a case of its own.
+pub fn seq_value(f: &RuleFile, c: &Checked, name: &str) -> Option<Val> {
+    let sq = f.sequences.iter().find(|s| s.name.text == name)?;
+    let mut rows = Vec::new();
+    for row in &sq.rows {
+        let mut one: std::collections::BTreeMap<String, Val> = Default::default();
+        for (ci, (col, _)) in sq.cols.iter().enumerate() {
+            let ty = c.ty_of(col)?;
+            let Some(Cell::Lit(l)) = row.cells.get(ci) else { continue };
+            one.insert(col.clone(), lit_to_val(l, &ty)?);
+        }
+        rows.push(one);
+    }
+    Some(Val::Seq(rows))
+}
+
+/// The inputs one example row stands for, the sequence included. The cell of the sequence
+/// column names a `sequence` block; everything else is a literal of its column's type.
+pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row) -> HashMap<String, Val> {
+    let mut env: HashMap<String, Val> = HashMap::new();
+    let seq_col = f.elements.as_ref().map(|e| e.name.text.clone());
+    for (ci, (col, _)) in ex.inputs.iter().enumerate() {
+        if Some(col) == seq_col.as_ref() {
+            if let Some(Cell::Lit(Lit::Word(w))) = row.cells.get(ci) {
+                if let Some(v) = seq_value(f, c, w) {
+                    env.insert(col.clone(), v);
+                }
+            }
+            continue;
+        }
+        let Some(ty) = c.ty_of(col) else { continue };
+        if let Some(Cell::Lit(l)) = row.cells.get(ci) {
+            if let Some(v) = lit_to_val(l, &ty) {
+                env.insert(col.clone(), v);
+            }
+        }
+    }
+    env
+}
+
 pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     let Some(ex) = &f.examples else { return out };
@@ -550,15 +591,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     }
 
     for row in &ex.rows {
-        let mut env: HashMap<String, Val> = HashMap::new();
-        for (ci, (col, _)) in ex.inputs.iter().enumerate() {
-            let Some(ty) = c.ty_of(col) else { continue };
-            if let Some(Cell::Lit(l)) = row.cells.get(ci) {
-                if let Some(v) = lit_to_val(l, &ty) {
-                    env.insert(col.clone(), v);
-                }
-            }
-        }
+        let env = example_env(f, c, ex, row);
         // An example is a case the rule is claimed to answer, so it has to be a case the rule
         // can receive. A `constraint` says which combinations exist (§15.55); an example
         // outside them would be asserting an answer for an input the generated code refuses

@@ -30,7 +30,9 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E022](#e022) | error | 要素がゼロ件のときの答えが宣言されていません |
 | [E023](#e023) | error | 最後まで見終えたときの答えが宣言されていません |
 | [E024](#e024) | error | 腕の無い判定があります |
-| [E025](#e025) | error | 畳み込みのある規則には、まだ例を書けません |
+| [E025](#e025) | error | 例に列の欄がありません |
+| [E026](#e026) | error | `sequence` の書き方が正しくありません |
+| [E027](#e027) | error | 例が指す列の実例がありません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -49,6 +51,7 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
+| [W116](#w116) | warning | どの例も使っていない列の実例です |
 | [W115](#w115) | warning | どの要素もこの判定にはなりません |
 | [W114](#w114) | warning | 未確認の重なり: 両方に当てはまる入力が有り得ます |
 
@@ -111,7 +114,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -129,7 +132,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -686,11 +689,11 @@ fold d over xs
 
 ## E025
 
-`error` — **畳み込みのある規則には、まだ例を書けません**
+`error` — **例に列の欄がありません**
 
-**いつ出るか。** `fold` のある規則に `examples` があるとき。例の一行はセルの並びで、要素の列を一つのセルに書く形がまだ決まっていません（§15.56）。
+**いつ出るか。** 列を歩く規則に `examples` があるのに、`elements` の名前の欄が見出しに無いとき。歩く列が決まっていない例は、答えの決まっていない例です（§15.56）。
 
-**直し方。** 例をいったん外してください。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの四つの検査は、例が無くても効きます。生成も同じ段で、いまは `gen` が名前を挙げて断ります。
+**直し方。** `sequence <名前>` で並びを書き、例の見出しに列の欄を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。
 
 **最小の再現**:
 
@@ -718,11 +721,91 @@ fold d over xs
   exhausted -> held
 
 examples
-| k | -> r |
-| 3円 | 3円 |
+| -> r |
+| 0円 |
 ```
 
-関係するコード: [E021](#e021)
+関係するコード: [E026](#e026), [E027](#e027)
+
+## E026
+
+`error` — **`sequence` の書き方が正しくありません**
+
+**いつ出るか。** `sequence` の欄が `elements` の欄とそろっていないとき——余分な欄がある、欄が足りない、`->` がある、歩く列そのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。
+
+**直し方。** `elements` の欄をそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+sequence s(s)
+| m |
+| 3円 |
+```
+
+関係するコード: [E025](#e025), [E020](#e020)
+
+## E027
+
+`error` — **例が指す列の実例がありません**
+
+**いつ出るか。** 例の列の欄に書かれた名前の `sequence` が無いとき、またはその欄に名前でないもの（数や範囲）が書かれているとき。
+
+**直し方。** その名前で `sequence` を書くか、セルの名前を書いてあるほうに直してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+examples
+| xs | -> r |
+| nope | 0円 |
+```
+
+関係するコード: [E025](#e025), [E026](#e026)
 
 ## E101
 
@@ -1263,6 +1346,46 @@ policy unique
 ```
 
 関係するコード: [E101](#e101), [E012](#e012)
+
+## W116
+
+`warning` — **どの例も使っていない列の実例です**
+
+**いつ出るか。** `sequence` を書いたのに、どの例もその名前を書いていないとき。並びは例から名指しされて初めて走るので、走っていない並びです（§15.56）。
+
+**直し方。** その並びを歩く例を足すか、並びのほうを消してください。書いたのに使っていないのは、たいてい例を書き忘れた跡です。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+sequence s(s)
+| k |
+| 3円 |
+```
+
+関係するコード: [E027](#e027), [W111](#w111)
 
 ## W115
 

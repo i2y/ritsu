@@ -34,7 +34,7 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "sequence")
 HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "examples", "constraint")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step")

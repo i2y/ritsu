@@ -107,6 +107,7 @@ impl P {
             examples: None,
             constraints: Vec::new(),
             elements: None,
+            sequences: Vec::new(),
             fold: None,
         };
 
@@ -245,6 +246,30 @@ impl P {
                         }
                     }
                     self.i += 1;
+                }
+                crate::kw::SEQUENCE => {
+                    let name = self.name_at(&line, 1).map(|(n, _)| n);
+                    let span = span_of(&line);
+                    self.i += 1;
+                    self.ctx = tr!("列の実例", "a named sequence");
+                    // A block with no rows is the empty sequence, which is a case of its own
+                    // (`empty ->`), so the header alone is a complete declaration.
+                    let (cols, outs, rows) = self.grid().unwrap_or_default();
+                    self.ctx.clear();
+                    if let Some(o) = outs.first() {
+                        self.err(
+                            Diag::error("E026", tr!("`sequence` に出力の列は書けません", "A `sequence` has no output column"))
+                                .at(self.at(o.span.line))
+                                .mark(o.span.clone(), tr!("`->` があります", "there is a `->` here"))
+                                .note(tr!(
+                                    "これは値の並びであって表ではありません。欄は `elements` の欄だけです。",
+                                    "This is a list of values, not a table: its columns are the fields of `elements` and nothing else."
+                                )),
+                        );
+                    }
+                    if let Some(name) = name {
+                        f.sequences.push(crate::ast::SeqDecl { name, cols, rows, span });
+                    }
                 }
                 crate::kw::EXAMPLES => {
                     self.i += 1;

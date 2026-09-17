@@ -39,6 +39,7 @@ These are all the words that may start a line.
 | `define` | a boolean, or a computed intermediate |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
 | `fold` | reduces a column of per-element verdicts to one answer |
+| `sequence` | a named list of elements, for an example to walk |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
 | `result` | assembles an output |

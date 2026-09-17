@@ -669,16 +669,14 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
     let Some(ex) = &f.examples else { return Vec::new() };
     let mut out = Vec::new();
     for row in &ex.rows {
-        let mut a: BTreeMap<String, Val> = BTreeMap::new();
-        for (ci, (col, _)) in ex.inputs.iter().enumerate() {
-            let Some(ty) = c.ty_of(col) else { continue };
-            if let Some(Cell::Lit(l)) = row.cells.get(ci) {
-                if let Some(v) = eval::lit_to_val(l, &ty) {
-                    a.insert(col.clone(), v);
-                }
-            }
-        }
-        if f.inputs.iter().all(|i| a.contains_key(&i.name.text)) {
+        let a: BTreeMap<String, Val> = eval::example_env(f, c, ex, row).into_iter().collect();
+        // The sequence counts as an input of the case: a walk with none is not the example
+        // that was written (§15.56).
+        let seq_ok = match &f.elements {
+            Some(el) => a.contains_key(&el.name.text),
+            None => true,
+        };
+        if seq_ok && f.inputs.iter().all(|i| a.contains_key(&i.name.text)) {
             out.push(a);
         }
     }

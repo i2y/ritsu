@@ -371,6 +371,36 @@ early. A window function or a recursive CTE can be made to look like a walk, but
 giving up the 1:1 between a branch of the generated query and a row of the rule — which is the
 reason the SQL backend exists. So `rulec gen` names SQL, skips it, and writes the other seven.
 
+### Writing an example of a walk
+
+An example is a row of cells and a sequence does not fit in one, so the sequence is written
+once, under a name, and the cell names it:
+
+```rule
+sequence 近い一件(near)
+| 行ゾーン | 閾値   | 行運賃 |
+| 近畿圏   | 500円  | 800円  |
+| 近畿圏   | 2000円 | 1500円 |
+
+sequence 空(none)
+| 行ゾーン | 閾値 | 行運賃 |
+
+examples
+| あて先 | 注文金額 | 運賃行   | -> 運賃 |
+| 近畿圏 | 5000円   | 近い一件 | 800円   |
+| 近畿圏 | 5000円   | 空       | 0円     |
+```
+
+The columns of a `sequence` are the fields of `elements`, all of them, and every cell is a
+**value** — a range or a `-` is how a table's cell is written, and this is one element as the
+caller would really pass it (E026). A block with no rows is the empty sequence, which is a
+case worth writing: it is the one a hand-written loop forgets.
+
+The examples of a rule that walks a sequence must carry a column for it (E025), the cell must
+name a `sequence` that exists (E027), and a `sequence` no example names is reported (W116).
+Each example runs through the reference evaluator at `rulec check` like any other (E107), and
+each one joins the generated vector suite.
+
 ### An input with no answer
 
 A sequence where `take_unique` matches twice is a contradiction: the reference evaluator has
@@ -497,7 +527,7 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `policy` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `sequence` `policy` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |

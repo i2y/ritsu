@@ -64,6 +64,23 @@ fold 採用 over 運賃行
   exhausted -> held
 "#;
 
+/// The same rule with the two things an example of a walk needs: a named sequence, and a
+/// column in `examples` that names one.
+const EXAMPLES: &str = r#"
+sequence 近い一件(near)
+| 行ゾーン | 閾値   | 行運賃 |
+| 近畿圏   | 500円  | 800円  |
+| 近畿圏   | 2000円 | 1500円 |
+
+sequence 空(none)
+| 行ゾーン | 閾値 | 行運賃 |
+
+examples
+| 運賃行   | -> 運賃 |
+| 近い一件 | 800円   |
+| 空       | 0円     |
+"#;
+
 fn write(d: &PathBuf, name: &str, body: &str) -> String {
     let p = d.join(name);
     std::fs::write(&p, body).unwrap();
@@ -273,6 +290,12 @@ console.log(JSON.stringify({ result: ids["#try-result"].textContent, record: ids
 body.children.slice().forEach((tr) => tr.children[tr.children.length - 1].children[0].click());
 ids["#try-buttons"].children[0].click();
 console.log(JSON.stringify({ result: ids["#try-result"].textContent, record: ids["#try-record"].textContent }));
+// An example rebuilds the rows from what the example itself walks.
+const btns = ids["#try-buttons"].children;
+if (btns.length > 1) {
+  btns[1].click();
+  console.log(JSON.stringify({ rows: body.children.length, result: ids["#try-result"].textContent }));
+}
 "##;
 
 /// The page an approver reads is generated for a walk too, and a page that cannot run is
@@ -285,7 +308,8 @@ fn ページの試用欄は列を編集して走る() {
         return;
     }
     let d = dir("page");
-    let p = write(&d, "r.rule", RULE);
+    // With the examples, so the panel's example button has a sequence to rebuild.
+    let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
@@ -312,6 +336,83 @@ fn ページの試用欄は列を編集して走る() {
     // Both rows removed: the empty sequence is its own answer, not a crash.
     assert!(none.get("result").and_then(|v| v.as_str()).unwrap().contains("0"), "{said}");
     assert!(none.get("record").and_then(|v| v.as_str()).unwrap().contains("\"運賃行\":[]"), "{said}");
+    // The example button puts its own sequence back: two rows, and the answer it declares.
+    let ex = rulec::json::parse(lines.next().expect("例の行が無い")).unwrap();
+    assert_eq!(ex.get("rows").and_then(|v| v.as_int()), Some(2), "例が行を組み直していない: {said}");
+    assert!(ex.get("result").and_then(|v| v.as_str()).unwrap().contains("800"), "{said}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// An example of a walk: the sequence is written once under a name, and the cell names it.
+/// It is checked by the reference evaluator like any other example, and joins the vectors.
+#[test]
+fn 例は列に名前を付けて書く() {
+    let d = dir("examples");
+    let body = format!("{RULE}{EXAMPLES}");
+    let p = write(&d, "r.rule", &body);
+    let (code, out, e) = run(&["check", &p]);
+    assert_eq!(code, 0, "{out}{e}");
+    // `rulec fmt` knows the block: the canonical form of what was just written is itself.
+    let (code, out, _) = run(&["fmt", &p, "--check"]);
+    assert_eq!(code, 0, "{out}");
+
+    // It really runs: a wrong expected value is caught, and the fired rows are named.
+    let wrong = body.replace("| 近い一件 | 800円   |", "| 近い一件 | 1500円  |");
+    let q = write(&d, "wrong.rule", &wrong);
+    let (code, out, _) = run(&["check", &q, "--format", "json"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(codes(&out).contains(&"E107".to_string()), "{out}");
+
+    // And it joins the suite. The empty sequence is already in it — a case a person wrote and
+    // a case the generator built are the same case — so what is checked is that both of the
+    // example's inputs are there with what the example says they answer.
+    let (code, out, e) = run(&["vectors", &p]);
+    assert_eq!(code, 0, "{e}");
+    let (mut near, mut none) = (false, false);
+    for line in out.lines().filter(|l| !l.trim().is_empty()) {
+        let j = rulec::json::parse(line).unwrap();
+        let Some(rulec::json::Json::Arr(xs)) = j.get("in").and_then(|i| i.get("運賃行")) else { continue };
+        let fee = j.get("out").and_then(|o| o.get("運賃")).and_then(|v| v.as_int());
+        let th = |k: usize| xs.get(k).and_then(|e| e.get("閾値")).and_then(|v| v.as_int());
+        if xs.len() == 2 && th(0) == Some(500) && th(1) == Some(2000) {
+            assert_eq!(fee, Some(800), "近い一件の答えが違う: {line}");
+            near = true;
+        }
+        if xs.is_empty() {
+            assert_eq!(fee, Some(0), "空の答えが違う: {line}");
+            none = true;
+        }
+    }
+    assert!(near && none, "例の入力がベクタに入っていない");
+    assert!(out.contains("example row") || out.contains("例 "), "例から来たベクタが名指しされていない: {out}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Each way of getting it wrong is named, and none of them is left to the first run.
+#[test]
+fn 列の実例の書き方の間違いは名指しされる() {
+    let d = dir("exbad");
+    let body = format!("{RULE}{EXAMPLES}");
+    for (tag, src, want) in [
+        // No column for the sequence: the case does not say what it walks.
+        ("nocol", body.replace("| 運賃行   | -> 運賃 |", "| -> 運賃 |"), "E025"),
+        // A column that is not a field of an element.
+        ("badcol", body.replace("| 行ゾーン | 閾値   | 行運賃 |", "| 行ゾーン | 閾値   | 運賃   |"), "E026"),
+        // A cell that is a pattern rather than a value.
+        ("range", body.replace("| 近畿圏   | 500円  | 800円  |", "| 近畿圏   | <=500円 | 800円 |"), "E026"),
+        // A name with no block behind it.
+        ("noname", body.replace("| 近い一件 | 800円   |", "| 遠い一件 | 800円   |"), "E027"),
+    ] {
+        let p = write(&d, &format!("{tag}.rule"), &src);
+        let (code, out, _) = run(&["check", &p, "--format", "json"]);
+        assert_eq!(code, 1, "{tag}: {out}");
+        assert!(codes(&out).contains(&want.to_string()), "{tag}: {want} が出ていない: {out}");
+    }
+    // A sequence no example names is a sequence that never runs.
+    let p = write(&d, "unused.rule", &format!("{RULE}{EXAMPLES}\nsequence 余り(spare)\n| 行ゾーン | 閾値 | 行運賃 |\n"));
+    let (_, out, _) = run(&["check", &p, "--format", "json"]);
+    assert!(codes(&out).contains(&"W116".to_string()), "{out}");
+    assert!(out.contains("余り"), "どの並びか言っていない: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

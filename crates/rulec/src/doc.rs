@@ -256,6 +256,27 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         ));
     }
 
+    // --- The sequence the rule walks, and the fields of one element (§15.56). An approver
+    // who cannot see these is reading half the rule: the caller passes them too.
+    if let Some(el) = &f.elements {
+        o.push_str(&tr!(
+            "\n## 歩く列: {}\n\n一件ぶんの欄です。呼び出し側は、この欄のそろった要素を何件でも渡します。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "\n## The sequence walked: {}\n\nThe fields of one element. The caller passes any number of elements, each with these fields filled in.\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
+            el.name.text
+        ));
+        for fd in &el.fields {
+            let n = &fd.name.text;
+            let note = trailing_comment(&lines, fd.name.span.line).unwrap_or_default();
+            o.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                md_esc(n),
+                md_esc(&ty_text(c, n)),
+                md_esc(&range_text(c, n)),
+                md_esc(&note)
+            ));
+        }
+    }
+
     // --- Outputs
     o.push_str(&tr!(
         "\n## 出力\n\n| 名前 | 型 | 丸め | 注記 |\n|---|---|---|---|\n",
@@ -422,6 +443,56 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         o.push_str(&table_section(f, c, t, &lines, path));
     }
 
+    // --- How the walk ends (§15.56). The arms are the whole of it: one move per verdict,
+    // plus the two answers that belong to no element at all.
+    if let Some(fold) = &f.fold {
+        o.push_str(&tr!(
+            "\n## 畳み込み: {} を {} で畳む\n\n要素を順に見て、表が書いた判定ごとに次の手を決めます。**表が完全かつ一意なので、どの要素もちょうど一つの判定に落ちます。**\n\n| 判定 | 手 |\n|---|---|\n",
+            "\n## The walk: {} folded on {}\n\nThe elements are taken in order, and the verdict the table wrote for each one decides the next move. **The table is complete and unique, so every element lands on exactly one verdict.**\n\n| Verdict | Move |\n|---|---|\n",
+            fold.over,
+            fold.verdict
+        ));
+        for (n, _, sp) in &fold.arms {
+            o.push_str(&format!("| {} | `{}` |\n", md_esc(&n.text), md_esc(&arm_src(&lines, sp.line))));
+        }
+        let answer = |k: &str, e: &Option<crate::ast::Expr>| -> String {
+            match e {
+                Some(x) => format!("| {k} | `{}` |\n", md_esc(&arm_src(&lines, x.span().line))),
+                None => String::new(),
+            }
+        };
+        o.push_str(&answer(crate::kw::EMPTY, &fold.empty));
+        o.push_str(&answer(crate::kw::EXHAUSTED, &fold.exhausted));
+        o.push_str(&tr!(
+            "\n`{}` は要素ゼロ件のときの答え、`{}` は最後まで見終えたときの答えです。この二つは宣言が必須で、`rulec check` が無ければ断ります（E022・E023）。\n",
+            "\n`{}` is the answer when the sequence has nothing in it, and `{}` the answer when the walk reached the end. Both must be declared, and `rulec check` refuses a rule that leaves either out (E022, E023).\n",
+            crate::kw::EMPTY,
+            crate::kw::EXHAUSTED
+        ));
+    }
+
+    // --- The named sequences the examples walk. Without them an example reads as a word
+    // with nothing behind it (§15.56).
+    if !f.sequences.is_empty() {
+        o.push_str(&tr!("\n## 例が歩く列\n\n", "\n## The sequences the examples walk\n\n"));
+        for sq in &f.sequences {
+            o.push_str(&format!("**{}**\n\n", md_esc(&sq.name.text)));
+            if sq.rows.is_empty() {
+                o.push_str(&tr!("要素ゼロ件。\n\n", "Nothing in it.\n\n"));
+                continue;
+            }
+            let head: Vec<String> = sq.cols.iter().map(|(n, _)| md_esc(n)).collect();
+            o.push_str(&format!("| {} |\n|{}|\n", head.join(" | "), vec!["---"; head.len()].join("|")));
+            for row in &sq.rows {
+                // Verbatim from the source, like every other cell this file renders.
+                let cells: Vec<String> =
+                    source_cells(&lines, row.span.line).iter().map(|x| md_esc(x)).collect();
+                o.push_str(&format!("| {} |\n", cells.join(" | ")));
+            }
+            o.push('\n');
+        }
+    }
+
     // --- Result
     if f.result.is_some() {
         if let Some(r) = &f.result {
@@ -449,6 +520,16 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     }
 
     o
+}
+
+/// The move one arm of a `fold` declares, verbatim: what is written after the `->`.
+fn arm_src(lines: &[&str], line: usize) -> String {
+    let Some(l) = lines.get(line.saturating_sub(1)) else { return String::new() };
+    let (body, _) = split_comment(l);
+    match body.split_once("->") {
+        Some((_, rhs)) => rhs.trim().to_string(),
+        None => body.trim().to_string(),
+    }
 }
 
 /// The right-hand side of `=` on a declaration line, verbatim from the source file.
@@ -845,6 +926,18 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             let mut o = Obj::new();
             let mut complete = true;
             for (k, (col, _)) in t.inputs.iter().enumerate() {
+                // The sequence column holds the name of a `sequence`, and what the panel
+                // needs is its rows (§15.56).
+                if f.elements.as_ref().is_some_and(|el| &el.name.text == col) {
+                    match row.cells.get(k) {
+                        Some(Cell::Lit(Lit::Word(w))) => match seq_json(f, c, w) {
+                            Some(a) => o = o.raw(col, a),
+                            None => complete = false,
+                        },
+                        _ => complete = false,
+                    }
+                    continue;
+                }
                 let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
                 let v = match row.cells.get(k) {
                     Some(Cell::Lit(l)) => crate::eval::lit_to_val(l, &ty),
@@ -892,6 +985,25 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         o = o.raw("elements", e);
     }
     o.finish()
+}
+
+/// One named `sequence` as the panel reads it: an array of objects, each field in the same
+/// wire form an example's scalar cell gets, so one `fromWire` fills them all (§15.56).
+fn seq_json(f: &RuleFile, c: &Checked, name: &str) -> Option<String> {
+    use crate::json::Obj;
+    let sq = f.sequences.iter().find(|s| s.name.text == name)?;
+    let mut rows: Vec<String> = Vec::new();
+    for row in &sq.rows {
+        let mut o = Obj::new();
+        for (ci, (col, _)) in sq.cols.iter().enumerate() {
+            let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
+            let Some(Cell::Lit(l)) = row.cells.get(ci) else { return None };
+            let w = crate::eval::lit_to_val(l, &ty).and_then(|v| crate::report::wire(c, col, Some(&v)))?;
+            o = o.str(col, &w);
+        }
+        rows.push(o.finish());
+    }
+    Some(crate::json::arr(&rows))
 }
 
 /// The script that drives the panel. It knows nothing about the rule beyond `RULE`.
@@ -945,6 +1057,8 @@ for (const inp of RULE.inputs) {
 // field widgets an input gets. The rows live outside the form so that a field name repeated
 // down the column does not collide with `form.elements`.
 let rows = [];
+// Assigned when there is a sequence to edit; `fillRows` below is what reaches for it.
+let addRow = null;
 if (RULE.elements) {
   const box = $("#try-rows");
   const caption = document.createElement("div");
@@ -962,12 +1076,13 @@ if (RULE.elements) {
   table.appendChild(head);
   table.appendChild(body);
   box.appendChild(table);
-  const addRow = () => {
+  addRow = (vals) => {
     const tr = document.createElement("tr");
     const cells = {};
     for (const fd of RULE.elements.fields) {
       const td = document.createElement("td");
       const el = widget(fd);
+      if (vals && vals[fd.name] !== undefined) fromWire(fd, el, vals[fd.name]);
       td.appendChild(el);
       tr.appendChild(td);
       cells[fd.alias] = el;
@@ -989,11 +1104,20 @@ if (RULE.elements) {
   const add = document.createElement("button");
   add.type = "button";
   add.textContent = RULE.text.add;
-  add.addEventListener("click", addRow);
+  add.addEventListener("click", () => addRow());
   box.appendChild(add);
   // One row to start with, so the shape is visible; removing it is the empty sequence,
   // which is a case of its own.
   addRow();
+}
+// An example of a walk carries its elements, so choosing it rebuilds the rows as well.
+function fillRows(ex) {
+  if (!RULE.elements) return;
+  const es = ex[RULE.elements.name];
+  if (!Array.isArray(es)) return;
+  for (const r of rows.slice()) r.tr.remove();
+  rows = [];
+  for (const e of es) addRow(e);
 }
 function toWire(inp, el) {
   switch (inp.kind) {
@@ -1084,6 +1208,7 @@ function fill(ex) {
   for (const inp of RULE.inputs) {
     if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
   }
+  fillRows(ex);
 }
 RULE.examples.forEach((ex, i) => {
   const b = document.createElement("button");

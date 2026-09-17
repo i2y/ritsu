@@ -113,6 +113,16 @@ pub enum Expr {
     Call(String, Vec<Expr>, Span),
 }
 
+impl Expr {
+    /// Where the expression was written. Every variant carries one, so a caller that needs
+    /// the source line does not have to match on the shape.
+    pub fn span(&self) -> &Span {
+        match self {
+            Expr::Name(_, s) | Expr::Lit(_, s) | Expr::Bin(_, _, _, s) | Expr::Call(_, _, s) => s,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
     Add,
@@ -277,6 +287,16 @@ pub struct Constraint {
     pub span: Span,
 }
 
+/// One named list of elements (§15.56). The columns are the fields of `elements` and every
+/// cell is a literal: this is a value, not a pattern, so nothing here narrows a range.
+#[derive(Debug, Clone)]
+pub struct SeqDecl {
+    pub name: Name,
+    pub cols: Vec<(String, Span)>,
+    pub rows: Vec<Row>,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleFile {
     pub name: Name,
@@ -296,6 +316,9 @@ pub struct RuleFile {
     pub constraints: Vec<Constraint>,
     /// The fields of one element of the sequence, when the rule walks one (§15.56).
     pub elements: Option<ElementsDecl>,
+    /// Named lists of elements. A cell of `examples` names one, which is how a case for a
+    /// walk is written: a row of cells has no room for a sequence (§15.56).
+    pub sequences: Vec<SeqDecl>,
     /// How the verdicts of the per-element table reduce to one answer (§15.56).
     pub fold: Option<FoldDecl>,
 }

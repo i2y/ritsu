@@ -634,6 +634,29 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             ),
         }
         c.used.insert(fold.verdict.clone());
+        // Everything the arms and the two answers read is read (§11 W111). An element's field
+        // that only ever appears in `take_unique 行運賃` is used by the rule, and saying it is
+        // not would send the author to delete the value the walk answers with.
+        {
+            let mut names = Vec::new();
+            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
+                collect_names(e, &mut names);
+            }
+            for (_, arm, _) in &fold.arms {
+                match arm {
+                    crate::ast::Arm::Stop(Some(x)) => collect_names(x, &mut names),
+                    crate::ast::Arm::Take { expr, .. } => collect_names(expr, &mut names),
+                    crate::ast::Arm::KeepMax { expr, key } => {
+                        collect_names(expr, &mut names);
+                        collect_names(key, &mut names);
+                    }
+                    _ => {}
+                }
+            }
+            for n in names {
+                c.used.insert(n);
+            }
+        }
 
         // (1) and (2): the two answers that belong to no element. Declaring them is not
         // optional, because a walk over nothing and a walk that ran out are exactly the two
@@ -679,19 +702,22 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     )),
             );
         }
-        // The limit of this stage, said out loud. The walk's semantics are one thing; the
-        // wire that carries a sequence, the vectors that cover one, and the eight backends
-        // that run one are another, and they are built together or not at all (§15.56).
-        if f.examples.is_some() {
-            c.diags.push(
-                Diag::error("E025", tr!("畳み込みのある規則には、まだ例を書けません", "A rule with a fold cannot carry examples yet"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("この規則は列を歩きます", "this rule walks a sequence"))
-                    .note(tr!(
-                        "例の一行はセルの並びで、要素の列を書く形がまだありません。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの検査は、例が無くても効きます。",
-                        "An example is a row of cells, and there is no shape yet for writing a sequence into one. The table's own checks — completeness, overlap, units, overflow — and the fold's checks hold without them."
-                    )),
-            );
+        // An example of a walk has to say which sequence it walks. A row of cells has no room
+        // for one, so the cell names a `sequence` block instead (§15.56).
+        if let (Some(ex), Some(el)) = (&f.examples, &f.elements) {
+            if !ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
+                let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| fold.span.clone());
+                c.diags.push(
+                    Diag::error("E025", tr!("例に列の欄がありません", "The examples have no column for the sequence"))
+                        .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
+                        .mark(sp, tr!("{} の欄がありません", "no column for {}", el.name.text))
+                        .note(tr!(
+                            "この規則は列を歩くので、一件の例はどの列を歩くのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の欄を足して、その名前をセルに書いてください。",
+                            "This rule walks a sequence, so an example is only a case once it says which sequence. Write the list with `sequence <name>`, add a `{}` column to the header, and name it in the cell.",
+                            el.name.text
+                        )),
+                );
+            }
         }
         for (n, _, sp) in &fold.arms {
             if !produced.is_empty() && !produced.contains(&n.text) {
@@ -702,6 +728,147 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .note(tr!(
                             "腕は書かれていますが、届きません。表の行を見直すか、この腕を消してください。",
                             "The arm is written but unreachable. Look again at the table's rows, or drop the arm."
+                        )),
+                );
+            }
+        }
+    }
+
+    // `sequence` (§15.56): one named list of elements, which an example names in a cell.
+    // Everything in it is a value — this is not a table, so nothing here narrows a range.
+    {
+        let mut seen: Vec<String> = Vec::new();
+        for sq in &f.sequences {
+            let at_seq = tr!("{path}:{} 列の実例 {}", "{path}:{} sequence {}", sq.span.line, sq.name.text);
+            let Some(el) = &f.elements else {
+                c.diags.push(
+                    Diag::error("E026", tr!("歩く列のない規則に `sequence` は書けません", "A `sequence` needs a rule that walks one"))
+                        .at(at_seq.clone())
+                        .mark(sq.span.clone(), tr!("`elements` がありません", "there is no `elements`"))
+                        .note(tr!(
+                            "`sequence` は `elements` で宣言した欄の並びです。歩く列が無いなら、書く先がありません。",
+                            "A `sequence` is a list of the fields `elements` declares. With no sequence to walk there is nothing for it to be a list of."
+                        )),
+                );
+                continue;
+            };
+            if seen.contains(&sq.name.text) {
+                c.diags.push(
+                    Diag::error("E026", tr!("`{}` という列の実例は二つあります", "There are two sequences called `{}`", sq.name.text))
+                        .at(at_seq.clone())
+                        .mark(sq.name.span.clone(), tr!("二本目です", "this is a second one"))
+                        .note(tr!("例はこの名前で並びを指すので、同じ名前が二つあるとどちらか決まりません。", "An example names a sequence by this name, so two of them leave it undecided.")),
+                );
+                continue;
+            }
+            seen.push(sq.name.text.clone());
+            let fields: Vec<&str> = el.fields.iter().map(|fd| fd.name.text.as_str()).collect();
+            for (n, sp) in &sq.cols {
+                if !fields.contains(&n.as_str()) {
+                    c.diags.push(
+                        Diag::error("E026", tr!("`{n}` は要素の欄ではありません", "`{n}` is not a field of an element"))
+                            .at(at_seq.clone())
+                            .mark(sp.clone(), "")
+                            .note(tr!(
+                                "書けるのは {} の欄だけです: {}。",
+                                "Only the fields of {} can be written here: {}.",
+                                el.name.text,
+                                fields.join(" / ")
+                            )),
+                    );
+                }
+            }
+            for fd in &el.fields {
+                if !sq.cols.iter().any(|(n, _)| n == &fd.name.text) {
+                    c.diags.push(
+                        Diag::error("E026", tr!("要素の欄 `{}` が書かれていません", "The element's field `{}` is not written", fd.name.text))
+                            .at(at_seq.clone())
+                            .mark(sq.span.clone(), tr!("`{}` の欄がありません", "no column for `{}`", fd.name.text))
+                            .note(tr!(
+                                "一件の要素は欄が全部そろって一件です。欄を落とすと、その値が何かを誰も決めていないことになります。",
+                                "One element is one element only when all of its fields are there. A field left out is a value nobody decided."
+                            )),
+                    );
+                }
+            }
+            // Every cell is a literal of its field's type: a range or a `-` would be a pattern,
+            // and this is a value.
+            for row in &sq.rows {
+                for (ci, cell) in row.cells.iter().enumerate() {
+                    let Some((col, _)) = sq.cols.get(ci) else { continue };
+                    let Some(sym) = c.syms.get(col).cloned() else { continue };
+                    let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
+                    if !matches!(cell, Cell::Lit(_) | Cell::Nothing) {
+                        c.diags.push(
+                            Diag::error("E026", tr!("列の実例のセルは値だけです", "A cell of a sequence is a value and nothing else"))
+                                .at(at_seq.clone())
+                                .mark(sp.clone(), tr!("`{col}` に値が書かれていません", "`{col}` does not hold a value"))
+                                .note(tr!(
+                                    "範囲や `-` は表のセルの書き方です。ここは実際に渡す一件なので、値を書きます。",
+                                    "A range or a `-` is how a table's cell is written. This is one element as it would really be passed, so write the value."
+                                )),
+                        );
+                        continue;
+                    }
+                    let sc = *c.scales.get(col).unwrap_or(&1);
+                    c.cell(cell, &sym.ty, sc, &sp, &at_seq);
+                }
+            }
+        }
+    }
+
+    // The cells that name one. A name with no block behind it is the one mistake this shape
+    // makes possible, and it is caught here rather than at the first run.
+    {
+        let mut named: Vec<String> = Vec::new();
+        if let Some((ex, ci)) = f.examples.as_ref().zip(f.elements.as_ref()).and_then(|(ex, el)| {
+            ex.inputs.iter().position(|(n, _)| n == &el.name.text).map(|ci| (ex, ci))
+        }) {
+            for row in &ex.rows {
+                let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
+                let at_ex = tr!("{path}:{} 例", "{path}:{} examples", row.span.line);
+                match row.cells.get(ci) {
+                    Some(Cell::Lit(Lit::Word(w))) => {
+                        if f.sequences.iter().any(|sq| &sq.name.text == w) {
+                            named.push(w.clone());
+                        } else {
+                            let mut d = Diag::error("E027", tr!("`{w}` という列の実例はありません", "There is no sequence called `{w}`"))
+                                .at(at_ex)
+                                .mark(sp, "");
+                            if !f.sequences.is_empty() {
+                                d = d.note(tr!(
+                                    "書いてあるのは {} です。",
+                                    "The ones that are written are {}.",
+                                    f.sequences.iter().map(|sq| sq.name.text.clone()).collect::<Vec<_>>().join(" / ")
+                                ));
+                            }
+                            c.diags.push(d.note(tr!(
+                                "`sequence {w}` で並びを書いてください。行がゼロ本なら、要素ゼロ件の例になります。",
+                                "Write the list with `sequence {w}`. With no rows it is the example for a sequence with nothing in it."
+                            )));
+                        }
+                    }
+                    _ => c.diags.push(
+                        Diag::error("E027", tr!("この欄には列の実例の名前を書きます", "This column holds the name of a sequence"))
+                            .at(at_ex)
+                            .mark(sp, tr!("名前ではありません", "this is not a name"))
+                            .note(tr!(
+                                "一件の例が歩く並びは `sequence <名前>` で書き、ここにはその名前だけを書きます。",
+                                "The sequence a case walks is written with `sequence <name>`, and this cell holds that name and nothing else."
+                            )),
+                    ),
+                }
+            }
+        }
+        for sq in &f.sequences {
+            if !named.contains(&sq.name.text) {
+                c.diags.push(
+                    Diag::warning("W116", tr!("どの例も使っていない列の実例です: {}", "No example uses this sequence: {}", sq.name.text))
+                        .at(tr!("{path}:{} 列の実例 {}", "{path}:{} sequence {}", sq.span.line, sq.name.text))
+                        .mark(sq.name.span.clone(), tr!("名指ししている例がありません", "no example names it"))
+                        .note(tr!(
+                            "並びは例から名指しされて初めて走ります。例を足すか、この並びを消してください。",
+                            "A sequence runs only when an example names it. Add the example, or drop the sequence."
                         )),
                 );
             }

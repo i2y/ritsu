@@ -25,6 +25,8 @@ pub const CONSTRAINT: &str = "constraint";
 /// The fields of one element of a sequence the rule is given (§15.56). Declared like
 /// `inputs`, because an element is a row of inputs.
 pub const ELEMENTS: &str = "elements";
+/// A named list of elements, written once and used by name in `examples` (§15.56).
+pub const SEQUENCE: &str = "sequence";
 /// Declares how the verdicts of a per-element table reduce to one answer (§15.56).
 pub const FOLD: &str = "fold";
 
@@ -32,7 +34,7 @@ pub const FOLD: &str = "fold";
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
-    FOLD, RESULT, EXAMPLES, POLICY,
+    FOLD, SEQUENCE, RESULT, EXAMPLES, POLICY,
 ];
 
 // --- Declaration modifiers
@@ -114,7 +116,7 @@ pub const STD: &str = "std";
 /// with the same name is silently misread by the line-oriented syntax.
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT,
-    TABLE, FOLD, POLICY, RESULT, EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE,
+    TABLE, FOLD, SEQUENCE, POLICY, RESULT, EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE,
     FALSE, MIN, MAX, UP, DOWN, HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE,
     TAKE_FIRST, KEEP_MAX, BY, EMPTY, EXHAUSTED, HELD, OVER,
 ];

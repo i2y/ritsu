@@ -168,14 +168,48 @@ const fn const_str_e024() -> &'static str {
 }
 
 const fn const_str_e025() -> &'static str {
-    // A complete fold, with examples that cannot yet be written.
+    // Examples for a rule that walks a sequence, with no column saying which one.
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
      table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
-     examples\n| k | -> r |\n| 3円 | 3円 |\n"
+     examples\n| -> r |\n| 0円 |\n"
 }
+
+const fn const_str_e026() -> &'static str {
+    // A sequence whose column is not a field of an element.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     sequence s(s)\n| m |\n| 3円 |\n"
+}
+
+const fn const_str_e027() -> &'static str {
+    // An example naming a sequence nobody wrote.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     examples\n| xs | -> r |\n| nope | 0円 |\n"
+}
+
+const fn const_str_w116() -> &'static str {
+    // A sequence written and never named.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     sequence s(s)\n| k |\n| 3円 |\n"
+}
+
+const X_E026: &str = const_str_e026();
+const X_E027: &str = const_str_e027();
+const X_W116: &str = const_str_w116();
 
 const fn const_str_w115() -> &'static str {
     // `b` is in the enum but no row produces it, and the fold still waits for it.
@@ -641,17 +675,45 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E025",
-            tr!("畳み込みのある規則には、まだ例を書けません", "A rule with a fold cannot carry examples yet"),
+            tr!("例に列の欄がありません", "The examples have no column for the sequence"),
             tr!(
-                "`fold` のある規則に `examples` があるとき。例の一行はセルの並びで、要素の列を一つのセルに書く形がまだ決まっていません（§15.56）。",
-                "A rule with a `fold` has an `examples` block. An example is a row of cells, and there is no shape yet for writing a sequence into one (§15.56)."
+                "列を歩く規則に `examples` があるのに、`elements` の名前の欄が見出しに無いとき。歩く列が決まっていない例は、答えの決まっていない例です（§15.56）。",
+                "A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56)."
             ),
             tr!(
-                "例をいったん外してください。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの四つの検査は、例が無くても効きます。生成も同じ段で、いまは `gen` が名前を挙げて断ります。",
-                "Take the examples out for now. The table's own checks — completeness, overlap, units, overflow — and the fold's four checks hold without them. Generation is at the same stage: `gen` refuses such a rule by name."
+                "`sequence <名前>` で並びを書き、例の見出しに列の欄を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
+                "Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it."
             ),
             X_E025,
-            &["E021"],
+            &["E026", "E027"],
+        ),
+        err(
+            "E026",
+            tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
+            tr!(
+                "`sequence` の欄が `elements` の欄とそろっていないとき——余分な欄がある、欄が足りない、`->` がある、歩く列そのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
+                "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
+            ),
+            tr!(
+                "`elements` の欄をそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。",
+                "Make the header the fields of `elements` as they are, and write one element's values per row. This is not a table: it is the list of values as they would really be passed."
+            ),
+            X_E026,
+            &["E025", "E020"],
+        ),
+        err(
+            "E027",
+            tr!("例が指す列の実例がありません", "The example names a sequence that is not there"),
+            tr!(
+                "例の列の欄に書かれた名前の `sequence` が無いとき、またはその欄に名前でないもの（数や範囲）が書かれているとき。",
+                "The cell in the sequence column names a `sequence` that is not declared, or holds something that is not a name at all."
+            ),
+            tr!(
+                "その名前で `sequence` を書くか、セルの名前を書いてあるほうに直してください。",
+                "Write a `sequence` under that name, or correct the cell to one that is written."
+            ),
+            X_E027,
+            &["E025", "E026"],
         ),
         err(
             "E101",
@@ -905,6 +967,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W111,
             &["E101", "E012"],
+        ),
+        warn(
+            "W116",
+            tr!("どの例も使っていない列の実例です", "No example uses this sequence"),
+            tr!(
+                "`sequence` を書いたのに、どの例もその名前を書いていないとき。並びは例から名指しされて初めて走るので、走っていない並びです（§15.56）。",
+                "A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs (§15.56)."
+            ),
+            tr!(
+                "その並びを歩く例を足すか、並びのほうを消してください。書いたのに使っていないのは、たいてい例を書き忘れた跡です。",
+                "Add the example that walks it, or drop the sequence. Written and unused is usually the trace of an example left unwritten."
+            ),
+            X_W116,
+            &["E027", "W111"],
         ),
         warn(
             "W115",
