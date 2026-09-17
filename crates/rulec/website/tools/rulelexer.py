@@ -14,7 +14,8 @@ What the colours are trying to say, in the order a reader needs them:
 
     keyword    the word that starts a line - the shape of the file
     function   the name being declared, and min / max
-    constant   the fixed vocabulary of values: types, policies, rounding, true / none
+    constant   the fixed vocabulary of values: types, policies, rounding, true / none,
+               and what a fold is made of (over, next, take_unique, empty …)
     number     a literal, with its unit attached - the business values in a table
     operator   a comparison in a cell, and the arithmetic
     quiet      the table's own furniture: | -> [ ] : , ( )
@@ -41,8 +42,11 @@ MODIFIERS = ("range", "round", "contract_only", "default", "step")
 TYPES = ("money", "mass", "length", "rate", "number", "bool", "string", "date")
 TAX = ("incl_tax", "excl_tax")
 POLICIES = ("unique", "first")
-ROUNDING = ("up", "down", "half_up", "half_even")
+ROUNDING = ("up", "down", "half_up", "half_down", "half_even")
 CONSTANTS = ("true", "false", "none")
+# What a `fold` is made of: the connectors of its heading and the arms.
+ARMS = ("over", "next", "stop", "with", "take_unique", "take_first", "keep_max", "by",
+        "empty", "exhausted", "held")
 FUNCTIONS = ("min", "max")
 NAMESPACE = "std"
 
@@ -73,7 +77,7 @@ class RuleLexer(RegexLexer):
             (r"(\()([A-Za-z_][A-Za-z0-9_]*)(\))",
              bygroups(Punctuation, Name.Attribute, Punctuation)),
             (words(MODIFIERS, suffix=r"\b"), Keyword),
-            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS, suffix=r"\b"),
+            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS, suffix=r"\b"),
              Name.Builtin),
             (words(FUNCTIONS, suffix=r"\b"), Name.Function),
             (r"\bnot\b", Operator.Word),

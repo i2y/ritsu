@@ -429,8 +429,9 @@ fn 色づけの語彙はkwと同じ() {
         ("TYPES", sorted(&[kw::MONEY, kw::MASS, kw::LENGTH, kw::RATE, kw::NUMBER, kw::BOOL, kw::STRING, kw::DATE])),
         ("TAX", sorted(&[kw::INCL_TAX, kw::EXCL_TAX])),
         ("POLICIES", sorted(&[kw::UNIQUE, kw::FIRST])),
-        ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_EVEN])),
+        ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_DOWN, kw::HALF_EVEN])),
         ("CONSTANTS", sorted(&[kw::TRUE, kw::FALSE, kw::NONE])),
+        ("ARMS", sorted(&[kw::OVER, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX])),
     ] {
         let mut got = list(name);
@@ -440,6 +441,22 @@ fn 色づけの語彙はkwと同じ() {
     // The two that are written into the patterns rather than into a list.
     for w in [kw::NOT, kw::STD] {
         assert!(py.contains(w), "レクサが {w} を知りません");
+    }
+
+    // The net under all of it: every reserved word has to be in one of those lists. The
+    // per-list checks above are written out by hand and rot the same way the lexer does —
+    // `half_down` was added to the language and to neither, and simply stopped being
+    // coloured. This one cannot be satisfied by forgetting.
+    let known: BTreeSet<String> = ["HEAD_NAMED", "HEAD_PLAIN", "MODIFIERS", "TYPES", "TAX",
+        "POLICIES", "ROUNDING", "CONSTANTS", "ARMS", "FUNCTIONS"]
+        .iter()
+        .flat_map(|n| list(n))
+        .collect();
+    for w in kw::RESERVED {
+        assert!(
+            known.contains(*w) || *w == kw::NOT,
+            "レクサの語彙に {w} がありません（色が付かないまま通ってしまいます）"
+        );
     }
 }
 
