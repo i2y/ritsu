@@ -371,13 +371,17 @@ early. A window function or a recursive CTE can be made to look like a walk, but
 giving up the 1:1 between a branch of the generated query and a row of the rule — which is the
 reason the SQL backend exists. So `rulec gen` names SQL, skips it, and writes the other seven.
 
+### An input with no answer
+
+A sequence where `take_unique` matches twice is a contradiction: the reference evaluator has
+no answer and the generated code raises. Such an input is still part of the suite — it goes to
+`vectors/<alias>.refused.jsonl`, and `rulec test` requires every generated language to refuse
+it. That is what makes the last fold transition covered rather than merely named.
+
 ### What is not built yet
 
 `examples` cannot be written for a rule with a fold (E025): an example is a row of cells, and
-the shape for writing a sequence into one is not decided. A sequence where `take_unique`
-matches twice has no expected record either — the generated code raises, and there is no shape
-for "an error" in the expected records yet — so `rulec coverage` names that transition as
-uncovered rather than rounding the score up.
+the shape for writing a sequence into one is not decided.
 
 ## 7. Tables
 

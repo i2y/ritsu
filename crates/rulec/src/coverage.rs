@@ -183,7 +183,10 @@ pub fn show_rat(v: Rat, ty: &Ty) -> String {
 }
 
 /// Judge whether a vector set satisfies the four criteria of §9.2.
-pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
+/// `refused` are the cases the reference evaluator has no answer for (`vectors::Suite`). They
+/// are part of the suite — `rulec test` holds the generated code to refusing them — so an
+/// obligation only such a case can reach is met, not missing (§15.56).
+pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Vector]) -> Audit {
     let checks = crate::table_checks(f, c, path);
     // Re-run every vector to get bindings that include the derived values and definitions.
     let binds: Vec<BTreeMap<String, Val>> = vs
@@ -241,6 +244,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
         };
         let seqs: Vec<Vec<String>> = vs.iter().map(verdict_of).collect();
         let has_seq: Vec<bool> = vs.iter().map(|v| matches!(v.input.get(&fold.over), Some(Val::Seq(_)))).collect();
+        // The same reading of the refused cases. They carry no witness index: nothing prunes
+        // them, so nothing has to be told to keep them.
+        let refused_seqs: Vec<Vec<String>> = refused.iter().map(verdict_of).collect();
         let values: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
 
         let mut want: Vec<(String, Vec<String>)> = vec![(tr!("要素ゼロ件", "no elements"), Vec::new())];
@@ -260,6 +266,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
             match met {
                 Some(k) => {
                     witness.insert(k);
+                    bump(FOLD, true, &mut tally);
+                }
+                None if refused_seqs.iter().any(|sq| sq == &pattern) => {
                     bump(FOLD, true, &mut tally);
                 }
                 None => {
@@ -442,11 +451,18 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
     Audit { tally, missing, witness, pruned_bounds }
 }
 
-pub fn render(a: &Audit, vs: &[Vector]) -> String {
+pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
     let mut o = tr!("ベクタ {} 件\n", "{} vectors\n", vs.len());
+    if !refused.is_empty() {
+        o.push_str(&tr!(
+            "  うち断る入力 {} 件（答えではなく、断ることが期待値）\n",
+            "  plus {} refused inputs (the expected answer is a refusal)\n",
+            refused.len()
+        ));
+    }
     // The Japanese column is 12 characters wide (the tests pin that output); the English
     // labels are longer, so the column widens to the longest of them.
-    let w = if crate::i18n::ja() { 12 } else { 22 };
+    let w = if crate::i18n::ja() { 12 } else { 24 };
     for k in [ROW, BOUND, SHADOW, TIE, FOLD] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
@@ -467,15 +483,16 @@ pub fn render(a: &Audit, vs: &[Vector]) -> String {
     o
 }
 
-/// The body of `rulec coverage`: audit the generated vectors as they are.
-pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>) {
-    let vs = vectors::generate(f, c);
-    let a = audit(f, c, path, &vs);
-    (a, vs)
+/// The body of `rulec coverage`: audit the generated suite as it is — the cases with an
+/// answer and the cases that are refused.
+pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>, Vec<Vector>) {
+    let s = vectors::suite(f, c);
+    let a = audit(f, c, path, &s.vectors, &s.refused);
+    (a, s.vectors, s.refused)
 }
 
 /// `--format json` (docs/formats.md). One object per rule file.
-pub fn render_json(a: &Audit, vs: &[Vector], path: &str) -> String {
+pub fn render_json(a: &Audit, vs: &[Vector], refused: &[Vector], path: &str) -> String {
     let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE, FOLD]
         .iter()
         .map(|k| {
@@ -497,6 +514,7 @@ pub fn render_json(a: &Audit, vs: &[Vector], path: &str) -> String {
     crate::json::Obj::new()
         .str("file", path)
         .int("vectors", vs.len() as i128)
+        .int("refused", refused.len() as i128)
         .raw("criteria", crate::json::arr(&criteria))
         .finish()
 }

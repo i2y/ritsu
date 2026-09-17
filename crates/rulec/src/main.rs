@@ -1174,7 +1174,8 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         let pkg = alias.replace('_', "").to_lowercase();
         // Also emit the vectors and the expected values. Of the three uses in §9.3, the
         // cross-language agreement test and the golden files run on these.
-        let vs = rulec::vectors::generate(&f, &c);
+        let suite = rulec::vectors::suite(&f, &c);
+        let vs = &suite.vectors;
         let vec_body: String =
             vs.iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
         let exp_body: String =
@@ -1205,6 +1206,19 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         }
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
         targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
+        // The cases the reference evaluator refuses, where there are any. They have no
+        // expected record — refusing is the expectation — so they get a file of their own
+        // and `rulec test` holds every generated language to raising on them (§15.56).
+        if !suite.refused.is_empty() {
+            let body: String = suite
+                .refused
+                .iter()
+                .map(|v| rulec::vectors::refused_json(&f, &c, v))
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), body));
+        }
         for (p, body) in targets {
             let existing = std::fs::read_to_string(&p).ok();
             if existing.as_deref() == Some(body.as_str()) {
@@ -1531,12 +1545,12 @@ fn coverage(files: &[&String], json: bool) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
             return ExitCode::from(1);
         };
-        let (a, vs) = rulec::coverage::audit_file(&f, &c, path);
+        let (a, vs, rf) = rulec::coverage::audit_file(&f, &c, path);
         if json {
-            println!("{}", rulec::coverage::render_json(&a, &vs, path));
+            println!("{}", rulec::coverage::render_json(&a, &vs, &rf, path));
         } else {
             println!("{path}");
-            print!("{}", rulec::coverage::render(&a, &vs));
+            print!("{}", rulec::coverage::render(&a, &vs, &rf));
         }
         if !a.ok() {
             worst = 1;

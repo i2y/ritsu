@@ -315,6 +315,70 @@ fn ページの試用欄は列を編集して走る() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// An input the reference evaluator **refuses** is part of the suite too: it has no expected
+/// record, because refusing is the expectation, and every generated language is held to
+/// raising on it (§15.56). Without this the walk's last transition — a take after a take —
+/// would be named as uncovered forever.
+#[test]
+fn 断る入力は生成コードにも断らせる() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let d = dir("refused");
+    let p = write(&d, "r.rule", RULE);
+    let out = d.join("out");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+
+    let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("断る入力の一覧が無い");
+    let lines: Vec<&str> = body.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines.len(), 1, "断る入力は一件のはず: {body}");
+    let j = rulec::json::parse(lines[0]).unwrap();
+    assert_eq!(j.get("refused").and_then(|v| v.as_str()), Some("contradiction"), "{body}");
+    assert!(j.get("in").and_then(|i| i.get("運賃行")).is_some(), "入力が読めない形: {body}");
+    // It is the transition no answer can reach, and the file says so.
+    assert!(lines[0].contains("確定"), "どの遷移か言っていない: {body}");
+
+    // As generated, every language refuses it.
+    let (_, said, _) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
+    let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();
+    let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!("{said}") };
+    let mut checked = 0;
+    for r in rs {
+        if r.get("ran") != Some(&rulec::json::Json::Bool(true)) || r.get("rule").and_then(|v| v.as_str()) != Some("freight") {
+            continue;
+        }
+        assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
+        assert_eq!(r.get("refused").and_then(|v| v.as_int()), Some(1), "断る入力が試されていない: {said}");
+        checked += 1;
+    }
+    assert!(checked >= 1, "どの言語も走らなかった: {said}");
+
+    // And a language that answers instead of raising is caught, by name.
+    let module = out.join("python/freight.py");
+    let py = std::fs::read_to_string(&module).unwrap();
+    let broken: Vec<String> = py
+        .lines()
+        .map(|l| {
+            if l.contains("RuleContradictionError") && l.contains("take_unique") {
+                format!("{}pass", &l[..l.len() - l.trim_start().len()])
+            } else {
+                l.to_string()
+            }
+        })
+        .collect();
+    assert!(broken.join("\n") != py, "壊すところが見つからない");
+    std::fs::write(&module, broken.join("\n") + "\n").unwrap();
+    let (code, said, _) = run(&["test", out.to_str().unwrap()]);
+    assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
+    assert!(
+        said.contains("answered an input") || said.contains("答えました"),
+        "何が起きたか言っていない: {said}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// The seven generated walks answer what the reference evaluator answered, over the whole
 /// vector suite. A language whose toolchain is missing is skipped by `rulec test` itself.
 #[test]
@@ -381,9 +445,10 @@ fn 歩きはベクタで覆われる() {
     // right one.
     assert!(answers.len() >= 2, "答えが一種類しかない: {answers:?}");
 
-    // The fifth criterion is reported, and what it cannot cover it names.
+    // The fifth criterion is reported, and every obligation is met — the one no answer can
+    // reach is met by the input the evaluator refuses (§15.56).
     let (code, cov, _) = run(&["coverage", &p, "--format", "json"]);
-    assert_eq!(code, 1, "覆えない義務があるので 1");
+    assert_eq!(code, 0, "{cov}");
     let j = rulec::json::parse(cov.lines().next().unwrap()).unwrap();
     let rulec::json::Json::Arr(cs) = j.get("criteria").unwrap() else { panic!() };
     let fold = cs
@@ -393,7 +458,7 @@ fn 歩きはベクタで覆われる() {
     let total = fold.get("total").and_then(|v| v.as_int()).unwrap();
     let met = fold.get("satisfied").and_then(|v| v.as_int()).unwrap();
     assert_eq!(total, 21, "義務は ゼロ件 + 判定4 + 対16");
-    assert_eq!(met, 20, "覆えるのは take_unique の矛盾を除く 20");
-    assert!(cov.contains("確定"), "覆えない遷移を名指ししていない: {cov}");
+    assert_eq!(met, 21, "断る入力も義務を果たす");
+    assert_eq!(j.get("refused").and_then(|v| v.as_int()), Some(1), "断る入力が数えられていない: {cov}");
     let _ = std::fs::remove_dir_all(&d);
 }

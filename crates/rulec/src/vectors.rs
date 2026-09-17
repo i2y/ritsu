@@ -707,7 +707,22 @@ pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
     })
 }
 
+/// The whole suite: the cases the reference evaluator answers, and the cases it **refuses**.
+///
+/// A refusal is an answer of its own kind. For a rule that walks a sequence it is where two
+/// elements both take under `take_unique`: the evaluator has no answer and the generated code
+/// raises, and holding the generated code to that is what makes the transition covered rather
+/// than merely named (§15.56).
+pub struct Suite {
+    pub vectors: Vec<Vector>,
+    pub refused: Vec<Vector>,
+}
+
 pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
+    suite(f, c).vectors
+}
+
+pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let cands = candidates(f, c);
     let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a)).collect();
 
@@ -715,6 +730,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
     };
     let mut evaluated: Vec<Vector> = Vec::new();
+    let mut refused: Vec<Vector> = Vec::new();
     let mut seen_in: BTreeMap<String, usize> = BTreeMap::new();
     for (a, why) in raw {
         let key = key_of(&a);
@@ -723,12 +739,12 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         }
         seen_in.insert(key, evaluated.len());
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
-        // A case the reference evaluator cannot answer is not a test case. For a rule that
-        // walks a sequence this is where two elements both take under `take_unique`: the
-        // generated code raises there, and the expected record has no shape for an error yet,
-        // so the suite leaves the transition uncovered rather than claiming an answer. The
-        // coverage report names it (§15.56).
+        // A case the reference evaluator refuses is not a case with an answer, and it is not
+        // nothing either. For a rule that walks a sequence, no answer means exactly one thing:
+        // two elements both took under `take_unique` (§15.56). It goes to the other list,
+        // where `rulec test` holds the generated code to refusing it too.
         if f.fold.is_some() && outs.first().is_some_and(|(_, v)| v.is_none()) {
+            refused.push(Vector { input: a, outputs: outs, trace, fired, why });
             continue;
         }
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
@@ -759,7 +775,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     // what the targeting side claims, but only what the auditor accepted as "this discharges
     // the obligation". A pair obligation admits both vectors together, which is where greedy
     // scoring would drop one.
-    let audit = crate::coverage::audit(f, c, "", &evaluated);
+    let audit = crate::coverage::audit(f, c, "", &evaluated, &refused);
     let mut keep: BTreeSet<usize> = audit.witness.clone();
     keep.extend(forced.iter().copied());
 
@@ -798,12 +814,29 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         pairs_of(&evaluated[i], &mut seen2);
     }
 
-    evaluated
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| keep.contains(i))
-        .map(|(_, v)| v)
-        .collect()
+    // Every refused case is kept: there are as many of them as there are transitions no
+    // answer can reach, and dropping one would take a check away rather than a duplicate.
+    Suite {
+        vectors: evaluated
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| keep.contains(i))
+            .map(|(_, v)| v)
+            .collect(),
+        refused,
+    }
+}
+
+/// One refused case, as a line of `vectors/<alias>.refused.jsonl`: the inputs in the same
+/// wire form the vectors file uses, and why the case is in the suite. The generated runners
+/// read `in` and nothing else, so the same line drives them (§15.56).
+pub fn refused_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    format!(
+        "{{\"in\":{},\"refused\":\"contradiction\",\"why\":\"{}\"}}",
+        in_object(f, c, v),
+        esc(&v.why)
+    )
 }
 
 /// Canonical JSON. Three-way agreement is judged on these bytes (§8.5).

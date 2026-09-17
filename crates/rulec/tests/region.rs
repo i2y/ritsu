@@ -93,8 +93,8 @@ fn 起こり得ない隠れ対はカバー義務にならない() {
     let src = rule("1");
     let (f, c) = rulec::prepare(&src, "region.rule").expect("検査を通る");
     let vs = rulec::vectors::generate(&f, &c);
-    let a = rulec::coverage::audit(&f, &c, "region.rule", &vs);
-    assert!(a.ok(), "{}", rulec::coverage::render(&a, &vs));
+    let a = rulec::coverage::audit(&f, &c, "region.rule", &vs, &[]);
+    assert!(a.ok(), "{}", rulec::coverage::render(&a, &vs, &[]));
 }
 
 /// A rule whose lower table names an upstream answer together with the column that decides it.

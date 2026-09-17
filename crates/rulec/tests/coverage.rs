@@ -34,8 +34,8 @@ fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>)
 fn コーパスは四基準を全部満たす() {
     for rel in CORPUS {
         let (f, c, vs) = load(rel);
-        let a = coverage::audit(&f, &c, rel, &vs);
-        assert!(a.ok(), "{rel}\n{}", coverage::render(&a, &vs));
+        let a = coverage::audit(&f, &c, rel, &vs, &[]);
+        assert!(a.ok(), "{rel}\n{}", coverage::render(&a, &vs, &[]));
         for k in [ROW, BOUND, SHADOW] {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(met, req, "{rel} の {k}");
@@ -54,8 +54,8 @@ fn コーパスは四基準を全部満たす() {
 fn 空集合はすべての義務が欠ける() {
     for rel in CORPUS {
         let (f, c, vs) = load(rel);
-        let full = coverage::audit(&f, &c, rel, &vs);
-        let empty = coverage::audit(&f, &c, rel, &[]);
+        let full = coverage::audit(&f, &c, rel, &vs, &[]);
+        let empty = coverage::audit(&f, &c, rel, &[], &[]);
         assert!(!empty.ok(), "{rel}: 空集合を通した");
         for k in [ROW, BOUND, SHADOW] {
             let (_, req) = full.tally.get(k).copied().unwrap_or((0, 0));
@@ -74,7 +74,7 @@ fn 行を勝たせる例を抜くと行カバーが欠ける() {
     let tag = "表 運賃表 行42"; // the 沖縄 × S170 cell
     let kept: Vec<Vector> = vs.iter().filter(|v| !v.trace.iter().any(|t| t == tag)).cloned().collect();
     assert!(kept.len() < vs.len(), "抜く対象がない");
-    let a = coverage::audit(&f, &c, rel, &kept);
+    let a = coverage::audit(&f, &c, rel, &kept, &[]);
     assert!(!a.ok(), "抜いたのに緑のまま");
     let rows: Vec<&str> = a.missing.iter().filter(|m| m.kind == ROW).map(|m| m.what.as_str()).collect();
     assert_eq!(rows, vec![tag], "欠けた行を名指ししていない: {rows:?}");
@@ -93,9 +93,9 @@ fn 境界の片側を抜くと境界の両側カバーが欠ける() {
         .cloned()
         .collect();
     assert!(kept.len() < vs.len(), "抜く対象がない");
-    let a = coverage::audit(&f, &c, rel, &kept);
+    let a = coverage::audit(&f, &c, rel, &kept, &[]);
     let b: Vec<&str> = a.missing.iter().filter(|m| m.kind == BOUND).map(|m| m.what.as_str()).collect();
-    assert!(!b.is_empty(), "境界の外側を抜いたのに緑のまま:\n{}", coverage::render(&a, &kept));
+    assert!(!b.is_empty(), "境界の外側を抜いたのに緑のまま:\n{}", coverage::render(&a, &kept, &[]));
     assert!(b.iter().any(|w| w.contains("境界 60")), "どの境界かを名指ししていない: {b:?}");
 }
 
@@ -108,7 +108,7 @@ fn 交差の内側を抜くと隠れ対カバーが欠ける() {
     let checks = rulec::table_checks(&f, &c, rel);
     let pairs: usize = checks.iter().map(|k| k.overlaps.len()).sum();
     assert!(pairs > 0, "隠れ対のある規則を選んでいない");
-    let a = coverage::audit(&f, &c, rel, &vs);
+    let a = coverage::audit(&f, &c, rel, &vs, &[]);
     assert_eq!(a.tally[SHADOW].1, pairs, "隠れ対の数が検査と食い違う");
     // Drop the inside points. What remains are only the points that hit row j alone.
     let inside: Vec<usize> = (0..vs.len())
@@ -117,7 +117,7 @@ fn 交差の内側を抜くと隠れ対カバーが欠ける() {
     assert!(!inside.is_empty(), "交差の内側を狙ったベクタがない");
     let kept: Vec<Vector> =
         vs.iter().enumerate().filter(|(i, _)| !inside.contains(i)).map(|(_, v)| v.clone()).collect();
-    let b = coverage::audit(&f, &c, rel, &kept);
+    let b = coverage::audit(&f, &c, rel, &kept, &[]);
     assert!(b.tally[SHADOW].0 <= a.tally[SHADOW].0, "抜いて増えている");
 }
 
@@ -169,7 +169,7 @@ fn 境界の義務は素朴な数え上げと一致する() {
 
     for rel in CORPUS {
         let (f, c, vs) = load(rel);
-        let a = coverage::audit(&f, &c, rel, &vs);
+        let a = coverage::audit(&f, &c, rel, &vs, &[]);
         let dead: Vec<Vec<usize>> =
             rulec::table_checks(&f, &c, rel).into_iter().map(|k| k.dead).collect();
         assert_eq!(
@@ -205,7 +205,7 @@ fn 義務の件数を固定する() {
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
     for (rel, rows, bounds, shadows) in PINNED {
         let (f, c, vs) = load(rel);
-        let a = coverage::audit(&f, &c, rel, &vs);
+        let a = coverage::audit(&f, &c, rel, &vs, &[]);
         assert_eq!(
             (a.tally[ROW].1, a.tally[BOUND].1, a.tally[SHADOW].1),
             (*rows, *bounds, *shadows),
@@ -221,7 +221,7 @@ fn audit_src(tag: &str, src: &str) -> (coverage::Audit, Vec<Vector>) {
         panic!("{tag} は検査を通らない: {:?}", d.iter().map(|x| x.code.to_string()).collect::<Vec<_>>())
     });
     let vs = vectors::generate(&f, &c);
-    let a = coverage::audit(&f, &c, tag, &vs);
+    let a = coverage::audit(&f, &c, tag, &vs, &[]);
     (a, vs)
 }
 
@@ -323,7 +323,7 @@ policy first
 | 壱   | -     | -     | -     | -   | -   | -   | 白              |
 ",
     );
-    assert!(a.ok(), "{}", coverage::render(&a, &vs));
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
 }
 
 /// The `examples` are part of the vector suite.

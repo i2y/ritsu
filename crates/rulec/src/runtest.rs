@@ -64,6 +64,9 @@ pub struct Outcome {
     /// generated server; §15.44).
     pub via: &'static str,
     pub vectors: usize,
+    /// How many inputs the reference evaluator refuses were put to it. The expected answer
+    /// there is a refusal, so they are counted apart from the vectors (§15.56).
+    pub refused: usize,
     /// Why it failed. None when everything matched.
     pub diff: Option<Failure>,
 }
@@ -125,7 +128,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
         if let Some(a) = name.strip_suffix(".jsonl") {
-            if !a.ends_with(".expected") {
+            // `<alias>.expected.jsonl` holds the answers and `<alias>.refused.jsonl` the
+            // inputs with none; neither is a rule of its own.
+            if !a.ends_with(".expected") && !a.ends_with(".refused") {
                 aliases.push(a.to_string());
             }
         }
@@ -208,6 +213,10 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
             .map_err(|_| tr!("{alias}: 期待値がありません", "{alias}: no expected values"))?;
         let n = std::fs::read_to_string(&vec_path).map(|s| s.lines().count()).unwrap_or(0);
+        // Written only for a rule that has any; a rule without one has no file (§15.56).
+        let refused: Vec<String> = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.refused.jsonl")))
+            .map(|s| s.lines().filter(|l| !l.trim().is_empty()).map(|l| l.to_string()).collect())
+            .unwrap_or_default();
         let pkg = alias.replace('_', "");
         for b in &present {
             // Not every rule is generated for every backend: a rule that walks a sequence is
@@ -216,21 +225,58 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             if !wrote(dir, b.id, alias) {
                 continue;
             }
-            let diff = match exec(&(b.run)(alias, &pkg), Some(&vec_path)) {
+            let mut diff = match exec(&(b.run)(alias, &pkg), Some(&vec_path)) {
                 Err(f) => Some(f),
                 Ok(got) => (got != want).then(|| first_diff(&got, &want)),
             };
-            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, diff });
+            // Each refused input goes in on its own: the generated code raises on the first
+            // one it is given, so a file of them would only ever prove the first (§15.56).
+            if diff.is_none() {
+                for (k, line) in refused.iter().enumerate() {
+                    let one = dir.join("vectors").join(format!(".{alias}.refused.{k}.jsonl"));
+                    if std::fs::write(&one, format!("{line}\n")).is_err() {
+                        diff = Some(broken(tr!("断る入力を書けません", "cannot write the refused input")));
+                        break;
+                    }
+                    let got = exec(&(b.run)(alias, &pkg), Some(&one));
+                    let _ = std::fs::remove_file(&one);
+                    match got {
+                        // Refusing is what was asked for: the run stopped without an answer.
+                        Err(Failure::Broken(_)) => {}
+                        Err(f) => {
+                            diff = Some(f);
+                            break;
+                        }
+                        Ok(said) => {
+                            diff = Some(Failure::Lines(tr!(
+                                "参照評価器が断る入力に答えました（{}行目）: {}",
+                                "answered an input the reference evaluator refuses (line {}): {}",
+                                k + 1,
+                                said.trim()
+                            )));
+                            break;
+                        }
+                    }
+                }
+            }
+            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), diff });
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
             if let Some(mcp) = b.mcp {
                 for (via, http) in [("mcp", false), ("mcp-http", true)] {
                     let cwd = dir.join(&mcp(alias).cwd);
-                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, http) {
+                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, &refused, http) {
                         Err(f) => Some(f),
                         Ok(got) => (got != want).then(|| first_diff(&got, &want)),
                     };
-                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via, vectors: n, diff });
+                    out.results.push(Outcome {
+                        rule: alias.clone(),
+                        lang: b.name,
+                        via,
+                        vectors: n,
+                        refused: refused.len(),
+                        diff,
+                    });
                 }
             }
         }
@@ -244,7 +290,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             continue;
         }
         let diff = exec(&(b.round)(&pkg0), None).err();
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, diff });
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, refused: 0, diff });
     }
 
     Ok(out)
@@ -263,6 +309,7 @@ fn via_mcp(
     plan: &crate::backend::Plan,
     alias: &str,
     want: &str,
+    refused: &[String],
     http: bool,
 ) -> Result<String, Failure> {
     let mut cmd = Command::new(&plan.cmd);
@@ -336,6 +383,27 @@ fn via_mcp(
         }
         got.push_str(text);
         got.push('\n');
+    }
+    // The inputs the reference evaluator refuses. A server stays up across an error, so these
+    // go through the same connection: what is asked of it is `isError`, not a record (§15.56).
+    for (k, line) in refused.iter().enumerate() {
+        let one = crate::json::parse(line).map_err(broken)?;
+        let Some(inp) = one.get("in") else {
+            return Err(broken(tr!("断る入力に in がありません", "a refused input has no in")));
+        };
+        let r = wire.ask(&format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
+            want.lines().count() + k + 2,
+            crate::json::quote(alias),
+            crate::json::unparse(inp)
+        ))?;
+        if r.get("isError") != Some(&crate::json::Json::Bool(true)) {
+            return Err(Failure::Lines(tr!(
+                "参照評価器が断る入力に答えました（{}行目）",
+                "answered an input the reference evaluator refuses (line {})",
+                k + 1
+            )));
+        }
     }
     drop(wire);
     // Closing stdin is what ends the stdio server; the HTTP one waits for connections until
@@ -515,11 +583,14 @@ pub fn render(r: &Run) -> String {
     for x in &r.results {
         match &x.diff {
             None => {
-                let n = if x.vectors > 0 {
+                let mut n = if x.vectors > 0 {
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
                     tr!("単体ベクタ", "unit vectors")
                 };
+                if x.refused > 0 {
+                    n.push_str(&tr!("、断る入力 {} 件", ", {} refused", x.refused));
+                }
                 o.push_str(&format!("ok    {} ({}{}) {n}\n", shown(&x.rule), x.lang, via(x)));
             }
             Some(d) => {
@@ -600,6 +671,7 @@ pub fn render_json(r: &Run) -> String {
                 .str("lang", x.lang.to_lowercase())
                 .str("via", x.via)
                 .int("vectors", x.vectors as i128)
+                .int("refused", x.refused as i128)
                 .bool("ok", x.diff.is_none())
                 // Whether the generated code ran at all. `ok:false` with `ran:false` is a
                 // machine that could not build or start it, not a rule that answered wrongly.

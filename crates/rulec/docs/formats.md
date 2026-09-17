@@ -102,7 +102,7 @@ written are in `written`. A file already up to date appears in none of the three
 One object per rule file.
 
 ```json
-{"file":"rules/送料.rule","vectors":70,
+{"file":"rules/送料.rule","vectors":70,"refused":0,
  "criteria":[{"name":"row","satisfied":7,"total":7,"missing":[]},
              {"name":"boundary_pair","satisfied":4,"total":4,"missing":[]},
              {"name":"shadow_pair","satisfied":3,"total":3,"missing":[]},
@@ -111,18 +111,20 @@ One object per rule file.
 ```
 
 `name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`, `fold_transition` — the last one has obligations only for a rule that walks a sequence (§15.56). An entry of `missing` is
-`{"what": …, "hint": …}`, both **prose**.
+`{"what": …, "hint": …}`, both **prose**. `refused` counts the cases in the suite that the
+reference evaluator has **no answer** for; they discharge obligations like any other case, and
+what is asked of the generated code there is that it refuse them too (below).
 
 ## `test`
 
 One object for the run.
 
 ```json
-{"results":[{"rule":"shipping_fee","lang":"python","via":"runner","vectors":68,
+{"results":[{"rule":"shipping_fee","lang":"python","via":"runner","vectors":68,"refused":0,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"shipping_fee","lang":"python","via":"mcp","vectors":68,
+             {"rule":"shipping_fee","lang":"python","via":"mcp","vectors":68,"refused":0,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"shipping_fee","lang":"go","via":"runner","vectors":68,
+             {"rule":"shipping_fee","lang":"go","via":"runner","vectors":68,"refused":0,
               "ok":false,"ran":false,"first_diff":null,
               "error":"does not compile:\n…"}],
  "skipped":[]}
@@ -131,7 +133,8 @@ One object for the run.
 | field | meaning |
 |---|---|
 | `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; or `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)) |
-| `ok` | the generated code and the reference evaluator agreed on every vector |
+| `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
+| `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
 | `error` | `null`, or **prose** for a failure with no single line to point at |
@@ -376,6 +379,22 @@ matched as `trace` (below). The generated runner prints the same record through 
 own record function, and that is what `rulec test` compares, byte for byte: the agreement is
 checked row by row, and over the wire form of every input. Being a fixtures file, it is also
 what `rulec fixtures lint` and `replay` accept.
+
+A rule that walks a sequence (§15.56) can have inputs the reference evaluator **refuses**:
+two elements both taking under `take_unique` is a contradiction, and there is no answer to
+expect. Those go to a third file, `<alias>.refused.jsonl`, written only when there are any:
+
+```json
+{"in":{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":100000},
+                 {"行ゾーン":"近畿圏","閾値":1000,"行運賃":100000}]},
+ "refused":"contradiction","why":"確定 then 確定"}
+```
+
+`in` is the same shape the vectors file uses, so the same runner reads it. `rulec test` puts
+each of them in **on its own** — the generated code raises on the first one it is given — and
+the run is green only if every language stops without an answer. A generated MCP server is
+asked the same thing and has to answer `isError`. `rulec verify` does not use this file: it
+asks an implementation for answers, and here there is none to compare.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 
