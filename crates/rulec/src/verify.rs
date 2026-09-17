@@ -155,7 +155,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
     let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
     match lang {
         "go" => tr!(
-            "// rulec のアダプタ雛形（規則 {}）。\n\
+            "// rulec のアダプタのテンプレート（規則 {}）。\n\
              // 標準入出力で JSON Lines をやりとりするだけ。旧実装をこの中から呼ぶ。\n\
              package main\n\n\
              import (\n\t\"bufio\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n)\n\n\
@@ -192,7 +192,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
             out
         ),
         _ => tr!(
-            "# rulec のアダプタ雛形（規則 {}）。\n\
+            "# rulec のアダプタのテンプレート（規則 {}）。\n\
              # 標準入出力で JSON Lines をやりとりするだけ。旧実装をこの中から呼ぶ。\n\
              import json, sys\n\n\
              sys.stdin.readline()  # 握手\n\

@@ -609,7 +609,7 @@ impl<'a> Gen<'a> {
 
         o.push_str(&format!(
             "class RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n",
-            tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
         ));
         o.push_str(&format!(
             "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n",
@@ -3270,7 +3270,7 @@ fn round_bankers(x: i64, g: i64) -> i64 {{
 }}
 "#,
         err = tr!("この規則が返しうる誤り。", "Everything this rule can go wrong with."),
-        input = tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+        input = tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
         contra = tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
         down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen → -4 yen."),
         up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen → -5 yen."),
@@ -4966,7 +4966,7 @@ impl<'a> Gen<'a> {
 
         o.push_str(&format!(
             "  # {}\n  class RuleInputError < ArgumentError; end\n\n",
-            tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
         ));
         o.push_str(&format!(
             "  # {}\n  class RuleContradictionError < RuntimeError; end\n\n",
@@ -5743,7 +5743,7 @@ private func _roundBankers(_ x: Int64, _ g: Int64) -> Int64 {{
 }}
 "#,
         err = tr!("この規則が返しうる誤り。", "Everything this rule can go wrong with."),
-        input = tr!("宣言された入力域の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+        input = tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
         contra = tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
         down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen -> -4 yen."),
         up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen -> -5 yen."),

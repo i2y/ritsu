@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/ja/"
-site_description = "表で書ける業務ルールを、エージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロの Python・TypeScript・Rust・Go を出す。"
+site_description = "表で書ける業務ルールを、エージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロのコードを八つの言語に出す。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
@@ -52,6 +52,10 @@ lang = "ja"
 
 [project.theme]
 variant = "modern"
+# The chrome the theme writes itself — search, the copy button, previous / next,
+# "edit this page" — comes from the theme's own Japanese pack. Without this the
+# Japanese site reads Japanese until the reader touches anything.
+language = "ja"
 icon.repo = "fontawesome/brands/github"
 # navigation.footer     previous / next at the foot of every page, so the
 #                       site reads in order without the sidebar
@@ -80,7 +84,7 @@ scheme = "default"
 primary = "black"
 accent = "indigo"
 toggle.icon = "lucide/moon"
-toggle.name = "Switch to dark mode"
+toggle.name = "ダークモードに切り替え"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
@@ -88,7 +92,7 @@ scheme = "slate"
 primary = "black"
 accent = "indigo"
 toggle.icon = "lucide/sun"
-toggle.name = "Switch to light mode"
+toggle.name = "ライトモードに切り替え"
 
 # ---- Markdown extensions ---------------------------------------------------
 

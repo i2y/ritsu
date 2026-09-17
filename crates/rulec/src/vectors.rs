@@ -504,7 +504,7 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
                 }
             }
             let seed = win_row(f, c, cands, &a, t, ri).unwrap_or(a);
-            out.push((seed.clone(), tr!("行狙い: 表 {tname} 行{}", "row target: table {tname} row {}", ri + 1)));
+            out.push((seed.clone(), tr!("行を当てる: 表 {tname} 行{}", "row target: table {tname} row {}", ri + 1)));
 
             // Boundary-pair coverage: build a **pair** that steps on both sides of a boundary
             // with the row's other columns held fixed. `place` picks inputs in declaration order

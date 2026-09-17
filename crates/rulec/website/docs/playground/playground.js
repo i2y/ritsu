@@ -22,7 +22,7 @@ const TEXT = {
     booting: "検査器を読み込んでいます…",
     checked: (ms, e, w) => `rulec ${VERSION} ・ ${ms} ms ・ エラー ${e} 件、警告 ${w} 件`,
     passed: (ms) => `rulec ${VERSION} ・ ${ms} ms ・ 通ります`,
-    refused: "検査を通らない規則からは何も生成しません。発見は「検査」のタブにあります。",
+    refused: "検査を通らない規則からは何も生成しません。指摘は「検査」のタブにあります。",
     generated: (n, ms) => `${n} ファイル ・ ${ms} ms`,
     broken: "この入力で検査器が止まったので読み直しました。その表を報告してください",
     file: "ファイル",

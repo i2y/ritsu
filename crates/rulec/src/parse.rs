@@ -183,7 +183,7 @@ impl P {
                                 .at(self.at(span.line))
                                 .mark(span, tr!("二本目です", "this is a second one"))
                                 .note(tr!(
-                                    "規則が歩く列は一つです。二つ目の列が要るなら、それは別の規則です。",
+                                    "規則がたどる並びは一つです。二つ目の並びが要るなら、それは別の規則です。",
                                     "A rule walks one sequence. A second one means a second rule."
                                 )),
                         ),
@@ -203,7 +203,7 @@ impl P {
                                     .at(self.at(d.span.line))
                                     .mark(d.span.clone(), tr!("二本目です", "this is a second one"))
                                     .note(tr!(
-                                        "列を畳むのは一度だけです。二段の畳み込みは、要素の列としての振る舞いが小さなオートマトンでなくなります（§15.56）。",
+                                        "並びを畳むのは一度だけです。二段に畳むと、要素の並びに対する振る舞いが小さなオートマトンでなくなります（§15.56）。",
                                         "A sequence is folded once. A second fold would take the walk out of the small automaton that makes it checkable (§15.56)."
                                     )),
                             ),
@@ -251,7 +251,7 @@ impl P {
                     let name = self.name_at(&line, 1).map(|(n, _)| n);
                     let span = span_of(&line);
                     self.i += 1;
-                    self.ctx = tr!("列の実例", "a named sequence");
+                    self.ctx = tr!("並び", "a named sequence");
                     // A block with no rows is the empty sequence, which is a case of its own
                     // (`empty ->`), so the header alone is a complete declaration.
                     let (cols, outs, rows) = self.grid().unwrap_or_default();
@@ -559,7 +559,7 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), what)
                     .note(tr!(
-                        "形は `fold <判定の列> over <列の名前>` です。左は表が出す列、右は `elements` で宣言した列の名前です。",
+                        "形は `fold <判定の列> over <並びの名前>` です。左は表が出す列、右は `elements` で宣言した並びの名前です。",
                         "The shape is `fold <verdict column> over <sequence>`: a column some table produces, and the name declared by `elements`."
                     )),
             );
@@ -574,7 +574,7 @@ impl P {
         }
         let over = match line.get(3).and_then(|t| t.ident()) {
             Some(v) => v.to_string(),
-            None => return head(self, tr!("歩く列の名前がありません", "the sequence has no name")),
+            None => return head(self, tr!("たどる並びの名前がありません", "the sequence has no name")),
         };
         let mut arms = Vec::new();
         let (mut empty, mut exhausted) = (None, None);
@@ -584,7 +584,7 @@ impl P {
             // `->` is written as the arrow the cells use.
             let Some(a) = l.iter().position(|t| t.is(&Kind::Arrow)) else {
                 self.err(
-                    Diag::error("E021", tr!("`fold` の腕に `->` がありません", "A `fold` arm has no `->`"))
+                    Diag::error("E021", tr!("`fold` の中に `->` の無い行があります", "A `fold` arm has no `->`"))
                         .at(self.at(sp.line))
                         .mark(sp, tr!("`{} -> next` のように書きます", "write it like `{} -> next`", name.text)),
                 );
@@ -632,9 +632,9 @@ impl P {
                         }
                         other => {
                             self.err(
-                                Diag::error("E021", tr!("`{other}` という腕はありません", "There is no arm called `{other}`"))
+                                Diag::error("E021", tr!("`{other}` という行き先はありません", "There is no arm called `{other}`"))
                                     .at(self.at(sp.line))
-                                    .mark(sp.clone(), tr!("腕は次のどれかです", "an arm is one of these"))
+                                    .mark(sp.clone(), tr!("行き先に書けるのは次のどれかです", "an arm is one of these"))
                                     .note(tr!(
                                         "`next`（次へ）、`stop`（終わり）、`stop with <値>`、`take_unique <値>`、`take_first <値>`、`keep_max <値> by <鍵>`。",
                                         "`next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`."

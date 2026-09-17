@@ -260,7 +260,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     // who cannot see these is reading half the rule: the caller passes them too.
     if let Some(el) = &f.elements {
         o.push_str(&tr!(
-            "\n## 歩く列: {}\n\n一件ぶんの欄です。呼び出し側は、この欄のそろった要素を何件でも渡します。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "\n## 順に見ていく並び: {}\n\n一件ぶんの欄です。呼び出し側は、この欄のそろった要素を何件でも渡します。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
             "\n## The sequence walked: {}\n\nThe fields of one element. The caller passes any number of elements, each with these fields filled in.\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
             el.name.text
         ));
@@ -474,7 +474,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     // --- The named sequences the examples walk. Without them an example reads as a word
     // with nothing behind it (§15.56).
     if !f.sequences.is_empty() {
-        o.push_str(&tr!("\n## 例が歩く列\n\n", "\n## The sequences the examples walk\n\n"));
+        o.push_str(&tr!("\n## 例がたどる並び\n\n", "\n## The sequences the examples walk\n\n"));
         for sq in &f.sequences {
             o.push_str(&format!("**{}**\n\n", md_esc(&sq.name.text)));
             if sq.rows.is_empty() {

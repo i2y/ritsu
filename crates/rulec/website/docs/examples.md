@@ -12,7 +12,7 @@ The smallest example there is: one input, one output. The rows are adjacent date
 
 ```rule
 rule 期間区分(period) v1
-description "注文日で適用期間を決める。両端含みの隣接敷き詰めを行使する"
+description "注文日で適用期間を決める。両端を含む日付の範囲を、隙間なく隣り合わせに並べた例"
 # 通算日で持たないと、月末と翌月初のあいだに実在しない整数の隙間ができて偽の E101 が出る（§2.1）
 
 enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
@@ -52,7 +52,7 @@ The design sketch written out as a rule. A boolean definition used as a column, 
 
 ```rule
 rule 送料(shipping_fee) v4
-description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対を行使する"
+description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対が出てくる"
 
 import std/都道府県
 
@@ -204,7 +204,7 @@ For one coupon: whether it applies, and how much it takes off. Stacking several 
 
 ```rule
 rule クーポン一枚(coupon_step) v1
-description "クーポン1枚の適用可否と素割引（設計文書 §5.4 のスケッチ）。重ね掛けの順序と反復は呼び出し側が持つ。複数出力と、出力セルの名前を行使する"
+description "クーポン1枚の適用可否と素割引（設計文書 §5.4 のスケッチ）。重ね掛けの順序と反復は呼び出し側が持つ。複数出力と、出力セルの名前が出てくる"
 
 enum クーポン種別(coupon_kind) = 率引き(percent) | 額引き(fixed) | 送料無料(free_ship)
 
@@ -340,8 +340,8 @@ outputs
 
 # 割引B は 0 円以上なので、残高B は定義から必ず 残高A 以下になる。
 # つまり 残高A <= 1000円 のとき 残高B が 3980円 に届くことはない。
-# 導出ごとに独立な区間の篩はこの従属を見ないので、下の 行1 と 行2 の重なりは
-# 実現不能と証明できないまま残る（W114）。Fourier-Motzkin なら証明できる形。
+# 検査は導出を一本ずつ独立に見るので、この結びつきが見えない。だから下の 行1 と 行2 の
+# 重なりは、起こりえないと証明できないまま残る（W114）。Fourier-Motzkin なら証明できる形。
 derive 残高A(rest_a) : money[円,incl_tax] = 合計 - 割引A            range >=-10万円 <=100万円
 derive 残高B(rest_b) : money[円,incl_tax] = 合計 - 割引A - 割引B    range >=-20万円 <=100万円
 
@@ -665,7 +665,7 @@ Names and cells are English, so not one ASCII alias appears. The money is EUR an
 
 ```rule
 rule ec261 v1
-description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km を行使する"
+description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km の例"
 
 # 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
 # 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。

@@ -564,7 +564,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
                     .fix(crate::diag::FixKind::AddExpected, &od.name.text)
                     .mark(sp, tr!("{} の期待値がありません", "no expected value for {}", od.name.text))
-                    .note(tr!("例は実装どうしの照合では捕まらない誤りを捕まえる唯一の楔なので、出力は全部書きます。", "The examples are the only wedge that catches errors the implementations can share, so every output is written."))
+                    .note(tr!("実装どうしの照合では捕まらない誤りを捕まえられるのは例だけなので、出力は全部書きます。", "The examples are the only wedge that catches errors the implementations can share, so every output is written."))
                     .note(tr!("ヒント: 見出しに `{}` の列を足してください。", "Hint: add a `{}` column to the header.", od.name.text)),
             );
         }
@@ -675,7 +675,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         expected: vec![(od.name.text.clone(), wval(c, &od.name.text, w))],
                     })
                     .mark(row.span.clone(), "")
-                    .note(tr!("発火した行: {}", "Fired rows: {}", fired.join(" / ")))
+                    .note(tr!("当てはまった行: {}", "Fired rows: {}", fired.join(" / ")))
                     .note(tr!("例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。", "Examples are executable specification. Fix the table, or fix the example if the example is what is wrong.")),
                 ),
                 (Some(w), None) => out.push(
@@ -691,9 +691,9 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     })
                     .mark(row.span.clone(), "")
                     .note(if fired.is_empty() {
-                        tr!("どの表も発火しませんでした。", "No table fired.")
+                        tr!("どの表にも当てはまりませんでした。", "No table fired.")
                     } else {
-                        tr!("発火した行: {}", "Fired rows: {}", fired.join(" / "))
+                        tr!("当てはまった行: {}", "Fired rows: {}", fired.join(" / "))
                     }),
                 ),
                 _ => {}

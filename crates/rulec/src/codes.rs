@@ -479,13 +479,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E011",
-            tr!("公開面の名前に ASCII 別名がありません", "A public name has no ASCII alias"),
+            tr!("公開される名前に ASCII の別名がありません", "A public name has no ASCII alias"),
             tr!(
                 "規則名・入力・出力に、**ASCII でない名前**が付いていて括弧の中の別名も無いとき。別名は生成コードの公開名になります（漢字は大文字を持てず、Go の公開識別子になれません）。名前がもとから ASCII なら、それ自身が公開名になるので別名は要りません。",
                 "The rule name, an input or an output has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier). A name that is already ASCII is its own public name and needs no alias."
             ),
             tr!(
-                "括弧で別名を足してください（`重量 : bool` なら `重量(weight) : bool`）。導出・定義・群・表の別名は任意で、書けば生成コードがその名前を使い、書かなければ宣言した名前をそのまま使います。",
+                "括弧で別名を足してください（`重量 : bool` なら `重量(weight) : bool`）。導出・定義・グループ・表の別名は任意で、書けば生成コードがその名前を使い、書かなければ宣言した名前をそのまま使います。",
                 "Add the alias in parentheses (`重量 : bool` becomes `重量(weight) : bool`). On a derived value, a definition, a group or a table the alias is optional: write one and the generated code uses it, leave it out and the declared name is used as it stands."
             ),
             X_E011,
@@ -537,7 +537,7 @@ pub fn ledger() -> Vec<Entry> {
             "E015",
             tr!("`result` が書けるのは最初の出力だけです", "`result` can only assemble the first output"),
             tr!(
-                "`result` が二つ目以降の出力を名指ししたとき。`result` は最初の出力のための糖衣で、評価器も生成コードもそこにしか当てません（§1.2）。名指しが効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
+                "`result` が二つ目以降の出力を名指ししたとき。`result` は最初の出力を組み立てるための書き方で、評価器も生成コードもそこにしか当てません（§1.2）。名指しが効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
                 "A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103."
             ),
             tr!(
@@ -593,7 +593,7 @@ pub fn ledger() -> Vec<Entry> {
             "E019",
             tr!("例が制約を破っています", "An example breaks a constraint"),
             tr!(
-                "例の入力が `constraint` を満たしていないとき。制約は「この組み合わせは起きない」という宣言で、完全性の検査はそれを信じてその升目に行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。",
+                "例の入力が `constraint` を満たしていないとき。制約は「この組み合わせは起きない」という宣言で、完全性の検査はそれを信じて、その組み合わせには行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。",
                 "An example's inputs do not satisfy a `constraint`. The constraint declares that the combination does not happen, the completeness check believed it and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for."
             ),
             tr!(
@@ -607,11 +607,11 @@ pub fn ledger() -> Vec<Entry> {
             "E020",
             tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
             tr!(
-                "`elements` に名前が無いか、二本あるとき。規則が歩く列は一つで、その一要素ぶんの欄をそこに書きます（§15.56）。",
+                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、その一要素ぶんの欄をそこに書きます（§15.56）。",
                 "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56)."
             ),
             tr!(
-                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんの欄を `inputs` と同じように書いてください。列が二つ要るなら、それは別の規則です。",
+                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんの欄を `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
                 "Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
             ),
             X_E020,
@@ -621,11 +621,11 @@ pub fn ledger() -> Vec<Entry> {
             "E021",
             tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
             tr!(
-                "`fold <判定の列> over <列の名前>` になっていないか、腕が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。",
+                "`fold <判定の列> over <並びの名前>` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。",
                 "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum."
             ),
             tr!(
-                "見出しと腕を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです（§15.56）。",
+                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです（§15.56）。",
                 "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose (§15.56)."
             ),
             X_E021,
@@ -635,7 +635,7 @@ pub fn ledger() -> Vec<Entry> {
             "E022",
             tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"),
             tr!(
-                "`fold` に `empty -> <値>` が無いとき。空の列は必ず来ます。手で書いた走査がいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。",
+                "`fold` に `empty -> <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。",
                 "A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over."
             ),
             tr!(
@@ -649,7 +649,7 @@ pub fn ledger() -> Vec<Entry> {
             "E023",
             tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
             tr!(
-                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに列が尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。",
+                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに並びが尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。",
                 "A `fold` has no `exhausted -> <value>`: the answer when the sequence ran out and no element ended the walk. Answering with the value that was held is a choice, and it is made by writing it."
             ),
             tr!(
@@ -661,13 +661,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E024",
-            tr!("腕の無い判定があります", "Some verdict has no arm"),
+            tr!("行き先の無い判定があります", "Some verdict has no arm"),
             tr!(
-                "表が出しうる判定のどれかに、`fold` の腕が無いとき。その判定の要素が来たら、歩き方が決まっていません。表の完全性と同じ検査を、畳み込みの側に当てたものです（§15.56）。",
+                "表が出しうる判定のどれかに、`fold` の行き先が無いとき。その判定の要素が来たら、次にどうするかが決まっていません。表の完全性と同じ検査を、畳み込みの側に当てたものです（§15.56）。",
                 "A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold (§15.56)."
             ),
             tr!(
-                "腕を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に腕があるときは W115 が出ます。",
+                "行き先を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に行き先があるときは W115 が出ます。",
                 "Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115."
             ),
             X_E024,
@@ -675,13 +675,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E025",
-            tr!("例に列の欄がありません", "The examples have no column for the sequence"),
+            tr!("例に並びの欄がありません", "The examples have no column for the sequence"),
             tr!(
-                "列を歩く規則に `examples` があるのに、`elements` の名前の欄が見出しに無いとき。歩く列が決まっていない例は、答えの決まっていない例です（§15.56）。",
+                "並びをたどる規則に `examples` があるのに、`elements` の名前の欄が見出しに無いとき。どの並びをたどるかが決まっていない例は、答えの決まっていない例です（§15.56）。",
                 "A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56)."
             ),
             tr!(
-                "`sequence <名前>` で並びを書き、例の見出しに列の欄を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
+                "`sequence <名前>` で並びを書き、例の見出しに並びの欄を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
                 "Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it."
             ),
             X_E025,
@@ -691,7 +691,7 @@ pub fn ledger() -> Vec<Entry> {
             "E026",
             tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
             tr!(
-                "`sequence` の欄が `elements` の欄とそろっていないとき——余分な欄がある、欄が足りない、`->` がある、歩く列そのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
+                "`sequence` の欄が `elements` の欄とそろっていないとき——余分な欄がある、欄が足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
                 "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
             ),
             tr!(
@@ -703,13 +703,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E027",
-            tr!("例が指す列の実例がありません", "The example names a sequence that is not there"),
+            tr!("例が指す並びがありません", "The example names a sequence that is not there"),
             tr!(
-                "例の列の欄に書かれた名前の `sequence` が無いとき、またはその欄に名前でないもの（数や範囲）が書かれているとき。",
+                "例の並びの欄に書かれた名前の `sequence` が無いとき、またはその欄に名前でないもの（数や範囲）が書かれているとき。",
                 "The cell in the sequence column names a `sequence` that is not declared, or holds something that is not a name at all."
             ),
             tr!(
-                "その名前で `sequence` を書くか、セルの名前を書いてあるほうに直してください。",
+                "その名前で `sequence` を書くか、セルを、書いてある `sequence` の名前に直してください。",
                 "Write a `sequence` under that name, or correct the cell to one that is written."
             ),
             X_E027,
@@ -733,7 +733,7 @@ pub fn ledger() -> Vec<Entry> {
             "E102",
             tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
-                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。二形あり、文面が原因を書き分けます。",
+                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。形は二つあり、文面が原因を書き分けます。",
                 "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
             ),
             tr!(
@@ -803,11 +803,11 @@ pub fn ledger() -> Vec<Entry> {
             "E107",
             tr!("例の期待値と一致しません", "An example does not match"),
             tr!(
-                "`examples` の行を参照評価器で走らせた結果が、書かれた期待値と違うとき。**どの表のどの行が発火したか**が付きます。`examples` は実行される仕様です。",
+                "`examples` の行を参照評価器で走らせた結果が、書かれた期待値と違うとき。**どの表のどの行に当てはまったか**が付きます。`examples` は実行される仕様です。",
                 "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification."
             ),
             tr!(
-                "表が正しいなら期待値を直してください。期待値が業務の真実なら、発火した行のほうを直します。どちらを直すかは、出典（規約・Excel・旧実装）が決めます。",
+                "表が正しいなら期待値を直してください。期待値が業務の真実なら、当てはまった行のほうを直します。どちらを直すかは、出典（規約・Excel・旧実装）が決めます。",
                 "If the table is right, fix the expected value. If the expected value is the business truth, fix the row that fired. Which one to fix is settled by the source: the written rule, the spreadsheet, or the legacy implementation."
             ),
             X_E107,
@@ -817,7 +817,7 @@ pub fn ledger() -> Vec<Entry> {
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
             tr!(
-                "宣言した範囲と刻みから計算した到達区間が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。",
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。",
                 "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value."
             ),
             tr!(
@@ -835,7 +835,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning."
             ),
             tr!(
-                "表を分けて列の数を減らすか、`--budget` を上げてください。列の積が効くので、一つの表に列を積むより、線形パイプラインで表を連ねるほうが安く済みます（§5.1）。",
+                "表を分けて列の数を減らすか、`--budget` を上げてください。列の積が効くので、一つの表に列を積むより、表を一列につないでいくほうが安く済みます（§5.1）。",
                 "Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table (§5.1)."
             ),
             X_E109,
@@ -846,7 +846,7 @@ pub fn ledger() -> Vec<Entry> {
             "E110",
             tr!("検査できない型の列があります", "A column has a type the check cannot handle"),
             tr!(
-                "その列の型を領域 IR に落とせないとき。**これが出たら rulec 自身のバグです。** 表の検査が黙って素通りするのを防ぐ内部の防波堤で、日付と optional で二度起きた事故を類として塞いだものです（§6.3）。",
+                "その列の型を、区画の計算ができる形に落とせないとき。**これが出たら rulec 自身のバグです。** 表の検査が黙って素通りするのを防ぐための内部の検査で、日付と optional で二度起きた同じ種類の事故を、まとめて塞いだものです（§6.3）。",
                 "The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional (§6.3)."
             ),
             tr!(
@@ -874,11 +874,11 @@ pub fn ledger() -> Vec<Entry> {
             "E112",
             tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
             tr!(
-                "入力の範囲から計算した到達区間が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。",
+                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。",
                 "The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur."
             ),
             tr!(
-                "文面が示す到達区間まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。到達しない分まで広げても、実現不能な領域として検査が篩うので害はありません。",
+                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",
                 "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-110万円 <=100万円`). Widening past what is reachable costs nothing: the check sifts the infeasible part out."
             ),
             X_E112,
@@ -886,7 +886,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E113",
-            tr!("真偽定義の条件が、許された二形のどちらでもありません", "The condition of a boolean definition is neither of the two allowed forms"),
+            tr!("真偽定義の条件が、書ける二つの形のどちらでもありません", "The condition of a boolean definition is neither of the two allowed forms"),
             tr!(
                 "`define … : bool` の条件が、「入力か導出の値ひとつを定数と比べる」形でも、「引き算で差を取れない型どうしの比較」（日付どうしなど）でもないとき。数値どうしを直接比べたときがこれに当たります（§5.3）。",
                 "The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3)."
@@ -958,7 +958,7 @@ pub fn ledger() -> Vec<Entry> {
             "W111",
             tr!("使われていない宣言があります", "A declaration is never used"),
             tr!(
-                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。取込した型の値は対象外です。",
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。",
                 "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way."
             ),
             tr!(
@@ -970,13 +970,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         warn(
             "W116",
-            tr!("どの例も使っていない列の実例です", "No example uses this sequence"),
+            tr!("どの例も使っていない `sequence` です", "No example uses this sequence"),
             tr!(
                 "`sequence` を書いたのに、どの例もその名前を書いていないとき。並びは例から名指しされて初めて走るので、走っていない並びです（§15.56）。",
                 "A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs (§15.56)."
             ),
             tr!(
-                "その並びを歩く例を足すか、並びのほうを消してください。書いたのに使っていないのは、たいてい例を書き忘れた跡です。",
+                "その並びをたどる例を足すか、並びのほうを消してください。書いたのに使っていないのは、たいてい例を書き忘れた跡です。",
                 "Add the example that walks it, or drop the sequence. Written and unused is usually the trace of an example left unwritten."
             ),
             X_W116,
@@ -986,11 +986,11 @@ pub fn ledger() -> Vec<Entry> {
             "W115",
             tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),
             tr!(
-                "`fold` に腕があるのに、その判定をどの行も出さないとき。E024 の裏返しで、こちらは穴ではなく届かない腕です。書き忘れではなく、表のほうが変わった跡であることが多い（§15.56）。",
+                "`fold` にその判定の行き先があるのに、表のどの行もその判定を出さないとき。E024 の裏返しで、こちらは穴ではなく届かない行き先です。書き忘れではなく、表のほうが変わった跡であることが多い（§15.56）。",
                 "A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake (§15.56)."
             ),
             tr!(
-                "表の行を見直すか、その腕を消してください。どちらが正しいかは表のほうを読まないと決まりません。",
+                "表の行を見直すか、その行き先を消してください。どちらが正しいかは表のほうを読まないと決まりません。",
                 "Look again at the table's rows, or drop the arm. Which of the two is right is decided by reading the table, not this message."
             ),
             X_W115,
@@ -1000,7 +1000,7 @@ pub fn ledger() -> Vec<Entry> {
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
-                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出どうしが入力を共有していると起こります（独立な区間の篩はその従属を見ません）。",
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出どうしが入力を共有していると起こります（列ごとに独立に見る検査では、その結びつきが見えません）。",
                 "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency."
             ),
             tr!(

@@ -127,7 +127,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--format", Some("json"), tr!("GitHub annotations に流せる一行一件の JSON", "one JSON object per line, ready for GitHub annotations")).choices(&["json"]),
                 flag("--show-shadow", None, tr!("件数に畳んである隠れ対も全部並べる", "list every shadow pair, including the ones folded into the count")),
                 flag("--terse", None, tr!("一件を三行に絞る（見出し・位置・その入力）。詳しくは rulec explain", "cut each finding to three lines: heading, position, witness; `rulec explain` has the rest")),
-                flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった発見を伏せる", "hide findings that were already present at that git revision")),
+                flag("--diff-base", Some("<rev>"), tr!("その git リビジョンに既にあった指摘を伏せる", "hide findings that were already present at that git revision")),
                 flag("--budget", Some("<n>"), tr!("検査が訪れるノード数の上限。超えたら E109", "cap on the nodes the check visits; over it, E109")).default(rulec::region::DEFAULT_BUDGET.to_string()),
             ],
             exits: vec![
@@ -253,8 +253,8 @@ fn commands() -> Vec<Cmd> {
             name: "coverage",
             args: "<file.rule>...",
             purpose: tr!(
-                "作ったテストケースの側を検査する。行・境界の両側・隠れ対の三つ",
-                "check the vector suite itself against four criteria: rows, both sides of a boundary, shadow pairs, rounding ties"
+                "作ったテストケースの側を検査する。行・境界の両側・隠れ対・丸めの同着・畳み込みの遷移の五つ",
+                "check the vector suite itself against five criteria: rows, both sides of a boundary, shadow pairs, rounding ties, fold transitions"
             ),
             params: vec![rule_files()],
             flags: vec![
@@ -338,7 +338,7 @@ fn commands() -> Vec<Cmd> {
             name: "schema",
             args: "<file.rule>",
             purpose: tr!(
-                "アダプタとやりとりするワイヤの JSON Schema を出す",
+                "アダプタとやりとりする JSON Schema を出す",
                 "emit the JSON Schema of the wire an adapter speaks"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
@@ -360,12 +360,12 @@ fn commands() -> Vec<Cmd> {
             name: "adapter",
             args: "<file.rule>",
             purpose: tr!(
-                "旧実装を包む 20〜30 行の雛形を出す",
+                "旧実装を包む 20〜30 行のテンプレートを出す",
                 "emit the 20-to-30-line template that wraps a legacy implementation"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
             flags: vec![
-                flag("--template", Some("python|go"), tr!("雛形の言語", "language of the template"))
+                flag("--template", Some("python|go"), tr!("テンプレートの言語", "language of the template"))
                     .choices(&["python", "go"])
                     .default("python"),
             ],
@@ -496,7 +496,7 @@ fn commands() -> Vec<Cmd> {
             name: "mcp",
             args: "",
             purpose: tr!(
-                "MCP サーバとして stdio で待つ。上のコマンド一つ一つがツール、文書がリソース",
+                "MCP サーバとして stdio で待ち受ける。上のコマンド一つ一つがツール、文書がリソース",
                 "serve over stdio as an MCP server: every command above as a tool, the documents as resources"
             ),
             params: vec![],
@@ -623,8 +623,8 @@ fn help_all() -> String {
         "Every command accepts --lang ja|en (default en; the RULEC_LANG environment variable works too).\n"
     ));
     o.push_str(&tr!(
-        "exit code: 0 注記のみ / 1 エラーあり / 2 内部異常\n",
-        "Exit codes: 0 notes only / 1 errors found / 2 internal failure\n"
+        "exit code: 0 注記のみ / 1 エラーあり / 2 引数の誤りか、読めないファイル\n",
+        "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file\n"
     ));
     o
 }

@@ -531,7 +531,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
     if !missing.is_empty() {
         c.diags.push(
-            Diag::error("E011", tr!("公開面の名前に ASCII 別名がありません", "A public name has no ASCII alias"))
+            Diag::error("E011", tr!("公開される名前に ASCII の別名がありません", "A public name has no ASCII alias"))
                 .at(at(f.name.span.line))
                 .fix_kind(crate::diag::FixKind::AddAlias)
                 .mark(f.name.span.clone(), "")
@@ -607,7 +607,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
                     .note(tr!(
-                        "歩く列は `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんの欄を書きます。",
+                        "たどる並びは `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんの欄を書きます。",
                         "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
                     )),
             );
@@ -667,7 +667,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("`empty -> <値>` がありません", "there is no `empty -> <value>`"))
                     .note(tr!(
-                        "空の列は必ず来ます。来たときに何を返すかは業務の判断で、道具が決められることではありません。",
+                        "空の並びは必ず来ます。来たときに何を返すかは業務の判断で、道具が決められることではありません。",
                         "An empty sequence will arrive. What to answer then is a business decision, and not one the tool can make."
                     )),
             );
@@ -693,11 +693,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if !missing.is_empty() && !produced.is_empty() {
             let names = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
             c.diags.push(
-                Diag::error("E024", tr!("腕の無い判定があります: {names}", "These verdicts have no arm: {names}"))
+                Diag::error("E024", tr!("行き先の無い判定があります: {names}", "These verdicts have no arm: {names}"))
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("表はこの判定を出しますが、畳み込みに扱いがありません", "the table produces them and the fold has nothing to do with them"))
                     .note(tr!(
-                        "その判定の要素が来たとき、歩き方が決まっていません。腕を足すか、表がその値を出さないようにしてください。",
+                        "その判定の要素が来たとき、次にどうするかが決まっていません。行き先を足すか、表がその値を出さないようにしてください。",
                         "When an element lands on one of them the walk has no move. Add an arm, or stop the table producing the value."
                     )),
             );
@@ -708,11 +708,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             if !ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
                 let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| fold.span.clone());
                 c.diags.push(
-                    Diag::error("E025", tr!("例に列の欄がありません", "The examples have no column for the sequence"))
+                    Diag::error("E025", tr!("例に並びの欄がありません", "The examples have no column for the sequence"))
                         .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
                         .mark(sp, tr!("{} の欄がありません", "no column for {}", el.name.text))
                         .note(tr!(
-                            "この規則は列を歩くので、一件の例はどの列を歩くのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の欄を足して、その名前をセルに書いてください。",
+                            "この規則は並びをたどるので、一件の例は、どの並びをたどるのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の欄を足して、その名前をセルに書いてください。",
                             "This rule walks a sequence, so an example is only a case once it says which sequence. Write the list with `sequence <name>`, add a `{}` column to the header, and name it in the cell.",
                             el.name.text
                         )),
@@ -726,7 +726,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at_fold.clone())
                         .mark(sp.clone(), tr!("表がこの値を出しません", "the table does not produce this value"))
                         .note(tr!(
-                            "腕は書かれていますが、届きません。表の行を見直すか、この腕を消してください。",
+                            "行き先は書かれていますが、届きません。表の行を見直すか、この行き先を消してください。",
                             "The arm is written but unreachable. Look again at the table's rows, or drop the arm."
                         )),
                 );
@@ -739,14 +739,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     {
         let mut seen: Vec<String> = Vec::new();
         for sq in &f.sequences {
-            let at_seq = tr!("{path}:{} 列の実例 {}", "{path}:{} sequence {}", sq.span.line, sq.name.text);
+            let at_seq = tr!("{path}:{} 並び {}", "{path}:{} sequence {}", sq.span.line, sq.name.text);
             let Some(el) = &f.elements else {
                 c.diags.push(
-                    Diag::error("E026", tr!("歩く列のない規則に `sequence` は書けません", "A `sequence` needs a rule that walks one"))
+                    Diag::error("E026", tr!("たどる並びのない規則に `sequence` は書けません", "A `sequence` needs a rule that walks one"))
                         .at(at_seq.clone())
                         .mark(sq.span.clone(), tr!("`elements` がありません", "there is no `elements`"))
                         .note(tr!(
-                            "`sequence` は `elements` で宣言した欄の並びです。歩く列が無いなら、書く先がありません。",
+                            "`sequence` は `elements` で宣言した欄の並びです。たどる並びが無いなら、書く先がありません。",
                             "A `sequence` is a list of the fields `elements` declares. With no sequence to walk there is nothing for it to be a list of."
                         )),
                 );
@@ -754,7 +754,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             };
             if seen.contains(&sq.name.text) {
                 c.diags.push(
-                    Diag::error("E026", tr!("`{}` という列の実例は二つあります", "There are two sequences called `{}`", sq.name.text))
+                    Diag::error("E026", tr!("`{}` という名前の `sequence` が二つあります", "There are two sequences called `{}`", sq.name.text))
                         .at(at_seq.clone())
                         .mark(sq.name.span.clone(), tr!("二本目です", "this is a second one"))
                         .note(tr!("例はこの名前で並びを指すので、同じ名前が二つあるとどちらか決まりません。", "An example names a sequence by this name, so two of them leave it undecided.")),
@@ -800,7 +800,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
                     if !matches!(cell, Cell::Lit(_) | Cell::Nothing) {
                         c.diags.push(
-                            Diag::error("E026", tr!("列の実例のセルは値だけです", "A cell of a sequence is a value and nothing else"))
+                            Diag::error("E026", tr!("`sequence` のセルは値だけです", "A cell of a sequence is a value and nothing else"))
                                 .at(at_seq.clone())
                                 .mark(sp.clone(), tr!("`{col}` に値が書かれていません", "`{col}` does not hold a value"))
                                 .note(tr!(
@@ -832,7 +832,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         if f.sequences.iter().any(|sq| &sq.name.text == w) {
                             named.push(w.clone());
                         } else {
-                            let mut d = Diag::error("E027", tr!("`{w}` という列の実例はありません", "There is no sequence called `{w}`"))
+                            let mut d = Diag::error("E027", tr!("`{w}` という `sequence` はありません", "There is no sequence called `{w}`"))
                                 .at(at_ex)
                                 .mark(sp, "");
                             if !f.sequences.is_empty() {
@@ -849,11 +849,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         }
                     }
                     _ => c.diags.push(
-                        Diag::error("E027", tr!("この欄には列の実例の名前を書きます", "This column holds the name of a sequence"))
+                        Diag::error("E027", tr!("この欄には `sequence` の名前を書きます", "This column holds the name of a sequence"))
                             .at(at_ex)
                             .mark(sp, tr!("名前ではありません", "this is not a name"))
                             .note(tr!(
-                                "一件の例が歩く並びは `sequence <名前>` で書き、ここにはその名前だけを書きます。",
+                                "一件の例がたどる並びは `sequence <名前>` で書き、ここにはその名前だけを書きます。",
                                 "The sequence a case walks is written with `sequence <name>`, and this cell holds that name and nothing else."
                             )),
                     ),
@@ -863,8 +863,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         for sq in &f.sequences {
             if !named.contains(&sq.name.text) {
                 c.diags.push(
-                    Diag::warning("W116", tr!("どの例も使っていない列の実例です: {}", "No example uses this sequence: {}", sq.name.text))
-                        .at(tr!("{path}:{} 列の実例 {}", "{path}:{} sequence {}", sq.span.line, sq.name.text))
+                    Diag::warning("W116", tr!("どの例も使っていない `sequence` です: {}", "No example uses this sequence: {}", sq.name.text))
+                        .at(tr!("{path}:{} 並び {}", "{path}:{} sequence {}", sq.span.line, sq.name.text))
                         .mark(sq.name.span.clone(), tr!("名指ししている例がありません", "no example names it"))
                         .note(tr!(
                             "並びは例から名指しされて初めて走ります。例を足すか、この並びを消してください。",
@@ -1192,7 +1192,7 @@ impl Checked {
                                 Diag::error("E103", tr!("金額どうしを掛けています", "Multiplying money by money"))
                                     .at(format!("{path}:{}", sp.line))
                                     .mark(sp.clone(), "")
-                                    .note(tr!("合成次元は業務ルールに現れないので、モデリングの誤りとして止めます（§2.1）。", "Compound dimensions do not occur in business rules, so this is stopped as a modeling error (§2.1).")),
+                                    .note(tr!("円×円のような単位は業務ルールに現れないので、書き方の誤りとして止めます（§2.1）。", "Compound dimensions do not occur in business rules, so this is stopped as a modeling error (§2.1).")),
                             );
                             Ty::Unknown
                         }
@@ -1243,7 +1243,7 @@ impl Checked {
             (Ty::Money { tax: Some(x), .. }, Ty::Money { tax: Some(y), .. }) if x != y => {
                 tr!("税の変換は変換式ではなく表として書いてください（§2.1）。", "Write a tax conversion as a table, not as a conversion formula (§2.1).")
             }
-            _ => tr!("次元の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
+            _ => tr!("単位の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
         };
         self.diags.push(
             Diag::error("E103", tr!("単位の混同: {a} に {b} を足しています", "Mixed units: adding {b} to {a}"))
@@ -1730,10 +1730,10 @@ impl Checked {
                         crate::diag::FixKind::WidenRange,
                         format!("{} >={} <={}", crate::kw::RANGE, fmt_val(rl, ty), fmt_val(rh, ty)),
                     )
-                    .mark(rg.span.clone(), tr!("到達区間は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
+                    .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
                     .note(tr!("範囲が狭いと、完全性の検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
                     .note(tr!(
-                        "ヒント: 範囲 >={} <={} に広げてください。到達しない分まで広げても、実現不能な領域として検査が篩うので害はありません。",
+                        "ヒント: 範囲 >={} <={} に広げてください。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",
                         "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
                         fmt_val(rl, ty),
                         fmt_val(rh, ty)
@@ -1879,7 +1879,7 @@ impl Checked {
                     .at(format!("{path}:{}", span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "到達区間は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
+                        "実際に取りうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
                         "The reachable interval is {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}.",
                         fmt_val(lo, ty),
                         fmt_val(hi, ty)

@@ -14,7 +14,7 @@ $ rulec --version
 rulec 0.3.0
 ```
 
-`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では検査は `sha256sum -c` です。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
+`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
 
 ## ソースから
 
@@ -86,7 +86,7 @@ $ claude mcp add rulec -- rulec mcp
 
 ## 言語
 
-出力の**既定は英語**です。一つの設定で日本語に戻ります — 生成コードの中の文面まで含めて、全部の面が戻ります。
+出力の**既定は英語**です。設定は一つで、生成コードの中の文面まで含めて、出るものが全部日本語になります。
 
 ```console
 $ rulec check rules/送料.rule --lang ja
@@ -108,7 +108,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 - run: rulec test generated/
 ```
 
-この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。四つ、わざとそうしている所があります。
+この五行がゲートです。過去再生は記録を持つ環境の別ジョブにします。変更が目に見えるのはこちらで、PR に「何件がいくら動くか」のコメントが付きます。わざとそうしている所が四つあります。
 
 - 旧の版は `rules/送料.rule@origin/main`、つまり base ブランチにあるままのファイルです。checkout でそのブランチを取ってきておきます。
 - `diff` は影響があると exit 1 を返します。ここではそれは失敗ではなく情報なので、1 では先へ進み、2 でだけ止めます。
@@ -127,7 +127,7 @@ replay:
       with:
         fetch-depth: 0                   # 旧の版は origin/main から読む
     - uses: i2y/rulec@v0.3.0
-    # 記録を $FIXTURES に置く段はご自身で: アーティファクトか、守られた置き場から
+    # 記録を $FIXTURES に置くところはご自身で: アーティファクトか、権限を絞った保管先から
     - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
         RULEC_LANG: ja

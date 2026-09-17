@@ -171,12 +171,12 @@ impl<'a> Gen<'a> {
             .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
             .replace("@D_HANDLE@", &tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here."))
             .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのは手元からの呼び出しだけで、ブラウザが開いているページに\n    このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
-            .replace("@D_HTTP@", &tr!("MCP の Streamable HTTP で待つ。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer."))
-            .replace("@D_QUIET@", &tr!("アクセスログは出さない。運びの話であって、この道具の声ではない。", "No access log: that is the transport talking, not this tool."))
+            .replace("@D_HTTP@", &tr!("MCP の Streamable HTTP で待ち受ける。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer."))
+            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信の話であって、この道具が言うことではない。", "No access log: that is the transport talking, not this tool."))
             .replace("@D_POST@", &tr!("メッセージを一つ読んで、答えを JSON で返す。", "Read one message and answer it in JSON."))
             .replace("@D_GET@", &tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open."))
             .replace("@D_DELETE@", &tr!("セッションを終える。", "End the session."))
-            .replace("@D_SEQ@", &tr!("列は配列で渡す。", "The sequence is passed as an array."))
+            .replace("@D_SEQ@", &tr!("並びは配列で渡す。", "The sequence is passed as an array."))
             .replace("@D_EL@", &tr!("要素はオブジェクトで渡す。", "An element is passed as an object."))
             .replace("@M_SEQ@", &tr!("f\"{{name}}: 配列で渡す。{{v!r}} は配列ではない\"", "f\"{{name}}: an array is expected, not {{v!r}}\""))
             .replace("@M_EL@", &tr!("f\"{{name}}: 要素はオブジェクトで渡す。{{v!r}} はオブジェクトではない\"", "f\"{{name}}: an element must be an object, not {{v!r}}\""))
@@ -309,9 +309,9 @@ impl<'a> Gen<'a> {
             ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
             ("@D_HANDLE@", tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here.")),
             ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのは手元からの呼び出しだけで、ブラウザが開いているページに\n * このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
-            ("@D_HTTP@", tr!("MCP の Streamable HTTP で待つ。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
+            ("@D_HTTP@", tr!("MCP の Streamable HTTP で待ち受ける。POST 一つに答え一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
             ("@D_GET@", tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open.")),
-            ("@D_SEQ@", tr!("列は配列で渡す。", "The sequence is passed as an array.")),
+            ("@D_SEQ@", tr!("並びは配列で渡す。", "The sequence is passed as an array.")),
             ("@D_EL@", tr!("要素はオブジェクトで渡す。", "An element is passed as an object.")),
             ("@M_SEQ@", tr!("`${{name}}: 配列で渡す。${{JSON.stringify(v)}} は配列ではない`", "`${{name}}: an array is expected, not ${{JSON.stringify(v)}}`")),
             ("@M_EL@", tr!("`${{name}}: 要素はオブジェクトで渡す。${{JSON.stringify(v)}} はオブジェクトではない`", "`${{name}}: an element must be an object, not ${{JSON.stringify(v)}}`")),

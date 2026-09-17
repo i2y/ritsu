@@ -146,7 +146,7 @@ pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppresse
     let mut out = String::new();
     if suppressed > 0 {
         out.push_str(&tr!(
-            "note {path}: 基準リビジョンに既にあった発見 {suppressed} 件は伏せました（--diff-base）\n",
+            "note {path}: 基準リビジョンに既にあった指摘 {suppressed} 件は伏せました（--diff-base）\n",
             "note {path}: suppressed {suppressed} findings already present at the base revision (--diff-base)\n"
         ));
     }

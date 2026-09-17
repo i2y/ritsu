@@ -460,14 +460,15 @@ pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
             refused.len()
         ));
     }
-    // The Japanese column is 12 characters wide (the tests pin that output); the English
-    // labels are longer, so the column widens to the longest of them.
-    let w = if crate::i18n::ja() { 12 } else { 24 };
+    // Padded to display width, not character count: a Japanese label is drawn twice as wide
+    // as an ASCII one, so counting characters leaves the column ragged on a terminal.
+    let w: usize = if crate::i18n::ja() { 22 } else { 24 };
     for k in [ROW, BOUND, SHADOW, TIE, FOLD] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
         let k = label(k);
-        o.push_str(&format!("  {k:<w$} {met:>4} / {req:<4}  {mark}\n"));
+        let pad = " ".repeat(w.saturating_sub(crate::diag::width(k)));
+        o.push_str(&format!("  {k}{pad} {met:>4} / {req:<4}  {mark}\n"));
     }
     if a.missing.is_empty() {
         return o;

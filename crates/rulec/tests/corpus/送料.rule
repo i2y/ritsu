@@ -1,5 +1,5 @@
 rule 送料(shipping_fee) v4
-description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対を行使する"
+description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対が出てくる"
 
 import std/都道府県
 

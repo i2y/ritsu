@@ -1247,7 +1247,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     .key(pair_key(&t.rows[i], &t.rows[j]));
                     if contained {
                         shadow.structural += 1;
-                        quiet.push(d.note(tr!("行の領域が後の行に丸ごと含まれています（階段の通常の姿）。", "The row's region is entirely contained in the later row (the normal shape of a staircase).")));
+                        quiet.push(d.note(tr!("この行の範囲が、後の行にまるごと含まれています（階段としてよくある形です）。", "The row's region is entirely contained in the later row (the normal shape of a staircase).")));
                     } else if same_out {
                         shadow.equivalent += 1;
                         quiet.push(d.note(tr!("出力が同じなので、どちらが勝っても値は変わりません。", "The outputs are the same, so the value does not change whichever row wins.")));

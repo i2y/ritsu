@@ -334,16 +334,17 @@ never produces fractions.
 ```console
 $ rulec coverage rules/送料.rule
 70 vectors
-  row coverage              7 / 7     satisfied
-  boundary-pair coverage    4 / 4     satisfied
-  shadow-pair coverage      3 / 3     satisfied
-  rounding-tie coverage     0 / 0     satisfied
+  row coverage                7 / 7     satisfied
+  boundary-pair coverage      4 / 4     satisfied
+  shadow-pair coverage        3 / 3     satisfied
+  rounding-tie coverage       0 / 0     satisfied
+  fold-transition coverage    0 / 0     satisfied
 ```
 
-`coverage` is **a completeness check on the test suite**. The four
+`coverage` is **a completeness check on the test suite**. The five
 obligations are derived from the rule rather than from the generated
 vectors, and anything missing is named — which row, which boundary,
-which shadow pair, which rounding tie — with exit 1.
+which shadow pair, which rounding tie, which fold transition — with exit 1.
 
 A rounding tie is the value exactly half a step off the grid, the one
 point where `half_up` and `half_down` part company. It raises an
