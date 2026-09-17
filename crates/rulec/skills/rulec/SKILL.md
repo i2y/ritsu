@@ -89,7 +89,7 @@ Two declarations are mandatory and are where most first drafts fail:
 - **`round` on every numeric output.** Without it the generated code would settle fractions
   silently.
 
-Two shapes are worth knowing before the first draft:
+Four shapes are worth knowing before the first draft:
 
 - **Tables stack.** A table's output column is a column of any later table, to any depth, and
   one table may produce several output columns. That, plus a `derive` used as a column, is how
@@ -97,6 +97,17 @@ Two shapes are worth knowing before the first draft:
 - **An output returns the binding of its own name** — a `define` or a table output column
   called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
+- **Combinations that cannot happen are said once.** `constraint <input> <= <input>` states a
+  relation the caller guarantees. Completeness then demands no row for what it excludes, every
+  witness becomes a case somebody could really send, and the generated code refuses a
+  violating input at the door (§6.1 of the grammar).
+- **A case may carry a sequence.** Where the number of things is not fixed — the rows of a
+  tariff sheet, the candidates a filter left — `elements` declares what one element carries
+  and `fold` says what each verdict does next: `next`, `stop with <value>`, `take_unique`,
+  `take_first`, `keep_max <value> by <key>`, plus the required `empty` and `exhausted`. The
+  table that judges one element is checked exactly as any other table is, and an example
+  names a `sequence` rather than holding one in a cell (§6.2). Every target but SQL
+  generates it.
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
@@ -164,6 +175,9 @@ meet while transcribing:
   name. Give the calculation a name on a `define` line and put that name in the table.
 - **E114 value off the column’s step** — `0.5%` in a `rate[step 1%]` column has no runtime
   representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`).
+- **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and
+  every verdict the table can produce needs an arm. The three are the completeness argument,
+  applied to the walk.
 - **W111 unused declaration** — see §3.
 
 ### `examples`
@@ -319,10 +333,13 @@ not overlap, fix the rows.
 
 ## 4. What rulec will not do, and why that is the point
 
-It has no loops, no recursion, no state, no nested objects in a cell, and no date arithmetic.
-Do not look for a way around these. They are the price of the checks terminating: because a
-cell is a unary test on its own column, a row is a box, and completeness and overlap are
-exactly decidable. Flatten nested data at the boundary; keep iteration in the caller.
+It has no loops in an expression, no recursion, no state, no nested objects in a cell, and no
+date arithmetic. A sequence is walked once, by a `fold`, and that is the whole of the
+iteration there is: nothing accumulates across elements, so a total or a count is computed
+before the call and passed in. Do not look for a way around these. They are the price of the
+checks terminating: because a cell is a unary test on its own column, a row is a box, and
+completeness and overlap are exactly decidable. Flatten nested data at the boundary; keep
+the rest of the iteration in the caller.
 
 It will not print a green result it cannot prove. When a check runs out of budget (E109) or
 cannot decide an overlap (W114), it says so rather than approximating.

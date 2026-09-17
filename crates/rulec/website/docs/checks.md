@@ -26,6 +26,11 @@ empty.
 | **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
 | **Examples** | every example runs; a failure names the rows that fired; a missing output column stops |
 
+A `constraint` narrows what completeness quantifies over: no row is demanded for a
+combination declared not to happen, and the generated code refuses one at the door
+instead. In a rule that walks a sequence, the same completeness check asks whether
+**every verdict the table can produce has an arm** in the fold (E024).
+
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.

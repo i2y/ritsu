@@ -328,6 +328,108 @@ The operations are addition and subtraction, multiplication by a
 constant, multiplication by a rate, `min`, `max`, and the five rounding
 modes. **There is no loop and no recursion.**
 
+## Saying which combinations cannot happen
+
+A relation between two inputs, guaranteed by the caller.
+
+```rule
+constraint 適用開始日 <= 適用終了日
+```
+
+It computes nothing. It says **which combinations of inputs can happen**,
+and three things follow from the one line.
+
+- **The completeness check stops demanding rows for what cannot happen.**
+  A table covering everything reachable is complete.
+- **A witness becomes a case somebody could really send.** Every input the
+  checks construct satisfies the constraints.
+- **The generated code refuses a violating input at the door.** The proof
+  assumed the constraint, so the code has to insist on it.
+
+The shape is `constraint <input> <comparison> <input>`, with one of `<=`,
+`<`, `>=`, `>`, an input on each side, and both of a type that has an
+order — money, a quantity, a rate, a `number` or a `date`. Several lines
+hold at once, and `A = B` is the two lines `A <= B` and `A >= B`. An
+example that breaks a constraint is an error (E019), not a case.
+
+## Taking a sequence whose length is not fixed
+
+Every rule so far took a fixed number of values and decided once. When the
+case carries **a sequence instead** — the rows of a tariff sheet, the
+candidates a filter left — `elements` declares what one element carries
+and `fold` declares how the walk ends.
+
+```rule
+elements 運賃行(fee_rows)
+  行ゾーン(row_zone) : ゾーン区分
+  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万円
+  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+
+table 行判定(row_of)
+policy unique
+| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
+| 近畿圏   | <=1000円 | 確定                        |
+| …
+
+fold 採用 over 運賃行
+  スキップ  -> next
+  打ち切り  -> stop with 0円
+  確定      -> take_unique 行運賃
+  持ち越し  -> keep_max 行運賃 by 閾値
+  empty     -> 0円
+  exhausted -> held
+```
+
+What judges an element is **an ordinary table**. One element is one case,
+so completeness, overlap and units are proved over it as they always were,
+and the fields are declared exactly like `inputs`, ranges and units
+included. The one difference is that the caller fills them in once per
+element.
+
+What `fold` adds is a single line per verdict: what the walk does next.
+
+| arm | what it does |
+|---|---|
+| `next` | leave this element, look at the next |
+| `stop` | end the walk; the answer is what `exhausted` says |
+| `stop with <value>` | end the walk with this answer |
+| `take_unique <value>` | take this element's value; a second element that also takes is a run-time error |
+| `take_first <value>` | take the first, ignore any later one |
+| `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
+| `empty -> <value>` | the answer when there are no elements. **Required** |
+| `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value being held |
+
+**Every verdict the table can produce needs an arm** (E024): the table's
+own completeness check, applied to the fold. An arm for a verdict nothing
+can reach is W115.
+
+None of this costs the checks their termination. The table is complete and
+unique, so every element lands on exactly one verdict, the sequence
+becomes a string of verdicts, and how the walk reads them is a matter of
+finitely many states — independent of how many elements arrive at run
+time.
+
+An example **names the sequence**, because a cell holds one value.
+
+```rule
+sequence 近い一件(near)
+| 行ゾーン | 閾値   | 行運賃 |
+| 近畿圏   | 500円  | 800円  |
+| 近畿圏   | 2000円 | 1500円 |
+
+examples
+| 運賃行   | -> 運賃 |
+| 近い一件 | 800円   |
+```
+
+A `sequence` with no rows is the example for a sequence with nothing in
+it. What comes out is the same function with one more argument — for
+every target **but SQL**, where one query has no place to carry a value
+from row to row and stop partway.
+
+A rule that runs is in [Examples](examples.md), under "A sequence walked
+into one answer".
+
 ## Examples
 
 ```rule
@@ -353,13 +455,15 @@ wrote.
 
 - Nested objects (`注文.配送先.都道府県`) — flatten at the boundary and
   pass the scalar in.
-- Collections and iteration — a variable number of stacked coupons is
-  handled by fixing the rule at "one decision" and leaving the order and
-  the repetition to the caller.
+- Iteration anywhere you like, and recursion — a sequence is walked once,
+  by `fold` (the section above); every other repetition, a stack of
+  coupons applied in order among them, stays with the caller.
+- Adding up or counting across elements — a fold chooses which element to
+  take and nothing more. Compute a total before the call and pass it in.
 - Date arithmetic — comparison and range only.
 
-Allowing any of the three would stop the completeness and overlap checks
-from terminating. **What cannot be written is the price of the checks
+Allowing these would stop the completeness and overlap checks from
+terminating. **What cannot be written is the price of the checks
 finishing.**
 
 ---

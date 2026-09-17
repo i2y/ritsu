@@ -659,6 +659,67 @@ examples
 - **A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.
 - **`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.
 
+## A sequence walked into one answer
+
+The caller passes the rows of a tariff sheet and the rule walks them in order. A table judges one element at a time, and `fold` says what each verdict does: go on, halt, take this one, hold the best so far. It is **the one shape that takes a number of things that is not fixed**.
+
+```rule
+rule 全国運賃(freight) v1
+description "呼び出し側が渡す運賃行を順に見て、一つの運賃に畳む。並びをたどる規則の例"
+
+enum 採用区分(verdict) = スキップ(skip) | 打ち切り(halt) | 確定(take) | 持ち越し(hold)
+enum ゾーン区分(zone) = 近畿圏(kinki) | 遠隔地(remote)
+
+# 一件ぶんの欄。呼び出し側はこの欄のそろった要素を何件でも渡す
+elements 運賃行(freight_rows)
+  行ゾーン(row_zone) : ゾーン区分
+  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万円
+  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+
+outputs
+  運賃(fee) : money[円, incl_tax]  round up(1円)
+
+# 一件の要素に対する判定。表の検査はいままでどおり効く（この四行で 採用区分 を覆いきる）
+table 行判定(row_of)
+policy unique
+| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
+| 近畿圏   | <=1000円 | 確定                        |
+| 近畿圏   | >1000円  | 持ち越し                    |
+| 遠隔地   | <=1000円 | スキップ                    |
+| 遠隔地   | >1000円  | 打ち切り                    |
+
+# 判定ごとの行き先。どの判定にも行き先が要る（E024）
+fold 採用 over 運賃行
+  スキップ  -> next
+  打ち切り  -> stop with 0円
+  確定      -> take_unique 行運賃
+  持ち越し  -> keep_max 行運賃 by 閾値
+  empty     -> 0円
+  exhausted -> held
+
+sequence 近い一件(near)
+| 行ゾーン | 閾値   | 行運賃 |
+| 近畿圏   | 500円  | 800円  |
+| 近畿圏   | 2000円 | 1500円 |
+
+sequence 空(none)
+| 行ゾーン | 閾値 | 行運賃 |
+
+examples
+| 運賃行   | -> 運賃 |
+| 近い一件 | 800円   |
+| 空       | 0円     |
+```
+
+**What this one shows**
+
+- **`elements` declares what one element carries.** The fields are declared exactly like `inputs`, ranges and units included, and the caller passes any number of elements with those fields filled in.
+- **The table's own checks are unchanged.** One element is one case, so completeness, overlap and units are proved over it as they always were: the four rows above cover `採用区分` exactly.
+- **The fold gives every verdict somewhere to go** — `next`, `stop with <value>`, `take_unique <value>` (a second element that also takes is a run-time error), `keep_max <value> by <key>`. A verdict with no arm stops at E024.
+- **The answer for no elements, and for a walk that reached the end, are both required** (E022, E023). An empty sequence always turns up, and answering with what is held is a choice made by writing it (`exhausted -> held`).
+- **An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.
+- **SQL is the one target that does not get it.** One query has no place to carry a value from row to row and stop partway. Every other target is generated, and agrees with the reference evaluator on every commit.
+
 ## A rule written in English — EU air passenger rights
 
 Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.

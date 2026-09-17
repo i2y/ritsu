@@ -132,7 +132,7 @@ fn 空と終端の答えは宣言が要る() {
 }
 
 #[test]
-fn 腕の無い判定は穴で_届かない腕は注意() {
+fn 行き先の無い判定は穴で_届かない行き先は注意() {
     let d = dir("arms");
     // A verdict the table produces, with nothing to do about it.
     let p = write(&d, "hole.rule", &RULE.replace("  持ち越し  -> keep_max 行運賃 by 閾値\n", ""));
@@ -197,7 +197,7 @@ fn 七言語に生成し_SQLは名指しで断る() {
 /// spells it — a caller that reads `rulec api` rather than the code would otherwise build a
 /// call with one argument missing.
 #[test]
-fn 目録は列を欄として載せる() {
+fn 一覧は並びを欄として載せる() {
     let d = dir("api");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
@@ -302,7 +302,7 @@ if (btns.length > 1) {
 /// worse than no page: the panel has to build an editor for the sequence and pass it as the
 /// argument the module takes (§15.52, §15.56).
 #[test]
-fn ページの試用欄は列を編集して走る() {
+fn ページの試用欄は並びを編集して走る() {
     if !have("node") {
         eprintln!("注意: node が無いので飛ばした");
         return;
@@ -346,7 +346,7 @@ fn ページの試用欄は列を編集して走る() {
 /// An example of a walk: the sequence is written once under a name, and the cell names it.
 /// It is checked by the reference evaluator like any other example, and joins the vectors.
 #[test]
-fn 例は列に名前を付けて書く() {
+fn 例は並びに名前を付けて書く() {
     let d = dir("examples");
     let body = format!("{RULE}{EXAMPLES}");
     let p = write(&d, "r.rule", &body);
@@ -390,7 +390,7 @@ fn 例は列に名前を付けて書く() {
 
 /// Each way of getting it wrong is named, and none of them is left to the first run.
 #[test]
-fn 列の実例の書き方の間違いは名指しされる() {
+fn 並びの書き方の間違いは名指しされる() {
     let d = dir("exbad");
     let body = format!("{RULE}{EXAMPLES}");
     for (tag, src, want) in [
@@ -483,7 +483,7 @@ fn 断る入力は生成コードにも断らせる() {
 /// The seven generated walks answer what the reference evaluator answered, over the whole
 /// vector suite. A language whose toolchain is missing is skipped by `rulec test` itself.
 #[test]
-fn 生成された歩きは参照評価器と一致する() {
+fn 生成されたたどり方は参照評価器と一致する() {
     if !have("python3") {
         eprintln!("注意: python3 が無いので飛ばした");
         return;
@@ -510,7 +510,7 @@ fn 生成された歩きは参照評価器と一致する() {
 }
 
 #[test]
-fn 列は一つで_二本目は断る() {
+fn 並びは一つで_二本目は断る() {
     let d = dir("two");
     let p = write(&d, "two.rule", &RULE.replace("outputs\n", "elements 別の列(others)\n  m(m) : number  range >=0 <=9\n\noutputs\n"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
@@ -521,7 +521,7 @@ fn 列は一つで_二本目は断る() {
 
 /// The walk itself: the evaluator's answers, and the suite that covers them (§15.56).
 #[test]
-fn 歩きはベクタで覆われる() {
+fn たどり方はベクタで覆われる() {
     let d = dir("vectors");
     let p = write(&d, "r.rule", RULE);
     let (code, out, e) = run(&["vectors", &p]);

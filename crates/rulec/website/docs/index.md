@@ -128,8 +128,10 @@ the table, and the indigo loop picks up again.
 
 ## What kind of rule is this language for
 
-**A rule that decides one transaction, in one shot, from a fixed number of flat
-facts.** The answer it gives back is one of four things — **an amount, a yes/no, a
+**A rule that decides one transaction, in one shot, from flat facts.** The facts
+are not nested, and a sequence of same-shaped elements can be walked once
+(`elements` and `fold`) where the number of them is not fixed. The answer it gives
+back is one of four things — **an amount, a yes/no, a
 class, an order**.
 
 - **Tariffs and shipping fees** — an amount decided by destination × size × weight
@@ -233,7 +235,7 @@ A table holds **the branching and nothing else**. Arithmetic lives in three plac
   a money constant — `税込金額 ÷ 100円` — cancels the unit and leaves a `number`.
 - Multiplication by a rate is allowed: `基本送料 × 負担率`. The rate stays a rate to the end,
   and rounding happens exactly once.
-- **There is no loop and no recursion**, and no date arithmetic — comparison and range only.
+- **There is no loop and no recursion** (bar a `fold`, which walks a sequence once), and no date arithmetic — comparison and range only.
 - Everything is an integer. No floating point appears anywhere.
 
 **When a rule has more than one output**, `result` assembles the first one and nothing else

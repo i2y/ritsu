@@ -408,11 +408,6 @@ no answer and the generated code raises. Such an input is still part of the suit
 `vectors/<alias>.refused.jsonl`, and `rulec test` requires every generated language to refuse
 it. That is what makes the last fold transition covered rather than merely named.
 
-### What is not built yet
-
-`examples` cannot be written for a rule with a fold (E025): an example is a row of cells, and
-the shape for writing a sequence into one is not decided.
-
 ## 7. Tables
 
 ```rule

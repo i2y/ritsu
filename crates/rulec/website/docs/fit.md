@@ -1,7 +1,7 @@
 # Does your rule fit
 
-rulec is for **a rule that decides one transaction, in one shot, from a fixed number of
-flat facts**, and hands back an amount, a yes/no, a class or an order. This page is the
+rulec is for **a rule that decides one transaction, in one shot, from flat facts**, and
+hands back an amount, a yes/no, a class or an order. This page is the
 test for whether yours is one of them: five questions, and then the two things people ask
 about most — apportionment, and what the language is not for.
 
@@ -9,10 +9,12 @@ about most — apportionment, and what the language is not for.
 
 If all five are **yes**, it fits. Whether money is involved is not one of them.
 
-1. Is the **number of inputs fixed** (not a list of variable length)?
-2. Are the inputs **flat values** (you can pass the prefecture itself, not
+1. Are the inputs **flat values** (you can pass the prefecture itself, not
    `order.destination.prefecture`)?
-3. Is it **one decision** (iteration and ordering can live in the caller)?
+2. Is the **number of them fixed** — or, where it is not, are they **elements of one
+   shape**, one after another (`elements` and `fold`; see [Writing a table](tour.md))?
+3. Is it **one decision** (ordering, and any repetition across decisions, can live in the
+   caller)?
 4. Does the **same input always give the same answer** ("today" and the stock level are
    arguments too)?
 5. Does **a person approve** the answer, or is the rule **revised on a date**?
@@ -63,8 +65,11 @@ longer something this tool says anything about.
 ## What it is not for
 
 - **Workflows** — several steps, carrying state
-- **Judgements about a collection itself** — "any line is refrigerated", "three or more
-  items in the cart". Flatten those at the boundary and pass the scalar in
+- **Counting or adding across a collection** — "three or more items in the cart", "the
+  lines total more than 10,000 yen". A fold chooses which element to take and nothing
+  more; compute the total or the count before the call and pass it in as a value. Picking
+  **one element** out of a sequence is writable — "refuse if any line is refrigerated",
+  "take the dearest row" 
 - **Branching on a string** — `string` cannot be a table column (E110). A value that
   decides a branch belongs in an `enum`, where the closed set makes the completeness check
   work. No prefix match and no regular expressions either

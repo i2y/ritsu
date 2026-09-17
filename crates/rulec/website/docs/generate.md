@@ -30,7 +30,7 @@ exists.
 | Swift | supported | just `swiftc` — no SwiftPM, no `Package.swift`; units ride in the type as they do in Rust |
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |
-| SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL |
+| SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
 
 One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
@@ -76,6 +76,11 @@ and the header of the file says which for every column. A query cannot
 stop, so the entry guard is a column too: `_input_error` is NULL for a
 row inside the declared domain and carries the sentence for one outside
 it.
+
+**A rule that walks a sequence is not generated for SQL.** One query has
+no place to carry a value from row to row and stop partway. That is a
+decision rather than a gap, so `gen` says so for that rule and writes the
+other targets.
 
 ## What the output looks like
 
