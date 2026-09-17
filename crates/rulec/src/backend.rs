@@ -30,6 +30,10 @@ pub struct Backend {
     pub run: fn(&str, &str) -> Plan,
     /// How to run the unit vectors of the rounding helpers.
     pub round: fn(&str) -> Plan,
+    /// Whether this backend can write the walk a `fold` declares (§15.56). A rule that walks
+    /// a sequence is generated only for the backends that say yes, and the others are
+    /// refused by name — a generated file that cannot run is worse than a missing one.
+    pub folds: bool,
     /// How to start the rule as an MCP server (§15.44), for the languages that get one.
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
@@ -96,6 +100,7 @@ pub const ALL: &[Backend] = &[
         // the last run would otherwise execute the old module and report it as ok.
         run: |alias, _| Plan::new("python", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("python", "python3", &["-B", "_round_test.py"]),
+        folds: true,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
     },
     Backend {
@@ -116,6 +121,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_runner.ts")])
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
+        folds: false,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
     },
     Backend {
@@ -136,6 +142,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
+        folds: false,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
     },
     Backend {
@@ -164,6 +171,7 @@ pub const ALL: &[Backend] = &[
                 &["--edition", "2021", "-O", "_round_test.rs", "-o", "_round_test"],
             )
         },
+        folds: false,
         mcp: None,
     },
     Backend {
@@ -182,6 +190,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
+        folds: false,
         mcp: None,
     },
     Backend {
@@ -203,6 +212,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
+        folds: false,
         mcp: None,
     },
     Backend {
@@ -231,6 +241,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("swift", "./_round_test", &[])
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
+        folds: false,
         mcp: None,
     },
     Backend {
@@ -249,6 +260,7 @@ pub const ALL: &[Backend] = &[
         },
         run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
+        folds: false,
         mcp: None,
     },
 ];

@@ -19,6 +19,10 @@ pub enum Val {
     Bool(bool),
     Str(String),
     Date(i32, u32, u32),
+    /// The sequence a `fold` walks: one map of field name to value per element (§15.56).
+    /// It never appears in a cell, an expression or a witness — only as the value of the
+    /// name `elements` declared, on the wire and in the evaluator's environment.
+    Seq(Vec<std::collections::BTreeMap<String, Val>>),
 }
 
 impl Val {
@@ -33,6 +37,9 @@ impl Val {
                 Ty::Rate => format!("{}%", r.mul(Rat::int(100))),
                 _ => format!("{r}"),
             },
+            // A sequence is never spelled into a cell or a message; how many there are is
+            // the only thing about it a reader of prose ever needs (§15.56).
+            Val::Seq(xs) => tr!("{} 件", "{} elements", xs.len()),
         }
     }
 }
@@ -64,6 +71,9 @@ pub fn wval(c: &crate::types::Checked, name: &str, v: &Val) -> crate::diag::WVal
         Val::Bool(b) => WVal::Bool(*b),
         Val::Date(y, m, d) => WVal::Str(format!("{y:04}-{m:02}-{d:02}")),
         Val::Num(r) => WVal::Int(crate::types::wire_int(*r, c.wire_scale(name))),
+        // A witness names one input at a time, and an element's fields are named on their
+        // own; the sequence as a whole never stands in one.
+        Val::Seq(xs) => WVal::Str(tr!("{} 件", "{} elements", xs.len())),
     }
 }
 
@@ -252,6 +262,23 @@ pub fn run_bindings(
     c: &Checked,
     inputs: HashMap<String, Val>,
 ) -> (Option<Val>, Vec<String>, HashMap<String, Val>) {
+    // A sequence of exactly one element **is** one element's case, and the coverage audit
+    // reads it that way: the element's fields and everything the tables bound from them
+    // (§15.56). A longer sequence has no single set of bindings, and nothing asks it for one.
+    if let Some(fold) = &f.fold {
+        if let Some(Val::Seq(xs)) = inputs.get(&fold.over) {
+            if xs.len() == 1 {
+                let mut m: HashMap<String, Val> =
+                    inputs.iter().filter(|(k, _)| *k != &fold.over).map(|(k, v)| (k.clone(), v.clone())).collect();
+                for (k, v) in &xs[0] {
+                    m.insert(k.clone(), v.clone());
+                }
+                let (fired, _, _, binds) = run_tables(f, c, m);
+                let (outs, _, _, _) = run_fold(f, c, inputs);
+                return (outs.into_iter().next().and_then(|(_, v)| v), fired, binds);
+            }
+        }
+    }
     let (outs, fired, binds) = run_all(f, c, inputs);
     (outs.into_iter().next().and_then(|(_, v)| v), fired, binds)
 }
@@ -270,11 +297,163 @@ pub fn run_all(
 
 /// `run_all`, plus the fired rows as `(table, row)` for a diagnostic's structured half.
 #[allow(clippy::type_complexity)]
+/// A rule that walks a sequence (§15.56).
+///
+/// The items run once per element with that element's fields in scope, and the fold reduces
+/// the column of verdicts. `held` is what the walk has picked up — by `take_unique`,
+/// `take_first` or `keep_max`. A walk that picked nothing up holds the `empty` answer, which
+/// is what makes `exhausted -> held` total: it is either what was taken, or the answer for a
+/// sequence with nothing in it.
+///
+/// Two elements taking under `take_unique` is a contradiction, and the answer is **no
+/// answer** — the same shape the generated code raises on. No vector carries one: the
+/// generator drops a case its own evaluator cannot answer.
+fn run_fold(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
+    let fold = f.fold.as_ref().expect("run_fold is only called for a rule that has one");
+    let seq = match inputs.get(&fold.over) {
+        Some(Val::Seq(xs)) => xs.clone(),
+        _ => Vec::new(),
+    };
+    let scalars: HashMap<String, Val> =
+        inputs.iter().filter(|(k, _)| *k != &fold.over).map(|(k, v)| (k.clone(), v.clone())).collect();
+
+    let answer_of = |expr: &Option<Expr>, held: Option<Val>| -> Option<Val> {
+        let e = expr.as_ref()?;
+        let mut m = scalars.clone();
+        if let Some(h) = held {
+            m.insert(crate::kw::HELD.to_string(), h);
+        }
+        Env::new(c, m).expr(e)
+    };
+    let empty_answer = answer_of(&fold.empty, None);
+
+    let (mut fired, mut fired_rows) = (Vec::new(), Vec::new());
+    let mut held: Option<Val> = None;
+    let mut taken: Option<Val> = None;
+    let mut best: Option<Val> = None;
+    let mut broken = false;
+    let mut stopped: Option<Option<Val>> = None;
+    for e in &seq {
+        let mut m = scalars.clone();
+        for (k, v) in e {
+            m.insert(k.clone(), v.clone());
+        }
+        let (ef, er, _, vals) = run_tables(f, c, m.clone());
+        fired.extend(ef);
+        fired_rows.extend(er);
+        let mut env = Env::new(c, m);
+        env.vals = vals.clone();
+        let Some(Val::Enum(v)) = vals.get(&fold.verdict).cloned() else { continue };
+        let Some((_, arm, _)) = fold.arms.iter().find(|(n, _, _)| n.text == v) else { continue };
+        match arm {
+            Arm::Next => {}
+            Arm::Stop(None) => {
+                stopped = Some(None);
+                break;
+            }
+            Arm::Stop(Some(x)) => {
+                stopped = Some(env.expr(x));
+                break;
+            }
+            // A take is definite and a keep is provisional, so they do not share a slot: a
+            // provisional value already held is not what `take_unique` is unique about. Two
+            // **takes** are the contradiction; a take after any number of keeps is the answer.
+            Arm::Take { expr, unique } => {
+                if taken.is_some() {
+                    if *unique {
+                        broken = true;
+                        break;
+                    }
+                    // take_first: the first one stands and the rest are passed over.
+                } else {
+                    taken = env.expr(expr);
+                }
+            }
+            Arm::KeepMax { expr, key } => {
+                let k = env.expr(key);
+                let better = match (&best, &k) {
+                    (None, Some(_)) => true,
+                    (Some(Val::Num(a)), Some(Val::Num(b))) => b.cmp_to(*a) == std::cmp::Ordering::Greater,
+                    _ => false,
+                };
+                if better {
+                    best = k;
+                    held = env.expr(expr);
+                }
+            }
+        }
+    }
+
+    let answer = if broken {
+        None
+    } else if seq.is_empty() {
+        empty_answer
+    } else {
+        match stopped {
+            Some(Some(v)) => Some(v),
+            _ => answer_of(&fold.exhausted, taken.or(held).or(empty_answer)),
+        }
+    };
+
+    let mut outs: Vec<(String, Option<Val>)> = Vec::new();
+    for (oi, od) in f.outputs.iter().enumerate() {
+        let name = od.name.text.clone();
+        let mut v = if oi == 0 { answer.clone() } else { None };
+        if let Some(Val::Num(x)) = &v {
+            if let Some(rd) = &od.rounding {
+                let ty = c.ty_of(&name).unwrap_or(Ty::Unknown);
+                if let (Some(g), Some(m)) = (lit_value_in_pub(&rd.grid, &ty), RoundMode::parse(&rd.mode)) {
+                    v = Some(Val::Num(x.round_to(m, g)));
+                }
+            }
+        }
+        outs.push((name, v));
+    }
+    (outs, fired, fired_rows, HashMap::new())
+}
+
+/// Run the rule's items over one environment, without the fold: the tables, the derived
+/// values and the definitions, and everything they bound. A rule that walks a sequence uses
+/// it once per element, and so does the vector generator when it asks what verdict an
+/// element lands on (§15.56).
+pub fn run_tables(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<String>, Vec<(String, usize)>, Vec<String>, HashMap<String, Val>) {
+    let mut env = Env::new(c, inputs);
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Define(d) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Table(t) => {
+                env.table(t);
+            }
+        }
+    }
+    (env.fired.clone(), env.fired_rows.clone(), Vec::new(), env.vals)
+}
+
 pub fn run_all_traced(
     f: &RuleFile,
     c: &Checked,
     inputs: HashMap<String, Val>,
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
+    if f.fold.is_some() {
+        return run_fold(f, c, inputs);
+    }
     let mut env = Env::new(c, inputs);
     for it in &f.items {
         match it {

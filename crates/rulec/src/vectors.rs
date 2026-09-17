@@ -27,7 +27,9 @@ pub struct Vector {
 /// Candidate values per column (§9.1).
 fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
     let mut out: BTreeMap<String, Vec<Val>> = BTreeMap::new();
-    for i in &f.inputs {
+    // An element's fields are table columns like any other, so their candidates come out of
+    // the same equivalence classes the cells induce (§15.56).
+    for i in f.inputs.iter().chain(f.elements.iter().flat_map(|e| &e.fields)) {
         let name = &i.name.text;
         let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
         let inner = match &ty {
@@ -351,7 +353,132 @@ pub fn is_tie(v: Rat, grid: Rat) -> bool {
     v.sub(below).cmp_to(grid.div(Rat::int(2))) == std::cmp::Ordering::Equal
 }
 
+/// The cases a walk has, as opposed to the cases one element has (§15.56).
+///
+/// The fold is an automaton over the verdicts, so what has to be covered is its transitions,
+/// not the length of the sequence: nothing, one element on each verdict, and every **ordered
+/// pair** of verdicts. That is what tells `take_first` from `take_unique`, shows `keep_max`
+/// replacing and not replacing, and puts an element after a `stop` to prove it is not read.
+fn fold_pool(
+    f: &RuleFile,
+    c: &Checked,
+    cands: &BTreeMap<String, Vec<Val>>,
+) -> Vec<(BTreeMap<String, Val>, String)> {
+    let fold = f.fold.as_ref().expect("a rule with elements has a fold");
+    let fields: Vec<String> =
+        f.elements.iter().flat_map(|e| &e.fields).map(|i| i.name.text.clone()).collect();
+    let scalars: BTreeMap<String, Val> = baseline(f, cands)
+        .into_iter()
+        .filter(|(k, _)| !fields.contains(k))
+        .collect();
+
+    // One element per verdict, built from the fields' own candidates: walk the cross product
+    // and keep the first that lands on each verdict.
+    let mut per_verdict: BTreeMap<String, BTreeMap<String, Val>> = BTreeMap::new();
+    let mut combos: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
+    for name in &fields {
+        let Some(vs) = cands.get(name) else { continue };
+        let mut next = Vec::new();
+        for base in &combos {
+            for v in vs {
+                let mut m = base.clone();
+                m.insert(name.clone(), v.clone());
+                next.push(m);
+            }
+            if next.len() > 4096 {
+                break;
+            }
+        }
+        combos = next;
+    }
+    for e in &combos {
+        let mut m: std::collections::HashMap<String, Val> = scalars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        for (k, v) in e {
+            m.insert(k.clone(), v.clone());
+        }
+        // One element, run through the tables the way any case is run: the verdict is what
+        // the per-element table wrote, read out of the evaluator's own environment.
+        let (_, _, _, vals) = crate::eval::run_tables(f, c, m);
+        if let Some(Val::Enum(v)) = vals.get(&fold.verdict) {
+            // Keep the element whose numbers are largest, not the first one found. The first
+            // is every field at the low end of its range, so `take` and `keep_max` would all
+            // answer with the same zero and an emitter that answered with the wrong value
+            // would still match (§15.9: an obligation nothing distinguishes is not one).
+            let weight = |e: &BTreeMap<String, Val>| -> Rat {
+                e.values().fold(Rat::zero(), |acc, x| match x {
+                    Val::Num(r) => acc.add(*r),
+                    _ => acc,
+                })
+            };
+            match per_verdict.get(v) {
+                Some(old) if weight(old).cmp_to(weight(e)) != std::cmp::Ordering::Less => {}
+                _ => {
+                    per_verdict.insert(v.clone(), e.clone());
+                }
+            }
+        }
+    }
+
+    let seq = |xs: Vec<&BTreeMap<String, Val>>| -> Val {
+        Val::Seq(xs.into_iter().cloned().collect())
+    };
+    let case = |elements: Val, why: String| -> (BTreeMap<String, Val>, String) {
+        let mut m = scalars.clone();
+        m.insert(fold.over.clone(), elements);
+        (m, why)
+    };
+
+    let mut out = vec![case(Val::Seq(Vec::new()), tr!("要素ゼロ件", "no elements"))];
+    // Every candidate element on its own. The boundaries of an element's fields are covered
+    // exactly the way an input's are — one element is one case — and the audit keeps the ones
+    // that discharge an obligation.
+    for e in &combos {
+        out.push(case(seq(vec![e]), tr!("要素の候補", "an element's candidates")));
+    }
+    for (v, e) in &per_verdict {
+        out.push(case(seq(vec![e]), tr!("判定 {v} 一件", "one element on {v}")));
+    }
+    for (a, ea) in &per_verdict {
+        for (b, eb) in &per_verdict {
+            out.push(case(seq(vec![ea, eb]), tr!("判定 {a} のあとに {b}", "{a} then {b}")));
+        }
+    }
+    // The scalars move too: each of their boundary cases, carried by one element of each
+    // verdict, so a scalar that decides a cell is still exercised.
+    for (a, why) in pool_scalars(f, c, cands, &fields) {
+        for (v, e) in &per_verdict {
+            let mut m = a.clone();
+            m.insert(fold.over.clone(), seq(vec![e]));
+            out.push((m, tr!("{why}（判定 {v}）", "{why} (verdict {v})")));
+        }
+    }
+    out
+}
+
+/// The pool as it is for a rule with no sequence, with the element fields left out.
+fn pool_scalars(
+    f: &RuleFile,
+    c: &Checked,
+    cands: &BTreeMap<String, Vec<Val>>,
+    fields: &[String],
+) -> Vec<(BTreeMap<String, Val>, String)> {
+    pool_inner(f, c, cands)
+        .into_iter()
+        .map(|(mut a, why)| {
+            a.retain(|k, _| !fields.contains(k));
+            (a, why)
+        })
+        .collect()
+}
+
 fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
+    if f.fold.is_some() {
+        return fold_pool(f, c, cands);
+    }
+    pool_inner(f, c, cands)
+}
+
+fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let base = baseline(f, cands);
     let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
@@ -507,6 +634,13 @@ pub fn show(v: &Val) -> String {
         Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
         Val::Num(r) => format!("{r}"),
         Val::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+        // Two sequences differ when any element does, so the key is the elements' own keys.
+        Val::Seq(xs) => {
+            let one = |e: &std::collections::BTreeMap<String, Val>| {
+                e.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
+            };
+            format!("[{}]", xs.iter().map(one).collect::<Vec<_>>().join(";"))
+        }
     }
 }
 
@@ -589,6 +723,14 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
         }
         seen_in.insert(key, evaluated.len());
         let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+        // A case the reference evaluator cannot answer is not a test case. For a rule that
+        // walks a sequence this is where two elements both take under `take_unique`: the
+        // generated code raises there, and the expected record has no shape for an error yet,
+        // so the suite leaves the transition uncovered rather than claiming an answer. The
+        // coverage report names it (§15.56).
+        if f.fold.is_some() && outs.first().is_some_and(|(_, v)| v.is_none()) {
+            continue;
+        }
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
     }
 
@@ -679,7 +821,37 @@ pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
 /// The JSON object of the inputs, in declaration order, in the wire form of §10.2.
 fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    // One value, in the wire form of §10.2. A sequence is an array of objects, and each
+    // element's fields are written the same way (§15.56) — the wire gains a shape, not a
+    // second kind of number.
+    let scalar = |name: &str, val: &Val| -> String {
+        match val {
+            Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
+            Val::Bool(b) => format!("{b}"),
+            other => format!("\"{}\"", esc(&show(other))),
+        }
+    };
     let mut ins: Vec<String> = Vec::new();
+    if let (Some(el), Some(Val::Seq(xs))) =
+        (&f.elements, f.fold.as_ref().and_then(|fd| v.input.get(&fd.over)))
+    {
+        let one = |e: &std::collections::BTreeMap<String, Val>| -> String {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .filter_map(|fd| {
+                    let val = e.get(&fd.name.text)?;
+                    Some(format!("\"{}\":{}", esc(&fd.name.text), scalar(&fd.name.text, val)))
+                })
+                .collect();
+            format!("{{{}}}", fields.join(","))
+        };
+        ins.push(format!(
+            "\"{}\":[{}]",
+            esc(&el.name.text),
+            xs.iter().map(one).collect::<Vec<_>>().join(",")
+        ));
+    }
     for i in &f.inputs {
         let Some(val) = v.input.get(&i.name.text) else { continue };
         let body = match val {

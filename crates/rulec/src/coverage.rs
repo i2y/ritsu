@@ -17,6 +17,10 @@ pub const ROW: &str = "行カバー";
 pub const BOUND: &str = "境界の両側カバー";
 pub const SHADOW: &str = "隠れ対カバー";
 pub const TIE: &str = "丸めの同着カバー";
+/// The transitions of a `fold` (§15.56): nothing, one element on each verdict, and every
+/// ordered pair of verdicts. The length of a sequence is not what has to be covered — the
+/// walk is an automaton, and what it can do is decided by which verdict follows which.
+pub const FOLD: &str = "畳み込みの遷移カバー";
 
 /// The name of a criterion in the output language. The constants above stay Japanese: they
 /// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
@@ -29,6 +33,7 @@ fn label(k: &'static str) -> &'static str {
             BOUND => "boundary-pair coverage",
             SHADOW => "shadow-pair coverage",
             TIE => "rounding-tie coverage",
+            FOLD => "fold-transition coverage",
             other => other,
         }
     }
@@ -193,7 +198,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
     // All four criteria are always reported. If a criterion with no obligations were left
     // out, the tallying side could not tell that apart from "the criterion was not checked".
     let mut tally: BTreeMap<&'static str, (usize, usize)> =
-        [ROW, BOUND, SHADOW, TIE].into_iter().map(|k| (k, (0, 0))).collect();
+        [ROW, BOUND, SHADOW, TIE, FOLD].into_iter().map(|k| (k, (0, 0))).collect();
     let mut missing: Vec<Missing> = Vec::new();
     let mut witness: BTreeSet<usize> = BTreeSet::new();
     let mut pruned_bounds = 0usize;
@@ -210,6 +215,67 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector]) -> Audit {
         .iter()
         .filter_map(|i| if let Item::Table(t) = i { Some(t) } else { None })
         .collect();
+
+    // --- the fold's transitions. What each element lands on is what the table wrote, so the
+    // obligations are read off the verdict's own enum and the witnesses off the vectors.
+    if let Some(fold) = &f.fold {
+        let verdict_of = |v: &Vector| -> Vec<String> {
+            let Some(Val::Seq(xs)) = v.input.get(&fold.over) else { return Vec::new() };
+            xs.iter()
+                .filter_map(|e| {
+                    let mut m: std::collections::HashMap<String, Val> = v
+                        .input
+                        .iter()
+                        .filter(|(k, _)| *k != &fold.over)
+                        .map(|(k, x)| (k.clone(), x.clone()))
+                        .collect();
+                    for (k, x) in e {
+                        m.insert(k.clone(), x.clone());
+                    }
+                    match eval::run_tables(f, c, m).3.get(&fold.verdict) {
+                        Some(Val::Enum(s)) => Some(s.clone()),
+                        _ => None,
+                    }
+                })
+                .collect()
+        };
+        let seqs: Vec<Vec<String>> = vs.iter().map(verdict_of).collect();
+        let has_seq: Vec<bool> = vs.iter().map(|v| matches!(v.input.get(&fold.over), Some(Val::Seq(_)))).collect();
+        let values: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
+
+        let mut want: Vec<(String, Vec<String>)> = vec![(tr!("要素ゼロ件", "no elements"), Vec::new())];
+        for v in &values {
+            want.push((tr!("判定 {v}", "verdict {v}"), vec![v.clone()]));
+        }
+        for a in &values {
+            for b in &values {
+                want.push((tr!("{a} のあと {b}", "{a} then {b}"), vec![a.clone(), b.clone()]));
+            }
+        }
+        for (what, pattern) in want {
+            let met = seqs
+                .iter()
+                .zip(&has_seq)
+                .position(|(sq, ok)| *ok && sq == &pattern);
+            match met {
+                Some(k) => {
+                    witness.insert(k);
+                    bump(FOLD, true, &mut tally);
+                }
+                None => {
+                    bump(FOLD, false, &mut tally);
+                    missing.push(Missing {
+                        kind: FOLD,
+                        what,
+                        hint: tr!(
+                            "この並びを作るベクタがありません。畳み込みの振る舞いは、どの判定のあとにどの判定が来るかで決まります。",
+                            "No vector produces this sequence. What the walk does is decided by which verdict follows which."
+                        ),
+                    });
+                }
+            }
+        }
+    }
 
     for (ti, t) in tables.iter().enumerate() {
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
@@ -381,7 +447,7 @@ pub fn render(a: &Audit, vs: &[Vector]) -> String {
     // The Japanese column is 12 characters wide (the tests pin that output); the English
     // labels are longer, so the column widens to the longest of them.
     let w = if crate::i18n::ja() { 12 } else { 22 };
-    for k in [ROW, BOUND, SHADOW, TIE] {
+    for k in [ROW, BOUND, SHADOW, TIE, FOLD] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
         let k = label(k);
@@ -410,7 +476,7 @@ pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>)
 
 /// `--format json` (docs/formats.md). One object per rule file.
 pub fn render_json(a: &Audit, vs: &[Vector], path: &str) -> String {
-    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE]
+    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE, FOLD]
         .iter()
         .map(|k| {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
@@ -441,6 +507,7 @@ fn json_name(k: &str) -> &'static str {
         ROW => "row",
         BOUND => "boundary_pair",
         TIE => "rounding_tie",
+        FOLD => "fold_transition",
         _ => "shadow_pair",
     }
 }

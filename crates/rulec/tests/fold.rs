@@ -175,3 +175,47 @@ fn 列は一つで_二本目は断る() {
     assert!(codes(&out).contains(&"E020".to_string()), "{out}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// The walk itself: the evaluator's answers, and the suite that covers them (§15.56).
+#[test]
+fn 歩きはベクタで覆われる() {
+    let d = dir("vectors");
+    let p = write(&d, "r.rule", RULE);
+    let (code, out, e) = run(&["vectors", &p]);
+    assert_eq!(code, 0, "{e}");
+
+    let mut lengths: std::collections::BTreeSet<usize> = Default::default();
+    let mut answers: std::collections::BTreeSet<i128> = Default::default();
+    for line in out.lines().filter(|l| !l.trim().is_empty()) {
+        let j = rulec::json::parse(line).unwrap();
+        let seq = j.get("in").and_then(|i| i.get("運賃行")).expect("列が in に無い");
+        let rulec::json::Json::Arr(xs) = seq else { panic!("列が配列でない: {line}") };
+        lengths.insert(xs.len());
+        // Every element carries its own fields, as integers in the canonical unit.
+        for x in xs {
+            assert!(x.get("行ゾーン").is_some() && x.get("閾値").is_some(), "{line}");
+        }
+        let v = j.get("out").and_then(|o| o.get("運賃")).and_then(|v| v.as_int()).expect("答えが無い");
+        answers.insert(v);
+    }
+    assert!(lengths.contains(&0) && lengths.contains(&1) && lengths.contains(&2), "長さが揃っていない: {lengths:?}");
+    // A suite where every case answers the same thing would not tell a wrong walk from a
+    // right one.
+    assert!(answers.len() >= 2, "答えが一種類しかない: {answers:?}");
+
+    // The fifth criterion is reported, and what it cannot cover it names.
+    let (code, cov, _) = run(&["coverage", &p, "--format", "json"]);
+    assert_eq!(code, 1, "覆えない義務があるので 1");
+    let j = rulec::json::parse(cov.lines().next().unwrap()).unwrap();
+    let rulec::json::Json::Arr(cs) = j.get("criteria").unwrap() else { panic!() };
+    let fold = cs
+        .iter()
+        .find(|c| c.get("name").and_then(|n| n.as_str()) == Some("fold_transition"))
+        .expect("fold_transition が無い");
+    let total = fold.get("total").and_then(|v| v.as_int()).unwrap();
+    let met = fold.get("satisfied").and_then(|v| v.as_int()).unwrap();
+    assert_eq!(total, 21, "義務は ゼロ件 + 判定4 + 対16");
+    assert_eq!(met, 20, "覆えるのは take_unique の矛盾を除く 20");
+    assert!(cov.contains("確定"), "覆えない遷移を名指ししていない: {cov}");
+    let _ = std::fs::remove_dir_all(&d);
+}

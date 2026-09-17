@@ -106,10 +106,11 @@ One object per rule file.
  "criteria":[{"name":"row","satisfied":7,"total":7,"missing":[]},
              {"name":"boundary_pair","satisfied":4,"total":4,"missing":[]},
              {"name":"shadow_pair","satisfied":3,"total":3,"missing":[]},
-             {"name":"rounding_tie","satisfied":0,"total":0,"missing":[]}]}
+             {"name":"rounding_tie","satisfied":0,"total":0,"missing":[]},
+             {"name":"fold_transition","satisfied":0,"total":0,"missing":[]}]}
 ```
 
-`name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`. An entry of `missing` is
+`name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`, `fold_transition` — the last one has obligations only for a rule that walks a sequence (§15.56). An entry of `missing` is
 `{"what": …, "hint": …}`, both **prose**.
 
 ## `test`
