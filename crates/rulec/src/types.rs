@@ -283,6 +283,9 @@ pub struct Sym {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SymKind {
     Input,
+    /// A field of one element of the sequence a `fold` walks (§15.56). It is an input, but
+    /// one the caller passes once per element rather than once per call.
+    Element,
     Derived,
     Define,
     TableOut,
@@ -407,6 +410,26 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Sym { ty, span: i.name.span.clone(), kind: SymKind::Input, contract_only: i.contract_only },
         );
     }
+    // The fields of one element (§15.56). They are declared like inputs and a table may use
+    // them as columns; what differs is that the caller passes them once per element, so the
+    // completeness proof quantifies over one element exactly as it quantifies over one call.
+    if let Some(el) = &f.elements {
+        for i in &el.fields {
+            let ty = c.resolve(&i.ty);
+            if let Some(r) = &i.range {
+                let (b, _) = bounds_of(r, &ty);
+                c.ranges.insert(i.name.text.clone(), b);
+            } else if matches!(ty, Ty::Rate) {
+                c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
+            }
+            c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
+            c.syms.insert(
+                i.name.text.clone(),
+                Sym { ty, span: i.name.span.clone(), kind: SymKind::Element, contract_only: i.contract_only },
+            );
+        }
+    }
+
     if f.outputs.is_empty() {
         c.diags.push(
             Diag::error("E009", tr!("出力がありません", "No outputs are declared"))
@@ -571,6 +594,172 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
+    // `fold` (§15.56). The table decides one element at a time and its verdict column is a
+    // finite enum, so the walk is a reduction of a string over a finite alphabet. What has to
+    // be checked is that the automaton has no holes: an arm for every verdict the table can
+    // produce, and the two answers that belong to no element at all.
+    if let Some(fold) = &f.fold {
+        let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
+        let el_name = f.elements.as_ref().map(|e| e.name.text.clone());
+        if el_name.as_deref() != Some(fold.over.as_str()) {
+            c.diags.push(
+                Diag::error("E021", tr!("`over` が指す列がありません", "`over` names a sequence that is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
+                    .note(tr!(
+                        "歩く列は `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんの欄を書きます。",
+                        "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
+                    )),
+            );
+        }
+        // The verdicts the table can actually produce. A fold reads a column some table
+        // writes, and that column's type is what makes the walk finite.
+        let produced: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
+        let known = c.syms.get(&fold.verdict).cloned();
+        match &known {
+            Some(sym) if matches!(sym.ty, Ty::Enum(_)) => {}
+            Some(sym) => c.diags.push(
+                Diag::error("E021", tr!("畳めるのは列挙の列だけです", "Only a column of an enum can be folded"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("{} は {} です", "{} is {}", fold.verdict, sym.ty))
+                    .note(tr!(
+                        "畳み込みが検査できるのは、判定が有限の値のどれかに落ちるからです（§15.56）。数や金額の列は畳めません。",
+                        "A fold is checkable because each element lands on one of finitely many verdicts (§15.56). A column of numbers or money is not one of them."
+                    )),
+            ),
+            None => c.diags.push(
+                Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", fold.verdict))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("どの表もこの列を出していません", "no table produces this column")),
+            ),
+        }
+        c.used.insert(fold.verdict.clone());
+
+        // (1) and (2): the two answers that belong to no element. Declaring them is not
+        // optional, because a walk over nothing and a walk that ran out are exactly the two
+        // cases a hand-written loop forgets.
+        if fold.empty.is_none() {
+            c.diags.push(
+                Diag::error("E022", tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("`empty -> <値>` がありません", "there is no `empty -> <value>`"))
+                    .note(tr!(
+                        "空の列は必ず来ます。来たときに何を返すかは業務の判断で、道具が決められることではありません。",
+                        "An empty sequence will arrive. What to answer then is a business decision, and not one the tool can make."
+                    )),
+            );
+        }
+        if fold.exhausted.is_none() {
+            c.diags.push(
+                Diag::error("E023", tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("`exhausted -> <値>` がありません", "there is no `exhausted -> <value>`"))
+                    .note(tr!(
+                        "どの要素も打ち切らずに終わった場合の答えです。保持しているものを返すなら `exhausted -> {}` と書きます。",
+                        "It is the answer when no element ended the walk. To answer with what is held, write `exhausted -> {}`.",
+                        crate::kw::HELD
+                    )),
+            );
+        }
+
+        // (3): every verdict the table can produce has an arm, and no arm waits for a verdict
+        // the table cannot produce. This is the fold's own completeness, and it is decided the
+        // same way the table's is: by comparing two finite sets.
+        let armed: Vec<String> = fold.arms.iter().map(|(n, _, _)| n.text.clone()).collect();
+        let missing: Vec<&String> = produced.iter().filter(|v| !armed.contains(v)).collect();
+        if !missing.is_empty() && !produced.is_empty() {
+            let names = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+            c.diags.push(
+                Diag::error("E024", tr!("腕の無い判定があります: {names}", "These verdicts have no arm: {names}"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("表はこの判定を出しますが、畳み込みに扱いがありません", "the table produces them and the fold has nothing to do with them"))
+                    .note(tr!(
+                        "その判定の要素が来たとき、歩き方が決まっていません。腕を足すか、表がその値を出さないようにしてください。",
+                        "When an element lands on one of them the walk has no move. Add an arm, or stop the table producing the value."
+                    )),
+            );
+        }
+        // The limit of this stage, said out loud. The walk's semantics are one thing; the
+        // wire that carries a sequence, the vectors that cover one, and the eight backends
+        // that run one are another, and they are built together or not at all (§15.56).
+        if f.examples.is_some() {
+            c.diags.push(
+                Diag::error("E025", tr!("畳み込みのある規則には、まだ例を書けません", "A rule with a fold cannot carry examples yet"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("この規則は列を歩きます", "this rule walks a sequence"))
+                    .note(tr!(
+                        "例の一行はセルの並びで、要素の列を書く形がまだありません。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの検査は、例が無くても効きます。",
+                        "An example is a row of cells, and there is no shape yet for writing a sequence into one. The table's own checks — completeness, overlap, units, overflow — and the fold's checks hold without them."
+                    )),
+            );
+        }
+        for (n, _, sp) in &fold.arms {
+            if !produced.is_empty() && !produced.contains(&n.text) {
+                c.diags.push(
+                    Diag::warning("W115", tr!("どの要素もこの判定にはなりません: {}", "No element can land on this verdict: {}", n.text))
+                        .at(at_fold.clone())
+                        .mark(sp.clone(), tr!("表がこの値を出しません", "the table does not produce this value"))
+                        .note(tr!(
+                            "腕は書かれていますが、届きません。表の行を見直すか、この腕を消してください。",
+                            "The arm is written but unreachable. Look again at the table's rows, or drop the arm."
+                        )),
+                );
+            }
+        }
+    }
+
+    // `constraint` (§15.55). It computes nothing: it says which combinations of inputs exist,
+    // so the region checks do not demand rows for the ones that do not, and the entry guard
+    // refuses them. Both sides have to be inputs of the same comparable type — a relation
+    // between a value and something the caller does not pass cannot be checked at the door.
+    for k in &f.constraints {
+        let mut sides = Vec::new();
+        for name in [&k.left, &k.right] {
+            match c.syms.get(name).cloned() {
+                Some(sym) if sym.kind == SymKind::Input => sides.push(Some(sym)),
+                found => {
+                    let what = match found {
+                        None => tr!("{name} という入力はありません", "there is no input called {name}"),
+                        Some(_) => tr!("{name} は入力ではありません", "{name} is not an input"),
+                    };
+                    c.diags.push(
+                        Diag::error("E018", tr!("`constraint` は入力どうしの関係です", "A `constraint` relates two inputs"))
+                            .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
+                            .mark(k.span.clone(), what)
+                            .note(tr!(
+                                "両側とも `inputs` に宣言した名前にしてください。導出や定義は入力から計算されるので、関係はその元になった入力どうしで書きます。",
+                                "Name something declared in `inputs` on both sides. A derived or defined value is computed from the inputs, so write the relation between those inputs instead."
+                            )),
+                    );
+                    sides.push(None);
+                }
+            }
+        }
+        let (Some(Some(a)), Some(Some(b))) = (sides.first().cloned(), sides.get(1).cloned()) else {
+            continue;
+        };
+        // Numbers and dates are what the region checker can narrow by arithmetic. An enum or a
+        // boolean has no order, so `<=` between two of them would be a shape with no meaning.
+        let ordered = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date);
+        if !ordered(&a.ty) || !ordered(&b.ty) {
+            c.diags.push(
+                Diag::error("E018", tr!("`constraint` は順序のある型どうしで書きます", "A `constraint` compares two ordered types"))
+                    .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
+                    .mark(k.span.clone(), tr!("{} と {} は比べられません", "{} and {} cannot be compared", k.left, k.right))
+                    .note(tr!(
+                        "比べられるのは、金額・数量・率・number・日付です。列挙や真偽に大小はありません。",
+                        "Money, a quantity, a rate, a number and a date can be compared. An enum and a boolean have no order."
+                    )),
+            );
+            continue;
+        }
+        c.check_same(&a.ty, &b.ty, &k.span, path, &tr!("制約", "constraint"));
+        // An input that only ever appears in a constraint is still doing work: it narrows the
+        // space the completeness proof walks. W111 is about a declaration nothing reads.
+        c.used.insert(k.left.clone());
+        c.used.insert(k.right.clone());
+    }
+
     if let Some(r) = &f.result {
         c.used.insert(r.name.clone());
         let got = c.expr_ty(&r.expr, path);
@@ -618,6 +807,22 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
                     .note(tr!("本来使うべき列の書き忘れかもしれません。", "A column that should use it may have been left out."))
                     .note(tr!("範囲の入口検査としてだけ効かせるつもりなら、宣言に `{}` を付けてください（§11 W111）。", "If it is meant only as an entry check on its range, add `{}` to the declaration (§11 W111).", crate::kw::CONTRACT_ONLY)),
+            );
+        }
+    }
+    // The fields of an element are declarations too, and an unused one costs more than an
+    // unused input: the caller fills it once per element (§15.56).
+    for i in f.elements.iter().flat_map(|e| &e.fields) {
+        if !c.used.contains(&i.name.text) && !i.contract_only {
+            c.diags.push(
+                Diag::warning("W111", tr!("要素の欄 {} はどの表でも使われていません", "Element field {} is not used by any table", i.name.text))
+                    .at(at(i.span.line))
+                    .fix(crate::diag::FixKind::MarkContractOnly, crate::kw::CONTRACT_ONLY)
+                    .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
+                    .note(tr!(
+                        "呼び出し側は要素ごとにこの欄を埋めることになります。使わないなら消してください。",
+                        "The caller fills this field for every element. If nothing uses it, take it out."
+                    )),
             );
         }
     }

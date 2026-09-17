@@ -354,6 +354,24 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         }
     }
 
+    // --- Constraints. What the table does not have to cover, and why.
+    //
+    // This is the §1.6 job exactly: a fact the checker used that the table does not show. A
+    // reader looking at a `-` cannot tell "this column does not matter here" from "this
+    // cannot happen"; the constraints are where the second one is written down, so the
+    // approver can agree or disagree with it.
+    if !f.constraints.is_empty() {
+        o.push_str(&tr!("\n## 起きない組み合わせ\n\n", "\n## Combinations that do not happen\n\n"));
+        o.push_str(&tr!(
+            "呼び出し側が保証する、入力どうしの関係です。**検査はこれを信じて、満たさない組み合わせには行を要求していません。** 生成コードは、満たさない入力を入口で断ります。\n\n",
+            "Relations between inputs that the caller guarantees. **The checks believed them and demanded no row for the combinations they exclude**, and the generated code refuses such an input at the door.\n\n"
+        ));
+        for k in &f.constraints {
+            o.push_str(&format!("- `{} {} {}`\n", md_esc(&k.left), k.op.word(), md_esc(&k.right)));
+        }
+        o.push('\n');
+    }
+
     // --- Derived values and definitions. The invisible axes.
     let derived: Vec<&DerivedDecl> =
         f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).collect();

@@ -22,6 +22,15 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E014](#e014) | error | An output cell cannot hold an expression |
 | [E015](#e015) | error | `result` can only assemble the first output |
 | [E016](#e016) | error | There can be only one `result` |
+| [E017](#e017) | error | A `constraint` is not shaped like this |
+| [E018](#e018) | error | A `constraint` relates two inputs |
+| [E019](#e019) | error | An example breaks a constraint |
+| [E020](#e020) | error | The `elements` declaration is not right |
+| [E021](#e021) | error | The `fold` is not written correctly |
+| [E022](#e022) | error | The answer for a sequence with no elements is not declared |
+| [E023](#e023) | error | The answer for a walk that reached the end is not declared |
+| [E024](#e024) | error | Some verdict has no arm |
+| [E025](#e025) | error | A rule with a fold cannot carry examples yet |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -40,6 +49,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
+| [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 
 ## E001
@@ -101,7 +111,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / outputs / derive / define / table / result / examples / policy`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -119,7 +129,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / outputs / derive / define / table / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -409,6 +419,310 @@ result a = p + 100円
 ```
 
 Related codes: [E015](#e015)
+
+## E017
+
+`error` — **A `constraint` is not shaped like this**
+
+**When.** A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name.
+
+**Fix.** Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+  b(b) : number  range >=0 <=10
+
+constraint a
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E018](#e018)
+
+## E018
+
+`error` — **A `constraint` relates two inputs**
+
+**When.** A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date.
+
+**Fix.** Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+
+constraint a <= r
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E017](#e017), [W111](#w111)
+
+## E019
+
+`error` — **An example breaks a constraint**
+
+**When.** An example's inputs do not satisfy a `constraint`. The constraint declares that the combination does not happen, the completeness check believed it and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for.
+
+**Fix.** Correct the example's values — or, if that combination really does happen, the constraint is what is wrong and it goes.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+  b(b) : number  range >=0 <=10
+
+constraint a <= b
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | b | -> r(r) : bool |
+| - | - | true |
+
+examples
+| a | b | -> r |
+| 5 | 1 | true |
+```
+
+Related codes: [E017](#e017), [E018](#e018), [E101](#e101)
+
+## E020
+
+`error` — **The `elements` declaration is not right**
+
+**When.** An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56).
+
+**Fix.** Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+elements ys(ys)
+  m(m) : number  range >=0 <=10
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E021](#e021)
+
+## E021
+
+`error` — **The `fold` is not written correctly**
+
+**When.** The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum.
+
+**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose (§15.56).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+
+fold r
+  empty -> false
+```
+
+Related codes: [E020](#e020), [E022](#e022), [E023](#e023), [E024](#e024)
+
+## E022
+
+`error` — **The answer for a sequence with no elements is not declared**
+
+**When.** A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over.
+
+**Fix.** Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  exhausted -> held
+```
+
+Related codes: [E023](#e023), [E024](#e024)
+
+## E023
+
+`error` — **The answer for a walk that reached the end is not declared**
+
+**When.** A `fold` has no `exhausted -> <value>`: the answer when the sequence ran out and no element ended the walk. Answering with the value that was held is a choice, and it is made by writing it.
+
+**Fix.** Add `exhausted -> <value>`; to answer with what is held, that is `exhausted -> held`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+```
+
+Related codes: [E022](#e022), [E024](#e024)
+
+## E024
+
+`error` — **Some verdict has no arm**
+
+**When.** A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold (§15.56).
+
+**Fix.** Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  empty -> 0円
+  exhausted -> held
+```
+
+Related codes: [E022](#e022), [E023](#e023), [W115](#w115)
+
+## E025
+
+`error` — **A rule with a fold cannot carry examples yet**
+
+**When.** A rule with a `fold` has an `examples` block. An example is a row of cells, and there is no shape yet for writing a sequence into one (§15.56).
+
+**Fix.** Take the examples out for now. The table's own checks — completeness, overlap, units, overflow — and the fold's four checks hold without them. Generation is at the same stage: `gen` refuses such a rule by name.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+examples
+| k | -> r |
+| 3円 | 3円 |
+```
+
+Related codes: [E021](#e021)
 
 ## E101
 
@@ -949,6 +1263,41 @@ policy unique
 ```
 
 Related codes: [E101](#e101), [E012](#e012)
+
+## W115
+
+`warning` — **No element can land on this verdict**
+
+**When.** A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake (§15.56).
+
+**Fix.** Look again at the table's rows, or drop the arm. Which of the two is right is decided by reading the table, not this message.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| - | a |
+
+fold d over xs
+  a -> take_first k
+  b -> next
+  empty -> 0円
+  exhausted -> held
+```
+
+Related codes: [E024](#e024)
 
 ## W114
 

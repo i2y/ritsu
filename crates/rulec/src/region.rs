@@ -180,6 +180,9 @@ pub struct TableRegion {
     spans: BTreeMap<String, Ival>,
     /// Row → axis → whether each coordinate is selected.
     masks: Vec<Vec<Vec<bool>>>,
+    /// The rule's `constraint` lines (§15.55). A box that no input satisfying them can reach
+    /// is not a gap and not an overlap: it is a combination the caller says does not happen.
+    constraints: Vec<crate::ast::Constraint>,
 }
 
 fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {
@@ -644,7 +647,19 @@ impl TableRegion {
             unreachable_row.push(only_unreachable);
             masks.push(m);
         }
-        Some(TableRegion { axes, col_names, unreachable_row, display_of: cell_of, is_define, derived, exprs, spans, masks, unanalyzable })
+        Some(TableRegion {
+            axes,
+            col_names,
+            unreachable_row,
+            display_of: cell_of,
+            is_define,
+            derived,
+            exprs,
+            spans,
+            masks,
+            unanalyzable,
+            constraints: f.constraints.clone(),
+        })
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
@@ -1587,7 +1602,45 @@ impl TableRegion {
     /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
     /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
     /// more constrained derived values share an input, their dependency cannot be examined.
+    /// The interval a name can hold inside this box: the coordinate's own span when the name
+    /// is one of this table's axes, and its declared range otherwise.
+    fn span_of_name(&self, name: &str, path: &[usize]) -> Option<Ival> {
+        if let Some(ai) = self.col_names.iter().position(|n| n == name) {
+            if let Some(&ci) = path.get(ai) {
+                if let Some(sp) = self.coord_span(ai, ci) {
+                    return Some(sp);
+                }
+            }
+        }
+        self.spans.get(name).copied()
+    }
+
+    /// Whether a `constraint` can hold anywhere in this box. Interval arithmetic, the same
+    /// shape the derived sieve uses: only a relation that is impossible for **every** pair of
+    /// values the box allows takes the box out (§15.55).
+    fn constraint_impossible(&self, k: &crate::ast::Constraint, path: &[usize]) -> bool {
+        let (Some((la, lb)), Some((ra, rb))) =
+            (self.span_of_name(&k.left, path), self.span_of_name(&k.right, path))
+        else {
+            return false;
+        };
+        use std::cmp::Ordering::*;
+        match k.op {
+            // left <= right is out of reach when the smallest left is already past the
+            // largest right.
+            CmpOp::Le => matches!((la, rb), (Some(x), Some(y)) if x.cmp_to(y) == Greater),
+            CmpOp::Lt => matches!((la, rb), (Some(x), Some(y)) if x.cmp_to(y) != Less),
+            CmpOp::Ge => matches!((lb, ra), (Some(x), Some(y)) if x.cmp_to(y) == Less),
+            CmpOp::Gt => matches!((lb, ra), (Some(x), Some(y)) if x.cmp_to(y) != Greater),
+        }
+    }
+
     pub fn feasible(&self, path: &[usize]) -> Feasible {
+        for k in &self.constraints {
+            if self.constraint_impossible(k, path) {
+                return Feasible::No;
+            }
+        }
         let mut constrained: Vec<(usize, Vec<String>)> = Vec::new();
         for (ai, d) in self.derived.iter().enumerate() {
             let Some(((rl, rh), deps)) = d else { continue };

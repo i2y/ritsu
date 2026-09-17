@@ -380,6 +380,45 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 }
             }
         }
+        // An example is a case the rule is claimed to answer, so it has to be a case the rule
+        // can receive. A `constraint` says which combinations exist (§15.55); an example
+        // outside them would be asserting an answer for an input the generated code refuses
+        // at the door, and the checker never demanded a row for it either.
+        {
+            let a: std::collections::BTreeMap<String, Val> = env.clone().into_iter().collect();
+            if !crate::vectors::allowed(f, &a) {
+                for k in &f.constraints {
+                    let one: std::collections::BTreeMap<String, Val> =
+                        a.iter().map(|(x, y)| (x.clone(), y.clone())).collect();
+                    let mut only = RuleFile { constraints: vec![k.clone()], ..f.clone() };
+                    only.constraints = vec![k.clone()];
+                    if crate::vectors::allowed(&only, &one) {
+                        continue;
+                    }
+                    let said = format!("{} {} {}", k.left, k.op.word(), k.right);
+                    let mut d = Diag::error("E019", tr!("例が制約を破っています", "An example breaks a constraint"))
+                        .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                        .mark(row.span.clone(), tr!("この入力では `{said}` が成り立ちません", "`{said}` does not hold for this input"));
+                    for (col, _) in &ex.inputs {
+                        if let Some(v) = env.get(col) {
+                            d = d.win(col.clone(), wval(c, col, v));
+                        }
+                    }
+                    out.push(
+                        d
+                            .note(tr!(
+                                "制約は「この組み合わせは起きない」という宣言で、検査はそれを信じて行を要求していません。生成コードも入口で断ります。",
+                                "A constraint declares that a combination does not happen; the checks believed it and demanded no row, and the generated code refuses it at the door."
+                            ))
+                            .note(tr!(
+                                "例の値を直すか、その組み合わせが本当に起きるなら制約のほうを消してください。",
+                                "Correct the example's values, or drop the constraint if that combination really does happen."
+                            )),
+                    );
+                }
+                continue;
+            }
+        }
         let (got, fired, fired_rows, _) = run_all_traced(f, c, env.clone());
         // The witness of E107 is the example's own row: the inputs as written, and the value
         // it expected. A caller can hand these straight back as a vector (§10.2).

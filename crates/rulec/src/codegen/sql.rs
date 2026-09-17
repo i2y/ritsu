@@ -376,6 +376,18 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
+        // The same door as the other backends (§15.55): a combination the caller said does not
+        // happen is refused rather than answered, because no row was ever demanded for it.
+        for k in &self.f.constraints {
+            let op = k.op.word();
+            let said = format!("{} {op} {}", k.left, k.right);
+            guard.push(format!(
+                "WHEN NOT ({} {op} {}) THEN {}",
+                q(&local(&k.left)),
+                q(&local(&k.right)),
+                lit(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
+            ));
+        }
         cols.push(if guard.is_empty() {
             format!("NULL AS {}", q("_input_error"))
         } else {

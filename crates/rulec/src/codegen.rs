@@ -815,6 +815,10 @@ impl<'a> Gen<'a> {
             }
         }
 
+        o.push_str(&self.constraint_guards(&local, Lang::Py, "    ", |m| {
+            format!("        raise RuleInputError(\"{m}\")\n")
+        }));
+
         let trace = self.temp("trace");
         o.push_str(&format!("    {trace}: _Trace = []\n"));
 
@@ -962,6 +966,42 @@ impl<'a> Gen<'a> {
                 tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
             )
         }));
+        o
+    }
+
+    /// The door for the `constraint` lines (§15.55).
+    ///
+    /// The checker was told these combinations do not happen, and it believed it: it demanded
+    /// no row for them. So a caller that sends one reaches branches that have nothing to
+    /// answer with. Refusing at the door is the same line as the range and the integer checks
+    /// — the entry guard enforces exactly what the proof assumed (§15.43, §15.45).
+    ///
+    /// Both sides are inputs of the same type, so their wire values share a scale and compare
+    /// directly.
+    fn constraint_guards(
+        &self,
+        local: &dyn Fn(&str) -> String,
+        lang: Lang,
+        indent: &str,
+        raise: impl Fn(&str) -> String,
+    ) -> String {
+        let sp = lang.spelling();
+        let mut o = String::new();
+        for k in &self.f.constraints {
+            let (a, b) = (local(&k.left), local(&k.right));
+            let op = k.op.word();
+            let said = format!("{} {op} {}", k.left, k.right);
+            o.push_str(&format!(
+                "{indent}{} {}\n",
+                sp.comment,
+                tr!("制約: {said}", "constraint: {said}")
+            ));
+            o.push_str(&format!("{indent}{}\n", (sp.if_head)(&format!("{}({a} {op} {b})", lang.not()))));
+            o.push_str(&raise(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}")));
+            if !sp.close.is_empty() {
+                o.push_str(&format!("{indent}{}\n", sp.close));
+            }
+        }
         o
     }
 
@@ -1361,6 +1401,10 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
+
+        o.push_str(&self.constraint_guards(&local, Lang::Go, "\t", |m| {
+            format!("\t\treturn {zero}, nil, fmt.Errorf(\"{m}\")\n")
+        }));
 
         let trace = self.temp("trace");
         o.push_str(&format!("\tvar {trace} []Fired\n"));
@@ -2039,6 +2083,15 @@ struct Spelling {
 }
 
 impl Lang {
+    /// How the language spells "not" in front of a parenthesised condition.
+    fn not(self) -> &'static str {
+        match self {
+            Lang::Py => "not ",
+            Lang::Sql => "NOT ",
+            _ => "!",
+        }
+    }
+
     fn spelling(self) -> Spelling {
         match self {
             Lang::Py => Spelling {
@@ -2311,6 +2364,10 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
+
+        o.push_str(&self.constraint_guards(&local, Lang::Ts, "  ", |m| {
+            format!("    throw new RuleInputError(`{m}`);\n")
+        }));
 
         let trace = self.temp("trace");
         o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
@@ -2869,6 +2926,10 @@ impl<'a> Gen<'a> {
                 tr!("{} が範囲の外です: {{}}", "{} is out of range: {{}}", i.name.text)
             ));
         }
+
+        o.push_str(&self.constraint_guards(&local, Lang::Rs, "    ", |m| {
+            format!("        return Err(RuleError::Input(\"{m}\".to_string()));\n")
+        }));
 
         let trace = self.temp("trace");
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
@@ -4166,6 +4227,10 @@ impl<'a> Gen<'a> {
             }
         }
 
+        o.push_str(&self.constraint_guards(&local, Lang::Rb, "    ", |m| {
+            format!("      raise RuleInputError, \"{m}\"\n")
+        }));
+
         let trace = self.temp("trace");
         o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
 
@@ -4990,6 +5055,10 @@ impl<'a> Gen<'a> {
                 tr!("{} が範囲の外です: \\({v})", "{} is out of range: \\({v})", i.name.text)
             ));
         }
+
+        o.push_str(&self.constraint_guards(&local, Lang::Sw, "    ", |m| {
+            format!("        throw RuleError.input(\"{m}\")\n")
+        }));
 
         let trace = self.temp("trace");
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));

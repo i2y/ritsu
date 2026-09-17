@@ -105,6 +105,9 @@ impl P {
             items: Vec::new(),
             result: None,
             examples: None,
+            constraints: Vec::new(),
+            elements: None,
+            fold: None,
         };
 
         loop {
@@ -162,6 +165,53 @@ impl P {
                 crate::kw::DEFINE => {
                     if let Some(d) = self.define(&line) {
                         f.items.push(Item::Define(d));
+                    }
+                    self.i += 1;
+                }
+                crate::kw::ELEMENTS => {
+                    let name = self.name_at(&line, 1).map(|(n, _)| n);
+                    let span = span_of(&line);
+                    self.i += 1;
+                    let fields = self.var_block();
+                    match name {
+                        Some(name) if f.elements.is_none() => {
+                            f.elements = Some(ElementsDecl { name, fields, span })
+                        }
+                        Some(_) => self.err(
+                            Diag::error("E020", tr!("`elements` は一つしか書けません", "There can be only one `elements`"))
+                                .at(self.at(span.line))
+                                .mark(span, tr!("二本目です", "this is a second one"))
+                                .note(tr!(
+                                    "規則が歩く列は一つです。二つ目の列が要るなら、それは別の規則です。",
+                                    "A rule walks one sequence. A second one means a second rule."
+                                )),
+                        ),
+                        None => self.err(
+                            Diag::error("E020", tr!("`elements` に名前がありません", "The `elements` line has no name"))
+                                .at(self.at(span.line))
+                                .mark(span, tr!("`elements 運賃行(fee_rows)` の形です", "the shape is `elements 運賃行(fee_rows)`")),
+                        ),
+                    }
+                }
+                crate::kw::FOLD => {
+                    if let Some(d) = self.fold(&line) {
+                        match f.fold {
+                            None => f.fold = Some(d),
+                            Some(_) => self.err(
+                                Diag::error("E020", tr!("`fold` は一つしか書けません", "There can be only one `fold`"))
+                                    .at(self.at(d.span.line))
+                                    .mark(d.span.clone(), tr!("二本目です", "this is a second one"))
+                                    .note(tr!(
+                                        "列を畳むのは一度だけです。二段の畳み込みは、要素の列としての振る舞いが小さなオートマトンでなくなります（§15.56）。",
+                                        "A sequence is folded once. A second fold would take the walk out of the small automaton that makes it checkable (§15.56)."
+                                    )),
+                            ),
+                        }
+                    }
+                }
+                crate::kw::CONSTRAINT => {
+                    if let Some(c) = self.constraint(&line) {
+                        f.constraints.push(c);
                     }
                     self.i += 1;
                 }
@@ -456,6 +506,166 @@ impl P {
         let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
         let expr = self.expr(&line[eq + 1..])?;
         Some(DefineDecl { name, ty, expr, span: span_of(line) })
+    }
+
+    /// ```text
+    /// fold 採用 over 運賃行
+    ///   スキップ  -> next
+    ///   打ち切り  -> stop
+    ///   確定      -> take_unique 運賃
+    ///   持ち越し  -> keep_max 運賃 by 閾値
+    ///   empty     -> 0円
+    ///   exhausted -> held
+    /// ```
+    ///
+    /// One arm per value of the verdict's enum, and the two answers that are not about any
+    /// element: `empty` for a sequence with nothing in it, `exhausted` for a walk that
+    /// reached the end. Both are required, which is the point (§15.56).
+    fn fold(&mut self, line: &[Token]) -> Option<FoldDecl> {
+        let span = span_of(line);
+        // The heading is consumed and so is the block under it, whatever else goes wrong: a
+        // parser that returns without moving reads the same line for ever, and the arms would
+        // otherwise be read as top-level declarations and reported twice.
+        self.i += 1;
+        let block = self.block_lines();
+        let head = |p: &mut Self, what: String| -> Option<FoldDecl> {
+            p.err(
+                Diag::error("E021", tr!("`fold` の見出しの形が違います", "A `fold` heading is not shaped like this"))
+                    .at(p.at(span.line))
+                    .mark(span.clone(), what)
+                    .note(tr!(
+                        "形は `fold <判定の列> over <列の名前>` です。左は表が出す列、右は `elements` で宣言した列の名前です。",
+                        "The shape is `fold <verdict column> over <sequence>`: a column some table produces, and the name declared by `elements`."
+                    )),
+            );
+            None
+        };
+        let verdict = match line.get(1).and_then(|t| t.ident()) {
+            Some(v) => v.to_string(),
+            None => return head(self, tr!("畳む列がありません", "there is no column to fold")),
+        };
+        if line.get(2).and_then(|t| t.ident()) != Some(crate::kw::OVER) {
+            return head(self, tr!("`over` がありません", "`over` is missing"));
+        }
+        let over = match line.get(3).and_then(|t| t.ident()) {
+            Some(v) => v.to_string(),
+            None => return head(self, tr!("歩く列の名前がありません", "the sequence has no name")),
+        };
+        let mut arms = Vec::new();
+        let (mut empty, mut exhausted) = (None, None);
+        for l in block {
+            let sp = span_of(&l);
+            let Some((name, k)) = self.name_at(&l, 0) else { continue };
+            // `->` is written as the arrow the cells use.
+            let Some(a) = l.iter().position(|t| t.is(&Kind::Arrow)) else {
+                self.err(
+                    Diag::error("E021", tr!("`fold` の腕に `->` がありません", "A `fold` arm has no `->`"))
+                        .at(self.at(sp.line))
+                        .mark(sp, tr!("`{} -> next` のように書きます", "write it like `{} -> next`", name.text)),
+                );
+                continue;
+            };
+            let _ = k;
+            let rest = &l[a + 1..];
+            let word = rest.first().and_then(|t| t.ident()).unwrap_or("");
+            match name.text.as_str() {
+                crate::kw::EMPTY => empty = self.expr(rest),
+                crate::kw::EXHAUSTED => exhausted = self.expr(rest),
+                _ => {
+                    let arm = match word {
+                        crate::kw::NEXT => Some(Arm::Next),
+                        crate::kw::STOP => {
+                            if rest.get(1).and_then(|t| t.ident()) == Some(crate::kw::WITH) {
+                                self.expr(&rest[2..]).map(|e| Arm::Stop(Some(e)))
+                            } else {
+                                Some(Arm::Stop(None))
+                            }
+                        }
+                        crate::kw::TAKE_UNIQUE | crate::kw::TAKE_FIRST => self
+                            .expr(&rest[1..])
+                            .map(|e| Arm::Take { expr: e, unique: word == crate::kw::TAKE_UNIQUE }),
+                        crate::kw::KEEP_MAX => {
+                            let by = rest.iter().position(|t| t.ident() == Some(crate::kw::BY));
+                            match by {
+                                Some(b) => match (self.expr(&rest[1..b]), self.expr(&rest[b + 1..])) {
+                                    (Some(expr), Some(key)) => Some(Arm::KeepMax { expr, key }),
+                                    _ => None,
+                                },
+                                None => {
+                                    self.err(
+                                        Diag::error("E021", tr!("`keep_max` に `by` がありません", "A `keep_max` has no `by`"))
+                                            .at(self.at(sp.line))
+                                            .mark(sp.clone(), tr!("`keep_max <値> by <鍵>` の形です", "the shape is `keep_max <value> by <key>`"))
+                                            .note(tr!(
+                                                "どちらを残すかを決める鍵が要ります。鍵が無ければ「最後が勝つ」で、それは書いた人の意図とは限りません。",
+                                                "The key is what decides which one is kept. Without it the last one wins, which is rarely what anyone meant."
+                                            )),
+                                    );
+                                    None
+                                }
+                            }
+                        }
+                        other => {
+                            self.err(
+                                Diag::error("E021", tr!("`{other}` という腕はありません", "There is no arm called `{other}`"))
+                                    .at(self.at(sp.line))
+                                    .mark(sp.clone(), tr!("腕は次のどれかです", "an arm is one of these"))
+                                    .note(tr!(
+                                        "`next`（次へ）、`stop`（終わり）、`stop with <値>`、`take_unique <値>`、`take_first <値>`、`keep_max <値> by <鍵>`。",
+                                        "`next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`."
+                                    )),
+                            );
+                            None
+                        }
+                    };
+                    if let Some(arm) = arm {
+                        arms.push((name, arm, sp));
+                    }
+                }
+            }
+        }
+        Some(FoldDecl { verdict, over, arms, empty, exhausted, span })
+    }
+
+    /// `constraint <input> <= <input>` — one relation per line, and several lines all hold.
+    ///
+    /// Only the four comparisons the lexer already knows, and only between two names: what a
+    /// constraint is for is saying which combinations exist, and `A = B` is the two lines
+    /// `A <= B` and `A >= B` when it is ever wanted. One shape means one thing to read
+    /// (§15.55).
+    fn constraint(&mut self, line: &[Token]) -> Option<Constraint> {
+        let span = span_of(line);
+        let bad = |p: &mut Self, what: String| -> Option<Constraint> {
+            p.err(
+                Diag::error("E017", tr!("`constraint` の形が違います", "A `constraint` is not shaped like this"))
+                    .at(p.at(span.line))
+                    .mark(span.clone(), what)
+                    .note(tr!(
+                        "形は `constraint <入力> <= <入力>` です。比較は `<=` `<` `>=` `>` の四つで、両側とも入力の名前です。",
+                        "The shape is `constraint <input> <= <input>`: one of `<=`, `<`, `>=`, `>`, with the name of an input on each side."
+                    )),
+            );
+            None
+        };
+        let Some(p) = line.iter().position(|t| matches!(t.kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt)) else {
+            return bad(self, tr!("比較がありません", "there is no comparison here"));
+        };
+        let op = match line[p].kind {
+            Kind::Le => CmpOp::Le,
+            Kind::Ge => CmpOp::Ge,
+            Kind::Lt => CmpOp::Lt,
+            _ => CmpOp::Gt,
+        };
+        let name_of = |ts: &[Token]| -> Option<String> {
+            match ts {
+                [t] => t.ident().map(|s| s.to_string()),
+                _ => None,
+            }
+        };
+        let (Some(left), Some(right)) = (name_of(&line[1..p]), name_of(&line[p + 1..])) else {
+            return bad(self, tr!("両側とも入力の名前を一つずつ書きます", "one input's name is expected on each side"));
+        };
+        Some(Constraint { left, op, right, span })
     }
 
     fn result(&mut self, line: &[Token]) -> Option<ResultDecl> {

@@ -33,9 +33,12 @@ These are all the words that may start a line.
 | `enum` | a closed enumeration |
 | `group` | a named subset of an enum |
 | `inputs` | the rule's arguments |
+| `elements` | the fields of one element of a sequence the rule walks |
 | `outputs` | its results |
 | `derive` | a linear combination of inputs — **the only intermediate that can sit in a table column while still being a quantity** |
 | `define` | a boolean, or a computed intermediate |
+| `constraint` | a relation between inputs: which combinations **cannot happen** |
+| `fold` | reduces a column of per-element verdicts to one answer |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
 | `result` | assembles an output |

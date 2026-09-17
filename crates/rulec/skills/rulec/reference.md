@@ -259,6 +259,112 @@ The condition of a boolean `define` must be one of exactly two shapes (E113):
 A direct comparison of two numbers is neither. Declare the difference as a `derive` and
 compare that with a constant; the analysis is exact that way, and the message says so.
 
+## 6.1 constraint
+
+A relation between two inputs that the caller guarantees. It computes nothing; it says
+**which combinations of inputs can happen**.
+
+```rule
+constraint 全条件一致数 <= 会社名一致数
+constraint 適用開始日 <= 適用終了日
+```
+
+The shape is `constraint <input> <comparison> <input>`, with one of `<=`, `<`, `>=`, `>`
+(E017), an input on each side (E018), and both of a type that has an order — money, a
+quantity, a rate, a `number` or a `date`. Several lines all hold at once, and `A = B`, when
+it is ever wanted, is the two lines `A <= B` and `A >= B`.
+
+Three things follow from one line.
+
+- **The completeness check stops demanding rows for combinations that cannot happen.** A
+  table that covers everything reachable is complete, and the gap E101 used to report — with
+  a witness nobody could ever produce — is gone.
+- **A witness is one of the combinations that can happen.** Every input the checks construct
+  satisfies the constraints, so what a diagnostic hands back is a case somebody could really
+  send.
+- **The generated code refuses a violating input at the door**, with the constraint quoted,
+  the way it refuses a number outside its range. The proof assumed the constraint, so the
+  code has to insist on it.
+
+The vectors follow the same line: `rulec vectors` never produces a combination a constraint
+excludes, and an `examples` row that breaks one is an error (E019) rather than a case.
+
+Writing `-` in a cell says "this column does not matter here". Before constraints it also
+had to stand in for "this cannot happen", and the two read the same on the page. A constraint
+is how the second one is said out loud.
+
+## 6.2 elements and fold
+
+A rule is one decision about one case. Sometimes the case carries a **sequence** — the rows
+of a tariff sheet, the candidates a predicate left — and the answer comes from walking it.
+`elements` declares what one element carries; `fold` declares how the walk ends.
+
+```rule
+elements 運賃行(fee_rows)
+  行ゾーン(row_zone) : ゾーン区分
+  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万円
+  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+
+table 行判定(row_of)
+policy unique
+| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
+| 近畿圏   | <=1000円 | 確定                        |
+| …
+
+fold 採用 over 運賃行
+  スキップ  -> next
+  打ち切り  -> stop with 0円
+  確定      -> take_unique 行運賃
+  持ち越し  -> keep_max 行運賃 by 閾値
+  empty     -> 0円
+  exhausted -> held
+```
+
+The fields of an element are declared exactly like `inputs`, and a table may use them as
+columns; what differs is that the caller passes them once per element. **The table's own
+checks are unchanged** — one element is one case, and completeness, overlap, units and
+overflow are proved over it as they always were.
+
+The arms:
+
+| arm | what it does |
+|---|---|
+| `next` | leave this element, look at the next |
+| `stop` | end the walk; the answer is what `exhausted` says |
+| `stop with <value>` | end the walk with this answer |
+| `take_unique <value>` | take this element's value; a second element that also takes is an error at run time |
+| `take_first <value>` | take the first, ignore any later one |
+| `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
+| `empty -> <value>` | the answer when there are no elements. **Required** |
+| `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value being held |
+
+Four things are checked, and each of them is a loop somebody has written by hand and got
+wrong:
+
+1. the answer for an **empty** sequence is declared (E022);
+2. the answer for a walk that **reached the end** is declared (E023);
+3. every verdict the table can produce **has an arm** (E024), and an arm nothing can reach is
+   named (W115);
+4. **`take_unique` or `take_first`** — there is no bare `take`. Whether a second matching
+   element is an error or is ignored is a decision, and the grammar makes it one (E021).
+
+### Why a fold does not cost the checks their decidability
+
+The checks work because a cell narrows its own column and nothing else, so a row is a box in
+the input space and gaps and overlaps are arithmetic. An arbitrary loop would end that. A
+fold does not: the table is complete and unique, so **every element lands on exactly one
+verdict**, and the verdict's type is a finite enum. The walk is therefore a reduction of a
+string over a finite alphabet — a small automaton — and how many elements there are at run
+time does not change what can be said about it.
+
+### What is not built yet
+
+The checks above are; **generation is not**. `rulec gen` refuses a rule with a fold by name,
+and `examples` cannot be written for one yet (E025), because an example is a row of cells and
+the shape for writing a sequence into one is not decided. The wire that carries a sequence,
+the vectors that cover one and the eight backends that run one are one piece of work, and
+they arrive together.
+
 ## 7. Tables
 
 ```rule
@@ -373,11 +479,12 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `outputs` `derive` `define` `table` `policy` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `policy` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
 | functions | `min` `max` |
+| fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

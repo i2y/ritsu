@@ -1149,6 +1149,21 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
+        // A fold walks a sequence, and the wire, the vectors and the eight backends that
+        // carry one are the next stage (§15.56). Refusing by name is what keeps `check` and
+        // `gen` from disagreeing in silence.
+        if let Ok((f, _)) = rulec::prepare(&src, path) {
+            if f.fold.is_some() {
+                eprintln!(
+                    "{}",
+                    tr!(
+                        "error: `{path}` は畳み込み（fold）を持つので、まだ生成できません。検査は通ります（DESIGN §15.56）",
+                        "error: `{path}` has a fold, which cannot be generated yet. It does pass the checks (DESIGN §15.56)"
+                    )
+                );
+                return ExitCode::from(2);
+            }
+        }
         // Nothing is generated from a rule that does not pass (README, AGENTS.md, the
         // generate page). `prepare` only gets as far as the types, so the checks the tables
         // themselves carry — completeness, overlap, dead rows, overflow and the examples —

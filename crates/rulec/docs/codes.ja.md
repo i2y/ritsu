@@ -22,6 +22,15 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E014](#e014) | error | 出力のセルに式は書けません |
 | [E015](#e015) | error | `result` が書けるのは最初の出力だけです |
 | [E016](#e016) | error | `result` は一つしか書けません |
+| [E017](#e017) | error | `constraint` の形が違います |
+| [E018](#e018) | error | `constraint` は入力どうしの関係です |
+| [E019](#e019) | error | 例が制約を破っています |
+| [E020](#e020) | error | `elements` の宣言が正しくありません |
+| [E021](#e021) | error | `fold` の書き方が正しくありません |
+| [E022](#e022) | error | 要素がゼロ件のときの答えが宣言されていません |
+| [E023](#e023) | error | 最後まで見終えたときの答えが宣言されていません |
+| [E024](#e024) | error | 腕の無い判定があります |
+| [E025](#e025) | error | 畳み込みのある規則には、まだ例を書けません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -40,6 +49,7 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
+| [W115](#w115) | warning | どの要素もこの判定にはなりません |
 | [W114](#w114) | warning | 未確認の重なり: 両方に当てはまる入力が有り得ます |
 
 ## E001
@@ -101,7 +111,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / outputs / derive / define / table / result / examples / policy`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -119,7 +129,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / outputs / derive / define / table / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -409,6 +419,310 @@ result a = p + 100円
 ```
 
 関係するコード: [E015](#e015)
+
+## E017
+
+`error` — **`constraint` の形が違います**
+
+**いつ出るか。** `constraint` の行が「入力 比較 入力」になっていないとき。比較が無い、片側が名前一つでない、のどちらかです。
+
+**直し方。** `constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+  b(b) : number  range >=0 <=10
+
+constraint a
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E018](#e018)
+
+## E018
+
+`error` — **`constraint` は入力どうしの関係です**
+
+**いつ出るか。** `constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、金額・数量・率・number・日付のいずれかです。
+
+**直し方。** 両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書きます。列挙や真偽に大小はありません。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+
+constraint a <= r
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E017](#e017), [W111](#w111)
+
+## E019
+
+`error` — **例が制約を破っています**
+
+**いつ出るか。** 例の入力が `constraint` を満たしていないとき。制約は「この組み合わせは起きない」という宣言で、完全性の検査はそれを信じてその升目に行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。
+
+**直し方。** 例の値を直してください。その組み合わせが本当に起きるなら、制約のほうが間違っているので消します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=10
+  b(b) : number  range >=0 <=10
+
+constraint a <= b
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a | b | -> r(r) : bool |
+| - | - | true |
+
+examples
+| a | b | -> r |
+| 5 | 1 | true |
+```
+
+関係するコード: [E017](#e017), [E018](#e018), [E101](#e101)
+
+## E020
+
+`error` — **`elements` の宣言が正しくありません**
+
+**いつ出るか。** `elements` に名前が無いか、二本あるとき。規則が歩く列は一つで、その一要素ぶんの欄をそこに書きます（§15.56）。
+
+**直し方。** `elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんの欄を `inputs` と同じように書いてください。列が二つ要るなら、それは別の規則です。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+elements ys(ys)
+  m(m) : number  range >=0 <=10
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E021](#e021)
+
+## E021
+
+`error` — **`fold` の書き方が正しくありません**
+
+**いつ出るか。** `fold <判定の列> over <列の名前>` になっていないか、腕が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。
+
+**直し方。** 見出しと腕を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです（§15.56）。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+
+fold r
+  empty -> false
+```
+
+関係するコード: [E020](#e020), [E022](#e022), [E023](#e023), [E024](#e024)
+
+## E022
+
+`error` — **要素がゼロ件のときの答えが宣言されていません**
+
+**いつ出るか。** `fold` に `empty -> <値>` が無いとき。空の列は必ず来ます。手で書いた走査がいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。
+
+**直し方。** `empty -> <値>` を足してください。何を返すかは業務の判断で、道具が決められることではありません。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  exhausted -> held
+```
+
+関係するコード: [E023](#e023), [E024](#e024)
+
+## E023
+
+`error` — **最後まで見終えたときの答えが宣言されていません**
+
+**いつ出るか。** `fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに列が尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。
+
+**直し方。** `exhausted -> <値>` を足してください。保持しているものを返すなら `exhausted -> held` です。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+```
+
+関係するコード: [E022](#e022), [E024](#e024)
+
+## E024
+
+`error` — **腕の無い判定があります**
+
+**いつ出るか。** 表が出しうる判定のどれかに、`fold` の腕が無いとき。その判定の要素が来たら、歩き方が決まっていません。表の完全性と同じ検査を、畳み込みの側に当てたものです（§15.56）。
+
+**直し方。** 腕を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に腕があるときは W115 が出ます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  empty -> 0円
+  exhausted -> held
+```
+
+関係するコード: [E022](#e022), [E023](#e023), [W115](#w115)
+
+## E025
+
+`error` — **畳み込みのある規則には、まだ例を書けません**
+
+**いつ出るか。** `fold` のある規則に `examples` があるとき。例の一行はセルの並びで、要素の列を一つのセルに書く形がまだ決まっていません（§15.56）。
+
+**直し方。** 例をいったん外してください。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの四つの検査は、例が無くても効きます。生成も同じ段で、いまは `gen` が名前を挙げて断ります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5円 | a |
+| >5円 | b |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0円
+  exhausted -> held
+
+examples
+| k | -> r |
+| 3円 | 3円 |
+```
+
+関係するコード: [E021](#e021)
 
 ## E101
 
@@ -949,6 +1263,41 @@ policy unique
 ```
 
 関係するコード: [E101](#e101), [E012](#e012)
+
+## W115
+
+`warning` — **どの要素もこの判定にはなりません**
+
+**いつ出るか。** `fold` に腕があるのに、その判定をどの行も出さないとき。E024 の裏返しで、こちらは穴ではなく届かない腕です。書き忘れではなく、表のほうが変わった跡であることが多い（§15.56）。
+
+**直し方。** 表の行を見直すか、その腕を消してください。どちらが正しいかは表のほうを読まないと決まりません。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| - | a |
+
+fold d over xs
+  a -> take_first k
+  b -> next
+  empty -> 0円
+  exhausted -> held
+```
+
+関係するコード: [E024](#e024)
 
 ## W114
 

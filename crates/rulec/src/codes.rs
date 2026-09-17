@@ -114,6 +114,90 @@ const X_E016: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  ran
                       table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円 |\n\n\
                       result a = p\nresult a = p + 100円\n";
 
+const X_E017: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
+                      b(b) : number  range >=0 <=10\n\nconstraint a\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true |\n";
+const X_E018: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\n\
+                      constraint a <= r\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true |\n";
+const X_E019: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
+                      b(b) : number  range >=0 <=10\n\nconstraint a <= b\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | b | -> r(r) : bool |\n| - | - | true |\n\n\
+                      examples\n| a | b | -> r |\n| 5 | 1 | true |\n";
+
+/// A rule that walks a sequence: an element decides a verdict, and the fold reduces the
+/// column of verdicts. The three examples below bend one thing each.
+#[allow(dead_code)]
+const FOLD_HEAD: &str = "rule t(t) v1\n\n\
+                      enum v(v) = a(a) | b(b)\n\n\
+                      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+                      fold d over xs\n";
+const X_E022: &str = const_str_e022();
+const X_E023: &str = const_str_e023();
+const X_E024: &str = const_str_e024();
+const X_E025: &str = const_str_e025();
+const fn const_str_e022() -> &'static str {
+    // Every arm and `exhausted`, but no `empty`.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  exhausted -> held\n"
+}
+
+const fn const_str_e023() -> &'static str {
+    // Every arm and `empty`, but no `exhausted`.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n"
+}
+
+const fn const_str_e024() -> &'static str {
+    // Both answers, but the verdict `b` has no arm.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  empty -> 0円\n  exhausted -> held\n"
+}
+
+const fn const_str_e025() -> &'static str {
+    // A complete fold, with examples that cannot yet be written.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     examples\n| k | -> r |\n| 3円 | 3円 |\n"
+}
+
+const fn const_str_w115() -> &'static str {
+    // `b` is in the enum but no row produces it, and the fold still waits for it.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| - | a |\n\n\
+     fold d over xs\n  a -> take_first k\n  b -> next\n  empty -> 0円\n  exhausted -> held\n"
+}
+const X_W115: &str = const_str_w115();
+
+const X_E020: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      elements ys(ys)\n  m(m) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n";
+const X_E021: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n\n\
+                      fold r\n  empty -> false\n";
+
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -444,6 +528,132 @@ pub fn ledger() -> Vec<Entry> {
             &["E015"],
         ),
         err(
+            "E017",
+            tr!("`constraint` の形が違います", "A `constraint` is not shaped like this"),
+            tr!(
+                "`constraint` の行が「入力 比較 入力」になっていないとき。比較が無い、片側が名前一つでない、のどちらかです。",
+                "A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name."
+            ),
+            tr!(
+                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けます。",
+                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`."
+            ),
+            X_E017,
+            &["E018"],
+        ),
+        err(
+            "E018",
+            tr!("`constraint` は入力どうしの関係です", "A `constraint` relates two inputs"),
+            tr!(
+                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、金額・数量・率・number・日付のいずれかです。",
+                "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date."
+            ),
+            tr!(
+                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書きます。列挙や真偽に大小はありません。",
+                "Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order."
+            ),
+            X_E018,
+            &["E017", "W111"],
+        ),
+        err(
+            "E019",
+            tr!("例が制約を破っています", "An example breaks a constraint"),
+            tr!(
+                "例の入力が `constraint` を満たしていないとき。制約は「この組み合わせは起きない」という宣言で、完全性の検査はそれを信じてその升目に行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。",
+                "An example's inputs do not satisfy a `constraint`. The constraint declares that the combination does not happen, the completeness check believed it and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for."
+            ),
+            tr!(
+                "例の値を直してください。その組み合わせが本当に起きるなら、制約のほうが間違っているので消します。",
+                "Correct the example's values — or, if that combination really does happen, the constraint is what is wrong and it goes."
+            ),
+            X_E019,
+            &["E017", "E018", "E101"],
+        ),
+        err(
+            "E020",
+            tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
+            tr!(
+                "`elements` に名前が無いか、二本あるとき。規則が歩く列は一つで、その一要素ぶんの欄をそこに書きます（§15.56）。",
+                "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56)."
+            ),
+            tr!(
+                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんの欄を `inputs` と同じように書いてください。列が二つ要るなら、それは別の規則です。",
+                "Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
+            ),
+            X_E020,
+            &["E021"],
+        ),
+        err(
+            "E021",
+            tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
+            tr!(
+                "`fold <判定の列> over <列の名前>` になっていないか、腕が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。",
+                "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum."
+            ),
+            tr!(
+                "見出しと腕を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです（§15.56）。",
+                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose (§15.56)."
+            ),
+            X_E021,
+            &["E020", "E022", "E023", "E024"],
+        ),
+        err(
+            "E022",
+            tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"),
+            tr!(
+                "`fold` に `empty -> <値>` が無いとき。空の列は必ず来ます。手で書いた走査がいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。",
+                "A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over."
+            ),
+            tr!(
+                "`empty -> <値>` を足してください。何を返すかは業務の判断で、道具が決められることではありません。",
+                "Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make."
+            ),
+            X_E022,
+            &["E023", "E024"],
+        ),
+        err(
+            "E023",
+            tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
+            tr!(
+                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに列が尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。",
+                "A `fold` has no `exhausted -> <value>`: the answer when the sequence ran out and no element ended the walk. Answering with the value that was held is a choice, and it is made by writing it."
+            ),
+            tr!(
+                "`exhausted -> <値>` を足してください。保持しているものを返すなら `exhausted -> held` です。",
+                "Add `exhausted -> <value>`; to answer with what is held, that is `exhausted -> held`."
+            ),
+            X_E023,
+            &["E022", "E024"],
+        ),
+        err(
+            "E024",
+            tr!("腕の無い判定があります", "Some verdict has no arm"),
+            tr!(
+                "表が出しうる判定のどれかに、`fold` の腕が無いとき。その判定の要素が来たら、歩き方が決まっていません。表の完全性と同じ検査を、畳み込みの側に当てたものです（§15.56）。",
+                "A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold (§15.56)."
+            ),
+            tr!(
+                "腕を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に腕があるときは W115 が出ます。",
+                "Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115."
+            ),
+            X_E024,
+            &["E022", "E023", "W115"],
+        ),
+        err(
+            "E025",
+            tr!("畳み込みのある規則には、まだ例を書けません", "A rule with a fold cannot carry examples yet"),
+            tr!(
+                "`fold` のある規則に `examples` があるとき。例の一行はセルの並びで、要素の列を一つのセルに書く形がまだ決まっていません（§15.56）。",
+                "A rule with a `fold` has an `examples` block. An example is a row of cells, and there is no shape yet for writing a sequence into one (§15.56)."
+            ),
+            tr!(
+                "例をいったん外してください。表そのものの検査（完全性・重なり・単位・オーバーフロー）と、畳み込みの四つの検査は、例が無くても効きます。生成も同じ段で、いまは `gen` が名前を挙げて断ります。",
+                "Take the examples out for now. The table's own checks — completeness, overlap, units, overflow — and the fold's four checks hold without them. Generation is at the same stage: `gen` refuses such a rule by name."
+            ),
+            X_E025,
+            &["E021"],
+        ),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -695,6 +905,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W111,
             &["E101", "E012"],
+        ),
+        warn(
+            "W115",
+            tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),
+            tr!(
+                "`fold` に腕があるのに、その判定をどの行も出さないとき。E024 の裏返しで、こちらは穴ではなく届かない腕です。書き忘れではなく、表のほうが変わった跡であることが多い（§15.56）。",
+                "A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake (§15.56)."
+            ),
+            tr!(
+                "表の行を見直すか、その腕を消してください。どちらが正しいかは表のほうを読まないと決まりません。",
+                "Look again at the table's rows, or drop the arm. Which of the two is right is decided by reading the table, not this message."
+            ),
+            X_W115,
+            &["E024"],
         ),
         warn(
             "W114",

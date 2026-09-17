@@ -20,6 +20,18 @@ pub enum CmpOp {
     Gt,
 }
 
+impl CmpOp {
+    /// How it is written, in the source and in everything that quotes the source back.
+    pub fn word(self) -> &'static str {
+        match self {
+            CmpOp::Le => "<=",
+            CmpOp::Ge => ">=",
+            CmpOp::Lt => "<",
+            CmpOp::Gt => ">",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Lit {
     Num(Num),
@@ -206,6 +218,65 @@ pub struct ResultDecl {
     pub span: Span,
 }
 
+/// `elements 運賃行(fee_rows)` — the fields of one element of the sequence the rule walks.
+///
+/// An element is a row of inputs, so the fields are declared exactly like `inputs` and a
+/// table may use them as columns. The sequence itself is what the caller passes; how many
+/// there are is decided at run time, and nothing in the checks depends on that number
+/// (§15.56).
+#[derive(Debug, Clone)]
+pub struct ElementsDecl {
+    pub name: Name,
+    pub fields: Vec<VarDecl>,
+    pub span: Span,
+}
+
+/// What one verdict does to the walk (§15.56).
+#[derive(Debug, Clone)]
+pub enum Arm {
+    /// Leave this element and look at the next.
+    Next,
+    /// End the walk. With an expression, that is the answer; without one, the answer is
+    /// whatever `exhausted` says.
+    Stop(Option<Expr>),
+    /// Take this element's value. `unique` makes a second taking element an error at run
+    /// time; `first` keeps the first and ignores the rest.
+    Take { expr: Expr, unique: bool },
+    /// Hold this element's value, replacing what is held when the key is larger.
+    KeepMax { expr: Expr, key: Expr },
+}
+
+/// `fold 採用 over 運賃行` — how a column of verdicts becomes one answer.
+///
+/// The table decides one element at a time and its verdict column is a **finite** enum, so
+/// the walk is a reduction of a string over a finite alphabet: a small automaton, which is
+/// why adding it does not cost the checks their decidability (§15.56).
+#[derive(Debug, Clone)]
+pub struct FoldDecl {
+    /// The table output column the walk reads, one verdict per element.
+    pub verdict: String,
+    /// The sequence it walks.
+    pub over: String,
+    /// One arm per value of the verdict's enum, in source order.
+    pub arms: Vec<(Name, Arm, Span)>,
+    /// The answer when there are no elements at all. Declaring it is not optional.
+    pub empty: Option<Expr>,
+    /// The answer when the walk reached the end. Declaring it is not optional.
+    pub exhausted: Option<Expr>,
+    pub span: Span,
+}
+
+/// `constraint 全条件一致数 <= 会社名一致数` — a relation between two inputs that the caller
+/// guarantees. Nothing computes with it: it says which combinations exist, so the checks do
+/// not demand rows for the ones that do not, and the entry guard refuses them (§15.55).
+#[derive(Debug, Clone)]
+pub struct Constraint {
+    pub left: String,
+    pub op: CmpOp,
+    pub right: String,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleFile {
     pub name: Name,
@@ -221,4 +292,10 @@ pub struct RuleFile {
     pub result: Option<ResultDecl>,
     /// `examples` — an executable specification (§1.2), shaped like a table.
     pub examples: Option<Table>,
+    /// The relations between inputs that always hold (§15.55).
+    pub constraints: Vec<Constraint>,
+    /// The fields of one element of the sequence, when the rule walks one (§15.56).
+    pub elements: Option<ElementsDecl>,
+    /// How the verdicts of the per-element table reduce to one answer (§15.56).
+    pub fold: Option<FoldDecl>,
 }

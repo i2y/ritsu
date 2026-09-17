@@ -358,7 +358,7 @@ $ cargo test          # 278 tests; python3, node, rustc, ruby, go and swiftc are
 
 ## Where it stands
 
-18 rules taken from real published terms are checked, generated and run on every commit, and all 35 diagnostics are implemented. What is built:
+18 rules taken from real published terms are checked, generated and run on every commit, and all 45 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

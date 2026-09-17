@@ -553,9 +553,29 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
 
 /// Evaluate the candidate population and deterministically select a subset that satisfies
 /// coverage.
+/// Whether an input satisfies every `constraint` the rule declares (§15.55).
+///
+/// A combination the caller says does not happen is not a test case: the generated code
+/// refuses it at the door, and the checker never demanded a row for it. Filtering here is
+/// what keeps the suite and the proof talking about the same set of inputs.
+pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
+    f.constraints.iter().all(|k| match (a.get(&k.left), a.get(&k.right)) {
+        (Some(Val::Num(x)), Some(Val::Num(y))) => {
+            let o = x.cmp_to(*y);
+            match k.op {
+                crate::ast::CmpOp::Le => o != std::cmp::Ordering::Greater,
+                crate::ast::CmpOp::Lt => o == std::cmp::Ordering::Less,
+                crate::ast::CmpOp::Ge => o != std::cmp::Ordering::Less,
+                crate::ast::CmpOp::Gt => o == std::cmp::Ordering::Greater,
+            }
+        }
+        _ => true,
+    })
+}
+
 pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     let cands = candidates(f, c);
-    let raw = pool(f, c, &cands);
+    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a)).collect();
 
     let key_of = |a: &BTreeMap<String, Val>| -> String {
         a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")
