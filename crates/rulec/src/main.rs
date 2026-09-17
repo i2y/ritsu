@@ -261,7 +261,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
-                (0, tr!("四基準すべてを満たす", "all four criteria are met")),
+                (0, tr!("五基準すべてを満たす", "all five criteria are met")),
                 (1, tr!("欠けている義務がある（名指しされる）", "an obligation is missing (it is named)")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],

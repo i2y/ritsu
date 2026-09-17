@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 13] = [
+const CORPUS: [&str; 15] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -20,6 +20,8 @@ const CORPUS: [&str; 13] = [
     "tests/corpus/所得税.rule",
     "tests/corpus/領収書の印紙税.rule",
     "tests/corpus/印紙税.rule",
+    "tests/corpus/全国運賃.rule",
+    "tests/corpus/納入先照合.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -31,11 +33,14 @@ fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>)
 }
 
 #[test]
-fn コーパスは四基準を全部満たす() {
+fn コーパスは五基準を全部満たす() {
     for rel in CORPUS {
-        let (f, c, vs) = load(rel);
-        let a = coverage::audit(&f, &c, rel, &vs, &[]);
-        assert!(a.ok(), "{rel}\n{}", coverage::render(&a, &vs, &[]));
+        let (f, c, _) = load(rel);
+        // `audit_file` is what `rulec coverage` runs: the cases with an answer **and** the cases
+        // that are refused. A fold's last transition — a second element on `take_unique` — is
+        // only ever witnessed by a refused case, so leaving them out fails a rule that is green.
+        let (a, vs, refused) = coverage::audit_file(&f, &c, rel);
+        assert!(a.ok(), "{rel}\n{}", coverage::render(&a, &vs, &refused));
         for k in [ROW, BOUND, SHADOW] {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(met, req, "{rel} の {k}");
@@ -201,6 +206,8 @@ fn 義務の件数を固定する() {
         ("tests/corpus/所得税.rule", 7, 12, 0),
         ("tests/corpus/領収書の印紙税.rule", 17, 28, 0),
         ("tests/corpus/印紙税.rule", 23, 41, 0),
+        ("tests/corpus/全国運賃.rule", 4, 4, 0),
+        ("tests/corpus/納入先照合.rule", 7, 6, 0),
     ];
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
     for (rel, rows, bounds, shadows) in PINNED {

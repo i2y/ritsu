@@ -540,6 +540,9 @@ fn count_pool(
         out.push(case(seq(vec![e]), tr!("要素の候補", "an element's candidates")));
     }
 
+    // The counted element and the cap of each count, kept for the row-wise sweep below.
+    let mut counted: Vec<(&crate::ast::CountDecl, &BTreeMap<String, Val>)> = Vec::new();
+
     for d in &counts {
         // An element this count accepts, and one it does not.
         let mut hit: Option<&BTreeMap<String, Val>> = None;
@@ -565,6 +568,7 @@ fn count_pool(
             }
         }
         let Some(hit) = hit else { continue };
+        counted.push((d, hit));
         // One past the largest number the cells name, held to what the range allows: that is
         // the first count on the far side of every boundary the tables draw.
         let top = numeric_bounds(f, &d.name.text, &Ty::Number, c)
@@ -582,6 +586,64 @@ fn count_pool(
         // rather than counting everything it sees.
         if let Some(miss) = miss {
             out.push(case(seq(vec![hit, miss]), tr!("{} に入るものと入らないもの", "one counted and one not, for {}", d.name.text)));
+        }
+    }
+
+    // A table downstream of a count is an ordinary table, so its boundary pairs have to be
+    // walked with the row's other columns held (§9.2). The sweep above moves the count with the
+    // baseline scalars only, which never lands on the far side of a boundary drawn in a row the
+    // baseline does not satisfy — `納入先照合` 行3 (`| 1 | false |`) had no vector at all with
+    // `自動確定可 = false` and a count of 0 or 2. `place` cannot help: a count is not an input,
+    // so there is nothing to place a number on. The pair is built here instead, out of the row's
+    // own assignment for the other columns and a sequence of exactly that many counted elements.
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        for (ri, row) in t.rows.iter().enumerate() {
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                let Some(&(d, hit)) = counted.iter().find(|(d, _)| d.name.text == *col) else {
+                    continue;
+                };
+                let Some(cell) = row.cells.get(ci) else { continue };
+                let ty = c.ty_of(col).unwrap_or(Ty::Number);
+                // The row's other columns, as the row-target seed builds them. A column another
+                // count decides is left alone: there is no one length that sets two counts.
+                let mut a = scalars.clone();
+                for (cj, (other, _)) in t.inputs.iter().enumerate() {
+                    if cj == ci || fields.contains(other) || counted.iter().any(|(e, _)| e.name.text == *other) {
+                        continue;
+                    }
+                    let (Some(oc), Some(ovs)) = (row.cells.get(cj), cands.get(other)) else {
+                        continue;
+                    };
+                    let oty = c.ty_of(other).unwrap_or(Ty::Unknown);
+                    if let Some(v) = satisfying(oc, ovs, &oty, c) {
+                        a.insert(other.clone(), v);
+                    }
+                }
+                let q = crate::coverage::quantum(c, col, &ty);
+                for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                    let b = crate::coverage::show_rat(b, &ty);
+                    let why = tr!(
+                        "境界両側: 表 {tname} 行{} {col} {b} の",
+                        "boundary pair: table {tname} row {} {col} {b}",
+                        ri + 1
+                    );
+                    for (n, side) in [
+                        (inside, tr!("{why}内側", "{why} inside")),
+                        (outside, tr!("{why}外側", "{why} outside")),
+                    ] {
+                        // A count is a whole number of elements, inside the range it declared —
+                        // which is also the cap on how long a sequence may be.
+                        if n.den != 1 || n.num < 0 || !crate::coverage::in_range(c, &d.name.text, n) {
+                            continue;
+                        }
+                        let mut m = a.clone();
+                        m.insert(over.clone(), seq((0..n.num).map(|_| hit).collect()));
+                        out.push((m, side));
+                    }
+                }
+            }
         }
     }
 
@@ -896,7 +958,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let mut keep: BTreeSet<usize> = audit.witness.clone();
     keep.extend(forced.iter().copied());
 
-    // The pairwise safety net (§9.2): with the four criteria satisfied, greedily add the
+    // The pairwise safety net (§9.2): with the five criteria satisfied, greedily add the
     // two-column combinations that have not appeared yet.
     let mut seen2: BTreeSet<(String, String, String, String)> = BTreeSet::new();
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();

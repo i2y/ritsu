@@ -1,6 +1,6 @@
 //! Completeness audit of the vector suite (§9.2).
 //!
-//! The four coverage criteria are derived **from the rule first**, not from the generated
+//! The five coverage criteria are derived **from the rule first**, not from the generated
 //! vector set. The list of obligations is built independently of the generator, so that an
 //! obligation the candidate population failed to reach cannot be written off as "never
 //! needed in the first place". The point of the separation is the one-way relation: when the
@@ -163,7 +163,7 @@ fn thresholds(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
     out
 }
 
-fn in_range(c: &Checked, col: &str, v: Rat) -> bool {
+pub fn in_range(c: &Checked, col: &str, v: Rat) -> bool {
     let Some((lo, hi)) = c.ranges.get(col) else { return true };
     lo.is_none_or(|l| v.cmp_to(l) != std::cmp::Ordering::Less)
         && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
@@ -182,7 +182,7 @@ pub fn show_rat(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// Judge whether a vector set satisfies the four criteria of §9.2.
+/// Judge whether a vector set satisfies the five criteria of §9.2.
 /// `refused` are the cases the reference evaluator has no answer for (`vectors::Suite`). They
 /// are part of the suite — `rulec test` holds the generated code to refusing them — so an
 /// obligation only such a case can reach is met, not missing (§15.56).
@@ -198,7 +198,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         .collect();
     let fired: Vec<BTreeSet<String>> = vs.iter().map(|v| v.trace.iter().cloned().collect()).collect();
 
-    // All four criteria are always reported. If a criterion with no obligations were left
+    // All five criteria are always reported. If a criterion with no obligations were left
     // out, the tallying side could not tell that apart from "the criterion was not checked".
     let mut tally: BTreeMap<&'static str, (usize, usize)> =
         [ROW, BOUND, SHADOW, TIE, FOLD].into_iter().map(|k| (k, (0, 0))).collect();
