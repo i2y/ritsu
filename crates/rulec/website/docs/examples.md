@@ -720,6 +720,76 @@ examples
 - **An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.
 - **SQL is the one target that does not get it.** One query has no place to carry a value from row to row and stop partway. Every other target is generated, and agrees with the reference evaluator on every commit.
 
+## Counting a sequence, and deciding from the count
+
+An invoice's name is matched against the supplier ledger, one candidate at a time. A table judges each candidate, `count` counts the ones it called a match, and **the next table decides what to do with that number**. "One means automatic, more than one means look at it" is decided inside the rule rather than by whoever counted before calling it.
+
+```rule
+rule 納入先照合(supplier_match) v1
+description "請求書の宛名を取引先台帳と一件ずつ照合し、一致した件数で次の手を決める。並びを数える例"
+
+enum 照合(match_kind) = 一致(same) | 不一致(diff)
+enum 次の手(action_kind) = 新規登録(register) | 自動確定(auto) | 目視確認(review)
+
+inputs
+  自動確定可(auto_ok) : bool
+
+# 台帳の候補。一件ぶんの欄で、呼び出し側は何件でも渡す
+elements 候補(candidates)
+  会社名一致(name_match) : bool
+  住所一致(addr_match)   : bool
+
+outputs
+  手続き(action) : 次の手
+
+# 一件の候補に対する判定。表の検査はいままでどおり効く
+table 候補判定(row_of)
+policy unique
+| 会社名一致 | 住所一致 | -> 照合結果(kind) : 照合 |
+| true       | true     | 一致                     |
+| true       | false    | 不一致                   |
+| false      | -        | 不一致                   |
+
+# 歩いたあとに残るのは数だけ。範囲は完全性の全体集合であり、並びの長さの上限でもある
+count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
+
+table 手続き判定(action_of)
+policy unique
+| 一致数 | 自動確定可 | -> 手続き(action) : 次の手 |
+| 0      | -          | 新規登録                   |
+| 1      | true       | 自動確定                   |
+| 1      | false      | 目視確認                   |
+| >=2    | -          | 目視確認                   |
+
+sequence 一件だけ一致(one)
+| 会社名一致 | 住所一致 |
+| true       | true     |
+| true       | false    |
+
+sequence 二件一致(two)
+| 会社名一致 | 住所一致 |
+| true       | true     |
+| true       | true     |
+
+sequence 候補なし(none)
+| 会社名一致 | 住所一致 |
+
+examples
+| 自動確定可 | 候補         | -> 手続き |
+| true       | 一件だけ一致 | 自動確定  |
+| false      | 一件だけ一致 | 目視確認  |
+| true       | 二件一致     | 目視確認  |
+| true       | 候補なし     | 新規登録  |
+```
+
+**What this one shows**
+
+- **A count is what the walk leaves behind.** `count 一致数(hits) over 候補 where 照合結果 = 一致` is how many elements the per-element table judged `一致`. From there it is a `number`, so it can be a column.
+- **What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.
+- **The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.
+- **Nothing accumulates across elements.** A count counts; there is no sum and no average. Compute one before the call and pass it in as a value.
+- **A `fold` and a `count` cannot share a rule** (E031): two endings for the same walk, and a fold may stop partway.
+
 ## A rule written in English — EU air passenger rights
 
 Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.

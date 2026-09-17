@@ -33,6 +33,10 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E025](#e025) | error | 例に並びの欄がありません |
 | [E026](#e026) | error | `sequence` の書き方が正しくありません |
 | [E027](#e027) | error | 例が指す並びがありません |
+| [E028](#e028) | error | `count` の書き方が正しくありません |
+| [E029](#e029) | error | この列は数えられません |
+| [E030](#e030) | error | `count` に範囲が要ります |
+| [E031](#e031) | error | `fold` と `count` は一緒に書けません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -114,7 +118,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -132,7 +136,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -806,6 +810,141 @@ examples
 ```
 
 関係するコード: [E025](#e025), [E026](#e026)
+
+## E028
+
+`error` — **`count` の書き方が正しくありません**
+
+**いつ出るか。** `count <名前>(<別名>) over <並びの名前> where <列> = <値>` になっていないとき。`over` が無い、`where` が無い、指した並びが `elements` で宣言されていない、`=` の右に値が無い（§15.58）。
+
+**直し方。** 上の形に直してください。`= <値>` は、真偽の列を数えるときだけ省けます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) where b  range >=0 <=10
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E029](#e029), [E030](#e030), [E020](#e020)
+
+## E029
+
+`error` — **この列は数えられません**
+
+**いつ出るか。** `where` が指す列が、要素ごとに決まる値でないとき（入力や導出は一件の呼び出しに一つしかないので、数えても 0 か 1 です）。値が有限の集合でないとき。書いた値がその列挙にないとき。列挙の列なのに `= <値>` が無いとき（§15.58）。
+
+**直し方。** 要素の欄か、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+  ok(ok) : bool
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) over xs where ok  range >=0 <=10
+
+table j(j)
+policy unique
+| h | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E028](#e028), [E012](#e012)
+
+## E030
+
+`error` — **`count` に範囲が要ります**
+
+**いつ出るか。** `count` の行に `range >=0 <=<上限>` が無いか、上限が無いか、下限が負のとき。範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です（§15.58）。
+
+**直し方。** `range >=0 <=100` の形で書いてください。生成コードは、この上限より長い並びを入口で断ります。数値の入力と同じで、宣言の外は黙って通しません。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) over xs where b
+
+table j(j)
+policy unique
+| h | -> r(r) : bool |
+| - | true |
+```
+
+関係するコード: [E028](#e028), [E112](#e112)
+
+## E031
+
+`error` — **`fold` と `count` は一緒に書けません**
+
+**いつ出るか。** 一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるので、止まった歩きの数え上げが何を意味するかが決まりません（§15.58）。
+
+**直し方。** 数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+outputs
+  r(r) : number  round down(1)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5 | a |
+| >5 | b |
+
+count h(h) over xs where d = a  range >=0 <=10
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0
+  exhausted -> held
+```
+
+関係するコード: [E021](#e021), [E029](#e029)
 
 ## E101
 

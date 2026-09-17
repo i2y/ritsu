@@ -232,6 +232,27 @@ const X_E021: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\
                       table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n\n\
                       fold r\n  empty -> false\n";
 
+const X_E028: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) where b  range >=0 <=10\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n";
+const X_E029: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n  ok(ok) : bool\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) over xs where ok  range >=0 <=10\n\n\
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true |\n";
+const X_E030: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) over xs where b\n\n\
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true |\n";
+const X_E031: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : number  round down(1)\n\n\
+                      table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5 | a |\n| >5 | b |\n\n\
+                      count h(h) over xs where d = a  range >=0 <=10\n\n\
+                      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0\n  exhausted -> held\n";
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -714,6 +735,62 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E027,
             &["E025", "E026"],
+        ),
+        err(
+            "E028",
+            tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"),
+            tr!(
+                "`count <名前>(<別名>) over <並びの名前> where <列> = <値>` になっていないとき。`over` が無い、`where` が無い、指した並びが `elements` で宣言されていない、`=` の右に値が無い（§15.58）。",
+                "The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right (§15.58)."
+            ),
+            tr!(
+                "上の形に直してください。`= <値>` は、真偽の列を数えるときだけ省けます。",
+                "Write it in that shape. The `= <value>` may be left out only for a bool column."
+            ),
+            X_E028,
+            &["E029", "E030", "E020"],
+        ),
+        err(
+            "E029",
+            tr!("この列は数えられません", "This column cannot be counted"),
+            tr!(
+                "`where` が指す列が、要素ごとに決まる値でないとき（入力や導出は一件の呼び出しに一つしかないので、数えても 0 か 1 です）。値が有限の集合でないとき。書いた値がその列挙にないとき。列挙の列なのに `= <値>` が無いとき（§15.58）。",
+                "The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum\'s; or an enum column was given no `= <value>` (§15.58)."
+            ),
+            tr!(
+                "要素の欄か、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。",
+                "Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check."
+            ),
+            X_E029,
+            &["E028", "E012"],
+        ),
+        err(
+            "E030",
+            tr!("`count` に範囲が要ります", "A `count` needs a range"),
+            tr!(
+                "`count` の行に `range >=0 <=<上限>` が無いか、上限が無いか、下限が負のとき。範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です（§15.58）。",
+                "The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** (§15.58)."
+            ),
+            tr!(
+                "`range >=0 <=100` の形で書いてください。生成コードは、この上限より長い並びを入口で断ります。数値の入力と同じで、宣言の外は黙って通しません。",
+                "Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range."
+            ),
+            X_E030,
+            &["E028", "E112"],
+        ),
+        err(
+            "E031",
+            tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"),
+            tr!(
+                "一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるので、止まった歩きの数え上げが何を意味するかが決まりません（§15.58）。",
+                "One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided (§15.58)."
+            ),
+            tr!(
+                "数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。",
+                "To count, drop the `fold` and let a table judge the count. To fold, drop the `count`."
+            ),
+            X_E031,
+            &["E021", "E029"],
         ),
         err(
             "E101",

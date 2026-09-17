@@ -551,7 +551,24 @@ impl TableRegion {
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
-                    let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
+                    let (mut b, mut lo, mut hi) = num_bounds(&t.rows, ci, &ty, &range);
+                    // A count is bounded by construction — never negative, never longer than
+                    // the sequence the guard caps — and it declares that bound (§15.58). The
+                    // axis takes it, or the completeness check would ask for a row covering a
+                    // count of −1.
+                    let counted = f.items.iter().find_map(|it| match it {
+                        Item::Count(d) if d.name.text == *name => c.ranges.get(name).copied(),
+                        _ => None,
+                    });
+                    if let Some((clo, chi)) = counted {
+                        for v in [clo, chi].into_iter().flatten() {
+                            b.push(v);
+                        }
+                        b.sort_by(|x, y| x.cmp_to(*y));
+                        b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
+                        lo = clo.or(lo);
+                        hi = chi.or(hi);
+                    }
                     let unit = match &ty {
                         Ty::Money { cur, .. } => cur.clone(),
                         Ty::Qty { unit, .. } => unit.clone(),

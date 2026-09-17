@@ -323,6 +323,51 @@ pub struct Checked {
     pub diags: Vec<Diag>,
 }
 
+/// The names that only have a value **inside the walk**: a field of one element, and
+/// everything computed from one (§15.58).
+///
+/// A rule with `elements` runs in two phases — the items in this set once per element, the
+/// rest once, with the counts in scope — and the split is derived rather than declared: an
+/// item is element-scoped exactly when it reads something that is. The loop repeats until
+/// nothing changes so that the answer cannot depend on the order the items are written in.
+pub fn element_scoped(f: &RuleFile) -> HashSet<String> {
+    let mut set: HashSet<String> =
+        f.elements.iter().flat_map(|e| &e.fields).map(|v| v.name.text.clone()).collect();
+    loop {
+        let before = set.len();
+        for it in &f.items {
+            match it {
+                Item::Derived(d) => {
+                    let mut deps = Vec::new();
+                    collect_names(&d.expr, &mut deps);
+                    if deps.iter().any(|n| set.contains(n)) {
+                        set.insert(d.name.text.clone());
+                    }
+                }
+                Item::Define(d) => {
+                    let mut deps = Vec::new();
+                    collect_names(&d.expr, &mut deps);
+                    if deps.iter().any(|n| set.contains(n)) {
+                        set.insert(d.name.text.clone());
+                    }
+                }
+                Item::Table(t) => {
+                    if t.inputs.iter().any(|(n, _)| set.contains(n)) {
+                        for oc in &t.outputs {
+                            set.insert(oc.name.text.clone());
+                        }
+                    }
+                }
+                // A count is what the walk leaves behind, so it is not in the walk.
+                Item::Count(_) => {}
+            }
+        }
+        if set.len() == before {
+            return set;
+        }
+    }
+}
+
 pub fn check(f: &RuleFile, path: &str) -> Checked {
     let mut c = Checked {
         syms: HashMap::new(),
@@ -489,6 +534,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         match it {
             Item::Derived(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Define(d) => named.push((d.name.text.as_str(), &d.name.span)),
+            Item::Count(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Table(t) => {
                 if let Some(n) = &t.name {
                     named.push((n.text.as_str(), &n.span));
@@ -577,6 +623,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             Item::Table(t) => c.table(t, path),
+            Item::Count(d) => c.count_decl(d, f, path),
         }
     }
 
@@ -598,6 +645,20 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // finite enum, so the walk is a reduction of a string over a finite alphabet. What has to
     // be checked is that the automaton has no holes: an arm for every verdict the table can
     // produce, and the two answers that belong to no element at all.
+    if let (Some(fold), Some(d)) = (
+        &f.fold,
+        f.items.iter().find_map(|it| if let Item::Count(d) = it { Some(d) } else { None }),
+    ) {
+        c.diags.push(
+            Diag::error("E031", tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"))
+                .at(tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line))
+                .mark(d.span.clone(), tr!("この規則には `fold` もあります（{} 行目）", "this rule also has a `fold` (line {})", fold.span.line))
+                .note(tr!(
+                    "どちらも同じ並びの終わり方です。`fold` は打ち切れるので、途中で止まった歩きの数え上げが何を意味するかが決まりません。数えたいなら `fold` を消して、数えた結果を表で判定してください。",
+                    "They are two endings for the same walk. A `fold` can stop partway, and what a count means on a walk that stopped is not decided. To count, drop the `fold` and let a table judge the count."
+                )),
+        );
+    }
     if let Some(fold) = &f.fold {
         let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
         let el_name = f.elements.as_ref().map(|e| e.name.text.clone());
@@ -994,6 +1055,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
     for it in &f.items {
+        if let Item::Count(d) = it {
+            if !c.used.contains(&d.name.text) {
+                c.diags.push(
+                    Diag::warning("W111", tr!("数え上げ {} はどこでも使われていません", "Count {} is never used", d.name.text))
+                        .at(at(d.span.line))
+                        .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
+                        .note(tr!(
+                            "数えた結果を使わないなら、並びを歩く意味がありません。表の列に置くか、消してください。",
+                            "A count nothing reads is a walk for nothing. Put it in a column, or remove it."
+                        )),
+                );
+            }
+        }
         if let Item::Derived(d) = it {
             if !c.used.contains(&d.name.text) {
                 c.diags.push(
@@ -1258,6 +1332,134 @@ impl Checked {
             .iter()
             .find(|(_, vs)| vs.iter().any(|x| x == v))
             .map(|(n, _)| n.clone())
+    }
+
+    /// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` (§15.58).
+    ///
+    /// Three things have to hold for the count to be a number the rest of the rule can treat
+    /// like any other: the test reads a column of **one element**, that column's values are a
+    /// closed set, and the range is declared. The range is not decoration — it is the
+    /// universe the completeness check quantifies over when the count becomes a column, and
+    /// it is the cap the generated code holds the sequence to.
+    fn count_decl(&mut self, d: &CountDecl, f: &RuleFile, path: &str) {
+        let at = tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line);
+        let col = d.column.text.clone();
+
+        if f.elements.as_ref().map(|e| e.name.text.as_str()) != Some(d.over.as_str()) {
+            self.diags.push(
+                Diag::error("E028", tr!("`over` が指す並びがありません", "`over` names a sequence that is not declared"))
+                    .at(at.clone())
+                    .mark(d.span.clone(), tr!("{} は宣言されていません", "{} is not declared", d.over))
+                    .note(tr!(
+                        "数えられるのは `elements <名前>(<別名>)` で宣言した並びだけです。",
+                        "Only the sequence declared by `elements <name>(<alias>)` can be counted."
+                    )),
+            );
+        }
+
+        let scoped = element_scoped(f);
+        let sym = self.syms.get(&col).cloned();
+        let bad = |c: &mut Self, what: String, note: String| {
+            c.diags.push(
+                Diag::error("E029", tr!("この列は数えられません", "This column cannot be counted"))
+                    .at(at.clone())
+                    .mark(d.column.span.clone(), what)
+                    .note(note),
+            );
+        };
+        match &sym {
+            None => self.diags.push(
+                Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", col))
+                    .at(at.clone())
+                    .mark(d.column.span.clone(), tr!("宣言されていません", "not declared")),
+            ),
+            Some(_) if !scoped.contains(&col) => bad(
+                self,
+                tr!("{col} は要素ごとの値ではありません", "{col} is not a value of one element"),
+                tr!(
+                    "数えられるのは、要素の欄か、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値を数えても、答えは 0 か 1 にしかなりません。",
+                    "Only a field of an element, or a column a per-element table produces, can be counted. Counting a value there is one of per call could only ever answer 0 or 1."
+                ),
+            ),
+            Some(sym) if !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
+                self,
+                tr!("{col} は {} です", "{col} is {}", sym.ty),
+                tr!(
+                    "数える条件は「その列がこの値であること」なので、値が有限の集合である列——真偽か列挙——にだけ書けます（§15.58）。",
+                    "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum (§15.58)."
+                ),
+            ),
+            Some(sym) => {
+                // The value the column has to take. A bool needs none, which is what makes
+                // `where 会社名一致` read the way it is meant to.
+                match (&d.value, &sym.ty) {
+                    (None, Ty::Bool) => {}
+                    (None, _) => bad(
+                        self,
+                        tr!("どの値を数えるのかが書かれていません", "the value to count is missing"),
+                        tr!(
+                            "`where {col} = <値>` と書いてください。値を書かなくていいのは真偽の列だけです。",
+                            "Write `where {col} = <value>`. Only a bool column may leave it out."
+                        ),
+                    ),
+                    (Some(v), Ty::Bool) => {
+                        if v.text != crate::kw::TRUE && v.text != crate::kw::FALSE {
+                            bad(
+                                self,
+                                tr!("{} は真偽の値ではありません", "{} is not a boolean", v.text),
+                                tr!("書けるのは `true` か `false` です。", "Write `true` or `false`."),
+                            );
+                        }
+                    }
+                    (Some(v), Ty::Enum(en)) => {
+                        let ok = self.enums.get(en).is_some_and(|vs| vs.contains(&v.text));
+                        if !ok {
+                            bad(
+                                self,
+                                tr!("{} は列挙 {en} の値ではありません", "{} is not a value of the enum {en}", v.text),
+                                tr!("その列挙の値を一つ書いてください。", "Name one of that enum's values."),
+                            );
+                        } else {
+                            self.used_values.insert(v.text.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.used.insert(col);
+
+        // The range, which is required and is what the sequence is held to.
+        let ty = Ty::Number;
+        let bounds = d.range.as_ref().map(|r| bounds_of(r, &ty).0);
+        match bounds {
+            Some((Some(lo), Some(hi))) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less => {
+                self.ranges.insert(d.name.text.clone(), (Some(lo), Some(hi)));
+            }
+            other => {
+                let what = match other {
+                    None => tr!("範囲がありません", "there is no range"),
+                    Some((_, None)) => tr!("上限がありません", "there is no upper bound"),
+                    Some((None, _)) => tr!("下限がありません", "there is no lower bound"),
+                    Some(_) => tr!("下限が負です", "the lower bound is negative"),
+                };
+                self.diags.push(
+                    Diag::error("E030", tr!("`count` に範囲が要ります", "A `count` needs a range"))
+                        .at(at.clone())
+                        .mark(d.span.clone(), what)
+                        .note(tr!(
+                            "`range >=0 <=100` の形で書いてください。この範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です。生成コードは、これより長い並びを入口で断ります。",
+                            "Write it as `range >=0 <=100`. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** — the generated code refuses a longer one at the door."
+                        )),
+                );
+                self.ranges.insert(d.name.text.clone(), (Some(Rat::zero()), None));
+            }
+        }
+        self.scales.insert(d.name.text.clone(), 1);
+        self.syms.insert(
+            d.name.text.clone(),
+            Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false },
+        );
     }
 
     fn table(&mut self, t: &Table, path: &str) {

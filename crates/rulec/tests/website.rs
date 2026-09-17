@@ -431,7 +431,7 @@ fn 色づけの語彙はkwと同じ() {
         ("POLICIES", sorted(&[kw::UNIQUE, kw::FIRST])),
         ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_DOWN, kw::HALF_EVEN])),
         ("CONSTANTS", sorted(&[kw::TRUE, kw::FALSE, kw::NONE])),
-        ("ARMS", sorted(&[kw::OVER, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
+        ("ARMS", sorted(&[kw::OVER, kw::WHERE, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX])),
     ] {
         let mut got = list(name);

@@ -169,6 +169,12 @@ impl P {
                     }
                     self.i += 1;
                 }
+                crate::kw::COUNT => {
+                    if let Some(d) = self.count(&line) {
+                        f.items.push(Item::Count(d));
+                    }
+                    self.i += 1;
+                }
                 crate::kw::ELEMENTS => {
                     let name = self.name_at(&line, 1).map(|(n, _)| n);
                     let span = span_of(&line);
@@ -523,6 +529,54 @@ impl P {
             self.i += 1;
         }
         Some(DerivedDecl { name, ty, expr, range, span: span_of(line) })
+    }
+
+    /// ```text
+    /// count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100
+    /// ```
+    ///
+    /// `= <値>` is what a bool column does not need: without it the test is `= true`
+    /// (§15.58). The range is read by `tail_range` like any other, and required later —
+    /// here a missing one is not a syntax error, so that the reason can be explained.
+    fn count(&mut self, line: &[Token]) -> Option<CountDecl> {
+        let span = span_of(line);
+        let shape = |p: &mut Self, what: String| -> Option<CountDecl> {
+            p.err(
+                Diag::error("E028", tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"))
+                    .at(p.at(span.line))
+                    .mark(span.clone(), what)
+                    .note(tr!(
+                        "形は `count <名前>(<別名>) over <並びの名前> where <列> = <値>` です。`= <値>` は、真偽の列なら書かなくて構いません。",
+                        "The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`. A bool column needs no `= <value>`."
+                    )),
+            );
+            None
+        };
+        let Some((name, k)) = self.name_at(line, 1) else {
+            return shape(self, tr!("数えた結果の名前がありません", "the count has no name"));
+        };
+        if line.get(k).and_then(|t| t.ident()) != Some(crate::kw::OVER) {
+            return shape(self, tr!("`over` がありません", "`over` is missing"));
+        }
+        let Some(over) = line.get(k + 1).and_then(|t| t.ident()).map(str::to_string) else {
+            return shape(self, tr!("たどる並びの名前がありません", "the sequence has no name"));
+        };
+        if line.get(k + 2).and_then(|t| t.ident()) != Some(crate::kw::WHERE) {
+            return shape(self, tr!("`where` がありません", "`where` is missing"));
+        }
+        let Some((column, mut j)) = self.name_at(line, k + 3) else {
+            return shape(self, tr!("数える条件の列がありません", "the test names no column"));
+        };
+        let mut value = None;
+        if line.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
+            let Some((v, after)) = self.name_at(line, j + 1) else {
+                return shape(self, tr!("`=` の右に値がありません", "`=` has no value on its right"));
+            };
+            value = Some(v);
+            j = after;
+        }
+        let (range, _) = self.tail_range(line, j);
+        Some(CountDecl { name, over, column, value, range, span })
     }
 
     fn define(&mut self, line: &[Token]) -> Option<DefineDecl> {

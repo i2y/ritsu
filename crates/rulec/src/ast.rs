@@ -219,6 +219,29 @@ pub enum Item {
     Derived(DerivedDecl),
     Define(DefineDecl),
     Table(Table),
+    Count(CountDecl),
+}
+
+/// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` — how many elements of
+/// the sequence satisfy one test (§15.58).
+///
+/// A count is the walk's summary rather than its answer: it is an ordinary `number` from
+/// then on, so the table that turns it into a class is checked like any other table. The
+/// declared range is what the completeness proof quantifies over, and it is also the cap on
+/// the sequence: a longer one is refused at the door, the way a number outside its range is.
+#[derive(Debug, Clone)]
+pub struct CountDecl {
+    pub name: Name,
+    /// The sequence it counts over.
+    pub over: String,
+    /// The column of one element the test reads: a field, or the output of a per-element
+    /// table.
+    pub column: Name,
+    /// The value that column must take. `None` is `true`, which is why a bool field needs
+    /// no `= <value>`.
+    pub value: Option<Name>,
+    pub range: Option<Range>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

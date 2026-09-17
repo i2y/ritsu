@@ -408,6 +408,58 @@ no answer and the generated code raises. Such an input is still part of the suit
 `vectors/<alias>.refused.jsonl`, and `rulec test` requires every generated language to refuse
 it. That is what makes the last fold transition covered rather than merely named.
 
+## 6.3 count
+
+`fold` ends a walk with one answer. `count` ends it with **a number**, and the rule goes on
+from there like any other.
+
+```rule
+count 一致数(hits) over 候補 where 照合 = 一致  range >=0 <=100
+```
+
+The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`, with `range`
+(E028, E030). The column is one of **one element** — a field of `elements`, or a column a
+per-element table produces — and its values have to be a closed set, a bool or an enum
+(E029). A bool column needs no `= <value>`: `where 会社名一致` counts the elements where it
+is true.
+
+A rule that counts runs in two phases, and which item belongs to which is derived rather
+than declared: **an item is part of the walk exactly when it reads something that only one
+element has.** So the table that classifies an element runs once per element, and everything
+that reads only the counts and the ordinary inputs runs once, after.
+
+```rule
+table 候補判定(row_of)          # the walk: it reads a field of an element
+policy unique
+| 会社名一致 | 住所一致 | -> 照合(hit) : 照合結果 |
+| true       | true     | 一致                    |
+| true       | false    | 不一致                  |
+| false      | -        | 不一致                  |
+
+count 一致数(hits) over 候補 where 照合 = 一致  range >=0 <=100
+
+table 結果判定(verdict_of)      # after the walk: it reads the count
+policy unique
+| 一致数 | -> 結果(result) : 判定 |
+| 0      | 該当なし               |
+| 1      | 一件                   |
+| >=2    | 複数                   |
+```
+
+**The range is required, and it says two things.** It is the universe the completeness check
+quantifies over once the count is a column — without it the check would ask for a row
+covering a count of −1 — and it is **the cap on the sequence**: the generated code refuses a
+sequence longer than the smallest bound any count declares, the way it refuses a number
+outside its range. A count cannot leave the space the proof was made over.
+
+Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
+passes a test. There is no sum, no average and no arm that carries a number forward:
+computing one belongs before the call, where its result is an ordinary input.
+
+A rule cannot have both a `fold` and a `count` (E031): they are two endings for the same
+walk, and a `fold` may stop partway, which leaves the meaning of a count on that walk
+undecided. Every target but SQL generates a count, for the reason SQL gets no walk at all.
+
 ## 7. Tables
 
 ```rule
@@ -522,12 +574,13 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `sequence` `policy` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
 | functions | `min` `max` |
 | fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
+| count | `where` (and `over`, above) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

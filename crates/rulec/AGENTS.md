@@ -69,6 +69,13 @@ Four shapes are worth knowing before the first draft:
   table that judges one element is checked exactly as any other table is, and an example
   names a `sequence` rather than holding one in a cell (§6.2). Every target but SQL
   generates it.
+- **Counting the walk instead of folding it.** `count <name>(<alias>) over <sequence> where
+  <column> = <value>` ends the walk with a number rather than with the answer, and the rule
+  goes on as usual — so what turns "how many matched" into a class is an ordinary table, and
+  its boundaries are checked like any other (§6.3). The `range` is required: it is the
+  universe the completeness check quantifies over **and** the cap on the sequence. Nothing
+  accumulates across elements; a sum belongs before the call. A rule has a `fold` or a
+  `count`, never both (E031).
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
@@ -139,6 +146,10 @@ meet while transcribing:
 - **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and
   every verdict the table can produce needs an arm. The three are the completeness argument,
   applied to the walk.
+- **E028 / E029 / E030 a count that cannot be counted** — the shape is `count <name> over
+  <sequence> where <column> = <value>`; the column has to be one an element has, with values
+  that are a closed set; and the range is required. E030's message says why it is two things
+  at once.
 - **W111 unused declaration** — see §3.
 
 ### `examples`

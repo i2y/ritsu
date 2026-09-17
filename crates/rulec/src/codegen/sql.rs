@@ -414,6 +414,8 @@ impl<'a> Gen<'a> {
         let mut tables: Vec<(&Table, String)> = Vec::new();
         for it in &self.f.items {
             match it {
+                // A rule that walks a sequence is not generated for SQL at all (§15.56).
+                Item::Count(_) => {}
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
                     let text = sql.translate(&e.text);

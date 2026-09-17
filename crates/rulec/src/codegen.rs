@@ -82,6 +82,19 @@ fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
 }
 
+/// Which side of a counting walk an item is emitted on (§15.58).
+///
+/// A rule that counts has items before the walk's summary and after it, so the body is
+/// written in two passes over the same list: `Walk` for what one element does, `Main` for
+/// the rule that the counts feed. Everything else is `All`, which is every rule that came
+/// before counting existed.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Phase {
+    All,
+    Walk,
+    Main,
+}
+
 pub struct Gen<'a> {
     f: &'a RuleFile,
     c: &'a Checked,
@@ -109,6 +122,58 @@ pub use sql::round_tests_sql;
 mod tool;
 
 impl<'a> Gen<'a> {
+    /// The counts this rule declares, in source order (§15.58).
+    fn counts(&self) -> Vec<&crate::ast::CountDecl> {
+        self.f.items.iter().filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None }).collect()
+    }
+
+    /// The cap the sequence is held to: the smallest upper bound any count declares.
+    ///
+    /// A count can be as large as the sequence, so a longer sequence could take a count
+    /// outside the universe the completeness proof quantified over. The guard is the same
+    /// shape as the one a number outside its range gets (§15.43, §15.58).
+    fn count_cap(&self) -> Option<i128> {
+        self.counts()
+            .iter()
+            .filter_map(|d| self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+            .map(|hi| crate::types::wire_int(hi, 1))
+            .min()
+    }
+
+    /// What one element has to look like to be counted: the value its column must take, or
+    /// `None` when the column is a bool the test reads as it is.
+    fn count_member<'d>(&self, d: &'d crate::ast::CountDecl) -> Option<&'d crate::ast::Name> {
+        match self.ty_of(&d.column.text) {
+            Ty::Bool => None,
+            _ => d.value.as_ref(),
+        }
+    }
+
+    /// A bool column counted for `false` rather than for `true`.
+    fn count_negated(&self, d: &crate::ast::CountDecl) -> bool {
+        matches!(self.ty_of(&d.column.text), Ty::Bool)
+            && d.value.as_ref().is_some_and(|v| v.text == crate::kw::FALSE)
+    }
+
+    /// Whether an item is emitted in this phase. The split is the evaluator's: an item is
+    /// element-scoped exactly when it reads something that is (§15.58).
+    fn in_phase(&self, it: &Item, phase: Phase) -> bool {
+        if matches!(it, Item::Count(_)) {
+            return false;
+        }
+        if phase == Phase::All {
+            return true;
+        }
+        let scoped = crate::types::element_scoped(self.f);
+        let walk = match it {
+            Item::Derived(d) => scoped.contains(&d.name.text),
+            Item::Define(d) => scoped.contains(&d.name.text),
+            Item::Table(t) => t.outputs.iter().any(|o| scoped.contains(&o.name.text)),
+            Item::Count(_) => false,
+        };
+        walk == (phase == Phase::Walk)
+    }
+
     pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str) -> Self {
         let mut enum_names = BTreeMap::new();
         let mut value_names = BTreeMap::new();
@@ -147,6 +212,7 @@ impl<'a> Gen<'a> {
                 match it {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
+                    Item::Count(d) => vec![&d.name],
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -210,6 +276,7 @@ impl<'a> Gen<'a> {
                 match it {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
+                    Item::Count(d) => vec![&d.name],
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -761,9 +828,12 @@ impl<'a> Gen<'a> {
     /// The rule's items — derived values, definitions and tables — as Python, at the base
     /// indentation. `local` decides how a name is spelled, which is where a walk puts the
     /// element's own fields.
-    fn py_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn py_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
@@ -773,6 +843,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.py_table(t, local, trace)),
             }
         }
@@ -814,7 +885,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    for {e} in {seq}:\n"));
 
         let mut body = self.py_element_guards(&local);
-        body.push_str(&self.py_items(&local, trace));
+        body.push_str(&self.py_items(&local, trace, Phase::All));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -865,6 +936,68 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("        {answer} = {}\n", text(&fold.exhausted)));
         o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        o
+    }
+
+    /// The counting walk (§15.58): the counters, one pass over the sequence with the items of
+    /// one element inside it, and then the rest of the rule with each count bound.
+    ///
+    /// Unlike a fold, the walk here is not the answer — it is what the answer is computed
+    /// from, so the lines after the loop are the ordinary ones every rule has.
+    fn py_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None => self.ident(n),
+            }
+        };
+
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "    if len({seq}) > {cap}:\n        raise RuleInputError(f\"{}\")\n",
+                tr!(
+                    "{} の要素が多すぎます（上限 {cap}）: {{len({seq})}}",
+                    "{} has too many elements (at most {cap}): {{len({seq})}}",
+                    el.name.text
+                )
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!(
+                "    {} = 0  # {}\n",
+                self.ident(&d.name.text),
+                tr!("数え上げ", "count")
+            ));
+        }
+        o.push_str(&format!("    for {e} in {seq}:\n"));
+        let mut body = self.py_element_guards(&local);
+        body.push_str(&self.py_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => {
+                    let cls = self.py_ty(&self.ty_of(&d.column.text));
+                    let member = self
+                        .value_names
+                        .get(&w.text)
+                        .map(|(_, a)| a.to_uppercase())
+                        .unwrap_or_else(|| w.text.clone());
+                    format!("{v} is {cls}.{member}")
+                }
+                None if self.count_negated(d) => format!("not {v}"),
+                None => v,
+            };
+            body.push_str(&format!("    if {test}:  # {}\n", d.name.text));
+            body.push_str(&format!("        {} += 1\n", self.ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str(&self.py_items(outer, trace, Phase::Main));
         o
     }
 
@@ -1020,8 +1153,9 @@ impl<'a> Gen<'a> {
         // A walk runs the same body once per element, so it is written once and moved in
         // (§15.56).
         match &self.f.fold {
-            None => o.push_str(&self.py_items(&local, &trace)),
             Some(fold) => o.push_str(&self.py_walk(fold, &trace)),
+            None if self.counts().is_empty() => o.push_str(&self.py_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.py_count_walk(&local, &trace)),
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -1494,9 +1628,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The rule's items as Go, at the base indentation (§15.56).
-    fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
@@ -1508,6 +1645,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.go_table(t, local, trace)),
             }
         }
@@ -1566,7 +1704,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
 
         let mut body = self.go_element_guards(&local, zero);
-        body.push_str(&self.go_items(&local, trace));
+        body.push_str(&self.go_items(&local, trace, Phase::All));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -1632,6 +1770,57 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\t\t{answer} = {ex}\n\t}}\n"));
         o.push_str(&format!("\t{} := {answer}\n", self.ident(&out_name)));
         o.push_str(&self.go_unread(&out_name));
+        o
+    }
+
+    /// The counting walk in Go. The shape is the one `py_count_walk` writes (§15.58).
+    fn go_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = format!("in.{}", pascal(&pub_name(&el.name)));
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                        format!("int64({v})")
+                    } else {
+                        v
+                    }
+                }
+                None => self.ident(n),
+            }
+        };
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", len({seq}))\n\t}}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）: %d", "{} has too many elements (at most {cap}): %d", el.name.text)
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+        }
+        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
+        let mut body = self.go_element_guards(&local, zero);
+        body.push_str(&self.go_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => format!("{v} == {}", self.go_value(&w.text)),
+                None if self.count_negated(d) => format!("!{v}"),
+                None => v,
+            };
+            body.push_str(&format!("\tif {test} {{ // {}\n\t\t{}++\n\t}}\n", d.name.text, self.ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "\t"));
+        o.push_str("\t}\n");
+        for d in self.counts() {
+            o.push_str(&self.go_unread(&d.name.text));
+        }
+        o.push_str(&self.go_items(outer, trace, Phase::Main));
         o
     }
 
@@ -1789,8 +1978,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\tvar {trace} []Fired\n"));
 
         match &self.f.fold {
-            None => o.push_str(&self.go_items(&local, &trace)),
             Some(fold) => o.push_str(&self.go_walk(fold, &trace, &zero)),
+            None if self.counts().is_empty() => o.push_str(&self.go_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.go_count_walk(&local, &trace, &zero)),
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -2738,7 +2928,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  for (const {e} of {seq}) {{\n"));
 
         let mut body = self.ts_element_guards(&local);
-        body.push_str(&self.ts_items(&local, trace));
+        body.push_str(&self.ts_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.ts_ty(&self.ty_of(&fold.verdict));
@@ -2788,6 +2978,51 @@ impl<'a> Gen<'a> {
     }
 
     /// The entry guards of one element, inside the walk.
+    /// The counting walk in TypeScript (§15.58).
+    fn ts_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None => self.ident(n),
+            }
+        };
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）: ${{{seq}.length}}", "{} has too many elements (at most {cap}): ${{{seq}.length}}", el.name.text)
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!("  let {}: bigint = 0n; // {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+        }
+        o.push_str(&format!("  for (const {e} of {seq}) {{\n"));
+        let mut body = self.ts_element_guards(&local);
+        body.push_str(&self.ts_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => {
+                    let cls = self.ts_ty(&self.ty_of(&d.column.text));
+                    let member = self.value_names.get(&w.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
+                    format!("{v} === {cls}.{member}")
+                }
+                None if self.count_negated(d) => format!("!{v}"),
+                None => v,
+            };
+            body.push_str(&format!("  if ({test}) {{ // {}\n    {} += 1n;\n  }}\n", d.name.text, self.ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "  "));
+        o.push_str("  }\n");
+        o.push_str(&self.ts_items(outer, trace, Phase::Main));
+        o
+    }
+
     fn ts_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
         for i in self.element_fields() {
@@ -2822,9 +3057,12 @@ impl<'a> Gen<'a> {
         o
     }
 
-    fn ts_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn ts_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
@@ -2844,6 +3082,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.ts_table(t, local, trace)),
             }
         }
@@ -2958,8 +3197,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
 
         match &self.f.fold {
-            None => o.push_str(&self.ts_items(&local, &trace)),
             Some(fold) => o.push_str(&self.ts_walk(fold, &trace)),
+            None if self.counts().is_empty() => o.push_str(&self.ts_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.ts_count_walk(&local, &trace)),
         }
 
         let cast = |ty: &Ty, body: String| -> String {
@@ -3439,9 +3679,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The rule's items as Rust, at the base indentation (§15.56).
-    fn rs_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn rs_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => o.push_str(&format!(
                     "    let {} = {}; // {}\n",
@@ -3455,6 +3698,7 @@ impl<'a> Gen<'a> {
                     rs_expr(unparen(&self.expr(&d.expr, local).text)),
                     tr!("定義", "definition")
                 )),
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.rs_table(t, local, trace)),
             }
         }
@@ -3503,7 +3747,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    for {e} in {seq} {{\n"));
 
         let mut body = self.rs_element_guards(&local);
-        body.push_str(&self.rs_items(&local, trace));
+        body.push_str(&self.rs_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.rs_ty(&self.ty_of(&fold.verdict));
@@ -3553,6 +3797,58 @@ impl<'a> Gen<'a> {
     }
 
     /// The entry guards of one element, inside the walk.
+    /// The counting walk in Rust (§15.58).
+    fn rs_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.0")
+                    } else {
+                        v
+                    }
+                }
+                None => self.ident(n),
+            }
+        };
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input(format!(\"{}\", {seq}.len())));\n    }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）: {{}}", "{} has too many elements (at most {cap}): {{}}", el.name.text)
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!("    let mut {}: i64 = 0; // {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+        }
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        let mut body = self.rs_element_guards(&local);
+        body.push_str(&self.rs_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => {
+                    let cls = self.rs_ty(&self.ty_of(&d.column.text));
+                    let member = self.value_names.get(&w.text).map(|(_, a)| a.clone()).unwrap_or_else(|| w.text.clone());
+                    format!("{v} == {cls}::{member}")
+                }
+                None if self.count_negated(d) => format!("!{v}"),
+                None => v,
+            };
+            body.push_str(&format!("    if {test} {{ // {}\n        {} += 1;\n    }}\n", d.name.text, self.ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+        o.push_str(&self.rs_items(outer, trace, Phase::Main));
+        o
+    }
+
     fn rs_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
         for i in self.element_fields() {
@@ -3684,8 +3980,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    let {}{trace}: Vec<Fired> = Vec::new();\n", if has_table { "mut " } else { "" }));
 
         match &self.f.fold {
-            None => o.push_str(&self.rs_items(&local, &trace)),
             Some(fold) => o.push_str(&self.rs_walk(fold, &trace)),
+            None if self.counts().is_empty() => o.push_str(&self.rs_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.rs_count_walk(&local, &trace)),
         }
 
         let wrap = |ty: &Ty, body: String| -> String {
@@ -4994,9 +5291,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The rule's items as Ruby, at the base indentation (§15.56).
-    fn rb_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn rb_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
@@ -5006,6 +5306,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
                 }
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.rb_table(t, local, trace)),
             }
         }
@@ -5051,7 +5352,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {seq}.each do |{e}|\n"));
 
         let mut body = self.rb_element_guards(&local);
-        body.push_str(&self.rb_items(&local, trace));
+        body.push_str(&self.rb_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let val = self.rb_value(&name.text);
@@ -5095,6 +5396,47 @@ impl<'a> Gen<'a> {
     }
 
     /// The entry guards of one element, inside the walk.
+    /// The counting walk in Ruby (§15.58).
+    fn rb_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = pub_name(&el.name);
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => format!("{e}.{f}"),
+                None => self.ident(n),
+            }
+        };
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "    raise RuleInputError, \"{}\" if {seq}.length > {cap}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）: #{{{seq}.length}}", "{} has too many elements (at most {cap}): #{{{seq}.length}}", el.name.text)
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+        }
+        o.push_str(&format!("    {seq}.each do |{e}|\n"));
+        let mut body = self.rb_element_guards(&local);
+        body.push_str(&self.rb_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => format!("{v} == {}", self.rb_value(&w.text)),
+                None if self.count_negated(d) => format!("!{v}"),
+                None => v,
+            };
+            body.push_str(&format!("    if {test}  # {}\n      {} += 1\n    end\n", d.name.text, self.ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    end\n");
+        o.push_str(&self.rb_items(outer, trace, Phase::Main));
+        o
+    }
+
     fn rb_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
         for i in self.element_fields() {
@@ -5214,8 +5556,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
 
         match &self.f.fold {
-            None => o.push_str(&self.rb_items(&local, &trace)),
             Some(fold) => o.push_str(&self.rb_walk(fold, &trace)),
+            None if self.counts().is_empty() => o.push_str(&self.rb_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.rb_count_walk(&local, &trace)),
         }
 
         // Every output: its source, brought to the wire scale, then its rounding once.
@@ -5966,9 +6309,12 @@ impl<'a> Gen<'a> {
     }
 
     /// The rule's items as Swift, at the base indentation (§15.56).
-    fn sw_items(&self, local: &dyn Fn(&str) -> String, trace: &str) -> String {
+    fn sw_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for it in &self.f.items {
+            if !self.in_phase(it, phase) {
+                continue;
+            }
             match it {
                 Item::Derived(d) => {
                     o.push_str(&format!(
@@ -5988,6 +6334,7 @@ impl<'a> Gen<'a> {
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
+                Item::Count(_) => {}
                 Item::Table(t) => o.push_str(&self.sw_table(t, local, trace)),
             }
         }
@@ -6041,7 +6388,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    for {e} in {seq} {{\n"));
 
         let mut body = self.sw_element_guards(&local);
-        body.push_str(&self.sw_items(&local, trace));
+        body.push_str(&self.sw_items(&local, trace, Phase::All));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -6106,6 +6453,54 @@ impl<'a> Gen<'a> {
 
     /// The entry guards of one element, inside the walk. An enum needs none, for the reason
     /// the inputs' own guards give.
+    /// The counting walk in Swift (§15.58).
+    fn sw_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = self.f.elements.as_ref().expect("a count has elements");
+        let seq = sw_name(&pub_name(&el.name));
+        let fields: BTreeMap<String, String> =
+            el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
+        let e = self.temp("elem");
+        let local = |n: &str| -> String {
+            match fields.get(n) {
+                Some(f) => {
+                    let v = format!("{e}.{f}");
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.value")
+                    } else {
+                        v
+                    }
+                }
+                None => self.sw_ident(n),
+            }
+        };
+        let mut o = String::new();
+        if let Some(cap) = self.count_cap() {
+            o.push_str(&format!(
+                "    if {seq}.count > {cap} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）: \\({seq}.count)", "{} has too many elements (at most {cap}): \\({seq}.count)", el.name.text)
+            ));
+        }
+        for d in self.counts() {
+            o.push_str(&format!("    var {}: Int64 = 0  // {}\n", self.sw_ident(&d.name.text), tr!("数え上げ", "count")));
+        }
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        let mut body = self.sw_element_guards(&local);
+        body.push_str(&self.sw_items(&local, trace, Phase::Walk));
+        for d in self.counts() {
+            let v = local(&d.column.text);
+            let test = match self.count_member(d) {
+                Some(w) => format!("{v} == {}", self.sw_value(&w.text)),
+                None if self.count_negated(d) => format!("!{v}"),
+                None => v,
+            };
+            body.push_str(&format!("    if {test} {{  // {}\n        {} += 1\n    }}\n", d.name.text, self.sw_ident(&d.name.text)));
+        }
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+        o.push_str(&self.sw_items(outer, trace, Phase::Main));
+        o
+    }
+
     fn sw_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
         for i in self.element_fields() {
@@ -6259,8 +6654,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {} {trace}: [Fired] = []\n", if has_table { "var" } else { "let" }));
 
         match &self.f.fold {
-            None => o.push_str(&self.sw_items(&local, &trace)),
             Some(fold) => o.push_str(&self.sw_walk(fold, &trace)),
+            None if self.counts().is_empty() => o.push_str(&self.sw_items(&local, &trace, Phase::All)),
+            None => o.push_str(&self.sw_count_walk(&local, &trace)),
         }
 
         let wrap = |ty: &Ty, body: String| -> String {

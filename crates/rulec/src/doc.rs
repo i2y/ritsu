@@ -130,8 +130,12 @@ fn producer(f: &RuleFile, col: &str) -> String {
     if f.inputs.iter().any(|i| i.name.text == col) {
         return tr!("入力", "Input");
     }
+    if f.elements.iter().flat_map(|e| &e.fields).any(|i| i.name.text == col) {
+        return tr!("要素の欄", "Field of one element");
+    }
     for it in &f.items {
         match it {
+            Item::Count(d) if d.name.text == col => return tr!("数え上げ", "Count"),
             Item::Derived(d) if d.name.text == col => return tr!("導出", "Derived value"),
             Item::Define(d) if d.name.text == col => return tr!("定義", "Definition"),
             Item::Table(t) if t.outputs.iter().any(|o| o.name.text == col) => {
@@ -391,6 +395,36 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
             o.push_str(&format!("- `{} {} {}`\n", md_esc(&k.left), k.op.word(), md_esc(&k.right)));
         }
         o.push('\n');
+    }
+
+    // --- What the walk counted. An approver reading the table below sees a column of
+    // numbers; this is where those numbers come from, and how long a sequence the rule will
+    // take at all (§15.58).
+    let counts: Vec<&crate::ast::CountDecl> =
+        f.items.iter().filter_map(|i| if let Item::Count(d) = i { Some(d) } else { None }).collect();
+    if !counts.is_empty() {
+        o.push_str(&tr!("\n## 数え上げ\n\n", "\n## Counts\n\n"));
+        o.push_str(&tr!(
+            "並びの要素のうち、条件に当てはまるものの数です。表の列に置けます。範囲は宣言されたもので、**並びの長さの上限**でもあります。\n\n",
+            "How many elements of the sequence meet one test. A count can be a table column. Its range is the declared one, and it is also **the cap on the sequence**.\n\n"
+        ));
+        o.push_str(&tr!(
+            "| 名前 | 何を数えるか | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "| Name | What it counts | Range | Notes |\n|---|---|---|---|\n"
+        ));
+        for d in &counts {
+            let what = match &d.value {
+                Some(v) => tr!("{} が {} の要素", "elements whose {} is {}", d.column.text, v.text),
+                None => tr!("{} の要素", "elements where {}", d.column.text),
+            };
+            o.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                md_esc(&d.name.text),
+                md_esc(&what),
+                md_esc(&range_text(c, &d.name.text)),
+                md_esc(&trailing_comment(&lines, d.name.span.line).unwrap_or_default())
+            ));
+        }
     }
 
     // --- Derived values and definitions. The invisible axes.

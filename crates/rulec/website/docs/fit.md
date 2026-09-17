@@ -65,11 +65,11 @@ longer something this tool says anything about.
 ## What it is not for
 
 - **Workflows** — several steps, carrying state
-- **Counting or adding across a collection** — "three or more items in the cart", "the
-  lines total more than 10,000 yen". A fold chooses which element to take and nothing
-  more; compute the total or the count before the call and pass it in as a value. Picking
-  **one element** out of a sequence is writable — "refuse if any line is refrigerated",
-  "take the dearest row" 
+- **Adding up across a collection** — "the lines total more than 10,000 yen". A sum or an
+  average carries a value from element to element, which is not written here; compute it
+  before the call and pass it in. **Counting is writable** (`count`: "three or more
+  refrigerated items" becomes a row of a table), and so is picking **one element** out of a
+  sequence (`fold`: "refuse if any line is refrigerated", "take the dearest row") 
 - **Branching on a string** — `string` cannot be a table column (E110). A value that
   decides a branch belongs in an `enum`, where the closed set makes the completeness check
   work. No prefix match and no regular expressions either

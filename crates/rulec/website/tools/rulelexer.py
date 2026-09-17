@@ -35,7 +35,7 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "sequence")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sequence")
 HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "examples", "constraint")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step")
@@ -44,9 +44,9 @@ TAX = ("incl_tax", "excl_tax")
 POLICIES = ("unique", "first")
 ROUNDING = ("up", "down", "half_up", "half_down", "half_even")
 CONSTANTS = ("true", "false", "none")
-# What a `fold` is made of: the connectors of its heading and the arms.
-ARMS = ("over", "next", "stop", "with", "take_unique", "take_first", "keep_max", "by",
-        "empty", "exhausted", "held")
+# What a `fold` and a `count` are made of: the connectors of their headings and the arms.
+ARMS = ("over", "where", "next", "stop", "with", "take_unique", "take_first", "keep_max",
+        "by", "empty", "exhausted", "held")
 FUNCTIONS = ("min", "max")
 NAMESPACE = "std"
 

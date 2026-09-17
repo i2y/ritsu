@@ -34,7 +34,7 @@ pub const FOLD: &str = "fold";
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
-    FOLD, SEQUENCE, RESULT, EXAMPLES, POLICY,
+    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY,
 ];
 
 // --- Declaration modifiers
@@ -70,8 +70,14 @@ pub const EMPTY: &str = "empty";
 pub const EXHAUSTED: &str = "exhausted";
 /// Inside `exhausted`, the value `keep_max` or a `take` is holding.
 pub const HELD: &str = "held";
-/// `fold <column> over <sequence>`.
+/// `fold <column> over <sequence>`, and `count <name> over <sequence>`.
 pub const OVER: &str = "over";
+
+// --- Counting the walk (§15.58)
+/// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements satisfy a test.
+pub const COUNT: &str = "count";
+/// The test of a `count`: a column of one element, and the value it must take.
+pub const WHERE: &str = "where";
 
 // --- Policies (§4)
 pub const UNIQUE: &str = "unique";
@@ -116,9 +122,9 @@ pub const STD: &str = "std";
 /// with the same name is silently misread by the line-oriented syntax.
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT,
-    TABLE, FOLD, SEQUENCE, POLICY, RESULT, EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE,
-    FALSE, MIN, MAX, UP, DOWN, HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE,
-    TAKE_FIRST, KEEP_MAX, BY, EMPTY, EXHAUSTED, HELD, OVER,
+    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, RESULT, EXAMPLES, RANGE, ROUND, CONTRACT_ONLY,
+    DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN, HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP,
+    WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY, EXHAUSTED, HELD, OVER,
 ];
 
 /// Lists the words that may follow `policy`, for use in diagnostic text.

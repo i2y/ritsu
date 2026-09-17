@@ -57,6 +57,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/領収書の印紙税.rule", "receipt_stamp"),
     ("tests/corpus/印紙税.rule", "stamp_duty"),
     ("tests/corpus/全国運賃.rule", "freight"),
+    ("tests/corpus/納入先照合.rule", "supplier_match"),
 ];
 
 #[test]
@@ -112,12 +113,13 @@ fn 評価器と生成コードが全言語で一致する() {
         total += vectors.lines().count();
         let pkg = alias.replace('_', "");
 
-        // A rule that walks a sequence is not generated for a backend that has no folds
-        // (SQL: one query has no place to carry a value from row to row, §15.56).
+        // A rule that walks a sequence — folding it or counting it — is not generated for a
+        // backend that has no walk (SQL: one query has no place to carry a value from row to
+        // row, §15.56, §15.58).
         let walks = std::fs::read_to_string(root().join(file))
             .unwrap_or_default()
             .lines()
-            .any(|l| l.starts_with("fold "));
+            .any(|l| l.starts_with("elements "));
 
         for b in present.iter().filter(|b| b.folds || !walks) {
             let plan = (b.run)(alias, &pkg);

@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E027, E101-E115, W105, W110, W111, W114, W115, W116) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E031, E101-E115, W105, W110, W111, W114, W115, W116) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -108,6 +108,13 @@ Four shapes are worth knowing before the first draft:
   table that judges one element is checked exactly as any other table is, and an example
   names a `sequence` rather than holding one in a cell (§6.2). Every target but SQL
   generates it.
+- **Counting the walk instead of folding it.** `count <name>(<alias>) over <sequence> where
+  <column> = <value>` ends the walk with a number rather than with the answer, and the rule
+  goes on as usual — so what turns "how many matched" into a class is an ordinary table, and
+  its boundaries are checked like any other (§6.3). The `range` is required: it is the
+  universe the completeness check quantifies over **and** the cap on the sequence. Nothing
+  accumulates across elements; a sum belongs before the call. A rule has a `fold` or a
+  `count`, never both (E031).
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
@@ -178,6 +185,10 @@ meet while transcribing:
 - **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and
   every verdict the table can produce needs an arm. The three are the completeness argument,
   applied to the walk.
+- **E028 / E029 / E030 a count that cannot be counted** — the shape is `count <name> over
+  <sequence> where <column> = <value>`; the column has to be one an element has, with values
+  that are a closed set; and the range is required. E030's message says why it is two things
+  at once.
 - **W111 unused declaration** — see §3.
 
 ### `examples`

@@ -39,6 +39,7 @@ These are all the words that may start a line.
 | `define` | a boolean, or a computed intermediate |
 | `constraint` | a relation between inputs: which combinations **cannot happen** |
 | `fold` | reduces a column of per-element verdicts to one answer |
+| `count` | how many elements of the sequence meet one test |
 | `sequence` | a named list of elements, for an example to walk |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
@@ -430,6 +431,47 @@ from row to row and stop partway.
 A rule that runs is in [Examples](examples.md), under "A sequence walked
 into one answer".
 
+### Counting instead: `count`
+
+A `fold` turns a sequence into **one answer**. A `count` turns it into **one
+number** and hands the rule back to the tables.
+
+```rule
+count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
+```
+
+What `where` names is **a column of one element** — a field, or a column a
+per-element table produces — whose values are a closed set. For an enum,
+`= <value>` says which one to count; a bool column needs nothing after it
+(`where 冷蔵品`).
+
+From there the count is a `number`, so **it can be a column**.
+
+```rule
+| 一致数 | 自動確定可 | -> 手続き(action) : 次の手 |
+| 0      | -          | 新規登録                   |
+| 1      | true       | 自動確定                   |
+| 1      | false      | 目視確認                   |
+| >=2    | -          | 目視確認                   |
+```
+
+That is why `count` exists beside `fold`: **when an ordinary table turns the
+number into a decision, the boundaries of that decision are checked** — a gap
+or an overlap between `0`, `1` and `>=2` stops the rule as any other would.
+
+**The `range` is required and says two things**: the universe the completeness
+check quantifies over, and **the cap on the sequence**. A longer sequence is
+refused at the door by the generated code, for the reason a number outside its
+range is — the proof was made over what was declared.
+
+**Nothing accumulates across elements.** A count counts; there is no sum and no
+average, and one belongs before the call, as a value. A rule cannot hold both a
+`fold` and a `count` (E031): two endings for one walk, and a fold may stop
+partway.
+
+A rule that runs is in [Examples](examples.md), under "Counting a sequence, and
+deciding from the count".
+
 ## Examples
 
 ```rule
@@ -458,8 +500,9 @@ wrote.
 - Iteration anywhere you like, and recursion — a sequence is walked once,
   by `fold` (the section above); every other repetition, a stack of
   coupons applied in order among them, stays with the caller.
-- Adding up or counting across elements — a fold chooses which element to
-  take and nothing more. Compute a total before the call and pass it in.
+- Adding up across elements — a sum or an average carries a value from one
+  element to the next. Compute it before the call and pass it in (**a count
+  is written with `count`**).
 - Date arithmetic — comparison and range only.
 
 Allowing these would stop the completeness and overlap checks from

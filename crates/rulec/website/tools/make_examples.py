@@ -244,6 +244,27 @@ EXAMPLES = [
         ],
     ),
     (
+        "納入先照合.rule",
+        "並びを数えて、その数で判定する",
+        "請求書の宛名を、取引先台帳の候補と一件ずつ照合します。判定するのは表で、`count` がその判定に当てはまった件数を数え、**次の表がその数で手続きを決めます**。「一件なら自動、複数なら目視」を、人が数えてから渡すのではなく、規則の中で決められます。",
+        [
+            "**`count` は歩いたあとに残る数です。** `count 一致数(hits) over 候補 where 照合結果 = 一致` は、要素ごとの判定が `一致` だった件数。そこから先は `number` の値なので、表の列に置けます。",
+            "**数を判定に変えるのは、ふつうの表です。** `0` / `1` / `>=2` の境界に穴や重なりがあれば、いつもどおり検査が止めます。数えることと、数から決めることが、別々に検査に掛かります。",
+            "**範囲は二つの意味を持ちます**（`range >=0 <=50`）。完全性の検査が見る全体集合であり、**並びの長さの上限**でもあります。51 件渡すと、生成コードが入口で断ります — 範囲外の数を断るのと同じことです。",
+            "**要素をまたぐ足し算はできません。** `count` が数えるのは件数だけで、合計も平均もありません。それらは呼び出す手前で出して、値として渡します。",
+            "**`fold` と `count` は一緒に書けません**（E031）。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるからです。",
+        ],
+        "Counting a sequence, and deciding from the count",
+        "An invoice's name is matched against the supplier ledger, one candidate at a time. A table judges each candidate, `count` counts the ones it called a match, and **the next table decides what to do with that number**. \"One means automatic, more than one means look at it\" is decided inside the rule rather than by whoever counted before calling it.",
+        [
+            "**A count is what the walk leaves behind.** `count 一致数(hits) over 候補 where 照合結果 = 一致` is how many elements the per-element table judged `一致`. From there it is a `number`, so it can be a column.",
+            "**What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.",
+            "**The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.",
+            "**Nothing accumulates across elements.** A count counts; there is no sum and no average. Compute one before the call and pass it in as a value.",
+            "**A `fold` and a `count` cannot share a rule** (E031): two endings for the same walk, and a fold may stop partway.",
+        ],
+    ),
+    (
         "ec261.rule",
         "英語で書いた規則 — EU 旅客権利規則",
         "名前もセルも英語なので、ASCII 別名が一つも出てきません。金額は EUR、距離は km です。公開されている法令（(EC) No 261/2004 第 7 条）をそのまま写したもので、条文そのものが決定表の形をしています。",

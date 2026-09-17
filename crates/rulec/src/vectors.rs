@@ -149,6 +149,8 @@ fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
     let mut out = Vec::new();
     for it in &f.items {
         match it {
+            // A count declares no cells; what it counts is tested inside the walk.
+            Item::Count(_) => {}
             Item::Table(t) => {
                 let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
                 for row in &t.rows {
@@ -212,6 +214,7 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
     };
     for it in &f.items {
         match it {
+            Item::Count(_) => {}
             Item::Table(t) => {
                 if let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) {
                     for row in &t.rows {
@@ -475,7 +478,123 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
     if f.fold.is_some() {
         return fold_pool(f, c, cands);
     }
+    if f.items.iter().any(|it| matches!(it, Item::Count(_))) {
+        return count_pool(f, c, cands);
+    }
     pool_inner(f, c, cands)
+}
+
+/// The cases a rule that counts needs (§15.58).
+///
+/// What the count feeds is an ordinary table, so what has to be covered is the values that
+/// table's cells care about — and the only way to reach a count of *n* is to pass *n*
+/// elements the test accepts. So the pool carries, for each count, a sequence of every
+/// length up to one past the largest number any cell names, made of elements that count.
+/// The elements themselves are covered the way a fold covers them: each candidate on its
+/// own, so the per-element table's rows and boundaries are exercised.
+fn count_pool(
+    f: &RuleFile,
+    c: &Checked,
+    cands: &BTreeMap<String, Vec<Val>>,
+) -> Vec<(BTreeMap<String, Val>, String)> {
+    let counts: Vec<&crate::ast::CountDecl> = f
+        .items
+        .iter()
+        .filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None })
+        .collect();
+    let el = f.elements.as_ref().expect("a count has elements");
+    let over = el.name.text.clone();
+    let fields: Vec<String> = el.fields.iter().map(|i| i.name.text.clone()).collect();
+    let scalars: BTreeMap<String, Val> =
+        baseline(f, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+
+    // Every element the fields' own candidates can make, as the fold pool builds them.
+    let mut combos: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
+    for name in &fields {
+        let Some(vs) = cands.get(name) else { continue };
+        let mut next = Vec::new();
+        for base in &combos {
+            for v in vs {
+                let mut m = base.clone();
+                m.insert(name.clone(), v.clone());
+                next.push(m);
+            }
+            if next.len() > 4096 {
+                break;
+            }
+        }
+        combos = next;
+    }
+
+    let case = |elements: Val, why: String| -> (BTreeMap<String, Val>, String) {
+        let mut m = scalars.clone();
+        m.insert(over.clone(), elements);
+        (m, why)
+    };
+    let seq = |xs: Vec<&BTreeMap<String, Val>>| -> Val {
+        Val::Seq(xs.into_iter().cloned().collect())
+    };
+
+    let mut out = vec![case(Val::Seq(Vec::new()), tr!("要素ゼロ件", "no elements"))];
+    for e in &combos {
+        out.push(case(seq(vec![e]), tr!("要素の候補", "an element's candidates")));
+    }
+
+    for d in &counts {
+        // An element this count accepts, and one it does not.
+        let mut hit: Option<&BTreeMap<String, Val>> = None;
+        let mut miss: Option<&BTreeMap<String, Val>> = None;
+        for e in &combos {
+            let mut m: std::collections::HashMap<String, Val> =
+                scalars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            for (k, v) in e {
+                m.insert(k.clone(), v.clone());
+            }
+            let (_, _, _, vals) = crate::eval::run_tables(f, c, m);
+            let v = vals.get(&d.column.text);
+            let counted = match (v, &d.value) {
+                (Some(Val::Bool(b)), None) => *b,
+                (Some(Val::Bool(b)), Some(w)) => *b == (w.text == crate::kw::TRUE),
+                (Some(Val::Enum(x)), Some(w)) => *x == w.text,
+                _ => false,
+            };
+            if counted {
+                hit.get_or_insert(e);
+            } else {
+                miss.get_or_insert(e);
+            }
+        }
+        let Some(hit) = hit else { continue };
+        // One past the largest number the cells name, held to what the range allows: that is
+        // the first count on the far side of every boundary the tables draw.
+        let top = numeric_bounds(f, &d.name.text, &Ty::Number, c)
+            .iter()
+            .map(|r| r.num / r.den)
+            .max()
+            .unwrap_or(1);
+        let cap = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi).map(|h| h.num / h.den).unwrap_or(top + 1);
+        let top = (top + 1).min(cap).max(1);
+        for n in 1..=top {
+            let xs: Vec<&BTreeMap<String, Val>> = (0..n).map(|_| hit).collect();
+            out.push(case(seq(xs), tr!("{} が {n} 件", "{} of them: {n}", d.name.text)));
+        }
+        // One that counts and one that does not, so the walk is shown skipping an element
+        // rather than counting everything it sees.
+        if let Some(miss) = miss {
+            out.push(case(seq(vec![hit, miss]), tr!("{} に入るものと入らないもの", "one counted and one not, for {}", d.name.text)));
+        }
+    }
+
+    // The scalars move too, carried by one element each, so a scalar that decides a cell is
+    // still exercised.
+    for (a, why) in pool_scalars(f, c, cands, &fields) {
+        if let Some(e) = combos.first() {
+            let mut m = a.clone();
+            m.insert(over.clone(), seq(vec![e]));
+            out.push((m, why));
+        }
+    }
+    out
 }
 
 fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
@@ -863,8 +982,9 @@ fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
         }
     };
     let mut ins: Vec<String> = Vec::new();
+    // The sequence is named by `elements`, whether a fold reads it or a count does (§15.58).
     if let (Some(el), Some(Val::Seq(xs))) =
-        (&f.elements, f.fold.as_ref().and_then(|fd| v.input.get(&fd.over)))
+        (&f.elements, f.elements.as_ref().and_then(|el| v.input.get(&el.name.text)))
     {
         let one = |e: &std::collections::BTreeMap<String, Val>| -> String {
             let fields: Vec<String> = el

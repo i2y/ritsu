@@ -1187,13 +1187,13 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         for b in rulec::backend::ALL {
             // A walk is written only by the backends that can write one (§15.56). A file that
             // cannot run is worse than a missing one, so the rest are named and skipped.
-            if f.fold.is_some() && !b.folds {
+            if f.elements.is_some() && !b.folds {
                 if !json {
                     println!(
                         "{}",
                         tr!(
-                            "{}: この言語には畳み込みのある規則を生成しません（DESIGN §15.56）",
-                            "{}: a rule with a fold is not generated for this target (DESIGN §15.56)",
+                            "{}: この言語には並びをたどる規則を生成しません（DESIGN §15.56）",
+                            "{}: a rule that walks a sequence is not generated for this target (DESIGN §15.56)",
                             b.name
                         )
                     );

@@ -33,6 +33,10 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E025](#e025) | error | The examples have no column for the sequence |
 | [E026](#e026) | error | The `sequence` is not written correctly |
 | [E027](#e027) | error | The example names a sequence that is not there |
+| [E028](#e028) | error | The `count` is not written correctly |
+| [E029](#e029) | error | This column cannot be counted |
+| [E030](#e030) | error | A `count` needs a range |
+| [E031](#e031) | error | A rule cannot have both a `fold` and a `count` |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -114,7 +118,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -132,7 +136,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / sequence / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -806,6 +810,141 @@ examples
 ```
 
 Related codes: [E025](#e025), [E026](#e026)
+
+## E028
+
+`error` — **The `count` is not written correctly**
+
+**When.** The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right (§15.58).
+
+**Fix.** Write it in that shape. The `= <value>` may be left out only for a bool column.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) where b  range >=0 <=10
+
+table j(j)
+policy unique
+| n | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E029](#e029), [E030](#e030), [E020](#e020)
+
+## E029
+
+`error` — **This column cannot be counted**
+
+**When.** The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum's; or an enum column was given no `= <value>` (§15.58).
+
+**Fix.** Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+  ok(ok) : bool
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) over xs where ok  range >=0 <=10
+
+table j(j)
+policy unique
+| h | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E028](#e028), [E012](#e012)
+
+## E030
+
+`error` — **A `count` needs a range**
+
+**When.** The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** (§15.58).
+
+**Fix.** Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+elements xs(xs)
+  b(b) : bool
+
+outputs
+  r(r) : bool
+
+count h(h) over xs where b
+
+table j(j)
+policy unique
+| h | -> r(r) : bool |
+| - | true |
+```
+
+Related codes: [E028](#e028), [E112](#e112)
+
+## E031
+
+`error` — **A rule cannot have both a `fold` and a `count`**
+
+**When.** One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided (§15.58).
+
+**Fix.** To count, drop the `fold` and let a table judge the count. To fold, drop the `count`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+outputs
+  r(r) : number  round down(1)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| <=5 | a |
+| >5 | b |
+
+count h(h) over xs where d = a  range >=0 <=10
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0
+  exhausted -> held
+```
+
+Related codes: [E021](#e021), [E029](#e029)
 
 ## E101
 

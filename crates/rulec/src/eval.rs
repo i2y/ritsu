@@ -441,9 +441,166 @@ pub fn run_tables(
             Item::Table(t) => {
                 env.table(t);
             }
+            // A count is what the walk leaves behind, not something one element does.
+            Item::Count(_) => {}
         }
     }
     (env.fired.clone(), env.fired_rows.clone(), Vec::new(), env.vals)
+}
+
+/// One element of a counting walk: the items that only have a value inside it (§15.58).
+///
+/// A rule that counts has items on both sides of the walk, so — unlike a fold, where every
+/// item belongs to one element — the element phase runs a subset. Running the rest here as
+/// well would put rows in the trace that fired once per element and answer with a count
+/// nothing had counted yet.
+fn run_walk(
+    f: &RuleFile,
+    c: &Checked,
+    scoped: &std::collections::HashSet<String>,
+    inputs: HashMap<String, Val>,
+) -> (Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
+    let mut env = Env::new(c, inputs);
+    for it in &f.items {
+        match it {
+            Item::Derived(d) if scoped.contains(&d.name.text) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Define(d) if scoped.contains(&d.name.text) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Table(t) if t.outputs.iter().any(|o| scoped.contains(&o.name.text)) => {
+                env.table(t);
+            }
+            _ => {}
+        }
+    }
+    (env.fired.clone(), env.fired_rows.clone(), env.vals)
+}
+
+/// Does this element's column hold the value the count is looking for?
+fn counts_here(v: Option<&Val>, want: &Option<crate::ast::Name>) -> bool {
+    match (v, want) {
+        (Some(Val::Bool(b)), None) => *b,
+        (Some(Val::Bool(b)), Some(w)) => *b == (w.text == crate::kw::TRUE),
+        (Some(Val::Enum(x)), Some(w)) => *x == w.text,
+        _ => false,
+    }
+}
+
+/// A rule that counts (§15.58) runs in two phases: the walk, which is the element-scoped
+/// items once per element with the counters beside them, and then the rule proper, with
+/// each count bound like any other number.
+///
+/// The second phase is an ordinary rule — tables, `result`, rounding — which is the whole
+/// point of counting rather than folding: what turns the count into a class is a table, and
+/// a table is checked.
+fn run_counted(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
+    let scoped = crate::types::element_scoped(f);
+    let counts: Vec<&crate::ast::CountDecl> = f
+        .items
+        .iter()
+        .filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None })
+        .collect();
+    let over = counts.first().map(|d| d.over.clone()).unwrap_or_default();
+    let seq = match inputs.get(&over) {
+        Some(Val::Seq(xs)) => xs.clone(),
+        _ => Vec::new(),
+    };
+    let scalars: HashMap<String, Val> =
+        inputs.iter().filter(|(k, _)| *k != &over).map(|(k, v)| (k.clone(), v.clone())).collect();
+
+    // The sequence is capped by the smallest bound any count declares, and a longer one has
+    // no answer here for the same reason the generated code refuses it: the completeness
+    // proof was made over the declared universe (§15.58).
+    let cap = counts
+        .iter()
+        .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+        .map(|hi| hi.num / hi.den)
+        .min();
+    if cap.is_some_and(|cap| seq.len() as i128 > cap) {
+        let outs = f.outputs.iter().map(|od| (od.name.text.clone(), None)).collect();
+        return (outs, Vec::new(), Vec::new(), HashMap::new());
+    }
+
+    let (mut fired, mut fired_rows) = (Vec::new(), Vec::new());
+    let mut tally: HashMap<String, i128> = counts.iter().map(|d| (d.name.text.clone(), 0)).collect();
+    for e in &seq {
+        let mut m = scalars.clone();
+        for (k, v) in e {
+            m.insert(k.clone(), v.clone());
+        }
+        let (ef, er, vals) = run_walk(f, c, &scoped, m);
+        fired.extend(ef);
+        fired_rows.extend(er);
+        for d in &counts {
+            if counts_here(vals.get(&d.column.text), &d.value) {
+                *tally.entry(d.name.text.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let mut m = scalars;
+    for (name, n) in &tally {
+        m.insert(name.clone(), Val::Num(Rat::int(*n)));
+    }
+    let mut env = Env::new(c, m);
+    env.fired = fired;
+    env.fired_rows = fired_rows;
+    for it in &f.items {
+        match it {
+            Item::Derived(d) if !scoped.contains(&d.name.text) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Define(d) if !scoped.contains(&d.name.text) => {
+                if let Some(v) = env.expr(&d.expr) {
+                    env.vals.insert(d.name.text.clone(), v);
+                }
+            }
+            Item::Table(t) if !t.outputs.iter().any(|o| scoped.contains(&o.name.text)) => {
+                env.table(t);
+            }
+            _ => {}
+        }
+    }
+    let outs = outputs_of(f, c, &mut env);
+    (outs, env.fired.clone(), env.fired_rows.clone(), env.vals)
+}
+
+/// The rule's outputs, read out of an environment that has finished running: the `result`
+/// expression for the first one, the binding of its own name for the rest, and the declared
+/// rounding applied last (§7.2).
+fn outputs_of(f: &RuleFile, c: &Checked, env: &mut Env) -> Vec<(String, Option<Val>)> {
+    let mut outs: Vec<(String, Option<Val>)> = Vec::new();
+    for (oi, od) in f.outputs.iter().enumerate() {
+        let name = od.name.text.clone();
+        let mut v = match (&f.result, oi) {
+            (Some(r), 0) => env.expr(&r.expr),
+            _ => env.vals.get(&name).cloned(),
+        };
+        if let Some(Val::Num(x)) = &v {
+            if let Some(rd) = &od.rounding {
+                let ty = c.ty_of(&name).unwrap_or(Ty::Unknown);
+                if let Some(g) = lit_value_in_pub(&rd.grid, &ty) {
+                    if let Some(m) = RoundMode::parse(&rd.mode) {
+                        v = Some(Val::Num(x.round_to(m, g)));
+                    }
+                }
+            }
+        }
+        outs.push((name, v));
+    }
+    outs
 }
 
 pub fn run_all_traced(
@@ -453,6 +610,9 @@ pub fn run_all_traced(
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
     if f.fold.is_some() {
         return run_fold(f, c, inputs);
+    }
+    if f.items.iter().any(|it| matches!(it, Item::Count(_))) {
+        return run_counted(f, c, inputs);
     }
     let mut env = Env::new(c, inputs);
     for it in &f.items {
@@ -470,29 +630,12 @@ pub fn run_all_traced(
             Item::Table(t) => {
                 env.table(t);
             }
+            Item::Count(_) => {}
         }
     }
-    let mut outs: Vec<(String, Option<Val>)> = Vec::new();
-    for (oi, od) in f.outputs.iter().enumerate() {
-        let name = od.name.text.clone();
-        let mut v = match (&f.result, oi) {
-            (Some(r), 0) => env.expr(&r.expr),
-            _ => env.vals.get(&name).cloned(),
-        };
-        // The rounding declared on the output applies last — §7.2, "an unrounded value
-        // never reaches the output".
-        if let Some(Val::Num(x)) = &v {
-            if let Some(rd) = &od.rounding {
-                let ty = c.ty_of(&name).unwrap_or(Ty::Unknown);
-                if let Some(g) = lit_value_in_pub(&rd.grid, &ty) {
-                    if let Some(m) = RoundMode::parse(&rd.mode) {
-                        v = Some(Val::Num(x.round_to(m, g)));
-                    }
-                }
-            }
-        }
-        outs.push((name, v));
-    }
+    // The rounding declared on the output applies last — §7.2, "an unrounded value never
+    // reaches the output".
+    let outs = outputs_of(f, c, &mut env);
     (outs, env.fired, env.fired_rows, env.vals)
 }
 
@@ -808,6 +951,8 @@ fn run_raw(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> (Option<V
             Item::Table(t) => {
                 env.table(t);
             }
+            // E104 asks what the output looks like unrounded; a walk has no witness here.
+            Item::Count(_) => {}
         }
     }
     let out_name = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
