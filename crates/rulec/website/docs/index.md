@@ -300,7 +300,7 @@ material, not from first-hand use.
 
 **Where rulec sits is the combination**: cells narrow enough that gaps and overlaps are
 exactly decidable, a witness (the input itself) attached every time, units and rounding held
-by types and declarations, seven languages out with zero dependencies, comparison against the
+by types and declarations, eight languages out with zero dependencies, comparison against the
 old implementation and against past records — and **all of it drivable by an agent through
 `--format json` alone**. Each piece exists somewhere already. The assembly, and treating an
 agent as the first user, is the position.

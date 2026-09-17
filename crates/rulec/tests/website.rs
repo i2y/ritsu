@@ -521,3 +521,74 @@ fn playgroundの表は絵の表と同じ() {
         assert_eq!(got, want, "playground.js の {key} の表が {rule} と違う");
     }
 }
+
+/// The count of target languages, written out in words. `tests/docs.rs` holds the *list* to
+/// `src/backend.rs` wherever a document enumerates it, but a sentence that says "seven
+/// languages" names none of them, so nothing caught the home page saying that after the
+/// eighth arrived. The registry knows the number; a page that spells it out has to agree.
+const COUNTS: [(&str, usize); 12] = [
+    ("六つの言語", 6),
+    ("七つの言語", 7),
+    ("八つの言語", 8),
+    ("九つの言語", 9),
+    ("六言語", 6),
+    ("七言語", 7),
+    ("八言語", 8),
+    ("九言語", 9),
+    ("six languages", 6),
+    ("seven languages", 7),
+    ("eight languages", 8),
+    ("nine languages", 9),
+];
+
+fn repo_docs() -> Vec<(String, String)> {
+    let mut out = vec![("README.md".to_string(), read("README.md")), ("AGENTS.md".to_string(), read("AGENTS.md"))];
+    for e in std::fs::read_dir(root().join("docs")).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "md") {
+            out.push((format!("docs/{}", p.file_name().unwrap().to_string_lossy()), std::fs::read_to_string(&p).unwrap()));
+        }
+    }
+    out
+}
+
+#[test]
+fn 言語の数を書いた文は登録簿と合っている() {
+    let want = rulec::backend::ALL.len();
+    for (name, body) in authored_pages().into_iter().chain(repo_docs()) {
+        for (phrase, n) in COUNTS {
+            if body.contains(phrase) {
+                assert_eq!(n, want, "{name}: 「{phrase}」と書いてありますが、登録簿は {want} です");
+            }
+        }
+    }
+}
+
+/// The rule `tests/docs.rs` applies to the repository's documents, for the pages written for
+/// the site: enumerating the languages and leaving one out.
+///
+/// The threshold here is **four**, where the repository's documents use three. These pages are
+/// narrative and name languages as examples rather than as the set — "the third one,
+/// TypeScript, cost about 700 lines; so did the fifth, Ruby, and the sixth, Swift" names three
+/// and is not a list of anything. Four or more in one paragraph is a list, and a list that
+/// drops one is the drift this catches: the two it found when it went in named six.
+#[test]
+fn サイトが並べる対象言語はレジストリと同じ() {
+    let names: Vec<&str> = rulec::backend::ALL.iter().map(|b| b.name).collect();
+    for (name, body) in authored_pages() {
+        for para in body.split("\n\n") {
+            if para.trim_start().starts_with("```") {
+                continue;
+            }
+            let named = names.iter().filter(|n| para.contains(**n)).count();
+            if named < 4 || named == names.len() {
+                continue;
+            }
+            let missing: Vec<&&str> = names.iter().filter(|n| !para.contains(**n)).collect();
+            panic!(
+                "{name}: 対象言語を {named} つ並べて {missing:?} を落としています。\n  段落: {}",
+                para.trim().chars().take(160).collect::<String>()
+            );
+        }
+    }
+}

@@ -132,7 +132,7 @@ outputs
   送料(fee) : money[円, incl_tax]  round up(10円)
 ```
 
-出力は複数書けます。生成物は Python の `NamedTuple`、TypeScript の `interface`、Ruby の `Struct`、Rust と Swift と Go の構造体になり、**丸めは出力ごとに一度ずつ**掛かります。
+出力は複数書けます。生成物は Python の `NamedTuple`、TypeScript の `interface`、JavaScript のただのオブジェクト、Ruby の `Struct`、Rust と Swift と Go の構造体、SQL では一つずつの列になり、**丸めは出力ごとに一度ずつ**掛かります。
 
 ```rule
 outputs
@@ -168,7 +168,7 @@ outputs
 
 括弧の中が**刻み**です。`up(10円)` なら 10 円単位へ丸めるので、−4.2 円は −10 円になります。
 
-負の向きまで決めてあるのは、**Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・TypeScript は 0 方向で食い違う**からです。言語の素の除算に任せると、同じ規則が言語ごとに違う答えを出します。生成コードは自前のヘルパ関数を通し、どの言語でも答えが揃うことをテストが毎回確かめています。
+負の向きまで決めてあるのは、**Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・TypeScript・JavaScript・SQL は 0 方向で食い違う**からです。言語の素の除算に任せると、同じ規則が言語ごとに違う答えを出します。生成コードは自前のヘルパ関数を通し、どの言語でも答えが揃うことをテストが毎回確かめています。
 
 ## 表
 
