@@ -98,6 +98,7 @@ impl P {
             version,
             description: None,
             imports: Vec::new(),
+            enum_imports: Vec::new(),
             enums: Vec::new(),
             groups: Vec::new(),
             inputs: Vec::new(),
@@ -130,12 +131,25 @@ impl P {
                     self.i += 1;
                 }
                 crate::kw::IMPORT => {
-                    let path: String = line[1..]
-                        .iter()
-                        .filter_map(|t| t.ident())
-                        .collect::<Vec<_>>()
-                        .join("/");
-                    f.imports.push((path, span_of(&line)));
+                    // Two kinds of import, told apart by the word after it: the built-in
+                    // namespace, and an enum a `.proto` owns (§15.59).
+                    let kind = match line.get(1).and_then(|t| t.ident()) {
+                        Some(crate::kw::PROTO) => Some(EnumSource::Proto),
+                        Some(crate::kw::JSONSCHEMA) => Some(EnumSource::JsonSchema),
+                        _ => None,
+                    };
+                    if let Some(kind) = kind {
+                        if let Some(p) = self.enum_import(&line, kind) {
+                            f.enum_imports.push(p);
+                        }
+                    } else {
+                        let path: String = line[1..]
+                            .iter()
+                            .filter_map(|t| t.ident())
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        f.imports.push((path, span_of(&line)));
+                    }
                     self.i += 1;
                 }
                 crate::kw::ENUM => {
@@ -333,6 +347,54 @@ impl P {
             }
         }
         Some(EnumDecl { name, values, default_marks, span: span_of(line) })
+    }
+
+    /// `import proto "<file>" <Enum> -> <enum>` and `import jsonschema "<file>" "<pointer>"
+    /// -> <enum>` (§15.59, §15.60).
+    ///
+    /// A line that starts this way and then does not hold together is not read as the other
+    /// kind of import: it says what the shape is, once, where the mistake is. What names the
+    /// enum inside the file is a word in a `.proto` and a quoted pointer in a schema, so both
+    /// spellings are accepted here and the reader for that kind decides what it means.
+    fn enum_import(&mut self, line: &[Token], kind: EnumSource) -> Option<EnumImport> {
+        let shape = || {
+            let (w, sel) = match kind {
+                EnumSource::Proto => (crate::kw::PROTO, tr!("<列挙>", "<Enum>")),
+                EnumSource::JsonSchema => (crate::kw::JSONSCHEMA, tr!("\"<ポインタ>\"", "\"<pointer>\"")),
+            };
+            Diag::error(
+                "E013",
+                tr!("`import {w}` の行の形が違います", "The shape of the `import {w}` line is wrong"),
+            )
+            .mark(span_of(line), "")
+            .note(tr!(
+                "形は `import {w} \"<ファイル>\" {sel} -> <この規則の列挙>` です。",
+                "The shape is `import {w} \"<file>\" {sel} -> <enum of this rule>`."
+            ))
+        };
+        let Some(Kind::Str(file)) = line.get(2).map(|t| t.kind.clone()) else {
+            self.err(shape());
+            return None;
+        };
+        let source = match line.get(3).map(|t| t.kind.clone()) {
+            Some(Kind::Str(s)) => s,
+            _ => match line.get(3).and_then(|t| t.ident()).map(|s| s.to_string()) {
+                Some(s) => s,
+                None => {
+                    self.err(shape());
+                    return None;
+                }
+            },
+        };
+        if !line.get(4).is_some_and(|t| t.is(&Kind::Arrow)) {
+            self.err(shape());
+            return None;
+        }
+        let Some((target, _)) = self.name_at(line, 5) else {
+            self.err(shape());
+            return None;
+        };
+        Some(EnumImport { kind, file, source, target, span: span_of(line) })
     }
 
     fn group_decl(&mut self, line: &[Token]) -> Option<GroupDecl> {

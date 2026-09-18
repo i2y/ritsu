@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E031, E101-E115, W105, W110, W111, W114, W115, W116) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E033, E101-E115, W105, W110, W111, W114, W115, W116) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -89,7 +89,7 @@ Two declarations are mandatory and are where most first drafts fail:
 - **`round` on every numeric output.** Without it the generated code would settle fractions
   silently.
 
-Four shapes are worth knowing before the first draft:
+Five shapes are worth knowing before the first draft:
 
 - **Tables stack.** A table's output column is a column of any later table, to any depth, and
   one table may produce several output columns. That, plus a `derive` used as a column, is how
@@ -115,6 +115,15 @@ Four shapes are worth knowing before the first draft:
   universe the completeness check quantifies over **and** the cap on the sequence. Nothing
   accumulates across elements; a sum belongs before the call. A rule has a `fold` or a
   `count`, never both (E031).
+
+- **An enum may belong to somebody else.** When the values come from a service contract,
+  `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
+  "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)
+  says so, and every `check` reads that file and holds the two together: the `.proto` owns which values exist, the `.rule` owns what
+  they are called here and what each one costs. A value on one side only is E032. Once the sets
+  agree, a value that no row names and no `default` marks is E033 — not the warning W111, because
+  a value that arrived through the contract is a change nobody has read yet, and a table with a
+  `-` row would pass completeness while the new value quietly takes the default amount.
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first

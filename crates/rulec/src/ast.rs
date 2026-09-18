@@ -80,6 +80,41 @@ pub struct EnumDecl {
     pub span: Span,
 }
 
+/// Which kind of file an imported enum's values are declared in (§15.59, §15.60).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnumSource {
+    /// `.proto`: the enum is named, and the value names carry its name as a prefix.
+    Proto,
+    /// JSON Schema, OpenAPI included: the enum is reached by a JSON Pointer, and the values
+    /// are the strings that go on the wire.
+    JsonSchema,
+}
+
+impl EnumSource {
+    /// The word written after `import`.
+    pub fn word(self) -> &'static str {
+        match self {
+            EnumSource::Proto => crate::kw::PROTO,
+            EnumSource::JsonSchema => crate::kw::JSONSCHEMA,
+        }
+    }
+}
+
+/// `import <kind> "<file>" <selector> -> <enum of this rule>` (§15.59, §15.60). The rule keeps
+/// the words; the file keeps the set, and the check holds them together.
+#[derive(Debug, Clone)]
+pub struct EnumImport {
+    pub kind: EnumSource,
+    /// The path as written, followed from the directory of the `.rule`.
+    pub file: String,
+    /// What names the enum inside that file: its name in a `.proto`, a JSON Pointer in a
+    /// schema.
+    pub source: String,
+    /// The enum declared here that it has to agree with.
+    pub target: Name,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct GroupDecl {
     pub name: Name,
@@ -326,6 +361,8 @@ pub struct RuleFile {
     pub version: String,
     pub description: Option<String>,
     pub imports: Vec<(String, Span)>,
+    /// The enums whose value set is declared outside this file (§15.59, §15.60).
+    pub enum_imports: Vec<EnumImport>,
     pub enums: Vec<EnumDecl>,
     pub groups: Vec<GroupDecl>,
     pub inputs: Vec<VarDecl>,

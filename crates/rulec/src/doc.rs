@@ -303,7 +303,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
 
     // --- Types. Closed enums: once a value is added, the completeness check breaks the
     // existing tables.
-    if !f.enums.is_empty() || !f.imports.is_empty() {
+    if !f.enums.is_empty() || !f.imports.is_empty() || !f.enum_imports.is_empty() {
         o.push_str(&tr!("\n## 型\n\n", "\n## Types\n\n"));
         o.push_str(&tr!(
             "列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。\n\n",
@@ -332,6 +332,16 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
                 n_values(e.values.len()),
                 md_esc(&vs.join(sep()))
             ));
+            // Where the set came from, when it is not this file's to decide (§15.59). The
+            // approver is the person who has to know the set can change without this file changing.
+            if let Some(p) = f.enum_imports.iter().find(|p| p.target.text == e.name.text) {
+                o.push_str(&tr!(
+                    "  - この値の集合は `{0}` の `{1}` が持っています。`rulec check` が一致を確かめています（ずれていれば E032、値に行が無ければ E033）。\n",
+                    "  - This set is owned by `{1}` in `{0}`. `rulec check` holds the two together (E032 when they differ, E033 when a value has no row).\n",
+                    md_esc(&p.file),
+                    md_esc(&p.source)
+                ));
+            }
         }
         for (im, _) in &f.imports {
             let name = im.rsplit('/').next().unwrap_or(im);
@@ -343,6 +353,15 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
                 n_values(n),
                 crate::kw::IMPORT,
                 md_esc(im)
+            ));
+        }
+        if !f.enum_imports.is_empty() {
+            o.push_str(&tr!(
+                "\n取り込んだ列挙では、行にも現れず `{}` も付いていない値は**エラー**です（E033）。値が増えたのは外の変更で、\
+                 まだ誰も読んでいないという意味だからです。\n",
+                "\nFor an imported enum, a value that appears in no row and carries no `{}` is an **error** (E033): \
+                 the value arrived through a change made elsewhere, and nobody has read it yet.\n",
+                crate::kw::DEFAULT
             ));
         }
         if f.enums.iter().any(|e| e.default_marks.iter().any(|b| *b)) {

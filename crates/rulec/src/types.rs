@@ -1090,7 +1090,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             .filter(|(i, v)| !c.used_values.contains(&v.text) && !e.default_marks.get(*i).copied().unwrap_or(false))
             .map(|(_, v)| v)
             .collect();
-        if !unused.is_empty() {
+        // An enum bound to a `.proto` is reported by the pass that read the file (E033): the
+        // question there is not "did you forget a line" but "has anyone read the change the
+        // contract shipped", and it is only a fair question once the file resolved (§15.59).
+        let bound = f.enum_imports.iter().any(|p| p.target.text == e.name.text);
+        if !unused.is_empty() && !bound {
             let names: Vec<String> = unused.iter().map(|v| v.text.clone()).collect();
             c.diags.push(
                 Diag::warning("W111", tr!("型 {} の値がどの行にも現れません", "Values of type {} appear in no row", e.name.text))
@@ -1102,6 +1106,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
     }
+
     // A table's output column may introduce a name of its own. Nothing downstream reading it
     // means the column computes a value that never leaves the table — and Go will not compile
     // a local that is never read, so this has to be said here rather than discovered there.

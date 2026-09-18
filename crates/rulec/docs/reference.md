@@ -24,6 +24,8 @@ every one except `rule` is optional, but an order that differs from this one is 
 rule <name>(<alias>) v<version>
 description "<one line>"
 import std/<name>
+import proto "<file>" <Enum> -> <enum of this rule>
+import jsonschema "<file>" "<pointer>" -> <enum of this rule>
 enum   …
 group  …
 inputs
@@ -164,10 +166,85 @@ group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 
 A group is a named subset of an enum and may be used in a cell wherever a value may. Groups
 are always expanded before checking, so a hole in a table written with groups is still found.
 
+## 3.1 import
+
+Two lines start with `import`, and both bring in **the values of an enum** — nothing else
+crosses a file boundary. A rule is still one file: what is imported is a set of names, not
+rows, not amounts, not another rule.
+
+| line | what it brings | who owns the set |
+|---|---|---|
+| `import std/<name>` | a built-in enum | rulec, frozen |
+| `import proto "<file>" <Enum> -> <enum of this rule>` | the value set of an enum in a `.proto` | that `.proto`, outside this rule |
+| `import jsonschema "<file>" "<pointer>" -> <enum of this rule>` | the value set of an enum in a JSON Schema, OpenAPI included | that file, outside this rule |
+
+> `rulec import csv` and `rulec import xlsx` are a different thing that shares the word: a
+> **command** that writes a first draft of a `.rule` from a spreadsheet, once. It leaves no
+> line in the file and nothing is read again afterwards. These two lines are read on every
+> `rulec check`.
+
 ### Built-in enums
 
 `import std/都道府県` brings in the 47 prefectures. It is the only built-in today (E013 for
 anything else).
+
+### An enum a `.proto` owns
+
+```rule
+import proto "api/v1/order.proto" MemberTier -> 会員区分
+enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+```
+
+When the values come from a service contract, the set is not the rule's to decide. The line
+above says where it comes from, and `rulec check` reads that file on every run and holds the
+two together. The path is followed from the directory of the `.rule`.
+
+The two sides carry different things, and neither can be derived from the other. The `.proto`
+owns **which values exist**; the `.rule` owns **what they are called here** and what each one
+costs — a proto has no Japanese in it. So what is checked is that they agree:
+
+- the value names are matched by the ASCII alias, with the enum's own name taken off the front
+  (`MEMBER_TIER_GOLD` is `gold`), which is the prefix convention `buf lint` enforces;
+- the zero value is proto3's "not set" when it is named `…_UNSPECIFIED`, so it is not a value
+  the table answers for — the generated code refuses it at the entry like any other non-member.
+  A zero value named anything else is a value like any other;
+- a value on one side only is **E032**, in either direction;
+- and once the sets agree, a value that no row names and no `default` marks is **E033**.
+
+E033 is the reason this exists. Adding a value to an enum is a compatible change on the wire,
+so the tools that guard the contract let it through; a table with a `-` row then passes the
+completeness check, and the new tier quietly takes the default amount. For a value you wrote
+yourself that state is a warning (W111). For a value that arrived through the contract it is an
+error, because nobody has read it yet. Marking it `default` is how you say you did.
+
+### An enum a JSON Schema owns
+
+```rule
+import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> 会員区分
+enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+```
+
+The same binding, for the other place a value set is declared. Everything about E032 and E033
+is the same; two things differ.
+
+**How the enum is named.** One document holds hundreds of enums, so one is named by a JSON
+Pointer rather than by a name. The pointer may land on the schema (its `enum` is then read) or
+on the array itself, and a leading `#` and a leading `/` are both optional. An enum written
+inline in a property — the usual shape in OpenAPI — is reached the same way
+(`#/components/schemas/Order/properties/status`). A pointer that does not resolve comes back
+with the keys that were there.
+
+**How the values map.** They are the aliases **exactly**: nothing is taken off the front and
+no case is folded. A `.proto` earns its transformation from a convention `buf lint` enforces;
+a schema has no such convention, and inventing one would mean a rule and a schema that look
+like they agree while sending different strings. An enum of numbers or nulls is refused by
+name: the values of a rule's enum are names.
+
+**YAML is not read.** It is the usual spelling of an OpenAPI document, and the reason for the
+refusal is not that a reader would be hard to start: a reader for the subset one file happens
+to use is a reader that goes wrong quietly on the next one, and a value set that is quietly
+wrong is the one thing this must never be. Point at a JSON form of the document, which most
+toolchains can write.
 
 ## 4. inputs and outputs
 

@@ -28,6 +28,11 @@ pub struct Entry {
     /// Only E109 needs this: with the default budget the example would have to be enormous,
     /// so it is reproduced with a budget this small.
     pub budget: Option<i64>,
+    /// What has to sit next to the example for it to reproduce, as (name, contents). Only the
+    /// codes about `import proto` need it: their smallest reproduction is two files, and one
+    /// of them is not a rule (§15.59). The test writes them beside the example and runs it
+    /// there, so a companion cannot rot any more than the example can.
+    pub files: &'static [(&'static str, &'static str)],
     pub related: &'static [&'static str],
 }
 
@@ -40,7 +45,7 @@ fn e(
     example: &'static str,
     related: &'static [&'static str],
 ) -> Entry {
-    Entry { code, severity, title, when, fix, example, budget: None, related }
+    Entry { code, severity, title, when, fix, example, budget: None, files: &[], related }
 }
 
 fn err(
@@ -58,6 +63,12 @@ impl Entry {
     /// Only E109 uses this (see the field).
     fn with_budget(mut self, b: i64) -> Entry {
         self.budget = Some(b);
+        self
+    }
+
+    /// Only the `import proto` codes use this (see the field).
+    fn with_files(mut self, fs: &'static [(&'static str, &'static str)]) -> Entry {
+        self.files = fs;
         self
     }
 }
@@ -98,6 +109,25 @@ const X_E011: &str = "rule t(t) v1\n\ninputs\n  重量 : bool\n\noutputs\n  r(r)
 const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true |\n";
 const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
+
+/// The `.proto` that E032 and E033 are read against. Two values and proto3's zero value,
+/// which is "not set" and not a value a table answers for.
+const TIER_PROTO: &[(&str, &str)] = &[(
+    "tier.proto",
+    "syntax = \"proto3\";\n\nenum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_ONE = 1;\n  TIER_TWO = 2;\n}\n",
+)];
+
+const X_E032: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
+                      enum v(v) = one(one)\n\n\
+                      inputs\n  x(x) : v\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n| one | true |\n";
+
+const X_E033: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
+                      enum v(v) = one(one) | two(two)\n\n\
+                      inputs\n  x(x) : v\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy first\n| x | -> r(r) : bool |\n| one | true |\n| - | false |\n";
 const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n  \
                       r(r) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  o(o) : money[円, incl_tax]  round down(1円)\n\n\
@@ -530,15 +560,15 @@ pub fn ledger() -> Vec<Entry> {
             "E013",
             tr!("取込先がありません", "No such import"),
             tr!(
-                "`import` の先が組み込みの名前空間に無いとき。いまあるのは `std/都道府県`（47 値）だけです。",
-                "The target of `import` is not in the built-in namespace. The only one for now is `std/都道府県` (47 values)."
+                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（いまは `std/都道府県`、47 値）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。YAML は読まないので、JSON にしたものを指してください。",
+                "The target of `import` is not there. There are three kinds: the built-in namespace (`std/都道府県`, 47 values, is the only one for now), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it."
             ),
             tr!(
-                "`import std/都道府県` に直すか、その列挙を `enum` でこのファイルに書いてください。",
-                "Correct it to `import std/都道府県`, or declare the enum in this file with `enum`."
+                "`import std/都道府県` に直すか、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からたどるので、そこからの相対で書きます。JSON Schema のポインタは `#/components/schemas/<名前>` の形で、届かなかったときは、そこにある鍵が並びます。",
+                "Correct it to `import std/都道府県`, or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
             ),
             X_E013,
-            &["E012"],
+            &["E012", "E032"],
         ),
         err(
             "E014",
@@ -792,6 +822,36 @@ pub fn ledger() -> Vec<Entry> {
             X_E031,
             &["E021", "E029"],
         ),
+        err(
+            "E032",
+            tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
+            tr!(
+                "`import proto` や `import jsonschema` が名指しした列挙の値と、この規則の `enum` の別名がそろっていないとき。どちら側にしか無い値も、名前で出ます。増えるのはたいてい proto の側で、**互換な変更として通ってしまう、規則の外での変更です**（§15.59）。",
+                "The values of the enum named by `import proto` or `import jsonschema` and the ASCII aliases of the rule's `enum` are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule** (§15.59)."
+            ),
+            tr!(
+                "増えた値をこの規則の `enum` に足してください。日本語の名前は proto に入っていないので、そこは自分で決めます。消えた値なら、この規則からも消します。値を足すと、次はその値に行が要るかを表が問います（E033）。",
+                "Add the new value to the rule's `enum`. The proto has no Japanese in it, so the name is yours to decide. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033)."
+            ),
+            X_E032,
+            &["E013", "E033", "E101"],
+        )
+        .with_files(TIER_PROTO),
+        err(
+            "E033",
+            tr!("取り込んだ列挙の値に、行も `default` もありません", "A value of an imported enum has neither a row nor `default`"),
+            tr!(
+                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。自分で書いた値なら書き忘れの警告（W111）ですが、契約から来た値は**外の変更がまだ誰にも読まれていない**という意味なので、止めます。既定の行がある表では完全性検査が通ってしまい、新しい値に既定の額が黙って当たります（§15.59）。",
+                "A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default amount (§15.59)."
+            ),
+            tr!(
+                "その値の行を表に足すか、値の宣言に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、額を決めた人がいることの印になります。",
+                "Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided the amount."
+            ),
+            X_E033,
+            &["E032", "W111", "E101"],
+        )
+        .with_files(TIER_PROTO),
         err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
@@ -1119,6 +1179,10 @@ pub fn render_text(e: &Entry) -> String {
         None => tr!("\n最小の再現\n", "\nSmallest reproduction\n"),
     });
     o.push_str(&indent(e.example));
+    for (name, text) in e.files {
+        o.push_str(&tr!("\n隣に置くファイル `{name}`\n", "\nThe file `{name}` beside it\n"));
+        o.push_str(&indent(text));
+    }
     if !e.related.is_empty() {
         o.push_str(&tr!("\n関係するコード: {}\n", "\nRelated codes: {}\n", e.related.join(" ")));
     }
@@ -1142,6 +1206,12 @@ pub fn render_markdown(e: &Entry) -> String {
     o.push_str("```rule\n");
     o.push_str(e.example);
     o.push_str("```\n");
+    for (name, text) in e.files {
+        o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
+        o.push_str("```proto\n");
+        o.push_str(text);
+        o.push_str("```\n");
+    }
     if !e.related.is_empty() {
         let links: Vec<String> =
             e.related.iter().map(|c| format!("[{c}](#{})", c.to_ascii_lowercase())).collect();
@@ -1161,6 +1231,17 @@ pub fn render_json(e: &Entry) -> String {
         .str("fix", &e.fix)
         .str("example", e.example)
         .opt_raw("budget", e.budget.map(|b| b.to_string()))
+        .raw(
+            "files",
+            format!(
+                "[{}]",
+                e.files
+                    .iter()
+                    .map(|(n, t)| json::Obj::new().str("name", n).str("text", t).finish())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        )
         .raw("related", json::strs(e.related))
         .str("lang", crate::i18n::current().code())
         .finish()

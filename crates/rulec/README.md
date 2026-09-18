@@ -73,7 +73,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec check` — [What it proves](https://i2y.github.io/rulec/checks/) |
+| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](https://i2y.github.io/rulec/checks/) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
 
@@ -148,6 +148,15 @@ examples
 business.** This example passes `rulec check` as it stands — the repository's tests run it
 on every commit. `examples` is an executable specification, and a row that does not hold is
 reported with the rows that fired.
+
+An enum is a **closed** set, which is what makes "somebody added a value" break every table
+that has not seen it. When the set is not yours to decide — a member tier, a status, anything
+declared in a `.proto` or a JSON Schema — `import proto "api/v1/order.proto" MemberTier ->
+会員区分` (or `import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" ->
+会員区分`) binds the two, and every `rulec check` reads that file. Adding a value to an enum is a compatible change
+on the wire, so the tools that guard the contract pass it; here it is **E032** until the rule
+carries the value and **E033** until a row names it or `default` marks it. A table with a `-`
+row would otherwise stay green while the new tier quietly took the default amount.
 
 A cell tests **its own column and nothing else**, which is what makes a row a box and the
 completeness and overlap checks exact. Complicated rules are written by **stacking tables**:
@@ -330,10 +339,12 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
                   `rulec mcp` serves the same commands as MCP tools where there is no shell
-src/              30 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+src/              33 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
                   import (a draft from a sheet), xlsx (reading the workbook: ZIP, deflate,
-                  the number formats), mcp (the command table as MCP tools),
+                  the number formats), proto and jsonschema (the enums whose values are
+                  declared outside the rule), enums (holding the two together),
+                  mcp (the command table as MCP tools),
                   codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query),
                   wasm (the checker as the site's playground)
 tests/corpus/     18 rules transcribed from real published terms
@@ -343,7 +354,8 @@ tests/oracle/     two premium tables transcribed grade by grade from their publi
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
-                  mcp, import, xlsx, tool (the rule as an MCP tool), sql, wasm (the site's
+                  mcp, import, xlsx, proto and jsonschema (an enum held to the file it is
+                  declared in), tool (the rule as an MCP tool), sql, wasm (the site's
                   playground answers what the binary answers)
 ```
 
@@ -354,12 +366,12 @@ of 協会けんぽ and 日本年金機構. None of it is private data. The two p
 held, grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 278 tests; python3, node, rustc, ruby, go and swiftc are used where present
+$ cargo test          # 326 tests; python3, node, rustc, ruby, go and swiftc are used where present
 ```
 
 ## Where it stands
 
-20 rules taken from real published terms are checked, generated and run on every commit, and all 52 diagnostics are implemented. What is built:
+20 rules taken from real published terms are checked, generated and run on every commit, and all 54 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

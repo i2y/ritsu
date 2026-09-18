@@ -37,6 +37,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E029](#e029) | error | This column cannot be counted |
 | [E030](#e030) | error | A `count` needs a range |
 | [E031](#e031) | error | A rule cannot have both a `fold` and a `count` |
+| [E032](#e032) | error | The declared enum and the imported one disagree |
+| [E033](#e033) | error | A value of an imported enum has neither a row nor `default` |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -324,9 +326,9 @@ Related codes: [E011](#e011), [E013](#e013)
 
 `error` — **No such import**
 
-**When.** The target of `import` is not in the built-in namespace. The only one for now is `std/都道府県` (47 values).
+**When.** The target of `import` is not there. There are three kinds: the built-in namespace (`std/都道府県`, 47 values, is the only one for now), an enum in a `.proto` (`import proto "<file>" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it.
 
-**Fix.** Correct it to `import std/都道府県`, or declare the enum in this file with `enum`.
+**Fix.** Correct it to `import std/都道府県`, or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there.
 
 **Smallest reproduction**:
 
@@ -336,7 +338,7 @@ rule t(t) v1
 import std/nope
 ```
 
-Related codes: [E012](#e012)
+Related codes: [E012](#e012), [E032](#e032)
 
 ## E014
 
@@ -945,6 +947,91 @@ fold d over xs
 ```
 
 Related codes: [E021](#e021), [E029](#e029)
+
+## E032
+
+`error` — **The declared enum and the imported one disagree**
+
+**When.** The values of the enum named by `import proto` or `import jsonschema` and the ASCII aliases of the rule's `enum` are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule** (§15.59).
+
+**Fix.** Add the new value to the rule's `enum`. The proto has no Japanese in it, so the name is yours to decide. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+import proto "tier.proto" Tier -> v
+enum v(v) = one(one)
+
+inputs
+  x(x) : v
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| one | true |
+```
+
+With `tier.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_ONE = 1;
+  TIER_TWO = 2;
+}
+```
+
+Related codes: [E013](#e013), [E033](#e033), [E101](#e101)
+
+## E033
+
+`error` — **A value of an imported enum has neither a row nor `default`**
+
+**When.** A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default amount (§15.59).
+
+**Fix.** Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided the amount.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+import proto "tier.proto" Tier -> v
+enum v(v) = one(one) | two(two)
+
+inputs
+  x(x) : v
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy first
+| x | -> r(r) : bool |
+| one | true |
+| - | false |
+```
+
+With `tier.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_ONE = 1;
+  TIER_TWO = 2;
+}
+```
+
+Related codes: [E032](#e032), [W111](#w111), [E101](#e101)
 
 ## E101
 

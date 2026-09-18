@@ -116,6 +116,13 @@ pub const MAX: &str = "max";
 
 // --- The built-in namespace (`import std/都道府県`)
 pub const STD: &str = "std";
+/// The other kind of import names the file an enum's value set is declared in (§15.59,
+/// §15.60): `import proto "<file>" <Enum> -> <enum>` and `import jsonschema "<file>"
+/// "<pointer>" -> <enum>`. Both are told apart by position — the word right after `import` —
+/// so neither is a reserved name.
+pub const PROTO: &str = "proto";
+/// JSON Schema, and the schemas inside an OpenAPI document, which are the same thing.
+pub const JSONSCHEMA: &str = "jsonschema";
 
 /// Words that cannot be used as names (E009). Besides the line-head words, this includes the
 /// words that cells, modifiers and expressions tell apart by position alone. A declaration

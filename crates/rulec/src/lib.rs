@@ -23,6 +23,7 @@ pub mod ast;
 pub mod backend;
 pub mod diag;
 pub mod doc;
+pub mod enums;
 pub mod eval;
 pub mod fixtures;
 pub mod fmt;
@@ -32,11 +33,13 @@ pub mod codegen;
 pub mod codes;
 pub mod coverage;
 pub mod json;
+pub mod jsonschema;
 pub mod kw;
 pub mod lex;
 pub mod num;
 pub mod parse;
 pub mod prelude;
+pub mod proto;
 pub mod region;
 pub mod replay;
 pub mod report;
@@ -83,6 +86,8 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
 
     let t = types::check(f, path);
     diags.extend(t.diags.iter().cloned());
+    // The one stage that reads another file: the enums declared outside it (§15.59, §15.60).
+    diags.extend(enums::check(f, &t, path));
     enrich_e104(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {
         return Report { diags, quiet, shadow, nodes };
