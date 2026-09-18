@@ -29,7 +29,7 @@ These are all the words that may start a line.
 |---|---|
 | `rule` | the first line: the rule's name and version |
 | `description` | one line of prose |
-| `import` | brings in a built-in enum |
+| `import` | brings in the values of an enum (built-in, a `.proto`, or a JSON Schema) |
 | `enum` | a closed enumeration |
 | `group` | a named subset of an enum |
 | `inputs` | the rule's arguments |
@@ -157,8 +157,75 @@ hole in a table written with groups is still found.
 group 遠隔地(remote) = 北海道, 沖縄県
 ```
 
+## Imports
+
+Two lines start with `import`, and both bring in **the values of an
+enum** — nothing else crosses a file boundary. A rule stays one file:
+what arrives is a set of names, not rows and not amounts.
+
+| line | what it brings | who owns the set |
+|---|---|---|
+| `import std/<name>` | a built-in enum | rulec, frozen |
+| `import proto "<file>" <Enum> -> <enum of this rule>` | the values of an enum in a `.proto` | that `.proto`, outside this rule |
+| `import jsonschema "<file>" "<pointer>" -> <enum of this rule>` | the values of an enum in a JSON Schema (OpenAPI included) | that file, outside this rule |
+
+!!! note "`rulec import` is a different thing that shares the word"
+
+    `rulec import csv` and `rulec import xlsx` are a **command**: they
+    write a first draft of a `.rule` from a spreadsheet, once, and leave
+    no line in the file. The two lines above are read again on every
+    `rulec check`.
+
+### Built-in enums
+
 The built-in `std/都道府県` (47 values) arrives with
 `import std/都道府県`.
+
+### When the set belongs to somebody else
+
+An enum like a member tier or a status is usually declared in a
+`.proto`, and whether it gains a value is decided outside this rule. Say
+where the set comes from, and the two are held together.
+
+```rule
+import proto "api/v1/order.proto" MemberTier -> 会員区分
+enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+```
+
+The `.proto` owns **which values exist**; the `.rule` owns **what they
+are called here and what each one costs**. A proto carries no Japanese,
+so the names are yours to decide. Every `rulec check` reads that file and
+holds the two together.
+
+- A value on one side only is **E032**. It is usually the proto that
+  gained one, and **on the wire that is a compatible change**.
+- Once the sets agree, a value that no row names and no `default` marks
+  is **E033**. For an enum you wrote yourself that state is a warning
+  (W111); for an imported one it is an error, because the value arrived
+  through a change nobody has read yet.
+
+A table with a `-` row passes the completeness check when a new value
+turns up, and the value quietly takes the default amount. That is what
+E033 stops.
+
+### From a JSON Schema or an OpenAPI document
+
+The same binding, written with a JSON Pointer, because one document holds
+hundreds of enums:
+
+```rule
+import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> 会員区分
+enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+```
+
+The pointer may land on the schema or on its `enum` array, and an enum
+written inline in a property is reached the same way. The values become
+the aliases **exactly** — nothing taken off the front, no case folded —
+because a schema has no naming convention to earn a transformation from.
+
+**YAML is not read.** A reader for the subset one file happens to use is
+a reader that goes wrong quietly on the next one. Point at a JSON form of
+the document; most toolchains can write one.
 
 ## Inputs and outputs
 

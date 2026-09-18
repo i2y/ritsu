@@ -57,7 +57,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec check` — [What it proves](checks.md) |
+| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](compare.md#against-a-legacy-implementation) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
 
@@ -325,10 +325,10 @@ error[E101]: Completeness gap: some input matches no row
  hint: add a row that matches this input.
 ```
 
-**No legacy implementation and no historical data required.** Transcribe
-the spreadsheet you already have, run `rulec check`, and the holes and
-the overlaps start coming out — each with a concrete input that
-exhibits it.
+**No legacy implementation and no historical data required.** Run the
+spreadsheet you already have through `rulec import xlsx` for a first
+draft, then `rulec check`, and the holes and the overlaps start coming
+out — each with a concrete input that exhibits it.
 
 ---
 

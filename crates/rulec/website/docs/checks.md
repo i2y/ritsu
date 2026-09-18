@@ -31,6 +31,14 @@ combination declared not to happen, and the generated code refuses one at the do
 instead. In a rule that walks a sequence, the same completeness check asks whether
 **every verdict the table can produce has an arm** in the fold (E024).
 
+In a rule that binds an enum to a `.proto` with `import proto`,
+completeness reaches **across the contract**. Every `rulec check` reads
+that file: a set that no longer agrees is E032, and once the sets agree,
+a value that no row names and no `default` marks is E033. Adding a value
+to an enum is a compatible change on the wire, so the tools that guard
+the contract let it through — this is the check that stops it from
+passing quietly through a table with a `-` row.
+
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.
