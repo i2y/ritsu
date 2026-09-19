@@ -429,8 +429,13 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 None => value,
             };
             // The output's own alias is the name this rule declares it under, if it is an
-            // output here; else the callee's alias, prefixed.
-            let ascii = f.outputs.iter().find(|o| o.name.text == target.text).and_then(|o| o.name.ascii.clone()).or_else(|| target.ascii.clone()).or_else(|| Some(format!("{}_{}", rn.alias, od.name.ascii.clone().unwrap_or_else(|| od.name.text.clone()))));
+            // output here; else the alias written on the `->` name, if any; else none, and
+            // the name itself is the identifier (§1.3). It used to fall back to the callee's
+            // alias with the apply's prefix — which is exactly the identifier the callee's
+            // own output column gets when it carries the output's name, the usual shape of a
+            // one-table rule — so TypeScript, JavaScript, Go and Swift saw one identifier
+            // declared twice (§15.71).
+            let ascii = f.outputs.iter().find(|o| o.name.text == target.text).and_then(|o| o.name.ascii.clone()).or_else(|| target.ascii.clone());
             a.defines.push(target.text.clone());
             items.push(Item::Define(DefineDecl {
                 name: Name { text: target.text.clone(), ascii, span: target.span.clone() },

@@ -5,6 +5,7 @@
 
 use rulec::ast::Item;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -112,4 +113,56 @@ fn 整形は呼び出しの本体を二字下げる() {
     let src = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=3\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:0000000000000000\n    a   =  n\nexcept 表\n  x  ->   y\n";
     let out = rulec::fmt::format(src);
     assert!(out.contains("\n  a = n\n  except 表\n  x -> y\n"), "{out}");
+}
+
+/// A callee whose table column carries the output's name — the usual shape of a one-table
+/// rule — applied twice under unaliased `->` names: two versions of a rule bundled, with a
+/// date table choosing between them (§15.71). The expansion used to give the renamed output
+/// the callee's own prefixed alias, the very identifier the callee's output column gets, so
+/// the generated TypeScript, JavaScript, Go and Swift declared one name twice.
+#[test]
+fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別子は衝突しない() {
+    let d = std::env::temp_dir().join(format!("rulec-bundle-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let callee = |name: &str, alias: &str, lo: &str, hi: &str| {
+        format!(
+            "rule {name}({alias}) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n\noutputs\n  税額(tax) : money[円]  round down(1円)\n\ntable 税額表(rates)\npolicy unique\n| 金額     | -> 税額(tax) : money[円] |\n| <=10万円 | {lo} |\n| >10万円  | {hi} |\n"
+        )
+    };
+    let old = callee("旧税額", "old_tax", "200円", "400円");
+    let new = callee("新税額", "new_tax", "0円", "300円");
+    std::fs::write(d.join("旧税額.rule"), &old).unwrap();
+    std::fs::write(d.join("新税額.rule"), &new).unwrap();
+    let bundle = format!(
+        "rule 束(bundle) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n  作成日(made) : date       range >=2024-04-01 <=2030-12-31\n\noutputs\n  税額(tax) : money[円]  round down(1円)\n\napply 旧(old) = \"旧税額.rule\" sha256:{}\n  金額 = 金額\n  税額 -> 旧税額\n\napply 新(new) = \"新税額.rule\" sha256:{}\n  金額 = 金額\n  税額 -> 新税額\n\ntable 選択(pick)\npolicy unique\n| 作成日       | -> 税額 |\n| <=2027-03-31 | 旧税額  |\n| >=2027-04-01 | 新税額  |\n\nexamples\n| 金額  | 作成日     | -> 税額 |\n| 5万円 | 2027-03-31 | 200円   |\n| 5万円 | 2027-04-01 | 0円     |\n",
+        rulec::sha256::short(old.as_bytes()),
+        rulec::sha256::short(new.as_bytes())
+    );
+    let path = d.join("束.rule");
+    std::fs::write(&path, &bundle).unwrap();
+    let (f, _) = rulec::prepare(&bundle, &path.to_string_lossy()).unwrap_or_else(|ds| panic!("{ds:?}"));
+    // Every identifier the generated code writes for an item is distinct.
+    let ident = |n: &rulec::ast::Name| n.ascii.clone().unwrap_or_else(|| n.text.clone());
+    let mut idents: Vec<String> = Vec::new();
+    for it in &f.items {
+        match it {
+            Item::Define(x) => idents.push(ident(&x.name)),
+            Item::Derived(x) => idents.push(ident(&x.name)),
+            Item::Count(x) => idents.push(ident(&x.name)),
+            Item::Table(t) => idents.extend(t.outputs.iter().map(|o| ident(&o.name))),
+        }
+    }
+    let mut distinct = idents.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), idents.len(), "識別子が重なっている: {idents:?}");
+    assert!(idents.contains(&"旧税額".to_string()), "別名の無い付け替え先は名前そのものが識別子になる: {idents:?}");
+    // And the generated code answers like the evaluator wherever a toolchain is installed.
+    let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
+    assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
+    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&d).args(["test", "out"]).output().unwrap();
+    let text = String::from_utf8_lossy(&test.stdout).into_owned() + &String::from_utf8_lossy(&test.stderr);
+    assert!(test.status.success() && !text.contains("FAIL"), "{text}");
+    let _ = std::fs::remove_dir_all(&d);
 }
