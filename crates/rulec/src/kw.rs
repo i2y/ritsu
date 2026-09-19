@@ -39,6 +39,11 @@ pub const LAW: &str = "law";
 pub const FILE: &str = "file";
 /// The date a law is read as of (the e-Gov `asof` parameter).
 pub const ASOF: &str = "asof";
+/// A rule applied with its inputs bound — a provision applied mutatis mutandis (DESIGN-draft
+/// §5, §15.69). The callee is expanded into this rule for the checks and the generators.
+pub const APPLY: &str = "apply";
+/// Inside an `apply`: the callee definitions left out (`第20条（第2項を除く。）`).
+pub const EXCEPT: &str = "except";
 pub const RESULT: &str = "result";
 pub const EXAMPLES: &str = "examples";
 /// A relation between two inputs that always holds. It narrows the input space the checks
@@ -56,7 +61,7 @@ pub const FOLD: &str = "fold";
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
-    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE,
+    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
 ];
 
 // --- Declaration modifiers
@@ -151,7 +156,8 @@ pub const JSONSCHEMA: &str = "jsonschema";
 /// with the same name is silently misread by the line-oriented syntax.
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT,
-    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, RESULT,
+    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, APPLY,
+    EXCEPT, RESULT,
     EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
     HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,
     EXHAUSTED, HELD, OVER,

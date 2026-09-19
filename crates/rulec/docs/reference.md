@@ -41,6 +41,10 @@ table  …          ┘
 policy …
 overrides …
 clause …          (a one-row definition written as prose; interleaves with the three above)
+apply  …          (another rule, applied with its inputs bound; interleaves too)
+  <callee input> = <value>
+  except <definition>, …
+  <callee output> -> <name>
 result …
 examples
   …
@@ -53,6 +57,9 @@ examples
 - `derive`, `define` and `table` are a pipeline: each may use anything declared above it.
 - `policy` belongs to the `table` immediately above it, and so does `overrides`: the tables or
   labelled rows, declared above, that every row of this table takes precedence over (§7).
+- `apply` is an item like `derive`, `define` and `table`: another rule file, applied with
+  every one of its inputs bound to a value of this rule (§7, "Applying another rule"). The
+  lines under it are indented by two spaces.
 - `examples` comes last.
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
@@ -665,6 +672,47 @@ a literal or a name. `overrides` is the same line a table may carry. A clause is
 row whose other columns are `-`: it is checked, evaluated and generated as one, fires in the
 trace as `{"table":"無料","row":1}`, and the page shows its condition and its value as written.
 
+### Applying another rule
+
+A provision applied mutatis mutandis — "the rule of Article 20 applies, reading 'years of
+service' as 'period in office'" — is an `apply`: another rule file, used once more with its
+inputs bound to values of this rule.
+
+```rule
+apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条
+  勤続年数 = 在職期間
+  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
+  基本給 = 報酬月額
+  except 減額
+  手当 -> 非常勤手当
+```
+
+The heading names the apply, the callee (a path relative to this file) and the digest of the
+callee file, which `rulec source pin` writes and `check` holds the callee to (E040: a callee
+that changed is looked at with `rulec diff` before the new digest is pasted). Under it, one
+line per callee input binds it to an input, a derived value, a definition, a table or clause
+output of this rule, or a literal — every input, exactly once (E041). The types agree (E042);
+two enums are mapped with `with`, which covers every value of this rule's enum, values spelled
+the same on both sides mapping by themselves. What this rule passes has to stay inside the
+callee's declared ranges and satisfy its constraints (E043, proved by interval arithmetic and
+never fixed by adding a row: the callee is another unit of approval). `except` leaves a table,
+a clause or a labelled row (`表:行`) of the callee out; a hole that leaves in the main rule is
+this rule's E101 to fill. The callee's outputs become definitions of this rule, under their
+own names or renamed with `->`, rounded as the callee declares and then, if one is an output
+here, rounded once more as this rule declares.
+
+The callee is expanded into this rule: its tables, clauses, derives and defines appear under
+`<apply>:<name>` (`退職手当:支給表`), which is how a clause of this rule takes precedence over
+one of them (`overrides 退職手当:減額`, defining `退職手当:手当`) and how the trace names a
+row (`{"table":"退職手当:支給表","row":1,"label":"短期"}`). Rows of the callee this rule never
+reaches — its ranges are usually narrower — are silent, and the page lists them under the
+apply; a whole table none of whose rows is reached is W118. A callee that itself applies a
+rule, walks a sequence, produces one of its own enums, or does not pass `check` cannot be
+applied (E044). The callee's sources come along with its definitions, and the page draws its
+tables from its own file, under a heading that says what was applied and how. Generated files
+name the callee and its digest in their header, `rulec api` lists them under `applies`, and
+`rulec diff old@rev new` reads the callee at the same revision as the rule.
+
 ### The seven kinds of cell
 
 | written | means |
@@ -753,7 +801,7 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `overrides` `clause` `source` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
@@ -761,6 +809,7 @@ which is why it is caught at parse time.
 | fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
 | count | `where` (and `over`, above) |
 | clause body | `when` `then` `always` |
+| apply body | `except` (and `with`, above) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

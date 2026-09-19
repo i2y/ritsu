@@ -33,6 +33,8 @@ pub struct DefSet {
     pub policies: Vec<Policy>,
     /// Whether each member was written as a `clause`.
     pub clause: Vec<bool>,
+    /// The `apply` each member came in through, if any (§15.69).
+    pub applied: Vec<Option<String>>,
     /// The merged table. Its name is `key`; every row carries `origin` and its own `index`.
     pub table: Table,
     /// Merged row → position in `members`.
@@ -102,6 +104,7 @@ pub fn single(t: &Table) -> DefSet {
         members: vec![name.clone()],
         policies: vec![t.policy],
         clause: vec![t.clause],
+        applied: vec![t.applied.clone()],
         table: t.clone(),
         member_of: vec![0; n],
         beats,
@@ -171,10 +174,17 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
     let mut raw: Vec<RawEdge> = Vec::new();
     for (k, t) in tables.iter().enumerate() {
         for r in &t.overrides {
-            let target = tables.iter().position(|u| table_name(u) == r.table);
-            let shown = match &r.row {
-                Some(l) => format!("{}:{l}", r.table),
-                None => r.table.clone(),
+            // `a:b` is table `a`, row `b` — unless `a:b` is the name of a table brought in by
+            // an `apply` (§15.69), which is what the whole spelling names then.
+            let joined = r.row.as_ref().map(|l| format!("{}:{l}", r.table));
+            let (tname, row) = match joined.filter(|j| tables.iter().any(|u| table_name(u) == *j)) {
+                Some(j) => (j, None),
+                None => (r.table.clone(), r.row.clone()),
+            };
+            let target = tables.iter().position(|u| table_name(u) == tname);
+            let shown = match &row {
+                Some(l) => format!("{tname}:{l}"),
+                None => tname.clone(),
             };
             match target {
                 None => {
@@ -202,11 +212,11 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                     continue;
                 }
                 Some(u) => {
-                    if let Some(l) = &r.row {
+                    if let Some(l) = &row {
                         let has = tables[u].rows.iter().any(|row| row.label.as_ref().is_some_and(|x| x.text == *l));
                         if !has {
                             diags.push(
-                                Diag::error("E035", tr!("表 {} に行ラベル `{l}` はありません", "Table {} has no row labelled `{l}`", r.table))
+                                Diag::error("E035", tr!("表 {} に行ラベル `{l}` はありません", "Table {} has no row labelled `{l}`", tname))
                                     .at(at(t, r.span.line))
                                     .mark(r.span.clone(), "")
                                     .note(tr!(
@@ -222,7 +232,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                         let mine: Vec<String> = t.outputs.iter().map(|o| o.name.text.clone()).collect();
                         let theirs: Vec<String> = tables[u].outputs.iter().map(|o| o.name.text.clone()).collect();
                         diags.push(
-                            Diag::error("E036", tr!("`{}` の相手 `{}` は、同じ出力を定めていません", "The target `{}` of `{}` does not define the same output", crate::kw::OVERRIDES, r.table))
+                            Diag::error("E036", tr!("`{}` の相手 `{}` は、同じ出力を定めていません", "The target `{}` of `{}` does not define the same output", crate::kw::OVERRIDES, tname))
                                 .at(at(t, r.span.line))
                                 .mark(r.span.clone(), tr!("{} を定めています", "defines {}", theirs.join(", ")))
                                 .note(tr!(
@@ -234,7 +244,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                         continue;
                     }
                     union(&mut parent, k, u);
-                    raw.push(RawEdge { winner: k, loser: u, loser_label: r.row.clone(), span: r.span.clone() });
+                    raw.push(RawEdge { winner: k, loser: u, loser_label: row.clone(), span: r.span.clone() });
                 }
             }
         }
@@ -301,6 +311,7 @@ fn merge(tables: &[&Table], members: &[usize], raw: &[RawEdge]) -> DefSet {
     let names: Vec<String> = members.iter().map(|&m| table_name(tables[m])).collect();
     let policies: Vec<Policy> = members.iter().map(|&m| tables[m].policy).collect();
     let clause: Vec<bool> = members.iter().map(|&m| tables[m].clause).collect();
+    let applied: Vec<Option<String>> = members.iter().map(|&m| tables[m].applied.clone()).collect();
     let key = tables[members[0]].outputs[0].name.text.clone();
 
     // The columns, in order of first appearance.
@@ -419,7 +430,8 @@ fn merge(tables: &[&Table], members: &[usize], raw: &[RawEdge]) -> DefSet {
         overrides: Vec::new(),
         clause: false,
         cite: None,
+        applied: None,
     };
     let eval_at = names[members.len() - 1].clone();
-    DefSet { key, members: names, policies, clause, table, member_of, beats, edges, eval_at }
+    DefSet { key, members: names, policies, clause, applied, table, member_of, beats, edges, eval_at }
 }

@@ -1,0 +1,24 @@
+rule 非常勤退職手当(part_time_allowance) v1
+description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN-draft §5 のスケッチ）"
+
+enum 終了事由(end_kind) = 任期満了(term_end) | 辞職(resignation)
+
+inputs
+  在職期間(tenure)       : number    range >=1 <=3
+  任期終了事由(end_reason) : 終了事由
+  報酬月額(monthly_pay)  : money[円]  range >=10万円 <=50万円
+
+outputs
+  非常勤手当(allowance) : money[円]  round down(1円)
+
+apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条（スケッチ）
+  勤続年数 = 在職期間
+  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
+  基本給 = 報酬月額
+  except 減額
+  手当 -> 非常勤手当
+
+examples
+| 在職期間 | 任期終了事由 | 報酬月額 | -> 非常勤手当 |
+| 3        | 任期満了     | 30万円   | 150万円       |
+| 3        | 辞職         | 30万円   | 150万円       |

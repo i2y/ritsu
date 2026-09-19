@@ -434,6 +434,7 @@ fn 色づけの語彙はkwと同じ() {
         ("ARMS", sorted(&[kw::OVER, kw::WHERE, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX])),
         ("CLAUSE", sorted(&[kw::WHEN, kw::THEN, kw::ALWAYS])),
+        ("APPLY", sorted(&[kw::EXCEPT])),
     ] {
         let mut got = list(name);
         got.sort();
@@ -449,7 +450,7 @@ fn 色づけの語彙はkwと同じ() {
     // `half_down` was added to the language and to neither, and simply stopped being
     // coloured. This one cannot be satisfied by forgetting.
     let known: BTreeSet<String> = ["HEAD_NAMED", "HEAD_PLAIN", "MODIFIERS", "TYPES", "TAX",
-        "POLICIES", "ROUNDING", "CONSTANTS", "ARMS", "FUNCTIONS", "CLAUSE"]
+        "POLICIES", "ROUNDING", "CONSTANTS", "ARMS", "FUNCTIONS", "CLAUSE", "APPLY"]
         .iter()
         .flat_map(|n| list(n))
         .collect();

@@ -45,6 +45,11 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E037](#e037) | error | A cited fragment is not pinned |
 | [E038](#e038) | error | A source fragment has changed |
 | [E039](#e039) | error | There is no copy of a source |
+| [E040](#e040) | error | The callee differs from its pinned digest |
+| [E041](#e041) | error | The bindings of an apply do not match the callee |
+| [E042](#e042) | error | A binding does not agree in type |
+| [E043](#e043) | error | A value passed leaves the callee's range or constraint |
+| [E044](#e044) | error | That rule cannot be applied |
 | [E045](#e045) | error | A table that shares an output has two or more output columns |
 | [E046](#e046) | error | A `clause` is not shaped like this |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
@@ -67,6 +72,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W111](#w111) | warning | A declaration is never used |
 | [W116](#w116) | warning | No example uses this sequence |
 | [W119](#w119) | warning | A pinned fragment is not cited |
+| [W118](#w118) | warning | No row of an applied table is reached in this apply |
 | [W117](#w117) | warning | An exception with no effect |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
@@ -130,7 +136,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -148,7 +154,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -1227,6 +1233,229 @@ table 表(t1)  @法 第2条
 
 Related codes: [E037](#e037), [E038](#e038)
 
+## E040
+
+`error` — **The callee differs from its pinned digest**
+
+**When.** The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it (§15.69).
+
+**Fix.** See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule"
+  a = n
+  x -> y
+```
+
+With `呼び先.rule` beside it:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+Related codes: [E037](#e037), [E038](#e038), [E044](#e044)
+
+## E041
+
+`error` — **The bindings of an apply do not match the callee**
+
+**When.** A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten (§15.69).
+
+**Fix.** Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  b = n
+  x -> y
+```
+
+With `呼び先.rule` beside it:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+Related codes: [E040](#e040), [E042](#e042), [E043](#e043)
+
+## E042
+
+`error` — **A binding does not agree in type**
+
+**When.** The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type.
+
+**Fix.** Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of "'retirement' is read as 'end of term'".
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum 種別(kind) = 甲(a) | 乙(b) | 丙(c)
+
+inputs
+  k(k) : 種別
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "区分の呼び先.rule" sha256:2e6f2e04c21cdbb3
+  a = k
+  x -> y
+```
+
+With `区分の呼び先.rule` beside it:
+
+```proto
+rule 区分の呼び先(enum_callee) v1
+
+enum 区分(kind) = 甲(a) | 乙(b)
+
+inputs
+  a(a) : 区分
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+| a  | -> x |
+| 甲 | 1    |
+| 乙 | 2    |
+```
+
+Related codes: [E041](#e041), [E043](#e043)
+
+## E043
+
+`error` — **A value passed leaves the callee's range or constraint**
+
+**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval (§15.69).
+
+**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  a = n
+  x -> y
+```
+
+With `呼び先.rule` beside it:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+Related codes: [E041](#e041), [E042](#e042), [E101](#e101)
+
+## E044
+
+`error` — **That rule cannot be applied**
+
+**When.** The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level.
+
+**Fix.** Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "壊れた呼び先.rule" sha256:c4f9eba5b2949205
+  a = n
+  x -> y
+```
+
+With `壊れた呼び先.rule` beside it:
+
+```proto
+rule 壊れた呼び先(broken) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+| a   | -> x |
+| <=5 | 1    |
+```
+
+Related codes: [E040](#e040), [E041](#e041)
+
 ## E045
 
 `error` — **A table that shares an output has two or more output columns**
@@ -1899,6 +2128,55 @@ With `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml` beside
 ```
 
 Related codes: [E037](#e037)
+
+## W118
+
+`warning` — **No row of an applied table is reached in this apply**
+
+**When.** **Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69).
+
+**Fix.** If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  a = n
+  x -> y
+
+clause 特例(special) -> 呼:x
+  when always
+  then 3
+  overrides 呼:表
+```
+
+With `呼び先.rule` beside it:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+Related codes: [E102](#e102), [W117](#w117)
 
 ## W117
 

@@ -45,6 +45,11 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E037](#e037) | error | 引用した断片が固定されていません |
 | [E038](#e038) | error | 出典の断片が変わっています |
 | [E039](#e039) | error | 出典の写しがありません |
+| [E040](#e040) | error | 呼び先が固定したハッシュと違います |
+| [E041](#e041) | error | 呼び出しの束縛が合いません |
+| [E042](#e042) | error | 束縛の型が合いません |
+| [E043](#e043) | error | 渡す値が呼び先の範囲か制約に収まりません |
+| [E044](#e044) | error | その規則は呼び出せません |
 | [E045](#e045) | error | 出力を共有する表に、出力の列が二つ以上あります |
 | [E046](#e046) | error | `clause` の形が読めません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
@@ -67,6 +72,7 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W111](#w111) | warning | 使われていない宣言があります |
 | [W116](#w116) | warning | どの例も使っていない `sequence` です |
 | [W119](#w119) | warning | 固定した断片が引かれていません |
+| [W118](#w118) | warning | 呼び先の表の行が、この呼び出しではどれも到達しません |
 | [W117](#w117) | warning | 効かない例外です |
 | [W115](#w115) | warning | どの要素もこの判定にはなりません |
 | [W114](#w114) | warning | 未確認の重なり: 両方に当てはまる入力が有り得ます |
@@ -130,7 +136,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -148,7 +154,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -1227,6 +1233,229 @@ table 表(t1)  @法 第2条
 
 関係するコード: [E037](#e037), [E038](#e038)
 
+## E040
+
+`error` — **呼び先が固定したハッシュと違います**
+
+**いつ出るか。** `apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある呼び先ファイルのハッシュが違うとき。呼び先が改正されれば、それを準用するこの規則の答えも変わっています。固定が無ければ、その変化を誰も承認しないまま通ります（§15.69）。
+
+**直し方。** `rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、動きを承認したら、`fix.text` の見出しに書き換えるか `rulec source pin <file.rule>` を走らせて固定し直してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule"
+  a = n
+  x -> y
+```
+
+隣に置く `呼び先.rule`:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+関係するコード: [E037](#e037), [E038](#e038), [E044](#e044)
+
+## E041
+
+`error` — **呼び出しの束縛が合いません**
+
+**いつ出るか。** 呼び先の入力に束縛されていないものがあるとき、呼び先に無い入力や出力を名指ししたとき、呼び先の出力に付けた名前がこの規則に既にあるとき、`apply` のブロックの形が読めないとき。読替えは全部の入力を明示に束縛することで書くので、足りない束縛は「読替えが書かれていない」と同じです（§15.69）。
+
+**直し方。** 呼び先の入力を一つずつ `<呼び先の入力> = <値>` で束縛し、出力は `<呼び先の出力> -> <名前>` で改名してください。呼び先の入力と出力の名前は文面に並びます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  b = n
+  x -> y
+```
+
+隣に置く `呼び先.rule`:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+関係するコード: [E040](#e040), [E042](#e042), [E043](#e043)
+
+## E042
+
+`error` — **束縛の型が合いません**
+
+**いつ出るか。** 束縛した値の型が呼び先の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値に対応する呼び先の値が無いとき（同じ綴りの値は自動で対応します）、`with` が知らない値を名指ししたとき、リテラルが呼び先の型の値でないときも同じです。
+
+**直し方。** 型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <呼び先の値>, …` で、この規則の列挙の値を全部対応させます。これが「『退職』とあるのは『任期の終了』と読み替える」の形です。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum 種別(kind) = 甲(a) | 乙(b) | 丙(c)
+
+inputs
+  k(k) : 種別
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "区分の呼び先.rule" sha256:2e6f2e04c21cdbb3
+  a = k
+  x -> y
+```
+
+隣に置く `区分の呼び先.rule`:
+
+```proto
+rule 区分の呼び先(enum_callee) v1
+
+enum 区分(kind) = 甲(a) | 乙(b)
+
+inputs
+  a(a) : 区分
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+| a  | -> x |
+| 甲 | 1    |
+| 乙 | 2    |
+```
+
+関係するコード: [E041](#e041), [E043](#e043)
+
+## E043
+
+`error` — **渡す値が呼び先の範囲か制約に収まりません**
+
+**いつ出るか。** 束縛した値の到達区間が、呼び先の入力の `range` の外に出るとき（外に出る点を証人として示します）、または呼び先の `constraint` がこの規則の宣言から導けないとき。呼び先の完全性はその範囲と制約の上で証明されていて、外の点には定義がありません。`fix.text` は付けません。呼び先に行を足すのは別の承認の単位だからです（§15.69）。
+
+**直し方。** この規則の入力の範囲を呼び先の範囲まで狭めるか、外れる領域をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  a = n
+  x -> y
+```
+
+隣に置く `呼び先.rule`:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+関係するコード: [E041](#e041), [E042](#e042), [E101](#e101)
+
+## E044
+
+`error` — **その規則は呼び出せません**
+
+**いつ出るか。** 呼び先が読めないとき、呼び先が `check` を通らないとき（出たコードを添えます）、呼び先自身が `apply` を持つとき、呼び先が列を歩く規則（`elements`、`fold`、`count`）のとき、呼び先の表や節が呼び先自身の列挙を出すとき。壊れた規則を展開しても壊れた規則で、準用の準用は一段に畳んでから書きます。
+
+**直し方。** 呼び先を先に直してください。`apply` を持つ規則や列を歩く規則を準用するなら、展開した形をこの規則に書いてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "壊れた呼び先.rule" sha256:c4f9eba5b2949205
+  a = n
+  x -> y
+```
+
+隣に置く `壊れた呼び先.rule`:
+
+```proto
+rule 壊れた呼び先(broken) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+| a   | -> x |
+| <=5 | 1    |
+```
+
+関係するコード: [E040](#e040), [E041](#e041)
+
 ## E045
 
 `error` — **出力を共有する表に、出力の列が二つ以上あります**
@@ -1899,6 +2128,55 @@ table 表(t1)  @法 第1条
 ```
 
 関係するコード: [E037](#e037)
+
+## W118
+
+`warning` — **呼び先の表の行が、この呼び出しではどれも到達しません**
+
+**いつ出るか。** 準用した表か節の**全行**が、この規則では到達しないとき。束縛した値がその表の条件に届かないか、この規則のほかの定義（`overrides 呼び出し:表` で優先する節など）が全部先に取っています。一部の行が届かないだけなら何も言いません。呼び先の表はこの規則より広い範囲に書かれているのが普通で、その行は `doc` が「この準用で使われない行」として挙げます（§15.69）。
+
+**直し方。** その表がこの呼び出しに要らないなら `except <表>` で外してください。要るはずなら、束縛か `with` の対応を見直してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+  a = n
+  x -> y
+
+clause 特例(special) -> 呼:x
+  when always
+  then 3
+  overrides 呼:表
+```
+
+隣に置く `呼び先.rule`:
+
+```proto
+rule 呼び先(callee) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+table 表(t)
+policy unique
+   | a   | -> x |
+小 | <=5 | 1    |
+大 | >5  | 2    |
+```
+
+関係するコード: [E102](#e102), [W117](#w117)
 
 ## W117
 

@@ -1,0 +1,8 @@
+error[E040]: The callee `../corpus/退職手当.rule` has changed
+  --> tests/mutants/m_e040.rule:14 apply 退職手当
+   |
+14 | apply 退職手当(retirement) = "../corpus/退職手当.rule" sha256:0000000000000000  # 出典: 第31条（スケッチ）
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:0000000000000000
+   |
+ The callee now: sha256:b58648ea2767ebbd
+ See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee.

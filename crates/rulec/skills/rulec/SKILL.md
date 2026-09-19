@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E039, E045-E046, E101-E115, W105, W110, W111, W114-W117, W119) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E046, E101-E115, W105, W110, W111, W114-W119) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -134,6 +134,13 @@ A few shapes are worth knowing before the first draft:
   `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
   and `doc` quotes the fragment under the definition. A document with no fragments is
   `source 郵便 = file "…" sha256:…`.
+
+- **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
+  sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
+  `with 任期満了 -> 定年`), definitions left out with `except 減額`, and outputs taken under a
+  name (`手当 -> 非常勤手当`). The callee is expanded into the rule under `退職手当:…`, held to
+  its digest (E040, `rulec source pin` writes it), and what is passed has to stay inside its
+  ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
 
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"

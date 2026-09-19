@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 17] = [
+const CORPUS: [&str; 19] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -22,6 +22,8 @@ const CORPUS: [&str; 17] = [
     "tests/corpus/印紙税.rule",
     "tests/corpus/印紙税の本則と軽減.rule",
     "tests/corpus/送料のただし書.rule",
+    "tests/corpus/退職手当.rule",
+    "tests/corpus/非常勤退職手当.rule",
     "tests/corpus/全国運賃.rule",
     "tests/corpus/納入先照合.rule",
 ];
@@ -213,6 +215,9 @@ fn 義務の件数を固定する() {
         ("tests/corpus/印紙税.rule", 23, 41, 0),
         ("tests/corpus/印紙税の本則と軽減.rule", 23, 41, 10),
         ("tests/corpus/送料のただし書.rule", 6, 1, 1),
+        ("tests/corpus/退職手当.rule", 6, 4, 1),
+        // The callee's rows beyond this rule's ranges are not obligations (§15.69).
+        ("tests/corpus/非常勤退職手当.rule", 2, 0, 0),
         ("tests/corpus/全国運賃.rule", 4, 4, 0),
         ("tests/corpus/納入先照合.rule", 7, 6, 0),
     ];

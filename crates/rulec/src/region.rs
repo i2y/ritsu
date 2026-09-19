@@ -226,7 +226,14 @@ fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec
             }
         }
     }
-    let mut v: Vec<Rat> = set.into_iter().map(|(n, d)| Rat { num: n, den: d }).collect();
+    // A boundary a cell names beyond the declared range is not a coordinate: the range is
+    // the universe, and what lies outside it no input reaches. Left in, an interval between
+    // the range's end and such a boundary would be demanded by the completeness check and
+    // a row lying wholly beyond the range would look reachable.
+    let inside = |x: &Rat| {
+        lo.is_none_or(|l| x.cmp_to(l) != std::cmp::Ordering::Less) && hi.is_none_or(|h| x.cmp_to(h) != std::cmp::Ordering::Greater)
+    };
+    let mut v: Vec<Rat> = set.into_iter().map(|(n, d)| Rat { num: n, den: d }).filter(inside).collect();
     v.sort_by(|a, b| a.cmp_to(*b));
     (v, lo, hi)
 }
@@ -1455,6 +1462,12 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 v
             };
             dead_rows.push(i);
+            // A row brought in by an `apply` is not this rule's to delete: it is the callee's,
+            // and dead here only because of what this rule binds or defines. It stays out of
+            // the coverage demand; W118 below says when a whole applied table is dead.
+            if set.applied[set.member_of[i]].is_some() {
+                continue;
+            }
             out.push(
                 Diag::error("E102", tr!("{} はどの入力にも当てはまりません", "Unreachable row: {} never matches", rn(i)))
                     .at(at(t.rows[i].span.line, set.member_of[i]))
@@ -1484,6 +1497,30 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     }),
             );
         }
+    }
+
+    // An applied table none of whose rows can be reached from what this rule binds (§15.69
+    // W118). Its rows are the callee's and stay silent one by one; as a whole, the table is
+    // doing nothing in this rule, which is worth a word.
+    for (mi, ap) in set.applied.iter().enumerate() {
+        let Some(an) = ap else { continue };
+        let mine: Vec<usize> = (0..t.rows.len()).filter(|&i| set.member_of[i] == mi).collect();
+        if mine.is_empty() || !mine.iter().all(|i| dead_rows.contains(i)) {
+            continue;
+        }
+        let sp = f.applies.iter().find(|a| a.name.text == *an).map(|a| a.span.clone()).unwrap_or_else(|| t.rows[mine[0]].span.clone());
+        let tn = set.members[mi].clone();
+        out.push(
+            Diag::warning("W118", tr!("{} {} の行は、この呼び出しではどれも到達しません", "No row of {} {} is reached in this apply", set.kind_word(mi), tn))
+                .at(at(sp.line, mi))
+                .table(tn.clone())
+                .mark(sp, "")
+                .note(tr!(
+                    "束縛した値がこの表の条件に届かないか、この規則のほかの定義が先に取っています。呼び先が自分の入力の上で完全なことは変わりません。",
+                    "What is bound never reaches this table's conditions, or other definitions of this rule take precedence first. The callee is still complete over its own inputs."
+                ))
+                .note(tr!("この呼び出しに要らない表なら、`{} {}` で外せます。", "If this apply does not need the table, `{} {}` leaves it out.", crate::kw::EXCEPT, tn.rsplit(':').next().unwrap_or(&tn))),
+        );
     }
 
     // --- Completeness

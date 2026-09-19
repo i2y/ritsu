@@ -1,0 +1,7 @@
+error[E041]: The callee input `基本給` is not bound
+  --> tests/mutants/m_e041.rule:14 apply 退職手当
+   |
+14 | apply 退職手当(retirement) = "../corpus/退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条（スケッチ）
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Every callee input is bound explicitly by a `<input> = <value>` line; that is the substitution.

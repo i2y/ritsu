@@ -266,6 +266,17 @@ const X_E039: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 
 table 表(t1)  @法 第2条\n| a | -> x |\n| - | true |\n";
 const X_W119: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:ce31217424a10206\n  第2条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+/// The rules the `apply` examples apply, beside them: one that passes check, one whose input
+/// is an enum, and one with a hole.
+const CALLEE: &[(&str, &str)] = &[("呼び先.rule", "rule 呼び先(callee) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n   | a   | -> x |\n小 | <=5 | 1    |\n大 | >5  | 2    |\n")];
+const ENUM_CALLEE: &[(&str, &str)] = &[("区分の呼び先.rule", "rule 区分の呼び先(enum_callee) v1\n\nenum 区分(kind) = 甲(a) | 乙(b)\n\ninputs\n  a(a) : 区分\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a  | -> x |\n| 甲 | 1    |\n| 乙 | 2    |\n")];
+const BROKEN_CALLEE: &[(&str, &str)] = &[("壊れた呼び先.rule", "rule 壊れた呼び先(broken) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a   | -> x |\n| <=5 | 1    |\n")];
+const X_E040: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\"\n  a = n\n  x -> y\n";
+const X_E041: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  b = n\n  x -> y\n";
+const X_E042: &str = "rule t(t) v1\n\nenum 種別(kind) = 甲(a) | 乙(b) | 丙(c)\n\ninputs\n  k(k) : 種別\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"区分の呼び先.rule\" sha256:2e6f2e04c21cdbb3\n  a = k\n  x -> y\n";
+const X_E043: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n";
+const X_E044: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"壊れた呼び先.rule\" sha256:c4f9eba5b2949205\n  a = n\n  x -> y\n";
+const X_W118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n\nclause 特例(special) -> 呼:x\n  when always\n  then 3\n  overrides 呼:表\n";
 const X_W116: &str = const_str_w116();
 
 const fn const_str_w115() -> &'static str {
@@ -963,6 +974,81 @@ pub fn ledger() -> Vec<Entry> {
             &["E037", "E038"],
         ),
         err(
+            "E040",
+            tr!("呼び先が固定したハッシュと違います", "The callee differs from its pinned digest"),
+            tr!(
+                "`apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある呼び先ファイルのハッシュが違うとき。呼び先が改正されれば、それを準用するこの規則の答えも変わっています。固定が無ければ、その変化を誰も承認しないまま通ります（§15.69）。",
+                "The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it (§15.69)."
+            ),
+            tr!(
+                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、動きを承認したら、`fix.text` の見出しに書き換えるか `rulec source pin <file.rule>` を走らせて固定し直してください。",
+                "See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again."
+            ),
+            X_E040,
+            &["E037", "E038", "E044"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E041",
+            tr!("呼び出しの束縛が合いません", "The bindings of an apply do not match the callee"),
+            tr!(
+                "呼び先の入力に束縛されていないものがあるとき、呼び先に無い入力や出力を名指ししたとき、呼び先の出力に付けた名前がこの規則に既にあるとき、`apply` のブロックの形が読めないとき。読替えは全部の入力を明示に束縛することで書くので、足りない束縛は「読替えが書かれていない」と同じです（§15.69）。",
+                "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten (§15.69)."
+            ),
+            tr!(
+                "呼び先の入力を一つずつ `<呼び先の入力> = <値>` で束縛し、出力は `<呼び先の出力> -> <名前>` で改名してください。呼び先の入力と出力の名前は文面に並びます。",
+                "Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message."
+            ),
+            X_E041,
+            &["E040", "E042", "E043"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E042",
+            tr!("束縛の型が合いません", "A binding does not agree in type"),
+            tr!(
+                "束縛した値の型が呼び先の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値に対応する呼び先の値が無いとき（同じ綴りの値は自動で対応します）、`with` が知らない値を名指ししたとき、リテラルが呼び先の型の値でないときも同じです。",
+                "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type."
+            ),
+            tr!(
+                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <呼び先の値>, …` で、この規則の列挙の値を全部対応させます。これが「『退職』とあるのは『任期の終了』と読み替える」の形です。",
+                "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\"."
+            ),
+            X_E042,
+            &["E041", "E043"],
+        )
+        .with_files(ENUM_CALLEE),
+        err(
+            "E043",
+            tr!("渡す値が呼び先の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
+            tr!(
+                "束縛した値の到達区間が、呼び先の入力の `range` の外に出るとき（外に出る点を証人として示します）、または呼び先の `constraint` がこの規則の宣言から導けないとき。呼び先の完全性はその範囲と制約の上で証明されていて、外の点には定義がありません。`fix.text` は付けません。呼び先に行を足すのは別の承認の単位だからです（§15.69）。",
+                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval (§15.69)."
+            ),
+            tr!(
+                "この規則の入力の範囲を呼び先の範囲まで狭めるか、外れる領域をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。",
+                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`."
+            ),
+            X_E043,
+            &["E041", "E042", "E101"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E044",
+            tr!("その規則は呼び出せません", "That rule cannot be applied"),
+            tr!(
+                "呼び先が読めないとき、呼び先が `check` を通らないとき（出たコードを添えます）、呼び先自身が `apply` を持つとき、呼び先が列を歩く規則（`elements`、`fold`、`count`）のとき、呼び先の表や節が呼び先自身の列挙を出すとき。壊れた規則を展開しても壊れた規則で、準用の準用は一段に畳んでから書きます。",
+                "The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level."
+            ),
+            tr!(
+                "呼び先を先に直してください。`apply` を持つ規則や列を歩く規則を準用するなら、展開した形をこの規則に書いてください。",
+                "Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule."
+            ),
+            X_E044,
+            &["E040", "E041"],
+        )
+        .with_files(BROKEN_CALLEE),
+        err(
             "E045",
             tr!("出力を共有する表に、出力の列が二つ以上あります", "A table that shares an output has two or more output columns"),
             tr!(
@@ -1266,6 +1352,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E037"],
         )
         .with_files(ARTICLE_1),
+        warn(
+            "W118",
+            tr!("呼び先の表の行が、この呼び出しではどれも到達しません", "No row of an applied table is reached in this apply"),
+            tr!(
+                "準用した表か節の**全行**が、この規則では到達しないとき。束縛した値がその表の条件に届かないか、この規則のほかの定義（`overrides 呼び出し:表` で優先する節など）が全部先に取っています。一部の行が届かないだけなら何も言いません。呼び先の表はこの規則より広い範囲に書かれているのが普通で、その行は `doc` が「この準用で使われない行」として挙げます（§15.69）。",
+                "**Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69)."
+            ),
+            tr!(
+                "その表がこの呼び出しに要らないなら `except <表>` で外してください。要るはずなら、束縛か `with` の対応を見直してください。",
+                "If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping."
+            ),
+            X_W118,
+            &["E102", "W117"],
+        )
+        .with_files(CALLEE),
         warn(
             "W117",
             tr!("効かない例外です", "An exception with no effect"),

@@ -155,6 +155,28 @@ fn cited_from<'a>(cites: &'a [(String, String, String, Span)], source: &str) -> 
 }
 
 /// The pin line of a fragment, as `rulec source pin` writes it and as `fix.text` offers it.
+/// The line with its `sha256:` token set to `hash` — replaced where there is one, added
+/// before the comment where there is none.
+fn set_hash(line: &str, hash: &str) -> String {
+    let (code, comment) = match line.find('#') {
+        Some(h) => (&line[..h], Some(&line[h..])),
+        None => (line, None),
+    };
+    let code = code.trim_end();
+    let code = match code.find("sha256:") {
+        Some(p) => {
+            let rest = &code[p + "sha256:".len()..];
+            let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            format!("{}sha256:{hash}{}", &code[..p], &rest[end..])
+        }
+        None => format!("{code} sha256:{hash}"),
+    };
+    match comment {
+        Some(c) => format!("{code}  {c}"),
+        None => code,
+    }
+}
+
 pub fn pin_line(fragment: &str, hash: &str) -> String {
     format!("  {fragment} sha256:{hash}")
 }
@@ -196,6 +218,10 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
     }
     let dir = Path::new(rule_path).parent().unwrap_or(Path::new(".")).to_path_buf();
     for d in &f.sources {
+        // A source that came in with an applied rule was checked with that rule (§15.69).
+        if d.base.is_some() {
+            continue;
+        }
         let name = &d.name.text;
         let whos_text = |whos: &[&str]| whos.join(if crate::i18n::ja() { "、" } else { ", " });
         match &d.kind {
@@ -305,7 +331,9 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
 pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<String> {
     let SourceKind::Law { id, asof } = &d.kind else { return None };
     let fr = fragment(frag)?;
-    let xml = std::fs::read_to_string(copy_dir(rule_path, id, asof).join(fr.file())).ok()?;
+    // A source inherited through an `apply` keeps its copies beside the rule it came from.
+    let base = d.base.as_deref().unwrap_or(rule_path);
+    let xml = std::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
     Some(xml_text(&xml))
 }
 
@@ -449,13 +477,28 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
     let mut edits: Vec<(usize, usize, Vec<String>)> = Vec::new();
     let mut report = Vec::new();
     let dir = Path::new(rule_path).parent().unwrap_or(Path::new("."));
+    // The rules this one applies (§15.69): the heading's digest is rewritten in place, so a
+    // comment on the line stays.
+    for a in &f.applies {
+        let bytes = std::fs::read(dir.join(&a.path)).map_err(|e| format!("{}: {e}", a.path))?;
+        let h = crate::sha256::short(&bytes);
+        if a.hash.as_deref() != Some(h.as_str()) {
+            let line = lines.get(a.span.line - 1).copied().unwrap_or("");
+            edits.push((a.span.line - 1, 1, vec![set_hash(line, &h)]));
+            report.push(tr!("{}: 呼び先 `{}` を sha256:{h} に固定しました", "{}: pinned the callee `{}` at sha256:{h}", a.name.text, a.path));
+        }
+    }
     for d in &f.sources {
+        if d.base.is_some() {
+            continue;
+        }
         match &d.kind {
             SourceKind::File { path, hash } => {
                 let bytes = std::fs::read(dir.join(path)).map_err(|e| format!("{path}: {e}"))?;
                 let h = crate::sha256::short(&bytes);
                 if hash.as_deref() != Some(h.as_str()) {
-                    edits.push((d.span.line - 1, 1, vec![file_line(d, &h)]));
+                    let line = lines.get(d.span.line - 1).copied().unwrap_or("");
+                    edits.push((d.span.line - 1, 1, vec![set_hash(line, &h)]));
                     report.push(tr!("{}: sha256:{h} を固定しました", "{}: pinned sha256:{h}", d.name.text));
                 }
             }

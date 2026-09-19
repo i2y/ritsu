@@ -46,6 +46,7 @@ These are all the words that may start a line.
 | `overrides` | the tables, or labelled rows (`table:label`), declared above that every row of this table takes precedence over. Written after `policy` |
 | `clause` | one definition written as prose: `when <column> <cell> and …` (`when always` for no condition), `then <value>`, and optionally `overrides` |
 | `source` | a document the rule transcribes: a law on e-Gov (`law "<law id>" asof <date>`, with a pin line per cited fragment) or a file beside the rule (`file "<file>" sha256:…`). Tables, clauses, rows, derives and defines cite it with `@source fragment` |
+| `apply` | another rule, applied with every input bound (`<callee input> = <value>`, enums mapped with `with`), some of its definitions left out with `except`, and its outputs taken under a name (`<callee output> -> <name>`). The heading pins the callee file's digest |
 | `result` | assembles an output |
 | `examples` | an executable specification |
 

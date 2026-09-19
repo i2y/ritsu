@@ -143,9 +143,9 @@ fn commands() -> Vec<Cmd> {
                 "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010",
                 "E011", "E012", "E013", "E014", "E015", "E016", "E017", "E018", "E019", "E020",
                 "E021", "E022", "E023", "E024", "E025", "E026", "E027", "E028", "E029", "E030",
-                "E031", "E032", "E033", "E034", "E035", "E036", "E037", "E038", "E039", "E045", "E046", "E101", "E102", "E103",
+                "E031", "E032", "E033", "E034", "E035", "E036", "E037", "E038", "E039", "E040", "E041", "E042", "E043", "E044", "E045", "E046", "E101", "E102", "E103",
                 "E104", "E105", "E106", "E107", "E108", "E109", "E110", "E111", "E112", "E113",
-                "E114", "E115", "W105", "W110", "W111", "W114", "W115", "W116", "W117", "W119",
+                "E114", "E115", "W105", "W110", "W111", "W114", "W115", "W116", "W117", "W118", "W119",
             ],
         },
         Cmd {
@@ -1168,7 +1168,7 @@ fn check(
         let mut suppressed = 0usize;
         if let Some(rev) = diff_base {
             let known: std::collections::HashSet<String> = match base_source(rev, path) {
-                Some(b) => rulec::report(&b, path).diags.iter().filter_map(|d| d.key.clone()).collect(),
+                Some(b) => rulec::vfs::with_git_rev(rev, || rulec::report(&b, path)).diags.iter().filter_map(|d| d.key.clone()).collect(),
                 None => Default::default(),
             };
             let before = diags.len();
@@ -1424,12 +1424,28 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
 /// `v3` as any revision with `送料.rule` looked up in its tree; `rules/送料.rule@origin/main` is
 /// that path at that revision, which is what a pull request compares against.
 fn load_rule(spec: &str) -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked), String> {
-    let src = match spec.split_once('@') {
-        Some((left, rev)) if !std::path::Path::new(spec).exists() => git_source(left, rev)?,
-        _ => std::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?,
-    };
-    let (f, c) = rulec::prepare(&src, spec).map_err(|_| tr!("`{spec}` は検査を通っていません", "`{spec}` does not pass check"))?;
-    Ok((src, f, c))
+    load_rule_with(spec, false)
+}
+
+/// `lenient` lets a rule whose applied callee is unpinned or changed (E040) through: `diff`
+/// exists to show what that change does. A rule read at a revision (`path@rev`) reads the
+/// rules it applies from the same revision.
+fn load_rule_with(spec: &str, lenient: bool) -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked), String> {
+    let prep = |src: &str, path: &str| if lenient { rulec::prepare_lenient(src, path) } else { rulec::prepare(src, path) };
+    let not_checked = || tr!("`{spec}` は検査を通っていません", "`{spec}` does not pass check");
+    match spec.split_once('@') {
+        Some((left, rev)) if !std::path::Path::new(spec).exists() => {
+            let src = git_source(left, rev)?;
+            let path = if left.ends_with(".rule") { left.to_string() } else { spec.to_string() };
+            let (f, c) = rulec::vfs::with_git_rev(rev, || prep(&src, &path)).map_err(|_| not_checked())?;
+            Ok((src, f, c))
+        }
+        _ => {
+            let src = std::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
+            let (f, c) = prep(&src, spec).map_err(|_| not_checked())?;
+            Ok((src, f, c))
+        }
+    }
 }
 
 /// Run git and hand back what it printed, or `None` when it refused (an unknown revision, a
@@ -1576,8 +1592,8 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
         return terse_with_json();
     }
     let r = (|| -> Result<_, String> {
-        let (_, of, oc) = load_rule(a)?;
-        let (_, nf, nc) = load_rule(b)?;
+        let (_, of, oc) = load_rule_with(a, true)?;
+        let (_, nf, nc) = load_rule_with(b, true)?;
         if of.name.text != nf.name.text {
             return Err(tr!(
                 "別の規則を比べようとしています（`{}` と `{}`）",

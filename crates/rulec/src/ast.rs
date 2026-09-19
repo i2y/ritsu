@@ -224,6 +224,81 @@ pub struct SourceDecl {
     pub kind: SourceKind,
     pub pins: Vec<Pin>,
     pub span: Span,
+    /// The rule file the declaration was written in, when it came in through an `apply`:
+    /// its copies sit beside that file, and its pins were checked there (§15.69).
+    pub base: Option<String>,
+}
+
+/// What a callee input is bound to: a name of this rule, or a literal.
+#[derive(Debug, Clone)]
+pub enum BindValue {
+    Name(String),
+    Lit(Lit),
+}
+
+/// `<callee input> = <value> [with <value> -> <value>, …]` under an `apply`.
+#[derive(Debug, Clone)]
+pub struct Binding {
+    pub input: String,
+    pub value: BindValue,
+    /// For an enum: which value of this rule's enum stands for which value of the callee's.
+    /// A value spelled the same on both sides needs no entry.
+    pub map: Vec<(String, String)>,
+    pub span: Span,
+}
+
+/// `<callee output> -> <name>` under an `apply`: what the callee's answer is called here.
+#[derive(Debug, Clone)]
+pub struct OutBinding {
+    pub output: String,
+    pub name: Name,
+    pub span: Span,
+}
+
+/// `apply <name> = "<path>" sha256:…` with its bindings (DESIGN-draft §5, §15.69). After
+/// expansion the callee's definitions sit in `items` from `at` on, `count` of them, named
+/// `<name>:<their name>`.
+#[derive(Debug, Clone)]
+pub struct ApplyDecl {
+    pub name: Name,
+    pub path: String,
+    pub hash: Option<String>,
+    pub bindings: Vec<Binding>,
+    pub excepts: Vec<(String, Span)>,
+    pub outputs: Vec<OutBinding>,
+    pub cite: Option<Cite>,
+    pub span: Span,
+    /// Where in `items` the expansion goes: the index the next item had when the `apply`
+    /// was read.
+    pub at: usize,
+    /// How many items the expansion put there.
+    pub count: usize,
+    /// The names of the definitions the expansion added for the callee's outputs.
+    pub defines: Vec<String>,
+    /// The callee as read, and where: what the page renders the applied tables from.
+    pub callee_src: String,
+    pub callee_path: String,
+    /// What the expansion learned about the callee, for the checks that need this rule's
+    /// types: its inputs with their types and ranges, its constraints, its outputs.
+    pub callee: Option<Callee>,
+}
+
+/// The callee's contract as its own check established it (§15.69).
+#[derive(Debug, Clone)]
+pub struct Callee {
+    pub rule: Name,
+    pub inputs: Vec<CalleeInput>,
+    pub constraints: Vec<Constraint>,
+    /// Enum name → its values, for the mapping of a bound enum input.
+    pub enums: Vec<(String, Vec<String>)>,
+}
+
+/// One input of the callee, with its type resolved by the callee's own check.
+#[derive(Debug, Clone)]
+pub struct CalleeInput {
+    pub name: String,
+    pub ty: crate::types::Ty,
+    pub range: Option<Range>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -312,6 +387,9 @@ pub struct Table {
     pub clause: bool,
     /// The citation on the `table` or `clause` line.
     pub cite: Option<Cite>,
+    /// The `apply` this table came in through, when it did. Its rows are alive in the
+    /// callee's own file, so the ones this rule never reaches are listed, not E102.
+    pub applied: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -430,6 +508,8 @@ pub struct RuleFile {
     pub enum_imports: Vec<EnumImport>,
     /// The documents the rule transcribes, with the pinned digests of what it cites (§15.68).
     pub sources: Vec<SourceDecl>,
+    /// The rules applied with their inputs bound (§15.69), in the order written.
+    pub applies: Vec<ApplyDecl>,
     pub enums: Vec<EnumDecl>,
     pub groups: Vec<GroupDecl>,
     pub inputs: Vec<VarDecl>,

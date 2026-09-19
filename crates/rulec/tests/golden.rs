@@ -84,3 +84,11 @@ golden!(e037_固定が無い, "E037", "tests/mutants/m_e037.rule", "E037");
 golden!(e038_写しが変わった, "E038", "tests/mutants/m_e038.rule", "E038");
 golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");
+
+// A rule applied by another (DESIGN-draft §5).
+golden!(e040_呼び先が変わった, "E040", "tests/mutants/m_e040.rule", "E040");
+golden!(e041_束縛が足りない, "E041", "tests/mutants/m_e041.rule", "E041");
+golden!(e042_列挙の対応の欠け, "E042", "tests/mutants/m_e042.rule", "E042");
+golden!(e043_範囲の外, "E043", "tests/mutants/m_e043.rule", "E043");
+golden!(e044_呼び出せない, "E044", "tests/mutants/m_e044.rule", "E044");
+golden!(w118_使われない表, "W118", "tests/mutants/m_w118.rule", "W118");

@@ -69,4 +69,23 @@ awk '/^table 軽減/ { sub(/@措置法 第91条/, "@措置法 第92条") } { pri
 # A pin no citation uses
 awk '{ print } /^  第91条 sha256:/ { print "  第92条 sha256:0000000000000000" }' "$s" > "$M/m_w119.rule"
 
+# --- A rule applied by another (DESIGN-draft §5). The callee stays in the corpus, so the
+# mutants reach it by a relative path; the digest in the heading is the corpus caller's own.
+a="$C/非常勤退職手当.rule"
+callee='"退職手当.rule"'
+via='"../corpus/退職手当.rule"'
+# A pinned digest the callee no longer has
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v); sub(/sha256:[0-9a-f]+/, "sha256:0000000000000000") } { print }' "$a" > "$M/m_e040.rule"
+# A callee input left unbound
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } !/^  基本給 = / { print }' "$a" > "$M/m_e041.rule"
+# A value of this rule's enum that stands for no value of the callee's
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { sub(/, 辞職 -> 自己都合/, ""); print }' "$a" > "$M/m_e042.rule"
+# A range that reaches outside the callee's
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { sub(/range >=1 <=3/, "range >=0 <=3"); print }' "$a" > "$M/m_e043.rule"
+# A callee that does not pass check (the E101 mutant, made above)
+h=$(shasum -a 256 "$M/m_e101.rule" | cut -c1-16)
+awk -v c="$callee" -v h="$h" '/^apply / { sub(c, "\"m_e101.rule\""); sub(/sha256:[0-9a-f]+/, "sha256:" h) } { print }' "$a" > "$M/m_e044.rule"
+# A clause of this rule that takes precedence over the whole applied table
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { print } /^  手当 -> 非常勤手当$/ { print ""; print "clause 特例(special) -> 退職手当:支給月数"; print "  when always"; print "  then 5"; print "  overrides 退職手当:支給表" }' "$a" > "$M/m_w118.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

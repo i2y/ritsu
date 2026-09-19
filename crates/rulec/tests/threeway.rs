@@ -58,6 +58,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/印紙税.rule", "stamp_duty"),
     ("tests/corpus/印紙税の本則と軽減.rule", "stamp_duty_split"),
     ("tests/corpus/送料のただし書.rule", "shipping_proviso"),
+    ("tests/corpus/退職手当.rule", "retirement_allowance"),
+    ("tests/corpus/非常勤退職手当.rule", "part_time_allowance"),
     ("tests/corpus/全国運賃.rule", "freight"),
     ("tests/corpus/納入先照合.rule", "supplier_match"),
     ("tests/corpus/Claude利用料.rule", "claude_usage_fee"),

@@ -96,6 +96,13 @@ A few shapes are worth knowing before the first draft:
   and `doc` quotes the fragment under the definition. A document with no fragments is
   `source 郵便 = file "…" sha256:…`.
 
+- **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
+  sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
+  `with 任期満了 -> 定年`), definitions left out with `except 減額`, and outputs taken under a
+  name (`手当 -> 非常勤手当`). The callee is expanded into the rule under `退職手当:…`, held to
+  its digest (E040, `rulec source pin` writes it), and what is passed has to stay inside its
+  ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
+
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
   "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)

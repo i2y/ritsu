@@ -1,0 +1,8 @@
+error[E043]: A value passed to `勤続年数` leaves the callee's range
+  --> tests/mutants/m_e043.rule:15 apply 退職手当
+   |
+15 |   勤続年数 = 在職期間
+   |   ^^^^^^^^^^^^^^^^^^^ what is passed: 0 .. 3
+   |
+ For example 勤続年数 = 0 is outside range ../corpus/退職手当.rule of `勤続年数` in `>=1 <=40`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision.

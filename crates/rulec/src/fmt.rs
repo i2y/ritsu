@@ -180,9 +180,18 @@ pub fn format(src: &str) -> String {
     let mut out: Vec<String> = Vec::with_capacity(lines.len());
     let mut i = 0;
     let mut in_clause = false;
+    // The body of an `apply` — bindings, `except`, output names — is indented like a clause's,
+    // up to the next blank line or line head.
+    let mut in_apply = false;
     while i < lines.len() {
         if !is_row(&lines[i]) {
             let w = first_word(&lines[i]);
+            if in_apply && !lines[i].trim().is_empty() && (w == crate::kw::EXCEPT || !crate::kw::LINE_HEAD.contains(&w)) && !w.starts_with('#') {
+                out.push(clause_body(&lines[i]));
+                i += 1;
+                continue;
+            }
+            in_apply = w == crate::kw::APPLY;
             if w == crate::kw::CLAUSE {
                 in_clause = true;
                 out.push(lines[i].trim_end().to_string());
@@ -217,6 +226,7 @@ pub fn format(src: &str) -> String {
             continue;
         }
         in_clause = false;
+        in_apply = false;
         // A run of consecutive `|` lines is one table. Widths are decided within this block only.
         let start = i;
         while i < lines.len() && is_row(&lines[i]) {

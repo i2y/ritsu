@@ -451,54 +451,23 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         }
     }
 
-    // --- Derived values and definitions. The invisible axes.
-    let derived: Vec<&DerivedDecl> =
-        f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).collect();
-    let defines: Vec<&DefineDecl> =
-        f.items.iter().filter_map(|i| if let Item::Define(d) = i { Some(d) } else { None }).collect();
-    if !derived.is_empty() || !defines.is_empty() {
-        o.push_str(&tr!("\n## 導出と定義\n\n", "\n## Derived Values and Definitions\n\n"));
-        o.push_str(&tr!(
-            "表の列に置ける中間の値です。式はもとの規則のとおりで、範囲は宣言されたものです。\n\n",
-            "Intermediate values that can be placed in a table column. The expressions are as written in the source file, and the ranges are the declared ones.\n\n"
-        ));
-        o.push_str(&tr!(
-            "| 名前 | 種類 | 式 | 範囲 | 注記 |\n|---|---|---|---|---|\n",
-            "| Name | Kind | Expression | Range | Notes |\n|---|---|---|---|---|\n"
-        ));
-        for d in &derived {
-            let e = expr_src(&lines, d.name.span.line);
-            o.push_str(&tr!(
-                "| {} | 導出 | `{}` | {} | {} |\n",
-                "| {} | Derived value | `{}` | {} | {} |\n",
-                md_esc(&d.name.text),
-                md_esc(&e),
-                md_esc(&range_text(c, &d.name.text)),
-                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
-            ));
-        }
-        for d in &defines {
-            let e = expr_src(&lines, d.name.span.line);
-            o.push_str(&tr!(
-                "| {} | 定義 | `{}` |  | {} |\n",
-                "| {} | Definition | `{}` |  | {} |\n",
-                md_esc(&d.name.text),
-                md_esc(&e),
-                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
-            ));
-        }
-        if !derived.is_empty() {
-            o.push_str(&tr!(
-                "\n導出の宣言範囲が、入力範囲から実際に到達しうる値をすべて含んでいることは `rulec check` が確かめました（E112）。\n",
-                "\nThat the declared range of every derived value contains all the values actually reachable from the input ranges was verified by `rulec check` (E112).\n"
-            ));
-        }
-    }
+    // --- Derived values and definitions. The invisible axes. What an `apply` brought in is
+    // shown under that apply, from the file it came from.
+    o.push_str(&defs_section(f, c, &lines, &|n| inlined(f, n)));
 
-    // --- Tables
-    for it in &f.items {
+    // --- Tables, and the rules applied among them (§15.69), in the order of the file.
+    for (k, it) in f.items.iter().enumerate() {
+        for a in f.applies.iter().filter(|a| a.at == k) {
+            o.push_str(&apply_section(f, c, a, &lines, path));
+        }
         let Item::Table(t) = it else { continue };
+        if t.applied.is_some() {
+            continue;
+        }
         o.push_str(&table_section(f, c, t, &lines, path));
+    }
+    for a in f.applies.iter().filter(|a| a.at >= f.items.len()) {
+        o.push_str(&apply_section(f, c, a, &lines, path));
     }
 
     // --- How an output that several tables define is decided (DESIGN-draft §2.7)
@@ -851,6 +820,196 @@ fn folded_out_header(f: &RuleFile, c: &Checked, n: &str) -> String {
         format!("→ {n}")
     } else {
         tr!("→ {n}（{}）", "→ {n} ({})", bits.join(" / "))
+    }
+}
+
+/// Whether a name is one an `apply` brought in: a callee definition under the apply's
+/// prefix, or the definition the expansion made for one of the callee's outputs.
+fn inlined(f: &RuleFile, name: &str) -> bool {
+    f.applies.iter().any(|a| name.starts_with(&format!("{}:", a.name.text)) || a.defines.iter().any(|d| d == name))
+}
+
+/// The `derive`s and `define`s of a rule, as written. `skip` leaves out the ones shown
+/// elsewhere.
+fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -> bool) -> String {
+    let mut o = String::new();
+    let derived: Vec<&DerivedDecl> =
+        f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).filter(|d| !skip(&d.name.text)).collect();
+    let defines: Vec<&DefineDecl> =
+        f.items.iter().filter_map(|i| if let Item::Define(d) = i { Some(d) } else { None }).filter(|d| !skip(&d.name.text)).collect();
+    if !derived.is_empty() || !defines.is_empty() {
+        o.push_str(&tr!("\n## 導出と定義\n\n", "\n## Derived Values and Definitions\n\n"));
+        o.push_str(&tr!(
+            "表の列に置ける中間の値です。式はもとの規則のとおりで、範囲は宣言されたものです。\n\n",
+            "Intermediate values that can be placed in a table column. The expressions are as written in the source file, and the ranges are the declared ones.\n\n"
+        ));
+        o.push_str(&tr!(
+            "| 名前 | 種類 | 式 | 範囲 | 注記 |\n|---|---|---|---|---|\n",
+            "| Name | Kind | Expression | Range | Notes |\n|---|---|---|---|---|\n"
+        ));
+        for d in &derived {
+            let e = expr_src(&lines, d.name.span.line);
+            o.push_str(&tr!(
+                "| {} | 導出 | `{}` | {} | {} |\n",
+                "| {} | Derived value | `{}` | {} | {} |\n",
+                md_esc(&d.name.text),
+                md_esc(&e),
+                md_esc(&range_text(c, &d.name.text)),
+                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
+            ));
+        }
+        for d in &defines {
+            let e = expr_src(&lines, d.name.span.line);
+            o.push_str(&tr!(
+                "| {} | 定義 | `{}` |  | {} |\n",
+                "| {} | Definition | `{}` |  | {} |\n",
+                md_esc(&d.name.text),
+                md_esc(&e),
+                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
+            ));
+        }
+        if !derived.is_empty() {
+            o.push_str(&tr!(
+                "\n導出の宣言範囲が、入力範囲から実際に到達しうる値をすべて含んでいることは `rulec check` が確かめました（E112）。\n",
+                "\nThat the declared range of every derived value contains all the values actually reachable from the input ranges was verified by `rulec check` (E112).\n"
+            ));
+        }
+    }
+    o
+}
+
+/// A rule applied by this one (§15.69): what it is, what is bound to what, what is left out,
+/// which of its rows this rule never reaches — and then the callee's own definitions, drawn
+/// from the callee's file with the callee's sources, one heading level down.
+fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path: &str) -> String {
+    let an = &a.name.text;
+    let hash = a.hash.as_deref().map(|h| format!("sha256:{h}")).unwrap_or_else(|| tr!("固定なし", "unpinned"));
+    let mut o = tr!("\n## 準用 {an}: {}（{hash}）\n\n", "\n## Applied rule {an}: {} ({hash})\n\n", a.path);
+    o.push_str(&cite_section(f, a.cite.as_ref(), path, true));
+    if let Some(cm) = trailing_comment(lines, a.span.line) {
+        o.push_str(&format!("{}\n\n", md_esc(&cm)));
+    }
+    let callee = crate::prepare(&a.callee_src, &a.callee_path).ok();
+    match &callee {
+        Some((cf, _)) => {
+            o.push_str(&tr!(
+                "規則 **{}** v{} を、次の読替えで適用する。\n\n",
+                "Rule **{}** v{} is applied with the following substitutions.\n\n",
+                cf.name.text,
+                cf.version
+            ));
+            if let Some(d) = &cf.description {
+                o.push_str(&format!("{}\n\n", md_esc(d)));
+            }
+        }
+        None => o.push_str(&tr!("呼び先 `{}` は読めなかった。\n\n", "The callee `{}` could not be read.\n\n", a.path)),
+    }
+    o.push_str(&tr!(
+        "| 呼び先の入力 | この規則で渡す値 | 値の読替え |\n|---|---|---|\n",
+        "| Callee input | What this rule passes | Value mapping |\n|---|---|---|\n"
+    ));
+    for b in &a.bindings {
+        let v = match &b.value {
+            BindValue::Name(n) => n.clone(),
+            BindValue::Lit(l) => lit_text(l),
+        };
+        let m: Vec<String> = b.map.iter().map(|(from, to)| format!("{from} → {to}")).collect();
+        o.push_str(&format!("| {} | {} | {} |\n", md_esc(&b.input), md_esc(&v), md_esc(&m.join(sep()))));
+    }
+    if !a.excepts.is_empty() {
+        let kinds: Vec<String> = a
+            .excepts
+            .iter()
+            .map(|(t, _)| {
+                let kind = callee.as_ref().and_then(|(cf, _)| {
+                    cf.items.iter().find_map(|it| match it {
+                        Item::Table(x) if x.name.as_ref().is_some_and(|n| n.text == *t) => {
+                            Some(if x.clause { tr!("節 {t}", "clause {t}") } else { tr!("表 {t}", "table {t}") })
+                        }
+                        _ => None,
+                    })
+                });
+                kind.unwrap_or_else(|| tr!("行 {t}", "row {t}"))
+            })
+            .collect();
+        o.push_str(&tr!("\n適用しない定義: {}。\n", "\nLeft out: {}.\n", kinds.join(sep())));
+    }
+    if !a.outputs.is_empty() {
+        o.push_str(&tr!(
+            "\n| 呼び先の出力 | この規則での名前 |\n|---|---|\n",
+            "\n| Callee output | Its name in this rule |\n|---|---|\n"
+        ));
+        for ob in &a.outputs {
+            o.push_str(&format!("| {} | {} |\n", md_esc(&ob.output), md_esc(&ob.name.text)));
+        }
+    }
+    // The callee's rows this rule never reaches: what it binds is narrower than what the
+    // callee was written for. They are listed, not reported (§5.3 of the draft).
+    let prefix = format!("{an}:");
+    let mut unused: Vec<String> = Vec::new();
+    for (si, chk) in crate::table_checks(f, c, path).iter().enumerate() {
+        let set = &c.sets[si];
+        if !set.applied.iter().any(|x| x.as_deref() == Some(an.as_str())) {
+            continue;
+        }
+        let mut by_table: Vec<(String, Vec<String>)> = Vec::new();
+        for &i in &chk.dead {
+            let tn = set.row_table(i).to_string();
+            if !tn.starts_with(&prefix) {
+                continue;
+            }
+            let r = &set.table.rows[i];
+            let rn = match &r.label {
+                Some(l) => l.text.clone(),
+                None => tr!("行{}", "row {}", r.index),
+            };
+            match by_table.iter_mut().find(|(t, _)| *t == tn) {
+                Some((_, rs)) => rs.push(rn),
+                None => by_table.push((tn, vec![rn])),
+            }
+        }
+        for (tn, rs) in by_table {
+            let shown = tn.strip_prefix(&prefix).unwrap_or(&tn).to_string();
+            unused.push(tr!("表 {shown}: {}", "table {shown}: {}", rs.join(sep())));
+        }
+    }
+    if !unused.is_empty() {
+        o.push_str(&tr!(
+            "\nこの準用で使われない行（この規則の範囲では到達しない）: {}。\n",
+            "\nRows this apply never uses (unreachable from this rule's ranges): {}.\n",
+            unused.join(if crate::i18n::ja() { "；" } else { "; " })
+        ));
+    }
+    // The callee, as written, under this apply.
+    if let Some((cf, cc)) = &callee {
+        let clines: Vec<&str> = a.callee_src.lines().collect();
+        let mut inner = String::new();
+        inner.push_str(&defs_section(cf, cc, &clines, &|_| false));
+        for it in &cf.items {
+            let Item::Table(t) = it else { continue };
+            let tn = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+            if a.excepts.iter().any(|(e, _)| *e == tn) {
+                continue;
+            }
+            inner.push_str(&table_section(cf, cc, t, &clines, &a.callee_path));
+        }
+        // A set one of whose members is left out is not the set this rule runs; the page
+        // says how this rule decides the output in its own section.
+        for set in cc.sets.iter().filter(|s| s.merged() && !s.members.iter().any(|m| a.excepts.iter().any(|(e, _)| e == m))) {
+            inner.push_str(&set_section(cf, cc, set, &a.callee_path));
+        }
+        // One heading level down: the callee's sections sit under this apply.
+        o.push_str(&inner.replace("\n## ", "\n### ").replace("\n**`rulec check` が確かめたこと**", "\n**呼び先の `rulec check` が確かめたこと**").replace("\n**What `rulec check` verified**", "\n**What `rulec check` verified of the callee**"));
+    }
+    o
+}
+
+fn lit_text(l: &Lit) -> String {
+    match l {
+        Lit::Num(n) => n.raw.clone(),
+        Lit::Word(w) => w.clone(),
+        Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+        Lit::Str(s) => format!("\"{s}\""),
     }
 }
 
@@ -1209,9 +1368,9 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 
     // --- Values computed along the way, as written.
     let derived: Vec<&DerivedDecl> =
-        f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).collect();
+        f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).filter(|d| !inlined(f, &d.name.text)).collect();
     let defines: Vec<&DefineDecl> =
-        f.items.iter().filter_map(|i| if let Item::Define(d) = i { Some(d) } else { None }).collect();
+        f.items.iter().filter_map(|i| if let Item::Define(d) = i { Some(d) } else { None }).filter(|d| !inlined(f, &d.name.text)).collect();
     let counts: Vec<&crate::ast::CountDecl> =
         f.items.iter().filter_map(|i| if let Item::Count(d) = i { Some(d) } else { None }).collect();
     if !derived.is_empty() || !defines.is_empty() || !counts.is_empty() {
@@ -1231,10 +1390,19 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         }
     }
 
-    // --- Tables.
-    for it in &f.items {
+    // --- Tables, and the rules applied among them.
+    for (k, it) in f.items.iter().enumerate() {
+        for a in f.applies.iter().filter(|a| a.at == k) {
+            o.push_str(&customer_apply(a, &lines));
+        }
         let Item::Table(t) = it else { continue };
+        if t.applied.is_some() {
+            continue;
+        }
         o.push_str(&customer_table(f, c, t, &lines));
+    }
+    for a in f.applies.iter().filter(|a| a.at >= f.items.len()) {
+        o.push_str(&customer_apply(a, &lines));
     }
     for set in c.sets.iter().filter(|s| s.merged()) {
         let order: Vec<String> = set.members.iter().rev().map(|m| tr!("「{m}」", "\"{m}\"")).collect();
@@ -1344,6 +1512,51 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 }
 
 /// One table, for the customer: the source cells in plainer words, the column headings without
+/// A rule applied by this one, for the customer: whose rule, read how, with what left out —
+/// and that rule's own tables under it.
+fn customer_apply(a: &ApplyDecl, lines: &[&str]) -> String {
+    let mut o = tr!("\n## {}（{} の決まりを使う）\n\n", "\n## {} (using the rule in {})\n\n", a.name.text, a.path);
+    if let Some(cm) = trailing_comment(lines, a.span.line) {
+        o.push_str(&format!("{}\n\n", md_esc(&cm)));
+    }
+    let callee = crate::prepare(&a.callee_src, &a.callee_path).ok();
+    if let Some((cf, _)) = &callee {
+        o.push_str(&tr!("「{}」の決まりを、次のように読み替えて使います。\n\n", "The rule \"{}\" is used, read as follows.\n\n", cf.name.text));
+    }
+    for b in &a.bindings {
+        let v = match &b.value {
+            BindValue::Name(n) => n.clone(),
+            BindValue::Lit(l) => lit_text(l),
+        };
+        let m: Vec<String> = b.map.iter().map(|(from, to)| tr!("{from} は {to} として", "{from} as {to}")).collect();
+        if m.is_empty() {
+            o.push_str(&tr!("- {} は {} のこと\n", "- {} means {}\n", md_esc(&b.input), md_esc(&v)));
+        } else {
+            o.push_str(&tr!("- {} は {} のこと（{}）\n", "- {} means {} ({})\n", md_esc(&b.input), md_esc(&v), m.join(sep())));
+        }
+    }
+    for (t, _) in &a.excepts {
+        o.push_str(&tr!("- 「{t}」は使いません\n", "- \"{t}\" is not used\n"));
+    }
+    for ob in &a.outputs {
+        o.push_str(&tr!("- {} を {} とします\n", "- {} becomes {}\n", md_esc(&ob.output), md_esc(&ob.name.text)));
+    }
+    if let Some((cf, cc)) = &callee {
+        let clines: Vec<&str> = a.callee_src.lines().collect();
+        let mut inner = String::new();
+        for it in &cf.items {
+            let Item::Table(t) = it else { continue };
+            let tn = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+            if a.excepts.iter().any(|(e, _)| *e == tn) {
+                continue;
+            }
+            inner.push_str(&customer_table(cf, cc, t, &clines));
+        }
+        o.push_str(&inner.replace("\n## ", "\n### "));
+    }
+    o
+}
+
 /// A clause for the customer: the condition and the value as written, in one row.
 fn customer_clause(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> String {
     let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();

@@ -50,6 +50,8 @@ const CORPUS: &[&str] = &[
     "tests/corpus/印紙税.rule",
     "tests/corpus/印紙税の本則と軽減.rule",
     "tests/corpus/送料のただし書.rule",
+    "tests/corpus/退職手当.rule",
+    "tests/corpus/非常勤退職手当.rule",
     "tests/corpus/全国運賃.rule",
     "tests/corpus/納入先照合.rule",
 ];
@@ -354,8 +356,17 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
         // Types are rendered in canonical form (`money[円,incl_tax]` in the source becomes
         // `money[円, incl_tax]`). Whitespace differences are spelling variation, so strip them before
         // matching. Only whitespace is stripped; the words themselves must be in the source.
-        let src: String =
-            std::fs::read_to_string(root().join(rel)).unwrap().chars().filter(|c| !c.is_whitespace()).collect();
+        let text = std::fs::read_to_string(root().join(rel)).unwrap();
+        let mut src: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+        // A rule applied by this one is drawn on the page from its own file, so its
+        // declarations count as the source too (§15.69).
+        for l in text.lines().filter(|l| l.starts_with("apply ")) {
+            if let Some(path) = l.split('"').nth(1) {
+                let callee = root().join(rel).parent().unwrap().join(path);
+                let t = std::fs::read_to_string(&callee).unwrap_or_else(|_| panic!("{rel} の呼び先 {path} が読めない"));
+                src.extend(t.chars().filter(|c| !c.is_whitespace()));
+            }
+        }
         let (c, out, e) = run(&["doc", rel]);
         assert_eq!(c, 0, "{rel}: {e}");
         let mut n = 0;

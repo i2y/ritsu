@@ -100,6 +100,7 @@ impl P {
             imports: Vec::new(),
             enum_imports: Vec::new(),
             sources: Vec::new(),
+            applies: Vec::new(),
             enums: Vec::new(),
             groups: Vec::new(),
             inputs: Vec::new(),
@@ -191,6 +192,14 @@ impl P {
                 crate::kw::SOURCE => {
                     if let Some(d) = self.source(&line) {
                         f.sources.push(d);
+                    }
+                }
+                crate::kw::APPLY => {
+                    let (head, cite) = self.split_cite(&line);
+                    let at = f.items.len();
+                    if let Some(mut a) = self.apply(&head, at) {
+                        a.cite = cite;
+                        f.applies.push(a);
                     }
                 }
                 crate::kw::COUNT => {
@@ -330,8 +339,20 @@ impl P {
     /// `名前(ascii)` starting at token `k`. Returns the name and the next index.
     fn name_at(&mut self, ts: &[Token], k: usize) -> Option<(Name, usize)> {
         let t = ts.get(k)?;
-        let text = t.ident()?.to_string();
+        let mut text = t.ident()?.to_string();
         let mut j = k + 1;
+        // `呼び出し:出力`, the colon touching both words, names a definition an `apply`
+        // brought in (§15.69). With a space on either side the colon starts a type instead.
+        let mut end = t.span.col + t.span.len;
+        while ts.get(j).is_some_and(|c| c.is(&Kind::Colon) && c.span.col == end)
+            && ts.get(j + 1).and_then(|n| n.ident()).is_some()
+            && ts[j + 1].span.col == ts[j].span.col + ts[j].span.len
+        {
+            text.push(':');
+            text.push_str(ts[j + 1].ident().unwrap_or(""));
+            end = ts[j + 1].span.col + ts[j + 1].span.len;
+            j += 2;
+        }
         let mut ascii = None;
         if ts.get(j).is_some_and(|t| t.is(&Kind::LParen)) {
             if let Some(a) = ts.get(j + 1).and_then(|t| t.ident()) {
@@ -971,7 +992,194 @@ impl P {
                 return None;
             }
         };
-        Some(SourceDecl { name, kind, pins, span })
+        Some(SourceDecl { name, kind, pins, span, base: None })
+    }
+
+    /// `apply <name> = "<path>" [sha256:…]`, then bindings `<input> = <value> [with a -> b, …]`,
+    /// `except <target>, …` and `<output> -> <name>` lines, in any order (§15.69).
+    fn apply(&mut self, head: &[Token], at: usize) -> Option<ApplyDecl> {
+        let span = span_of(head);
+        self.i += 1;
+        let shape = tr!(
+            "形は `{a} <名前> = \"<規則ファイル>\" sha256:<ハッシュ>` の下に `<呼び先の入力> = <値>`（列挙なら `with <値> -> <値>, …` を続ける）、`{e} <相手>, …`、`<呼び先の出力> -> <名前>` を一行ずつです。",
+            "The shape is `{a} <name> = \"<rule file>\" sha256:<digest>`, then one `<callee input> = <value>` line each (for an enum, followed by `with <value> -> <value>, …`), `{e} <target>, …`, and `<callee output> -> <name>` lines.",
+            a = crate::kw::APPLY,
+            e = crate::kw::EXCEPT
+        );
+        let bad = |p: &mut Self, sp: Span, what: String| {
+            p.err(
+                Diag::error("E041", tr!("`{}` の形が読めません", "An `{}` is not shaped like this", crate::kw::APPLY))
+                    .at(p.at(sp.line))
+                    .mark(sp, what)
+                    .note(shape.clone()),
+            );
+        };
+        // The body first, so the block is consumed whatever the heading's shape.
+        let mut bindings: Vec<Binding> = Vec::new();
+        let mut excepts: Vec<(String, Span)> = Vec::new();
+        let mut outputs: Vec<OutBinding> = Vec::new();
+        let mut ok = true;
+        while let Some(l) = self.cur().cloned() {
+            if l.is_empty() || l.first().is_some_and(|t| t.is(&Kind::Pipe)) {
+                break;
+            }
+            let Some(first) = l.first().and_then(|t| t.ident()).map(|s| s.to_string()) else { break };
+            if crate::kw::LINE_HEAD.contains(&first.as_str()) && first != crate::kw::EXCEPT {
+                break;
+            }
+            self.i += 1;
+            if first == crate::kw::EXCEPT {
+                let mut k = 1;
+                while k < l.len() {
+                    match l[k].ident() {
+                        Some(t) => {
+                            // `表:行` is one target; the segments are joined back with `:`.
+                            let mut name = t.to_string();
+                            let mut sp = l[k].span.clone();
+                            k += 1;
+                            while l.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
+                                match l.get(k + 1).and_then(|t| t.ident()) {
+                                    Some(r) => {
+                                        name.push(':');
+                                        name.push_str(r);
+                                        sp.len = l[k + 1].span.col + l[k + 1].span.len - sp.col;
+                                        k += 2;
+                                    }
+                                    None => break,
+                                }
+                            }
+                            excepts.push((name, sp));
+                            if l.get(k).is_some_and(|t| t.is(&Kind::Comma)) {
+                                k += 1;
+                            }
+                        }
+                        None => {
+                            bad(self, span_of(&l), tr!("`{}` の相手が読めません", "the target of `{}` cannot be read", crate::kw::EXCEPT));
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+                if excepts.is_empty() && ok {
+                    bad(self, span_of(&l), tr!("`{}` の相手がありません", "`{}` names nothing", crate::kw::EXCEPT));
+                    ok = false;
+                }
+                continue;
+            }
+            match l.get(1).map(|t| &t.kind) {
+                Some(Kind::Eq) => {
+                    let value = match l.get(2).map(|t| &t.kind) {
+                        Some(Kind::Ident(n)) => BindValue::Name(n.clone()),
+                        Some(_) => match lit_of(&l[2]) {
+                            Some(v) => BindValue::Lit(v),
+                            None => {
+                                bad(self, span_of(&l), tr!("`=` の右は名前かリテラルです", "the right side of `=` is a name or a literal"));
+                                ok = false;
+                                continue;
+                            }
+                        },
+                        None => {
+                            bad(self, span_of(&l), tr!("`=` の右に値がありません", "nothing after `=`"));
+                            ok = false;
+                            continue;
+                        }
+                    };
+                    let mut map: Vec<(String, String)> = Vec::new();
+                    let mut k = 3;
+                    if l.get(k).and_then(|t| t.ident()) == Some(crate::kw::WITH) {
+                        k += 1;
+                        loop {
+                            let (Some(a), Some(arrow), Some(b)) = (l.get(k).and_then(|t| t.ident()), l.get(k + 1), l.get(k + 2).and_then(|t| t.ident())) else {
+                                bad(self, span_of(&l), tr!("`{}` の後は `<値> -> <値>` の並びです", "after `{}` come `<value> -> <value>` pairs", crate::kw::WITH));
+                                ok = false;
+                                break;
+                            };
+                            if !arrow.is(&Kind::Arrow) {
+                                bad(self, span_of(&l), tr!("`{}` の後は `<値> -> <値>` の並びです", "after `{}` come `<value> -> <value>` pairs", crate::kw::WITH));
+                                ok = false;
+                                break;
+                            }
+                            map.push((a.to_string(), b.to_string()));
+                            k += 3;
+                            match l.get(k) {
+                                None => break,
+                                Some(t) if t.is(&Kind::Comma) => k += 1,
+                                Some(_) => {
+                                    bad(self, span_of(&l), tr!("対応の区切りは `,` です", "pairs are separated by `,`"));
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                    } else if l.len() > 3 {
+                        bad(self, span_of(&l), tr!("値の後に書けるのは `{} …` だけです", "only `{} …` may follow the value", crate::kw::WITH));
+                        ok = false;
+                        continue;
+                    }
+                    bindings.push(Binding { input: first, value, map, span: span_of(&l) });
+                }
+                Some(Kind::Arrow) => {
+                    let Some((name, k)) = self.name_at(&l, 2) else {
+                        bad(self, span_of(&l), tr!("`->` の右に名前がありません", "no name after `->`"));
+                        ok = false;
+                        continue;
+                    };
+                    if l.len() > k {
+                        bad(self, span_of(&l), tr!("名前の後に余分な語があります", "extra words after the name"));
+                        ok = false;
+                        continue;
+                    }
+                    outputs.push(OutBinding { output: first, name, span: span_of(&l) });
+                }
+                _ => {
+                    bad(self, span_of(&l), tr!("`<入力> = <値>` か `<出力> -> <名前>` の形です", "a line is `<input> = <value>` or `<output> -> <name>`"));
+                    ok = false;
+                }
+            }
+        }
+        let Some((name, k)) = self.name_at(head, 1) else {
+            bad(self, span.clone(), tr!("呼び出しの名前がありません", "the apply has no name"));
+            return None;
+        };
+        if !head.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
+            bad(self, span.clone(), tr!("`=` が要ります", "`=` is required"));
+            return None;
+        }
+        let Some(Kind::Str(path)) = head.get(k + 1).map(|t| t.kind.clone()) else {
+            bad(self, span.clone(), tr!("規則ファイルを `\"…\"` で書いてください", "write the rule file in quotes"));
+            return None;
+        };
+        let hash = match head.get(k + 2).map(|t| t.kind.clone()) {
+            Some(Kind::Hash(h)) => Some(h),
+            None => None,
+            Some(_) => {
+                bad(self, span.clone(), tr!("ファイル名の後に書けるのは `sha256:<ハッシュ>` だけです", "only `sha256:<digest>` may follow the file name"));
+                return None;
+            }
+        };
+        if head.len() > k + 3 {
+            bad(self, span.clone(), tr!("余分な語があります", "extra words"));
+            return None;
+        }
+        if !ok {
+            return None;
+        }
+        Some(ApplyDecl {
+            name,
+            path,
+            hash,
+            bindings,
+            excepts,
+            outputs,
+            cite: None,
+            span,
+            at,
+            count: 0,
+            defines: Vec::new(),
+            callee_src: String::new(),
+            callee_path: String::new(),
+            callee: None,
+        })
     }
 
     fn table(&mut self, head: &[Token]) -> Option<Table> {
@@ -1010,7 +1218,7 @@ impl P {
         };
         let (inputs, outputs, rows) = self.grid(true)?;
         self.ctx.clear();
-        Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None })
+        Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None, applied: None })
     }
 
     /// A clause (DESIGN-draft §2.2): `clause <name>(<alias>) -> <output>[ : <type>]`, then a
@@ -1167,6 +1375,7 @@ impl P {
             overrides,
             clause: true,
             cite: None,
+            applied: None,
         })
     }
 
@@ -1184,11 +1393,14 @@ impl P {
             };
             let mut span = line[k].span.clone();
             k += 1;
-            let mut row = None;
-            if line.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
+            // `表:行`, or `呼び出し:表:行` for a row of an applied rule (§15.69): the segments
+            // before the last name the table, the last names the row — unless the whole
+            // spelling names a table, which the checker decides.
+            let mut segs: Vec<String> = vec![table];
+            while line.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
                 match line.get(k + 1).and_then(|t| t.ident()) {
                     Some(r) => {
-                        row = Some(r.to_string());
+                        segs.push(r.to_string());
                         span.len = line[k + 1].span.col + line[k + 1].span.len - span.col;
                         k += 2;
                     }
@@ -1198,6 +1410,15 @@ impl P {
                     }
                 }
             }
+            if bad {
+                break;
+            }
+            let (table, row) = if segs.len() == 1 {
+                (segs.remove(0), None)
+            } else {
+                let row = segs.pop();
+                (segs.join(":"), row)
+            };
             out.push(OverrideRef { table, row, span });
             match line.get(k) {
                 None => break,
@@ -1238,6 +1459,7 @@ impl P {
             overrides: Vec::new(),
             clause: false,
             cite: None,
+            applied: None,
         })
     }
 

@@ -1,0 +1,38 @@
+rule 退職手当(retirement_allowance) v1
+description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN-draft §5 のスケッチ）"
+
+enum 事由(reason_kind) = 定年(retirement_age) | 自己都合(voluntary) | 死亡(death)
+
+inputs
+  勤続年数(years)  : number    range >=1 <=40
+  退職事由(reason) : 事由
+  基本給(base_pay) : money[円]  range >=10万円 <=100万円
+
+outputs
+  手当(allowance) : money[円]  round down(1円)
+
+table 支給表(schedule)  # 出典: 第20条第1項（スケッチ）
+policy unique
+     | 勤続年数 | 退職事由       | -> 支給月数(months) : number |
+短期 | <10      | 定年, 自己都合 | 5                            |
+中期 | >=10 <25 | 定年, 自己都合 | 20                           |
+長期 | >=25     | 定年, 自己都合 | 40                           |
+死亡 | -        | 死亡           | 40                           |
+
+define 満額(full) : money[円] = 基本給 × 支給月数
+define 減額後(reduced) : money[円] = 満額 × 80%
+
+clause 本則(main) -> 手当  # 出典: 第20条第1項（スケッチ）
+  when always
+  then 満額
+
+clause 減額(reduction) -> 手当  # 出典: 第20条第2項（スケッチ）
+  when 退職事由 自己都合
+  then 減額後
+  overrides 本則
+
+examples
+| 勤続年数 | 退職事由 | 基本給 | -> 手当  |
+| 3        | 定年     | 30万円 | 150万円  |
+| 3        | 自己都合 | 30万円 | 120万円  |
+| 30       | 死亡     | 30万円 | 1200万円 |

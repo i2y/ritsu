@@ -41,6 +41,16 @@ fn assert_english(got: &str, src: &str) {
         allowed.push('\n');
         allowed.push_str(ja);
     }
+    // A rule applied by this one is quoted the same way: its names come from its own file.
+    for l in src.lines().filter(|l| l.trim_start().starts_with("apply ")) {
+        if let Some(path) = l.split('"').nth(1) {
+            let p = root().join("tests/mutants").join(path);
+            if let Ok(callee) = std::fs::read_to_string(&p) {
+                allowed.push('\n');
+                allowed.push_str(&callee.lines().map(|l| l.split('#').next().unwrap_or("")).collect::<Vec<_>>().join("\n"));
+            }
+        }
+    }
     // Unit symbols, multipliers, and the fixed example name a hint uses (`届け先(dest)`).
     allowed.push_str("\n円 銭 万 億 兆 万円 億円 兆円 届け先");
     let mut leaks: Vec<String> = Vec::new();
@@ -123,3 +133,11 @@ golden!(e037_unpinned, "E037", "tests/mutants/m_e037.rule", "E037");
 golden!(e038_copy_changed, "E038", "tests/mutants/m_e038.rule", "E038");
 golden!(e039_no_copy, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_uncited_pin, "W119", "tests/mutants/m_w119.rule", "W119");
+
+// A rule applied by another (DESIGN-draft §5).
+golden!(e040_callee_changed, "E040", "tests/mutants/m_e040.rule", "E040");
+golden!(e041_unbound_input, "E041", "tests/mutants/m_e041.rule", "E041");
+golden!(e042_unmapped_value, "E042", "tests/mutants/m_e042.rule", "E042");
+golden!(e043_outside_range, "E043", "tests/mutants/m_e043.rule", "E043");
+golden!(e044_not_applicable, "E044", "tests/mutants/m_e044.rule", "E044");
+golden!(w118_unused_table, "W118", "tests/mutants/m_w118.rule", "W118");

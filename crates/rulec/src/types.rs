@@ -50,7 +50,7 @@ impl Ty {
     }
     /// Do two types describe the same quantity? Money literals carry no tax brand,
     /// so they unify with either.
-    fn unifies(&self, o: &Ty) -> bool {
+    pub fn unifies(&self, o: &Ty) -> bool {
         match (self, o) {
             (Ty::Money { cur: a, tax: ta }, Ty::Money { cur: b, tax: tb }) => {
                 a == b && (ta.is_none() || tb.is_none() || ta == tb)

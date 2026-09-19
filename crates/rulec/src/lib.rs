@@ -20,6 +20,7 @@ macro_rules! tr {
 }
 
 pub mod ast;
+pub mod apply;
 pub mod backend;
 pub mod defset;
 pub mod diag;
@@ -48,6 +49,7 @@ pub mod runtest;
 pub mod sha256;
 pub mod sources;
 pub mod types;
+pub mod vfs;
 pub mod vectors;
 pub mod verify;
 pub mod xlsx;
@@ -85,10 +87,20 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     if !diags.is_empty() {
         return Report { diags, quiet, shadow, nodes };
     }
-    let Some(f) = &parsed.file else { return Report { diags, quiet, shadow, nodes } };
+    let Some(mut f) = parsed.file else { return Report { diags, quiet, shadow, nodes } };
+    // A rule applied by this one is read and expanded into it first (§15.69). A callee that
+    // cannot be expanded leaves holes everything below would trip over, so those errors
+    // return here; a pin that does not match (E040) is reported and the check goes on, so
+    // that what the changed callee does to this rule can be seen.
+    diags.extend(apply::expand(&mut f, path));
+    if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
+        return Report { diags, quiet, shadow, nodes };
+    }
+    let f = &f;
 
     let t = types::check(f, path);
     diags.extend(t.diags.iter().cloned());
+    diags.extend(apply::check(f, &t, path));
     // The stages that read other files: the enums declared outside it (§15.59, §15.60), and
     // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
@@ -224,14 +236,32 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
 /// Gathers everything generation needs in one go. Nothing is generated if syntax or types
 /// fail.
 pub fn prepare<'a>(src: &'a str, path: &str) -> Result<(ast::RuleFile, types::Checked), Vec<Diag>> {
+    prepare_with(src, path, false)
+}
+
+/// [`prepare`], with an unpinned or changed callee (E040) let through: what `rulec diff`
+/// needs, since the difference a changed callee makes is what E040 asks to be looked at.
+pub fn prepare_lenient<'a>(src: &'a str, path: &str) -> Result<(ast::RuleFile, types::Checked), Vec<Diag>> {
+    prepare_with(src, path, true)
+}
+
+fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleFile, types::Checked), Vec<Diag>> {
     let parsed = parse::parse(src, path);
     if !parsed.diags.is_empty() {
         return Err(parsed.diags);
     }
-    let Some(f) = parsed.file else { return Err(Vec::new()) };
+    let Some(mut f) = parsed.file else { return Err(Vec::new()) };
+    let ds = apply::expand(&mut f, path);
+    if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
+        return Err(ds);
+    }
     let t = types::check(&f, path);
     if t.diags.iter().any(|d| d.severity == Severity::Error) {
         return Err(t.diags);
+    }
+    let ds = apply::check(&f, &t, path);
+    if ds.iter().any(|d| d.severity == Severity::Error) {
+        return Err(ds);
     }
     Ok((f, t))
 }
