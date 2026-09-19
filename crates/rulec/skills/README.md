@@ -1,7 +1,7 @@
 # The rulec agent skill
 
 `rulec/` is an [Agent Skill](https://agentskills.io) for **using rulec** — writing a `.rule`,
-getting it past `rulec check`, generating the seven languages, and showing a person what
+getting it past `rulec check`, generating the nine languages, and showing a person what
 changed. It is not about working on rulec itself.
 
 ## Install

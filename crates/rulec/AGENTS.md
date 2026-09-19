@@ -191,9 +191,12 @@ stdio for an agent on the same machine and, with `--http <port>`, MCP's Streamab
 the places that only accept a URL — put TLS and authentication in front of that one. Where
 the host renders MCP Apps, the server also offers the approver's page (`<alias>_page.html`,
 written beside it) as the tool's view, opened on the case that was just asked
-([docs/generated-code.md](docs/generated-code.md)).
+([docs/generated-code.md](docs/generated-code.md)). The `wasm/` directory holds the rule as
+one module for any host, behind `call: func(input: string) -> string` in the canonical ABI,
+with a `.wit` that makes a component of it; `rulec api` says under `wasm` how to build it
+with `rustc` alone and what to call.
 
-For a target none of the eight covers — another language, a workflow engine's expression
+For a target none of the nine covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
 generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
 with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to end.
@@ -202,8 +205,8 @@ with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to 
 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
-`node`, `rustc`, `ruby`, `go` and `swiftc`, and skips-and-reports the side whose toolchain is
-missing. A skipped language narrows what the run proved, so the summary says how many were
+`node`, `rustc`, `ruby`, `go` and `swiftc`, plus the `wasm32-unknown-unknown` target for the
+Wasm side, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
