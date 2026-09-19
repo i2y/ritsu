@@ -428,8 +428,9 @@ impl<'a> Gen<'a> {
                     let pinned = if pins.is_empty() { String::new() } else { format!(" ({})", pins.join(", ")) };
                     format!("{} {id} {} {asof}{pinned}", crate::kw::LAW, crate::kw::ASOF)
                 }
-                SourceKind::File { path, hash } => {
-                    format!("{} {path}{}", crate::kw::FILE, hash.as_ref().map(|h| format!(" sha256:{h}")).unwrap_or_default())
+                SourceKind::File { path, url, hash } => {
+                    let u = url.as_ref().map(|u| format!(" {} {u}", crate::kw::URL)).unwrap_or_default();
+                    format!("{} {path}{u}{}", crate::kw::FILE, hash.as_ref().map(|h| format!(" sha256:{h}")).unwrap_or_default())
                 }
             };
             h.push_str(&tr!("{comment} 出典: {} = {what}\n", "{comment} Cites: {} = {what}\n", s.name.text));
@@ -5542,9 +5543,10 @@ impl Gen<'_> {
                             crate::json::Obj::new().str("fragment", &p.fragment).str("sha256", &p.hash).finish()
                         }).collect::<Vec<_>>()))
                         .finish(),
-                    SourceKind::File { path, hash } => o
+                    SourceKind::File { path, url, hash } => o
                         .str("kind", crate::kw::FILE)
                         .str("path", path)
+                        .str("url", url.as_deref().unwrap_or(""))
                         .str("sha256", hash.as_deref().unwrap_or(""))
                         .finish(),
                 }

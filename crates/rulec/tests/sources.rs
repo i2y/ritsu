@@ -172,3 +172,53 @@ fn 生成物のヘッダは出典を名指す() {
     assert!(sql.contains("-- Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)\n"), "{sql}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// A file source may say where its copy came from (§15.76). The address rides through
+/// everything that shows a source: the fix for an unpinned digest, `pin`, the generated
+/// header and `rulec api` — otherwise a reader of the generated code could not go and look at
+/// the document the rows were transcribed from.
+#[test]
+fn ファイルの出典はurlを持ち_それが下流まで届く() {
+    let d = scratch("url");
+    std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
+    let url = "https://raw.githubusercontent.com/o/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/docs/t.md";
+    let body = |pin: &str| {
+        format!(
+            "rule t(t) v1\n\nsource 郵便 = file \"料金表.txt\" url \"{url}\"{pin}\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\ntable 表(t1)  @郵便\n| a | -> x |\n| - | true |\n"
+        )
+    };
+    let p = d.join("a.rule");
+
+    // Unpinned: E037, and the fix keeps the address rather than dropping it.
+    let unpinned = body("");
+    let ds = rulec::check_source(&unpinned, &p.to_string_lossy());
+    let e037 = ds.iter().find(|x| x.code == "E037").expect("E037 が出ない");
+    let fix = e037.fix.text.as_deref().expect("fix の本文が無い");
+    assert!(fix.contains(&format!("url \"{url}\"")), "{fix}");
+
+    // `pin` writes the digest without disturbing the address.
+    std::fs::write(&p, &unpinned).unwrap();
+    let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let after = std::fs::read_to_string(&p).unwrap();
+    let line = after.lines().find(|l| l.starts_with("source 郵便")).unwrap();
+    assert!(line.contains(&format!("url \"{url}\"")) && line.contains("sha256:"), "{line}");
+    assert!(rulec::check_source(&after, &p.to_string_lossy()).iter().all(|x| x.code.starts_with('W')));
+
+    // The header and the inventory carry it.
+    let g = d.join("gen");
+    let (c, out) = rulec(&d, &["gen", "a.rule", "--out", &g.to_string_lossy(), "--lang", "en"]);
+    assert_eq!(c, 0, "{out}");
+    let py = std::fs::read_to_string(g.join("python/t.py")).unwrap();
+    assert!(py.contains(&format!("# Cites: 郵便 = file 料金表.txt url {url} sha256:")), "{py}");
+    let (c, api) = rulec(&d, &["api", "a.rule"]);
+    assert_eq!(c, 0, "{api}");
+    assert!(api.contains(&format!("\"url\":\"{url}\"")), "{api}");
+
+    // An address is optional, and a word that is not one is refused.
+    let none = body("").replace(&format!(" url \"{url}\""), "");
+    assert!(rulec::check_source(&none, &p.to_string_lossy()).iter().any(|x| x.code == "E037"));
+    let bad = body("").replace(&format!("url \"{url}\""), "urrl \"x\"");
+    assert!(rulec::check_source(&bad, &p.to_string_lossy()).iter().any(|x| x.code.starts_with('E')));
+    let _ = std::fs::remove_dir_all(&d);
+}

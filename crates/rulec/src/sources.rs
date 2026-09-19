@@ -227,12 +227,13 @@ pub fn pin_line(fragment: &str, hash: &str) -> String {
 
 /// The `source` line of a file source with its digest.
 pub fn file_line(d: &SourceDecl, hash: &str) -> String {
-    let SourceKind::File { path, .. } = &d.kind else { return String::new() };
+    let SourceKind::File { path, url, .. } = &d.kind else { return String::new() };
     let name = match &d.name.ascii {
         Some(a) => format!("{}({a})", d.name.text),
         None => d.name.text.clone(),
     };
-    format!("{} {name} = {} \"{path}\" sha256:{hash}", crate::kw::SOURCE, crate::kw::FILE)
+    let u = url.as_ref().map(|u| format!(" {} \"{u}\"", crate::kw::URL)).unwrap_or_default();
+    format!("{} {name} = {} \"{path}\"{u} sha256:{hash}", crate::kw::SOURCE, crate::kw::FILE)
 }
 
 /// Holds every source to its copies: a cited fragment is pinned (E037), the pin is the copy's
@@ -269,7 +270,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
         let name = &d.name.text;
         let whos_text = |whos: &[&str]| whos.join(if crate::i18n::ja() { "、" } else { ", " });
         match &d.kind {
-            SourceKind::File { path, hash } => {
+            SourceKind::File { path, hash, .. } => {
                 let p = dir.join(path);
                 let Ok(bytes) = std::fs::read(&p) else {
                     out.push(
@@ -465,6 +466,53 @@ fn curl(url: &str) -> Result<Vec<u8>, String> {
         }
     }
     Err(tr!("{url} を取れません（三度試しました）: {last}", "cannot fetch {url} (tried three times): {last}"))
+}
+
+/// One request to an API that answers JSON, with the headers GitHub asks for. A token in
+/// `GITHUB_TOKEN` or `GH_TOKEN` is passed on when there is one: without it the rate limit is
+/// sixty requests an hour, which a scheduled job will reach.
+fn curl_json(url: &str) -> Result<crate::json::Json, String> {
+    let mut args: Vec<String> = ["-fsSL", "--max-time", "120", "-H", "Accept: application/vnd.github+json"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    if let Some(t) = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")).ok().filter(|t| !t.is_empty()) {
+        args.push("-H".into());
+        args.push(format!("Authorization: Bearer {t}"));
+    }
+    args.push(url.to_string());
+    let out = std::process::Command::new("curl")
+        .args(&args)
+        .output()
+        .map_err(|e| tr!("curl を起動できません: {e}", "cannot run curl: {e}"))?;
+    if !out.status.success() {
+        return Err(tr!(
+            "{url} を問い合わせられません: {}",
+            "cannot query {url}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    crate::json::parse(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// A GitHub raw URL, split into owner, repo, revision and path. `Some` only when the revision
+/// is a commit: a URL that names a branch answers with whatever is on that branch today, so it
+/// is not a point in time and the question has to be asked of the bytes instead.
+pub fn github_raw(url: &str) -> Option<(String, String, String, String)> {
+    let rest = url.strip_prefix("https://raw.githubusercontent.com/")?;
+    let mut it = rest.splitn(4, '/');
+    let (owner, repo, rev, path) = (it.next()?, it.next()?, it.next()?, it.next()?);
+    let commit = (7..=40).contains(&rev.len()) && rev.chars().all(|c| c.is_ascii_hexdigit());
+    if !commit || owner.is_empty() || repo.is_empty() || path.is_empty() {
+        return None;
+    }
+    Some((owner.into(), repo.into(), rev.into(), path.into()))
+}
+
+/// Whether a raw URL names a branch rather than a commit, which is worth saying out loud: the
+/// same URL will answer differently next year, so the copy cannot be brought back.
+fn raw_on_a_branch(url: &str) -> bool {
+    url.starts_with("https://raw.githubusercontent.com/") && github_raw(url).is_none()
 }
 
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
@@ -710,6 +758,53 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
             });
         }
     }
+    // A file source with a `url`: bring the copy again from where it came from (§15.76). A
+    // copy whose bytes did not move keeps them, as a fragment's do, so the pin stays true.
+    let dir = Path::new(rule_path).parent().unwrap_or(Path::new("."));
+    for d in &f.sources {
+        let SourceKind::File { path, url, .. } = &d.kind else { continue };
+        if d.base.is_some() {
+            continue;
+        }
+        let Some(url) = url else {
+            lines.push(tr!(
+                "{}: url がないので取り直せません（`{} \"…\"` を足すと取り直せます）",
+                "{}: no url, so the copy cannot be brought again (add `{} \"…\"` to it)",
+                d.name.text,
+                crate::kw::URL
+            ));
+            continue;
+        };
+        let body = curl(url)?;
+        let p = dir.join(path);
+        let before = std::fs::read(&p).ok();
+        let same = before.as_deref() == Some(body.as_slice());
+        if !same {
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+            }
+            std::fs::write(&p, &body).map_err(|e| format!("{}: {e}", p.display()))?;
+        }
+        let h = crate::sha256::short(&body);
+        lines.push(match before {
+            None => tr!("{}: {path} を取りました（sha256:{h}）", "{}: fetched {path} (sha256:{h})", d.name.text),
+            Some(_) if same => tr!("{}: {path} は変わっていません（sha256:{h}）", "{}: {path} is unchanged (sha256:{h})", d.name.text),
+            Some(_) => {
+                changed = true;
+                tr!(
+                    "{}: {path} が変わりました（いま sha256:{h}）。引いている行を読み直し、`rulec source pin` で承認してください",
+                    "{}: {path} changed (now sha256:{h}); reread the rows that cite it, then approve it with `rulec source pin`",
+                    d.name.text
+                )
+            }
+        });
+        if raw_on_a_branch(url) {
+            lines.push(tr!(
+                "  この URL は枝を指しています。コミットを指す URL なら、来年取り直しても同じ写しが返ります",
+                "  this URL names a branch; one that names a commit answers with the same copy next year"
+            ));
+        }
+    }
     Ok(Outcome { lines, changed })
 }
 
@@ -738,7 +833,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
             continue;
         }
         match &d.kind {
-            SourceKind::File { path, hash } => {
+            SourceKind::File { path, hash, .. } => {
                 let bytes = std::fs::read(dir.join(path)).map_err(|e| format!("{path}: {e}"))?;
                 let h = crate::sha256::short(&bytes);
                 if hash.as_deref() != Some(h.as_str()) {
@@ -889,12 +984,172 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
             }
         }
     }
+    // A file source (§15.76). What can be asked depends on what the `url` names: a commit
+    // cannot go stale, so the repository is asked what it has done to that path since; anything
+    // else is asked of its bytes.
+    let dir = Path::new(rule_path).parent().unwrap_or(Path::new("."));
+    for d in &f.sources {
+        let SourceKind::File { path, url, hash } = &d.kind else { continue };
+        if d.base.is_some() {
+            continue;
+        }
+        let name = &d.name.text;
+        let Some(url) = url else {
+            lines.push(tr!(
+                "{name}: url がないので、もとが変わったかは問い合わせられません（`{} \"…\"` を足すと問い合わせられます）",
+                "{name}: no url, so whether the original moved on cannot be asked (add `{} \"…\"` to it)",
+                crate::kw::URL
+            ));
+            continue;
+        };
+        match github_raw(url) {
+            Some((owner, repo, rev, p)) => {
+                let cmp = curl_json(&format!("https://api.github.com/repos/{owner}/{repo}/compare/{rev}...HEAD"))?;
+                let touched = match cmp.get("files") {
+                    Some(crate::json::Json::Arr(fs)) => {
+                        fs.iter().any(|f| f.get("filename").and_then(|v| v.as_str()) == Some(p.as_str()))
+                    }
+                    _ => false,
+                };
+                if !touched {
+                    lines.push(tr!(
+                        "{name}: {rev} 以後、{p} は変わっていません",
+                        "{name}: {p} has not changed since {rev}"
+                    ));
+                    continue;
+                }
+                changed = true;
+                lines.push(tr!("{name}: {rev} 以後、{p} が変わっています", "{name}: {p} has changed since {rev}"));
+                let commits =
+                    curl_json(&format!("https://api.github.com/repos/{owner}/{repo}/commits?path={}&per_page=5", urlq(&p)))?;
+                let mut newest = String::new();
+                if let crate::json::Json::Arr(cs) = &commits {
+                    for c in cs {
+                        let sha = c.get("sha").and_then(|v| v.as_str()).unwrap_or("");
+                        let date = c
+                            .get("commit")
+                            .and_then(|v| v.get("author"))
+                            .and_then(|v| v.get("date"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let msg = c
+                            .get("commit")
+                            .and_then(|v| v.get("message"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .lines()
+                            .next()
+                            .unwrap_or("");
+                        if newest.is_empty() {
+                            newest = sha.to_string();
+                        }
+                        let short: String = sha.chars().take(7).collect();
+                        lines.push(format!("  {short} {} {msg}", date.split('T').next().unwrap_or(date)));
+                    }
+                }
+                if !newest.is_empty() {
+                    lines.push(tr!(
+                        "  読み直したら、`{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"` に留め直して `rulec source fetch` と `rulec source pin` です",
+                        "  once the rows are reread, repin it at `{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"`, then `rulec source fetch` and `rulec source pin`",
+                        crate::kw::URL
+                    ));
+                }
+            }
+            None => {
+                let body = curl(url)?;
+                let now = crate::sha256::short(&body);
+                let before = hash
+                    .clone()
+                    .or_else(|| std::fs::read(dir.join(path)).ok().map(|b| crate::sha256::short(&b)));
+                match before {
+                    None => lines.push(tr!(
+                        "{name}: 固定も写しも無いので比べられません（いま sha256:{now}）",
+                        "{name}: nothing to compare against, neither a pin nor a copy (it is sha256:{now} now)"
+                    )),
+                    Some(b) if b == now => {
+                        lines.push(tr!("{name}: {path} は変わっていません（sha256:{now}）", "{name}: {path} is unchanged (sha256:{now})"))
+                    }
+                    Some(b) => {
+                        changed = true;
+                        lines.push(tr!(
+                            "{name}: もとが変わっています（固定: sha256:{b}、いま: sha256:{now}）。`rulec source fetch` で取り直し、読み直してから `rulec source pin` です",
+                            "{name}: the original has changed (pinned: sha256:{b}, now: sha256:{now}); bring it again with `rulec source fetch`, reread the rows, then `rulec source pin`"
+                        ));
+                        if opaque(path) {
+                            lines.push(tr!(
+                                "  この形式は中身の差分が取れないので、変わったことしか言えません",
+                                "  nothing here can diff this format, so all it can say is that it changed"
+                            ));
+                        }
+                    }
+                }
+                if raw_on_a_branch(url) {
+                    lines.push(tr!(
+                        "  この URL は枝を指しています。コミットを指す URL なら、何がいつ変えたかまで言えます",
+                        "  this URL names a branch; one that names a commit would say what changed it, and when"
+                    ));
+                }
+            }
+        }
+    }
     Ok(Outcome { lines, changed })
+}
+
+/// Percent-encode a path for a query parameter, leaving what GitHub accepts bare.
+fn urlq(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => o.push(b as char),
+            _ => o.push_str(&format!("%{b:02X}")),
+        }
+    }
+    o
+}
+
+/// A document nothing here can diff: all that can be said of it is that it changed.
+fn opaque(path: &str) -> bool {
+    let p = path.to_ascii_lowercase();
+    [".pdf", ".xlsx", ".xls", ".docx", ".doc", ".zip", ".png", ".jpg"].iter().any(|e| p.ends_with(e))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A raw URL is a point in time only when its revision is a commit. A branch answers with
+    /// whatever is on it today, so it must not be mistaken for one — `outdated` would then ask
+    /// the repository a question about a moving target and report nothing.
+    #[test]
+    fn 生のurlはコミットのときだけ点である() {
+        let commit = "https://raw.githubusercontent.com/o/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/docs/t.md";
+        let got = github_raw(commit).expect("コミットの URL が読めない");
+        assert_eq!(got.0, "o");
+        assert_eq!(got.1, "r");
+        assert_eq!(got.2, "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678");
+        assert_eq!(got.3, "docs/t.md");
+        // A short sha is still a commit; a branch, a tag and a foreign host are not.
+        assert!(github_raw("https://raw.githubusercontent.com/o/r/a1b2c3d/t.md").is_some());
+        for not in [
+            "https://raw.githubusercontent.com/o/r/main/t.md",
+            "https://raw.githubusercontent.com/o/r/v1.2.0/t.md",
+            "https://raw.githubusercontent.com/o/r/abc/t.md",
+            "https://raw.githubusercontent.com/o/r/a1b2c3d",
+            "https://example.com/o/r/a1b2c3d/t.md",
+        ] {
+            assert!(github_raw(not).is_none(), "{not} をコミットとして読んでしまう");
+        }
+        assert!(raw_on_a_branch("https://raw.githubusercontent.com/o/r/main/t.md"));
+        assert!(!raw_on_a_branch(commit));
+        assert!(!raw_on_a_branch("https://example.com/t.pdf"));
+    }
+
+    #[test]
+    fn 問い合わせのパスは符号化される() {
+        assert_eq!(urlq("docs/料金表.md"), "docs/%E6%96%99%E9%87%91%E8%A1%A8.md");
+        assert_eq!(urlq("a b/c.md"), "a%20b/c.md");
+        assert_eq!(urlq("docs/t-1_2.md"), "docs/t-1_2.md");
+    }
 
     #[test]
     fn fragments_are_named_as_the_law_names_them() {

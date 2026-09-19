@@ -716,9 +716,12 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
                 .unwrap_or_default();
             tr!("出典: {}{frags}（法令 {id}、{asof} 時点{rev}）", "Source: {}{frags} (law {id}, as of {asof}{rev})", c.source)
         }
-        Some(SourceKind::File { path: p, hash }) => {
+        Some(SourceKind::File { path: p, url, hash }) => {
             let h = hash.as_ref().map(|h| tr!("、sha256:{h}", ", sha256:{h}")).unwrap_or_default();
-            tr!("出典: {}{frags}（{p}{h}）", "Source: {}{frags} ({p}{h})", c.source)
+            // The address the copy came from, so that a reader can go and look at the original.
+            let u = url.as_ref().map(|u| format!("、{u}")).unwrap_or_default();
+            let u = if crate::i18n::ja() { u } else { u.replace('、', ", ") };
+            tr!("出典: {}{frags}（{p}{u}{h}）", "Source: {}{frags} ({p}{u}{h})", c.source)
         }
         None => tr!("出典: {}{frags}", "Source: {}{frags}", c.source),
     };

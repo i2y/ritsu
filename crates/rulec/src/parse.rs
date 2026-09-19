@@ -975,19 +975,39 @@ impl P {
                     bad(self, tr!("ファイル名を `\"…\"` で書いてください", "write the file name in quotes"));
                     return None;
                 };
-                let hash = match line.get(k + 3).map(|t| t.kind.clone()) {
-                    Some(Kind::Hash(h)) => Some(h),
+                // `url "…"` before the digest: where the copy came from (§15.76). Optional,
+                // because a document that arrived from a person has no address.
+                let mut i = k + 3;
+                let url = if line.get(i).and_then(|t| t.ident()) == Some(crate::kw::URL) {
+                    let Some(Kind::Str(u)) = line.get(i + 1).map(|t| t.kind.clone()) else {
+                        bad(self, tr!("URL を `\"…\"` で書いてください", "write the URL in quotes"));
+                        return None;
+                    };
+                    i += 2;
+                    Some(u)
+                } else {
+                    None
+                };
+                let hash = match line.get(i).map(|t| t.kind.clone()) {
+                    Some(Kind::Hash(h)) => {
+                        i += 1;
+                        Some(h)
+                    }
                     None => None,
                     Some(_) => {
-                        bad(self, tr!("ファイル名の後に書けるのは `sha256:<ハッシュ>` だけです", "only `sha256:<digest>` may follow the file name"));
+                        bad(self, tr!(
+                            "ファイル名の後に書けるのは `{} \"…\"` と `sha256:<ハッシュ>` だけです",
+                            "only `{} \"…\"` and `sha256:<digest>` may follow the file name",
+                            crate::kw::URL
+                        ));
                         return None;
                     }
                 };
-                if line.len() > k + 4 {
+                if line.len() > i {
                     bad(self, tr!("余分な語があります", "extra words"));
                     return None;
                 }
-                SourceKind::File { path, hash }
+                SourceKind::File { path, url, hash }
             }
             _ => {
                 bad(self, tr!("`=` の後は `{}` か `{}` です", "after `=` comes `{}` or `{}`", crate::kw::LAW, crate::kw::FILE));

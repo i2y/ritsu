@@ -206,8 +206,11 @@ pub enum SourceKind {
     /// A law on e-Gov, by its law id, read as of a date. Its fragments can be fetched one by
     /// one, so each cited one is pinned on its own.
     Law { id: String, asof: String },
-    /// A file beside the rule that has no addressable fragments; pinned whole.
-    File { path: String, hash: Option<String> },
+    /// A file beside the rule that has no addressable fragments; pinned whole. `url` is where
+    /// the copy came from, when there is such a place: it lets `source fetch` bring it again
+    /// and `source outdated` ask whether it has moved on (§15.76). A document handed over by a
+    /// person has none, so it stays optional.
+    File { path: String, url: Option<String>, hash: Option<String> },
 }
 
 /// One pinned fragment under a `source … = law` line: `  第91条 sha256:77aa00bb11cc22dd`.

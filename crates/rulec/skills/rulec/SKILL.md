@@ -134,7 +134,10 @@ A few shapes are worth knowing before the first draft:
   fragment beside the rule and `rulec source pin` writes its digest under the `source` line.
   `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
   and `doc` quotes the fragment under the definition. A document with no fragments is
-  `source 郵便 = file "…" sha256:…`.
+  `source 郵便 = file "…" sha256:…`, and a `url "…"` on it says where that copy came from, so
+  `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a commit
+  (`raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>`) the answer names the commits
+  that touched it, otherwise it can only say that the bytes differ.
 
 - **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
   sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with

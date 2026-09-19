@@ -28,7 +28,7 @@ import proto "<file>" <Enum> -> <enum of this rule>
 import jsonschema "<file>" "<pointer>" -> <enum of this rule>
 source <name> = law "<law id>" asof <date>
   <fragment> sha256:<digest>
-source <name> = file "<file>" sha256:<digest>
+source <name> = file "<file>" [url "<url>"] sha256:<digest>
 enum   …
 group  …
 inputs
@@ -267,6 +267,7 @@ source 法 = law "342AC0000000023" asof 2026-04-01
 source 措置法 = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
 source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
+source 規約 = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
 
 table 本則(base)  @法 別表第一
 policy unique
@@ -279,7 +280,10 @@ government's statute database), by its law id, read
 as of a date: the API returns one fragment at a time, so each fragment the rule cites is
 kept as a copy beside the rule (`sources/law/<law id>@<date>/<element>.xml`) and pinned by
 its digest on the line under the `source`. A `file` is a document with no addressable
-fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own line.
+fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own line. A `url` on
+it says where that copy came from, so `rulec source fetch` can bring it again and `rulec source
+outdated` can ask whether the original has moved on; a document that arrived from a person has
+no address and leaves it out.
 
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
@@ -290,14 +294,26 @@ whole, `@郵便`, or with one word saying where in it, `@郵便 別紙1`; a law 
 is E037. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
-citation uses is W119. `rulec source fetch` brings the copies from e-Gov, `rulec source pin`
-writes the pins, and `rulec source outdated` asks e-Gov whether an amendment enforced after
-the date changes the text of a cited fragment (a revision that only re-marks the XML is not
-a change) — the one question `check` cannot answer offline. The
+citation uses is W119. `rulec source fetch` brings the copies — from e-Gov for a law, from the `url` for a file —
+`rulec source pin` writes the pins, and `rulec source outdated` asks whether the original has
+moved on, which is the one question `check` cannot answer offline. For a law it asks e-Gov
+whether an amendment enforced after the date changes the text of a cited fragment (a revision
+that only re-marks the XML is not a change).
+
+For a file it depends on what the `url` names, and the difference is worth knowing before
+writing one. **A URL that names a commit cannot go stale**, so the question is asked of the
+repository instead: on a GitHub raw URL whose revision is a commit
+(`raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>`), `outdated` asks what has touched
+that path since, and answers with the commits, their dates and their subjects, and the URL to
+pin next. A URL that names a branch, or any other URL, can only be fetched and compared with
+the pin: the answer is then that the bytes differ, which for a PDF or a spreadsheet is all
+anything can say — and a page that changes its footer says it too. A commit is to a file what
+`asof` is to a law, and pinning one is what makes this question worth asking. `GITHUB_TOKEN`
+or `GH_TOKEN` is passed on when it is set; without one the API allows sixty requests an hour. The
 approver's page quotes the fragment's text under the definition that cites it, with the date the copy's
 text came into force and the amending law. Every generated file names the sources in its header
 (`Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
-them under `sources`.
+them under `sources`, a file source carrying its `url` in both.
 
 ## 4. inputs and outputs
 

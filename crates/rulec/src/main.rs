@@ -295,8 +295,8 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は法令の引用箇所を e-Gov から取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated は法令の後の改正で引用箇所が変わるかを問い合わせる",
-                "handle the copies of a rule's sources: fetch brings the cited fragments from e-Gov to the rule's side, pin writes the copies' digests into the rule, outdated asks whether a later amendment changes them"
+                "出典の写しを扱う。fetch は法令の引用箇所を e-Gov から、ファイルの出典を その url から取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated はもとが変わったかを問い合わせる（法令なら後の改正、ファイルなら url の先。コミットで留めた GitHub の URL なら、何がいつ変えたかまで言う）",
+                "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
             ),
             params: vec![
                 ("fetch|pin|outdated", tr!("fetch と outdated は通信する（curl を呼ぶ）。pin は規則ファイルのハッシュの行だけを書き換える", "fetch and outdated read the network (through curl); pin rewrites only the pin lines of the rule file")),
@@ -304,8 +304,8 @@ fn commands() -> Vec<Cmd> {
             ],
             flags: vec![],
             exits: vec![
-                (0, tr!("済んだ。outdated では、引用箇所を変える改正が無い", "done; for outdated, no later amendment changes a cited fragment")),
-                (1, tr!("outdated: 後の改正で引用箇所が変わる。規則が読めないときも", "outdated: a later amendment changes a cited fragment; also when the rule cannot be parsed")),
+                (0, tr!("済んだ。outdated では、もとが変わっていない", "done; for outdated, nothing the rule cites has moved on")),
+                (1, tr!("outdated: もとが変わっている（後の改正、または url の先）。規則が読めないときも", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
                 (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
             ],
             examples: vec![

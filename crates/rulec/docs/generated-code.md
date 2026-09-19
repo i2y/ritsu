@@ -471,7 +471,9 @@ bytes, computed by rulec itself, so `gen --check` and a reader of the header agr
 generated from what. A rule transcribed from a document names it too — `Cites: 措置法 = law
 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)` — one line per `source`, and
 `rulec api` lists the same under `sources`, so the file says which text of the law it was made
-from.
+from. A file source carries its `url` there too when it has one (`Cites: 規約 = file tariff.md
+url https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md sha256:…`), which is what lets
+a reader of the generated code go and look at the document it was transcribed from.
 
 ## The rows that matched
 

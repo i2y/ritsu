@@ -39,6 +39,7 @@ pub const LAW: &str = "law";
 pub const FILE: &str = "file";
 /// The date a law is read as of (the e-Gov `asof` parameter).
 pub const ASOF: &str = "asof";
+pub const URL: &str = "url";
 /// A rule applied with its inputs bound — a provision applied mutatis mutandis (§15.69). The callee is expanded into this rule for the checks and the generators.
 pub const APPLY: &str = "apply";
 /// Inside an `apply`: the callee definitions left out (`第20条（第2項を除く。）`).

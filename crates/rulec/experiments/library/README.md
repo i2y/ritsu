@@ -43,7 +43,7 @@ Release には言語ごとのアーカイブ（`rules-<tag>-<lang>.tar.gz`）と
 2026-09-19 に種を作って走らせたところで止めている。再開するときの残りは次のとおり。
 
 rulec 側に足すもの
-- `source 名 = file "…" url "…"` と、`rulec source outdated` の file 対応。URL から取り直してハッシュを比べる（PDF や xlsx は本文の差分が取れないので「変わった」までしか言えない。協会けんぽの URL は年度ごとに変わる）。
+- ~~`source 名 = file "…" url "…"` と、`rulec source outdated` の file 対応。~~ §15.76 で入った。PDF や xlsx は「変わった」までしか言えないのは変わらない。協会けんぽの URL は年度ごとに変わるので、枝を指す URL と同じ扱い（バイトの比較）になる。
 - rulec の次のリリース。workflow が指す `i2y/rulec@v0.6.0` は、附則の引用・ヘッダの `Cites:`・生成器の修正を含む版として切る。
 
 種の側で決めること
