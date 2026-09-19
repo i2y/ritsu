@@ -42,6 +42,9 @@ MODIFIERS = ("range", "round", "contract_only", "default", "step")
 CLAUSE = ("when", "then", "always")
 # The body of an `apply`: what the callee's definitions it leaves out are introduced with.
 APPLY = ("except",)
+# What starts a line inside a clause or an apply body: the two clause lines, the apply's
+# exception, and `overrides`, which a clause carries as a table does.
+INDENTED = ("when", "then", "except", "overrides")
 SOURCE = ("law", "file", "asof")
 TYPES = ("money", "mass", "length", "rate", "number", "bool", "string", "date")
 TAX = ("incl_tax", "excl_tax")
@@ -68,13 +71,22 @@ class RuleLexer(RegexLexer):
 
     tokens = {
         "root": [
+            # The body of a clause or an apply is indented, and its line heads are keywords
+            # like any other. Tried before the whitespace rule, which would otherwise eat the
+            # indentation and leave the word mid-line, where `^` no longer matches.
+            (r"^([^\S\n]+)(" + "|".join(INDENTED) + r")\b", bygroups(Whitespace, Keyword)),
             (r"[^\S\n]+", Whitespace),
             (r"\n", Whitespace),
             (r"#[^\n]*", Comment.Single),
             (r'"[^"\n]*"', String.Double),
-            # A line head, and the name it declares.
+            # A line head, and the name it declares. The body of a clause or an apply is
+            # indented, and `overrides` may sit there as well as under a table.
             (words(HEAD_NAMED, prefix=r"^", suffix=r"\b"), Keyword, "decl"),
             (words(HEAD_PLAIN, prefix=r"^", suffix=r"\b"), Keyword),
+            # A pinned digest (§15.68, §15.69): one token, not a number followed by a word.
+            (r"(sha256)(:)([0-9a-f]+)", bygroups(Name.Builtin, Punctuation, Number.Hex)),
+            # A citation: `@法 別表第一`.
+            (r"(@)([^\s|#]+)", bygroups(Punctuation, Name.Label)),
             # `import std/都道府県`
             (rf"\b({NAMESPACE})(/)(\S+)", bygroups(Name.Builtin, Punctuation, Name)),
             # The ASCII alias (§1.3), which is the public name in the generated code.
