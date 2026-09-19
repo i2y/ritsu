@@ -933,8 +933,8 @@ pub fn ledger() -> Vec<Entry> {
             "E037",
             tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
-                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。箇所の書き方や、引用・宣言の形が読めないときも同じです。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
-                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A fragment name, a citation or a `source` line whose shape cannot be read is reported the same way. Without a pin, a revised copy passes check in silence (§15.68)."
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
+                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). Without a pin, a revised copy passes check in silence (§15.68)."
             ),
             tr!(
                 "原文を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を実行して、いまの写しのハッシュを書き込んでください。",

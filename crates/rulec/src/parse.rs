@@ -872,8 +872,8 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。出典は `{}` で宣言した名前です。",
-                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`). The source is a name a `{}` line declares.",
+                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも書けます。出典は `{}` で宣言した名前です。",
+                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`. The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
             );
@@ -882,9 +882,11 @@ impl P {
             bad(self);
             return (head, None);
         };
+        // The places cited, if any: a `file` source is cited whole (`@郵便`) or with a word
+        // saying where in it (`@郵便 別紙1`); a law needs its article, which the check says.
         let mut fragments: Vec<String> = Vec::new();
         let mut k = 1;
-        loop {
+        while k < rest.len() {
             match rest.get(k).and_then(|t| t.ident()) {
                 Some(f) => {
                     fragments.push(f.to_string());
@@ -897,7 +899,7 @@ impl P {
             }
             match rest.get(k) {
                 None => break,
-                Some(t) if t.is(&Kind::Comma) => k += 1,
+                Some(t) if t.is(&Kind::Comma) && k + 1 < rest.len() => k += 1,
                 Some(_) => {
                     bad(self);
                     return (head, None);

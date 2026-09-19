@@ -467,32 +467,33 @@ machinery, firing as `{"table":"無料","row":1}`. It mixes with tables through 
 
 ## Where it was transcribed from: source and @
 
-A rule transcribed from a law or a published policy can say where each part came from.
+A rule transcribed from a published policy or a statute can say where each part came from:
+`source` declares a document, and `@source` at the end of a table, clause, row, derive or define
+line cites it.
 
 ```rule
-source 法 = law "342AC0000000023" asof 2026-04-01
-  別表第一 sha256:0ba69792e960021e
+source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
 source 措置法 = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
 
 define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
 
-table 本則(base)  @法 別表第一
+table 運賃表(fee_table)  @郵便
 ```
 
-`source` declares a document: for a law, its id on e-Gov (the Japanese government's statute
-database) and the date whose text is meant
-(`asof`); for a file beside the rule, `file "料金表.pdf" sha256:…`. A table, a clause, a row, a
-derive or a define cites it at the end of its line, `@source 箇所`, naming the place the way the
-document does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一`.
+There are two kinds of document, cited and copied a little differently.
 
-`rulec source fetch` brings a copy of every cited place from e-Gov into `sources/` beside the
-rule, and `rulec source pin` writes the digest of each copy on the line under `source`. From
-then on every `rulec check` confirms that the copies are there and that their digests are what
-the rule says. When a refreshed copy differs, the check stops and names the tables, clauses and
-rows that cite that place (E038), which is all there is to reread. `check` itself never reads
-the network; whether a later amendment changes a cited place is what `rulec source outdated`
-asks e-Gov, and it belongs in a scheduled CI job.
+| Document | Declared as | Cited as | Its copy |
+|---|---|---|---|
+| **A file beside the rule** (a policy PDF, a tariff sheet) | `source 郵便 = file "<file>" sha256:<digest>` | `@郵便`, or `@郵便 別紙1` to say where in it | the file itself; `rulec source pin` writes its digest on the `source` line |
+| **A statute** | `source 法 = law "<law id>" asof <date>`, the id being the law's id on e-Gov (the Japanese government's statute database) and the date saying which text is meant | `@法 第91条`, always with the article, named the way the statute does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一` | `rulec source fetch` brings each cited article from e-Gov into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
+
+From then on every `rulec check` confirms that the copies are there and that their digests
+are what the rule says. When a copy differs — the file was replaced, or the article was
+fetched again after an amendment — the check stops and names the tables, clauses and rows
+that cite it (E038), which is all there is to reread. `check` itself never reads the network;
+whether a later amendment changes a cited article is what `rulec source outdated` asks e-Gov,
+and it belongs in a scheduled CI job.
 
 The approver's page quotes the cited text from the copies.
 

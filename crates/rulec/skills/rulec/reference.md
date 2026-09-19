@@ -283,8 +283,9 @@ fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own
 
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
-`第20条第2項`, `第20条第2項第3号`, `別表第一`; several are separated by `,`. It goes before the
-`#` comment. `check` holds the pins to the copies and never reads the network: a cited
+`第20条第2項`, `第20条第2項第3号`, `別表第一`; several are separated by `,`. A `file` is cited
+whole, `@郵便`, or with one word saying where in it, `@郵便 別紙1`; a law cited with no article
+is E037. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
 citation uses is W119. `rulec source fetch` brings the copies from e-Gov, `rulec source pin`

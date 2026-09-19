@@ -112,6 +112,10 @@ pub fn citations(f: &RuleFile) -> Vec<(String, String, String, Span)> {
     let mut out = Vec::new();
     let mut push = |c: &Option<Cite>, who: String| {
         if let Some(c) = c {
+            if c.fragments.is_empty() {
+                // Cited whole: what a `file` source allows, and what a law is told it cannot.
+                out.push((c.source.clone(), String::new(), who.clone(), c.span.clone()));
+            }
             for frag in &c.fragments {
                 out.push((c.source.clone(), frag.clone(), who.clone(), c.span.clone()));
             }
@@ -266,6 +270,16 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 let cdir = copy_dir(rule_path, id, asof);
                 let cited = cited_from(&cites, name);
                 for (frag, whos) in &cited {
+                    if frag.is_empty() {
+                        out.push(
+                            Diag::error("E037", tr!("法令 `{name}` の引用に箇所がありません", "A citation of the law `{name}` names no article"))
+                                .at(at(d.span.line, name))
+                                .mark(d.span.clone(), "")
+                                .note(tr!("法令は条や別表の単位で写すので、`@{name} 第20条` のように、どこを引いたかを書いてください。", "A law is copied an article at a time, so say which one: `@{name} 第20条`."))
+                                .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
+                        );
+                        continue;
+                    }
                     let Some(fr) = fragment(frag) else {
                         out.push(
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
@@ -441,6 +455,9 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let SourceKind::Law { id, asof } = &d.kind else { continue };
         let cdir = copy_dir(rule_path, id, asof);
         for (frag, _) in cited_from(&cites, &d.name.text) {
+            if frag.is_empty() {
+                continue;
+            }
             let Some(fr) = fragment(&frag) else {
                 lines.push(tr!("{}: 引用箇所 `{frag}` の書き方が読めません", "{}: the fragment `{frag}` cannot be read", d.name.text));
                 continue;
@@ -506,7 +523,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                 let cdir = copy_dir(rule_path, id, asof);
                 let mut new_pins: Vec<String> = Vec::new();
                 for (frag, _) in cited_from(&cites, &d.name.text) {
-                    let Some(fr) = fragment(&frag) else { continue };
+                    let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
                     match std::fs::read(cdir.join(fr.file())) {
                         Ok(bytes) => new_pins.push(pin_line(&frag, &crate::sha256::short(&bytes))),
                         Err(_) => {
@@ -571,7 +588,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let mut differs: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for (date, _) in &later {
             for (frag, _) in cited_from(&cites, &d.name.text) {
-                let Some(fr) = fragment(&frag) else { continue };
+                let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
                 let (xml, _) = fetch_fragment(id, date, &fr)?;
                 let now = std::fs::read(cdir.join(fr.file())).ok();
                 if now.as_deref() != Some(xml.as_slice()) {

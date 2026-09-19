@@ -696,14 +696,14 @@ fn cite_text(c: &Cite) -> String {
 fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> String {
     let Some(c) = cite else { return String::new() };
     let decl = f.sources.iter().find(|d| d.name.text == c.source);
-    let frags = c.fragments.join(sep());
+    let frags = if c.fragments.is_empty() { String::new() } else { format!(" {}", c.fragments.join(sep())) };
     let line = match decl.map(|d| &d.kind) {
-        Some(SourceKind::Law { id, asof }) => tr!("出典: {} {frags}（法令 {id}、{asof} 時点）", "Source: {} {frags} (law {id}, as of {asof})", c.source),
+        Some(SourceKind::Law { id, asof }) => tr!("出典: {}{frags}（法令 {id}、{asof} 時点）", "Source: {}{frags} (law {id}, as of {asof})", c.source),
         Some(SourceKind::File { path: p, hash }) => {
             let h = hash.as_ref().map(|h| tr!("、sha256:{h}", ", sha256:{h}")).unwrap_or_default();
-            tr!("出典: {} {frags}（{p}{h}）", "Source: {} {frags} ({p}{h})", c.source)
+            tr!("出典: {}{frags}（{p}{h}）", "Source: {}{frags} ({p}{h})", c.source)
         }
-        None => tr!("出典: {} {frags}", "Source: {} {frags}", c.source),
+        None => tr!("出典: {}{frags}", "Source: {}{frags}", c.source),
     };
     let mut o = format!("{}\n\n", md_esc(&line));
     if quote {

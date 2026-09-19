@@ -138,3 +138,21 @@ fn ページは引いた断片を引用する() {
     assert!(out.contains("> 第九十一条"), "the article's title is quoted");
     assert!(out.contains("| 軽減期間 | 定義 | `作成日 <= 2027-03-31` |  | 出典: 措置法 第91条 |"), "the define's citation is a note, not part of its expression");
 }
+
+/// A file beside the rule is cited whole (`@郵便`) or with a word saying where in it; a law
+/// is copied an article at a time, so a citation of a law without one is E037.
+#[test]
+fn ファイルは丸ごと引用でき_法令は箇所が要る() {
+    let d = scratch("whole");
+    std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
+    let h = rulec::sha256::short(b"S60 990\xe5\x86\x86\n");
+    let head = format!(
+        "rule t(t) v1\n\nsource 郵便 = file \"料金表.txt\" sha256:{h}\nsource 措置法 = law \"332AC0000000026\" asof 2026-04-01\n  第91条 sha256:85faf53f6f6e8196\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n"
+    );
+    let whole = format!("{head}table 表(t1)  @郵便\n| a | -> x |\n| - | true |\n\ntable 表2(t2)  @郵便 別紙1\n| a | -> y(y) : bool |\n| - | true |\n\ntable 表3(t3)  @措置法 第91条\n| a | -> z(z) : bool |\n| - | true |\n");
+    let p = d.join("a.rule");
+    assert!(codes(&whole, &p).iter().all(|c| c.starts_with('W')), "{:?}", codes(&whole, &p));
+    let bare_law = format!("{head}table 表(t1)  @措置法\n| a | -> x |\n| - | true |\n");
+    assert!(codes(&bare_law, &p).contains(&"E037".to_string()), "{:?}", codes(&bare_law, &p));
+    let _ = std::fs::remove_dir_all(&d);
+}
