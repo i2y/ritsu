@@ -110,7 +110,7 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
         return Report { diags, quiet, shadow, nodes };
     }
     // The unit is the definition set: one table, or every table that defines one output
-    // (DESIGN-draft §2.4).
+    // (§15.66).
     for set in &t.sets {
         let r = region::check_set(set, &t, f, path, budget);
         diags.extend(r.diags);

@@ -1,5 +1,5 @@
 rule 送料のただし書(shipping_proviso) v1
-description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN-draft §2 のスケッチ）"
+description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN.md §15.67 のスケッチ）"
 
 import std/都道府県
 

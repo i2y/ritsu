@@ -470,7 +470,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         o.push_str(&apply_section(f, c, a, &lines, path));
     }
 
-    // --- How an output that several tables define is decided (DESIGN-draft §2.7)
+    // --- How an output that several tables define is decided (§15.66)
     for set in c.sets.iter().filter(|s| s.merged()) {
         o.push_str(&set_section(f, c, set, path));
     }
@@ -692,7 +692,7 @@ fn cite_text(c: &Cite) -> String {
 
 /// The citation of a definition: which source, which fragment, and — for a law with a copy
 /// beside the rule — the fragment's text, quoted, so that the approver compares the rows
-/// with the source on one page (DESIGN-draft §3.6).
+/// with the source on one page (§15.68).
 fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> String {
     let Some(c) = cite else { return String::new() };
     let decl = f.sources.iter().find(|d| d.name.text == c.source);
@@ -1213,7 +1213,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     }
 
     // A table that shares its output with others is verified as a set; the facts are under
-    // the set's own section (DESIGN-draft §2.7).
+    // the set's own section (§15.66).
     if let Some(set) = c.set_of_table(t).filter(|s| s.merged()) {
         o.push_str(&tr!(
             "\n検査の結果は「{} の決まり方」の節にある。\n",

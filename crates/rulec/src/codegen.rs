@@ -175,7 +175,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The definition set a table stands for: the merged table's name is the set's key, and
-    /// a table that stands alone is its own set (DESIGN-draft §2.4).
+    /// a table that stands alone is its own set (§15.66).
     fn set_for(&self, t: &Table) -> Option<&crate::defset::DefSet> {
         let name = t.name.as_ref().map(|n| n.text.as_str()).unwrap_or("");
         self.c.sets.iter().find(|s| s.key == name)

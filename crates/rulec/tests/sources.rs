@@ -1,4 +1,4 @@
-//! Sources (DESIGN-draft §3, §15.68): a `source` declared, cited with `@`, and held to the
+//! Sources (§15.68): a `source` declared, cited with `@`, and held to the
 //! copies beside the rule by pinned digests. Fetching is not exercised here — it reads the
 //! network — but everything from a copy on disk onward is.
 

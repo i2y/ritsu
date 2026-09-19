@@ -723,7 +723,7 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
         // Shadow-pair coverage: the inside of the intersection (a point where row i wins while
         // row j's conditions hold too). The pairs are the ones the precedence relation orders
         // — the earlier rows of a `first` table, and the rows of a table this one takes
-        // precedence over (DESIGN-draft §2.8).
+        // precedence over (§15.66).
         for j in 1..t.rows.len() {
             for &i in &set.beats[j] {
                 let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j], &BTreeSet::new())

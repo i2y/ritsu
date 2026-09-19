@@ -1,4 +1,4 @@
-//! Definition sets (DESIGN-draft §2): several tables defining one output, ordered by
+//! Definition sets (§15.66): several tables defining one output, ordered by
 //! `overrides`; row labels; and what the evaluator, the generators and the page do with them.
 
 use std::collections::HashMap;
@@ -257,7 +257,7 @@ r2 | false | false |
     assert_eq!(rulec::fmt::format(&once), once, "not idempotent");
 }
 
-// ── Clauses (DESIGN-draft §2.2) ─────────────────────────────────────────────
+// ── Clauses (§15.67) ─────────────────────────────────────────────
 
 const PROVISO: &str = "tests/corpus/送料のただし書.rule";
 

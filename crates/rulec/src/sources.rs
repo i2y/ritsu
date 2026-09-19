@@ -1,4 +1,4 @@
-//! Sources (DESIGN-draft §3, §15.68): the documents a rule transcribes, the fragments it
+//! Sources (§15.68): the documents a rule transcribes, the fragments it
 //! cites, and the digests that hold the two together.
 //!
 //! A `source … = law` names a law on e-Gov as of a date; each fragment the rule cites
@@ -63,7 +63,7 @@ fn number(s: &str) -> Option<u32> {
 
 /// The fragment a citation names. Articles, paragraphs and items of the main provisions,
 /// and appendix tables by their ordinal; supplementary provisions and sub-items wait for a
-/// rule that needs them (DESIGN-draft §3.2).
+/// rule that needs them (§15.68).
 pub fn fragment(name: &str) -> Option<Fragment> {
     if let Some(rest) = name.strip_prefix("別表第") {
         let n = number(rest)?;

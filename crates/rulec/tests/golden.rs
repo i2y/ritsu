@@ -75,7 +75,7 @@ golden!(w105_適用順序, "W105-c", "tests/corpus/適用順序.rule", "W105");
 golden!(e010_範囲記法, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_別名, "E011", "tests/mutants/m_e011.rule", "E011");
 
-// Labels and tables that share an output (DESIGN-draft §2).
+// Labels and tables that share an output (§15.66).
 golden!(e034_ラベル重複, "E034", "tests/mutants/m_e034.rule", "E034");
 golden!(e035_指す先が無い, "E035", "tests/mutants/m_e035.rule", "E035");
 golden!(w117_効かない例外, "W117", "tests/mutants/m_w117.rule", "W117");
@@ -85,7 +85,7 @@ golden!(e038_写しが変わった, "E038", "tests/mutants/m_e038.rule", "E038")
 golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");
 
-// A rule applied by another (DESIGN-draft §5).
+// A rule applied by another (§15.69).
 golden!(e040_呼び先が変わった, "E040", "tests/mutants/m_e040.rule", "E040");
 golden!(e041_束縛が足りない, "E041", "tests/mutants/m_e041.rule", "E041");
 golden!(e042_列挙の対応の欠け, "E042", "tests/mutants/m_e042.rule", "E042");

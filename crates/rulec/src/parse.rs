@@ -1223,7 +1223,7 @@ impl P {
         Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None, applied: None })
     }
 
-    /// A clause (DESIGN-draft §2.2): `clause <name>(<alias>) -> <output>[ : <type>]`, then a
+    /// A clause (§15.67): `clause <name>(<alias>) -> <output>[ : <type>]`, then a
     /// `when` line, a `then` line and an optional `overrides` line, in any order. It becomes a
     /// one-row table whose columns are the ones `when` names.
     fn clause(&mut self, head: &[Token]) -> Option<Table> {

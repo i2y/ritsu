@@ -1,4 +1,4 @@
-//! `apply` (DESIGN-draft §5, §15.69): a rule applied with its inputs bound — a provision
+//! `apply` (§15.69): a rule applied with its inputs bound — a provision
 //! applied mutatis mutandis. The callee is read at the same revision, held to its pinned
 //! digest, checked on its own, and then expanded into the applying rule: its definitions are
 //! renamed `<apply>:<name>`, its inputs are replaced by what they are bound to, and its

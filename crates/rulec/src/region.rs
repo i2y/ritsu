@@ -1038,7 +1038,7 @@ fn outs_equal(a: &Row, b: &Row) -> bool {
 
 /// Emits E101 / E102 / E105 / W105 / W110.
 /// The checks of one table on its own. The unit of checking is the definition set
-/// (DESIGN-draft §2.4); this is the set of one table, kept for callers that hold a table.
+/// (§15.66); this is the set of one table, kept for callers that hold a table.
 pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
     match c.set_of_table(t) {
         Some(s) if s.members.len() == 1 => check_set(s, c, f, path, budget),
@@ -1047,7 +1047,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
 }
 
 /// The checks of one definition set: completeness of the union, decisiveness of every
-/// overlap, reachability of every row, on the merged table (DESIGN-draft §1, §2.4).
+/// overlap, reachability of every row, on the merged table (§15.66).
 ///
 /// For a set of one table this is exactly the check the table always had: the rows come in
 /// their own order, and the precedence relation is the policy's.

@@ -1,7 +1,7 @@
 warning[W118]: No row of table 退職手当:支給表 is reached in this apply
   --> tests/mutants/m_w118.rule:14 table 退職手当:支給表
    |
-14 | apply 退職手当(retirement) = "../corpus/退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条（スケッチ）
+14 | apply 退職手当(retirement) = "../corpus/退職手当.rule" sha256:fb21d081458c197e  # 出典: 第31条（スケッチ）
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
  What is bound never reaches this table's conditions, or other definitions of this rule take precedence first. The callee is still complete over its own inputs.

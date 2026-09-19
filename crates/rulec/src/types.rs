@@ -322,7 +322,7 @@ pub struct Checked {
     pub used_values: HashSet<String>,
     pub diags: Vec<Diag>,
     /// The definition sets: one per table, or one per output that several tables define
-    /// (DESIGN-draft §2.4). Everything downstream — the region checks, the evaluator, the
+    /// (§15.66). Everything downstream — the region checks, the evaluator, the
     /// generators, the vectors, the approver's page — works on these.
     pub sets: Vec<crate::defset::DefSet>,
     /// Table name → its set, and whether the set is evaluated at that table's position.
@@ -1227,7 +1227,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
     }
-    // The definition sets, once every table is typed (DESIGN-draft §2.4).
+    // The definition sets, once every table is typed (§15.66).
     let (sets, set_of, ds) = crate::defset::build(f, path);
     c.sets = sets;
     c.set_of = set_of;

@@ -1268,7 +1268,7 @@ examples
 
 ```rule
 rule 送料のただし書(shipping_proviso) v1
-description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN-draft §2 のスケッチ）"
+description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN.md §15.67 のスケッチ）"
 
 import std/都道府県
 
@@ -1320,7 +1320,7 @@ examples
 
 ```rule
 rule 退職手当(retirement_allowance) v1
-description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN-draft §5 のスケッチ）"
+description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN.md §15.69 のスケッチ）"
 
 enum 事由(reason_kind) = 定年(retirement_age) | 自己都合(voluntary) | 死亡(death)
 
@@ -1370,7 +1370,7 @@ examples
 
 ```rule
 rule 非常勤退職手当(part_time_allowance) v1
-description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN-draft §5 のスケッチ）"
+description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN.md §15.69 のスケッチ）"
 
 enum 終了事由(end_kind) = 任期満了(term_end) | 辞職(resignation)
 
@@ -1382,7 +1382,7 @@ inputs
 outputs
   非常勤手当(allowance) : money[円]  round down(1円)
 
-apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条（スケッチ）
+apply 退職手当(retirement) = "退職手当.rule" sha256:fb21d081458c197e  # 出典: 第31条（スケッチ）
   勤続年数 = 在職期間
   退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
   基本給 = 報酬月額

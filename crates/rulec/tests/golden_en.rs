@@ -124,7 +124,7 @@ golden!(w105_order, "W105-c", "tests/corpus/適用順序.rule", "W105");
 golden!(e010_range_notation, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_alias, "E011", "tests/mutants/m_e011.rule", "E011");
 
-// Labels and tables that share an output (DESIGN-draft §2).
+// Labels and tables that share an output (§15.66).
 golden!(e034_duplicate_label, "E034", "tests/mutants/m_e034.rule", "E034");
 golden!(e035_missing_target, "E035", "tests/mutants/m_e035.rule", "E035");
 golden!(w117_idle_exception, "W117", "tests/mutants/m_w117.rule", "W117");
@@ -134,7 +134,7 @@ golden!(e038_copy_changed, "E038", "tests/mutants/m_e038.rule", "E038");
 golden!(e039_no_copy, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_uncited_pin, "W119", "tests/mutants/m_w119.rule", "W119");
 
-// A rule applied by another (DESIGN-draft §5).
+// A rule applied by another (§15.69).
 golden!(e040_callee_changed, "E040", "tests/mutants/m_e040.rule", "E040");
 golden!(e041_unbound_input, "E041", "tests/mutants/m_e041.rule", "E041");
 golden!(e042_unmapped_value, "E042", "tests/mutants/m_e042.rule", "E042");

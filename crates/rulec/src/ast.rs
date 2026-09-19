@@ -191,7 +191,7 @@ pub struct DefineDecl {
 }
 
 /// `@<source> <fragment>, …` at the end of a table, clause, derive or define line, or of a
-/// row: which part of which document the definition transcribes (DESIGN-draft §3). The
+/// row: which part of which document the definition transcribes (§15.68). The
 /// fragment is named as the document names it (`第91条`, `第20条第2項`, `別表第一`).
 #[derive(Debug, Clone)]
 pub struct Cite {
@@ -255,7 +255,7 @@ pub struct OutBinding {
     pub span: Span,
 }
 
-/// `apply <name> = "<path>" sha256:…` with its bindings (DESIGN-draft §5, §15.69). After
+/// `apply <name> = "<path>" sha256:…` with its bindings (§15.69). After
 /// expansion the callee's definitions sit in `items` from `at` on, `count` of them, named
 /// `<name>:<their name>`.
 #[derive(Debug, Clone)]

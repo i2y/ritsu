@@ -473,7 +473,7 @@ impl<'a> Gen<'a> {
                     prev = name;
                 }
                 Item::Table(pt) => {
-                    // The definition set is evaluated at its last member (DESIGN-draft §2.5);
+                    // The definition set is evaluated at its last member (§15.66);
                     // at any other member's position the query builds nothing.
                     let Some(t) = self.c.table_at(pt) else { continue };
                     let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();

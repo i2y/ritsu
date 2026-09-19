@@ -218,7 +218,7 @@ impl<'a> Env<'a> {
 
     /// Evaluate one table and bind its outputs. Returns the index of the row that matched.
     ///
-    /// What is evaluated is the table's definition set (DESIGN-draft §2.4): the merged table
+    /// What is evaluated is the table's definition set (§15.66): the merged table
     /// of every table defining the same output, in evaluation order, at the position of the
     /// last of them. At any other member's position nothing happens.
     fn table(&mut self, t: &Table) -> Option<usize> {

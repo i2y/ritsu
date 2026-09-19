@@ -20,7 +20,7 @@ pub const POLICY: &str = "policy";
 /// The line after `policy`: the definitions this table's rows take precedence over. The
 /// exception is written after what it excepts, so the targets are always declared above.
 pub const OVERRIDES: &str = "overrides";
-/// A definition written as prose (DESIGN-draft §2.2): a condition, a value, and what it takes
+/// A definition written as prose (§15.67): a condition, a value, and what it takes
 /// precedence over. It is one row of a one-row table, with the columns it does not name left
 /// as `-`.
 pub const CLAUSE: &str = "clause";
@@ -30,7 +30,7 @@ pub const WHEN: &str = "when";
 pub const THEN: &str = "then";
 /// The condition of a clause that applies to every input.
 pub const ALWAYS: &str = "always";
-/// A document a rule transcribes (DESIGN-draft §3): `source 法 = law "342AC0000000023" asof
+/// A document a rule transcribes (§15.68): `source 法 = law "342AC0000000023" asof
 /// 2026-04-01`, with the pinned digest of every fragment cited, or `source 郵便 = file "…"
 /// sha256:…` for a document that has no fragments.
 pub const SOURCE: &str = "source";
@@ -39,8 +39,7 @@ pub const LAW: &str = "law";
 pub const FILE: &str = "file";
 /// The date a law is read as of (the e-Gov `asof` parameter).
 pub const ASOF: &str = "asof";
-/// A rule applied with its inputs bound — a provision applied mutatis mutandis (DESIGN-draft
-/// §5, §15.69). The callee is expanded into this rule for the checks and the generators.
+/// A rule applied with its inputs bound — a provision applied mutatis mutandis (§15.69). The callee is expanded into this rule for the checks and the generators.
 pub const APPLY: &str = "apply";
 /// Inside an `apply`: the callee definitions left out (`第20条（第2項を除く。）`).
 pub const EXCEPT: &str = "except";

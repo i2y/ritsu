@@ -1,4 +1,4 @@
-//! A rule applied by another (DESIGN-draft §5, DESIGN.md §15.69): the callee is read beside
+//! A rule applied by another (§15.69, §15.66): the callee is read beside
 //! the rule, held to its pinned digest, checked on its own, and expanded into the rule under
 //! the apply's name with the bound inputs substituted. What is pinned here is the shape of the
 //! expansion the rest of the tool sees, and the flow from a changed callee to a new pin.
@@ -50,7 +50,7 @@ fn 呼び先の定義は呼び出しの名前の下に展開される() {
     assert!(c.ty_of("退職手当:支給月数").is_some());
     // The apply remembers what it learned.
     let a = &f.applies[0];
-    assert_eq!(a.hash.as_deref(), Some("b58648ea2767ebbd"));
+    assert_eq!(a.hash.as_deref(), Some("fb21d081458c197e"));
     // 支給表, 満額, 本則 and the definition of 非常勤手当 (the callee has no `result`, so
     // its output is the clause's column itself).
     assert_eq!(a.count, 4);
@@ -78,14 +78,14 @@ fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換え
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::copy(root().join(CALLEE), dir.join("退職手当.rule")).unwrap();
-    let caller = std::fs::read_to_string(root().join(CALLER)).unwrap().replace("sha256:b58648ea2767ebbd", "sha256:0000000000000000  # 固定");
+    let caller = std::fs::read_to_string(root().join(CALLER)).unwrap().replace("sha256:fb21d081458c197e", "sha256:0000000000000000  # 固定");
     let path = dir.join("非常勤退職手当.rule");
     std::fs::write(&path, &caller).unwrap();
     let p = path.to_string_lossy().into_owned();
     let ds = rulec::report(&caller, &p).diags;
     let e040: Vec<_> = ds.iter().filter(|d| d.code == "E040").collect();
     assert_eq!(e040.len(), 1, "{ds:?}");
-    assert_eq!(e040[0].fix.text.as_deref(), Some("apply 退職手当(retirement) = \"退職手当.rule\" sha256:b58648ea2767ebbd"));
+    assert_eq!(e040[0].fix.text.as_deref(), Some("apply 退職手当(retirement) = \"退職手当.rule\" sha256:fb21d081458c197e"));
     // The check goes on past E040, so the rest of the rule is still judged.
     assert!(ds.iter().all(|d| d.code == "E040" || d.severity != rulec::diag::Severity::Error), "{ds:?}");
     // gen refuses; diff may go on.
@@ -95,7 +95,7 @@ fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換え
     let parsed = rulec::parse::parse(&caller, &p);
     let (text, o) = rulec::sources::pin(parsed.file.as_ref().unwrap(), &p, &caller).unwrap();
     assert!(o.changed);
-    assert!(text.contains("sha256:b58648ea2767ebbd  # 固定"), "{text}");
+    assert!(text.contains("sha256:fb21d081458c197e  # 固定"), "{text}");
     assert!(rulec::report(&text, &p).diags.iter().all(|d| d.code != "E040"));
     let _ = std::fs::remove_dir_all(&dir);
 }

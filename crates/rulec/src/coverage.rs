@@ -213,7 +213,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         }
     };
 
-    // One (merged) table per definition set, parallel to `checks` (DESIGN-draft §2.4).
+    // One (merged) table per definition set, parallel to `checks` (§15.66).
     let tables: Vec<&Table> = c.sets.iter().map(|s| &s.table).collect();
 
     // --- the fold's transitions. What each element lands on is what the table wrote, so the

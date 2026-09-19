@@ -1,5 +1,5 @@
 rule 非常勤退職手当(part_time_allowance) v1
-description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN-draft §5 のスケッチ）"
+description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN.md §15.69 のスケッチ）"
 
 enum 終了事由(end_kind) = 任期満了(term_end) | 辞職(resignation)
 

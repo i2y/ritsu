@@ -1,7 +1,7 @@
 //! Definition sets — the unit the checks, the evaluator and the generators work on.
 //!
 //! A table used to be that unit. Several tables may now define the same output and say with
-//! `overrides` which of them takes precedence (DESIGN-draft §2), so the unit becomes
+//! `overrides` which of them takes precedence (§15.66), so the unit becomes
 //! "everything that defines one output": a merged table whose rows remember the table they
 //! were written in, and a precedence relation between those rows. A table that shares its
 //! output with no other table is a set of one, and nothing about it changes.
@@ -10,7 +10,7 @@
 //! to the first, each member's rows as written. An `overrides` line may only point upward, so
 //! a winner is always declared after its loser, and this order is a linear extension of the
 //! precedence relation. The evaluator and every generator keep their "first row that matches
-//! wins" shape; only the order of the rows is decided here (DESIGN-draft §2.5).
+//! wins" shape; only the order of the rows is decided here (§15.66).
 
 use crate::ast::*;
 use crate::diag::{Diag, Span};

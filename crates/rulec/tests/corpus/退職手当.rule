@@ -1,5 +1,5 @@
 rule 退職手当(retirement_allowance) v1
-description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN-draft §5 のスケッチ）"
+description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN.md §15.69 のスケッチ）"
 
 enum 事由(reason_kind) = 定年(retirement_age) | 自己都合(voluntary) | 死亡(death)
 
