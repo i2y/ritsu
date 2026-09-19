@@ -2145,7 +2145,7 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **WIT を `string -> string` にした理由**：入力を record、列挙を enum に写した型付きの interface のほうが読みやすい。だがそれには canonical ABI の record・list・string の配置を生成コードが自前で実装する必要があり、wit-bindgen を依存に入れずにやると数百行の glue になる。JSON はこの道具のワイヤそのもの（fixtures・adapter・MCP・vectors がみな同じ形）なので、component も同じワイヤで話す。型付きの interface が要る相手が出てきたら、`.wit` を足す形で広げられる。
 
-**捨てたもの**：`wasm32-wasip1` を対象にする案。WASI の import が付き、ブラウザや Extism では動かない。WASI の段（§15.63）はそのまま残す。Shopify Functions のように標準入出力で話す置き場の証拠になる。cargo のプロジェクトを生成する案。`rustc` 一発で組めるのが Rust 側と同じ約束で、cargo が要るなら「依存ゼロ」が崩れる。
+**捨てたもの**：`wasm32-wasip1` を対象にする案。WASI の import が付き、ブラウザや Extism では動かない。WASI の段（§15.63）はそのまま残す。Shopify Functions のように標準入出力で話す置き場の証拠になる。**この最後の前提は §15.73 で崩れた。Shopify は標準入出力をやめている。**cargo のプロジェクトを生成する案。`rustc` 一発で組めるのが Rust 側と同じ約束で、cargo が要るなら「依存ゼロ」が崩れる。
 
 ### 15.65 名前を出す出力列が、下流の行を殺していた（2026-09-19）
 
@@ -2294,3 +2294,32 @@ E104 と E108 の文面がそれを業務の判断として提示し直せてい
 
 **保留**：ここでいったん止める。残りは `experiments/library/README.md` の「保留中（TODO）」に置いた。rulec 側に足すのは `source = file` の `url` と `outdated` の file 対応、それらを含む次のリリース。種の側で決めるのは、リポジトリの名前とライセンス、雇用保険の端数の出典、47 支部の保険料額表を持つかどうか、事業主負担の額を出すかどうか。
 
+### 15.73 Shopify は標準入出力をやめていた（2026-09-19）
+
+**きっかけ**：`.rule` を Shopify Functions のような置き場へ配るところまでを道具にするか、という問いから、相手の現状を確かめた。
+
+**分かったこと**：Shopify Functions は `wasm32-unknown-unknown` に移っていた。extension target ごとに引数も戻り値も無い関数を export し、入力の読み出しと operations の書き出しはホストの import 関数で行う（Shopify Wasm API。`shopify_function` crate 1.0 以上と `@shopify/shopify_function` 2.0 以上が包む）。Wasm ファイルは 256 kB 未満、一回の実行は 1,100 万命令まで、入力の形を決める `input_query` は 3,000 バイトまで。§15.64 の「WASI の段は Shopify のような置き場の証拠になる」は、もう成り立たない。移った先は §15.64 で足したほうの形である。
+
+**決定**：古くなった記述を五箇所直す。`docs/backends.md` の節（二つの形の説明と、Shopify がどちらを取るか）、`docs/generated-code.md` の WASI の節、`src/runtest.rs` の註、サイトの `generate.md` の英日。WASI の段そのものは残し、名指しする相手を Fastly Compute・Spin・サンドボックスの中のバッチに替える。ついでに、飛ばした Wasm の段が `--require-all` では落ちることを文書に書く（`out.skipped` に積んでいるので前からそうだが、「言語の数には入れない」だけを読むと逆に取れる）。境界の crate から呼ぶのは `wasm/` の JSON の ABI ではなく `rust/<alias>.rs` の型の付いた関数にする、と書き足す。JSON の往復は 1,100 万命令の予算に対して無駄で、ここでは何も買わない。
+
+**理由**：文書が事実と違うと、読んだ人は動かないものを作る。しかも今回は「対応していない」ではなく「**していた対応の説明が古い**」形なので、走らせるまで気付けない。事実の寿命が短い相手のことは、書くなら日付と数字で書くしかない。
+
+**捨てたもの**：Shopify の関数の形を生成する案を、もう一度捨てる。§15.63 で捨てたときの理由（相手の入力の形を追いかけることになる）に、この移行そのものが証拠を足した。対象も扉も入力の形も動く。動くものは相手の crate の中に置く。`rulec deploy` の案。Partner の組織・アプリ・開発ストア・OAuth が要り、網に出て状態を持つのに、証拠を一つも生まない。`check` が固定した写しだけを読み、網に出るのは `test` だけ、という性質と引き換えにするものが無い。組み上げるところまでが道具の仕事で、配るのは相手の CLI である。
+
+### 15.74 二つの Wasm に別々の名前を付ける（2026-09-19）
+
+**きっかけ**：§15.73 で古い記述を直したあと、なぜ古いまま残ったのかを見た。`rulec test` の出力に `ok … (Rust, Wasm)` と `ok … (Wasm)` が並んでいる。前者は runner を `wasm32-wasip1` で組んだ標準入出力のプログラム、後者は `wasm32-unknown-unknown` の呼ばれるモジュールで、まったく違う形なのに、名前が同じである。**混同は書き手の不注意ではなく、名前が一つしか無かったことの結果だった。**
+
+**決定**：形ごとに名前を分ける。`Backend::wasm` の欄を `wasi` に改名し、`--format json` の `via` の値 `wasm` を `wasi` に、行の見出し `(Rust, Wasm)` を `(Rust, WASI)` に、飛ばしの文言を「WASI 側」にする。これで `wasm` は言語の名前、`wasi` は言語への行き方の名前になり、両方を一行に並べても読める。
+
+**`--format json` の非互換な変更である。** `via` の値は `docs/formats.md` に載っていて `tests/formats.rs` が集合を固定している、つまり安定した API として扱ってきたものである。それでも変える。値は診断コードではなく説明で、しかも「混同が実際に欠陥を生んだ」証拠がある。1.0 より前に一度で直すほうが、間違った名前を約束として抱えるより安い。
+
+**`rulec api` に `wasi` の項を足す**。`rust` の項の中に入れる。登録簿がこれを backend の性質として持っているからで、二つ目の言語が欄を持ったら同じ鍵がその言語の項に出る。中身は `source`・`module`・`build`・`run`・`wire`・`needs`。build 行は `codegen::WASI_RUSTC_FLAGS` から組み、`backend.rs` の `wasi_rustc` も同じ定数を使う——`api` と `test` が二通りに組むことが構造的に起きないようにした（`WASM_RUSTC_FLAGS` と同じやり方）。`tests/api.rs` に一本足して、api の build 行で実際に組み、api の run 行で走らせ、ネイティブの runner の出力と一字一句比べる。手元に wasmtime と wasm32-wasip1 があれば本当に走る。
+
+**欄は一つで閉じる、と書く。** WASI の欄は*形*を証明するためにあり、Rust が一つ証明すれば claim は満ちる。TinyGo・Javy・ruby.wasm を並べても `rulec test` の前提が増えるだけで、証明する事実は増えない。八つの `None` が「未対応の一覧」ではなく決定だと読めるように、欄の doc コメントと `docs/generated-code.md` に書いた。
+
+**SQL の方言を書く。** 生成する SQL は Postgres 向けで、一致検査は SQLite で回している。この二つは「整数どうしの `/` はゼロ方向に切り捨てる」で一致するので、後者で証明することが前者について何かを言う。BigQuery の `/` は常に `FLOAT64` を返し（整数の割り算は `DIV`）、Snowflake は scale の付いた `NUMBER` を返す。生成物に実際に出ている `(ABS("_raw_fee") / 20 + 1) * 20` は、そこへ貼った瞬間に丸めでなくなる。**証明が見張っているまさにその場所で、静かに**。どちらにも手元の engine が無いので、移すなら意図してやり、`rulec verify` で本物に当てる、と `docs/generated-code.md` に書いた。
+
+**Google Apps Script のレシピを `docs/backends.md` に置く。** `import xlsx` に出口が無かった。承認する人が自分の表から出ずに済むのは、この道具の役割分担（表を承認するのは人）にそのまま乗る。技術的には生成する JavaScript がそのまま動き、要るのは二つだけ——Apps Script に ES module が無いので `export` を落とす（手ではなく `sed` の一行で。`gen --check` を壊さないため）、そして生成物の整数は全部 `bigint` なのでセルとの境目で変換する。2^53 の話は円では当たらないが、書かないと読んだ人が迷う。
+
+**捨てたもの**：GAS を十番目の生成対象にする案。走らせられない `.gs` は `rulec test` に乗らず、比較の外の生成物は claim の外である（§15.46）。BigQuery と Snowflake の UDF を対象にする案。手元の engine が無いので同じ理由で落ちる。加えて用途のほうも、「過去の全件に新しい表を当てる」は `replay` と `diff` がすでに答える仕事で、倉庫の側には行のトレースも承認者向けの描画も無い。`rulec deploy`（§15.73 で捨てたもの）と同じ線の引き方をした。

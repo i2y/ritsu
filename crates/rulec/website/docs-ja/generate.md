@@ -225,12 +225,12 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
 ```console
 $ rulec test generated/ --lang ja
 ok    shipping_fee (Rust) ベクタ 68 件
-ok    shipping_fee (Rust, Wasm) ベクタ 68 件
+ok    shipping_fee (Rust, WASI) ベクタ 68 件
 ok    shipping_fee (Wasm) ベクタ 68 件
 …
 ```
 
-二行目と三行目は別のものです。二行目は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Shopify Functions のように標準入出力でやり取りする実行環境の形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
+二行目と三行目は別のものです。二行目は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Fastly Compute や Spin のように標準入出力でやり取りする実行環境の形です。Shopify Functions が取るのは三行目のほう、名前の付いた関数を export する形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
 
 ## テストケースの側は足りているか
 

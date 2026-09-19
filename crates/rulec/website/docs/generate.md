@@ -361,16 +361,16 @@ component step, and what `rulec api` says under `wasm`.
 ```console
 $ rulec test generated/
 ok    shipping_fee (Rust) 68 vectors
-ok    shipping_fee (Rust, Wasm) 68 vectors
+ok    shipping_fee (Rust, WASI) 68 vectors
 ok    shipping_fee (Wasm) 68 vectors
 …
 ```
 
 The second line is a different thing from the third: the Rust runner itself compiled for
 `wasm32-wasip1` and run under wasmtime, the shape a platform that speaks through stdin and
-stdout takes, such as a Shopify Function. [Targeting a language rulec does not
-generate](backends.md#a-wasm-host-shopify-functions) says which shape a platform takes and
-where its boundary runs.
+stdout takes, such as Fastly Compute or Spin. [Targeting a language rulec does not
+generate](backends.md#a-wasm-host-shopify-functions) says which shape a platform takes — a
+Shopify Function takes the third, a named export — and where its boundary runs.
 
 ## Is the vector suite itself complete?
 

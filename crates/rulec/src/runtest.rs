@@ -169,18 +169,20 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             crate::backend::ALL.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
         ));
     }
-    // The Rust runner once more as a WASI module under wasmtime (§15.63): the host a Shopify
-    // Function or an Extism plugin gives a rule. It needs wasmtime on the PATH and the
+    // The Rust runner once more as a WASI module under wasmtime (§15.63): the shape a host
+    // that speaks through stdin and stdout gives a rule — Fastly Compute, Spin, a batch step.
+    // Not Shopify Functions: those export a named function and read the input through the
+    // platform's own host calls (§15.73). It needs wasmtime on the PATH and the
     // wasm32-wasip1 standard library in the toolchain; without either the pass is skipped and
     // said so, like a missing language, but not counted as one.
-    let wasm_host = if present.iter().any(|b| b.wasm.is_some()) {
+    let wasi_host = if present.iter().any(|b| b.wasi.is_some()) {
         if !have("wasmtime") {
-            out.skipped.push(tr!("wasmtime が無いので Wasm 側を飛ばしました", "wasmtime not found; skipped the Wasm side"));
+            out.skipped.push(tr!("wasmtime が無いので WASI 側を飛ばしました", "wasmtime not found; skipped the WASI side"));
             false
         } else if !rust_target("wasm32-wasip1") {
             out.skipped.push(tr!(
-                "wasm32-wasip1 の標準ライブラリが無いので Wasm 側を飛ばしました（rustup target add wasm32-wasip1）",
-                "the wasm32-wasip1 standard library is not installed; skipped the Wasm side (rustup target add wasm32-wasip1)"
+                "wasm32-wasip1 の標準ライブラリが無いので WASI 側を飛ばしました（rustup target add wasm32-wasip1）",
+                "the wasm32-wasip1 standard library is not installed; skipped the WASI side (rustup target add wasm32-wasip1)"
             ));
             false
         } else {
@@ -290,9 +292,9 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             let diff = held(&(b.run)(alias, &pkg));
             out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), diff });
             // The same runner as a WASI module, held to the same records (§15.63).
-            if let (Some(w), true) = (b.wasm, wasm_host) {
+            if let (Some(w), true) = (b.wasi, wasi_host) {
                 let diff = held(&w(alias, &pkg));
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasm", vectors: n, refused: refused.len(), diff });
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), diff });
             }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
@@ -676,7 +678,7 @@ fn via(x: &Outcome) -> &'static str {
     match x.via {
         "mcp" => ", MCP",
         "mcp-http" => ", MCP/HTTP",
-        "wasm" => ", Wasm",
+        "wasi" => ", WASI",
         _ => "",
     }
 }

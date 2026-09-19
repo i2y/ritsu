@@ -298,28 +298,97 @@ Two shapes of Wasm come out of `rulec gen`, and a platform takes one or the othe
 `wasm/` target is a module that exports a function — `call: func(input: string) -> string`
 in the canonical ABI, with a `.wit` that makes a component of it — for a host that calls
 into it: a script host, an Extism plugin, a component runtime
-([generated-code.md](generated-code.md#wasm)). A Shopify Function is the other shape: a WASI
-command that reads one JSON document on stdin (the cart, in the shape of the GraphQL input
-query the app declares) and writes one on stdout (the operations: a discount of a fixed
-amount or a percentage on some targets, or a validation error). That is what the Rust runner
-is, and it compiles for `wasm32-wasip1` unchanged
-([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)). No network, a
-limit on instructions, and the smaller the module the better — the shape the generated Rust
-already has, so neither is a target of the platform's own: the module `gen` writes goes into
-the function's crate as it is, and `rulec test` holds it to the rule.
+([generated-code.md](generated-code.md#wasm)). The other shape is a WASI command that reads
+one JSON document on stdin and writes one on stdout; that is what the Rust runner is, and it
+compiles for `wasm32-wasip1` unchanged
+([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)).
+
+A Shopify Function is on the first side, through a door of the platform's own. It is built
+for `wasm32-unknown-unknown`, and for every extension target it exports one function that
+takes no arguments and returns nothing — `cart.lines.discounts.generate.run`, say. It reads
+the input and writes the operations through imported host calls rather than through stdio:
+the Shopify Wasm API, which the `shopify_function` crate wraps. The module has to stay under
+256 kB, the run under 11 million instructions, and the `input_query` that shapes the input
+under 3,000 bytes. No network anywhere. None of that is a shape `gen` emits, and none of it
+has to be: the decision itself is small — the `wasm/` module for 送料 is 40 kB, built with
+`rustc` alone — so what the budget goes on is the boundary, not the table.
 
 The rule stays a rule: flat inputs, one decision. What the function adds is the boundary —
-the twenty lines that read the cart and flatten it into the rule's inputs, call the
-generated function, and turn its outputs into operations. "Three or more refrigerated
-items" and "the dearest line" are written in the rule (`count`, and `elements` with
-`fold`), so the boundary passes the lines through and does not decide anything. Keep it in
-the function's crate beside the generated `<alias>.rs`, with ordinary tests of its own; the
-generated part is the part the vectors cover.
+the twenty lines that pull the scalars the rule wants out of the input, call the generated
+function, and turn its outputs into operations. Call the generated Rust module by its typed
+signature (`rust/<alias>.rs`, the same file the `wasm/` target wraps); the JSON wire of that
+target would cost a parse and a serialisation against the instruction budget and buy nothing
+here. "Three or more refrigerated items" and "the dearest line" are written in the rule
+(`count`, and `elements` with `fold`), so the boundary passes the lines through and does not
+decide anything. Keep it in the function's crate beside the generated module, with ordinary
+tests of its own; the generated part is the part the vectors cover.
+
+The boundary is also where the platform's own shape lives, and that shape moves: the input
+query, the operations and the API version are Shopify's, on Shopify's release cycle — the
+target used to be `wasm32-wasip1` and the input used to arrive on stdin. That is why the
+boundary belongs in the function's crate and not in this tool. `function-runner` runs the
+built module over one input document and reports the instructions it took, which is how the
+boundary earns the same kind of evidence the rule already has.
 
 What the platform decides is out of the rule's reach. A shipping *rate* is not set by a
 function (the delivery functions rename, reorder and hide options; rates come from a carrier
 service), so a tariff like ゆうパック運賃 is served from the generated code behind an HTTP
 endpoint, and a discount table like クーポン割引 is the function itself.
+
+## A spreadsheet again: Google Apps Script
+
+`rulec import xlsx` is the way in from a workbook. This is the way back, and it closes the
+loop: the person who owns the policy goes on working in the sheet, but the cell now calls
+something with a completeness proof and a `rulec doc` rendering behind it.
+
+Apps Script runs V8, so the generated JavaScript module is the module — with two things to
+know.
+
+**There are no ES modules.** Apps Script concatenates `.gs` files into one global scope, and
+`export` is a syntax error there. Strip it as a build step, never by hand, so that
+`gen --check` still guards the file it came from:
+
+```console
+$ sed 's/^export //' generated/javascript/送料.mjs > gas/送料.gs
+```
+
+**Every integer in the module is a `bigint`**, because a JavaScript `number` is exact only to
+2^53 and the overflow proof (E108) is against int64. A cell gives a `number` and takes one, so
+the wrapper converts at both ends:
+
+```js
+/**
+ * 送料（円）。
+ * @param {string} 届け先
+ * @param {number} 重量      kg
+ * @param {number} 注文金額  円
+ * @param {string} 会員
+ * @return {number} 円、10円単位に切り上げ
+ * @customfunction
+ */
+function 送料(届け先, 重量, 注文金額, 会員) {
+  return Number(shipping_fee(String(届け先), BigInt(重量), BigInt(注文金額), String(会員)));
+}
+```
+
+`BigInt(1.5)` throws, which is the right answer: the rule refuses a non-integer at the door
+anyway. An error thrown inside a custom function reaches the cell as `#ERROR!` carrying the
+message, so the entry guard ends up stating its refusal where the person who typed the value
+can read it. `Number()` on the way out would lose precision above 2^53 — a yen amount never
+reaches that, and saying so is cheaper than leaving a reader to wonder. A second custom
+function around `shipping_fee_traced` puts the row that fired in the next column, which is
+what a sheet wants for the same reason a log line does.
+
+**Where the evidence stops.** The module is the one the JavaScript pass of `rulec test`
+proves — the `sed` removes a keyword and nothing else — and the wrapper is the four lines
+outside it. That is the whole boundary, and it is small enough to read. If you want it inside
+as well, `clasp run` calls a deployed function from the command line, and that is a process
+`rulec verify` can drive over the vectors; it needs your credentials and the network, so it
+belongs on your machine rather than in CI.
+
+None of this is a backend. A `.gs` that nothing on the machine can run cannot ride in
+`rulec test`, and a target outside the comparison is outside the claim — so the recipe lives
+here, and `gen` writes what it can already prove.
 
 ## Where to read next
 

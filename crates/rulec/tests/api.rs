@@ -640,3 +640,56 @@ fn 出典は目録に載る() {
     assert_eq!(s(&pins[0], "fragment"), "第91条");
     assert_eq!(s(&pins[0], "sha256"), "85faf53f6f6e8196");
 }
+
+/// The `wasi` entry inside the Rust entry (§15.63): the rule reached as a command that reads
+/// stdin and writes stdout. The names have to be files `gen` really wrote, and where the
+/// toolchain is installed the two lines have to build something that answers exactly what the
+/// native runner answers — otherwise the inventory would be describing a shape nobody can get
+/// to, which is the failure this file exists to prevent.
+#[test]
+fn wasiの項は実際に組めて同じ答えを返す() {
+    let (dir, j) = setup("wasi", "tests/corpus/送料.rule");
+    let rs = j.get("rust").expect("rust の項が無い");
+    let w = rs.get("wasi").expect("rust の中に wasi の項が無い");
+    let rust = dir.join("rust");
+    assert!(rust.join(s(w, "source")).exists(), "{} が無い", s(w, "source"));
+    assert_eq!(s(w, "run"), format!("wasmtime {}", s(w, "module")));
+    // The column is closed at one: no other language claims the shape.
+    for id in ["python", "typescript", "javascript", "ruby", "go", "swift", "sql", "wasm"] {
+        if let Some(e) = j.get(id) {
+            assert!(e.get("wasi").is_none(), "{id} に wasi の項がある");
+        }
+    }
+
+    if !(have("rustc") && have("wasmtime") && rulec::backend::rust_target("wasm32-wasip1")) {
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
+    let build = s(w, "build");
+    let words: Vec<&str> = build.split(' ').collect();
+    let o = Command::new(words[0]).current_dir(&rust).args(&words[1..]).output().expect("rustc を起動できない");
+    assert!(o.status.success(), "api の build 行が通らない: {build}\n{}", String::from_utf8_lossy(&o.stderr));
+
+    // The same runner built natively, over the same vectors: the two have to agree byte for byte.
+    let native = s(rs, "module").replace(".rs", "");
+    let o = Command::new("rustc")
+        .current_dir(&rust)
+        .args(["--edition", "2021", "-O", &format!("{native}_runner.rs"), "-o", &native])
+        .output()
+        .expect("rustc を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    let vectors = dir.join("vectors").join(format!("{native}.jsonl"));
+    let pipe = || std::process::Stdio::from(std::fs::File::open(&vectors).expect("ベクタが無い"));
+    let a = Command::new(format!("./{native}")).current_dir(&rust).stdin(pipe()).output().unwrap();
+    let run = s(w, "run");
+    let rw: Vec<&str> = run.split(' ').collect();
+    let b = Command::new(rw[0]).current_dir(&rust).args(&rw[1..]).stdin(pipe()).output().expect("wasmtime を起動できない");
+    assert!(b.status.success(), "api の run 行が通らない: {run}\n{}", String::from_utf8_lossy(&b.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&a.stdout),
+        String::from_utf8_lossy(&b.stdout),
+        "WASI の答えがネイティブと違う"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

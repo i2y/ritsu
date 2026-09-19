@@ -345,6 +345,16 @@ nothing but `python3`: the runner beside it loads the vectors into an in-memory 
 prints the same records the other runners print. `min` and `max` are `LEAST` and `GREATEST`,
 which the runner registers for SQLite.
 
+**The dialect is part of the claim.** Postgres and SQLite agree on the one thing the rounding
+leans on — `/` between integers truncates toward zero — which is why proving on the second
+says something about the first. A warehouse does not necessarily agree. BigQuery's `/` always
+returns `FLOAT64` (its integer division is `DIV`), and Snowflake's returns a scaled `NUMBER`
+rather than truncating, so a grid like `(ABS("_raw_fee") / 20 + 1) * 20` stops being the
+rounding it was written as, silently, in exactly the place the proof exists to watch. Neither
+has a local engine to hold a port to, so if the rule has to run in one, port it deliberately
+and hold the port to the rule with `rulec verify` against the real warehouse
+([backends.md](backends.md)) — nothing else will catch it.
+
 A query cannot stop, so what the other languages raise, this one returns as a column. The
 entry guard is `_input_error`: NULL for a row inside the declared domain, and otherwise the
 same sentence the others raise — a missing input, a value outside its range, a name that is
@@ -659,16 +669,41 @@ answer that changed with the carrying would be a disagreement. Nothing beyond `p
 
 Apart from the `wasm/` target above, the Rust runner itself compiles unchanged for
 `wasm32-wasip1`: it reads stdin and writes stdout through the standard library, which is what
-a WASI command does, and it is the shape a Shopify Function has. When `wasmtime` is on the
-PATH and that target's standard library is installed (`rustup target add wasm32-wasip1`),
-`rulec test` runs the runner that way too and holds its answers to the same expected records
-(`via` is `wasm`, the line reads `(Rust, Wasm)`). Without either, that pass is skipped with a
-note and not counted as a missing language.
+a WASI command does — the shape a host that speaks through stdio gives a rule, such as Fastly
+Compute, Spin, or an ordinary batch step in a sandbox. When `wasmtime` is on the PATH and that
+target's standard library is installed (`rustup target add wasm32-wasip1`), `rulec test` runs
+the runner that way too and holds its answers to the same expected records (`via` is `wasi`,
+the line reads `(Rust, WASI)`). Without either, that pass is skipped with a note; it is not
+counted as a missing language, but `--require-all` still fails on it, because a skipped pass
+is a narrower claim either way.
+
+A Shopify Function is **not** this shape: it exports a named function and reads its input
+through the platform's own host calls ([backends.md](backends.md#a-wasm-host-shopify-functions)).
 
 ```console
 $ rustc --edition 2021 -O --target wasm32-wasip1 shipping_fee_runner.rs -o shipping_fee_runner.wasm
 $ wasmtime shipping_fee_runner.wasm < ../vectors/shipping_fee.jsonl
 ```
+
+Those two lines are what `rulec api` carries, so nothing here has to be copied by hand. They
+sit inside the Rust entry, because the shape is a property of a backend and Rust is the one
+that has it:
+
+```json
+"rust": { "module": "shipping_fee.rs", "function": "shipping_fee", …,
+          "wasi": {
+            "source": "shipping_fee_runner.rs",
+            "module": "shipping_fee_runner.wasm",
+            "build":  "rustc --edition 2021 -O --target wasm32-wasip1 shipping_fee_runner.rs -o shipping_fee_runner.wasm",
+            "run":    "wasmtime shipping_fee_runner.wasm",
+            "wire":   "one vectors line on stdin, one fixtures record per line on stdout",
+            "needs":  ["wasmtime", "rustup target add wasm32-wasip1"] } }
+```
+
+**The column is closed at one.** It is there to prove the *shape* — a rule reached as a
+command that reads stdin and writes stdout — and one language proving it is the whole claim.
+TinyGo, Javy or ruby.wasm alongside would add a toolchain to `rulec test` and widen nothing,
+so the absence of a `wasi` entry under every other language is a decision, not a gap.
 
 [backends.md](backends.md#a-wasm-host-shopify-functions) says which of the two shapes a
 platform takes and where its input ends and the rule's begins.

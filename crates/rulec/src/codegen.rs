@@ -4477,6 +4477,27 @@ use std::io::Read;
         o
     }
 
+    /// The `wasi` entry, inside the Rust entry of `rulec api`: the *other* shape of Wasm
+    /// (§15.63) — the runner itself built as a command that reads stdin and writes stdout, the
+    /// shape Fastly Compute, Spin or a batch step in a sandbox takes. It sits under the
+    /// language and not at the top level because the registry carries it as a property of a
+    /// backend (`Backend::wasi`), so a second language that ever earned the column would get
+    /// the same key.
+    pub fn api_wasi(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        crate::json::Obj::new()
+            .str("source", &format!("{alias}_runner.rs"))
+            .str("module", &format!("{alias}_runner.wasm"))
+            .str(
+                "build",
+                &format!("rustc --edition 2021 {WASI_RUSTC_FLAGS} {alias}_runner.rs -o {alias}_runner.wasm"),
+            )
+            .str("run", &format!("wasmtime {alias}_runner.wasm"))
+            .str("wire", "one vectors line on stdin, one fixtures record per line on stdout")
+            .raw("needs", crate::json::strs(&["wasmtime", "rustup target add wasm32-wasip1"]))
+            .finish()
+    }
+
     /// The `wasm` entry of `rulec api`: the files, the build line, and the names of the
     /// exports a host needs.
     pub fn api_wasm(&self) -> String {
@@ -4511,6 +4532,11 @@ pub(crate) const RS_JSON_STR: &str = "fn json_str(s: &str) -> String {\n    let 
 /// 1.4 MB.
 pub const WASM_RUSTC_FLAGS: &str =
     "-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib";
+
+/// The flags the Rust runner is built with as a WASI command (§15.63), as one line for
+/// `rulec api` and as arguments for `rulec test`. Nothing is tuned for size here: this is the
+/// same program the native runner is, reached through stdin and stdout.
+pub const WASI_RUSTC_FLAGS: &str = "-O --target wasm32-wasip1";
 
 /// The JSON reading the generated Rust runner and the Wasm entry share: one flat object as
 /// (key, value) pairs, values kept as their source text, and a reader for each wire type.
@@ -5316,6 +5342,7 @@ impl Gen<'_> {
             // A Rust enum member is the alias in PascalCase on the enum's own type.
             .raw("enums", self.enums_json(|_, a| pascal(a)))
             .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
+            .raw("wasi", self.api_wasi())
             .finish();
 
         // --- Ruby. The unit is not in the type here (§15.20), so the entry states it

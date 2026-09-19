@@ -37,7 +37,14 @@ pub struct Backend {
     /// How to run the same runner as a WASI module under wasmtime (§15.63), for the languages
     /// whose output compiles to `wasm32-wasip1` unchanged. `rulec test` runs it as a pass of its
     /// own when wasmtime and the target's standard library are installed.
-    pub wasm: Option<fn(&str, &str) -> Plan>,
+    ///
+    /// **The column is closed at one.** It exists to prove the *shape* — a rule reached as a
+    /// command that reads stdin and writes stdout — and one language proving it is the whole
+    /// claim. TinyGo, Javy or ruby.wasm here would add a toolchain to `rulec test` and widen
+    /// nothing, so the `None`s elsewhere are a decision and not a list of things to do. Not to be
+    /// confused with the `wasm` backend below, which is the other shape: a module that exports
+    /// a function for a host to call (§15.64).
+    pub wasi: Option<fn(&str, &str) -> Plan>,
     /// How to start the rule as an MCP server (§15.44), for the languages that get one.
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
@@ -126,7 +133,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("python", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("python", "python3", &["-B", "_round_test.py"]),
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
         ready: None,
     },
@@ -149,7 +156,7 @@ pub const ALL: &[Backend] = &[
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
         ready: None,
     },
@@ -172,7 +179,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
         ready: None,
     },
@@ -205,20 +212,10 @@ pub const ALL: &[Backend] = &[
         folds: true,
         // The same runner, compiled for WASI and run under wasmtime. Nothing in the generated
         // Rust is platform-specific, so the source is the one above, unchanged.
-        wasm: Some(|alias, _| {
-            Plan::new("rust", "wasmtime", &[&format!("{alias}_runner.wasm")]).built(
-                "rustc",
-                &[
-                    "--edition",
-                    "2021",
-                    "-O",
-                    "--target",
-                    "wasm32-wasip1",
-                    &format!("{alias}_runner.rs"),
-                    "-o",
-                    &format!("{alias}_runner.wasm"),
-                ],
-            )
+        wasi: Some(|alias, _| {
+            let args = wasi_rustc(&format!("{alias}_runner.rs"), &format!("{alias}_runner.wasm"));
+            let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            Plan::new("rust", "wasmtime", &[&format!("{alias}_runner.wasm")]).built("rustc", &refs)
         }),
         mcp: None,
         ready: None,
@@ -240,7 +237,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: None,
         ready: None,
     },
@@ -264,7 +261,7 @@ pub const ALL: &[Backend] = &[
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: None,
         ready: None,
     },
@@ -295,7 +292,7 @@ pub const ALL: &[Backend] = &[
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: None,
         ready: None,
     },
@@ -316,7 +313,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
         folds: false,
-        wasm: None,
+        wasi: None,
         mcp: None,
         ready: None,
     },
@@ -349,7 +346,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("wasm", "node", &["_round_test.mjs"]).built("rustc", &refs)
         },
         folds: true,
-        wasm: None,
+        wasi: None,
         mcp: None,
         ready: Some(|| {
             if !have("node") {
@@ -365,6 +362,16 @@ pub const ALL: &[Backend] = &[
         }),
     },
 ];
+
+/// The rustc invocation for the runner as a WASI command: the flags of
+/// `codegen::WASI_RUSTC_FLAGS`, so `rulec test` and the `wasi` entry of `rulec api` cannot
+/// build it two different ways.
+fn wasi_rustc(src: &str, out: &str) -> Vec<String> {
+    let mut v: Vec<String> = vec!["--edition".into(), "2021".into()];
+    v.extend(crate::codegen::WASI_RUSTC_FLAGS.split(' ').map(|s| s.to_string()));
+    v.extend([src.to_string(), "-o".to_string(), out.to_string()]);
+    v
+}
 
 /// The rustc invocation for a Wasm module: the flags of `codegen::WASM_RUSTC_FLAGS`, the
 /// source, the output.
