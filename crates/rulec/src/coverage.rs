@@ -213,11 +213,8 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         }
     };
 
-    let tables: Vec<&Table> = f
-        .items
-        .iter()
-        .filter_map(|i| if let Item::Table(t) = i { Some(t) } else { None })
-        .collect();
+    // One (merged) table per definition set, parallel to `checks` (DESIGN-draft §2.4).
+    let tables: Vec<&Table> = c.sets.iter().map(|s| &s.table).collect();
 
     // --- the fold's transitions. What each element lands on is what the table wrote, so the
     // obligations are read off the verdict's own enum and the witnesses off the vectors.
@@ -287,7 +284,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
     }
 
     for (ti, t) in tables.iter().enumerate() {
-        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let set = &c.sets[ti];
         let chk = checks.get(ti);
         let dead: BTreeSet<usize> = chk.map(|k| k.dead.iter().copied().collect()).unwrap_or_default();
 
@@ -296,7 +293,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             if dead.contains(&ri) {
                 continue; // a row E102 already reports as never matching
             }
-            let tag = eval::row_tag(&tname, ri + 1);
+            let tag = eval::row_tag(set.row_table(ri), t.rows[ri].index);
             let met = match fired.iter().position(|s| s.contains(&tag)) {
                 Some(k) => {
                     witness.insert(k);
@@ -376,9 +373,10 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                         missing.push(Missing {
                             kind: BOUND,
                             what: tr!(
-                                "表 {tname} 行{} 列 {col} の境界 {}（{} / {} を踏む対）",
-                                "table {tname} row {} column {col} boundary {} (pair at {} / {})",
-                                ri + 1,
+                                "表 {} 行{} 列 {col} の境界 {}（{} / {} を踏む対）",
+                                "table {} row {} column {col} boundary {} (pair at {} / {})",
+                                set.row_table(ri),
+                                t.rows[ri].index,
                                 show_rat(b, &ty),
                                 show_rat(inside, &ty),
                                 show_rat(outside, &ty)
@@ -392,7 +390,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
 
         // --- shadow-pair coverage
         for &(i, j) in chk.map(|k| k.overlaps.as_slice()).unwrap_or(&[]) {
-            let tag = eval::row_tag(&tname, i + 1);
+            let tag = eval::row_tag(set.row_table(i), t.rows[i].index);
             // The inside of the intersection: a point where row j's conditions hold too, yet row
             // i wins.
             let met = match (0..vs.len())
@@ -408,13 +406,15 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             if !met {
                 missing.push(Missing {
                     kind: SHADOW,
-                    what: tr!(
-                        "表 {tname} 行{} ∩ 行{}（行{} が勝つ点）",
-                        "table {tname} row {} ∩ row {} (a point where row {} wins)",
-                        i + 1,
-                        j + 1,
-                        i + 1
-                    ),
+                    what: {
+                        let (ti, tj) = (set.row_table(i), set.row_table(j));
+                        let (ni, nj) = (t.rows[i].index, t.rows[j].index);
+                        if ti == tj {
+                            tr!("表 {ti} 行{ni} ∩ 行{nj}（行{ni} が勝つ点）", "table {ti} row {ni} ∩ row {nj} (a point where row {ni} wins)")
+                        } else {
+                            tr!("表 {ti} 行{ni} ∩ 表 {tj} 行{nj}（表 {ti} 行{ni} が勝つ点）", "table {ti} row {ni} ∩ table {tj} row {nj} (a point where table {ti} row {ni} wins)")
+                        }
+                    },
                     hint: tr!(
                         "この点が無いと、隣接行を入れ替えても期待値が変わりません。",
                         "Without this point, swapping the adjacent rows changes no expected value."

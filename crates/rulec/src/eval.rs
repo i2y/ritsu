@@ -217,7 +217,12 @@ impl<'a> Env<'a> {
     }
 
     /// Evaluate one table and bind its outputs. Returns the index of the row that matched.
+    ///
+    /// What is evaluated is the table's definition set (DESIGN-draft §2.4): the merged table
+    /// of every table defining the same output, in evaluation order, at the position of the
+    /// last of them. At any other member's position nothing happens.
     fn table(&mut self, t: &Table) -> Option<usize> {
+        let t = self.c.table_at(t)?;
         let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         let hit = t.rows.iter().position(|row| {
             t.inputs.iter().enumerate().all(|(ci, (col, _))| {
@@ -227,8 +232,11 @@ impl<'a> Env<'a> {
                 row.cells.get(ci).is_none_or(|cell| self.matches(cell, v, &ty))
             })
         })?;
-        self.fired.push(row_tag(&name, hit + 1));
-        self.fired_rows.push((name.clone(), hit + 1));
+        // The trace names the row as written: the table it came from and its position there.
+        let tn = t.rows[hit].origin.clone().unwrap_or_else(|| name.clone());
+        let rn = t.rows[hit].index;
+        self.fired.push(row_tag(&tn, rn));
+        self.fired_rows.push((tn, rn));
         for (oi, oc) in t.outputs.iter().enumerate() {
             let ty = self.c.ty_of(&oc.name.text).unwrap_or(Ty::Unknown);
             let v = match t.rows[hit].outs.get(oi) {

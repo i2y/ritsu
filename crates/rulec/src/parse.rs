@@ -99,6 +99,7 @@ impl P {
             description: None,
             imports: Vec::new(),
             enum_imports: Vec::new(),
+            sources: Vec::new(),
             enums: Vec::new(),
             groups: Vec::new(),
             inputs: Vec::new(),
@@ -173,15 +174,24 @@ impl P {
                     f.outputs.extend(self.out_block());
                 }
                 crate::kw::DERIVE => {
-                    if let Some(d) = self.derived(&line) {
+                    let (head, cite) = self.split_cite(&line);
+                    if let Some(mut d) = self.derived(&head) {
+                        d.cite = cite;
                         f.items.push(Item::Derived(d));
                     }
                 }
                 crate::kw::DEFINE => {
-                    if let Some(d) = self.define(&line) {
+                    let (head, cite) = self.split_cite(&line);
+                    if let Some(mut d) = self.define(&head) {
+                        d.cite = cite;
                         f.items.push(Item::Define(d));
                     }
                     self.i += 1;
+                }
+                crate::kw::SOURCE => {
+                    if let Some(d) = self.source(&line) {
+                        f.sources.push(d);
+                    }
                 }
                 crate::kw::COUNT => {
                     if let Some(d) = self.count(&line) {
@@ -237,7 +247,16 @@ impl P {
                     self.i += 1;
                 }
                 crate::kw::TABLE => {
-                    if let Some(t) = self.table(&line) {
+                    let (head, cite) = self.split_cite(&line);
+                    if let Some(mut t) = self.table(&head) {
+                        t.cite = cite;
+                        f.items.push(Item::Table(t));
+                    }
+                }
+                crate::kw::CLAUSE => {
+                    let (head, cite) = self.split_cite(&line);
+                    if let Some(mut t) = self.clause(&head) {
+                        t.cite = cite;
                         f.items.push(Item::Table(t));
                     }
                 }
@@ -274,7 +293,7 @@ impl P {
                     self.ctx = tr!("並び", "a named sequence");
                     // A block with no rows is the empty sequence, which is a case of its own
                     // (`empty ->`), so the header alone is a complete declaration.
-                    let (cols, outs, rows) = self.grid().unwrap_or_default();
+                    let (cols, outs, rows) = self.grid(false).unwrap_or_default();
                     self.ctx.clear();
                     if let Some(o) = outs.first() {
                         self.err(
@@ -590,7 +609,7 @@ impl P {
             range = r;
             self.i += 1;
         }
-        Some(DerivedDecl { name, ty, expr, range, span: span_of(line) })
+        Some(DerivedDecl { cite: None, name, ty, expr, range, span: span_of(line) })
     }
 
     /// ```text
@@ -646,7 +665,7 @@ impl P {
         let (ty, _k) = self.type_ref(line, k)?;
         let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
         let expr = self.expr(&line[eq + 1..])?;
-        Some(DefineDecl { name, ty, expr, span: span_of(line) })
+        Some(DefineDecl { cite: None, name, ty, expr, span: span_of(line) })
     }
 
     /// ```text
@@ -816,37 +835,398 @@ impl P {
         Some(ResultDecl { name, expr, span: span_of(line) })
     }
 
+    /// The citation at the end of a line — everything from `@` on (§15.68). Returns the
+    /// tokens before it and the citation; a citation whose shape cannot be read is E037 and
+    /// is dropped, the rest of the line still being read.
+    fn split_cite(&mut self, line: &[Token]) -> (Vec<Token>, Option<Cite>) {
+        let Some(at) = line.iter().position(|t| t.is(&Kind::At)) else {
+            return (line.to_vec(), None);
+        };
+        let head = line[..at].to_vec();
+        let rest = &line[at + 1..];
+        let span = span_of(&line[at..]);
+        let bad = |p: &mut Self| {
+            p.err(
+                Diag::error("E037", tr!("引用の形が読めません", "A citation is not shaped like this"))
+                    .at(p.at(span.line))
+                    .mark(span.clone(), "")
+                    .note(tr!(
+                        "形は `@<出典> <断片>` で、断片は `,` で区切って並べられます（`@法 第20条, 第21条`）。出典は `{}` で宣言した名前です。",
+                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`). The source is a name a `{}` line declares.",
+                        crate::kw::SOURCE
+                    )),
+            );
+        };
+        let Some(source) = rest.first().and_then(|t| t.ident()).map(|s| s.to_string()) else {
+            bad(self);
+            return (head, None);
+        };
+        let mut fragments: Vec<String> = Vec::new();
+        let mut k = 1;
+        loop {
+            match rest.get(k).and_then(|t| t.ident()) {
+                Some(f) => {
+                    fragments.push(f.to_string());
+                    k += 1;
+                }
+                None => {
+                    bad(self);
+                    return (head, None);
+                }
+            }
+            match rest.get(k) {
+                None => break,
+                Some(t) if t.is(&Kind::Comma) => k += 1,
+                Some(_) => {
+                    bad(self);
+                    return (head, None);
+                }
+            }
+        }
+        (head, Some(Cite { source, fragments, span }))
+    }
+
+    /// `source <name> = law "<law id>" asof <date>` with its pinned fragments on the lines
+    /// below (`  第91条 sha256:…`), or `source <name> = file "<path>" [sha256:…]` (§15.68).
+    fn source(&mut self, line: &[Token]) -> Option<SourceDecl> {
+        let span = span_of(line);
+        self.i += 1;
+        // The pins are consumed first, whatever the heading's shape: a parser that returns
+        // without moving on reads the same line for ever.
+        let mut pins: Vec<Pin> = Vec::new();
+        while let Some(l) = self.cur().cloned() {
+            match (l.first().and_then(|t| t.ident()), l.get(1).map(|t| t.kind.clone())) {
+                (Some(frag), Some(Kind::Hash(h))) if l.len() == 2 => {
+                    pins.push(Pin { fragment: frag.to_string(), hash: h, span: span_of(&l) });
+                    self.i += 1;
+                }
+                _ => break,
+            }
+        }
+        let shape = tr!(
+            "形は `{s} <名前> = {l} \"<法令ID>\" {a} <日付>` か `{s} <名前> = {f} \"<ファイル>\" [sha256:<ハッシュ>]` です。`{l}` の下には引用した断片ごとに `  <断片> sha256:<ハッシュ>` の行が並びます（`rulec source pin` が書きます）。",
+            "The shape is `{s} <name> = {l} \"<law id>\" {a} <date>` or `{s} <name> = {f} \"<file>\" [sha256:<digest>]`. Under `{l}`, one `  <fragment> sha256:<digest>` line per cited fragment (`rulec source pin` writes them).",
+            s = crate::kw::SOURCE,
+            l = crate::kw::LAW,
+            a = crate::kw::ASOF,
+            f = crate::kw::FILE
+        );
+        let bad = |p: &mut Self, what: String| {
+            p.err(
+                Diag::error("E037", tr!("`{}` の形が読めません", "A `{}` is not shaped like this", crate::kw::SOURCE))
+                    .at(p.at(span.line))
+                    .mark(span.clone(), what)
+                    .note(shape.clone()),
+            );
+        };
+        let Some((name, k)) = self.name_at(line, 1) else {
+            bad(self, tr!("出典の名前がありません", "the source has no name"));
+            return None;
+        };
+        if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
+            bad(self, tr!("`=` が要ります", "`=` is required"));
+            return None;
+        }
+        let kind = match line.get(k + 1).and_then(|t| t.ident()) {
+            Some(crate::kw::LAW) => {
+                let Some(Kind::Str(id)) = line.get(k + 2).map(|t| t.kind.clone()) else {
+                    bad(self, tr!("法令 ID を `\"…\"` で書いてください", "write the law id in quotes"));
+                    return None;
+                };
+                if line.get(k + 3).and_then(|t| t.ident()) != Some(crate::kw::ASOF) {
+                    bad(self, tr!("`{} <日付>` が要ります", "`{} <date>` is required", crate::kw::ASOF));
+                    return None;
+                }
+                let Some(Kind::Date(y, m, d)) = line.get(k + 4).map(|t| t.kind.clone()) else {
+                    bad(self, tr!("日付は `YYYY-MM-DD` です", "the date is `YYYY-MM-DD`"));
+                    return None;
+                };
+                if line.len() > k + 5 {
+                    bad(self, tr!("日付の後に余分な語があります", "extra words after the date"));
+                    return None;
+                }
+                SourceKind::Law { id, asof: format!("{y:04}-{m:02}-{d:02}") }
+            }
+            Some(crate::kw::FILE) => {
+                let Some(Kind::Str(path)) = line.get(k + 2).map(|t| t.kind.clone()) else {
+                    bad(self, tr!("ファイル名を `\"…\"` で書いてください", "write the file name in quotes"));
+                    return None;
+                };
+                let hash = match line.get(k + 3).map(|t| t.kind.clone()) {
+                    Some(Kind::Hash(h)) => Some(h),
+                    None => None,
+                    Some(_) => {
+                        bad(self, tr!("ファイル名の後に書けるのは `sha256:<ハッシュ>` だけです", "only `sha256:<digest>` may follow the file name"));
+                        return None;
+                    }
+                };
+                if line.len() > k + 4 {
+                    bad(self, tr!("余分な語があります", "extra words"));
+                    return None;
+                }
+                SourceKind::File { path, hash }
+            }
+            _ => {
+                bad(self, tr!("`=` の後は `{}` か `{}` です", "after `=` comes `{}` or `{}`", crate::kw::LAW, crate::kw::FILE));
+                return None;
+            }
+        };
+        Some(SourceDecl { name, kind, pins, span })
+    }
+
     fn table(&mut self, head: &[Token]) -> Option<Table> {
         let name = self.name_at(head, 1).map(|(n, _)| n);
         let span = span_of(head);
         self.i += 1;
         let mut policy = Policy::Unique; // §4: the default is unique.
-        if self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some(crate::kw::POLICY)) {
-            let l = self.cur().cloned().unwrap();
-            match l.get(1).and_then(|t| t.ident()) {
-                Some(crate::kw::UNIQUE) => policy = Policy::Unique,
-                Some(crate::kw::FIRST) => policy = Policy::TopDown,
-                other => self.err(
-                    Diag::error("E007", tr!("`{}` という方式はありません", "There is no policy `{}`", other.unwrap_or("")))
-                        .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
-                        .mark(span_of(&l), "")
-                        .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
-                ),
+        let mut overrides: Vec<OverrideRef> = Vec::new();
+        // `policy` and `overrides` may follow the `table` line, in either order, once each.
+        for _ in 0..2 {
+            let Some(l) = self.cur().cloned() else { break };
+            match l.first().and_then(|t| t.ident()) {
+                Some(crate::kw::POLICY) => {
+                    match l.get(1).and_then(|t| t.ident()) {
+                        Some(crate::kw::UNIQUE) => policy = Policy::Unique,
+                        Some(crate::kw::FIRST) => policy = Policy::TopDown,
+                        other => self.err(
+                            Diag::error("E007", tr!("`{}` という方式はありません", "There is no policy `{}`", other.unwrap_or("")))
+                                .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
+                                .mark(span_of(&l), "")
+                                .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
+                        ),
+                    }
+                    self.i += 1;
+                }
+                Some(crate::kw::OVERRIDES) => {
+                    overrides = self.override_refs(&l);
+                    self.i += 1;
+                }
+                _ => break,
             }
-            self.i += 1;
         }
         self.ctx = match &name {
             Some(n) => tr!("表 {}", "table {}", n.text),
             None => String::new(),
         };
-        let (inputs, outputs, rows) = self.grid()?;
+        let (inputs, outputs, rows) = self.grid(true)?;
         self.ctx.clear();
-        Some(Table { name, policy, inputs, outputs, rows, span })
+        Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None })
+    }
+
+    /// A clause (DESIGN-draft §2.2): `clause <name>(<alias>) -> <output>[ : <type>]`, then a
+    /// `when` line, a `then` line and an optional `overrides` line, in any order. It becomes a
+    /// one-row table whose columns are the ones `when` names.
+    fn clause(&mut self, head: &[Token]) -> Option<Table> {
+        let span = span_of(head);
+        self.i += 1;
+        // The body lines are consumed whatever goes wrong with the heading: a parser that
+        // returns without moving on reads the same line for ever.
+        let mut when: Option<Vec<Token>> = None;
+        let mut then: Option<Vec<Token>> = None;
+        let mut overrides: Vec<OverrideRef> = Vec::new();
+        let mut twice: Vec<Vec<Token>> = Vec::new();
+        loop {
+            let Some(l) = self.cur().cloned() else { break };
+            match l.first().and_then(|t| t.ident()) {
+                Some(crate::kw::WHEN) => {
+                    if when.is_some() {
+                        twice.push(l);
+                    } else {
+                        when = Some(l);
+                    }
+                    self.i += 1;
+                }
+                Some(crate::kw::THEN) => {
+                    if then.is_some() {
+                        twice.push(l);
+                    } else {
+                        then = Some(l);
+                    }
+                    self.i += 1;
+                }
+                Some(crate::kw::OVERRIDES) => {
+                    overrides = self.override_refs(&l);
+                    self.i += 1;
+                }
+                _ => break,
+            }
+        }
+        let shape = tr!(
+            "形は `{c} <名前>(<別名>) -> <出力>` の下に `{w} <列> <セル> and …`（条件が無ければ `{w} {a}`）と `{t} <値>` を一行ずつ、任意で `{o} <相手>` です。",
+            "The shape is `{c} <name>(<alias>) -> <output>`, then one `{w} <column> <cell> and …` line (`{w} {a}` when there is no condition), one `{t} <value>` line, and optionally `{o} <target>`.",
+            c = crate::kw::CLAUSE,
+            w = crate::kw::WHEN,
+            a = crate::kw::ALWAYS,
+            t = crate::kw::THEN,
+            o = crate::kw::OVERRIDES
+        );
+        let bad = |p: &mut Self, sp: Span, what: String| {
+            p.err(
+                Diag::error("E046", tr!("`{}` の形が読めません", "A `{}` is not shaped like this", crate::kw::CLAUSE))
+                    .at(p.at(sp.line))
+                    .mark(sp, what)
+                    .note(shape.clone()),
+            );
+        };
+        let Some((name, k)) = self.name_at(head, 1) else {
+            bad(self, span.clone(), tr!("節の名前がありません", "the clause has no name"));
+            return None;
+        };
+        if !head.get(k).is_some_and(|t| t.is(&Kind::Arrow)) {
+            bad(self, span.clone(), tr!("`->` と出力の名前が要ります", "`->` and the output's name are required"));
+            return None;
+        }
+        let Some((oname, k2)) = self.name_at(head, k + 1) else {
+            bad(self, span.clone(), tr!("`->` の後に出力の名前がありません", "no output name after `->`"));
+            return None;
+        };
+        let ty = self.type_ref(head, k2).map(|(t, _)| t);
+        let out = OutCol { name: oname, ty, span: span_of(&head[k + 1..]) };
+        for l in twice {
+            bad(self, span_of(&l), tr!("同じ行が二度あります", "this line appears twice"));
+        }
+        let Some(wl) = when else {
+            bad(self, span.clone(), tr!("`{}` の行がありません", "there is no `{}` line", crate::kw::WHEN));
+            return None;
+        };
+        let Some(tl) = then else {
+            bad(self, span.clone(), tr!("`{}` の行がありません", "there is no `{}` line", crate::kw::THEN));
+            return None;
+        };
+        // `when always`, or `<column> <cell>` joined by `and`.
+        let mut inputs: Vec<(String, Span)> = Vec::new();
+        let mut cells: Vec<Cell> = Vec::new();
+        let mut cell_spans: Vec<Span> = Vec::new();
+        let body = &wl[1..];
+        let always = body.len() == 1 && body[0].ident() == Some(crate::kw::ALWAYS);
+        if body.is_empty() {
+            bad(self, span_of(&wl), tr!("条件がありません。無いなら `{} {}` と書きます", "there is no condition; write `{} {}` when there is none", crate::kw::WHEN, crate::kw::ALWAYS));
+            return None;
+        }
+        if !always {
+            let mut parts: Vec<Vec<Token>> = vec![Vec::new()];
+            for t in body {
+                if t.ident() == Some("and") {
+                    parts.push(Vec::new());
+                } else {
+                    parts.last_mut().unwrap().push(t.clone());
+                }
+            }
+            let mut ok = true;
+            for part in parts {
+                let Some(col) = part.first().and_then(|t| t.ident()).map(|s| s.to_string()) else {
+                    bad(self, span_of(&wl), tr!("`and` の区切りの中に列の名前がありません", "a part between `and` has no column name"));
+                    ok = false;
+                    continue;
+                };
+                if part.len() < 2 {
+                    bad(self, part[0].span.clone(), tr!("列 {col} の条件がありません", "column {col} has no condition"));
+                    ok = false;
+                    continue;
+                }
+                if inputs.iter().any(|(c, _)| *c == col) {
+                    bad(self, part[0].span.clone(), tr!("列 {col} が二度あります", "column {col} appears twice"));
+                    ok = false;
+                    continue;
+                }
+                let Some(cell) = self.cell(&part[1..]) else {
+                    ok = false;
+                    continue;
+                };
+                inputs.push((col, part[0].span.clone()));
+                cells.push(cell);
+                cell_spans.push(span_of(&part[1..]));
+            }
+            if !ok {
+                return None;
+            }
+        }
+        if tl.len() < 2 {
+            bad(self, span_of(&tl), tr!("`{}` の後に値がありません", "there is no value after `{}`", crate::kw::THEN));
+            return None;
+        }
+        let value = self.out_cell(&tl[1..]);
+        let row = Row {
+            cells,
+            cell_spans,
+            outs: vec![value],
+            out_spans: vec![span_of(&tl[1..])],
+            span: span_of(&wl),
+            index: 1,
+            label: None,
+            origin: None,
+            cite: None,
+        };
+        Some(Table {
+            name: Some(name),
+            policy: Policy::Unique,
+            inputs,
+            outputs: vec![out],
+            rows: vec![row],
+            span,
+            overrides,
+            clause: true,
+            cite: None,
+        })
+    }
+
+    /// The targets of an `overrides` line: `A, B, 表:行`, each a table declared above or one
+    /// labelled row of it. The shape is checked here; whether the target exists is E035, in
+    /// the type checker.
+    fn override_refs(&mut self, line: &[Token]) -> Vec<OverrideRef> {
+        let mut out = Vec::new();
+        let mut k = 1;
+        let mut bad = false;
+        while k < line.len() {
+            let Some(table) = line[k].ident().map(|s| s.to_string()) else {
+                bad = true;
+                break;
+            };
+            let mut span = line[k].span.clone();
+            k += 1;
+            let mut row = None;
+            if line.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
+                match line.get(k + 1).and_then(|t| t.ident()) {
+                    Some(r) => {
+                        row = Some(r.to_string());
+                        span.len = line[k + 1].span.col + line[k + 1].span.len - span.col;
+                        k += 2;
+                    }
+                    None => {
+                        bad = true;
+                        break;
+                    }
+                }
+            }
+            out.push(OverrideRef { table, row, span });
+            match line.get(k) {
+                None => break,
+                Some(t) if t.is(&Kind::Comma) => k += 1,
+                Some(_) => {
+                    bad = true;
+                    break;
+                }
+            }
+        }
+        if bad || out.is_empty() {
+            self.err(
+                Diag::error("E035", tr!("`{}` の指す先が読めません", "The target of `{}` cannot be read", crate::kw::OVERRIDES))
+                    .at(self.at(line[0].span.line))
+                    .mark(span_of(line), "")
+                    .note(tr!(
+                        "形は `{} <表>` か `{} <表>:<行ラベル>` で、複数は `,` で区切ります。",
+                        "The form is `{} <table>` or `{} <table>:<row label>`, several separated by `,`.",
+                        crate::kw::OVERRIDES,
+                        crate::kw::OVERRIDES
+                    )),
+            );
+        }
+        out
     }
 
     fn example_table(&mut self) -> Option<Table> {
         self.ctx = tr!("例", "examples");
-        let (inputs, outputs, rows) = self.grid()?;
+        let (inputs, outputs, rows) = self.grid(false)?;
         self.ctx.clear();
         Some(Table {
             name: None,
@@ -855,16 +1235,26 @@ impl P {
             outputs,
             rows,
             span: Span::new(1, 0, 1),
+            overrides: Vec::new(),
+            clause: false,
+            cite: None,
         })
     }
 
-    /// The `|` block: one header row, then rule rows.
-    fn grid(&mut self) -> Option<(Vec<(String, Span)>, Vec<OutCol>, Vec<Row>)> {
+    /// The `|` block: one header row, then rule rows. With `labels`, a row may start with one
+    /// word before its first bar, which names the row (§2.1 of the statute draft); the rows of
+    /// `examples` and of a `sequence` have no use for a name, so there a leading word ends the
+    /// block as any statement does.
+    fn grid(&mut self, labels: bool) -> Option<(Vec<(String, Span)>, Vec<OutCol>, Vec<Row>)> {
         let mut raw_rows: Vec<Vec<Token>> = Vec::new();
-        while self
-            .cur()
-            .is_some_and(|l| l.first().is_some_and(|t| t.is(&Kind::Pipe)))
-        {
+        let is_row = |l: &[Token]| -> bool {
+            match l.first() {
+                Some(t) if t.is(&Kind::Pipe) => true,
+                Some(t) if labels && t.ident().is_some() => l.get(1).is_some_and(|t| t.is(&Kind::Pipe)),
+                _ => false,
+            }
+        };
+        while self.cur().is_some_and(|l| is_row(l)) {
             raw_rows.push(self.cur().cloned().unwrap());
             self.i += 1;
         }
@@ -895,6 +1285,8 @@ impl P {
         let ncol = inputs.len();
         let mut rows = Vec::new();
         for (n, rt) in raw_rows[1..].iter().enumerate() {
+            let (rt, cite) = self.split_cite(rt);
+            let rt = &rt;
             let cells_t = split_cells(rt);
             let mut cells = Vec::new();
             let mut cell_spans = Vec::new();
@@ -928,7 +1320,13 @@ impl P {
                     out_spans.push(cspan.clone());
                 }
             }
-            rows.push(Row { cells, cell_spans, outs, out_spans, span: span_of(rt), index: n + 1 });
+            // The word before the first bar is the row's label. `split_cells` starts at the
+            // first bar, so the label never reaches the cells.
+            let label = match rt.first() {
+                Some(t) if !t.is(&Kind::Pipe) => t.ident().map(|w| Name { text: w.to_string(), ascii: None, span: t.span.clone() }),
+                _ => None,
+            };
+            rows.push(Row { cells, cell_spans, outs, out_spans, span: span_of(rt), index: n + 1, label, origin: None, cite });
         }
         Some((inputs, outputs, rows))
     }

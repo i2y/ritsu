@@ -1,0 +1,9 @@
+error[E034]: The row label `r3` appears twice
+  --> tests/mutants/m_e034.rule:24 table 本則
+   |
+23 | r3       | true           | >=1万円 <=10万円     | 200円                        |
+   | ^^ the first row
+24 | r3       | true           | >10万円 <=50万円     | 400円                        |
+   | ^^ the same label
+   |
+ A label is unique within its table: `overrides` lines and records refer to the row by it. Change one of the two.

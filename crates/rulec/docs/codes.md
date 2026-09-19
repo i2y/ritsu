@@ -39,6 +39,14 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E031](#e031) | error | A rule cannot have both a `fold` and a `count` |
 | [E032](#e032) | error | The declared enum and the imported one disagree |
 | [E033](#e033) | error | A value of an imported enum has neither a row nor `default` |
+| [E034](#e034) | error | A row label appears twice |
+| [E035](#e035) | error | The target of `overrides` does not exist |
+| [E036](#e036) | error | The target of `overrides` does not define the same output |
+| [E037](#e037) | error | A cited fragment is not pinned |
+| [E038](#e038) | error | A source fragment has changed |
+| [E039](#e039) | error | There is no copy of a source |
+| [E045](#e045) | error | A table that shares an output has two or more output columns |
+| [E046](#e046) | error | A `clause` is not shaped like this |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -58,6 +66,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
 | [W116](#w116) | warning | No example uses this sequence |
+| [W119](#w119) | warning | A pinned fragment is not cited |
+| [W117](#w117) | warning | An exception with no effect |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 
@@ -92,7 +102,7 @@ Related codes: [E002](#e002)
 rule t(t) v1
 
 inputs
-  @x(x) : bool
+  %x(x) : bool
 ```
 
 Related codes: [E001](#e001), [E009](#e009)
@@ -120,7 +130,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -138,7 +148,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -1033,6 +1043,247 @@ enum Tier {
 
 Related codes: [E032](#e032), [W111](#w111), [E101](#e101)
 
+## E034
+
+`error` — **A row label appears twice**
+
+**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table.
+
+**Fix.** Change one of the two labels.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+| a     | -> x  |
+r1 | true  | true  |
+r1 | false | false |
+```
+
+Related codes: [E009](#e009), [E035](#e035)
+
+## E035
+
+`error` — **The target of `overrides` does not exist**
+
+**When.** An `overrides` line names a table that does not exist, or one declared below this table, or a row label (`table:label`) the table has no row of. A line whose shape cannot be read is reported the same way. The exception is written after what it excepts, so a target is always above.
+
+**Fix.** Name a table declared above, or one of its rows (label the row at its head and write `table:label`). Write the side that takes precedence later.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+overrides 無い表
+| a     | -> x  |
+| true  | true  |
+| false | false |
+```
+
+Related codes: [E034](#e034), [E036](#e036)
+
+## E036
+
+`error` — **The target of `overrides` does not define the same output**
+
+**When.** The table an `overrides` line names defines a different output from this table. Precedence exists only between definitions of the same output.
+
+**Fix.** Name a table that defines the same output, or make this table's output column the same one.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table 甲(ko)
+| a | -> x |
+| - | true |
+
+table 乙(otsu)
+overrides 甲
+| a | -> y |
+| - | true |
+```
+
+Related codes: [E035](#e035), [E045](#e045)
+
+## E037
+
+`error` — **A cited fragment is not pinned**
+
+**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A fragment name, a citation or a `source` line whose shape cannot be read is reported the same way. Without a pin, a revised copy passes check in silence (§15.68).
+
+**Fix.** Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+With `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml` beside it:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+Related codes: [E038](#e038), [E039](#e039), [W119](#w119)
+
+## E038
+
+`error` — **A source fragment has changed**
+
+**When.** The pinned digest differs from the digest of the copy beside the rule. It fails in the pull request that refreshed the copy, and names the tables, clauses and rows that cite the fragment, which is all there is to reread.
+
+**Fix.** Read the copy's diff; if the transcribed rows still hold, rewrite the pin line as `fix.text` says (`rulec source pin` writes it too). If the rows have to change, change them first.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+  第1条 sha256:0000000000000000
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+With `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml` beside it:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+Related codes: [E037](#e037), [E039](#e039)
+
+## E039
+
+`error` — **There is no copy of a source**
+
+**When.** The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare.
+
+**Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov into the copies. Commit the copies.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第2条
+| a | -> x |
+| - | true |
+```
+
+Related codes: [E037](#e037), [E038](#e038)
+
+## E045
+
+`error` — **A table that shares an output has two or more output columns**
+
+**When.** An output is defined by two or more tables (or tables are joined by `overrides`), and one of them has two or more output columns. A row that bundles two definitions leaves the other value's origin undecided when only one is overridden, and the generated code would have to write the row's condition twice.
+
+**Fix.** Move the second output to a table of its own.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table 甲(ko)
+| a | -> x | y |
+| - | true | true |
+
+table 乙(otsu)
+overrides 甲
+| a    | -> x  |
+| true | false |
+```
+
+Related codes: [E036](#e036), [E105](#e105)
+
+## E046
+
+`error` — **A `clause` is not shaped like this**
+
+**When.** The `clause` heading lacks a name, the `->` or the output; the `when` or `then` line is missing or appears twice; or the `when` condition is not `<column> <cell> and …` (a part without a column, a column twice, a column without a condition). A clause is a one-row table, so it needs exactly one condition and one value.
+
+**Fix.** Under `clause <name>(<alias>) -> <output>`, write one `when <column> <cell> and …` line (`when always` when there is no condition) and one `then <value>` line. Add `overrides <target>` when it takes precedence over something.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+clause 例外(exception) -> x
+  then true
+```
+
+Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
+
 ## E101
 
 `error` — **Completeness gap: some input matches no row**
@@ -1612,6 +1863,74 @@ sequence s(s)
 ```
 
 Related codes: [E027](#e027), [W111](#w111)
+
+## W119
+
+`warning` — **A pinned fragment is not cited**
+
+**When.** A pin line sits under a `source` line, but no `@` in the rule cites that fragment. It is what remains after a citation was removed.
+
+**Fix.** Remove the pin line; `rulec source pin` does.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+  第1条 sha256:ce31217424a10206
+  第2条 sha256:0000000000000000
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+With `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml` beside it:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+Related codes: [E037](#e037)
+
+## W117
+
+`warning` — **An exception with no effect**
+
+**When.** No row of this table meets a row of what its `overrides` line names. Precedence decides which wins when an input matches both, so with no meeting rows the line decides nothing. It is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule.
+
+**Fix.** Compare with the source and fix the conditions of this table's rows or of the target's. If they really never meet, drop the `overrides` line.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 甲(ko)
+   | a     | -> x  |
+r1 | true  | true  |
+r2 | false | false |
+
+table 乙(otsu)
+overrides 甲:r1, 甲:r2
+| a    | -> x  |
+| true | false |
+```
+
+Related codes: [E035](#e035), [E105](#e105)
 
 ## W115
 

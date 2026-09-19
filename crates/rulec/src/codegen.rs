@@ -174,6 +174,84 @@ impl<'a> Gen<'a> {
         walk == (phase == Phase::Walk)
     }
 
+    /// The definition set a table stands for: the merged table's name is the set's key, and
+    /// a table that stands alone is its own set (DESIGN-draft §2.4).
+    fn set_for(&self, t: &Table) -> Option<&crate::defset::DefSet> {
+        let name = t.name.as_ref().map(|n| n.text.as_str()).unwrap_or("");
+        self.c.sets.iter().find(|s| s.key == name)
+    }
+
+    /// The comment over a table's branches: the table and its policy, or, for a merged set,
+    /// the tables it was built from in the order they are tried.
+    fn table_head(&self, t: &Table) -> String {
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        match self.set_for(t) {
+            Some(s) if s.merged() => {
+                let order: Vec<String> =
+                    (0..s.members.len()).rev().map(|mi| format!("{} {}", s.kind_word(mi), s.members[mi])).collect();
+                tr!(
+                    "{name} を定める表と節。例外を先に試す: {}",
+                    "the tables and clauses defining {name}, exceptions first: {}",
+                    order.join(if crate::i18n::ja() { "、" } else { ", " })
+                )
+            }
+            _ if t.clause => tr!("節 {name}", "clause {name}"),
+            _ => {
+                let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+                tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY)
+            }
+        }
+    }
+
+    /// Whether row `ri` of `t` was written as a clause: `t` itself is one, or the row of a
+    /// merged table came from one.
+    fn is_clause_row(&self, t: &Table, ri: usize) -> bool {
+        t.clause || self.set_for(t).is_some_and(|s| s.merged() && s.is_clause_row(ri))
+    }
+
+    /// How a branch names its row: the position as written, its label, and — in a merged
+    /// set — the table it was written in.
+    fn row_name(&self, t: &Table, ri: usize) -> String {
+        let row = &t.rows[ri];
+        if self.is_clause_row(t, ri) {
+            let tn = row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default());
+            return tr!("節 {tn}", "clause {tn}");
+        }
+        let n = match &row.label {
+            Some(l) => tr!("行{}（{}）", "row {} ({})", row.index, l.text),
+            None => tr!("行{}", "row {}", row.index),
+        };
+        match &row.origin {
+            Some(tn) => tr!("表 {tn} {n}", "table {tn} {n}"),
+            None => n,
+        }
+    }
+
+    /// The comment on one branch: the row as written.
+    fn row_head(&self, t: &Table, ri: usize, cells: &str) -> String {
+        format!("{}: {cells}", self.row_name(t, ri))
+    }
+
+    /// A group's constant in Ruby and in its signature: the ASCII alias when the group has
+    /// one, else a name by declaration order. Ruby accepts `GROUP_遠隔地`, but RBS reads only
+    /// ASCII identifiers, and the two have to agree (§15.67).
+    fn rb_group(&self, name: &str) -> String {
+        let id = self.ident(name);
+        if id.is_ascii() {
+            return id;
+        }
+        let k = self.f.groups.iter().position(|g| g.name.text == name).map(|i| i + 1).unwrap_or(0);
+        format!("g{k}")
+    }
+
+    /// What a branch pushes on the trace: the table the row was written in, its position
+    /// there, and its label (empty when it has none).
+    fn fired_of(&self, t: &Table, ri: usize) -> (String, usize, String) {
+        let row = &t.rows[ri];
+        let tn = row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default());
+        (tn, row.index, row.label.as_ref().map(|l| l.text.clone()).unwrap_or_default())
+    }
+
     pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str) -> Self {
         let mut enum_names = BTreeMap::new();
         let mut value_names = BTreeMap::new();
@@ -191,12 +269,10 @@ impl<'a> Gen<'a> {
             }
         }
         let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
-        for it in &f.items {
-            if let Item::Table(t) = it {
-                let r = crate::region::check_table(t, c, f, "", crate::region::DEFAULT_BUDGET);
-                if !r.w114.is_empty() {
-                    w114.insert(t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), r.w114);
-                }
+        for set in &c.sets {
+            let r = crate::region::check_set(set, c, f, "", crate::region::DEFAULT_BUDGET);
+            if !r.w114.is_empty() {
+                w114.insert(set.key.clone(), r.w114);
             }
         }
         // §1.3: a name that declared an ASCII alias is written out under that alias, inside
@@ -334,14 +410,11 @@ impl<'a> Gen<'a> {
     }
 }
 
-/// A deterministic short hash of our own (FNV-1a 128), so as not to add a dependency.
+/// The SHA-256 of the source text, as the header says it is. Until §15.68 the header named
+/// SHA-256 and computed FNV-1a; the digest is now the one it names, from `sha256.rs`, with no
+/// dependency added.
 pub fn hash(s: &str) -> String {
-    let mut h: u128 = 0x6c62272e07bb014262b821756295c58d;
-    for b in s.as_bytes() {
-        h ^= *b as u128;
-        h = h.wrapping_mul(0x0000000001000000000000000000013b);
-    }
-    format!("{h:032x}")
+    crate::sha256::hex(s.as_bytes())
 }
 
 // ---------------------------------------------------------------------------
@@ -520,7 +593,7 @@ fn record_doc() -> String {
 
 /// The doc line of the `Fired` type.
 fn fired_doc() -> String {
-    tr!("当てはまった行。表の名前と、1 から数えた行番号。", "A row that matched: the table's name and its 1-based row number.")
+    tr!("当てはまった行。表の名前と、1 から数えた行番号と、あればラベル。", "A row that matched: the table's name, its 1-based row number, and its label when it has one.")
 }
 
 fn raw_base(oi: usize) -> String {
@@ -683,7 +756,7 @@ impl<'a> Gen<'a> {
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
         o.push_str(&format!(
-            "class Fired(NamedTuple):\n    \"\"\"{}\"\"\"\n\n    table: str\n    row: int\n\n",
+            "class Fired(NamedTuple):\n    \"\"\"{}\"\"\"\n\n    table: str\n    row: int\n    label: str = \"\"\n\n",
             fired_doc()
         ));
         // The alias exists so that the local inside the function can be annotated without
@@ -844,7 +917,11 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.py_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.py_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -1223,9 +1300,7 @@ impl<'a> Gen<'a> {
     }
 
     fn py_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("    # {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("    # {}\n", self.table_head(t));
         for (ri, row) in t.rows.iter().enumerate() {
             // §8.1 criterion 1: write out every cell. Conditions already known to be true from
             // earlier branches are not dropped either.
@@ -1246,7 +1321,7 @@ impl<'a> Gen<'a> {
                 .map(cell_src)
                 .chain(row.outs.iter().map(out_src))
                 .collect();
-            o.push_str(&format!("    {kw} {cond}:  # {}\n", tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "))));
+            o.push_str(&format!("    {kw} {cond}:  # {}\n", self.row_head(t, ri, &cells.join(" | "))));
             for (oi, oc) in t.outputs.iter().enumerate() {
                 let v = match row.outs.get(oi) {
                     Some(OutCell::Lit(Lit::Num(n))) => {
@@ -1275,7 +1350,12 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v}\n", self.ident(&oc.name.text)));
             }
-            o.push_str(&format!("        {trace}.append(Fired({name:?}, {}))\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            if lbl.is_empty() {
+                o.push_str(&format!("        {trace}.append(Fired({tn:?}, {rn}))\n"));
+            } else {
+                o.push_str(&format!("        {trace}.append(Fired({tn:?}, {rn}, {lbl:?}))\n"));
+            }
         }
         o.push_str(&format!(
             "    else:\n        raise AssertionError(\"{}\")\n",
@@ -1284,7 +1364,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Py, "    ", |name, i, j| {
             format!(
                 "        raise RuleContradictionError(\"{}\")\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -1335,7 +1415,7 @@ impl<'a> Gen<'a> {
         local: &dyn Fn(&str) -> String,
         lang: Lang,
         indent: &str,
-        raise: impl Fn(&str, usize, usize) -> String,
+        raise: impl Fn(&str, &str, &str) -> String,
     ) -> String {
         let Some(pairs) = self.w114.get(&t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()) else {
             return String::new();
@@ -1344,6 +1424,7 @@ impl<'a> Gen<'a> {
         let guard = tr!("ガード", "guard");
         let mut o = String::new();
         for (i, j) in pairs {
+            let (ni, nj) = (self.row_name(t, *i), self.row_name(t, *j));
             let mut conds: Vec<String> = Vec::new();
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 let ty = self.ty_of(col);
@@ -1367,14 +1448,12 @@ impl<'a> Gen<'a> {
                 "{indent}{} {guard}: {}\n",
                 sp.comment,
                 tr!(
-                    "W114（表 {name} 行{} × 行{}）。重ならないことを静的に証明できなかった行の対",
-                    "W114 (table {name}, row {} × row {}): a pair of rows whose exclusivity could not be proven statically",
-                    i + 1,
-                    j + 1
+                    "W114（表 {name} {ni} × {nj}）。重ならないことを静的に証明できなかった行の対",
+                    "W114 (table {name}, {ni} × {nj}): a pair of rows whose exclusivity could not be proven statically"
                 )
             ));
             o.push_str(&format!("{indent}{}\n", (sp.if_head)(&joined)));
-            o.push_str(&raise(&name, i + 1, j + 1));
+            o.push_str(&raise(&name, &ni, &nj));
             if !sp.close.is_empty() {
                 o.push_str(&format!("{indent}{}\n", sp.close));
             }
@@ -1616,7 +1695,7 @@ impl<'a> Gen<'a> {
             o.push_str(":\n\t\treturn true\n\t}\n\treturn false\n}\n\n");
         }
 
-        o.push_str(&format!("// Fired {}\ntype Fired struct {{\n\tTable{CELL}string\n\tRow{CELL}int\n}}\n\n", fired_doc()));
+        o.push_str(&format!("// Fired {}\ntype Fired struct {{\n\tTable{CELL}string\n\tRow{CELL}int\n\tLabel{CELL}string\n}}\n\n", fired_doc()));
         o.push_str(&round_go());
         o.push_str(&self.go_fn());
         o.push('\n');
@@ -1646,7 +1725,11 @@ impl<'a> Gen<'a> {
                     o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.go_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.go_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -2036,9 +2119,7 @@ impl<'a> Gen<'a> {
     }
 
     fn go_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("\t// {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("\t// {}\n", self.table_head(t));
         // In Go a variable declared inside an if does not escape it, so declare them up front.
         for oc in &t.outputs {
             let t2 = self.ty_of(&oc.name.text);
@@ -2068,10 +2149,11 @@ impl<'a> Gen<'a> {
             };
             let kw = if ri == 0 { "\tif" } else { " else if" };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            let line = self.row_head(t, ri, &cells.join(" | "));
             if ri == 0 {
-                o.push_str(&format!("{kw} {cond} {{ // {}\n", tr!("行1: {}", "row 1: {}", cells.join(" | "))));
+                o.push_str(&format!("{kw} {cond} {{ // {line}\n"));
             } else {
-                o.push_str(&format!("\t}}{kw} {cond} {{ // {}\n", tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "))));
+                o.push_str(&format!("\t}}{kw} {cond} {{ // {line}\n"));
             }
             for (oi, oc) in t.outputs.iter().enumerate() {
                 let v = match row.outs.get(oi) {
@@ -2101,7 +2183,8 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("\t\t{} = {v}\n", self.ident(&oc.name.text)));
             }
-            o.push_str(&format!("\t\t{trace} = append({trace}, Fired{{{name:?}, {}}})\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            o.push_str(&format!("\t\t{trace} = append({trace}, Fired{{{tn:?}, {rn}, {lbl:?}}})\n"));
         }
         o.push_str(&format!(
             "\t}} else {{\n\t\tpanic(\"{}\")\n\t}}\n",
@@ -2118,7 +2201,7 @@ impl<'a> Gen<'a> {
                 } else {
                     "Output{}".into()
                 },
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -2845,7 +2928,7 @@ impl<'a> Gen<'a> {
             o.push('\n');
         }
 
-        o.push_str(&format!("/** {} */\nexport type Fired = {{ readonly table: string; readonly row: number }};\n\n", fired_doc()));
+        o.push_str(&format!("/** {} */\nexport type Fired = {{ readonly table: string; readonly row: number; readonly label?: string }};\n\n", fired_doc()));
 
         // The error classes come first: the enum parsers below throw them.
         o.push_str(&round_ts());
@@ -3089,7 +3172,11 @@ impl<'a> Gen<'a> {
                     ));
                 }
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.ts_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.ts_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -3261,9 +3348,7 @@ impl<'a> Gen<'a> {
     }
 
     fn ts_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("  // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("  // {}\n", self.table_head(t));
         // `let` up front: a binding made inside a branch does not leave it.
         for oc in &t.outputs {
             let ty = self.ty_of(&oc.name.text);
@@ -3288,7 +3373,7 @@ impl<'a> Gen<'a> {
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
             let head = if ri == 0 { "  if" } else { " else if" };
-            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            let line = self.row_head(t, ri, &cells.join(" | "));
             if ri == 0 {
                 o.push_str(&format!("{head} ({cond}) {{ // {line}\n"));
             } else {
@@ -3322,7 +3407,12 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("    {} = {v};\n", self.ident(&oc.name.text)));
             }
-            o.push_str(&format!("    {trace}.push({{ table: {name:?}, row: {} }});\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            if lbl.is_empty() {
+                o.push_str(&format!("    {trace}.push({{ table: {tn:?}, row: {rn} }});\n"));
+            } else {
+                o.push_str(&format!("    {trace}.push({{ table: {tn:?}, row: {rn}, label: {lbl:?} }});\n"));
+            }
         }
         o.push_str(&format!(
             "  }} else {{\n    throw new Error(\"{}\");\n  }}\n",
@@ -3331,7 +3421,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Ts, "  ", |name, i, j| {
             format!(
                 "      throw new RuleContradictionError(\"{}\");\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -3628,7 +3718,7 @@ impl<'a> Gen<'a> {
             ));
         }
         o.push_str(&format!(
-            "/// {}\n#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Fired {{\n    pub table: &'static str,\n    pub row: u32,\n}}\n\n",
+            "/// {}\n#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Fired {{\n    pub table: &'static str,\n    pub row: u32,\n    pub label: &'static str,\n}}\n\n",
             fired_doc()
         ));
 
@@ -3705,7 +3795,11 @@ impl<'a> Gen<'a> {
                     tr!("定義", "definition")
                 )),
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.rs_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.rs_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -4044,9 +4138,7 @@ impl<'a> Gen<'a> {
     }
 
     fn rs_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("    // {}\n", self.table_head(t));
         for oc in &t.outputs {
             let ty = self.ty_of(&oc.name.text);
             let decl = match ty {
@@ -4069,7 +4161,7 @@ impl<'a> Gen<'a> {
                 .collect();
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
-            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            let line = self.row_head(t, ri, &cells.join(" | "));
             let head = if ri == 0 { "    if" } else { " else if" };
             if ri == 0 {
                 o.push_str(&format!("{head} {cond} {{ // {line}\n"));
@@ -4104,7 +4196,8 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v};\n", self.ident(&oc.name.text)));
             }
-            o.push_str(&format!("        {trace}.push(Fired {{ table: {name:?}, row: {} }});\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            o.push_str(&format!("        {trace}.push(Fired {{ table: {tn:?}, row: {rn}, label: {lbl:?} }});\n"));
         }
         o.push_str(&format!(
             "    }} else {{\n        unreachable!(\"{}\");\n    }}\n",
@@ -4113,7 +4206,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Rs, "    ", |name, i, j| {
             format!(
                 "        return Err(RuleError::Contradiction(\"{}\".into()));\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -5488,7 +5581,7 @@ impl<'a> Gen<'a> {
             // A cell naming one group calls the constant the module already declares,
             // rather than writing the members out again.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("GROUP_{}.include?({var})", self.ident(w))
+                format!("GROUP_{}.include?({var})", self.rb_group(w))
             }
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
@@ -5496,7 +5589,7 @@ impl<'a> Gen<'a> {
             Cell::Set(ls) => any_of(ls, false),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("!GROUP_{}.include?({var})", self.ident(w))
+                format!("!GROUP_{}.include?({var})", self.rb_group(w))
             }
             Cell::Not(ls) => any_of(ls, true),
             Cell::Cmp(cs) => cs
@@ -5570,13 +5663,13 @@ impl<'a> Gen<'a> {
             "  # {}\n  class RuleContradictionError < RuntimeError; end\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
-        o.push_str(&format!("  # {}\n  Fired = Struct.new(:table, :row)\n\n", fired_doc()));
+        o.push_str(&format!("  # {}\n  Fired = Struct.new(:table, :row, :label)\n\n", fired_doc()));
 
         // Groups. A Ruby constant has to begin with an uppercase ASCII letter, so a
         // Japanese group name cannot be one on its own; the prefix is what makes it legal.
         for g in &self.f.groups {
             let ms: Vec<String> = g.members.iter().map(|m| self.rb_value(&m.text)).collect();
-            o.push_str(&format!("  GROUP_{} = [{}].freeze\n", self.ident(&g.name.text), ms.join(", ")));
+            o.push_str(&format!("  GROUP_{} = [{}].freeze\n", self.rb_group(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
             o.push('\n');
@@ -5608,7 +5701,11 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
                 }
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.rb_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.rb_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -5902,9 +5999,7 @@ impl<'a> Gen<'a> {
     }
 
     fn rb_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("    # {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("    # {}\n", self.table_head(t));
         for (ri, row) in t.rows.iter().enumerate() {
             let conds: Vec<String> = t
                 .inputs
@@ -5918,7 +6013,7 @@ impl<'a> Gen<'a> {
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let kw = if ri == 0 { "if" } else { "elsif" };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
-            o.push_str(&format!("    {kw} {cond}  # {}\n", tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "))));
+            o.push_str(&format!("    {kw} {cond}  # {}\n", self.row_head(t, ri, &cells.join(" | "))));
             for (oi, oc) in t.outputs.iter().enumerate() {
                 let v = match row.outs.get(oi) {
                     Some(OutCell::Lit(Lit::Num(n))) => {
@@ -5947,7 +6042,12 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("      {} = {v}\n", self.ident(&oc.name.text)));
             }
-            o.push_str(&format!("      {trace} << Fired.new({name:?}, {})\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            if lbl.is_empty() {
+                o.push_str(&format!("      {trace} << Fired.new({tn:?}, {rn})\n"));
+            } else {
+                o.push_str(&format!("      {trace} << Fired.new({tn:?}, {rn}, {lbl:?})\n"));
+            }
         }
         o.push_str(&format!(
             "    else\n      raise RuleContradictionError, \"{}\"\n    end\n",
@@ -5956,7 +6056,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Rb, "    ", |name, i, j| {
             format!(
                 "      raise RuleContradictionError, \"{}\"\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -6140,7 +6240,7 @@ impl<'a> Gen<'a> {
                 .get(&g.name.text)
                 .map(|(ty, _)| self.rbs_ty(&Ty::Enum(ty.clone())))
                 .unwrap_or_else(|| "String".into());
-            o.push_str(&format!("  GROUP_{}: Array[{el}]\n", self.ident(&g.name.text)));
+            o.push_str(&format!("  GROUP_{}: Array[{el}]\n", self.rb_group(&g.name.text)));
         }
         if !self.f.groups.is_empty() {
             o.push('\n');
@@ -6169,7 +6269,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(
-            "  class Fired < Struct[untyped]\n    attr_reader table: String\n    attr_reader row: Integer\n    def self.new: (String, Integer) -> Fired\n  end\n\n",
+            "  class Fired < Struct[untyped]\n    attr_reader table: String\n    attr_reader row: Integer\n    attr_reader label: String?\n    def self.new: (String, Integer, ?String) -> Fired\n  end\n\n",
         );
 
         // The rounding helpers are private at run time; declaring them keeps `steep` from
@@ -6554,8 +6654,8 @@ impl<'a> Gen<'a> {
             ));
         }
         o.push_str(&format!(
-            "/// {}\npublic struct Fired: Hashable, Sendable {{\n    public let table: String\n    public let row: Int\n\n    \
-             public init(table: String, row: Int) {{\n        self.table = table\n        self.row = row\n    }}\n}}\n\n",
+            "/// {}\npublic struct Fired: Hashable, Sendable {{\n    public let table: String\n    public let row: Int\n    public let label: String\n\n    \
+             public init(table: String, row: Int, label: String = \"\") {{\n        self.table = table\n        self.row = row\n        self.label = label\n    }}\n}}\n\n",
             fired_doc()
         ));
 
@@ -6636,7 +6736,11 @@ impl<'a> Gen<'a> {
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
                 Item::Count(_) => {}
-                Item::Table(t) => o.push_str(&self.sw_table(t, local, trace)),
+                Item::Table(t) => {
+                    if let Some(t) = self.c.table_at(t) {
+                        o.push_str(&self.sw_table(t, local, trace));
+                    }
+                }
             }
         }
         o
@@ -7014,9 +7118,7 @@ impl<'a> Gen<'a> {
     }
 
     fn sw_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-        let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-        let mut o = format!("    // {}\n", tr!("表 {name}（{} {policy}）", "table {name} ({} {policy})", crate::kw::POLICY));
+        let mut o = format!("    // {}\n", self.table_head(t));
         // Swift lets a `let` be assigned once on every path; the throwing `else` below is a
         // path that assigns nothing, and the compiler accepts it because it does not return.
         for oc in &t.outputs {
@@ -7041,7 +7143,7 @@ impl<'a> Gen<'a> {
                 .collect();
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
-            let line = tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "));
+            let line = self.row_head(t, ri, &cells.join(" | "));
             let head = if ri == 0 { "    if" } else { "    } else if" };
             o.push_str(&format!("{head} {cond} {{ // {line}\n"));
             for (oi, oc) in t.outputs.iter().enumerate() {
@@ -7072,7 +7174,12 @@ impl<'a> Gen<'a> {
                 };
                 o.push_str(&format!("        {} = {v}\n", self.sw_ident(&oc.name.text)));
             }
-            o.push_str(&format!("        {trace}.append(Fired(table: {name:?}, row: {}))\n", ri + 1));
+            let (tn, rn, lbl) = self.fired_of(t, ri);
+            if lbl.is_empty() {
+                o.push_str(&format!("        {trace}.append(Fired(table: {tn:?}, row: {rn}))\n"));
+            } else {
+                o.push_str(&format!("        {trace}.append(Fired(table: {tn:?}, row: {rn}, label: {lbl:?}))\n"));
+            }
         }
         o.push_str(&format!(
             "    }} else {{\n        throw RuleError.contradiction(\"{}\")\n    }}\n",
@@ -7084,7 +7191,7 @@ impl<'a> Gen<'a> {
         o.push_str(&self.guards(t, local, Lang::Sw, "    ", |name, i, j| {
             format!(
                 "        throw RuleError.contradiction(\"{}\")\n",
-                tr!("表 {name}: 行{i} と 行{j} が同時に当てはまりました", "table {name}: row {i} and row {j} matched at the same time")
+                tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
         o
@@ -7363,7 +7470,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ]\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + \"}}\" for f in {trace}]\n"
+            "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + (',\"label\":' + _json_str(f.label) if f.label else \"\") + \"}}\" for f in {trace}]\n"
         ));
         o.push_str(&format!("    {v_head} = '{{\"tag\":' + _json_str({tag}) + \",\" if {tag} else \"{{\"\n"));
         o.push_str(&format!(
@@ -7439,7 +7546,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  const {v_ins} = [\n{seq_first}{}  ].join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("  const {v_obs} = [\n{}  ].join(\",\");\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "  const {v_rows} = {trace}.map((f) => '{{\"table\":' + JSON.stringify(f.table) + ',\"row\":' + String(f.row) + \"}}\").join(\",\");\n"
+            "  const {v_rows} = {trace}.map((f) => '{{\"table\":' + JSON.stringify(f.table) + ',\"row\":' + String(f.row) + (f.label ? ',\"label\":' + JSON.stringify(f.label) : \"\") + \"}}\").join(\",\");\n"
         ));
         o.push_str(&format!("  const {v_head} = {tag} === \"\" ? \"{{\" : '{{\"tag\":' + JSON.stringify({tag}) + \",\";\n"));
         o.push_str(&format!(
@@ -7517,7 +7624,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ]\n    .join(\",\");\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "    let {v_rows} = {trace}\n        .iter()\n        .map(|f| String::from(\"{{\\\"table\\\":\") + &json_str(f.table) + \",\\\"row\\\":\" + &f.row.to_string() + \"}}\")\n        .collect::<Vec<_>>()\n        .join(\",\");\n"
+            "    let {v_rows} = {trace}\n        .iter()\n        .map(|f| String::from(\"{{\\\"table\\\":\") + &json_str(f.table) + \",\\\"row\\\":\" + &f.row.to_string() + &(if f.label.is_empty() {{ String::new() }} else {{ String::from(\",\\\"label\\\":\") + &json_str(f.label) }}) + \"}}\")\n        .collect::<Vec<_>>()\n        .join(\",\");\n"
         ));
         o.push_str(&format!(
             "    let {v_head} = if {tag}.is_empty() {{ String::from(\"{{\") }} else {{ String::from(\"{{\\\"tag\\\":\") + &json_str({tag}) + \",\" }};\n"
@@ -7602,7 +7709,7 @@ impl<'a> Gen<'a> {
         };
         list("ins", &ins);
         list("obs", &obs);
-        o.push_str("\trows := []string{}\n\tfor _, f := range trace {\n\t\trows = append(rows, fmt.Sprintf(\"{\\\"table\\\":%s,\\\"row\\\":%d}\", jsonStr(f.Table), f.Row))\n\t}\n");
+        o.push_str("\trows := []string{}\n\tfor _, f := range trace {\n\t\tlbl := \"\"\n\t\tif f.Label != \"\" {\n\t\t\tlbl = fmt.Sprintf(\",\\\"label\\\":%s\", jsonStr(f.Label))\n\t\t}\n\t\trows = append(rows, fmt.Sprintf(\"{\\\"table\\\":%s,\\\"row\\\":%d%s}\", jsonStr(f.Table), f.Row, lbl))\n\t}\n");
         o.push_str("\thead := \"{\"\n\tif tag != \"\" {\n\t\thead = fmt.Sprintf(\"{\\\"tag\\\":%s,\", jsonStr(tag))\n\t}\n");
         o.push_str("\treturn fmt.Sprintf(\"%s\\\"in\\\":{%s},\\\"observed\\\":{%s},\\\"trace\\\":[%s]}\", head, joinComma(ins), joinComma(obs), joinComma(rows))\n}\n");
         o
@@ -7671,7 +7778,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ].join(\",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ].join(\",\")\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "    {v_rows} = {trace}.map {{ |f| \"{{\\\"table\\\":#{{_json_str(f.table)}},\\\"row\\\":#{{f.row}}}}\" }}.join(\",\")\n"
+            "    {v_rows} = {trace}.map {{ |f| lbl = f.label.to_s; \"{{\\\"table\\\":#{{_json_str(f.table)}},\\\"row\\\":#{{f.row}}#{{lbl.empty? ? \"\" : \",\\\"label\\\":#{{_json_str(lbl)}}\"}}}}\" }}.join(\",\")\n"
         ));
         o.push_str(&format!("    {v_head} = {tag}.empty? ? \"{{\" : \"{{\\\"tag\\\":#{{_json_str({tag})}},\"\n"));
         o.push_str(&format!(
@@ -7757,7 +7864,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ].joined(separator: \",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ].joined(separator: \",\")\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "    let {v_rows} = {}.map {{ \"{{\\\"table\\\":\\(_jsonStr($0.table)),\\\"row\\\":\\($0.row)}}\" }}.joined(separator: \",\")\n",
+            "    let {v_rows} = {}.map {{ f in\n        let l = f.label.isEmpty ? \"\" : \",\\\"label\\\":\" + _jsonStr(f.label)\n        return \"{{\\\"table\\\":\\(_jsonStr(f.table)),\\\"row\\\":\\(f.row)\\(l)}}\"\n    }}.joined(separator: \",\")\n",
             sw_name(&trace)
         ));
         o.push_str(&format!(

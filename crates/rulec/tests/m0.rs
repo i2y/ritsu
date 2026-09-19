@@ -67,6 +67,14 @@ fn 変異は決めたコードだけを出す() {
         ("m_e113.rule", &[("E113", 1)], "表の出力どうしを比べる真偽定義を書いた"),
         ("m_w105.rule", &[("W105", 3)], "上からの表で出力の食い違う重なりを作った"),
         ("m_w111.rule", &[("W111", 1)], "contract_only の印を消した"),
+        ("m_e034.rule", &[("E034", 1)], "同じ表の二つの行に同じラベルを付けた"),
+        ("m_e035.rule", &[("E035", 1)], "overrides で無い表を指した"),
+        ("m_w117.rule", &[("W117", 1)], "交わらない行への overrides を足した"),
+        ("m_e046.rule", &[("E046", 1)], "節の when の行を消した"),
+        ("m_e037.rule", &[("E037", 1)], "引いた断片の固定行を消した"),
+        ("m_e038.rule", &[("E038", 1)], "固定のハッシュを写しと違うものにした"),
+        ("m_e039.rule", &[("E039", 1)], "写しの無い断片を引いた"),
+        ("m_w119.rule", &[("W119", 1)], "引いていない断片の固定行を足した"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -76,7 +84,11 @@ fn 変異は決めたコードだけを出す() {
 
     // Also close the gap of adding material but forgetting to add it to the table.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants");
-    let on_disk = std::fs::read_dir(&dir).expect("変異の置き場が無い").count();
+    let on_disk = std::fs::read_dir(&dir)
+        .expect("変異の置き場が無い")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
+        .count();
     assert_eq!(on_disk, cases.len(), "変異ファイルの数と、固定した数が合わない");
 
     for (f, want, what) in cases {

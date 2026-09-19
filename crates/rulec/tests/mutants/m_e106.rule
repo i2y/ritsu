@@ -1,5 +1,5 @@
 rule ゆうパック運賃(yupack_fee) v1
-description "東京から差し出す場合の基本運賃。出典: 日本郵便 基本運賃表（東京）"
+description "東京から差し出す場合の基本運賃"
 
 import std/都道府県
 
@@ -20,7 +20,7 @@ inputs
 outputs
   運賃(fee) : money[円, incl_tax]  round up(10円)
 
-table サイズ判定(size_of)
+table サイズ判定(size_of)  # 出典: 日本郵便 基本運賃表（東京）のサイズ区分
 policy first
 | 三辺合計 | -> サイズ(size) : サイズ区分 |
 | <=60cm   | S60                          |
@@ -31,7 +31,7 @@ policy first
 | <=160cm  | S160                         |
 | -        | S170                         |
 
-table 運賃表(fee_table)
+table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
 policy unique
 | あて先     | サイズ | -> 運賃(fee) : money[円, incl_tax] |
 | 都内       | S60    | 820円                              |

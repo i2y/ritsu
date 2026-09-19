@@ -39,6 +39,14 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E031](#e031) | error | `fold` と `count` は一緒に書けません |
 | [E032](#e032) | error | 取り込んだ列挙と宣言がずれています |
 | [E033](#e033) | error | 取り込んだ列挙の値に、行も `default` もありません |
+| [E034](#e034) | error | 行ラベルが二度あります |
+| [E035](#e035) | error | `overrides` の指す先がありません |
+| [E036](#e036) | error | `overrides` の相手が同じ出力を定めていません |
+| [E037](#e037) | error | 引用した断片が固定されていません |
+| [E038](#e038) | error | 出典の断片が変わっています |
+| [E039](#e039) | error | 出典の写しがありません |
+| [E045](#e045) | error | 出力を共有する表に、出力の列が二つ以上あります |
+| [E046](#e046) | error | `clause` の形が読めません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -58,6 +66,8 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
 | [W116](#w116) | warning | どの例も使っていない `sequence` です |
+| [W119](#w119) | warning | 固定した断片が引かれていません |
+| [W117](#w117) | warning | 効かない例外です |
 | [W115](#w115) | warning | どの要素もこの判定にはなりません |
 | [W114](#w114) | warning | 未確認の重なり: 両方に当てはまる入力が有り得ます |
 
@@ -92,7 +102,7 @@ description "unterminated
 rule t(t) v1
 
 inputs
-  @x(x) : bool
+  %x(x) : bool
 ```
 
 関係するコード: [E001](#e001), [E009](#e009)
@@ -120,7 +130,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -138,7 +148,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -1033,6 +1043,247 @@ enum Tier {
 
 関係するコード: [E032](#e032), [W111](#w111), [E101](#e101)
 
+## E034
+
+`error` — **行ラベルが二度あります**
+
+**いつ出るか。** 同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは `overrides` の行、記録の trace、後の版が行を指す名前なので、一つの表の中で一意でなければなりません。
+
+**直し方。** どちらかのラベルを変えてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+| a     | -> x  |
+r1 | true  | true  |
+r1 | false | false |
+```
+
+関係するコード: [E009](#e009), [E035](#e035)
+
+## E035
+
+`error` — **`overrides` の指す先がありません**
+
+**いつ出るか。** `overrides` が名指した表が無いか、この表より後ろで宣言されているか、`表:行ラベル` の行にそのラベルが無いとき。行の書き方が読めないときも同じです。例外は本文の後に書くので、指す先はいつも上にあります。
+
+**直し方。** 上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書きます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+overrides 無い表
+| a     | -> x  |
+| true  | true  |
+| false | false |
+```
+
+関係するコード: [E034](#e034), [E036](#e036)
+
+## E036
+
+`error` — **`overrides` の相手が同じ出力を定めていません**
+
+**いつ出るか。** `overrides` の指す表が、この表とは別の出力を定めているとき。優先の順序は、同じ出力を定める定義のあいだにだけあります。
+
+**直し方。** 同じ出力を定める表を指すか、この表の出力列をその相手と揃えてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table 甲(ko)
+| a | -> x |
+| - | true |
+
+table 乙(otsu)
+overrides 甲
+| a | -> y |
+| - | true |
+```
+
+関係するコード: [E035](#e035), [E045](#e045)
+
+## E037
+
+`error` — **引用した断片が固定されていません**
+
+**いつ出るか。** `@出典 断片` で引いた断片に、`source` の行の下の `  断片 sha256:…` の固定行が無いとき。`file` の出典なら、行に `sha256:…` が無いとき。断片の書き方や引用・宣言の形が読めないときも同じです。固定が無ければ、写しが改訂されても check は何も言えません（§15.68）。
+
+**直し方。** 原本を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を走らせて、いまの写しのハッシュを固定してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+隣に置く `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml`:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+関係するコード: [E038](#e038), [E039](#e039), [W119](#w119)
+
+## E038
+
+`error` — **出典の断片が変わっています**
+
+**いつ出るか。** 固定したハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。引いている表・節・行を名指しするので、読み直す範囲はそこだけです。
+
+**直し方。** 写しの差分を読み、写した行がまだ正しければ `fix.text` の行に書き換えて固定し直してください（`rulec source pin` も書きます）。行が変わるなら、先に行を直します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+  第1条 sha256:0000000000000000
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+隣に置く `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml`:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+関係するコード: [E037](#e037), [E039](#e039)
+
+## E039
+
+`error` — **出典の写しがありません**
+
+**いつ出るか。** 引いた断片の写し `sources/law/<法令ID>@<日付>/<要素>.xml` が規則の隣に無いとき、または `file` の出典が読めないとき。check は網を見ないので、写しが無ければ照合できません。
+
+**直し方。** `rulec source fetch <file.rule>` が e-Gov から断片を取って写しに置きます。写しは git に入れてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第2条
+| a | -> x |
+| - | true |
+```
+
+関係するコード: [E037](#e037), [E038](#e038)
+
+## E045
+
+`error` — **出力を共有する表に、出力の列が二つ以上あります**
+
+**いつ出るか。** ある出力を二つ以上の表が定めていて（または `overrides` で結ばれていて）、そのうちの表に出力の列が二つ以上あるとき。行が二つの出力の定義を束ねていると、一方だけが上書きされたときにもう一方の値の出どころが決まらず、生成コードでは同じ行の条件を二度書くことになります。
+
+**直し方。** 二つ目の出力を、別の表に分けてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table 甲(ko)
+| a | -> x | y |
+| - | true | true |
+
+table 乙(otsu)
+overrides 甲
+| a    | -> x  |
+| true | false |
+```
+
+関係するコード: [E036](#e036), [E105](#e105)
+
+## E046
+
+`error` — **`clause` の形が読めません**
+
+**いつ出るか。** `clause` の見出しに名前か `->` か出力が無いとき、`when` か `then` の行が無いか二度あるとき、`when` の条件が `<列> <セル> and …` の形でないとき（列が無い、同じ列が二度ある、条件が無い）。節は一行の表なので、条件と値が一つずつ要ります。
+
+**直し方。** `clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ書いてください。優先する相手があれば `overrides <相手>` を足します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+clause 例外(exception) -> x
+  then true
+```
+
+関係するコード: [E008](#e008), [E035](#e035), [E045](#e045)
+
 ## E101
 
 `error` — **完全性の欠落: どの行にも当てはまらない入力があります**
@@ -1612,6 +1863,74 @@ sequence s(s)
 ```
 
 関係するコード: [E027](#e027), [W111](#w111)
+
+## W119
+
+`warning` — **固定した断片が引かれていません**
+
+**いつ出るか。** `source` の下に固定行があるのに、その断片を引く `@` が規則のどこにも無いとき。引用を消したあとの残りです。
+
+**直し方。** 固定行を消してください。`rulec source pin` が消します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+source 法 = law "000AC0000000001" asof 2026-04-01
+  第1条 sha256:ce31217424a10206
+  第2条 sha256:0000000000000000
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)  @法 第1条
+| a | -> x |
+| - | true |
+```
+
+隣に置く `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml`:
+
+```proto
+<Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>
+```
+
+関係するコード: [E037](#e037)
+
+## W117
+
+`warning` — **効かない例外です**
+
+**いつ出るか。** `overrides` で優先すると書いた相手の行と、この表の行が一つも交わらないとき。優先は、両方に当てはまる入力があるときにどちらが勝つかを決めるものなので、交わらなければ何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。
+
+**直し方。** 原文と見比べて、この表の行の条件か相手の行の条件を直してください。本当に交わらないなら、`overrides` の行を消します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 甲(ko)
+   | a     | -> x  |
+r1 | true  | true  |
+r2 | false | false |
+
+table 乙(otsu)
+overrides 甲:r1, 甲:r2
+| a    | -> x  |
+| true | false |
+```
+
+関係するコード: [E035](#e035), [E105](#e105)
 
 ## W115
 

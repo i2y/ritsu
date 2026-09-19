@@ -90,7 +90,7 @@ fn warn(
 // that reaches the code, and a test runs every one of them.
 
 const X_E001: &str = "rule t(t) v1\ndescription \"unterminated\n";
-const X_E002: &str = "rule t(t) v1\n\ninputs\n  @x(x) : bool\n";
+const X_E002: &str = "rule t(t) v1\n\ninputs\n  %x(x) : bool\n";
 const X_E003: &str = "inputs\n  x(x) : bool\n";
 const X_E004: &str = "rule t(t) v1\n\n= 1\n";
 const X_E005: &str = "rule t(t) v1\n\nfoo bar\n";
@@ -239,6 +239,33 @@ const fn const_str_w116() -> &'static str {
 
 const X_E026: &str = const_str_e026();
 const X_E027: &str = const_str_e027();
+const X_E034: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)\n| a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
+const X_E035: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)\noverrides 無い表\n| a     | -> x  |\n| true  | true  |\n| false | false |\n";
+const X_E036: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
+table 甲(ko)\n| a | -> x |\n| - | true |\n\ntable 乙(otsu)\noverrides 甲\n| a | -> y |\n| - | true |\n";
+const X_E045: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
+table 甲(ko)\n| a | -> x | y |\n| - | true | true |\n\ntable 乙(otsu)\noverrides 甲\n| a    | -> x  |\n| true | false |\n";
+const X_W117: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 甲(ko)\n   | a     | -> x  |\nr1 | true  | true  |\nr2 | false | false |\n\n\
+table 乙(otsu)\noverrides 甲:r1, 甲:r2\n| a    | -> x  |\n| true | false |\n";
+const X_E046: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+clause 例外(exception) -> x\n  then true\n";
+/// A copy of one fragment of a law, beside the examples that cite it. Its digest is what the
+/// examples pin (or fail to).
+const ARTICLE_1: &[(&str, &str)] = &[(
+    "sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml",
+    "<Article Num=\"1\"><ArticleTitle>第一条</ArticleTitle><Paragraph Num=\"1\"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>\n",
+)];
+const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+const X_E039: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第2条\n| a | -> x |\n| - | true |\n";
+const X_W119: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:ce31217424a10206\n  第2条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 const X_W116: &str = const_str_w116();
 
 const fn const_str_w115() -> &'static str {
@@ -853,6 +880,114 @@ pub fn ledger() -> Vec<Entry> {
         )
         .with_files(TIER_PROTO),
         err(
+            "E034",
+            tr!("行ラベルが二度あります", "A row label appears twice"),
+            tr!(
+                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは `overrides` の行、記録の trace、後の版が行を指す名前なので、一つの表の中で一意でなければなりません。",
+                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table."
+            ),
+            tr!("どちらかのラベルを変えてください。", "Change one of the two labels."),
+            X_E034,
+            &["E009", "E035"],
+        ),
+        err(
+            "E035",
+            tr!("`overrides` の指す先がありません", "The target of `overrides` does not exist"),
+            tr!(
+                "`overrides` が名指した表が無いか、この表より後ろで宣言されているか、`表:行ラベル` の行にそのラベルが無いとき。行の書き方が読めないときも同じです。例外は本文の後に書くので、指す先はいつも上にあります。",
+                "An `overrides` line names a table that does not exist, or one declared below this table, or a row label (`table:label`) the table has no row of. A line whose shape cannot be read is reported the same way. The exception is written after what it excepts, so a target is always above."
+            ),
+            tr!(
+                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書きます。",
+                "Name a table declared above, or one of its rows (label the row at its head and write `table:label`). Write the side that takes precedence later."
+            ),
+            X_E035,
+            &["E034", "E036"],
+        ),
+        err(
+            "E036",
+            tr!("`overrides` の相手が同じ出力を定めていません", "The target of `overrides` does not define the same output"),
+            tr!(
+                "`overrides` の指す表が、この表とは別の出力を定めているとき。優先の順序は、同じ出力を定める定義のあいだにだけあります。",
+                "The table an `overrides` line names defines a different output from this table. Precedence exists only between definitions of the same output."
+            ),
+            tr!(
+                "同じ出力を定める表を指すか、この表の出力列をその相手と揃えてください。",
+                "Name a table that defines the same output, or make this table's output column the same one."
+            ),
+            X_E036,
+            &["E035", "E045"],
+        ),
+        err(
+            "E037",
+            tr!("引用した断片が固定されていません", "A cited fragment is not pinned"),
+            tr!(
+                "`@出典 断片` で引いた断片に、`source` の行の下の `  断片 sha256:…` の固定行が無いとき。`file` の出典なら、行に `sha256:…` が無いとき。断片の書き方や引用・宣言の形が読めないときも同じです。固定が無ければ、写しが改訂されても check は何も言えません（§15.68）。",
+                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A fragment name, a citation or a `source` line whose shape cannot be read is reported the same way. Without a pin, a revised copy passes check in silence (§15.68)."
+            ),
+            tr!(
+                "原本を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を走らせて、いまの写しのハッシュを固定してください。",
+                "Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest."
+            ),
+            X_E037,
+            &["E038", "E039", "W119"],
+        )
+        .with_files(ARTICLE_1),
+        err(
+            "E038",
+            tr!("出典の断片が変わっています", "A source fragment has changed"),
+            tr!(
+                "固定したハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。引いている表・節・行を名指しするので、読み直す範囲はそこだけです。",
+                "The pinned digest differs from the digest of the copy beside the rule. It fails in the pull request that refreshed the copy, and names the tables, clauses and rows that cite the fragment, which is all there is to reread."
+            ),
+            tr!(
+                "写しの差分を読み、写した行がまだ正しければ `fix.text` の行に書き換えて固定し直してください（`rulec source pin` も書きます）。行が変わるなら、先に行を直します。",
+                "Read the copy's diff; if the transcribed rows still hold, rewrite the pin line as `fix.text` says (`rulec source pin` writes it too). If the rows have to change, change them first."
+            ),
+            X_E038,
+            &["E037", "E039"],
+        )
+        .with_files(ARTICLE_1),
+        err(
+            "E039",
+            tr!("出典の写しがありません", "There is no copy of a source"),
+            tr!(
+                "引いた断片の写し `sources/law/<法令ID>@<日付>/<要素>.xml` が規則の隣に無いとき、または `file` の出典が読めないとき。check は網を見ないので、写しが無ければ照合できません。",
+                "The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare."
+            ),
+            tr!(
+                "`rulec source fetch <file.rule>` が e-Gov から断片を取って写しに置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov into the copies. Commit the copies."
+            ),
+            X_E039,
+            &["E037", "E038"],
+        ),
+        err(
+            "E045",
+            tr!("出力を共有する表に、出力の列が二つ以上あります", "A table that shares an output has two or more output columns"),
+            tr!(
+                "ある出力を二つ以上の表が定めていて（または `overrides` で結ばれていて）、そのうちの表に出力の列が二つ以上あるとき。行が二つの出力の定義を束ねていると、一方だけが上書きされたときにもう一方の値の出どころが決まらず、生成コードでは同じ行の条件を二度書くことになります。",
+                "An output is defined by two or more tables (or tables are joined by `overrides`), and one of them has two or more output columns. A row that bundles two definitions leaves the other value's origin undecided when only one is overridden, and the generated code would have to write the row's condition twice."
+            ),
+            tr!("二つ目の出力を、別の表に分けてください。", "Move the second output to a table of its own."),
+            X_E045,
+            &["E036", "E105"],
+        ),
+        err(
+            "E046",
+            tr!("`clause` の形が読めません", "A `clause` is not shaped like this"),
+            tr!(
+                "`clause` の見出しに名前か `->` か出力が無いとき、`when` か `then` の行が無いか二度あるとき、`when` の条件が `<列> <セル> and …` の形でないとき（列が無い、同じ列が二度ある、条件が無い）。節は一行の表なので、条件と値が一つずつ要ります。",
+                "The `clause` heading lacks a name, the `->` or the output; the `when` or `then` line is missing or appears twice; or the `when` condition is not `<column> <cell> and …` (a part without a column, a column twice, a column without a condition). A clause is a one-row table, so it needs exactly one condition and one value."
+            ),
+            tr!(
+                "`clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ書いてください。優先する相手があれば `overrides <相手>` を足します。",
+                "Under `clause <name>(<alias>) -> <output>`, write one `when <column> <cell> and …` line (`when always` when there is no condition) and one `then <value>` line. Add `overrides <target>` when it takes precedence over something."
+            ),
+            X_E046,
+            &["E008", "E035", "E045"],
+        ),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -1118,6 +1253,32 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W116,
             &["E027", "W111"],
+        ),
+        warn(
+            "W119",
+            tr!("固定した断片が引かれていません", "A pinned fragment is not cited"),
+            tr!(
+                "`source` の下に固定行があるのに、その断片を引く `@` が規則のどこにも無いとき。引用を消したあとの残りです。",
+                "A pin line sits under a `source` line, but no `@` in the rule cites that fragment. It is what remains after a citation was removed."
+            ),
+            tr!("固定行を消してください。`rulec source pin` が消します。", "Remove the pin line; `rulec source pin` does."),
+            X_W119,
+            &["E037"],
+        )
+        .with_files(ARTICLE_1),
+        warn(
+            "W117",
+            tr!("効かない例外です", "An exception with no effect"),
+            tr!(
+                "`overrides` で優先すると書いた相手の行と、この表の行が一つも交わらないとき。優先は、両方に当てはまる入力があるときにどちらが勝つかを決めるものなので、交わらなければ何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。",
+                "No row of this table meets a row of what its `overrides` line names. Precedence decides which wins when an input matches both, so with no meeting rows the line decides nothing. It is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule."
+            ),
+            tr!(
+                "原文と見比べて、この表の行の条件か相手の行の条件を直してください。本当に交わらないなら、`overrides` の行を消します。",
+                "Compare with the source and fix the conditions of this table's rows or of the target's. If they really never meet, drop the `overrides` line."
+            ),
+            X_W117,
+            &["E035", "E105"],
         ),
         warn(
             "W115",

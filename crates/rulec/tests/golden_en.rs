@@ -113,3 +113,13 @@ golden!(w105_shipping, "W105-b", "tests/corpus/送料.rule", "W105");
 golden!(w105_order, "W105-c", "tests/corpus/適用順序.rule", "W105");
 golden!(e010_range_notation, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_alias, "E011", "tests/mutants/m_e011.rule", "E011");
+
+// Labels and tables that share an output (DESIGN-draft §2).
+golden!(e034_duplicate_label, "E034", "tests/mutants/m_e034.rule", "E034");
+golden!(e035_missing_target, "E035", "tests/mutants/m_e035.rule", "E035");
+golden!(w117_idle_exception, "W117", "tests/mutants/m_w117.rule", "W117");
+golden!(e046_clause_shape, "E046", "tests/mutants/m_e046.rule", "E046");
+golden!(e037_unpinned, "E037", "tests/mutants/m_e037.rule", "E037");
+golden!(e038_copy_changed, "E038", "tests/mutants/m_e038.rule", "E038");
+golden!(e039_no_copy, "E039", "tests/mutants/m_e039.rule", "E039");
+golden!(w119_uncited_pin, "W119", "tests/mutants/m_w119.rule", "W119");

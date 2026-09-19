@@ -453,6 +453,13 @@ element's fields under `elements`, and the record written for one call carries t
 an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and Wasm are
 generated; SQL is refused by name, because one query has nowhere to carry a value from row to row.
 
+## The digest in the header
+
+Every generated file names its source in its header — `rule 送料 v4, sha256:d98b4f699db8` — and
+`rulec api` gives the whole digest as `source_sha256`. It is the SHA-256 of the rule file's
+bytes, computed by rulec itself, so `gen --check` and a reader of the header agree on what was
+generated from what.
+
 ## The rows that matched
 
 Beside every function there is a twin with `_traced` on its name (`Traced` in Go and Swift).
@@ -462,19 +469,22 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 
 | | the twin | the row |
 |---|---|---|
-| Python | `def coupon_step_traced(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> tuple[Output, list[Fired]]:` | `Fired`, a `NamedTuple` of `table` and `row` |
-| TypeScript | `coupon_step_traced(…): [Output, Fired[]]` | `{ table: string; row: number }` |
-| JavaScript | `coupon_step_traced(…)`, returning `[out, trace]` | `{ table, row }` |
-| Rust | `coupon_step_traced(…) -> Result<(Output, Vec<Fired>), RuleError>` | `Fired { table: &'static str, row: u32 }` |
-| Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table` and `row` |
-| Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row}` |
-| Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:)` |
-| SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number |
-| Wasm | none: the answer of `call` is the record line, `trace` beside `observed` | `{"table":…,"row":…}` objects in that line |
+| Python | `def coupon_step_traced(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> tuple[Output, list[Fired]]:` | `Fired`, a `NamedTuple` of `table`, `row` and `label` (`""` when the row has none) |
+| TypeScript | `coupon_step_traced(…): [Output, Fired[]]` | `{ table: string; row: number; label?: string }` |
+| JavaScript | `coupon_step_traced(…)`, returning `[out, trace]` | `{ table, row, label? }` |
+| Rust | `coupon_step_traced(…) -> Result<(Output, Vec<Fired>), RuleError>` | `Fired { table: &'static str, row: u32, label: &'static str }` |
+| Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table`, `row` and `label` |
+| Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row, Label}` |
+| Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:label:)`, `label` defaulting to `""` |
+| SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number; NULL for a table that another table of the same output beat |
+| Wasm | none: the answer of `call` is the record line, `trace` beside `observed` | `{"table":…,"row":…}` objects in that line, with `"label"` when the row has one |
 
 The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
 `replay` report clusters by, so a trace taken from a log reads against the approved document
-directly. `rulec test` compares these rows as well as the values: a generated function that
+directly. A row is numbered as it is written, whatever order the branches are tried in: when
+several tables define one output, the branches of the table that takes precedence come first
+and the row still reports the table it was written in and its position there. A `clause` is
+one branch and fires as row 1 of a table named after it. `rulec test` compares these rows as well as the values: a generated function that
 produced the right amount from the wrong row fails there. `rulec api` names the twin under
 `traced` and gives its signature under `traced_signature`.
 

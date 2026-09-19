@@ -48,4 +48,25 @@ awk '{ sub(/>=2026-04-01 <=2026-06-30/, ">=2026-04-02 <=2026-06-30"); print }' "
 # agreement, so a missing one is an error (§1.2).
 awk '{ sub(/ 素割引 \|$/, "|"); print }'                               "$C/クーポン一枚.rule" > "$M/m_e111.rule"
 
+# --- Labels and tables that share an output (DESIGN-draft §2)
+s="$C/印紙税の本則と軽減.rule"
+# Two rows of one table with the same label
+awk '/^r4 / { sub(/^r4 /, "r3 ") } { print }'                          "$s" > "$M/m_e034.rule"
+# `overrides` naming a table that does not exist
+awk '/^overrides 本則$/ { sub(/本則/, "本則の表") } { print }'            "$s" > "$M/m_e035.rule"
+# A precedence over a row the rows of this table never meet
+awk '/^overrides 本則$/ { sub(/本則/, "本則, 本則:記載なし") } { print }'  "$s" > "$M/m_w117.rule"
+# A clause without its `when` line
+awk '!/^  when 注文金額/ { print }'                                      "$C/送料のただし書.rule" > "$M/m_e046.rule"
+
+# --- Sources (DESIGN-draft §3). The copies live beside the corpus, so the mutants sit there too.
+# A cited fragment with its pin line removed
+awk '!/^  第91条 sha256:/ { print }'                                     "$s" > "$M/m_e037.rule"
+# A pin whose digest is not the copy's
+awk '/^  第91条 sha256:/ { sub(/sha256:[0-9a-f]+/, "sha256:0000000000000000") } { print }' "$s" > "$M/m_e038.rule"
+# A citation of a fragment that has no copy
+awk '/^table 軽減/ { sub(/@措置法 第91条/, "@措置法 第92条") } { print }'  "$s" > "$M/m_e039.rule"
+# A pin no citation uses
+awk '{ print } /^  第91条 sha256:/ { print "  第92条 sha256:0000000000000000" }' "$s" > "$M/m_w119.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

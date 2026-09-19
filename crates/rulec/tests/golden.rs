@@ -74,3 +74,13 @@ golden!(w105_負担判定, "W105-b", "tests/corpus/送料.rule", "W105");
 golden!(w105_適用順序, "W105-c", "tests/corpus/適用順序.rule", "W105");
 golden!(e010_範囲記法, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_別名, "E011", "tests/mutants/m_e011.rule", "E011");
+
+// Labels and tables that share an output (DESIGN-draft §2).
+golden!(e034_ラベル重複, "E034", "tests/mutants/m_e034.rule", "E034");
+golden!(e035_指す先が無い, "E035", "tests/mutants/m_e035.rule", "E035");
+golden!(w117_効かない例外, "W117", "tests/mutants/m_w117.rule", "W117");
+golden!(e046_節の形, "E046", "tests/mutants/m_e046.rule", "E046");
+golden!(e037_固定が無い, "E037", "tests/mutants/m_e037.rule", "E037");
+golden!(e038_写しが変わった, "E038", "tests/mutants/m_e038.rule", "E038");
+golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
+golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");

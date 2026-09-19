@@ -62,7 +62,12 @@ fn 台帳の例は本当にそのコードを出す() {
             let d = std::env::temp_dir().join(format!("rulec-explain-{}", e.code));
             std::fs::create_dir_all(&d).expect("作業ディレクトリを作れない");
             for (name, text) in e.files {
-                std::fs::write(d.join(name), text).expect("隣のファイルを書けない");
+                // A copy of a source lives under `sources/law/…`, so the directories come first.
+                let p = d.join(name);
+                if let Some(parent) = p.parent() {
+                    std::fs::create_dir_all(parent).expect("隣のディレクトリを作れない");
+                }
+                std::fs::write(&p, text).expect("隣のファイルを書けない");
             }
             d
         });
@@ -94,7 +99,7 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     }
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
-    assert_eq!(all.len(), 54, "台帳の件数が変わった: {}", all.len());
+    assert_eq!(all.len(), 64, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

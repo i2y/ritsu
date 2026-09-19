@@ -141,9 +141,11 @@ fn commands() -> Vec<Cmd> {
             ],
             codes: &[
                 "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010",
-                "E011", "E012", "E013", "E032", "E033", "E101", "E102", "E103", "E104", "E105",
-                "E106", "E107", "E108", "E109", "E110", "E111", "E112", "E113", "W105", "W110",
-                "W111", "W114",
+                "E011", "E012", "E013", "E014", "E015", "E016", "E017", "E018", "E019", "E020",
+                "E021", "E022", "E023", "E024", "E025", "E026", "E027", "E028", "E029", "E030",
+                "E031", "E032", "E033", "E034", "E035", "E036", "E037", "E038", "E039", "E045", "E046", "E101", "E102", "E103",
+                "E104", "E105", "E106", "E107", "E108", "E109", "E110", "E111", "E112", "E113",
+                "E114", "E115", "W105", "W110", "W111", "W114", "W115", "W116", "W117", "W119",
             ],
         },
         Cmd {
@@ -286,6 +288,30 @@ fn commands() -> Vec<Cmd> {
             examples: vec![
                 "rulec vectors rules/送料.rule".into(),
                 "rulec vectors rules/ --out vectors/".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
+            name: "source",
+            args: "fetch|pin|outdated <file.rule>",
+            purpose: tr!(
+                "出典の写しを扱う。fetch は e-Gov から引用した断片を取って規則の隣に置き、pin は写しのハッシュを規則に固定し、outdated は後の改正で断片が変わるかを訊く",
+                "handle the copies of a rule's sources: fetch brings the cited fragments from e-Gov to the rule's side, pin writes the copies' digests into the rule, outdated asks whether a later amendment changes them"
+            ),
+            params: vec![
+                ("fetch|pin|outdated", tr!("fetch と outdated は網を見る（curl を呼ぶ）。pin は規則ファイルの固定行だけを書き換える", "fetch and outdated read the network (through curl); pin rewrites only the pin lines of the rule file")),
+                ("<file.rule>", tr!("`source` の宣言と `@` の引用を持つ規則", "a rule with `source` lines and `@` citations")),
+            ],
+            flags: vec![],
+            exits: vec![
+                (0, tr!("済んだ。outdated では、引いている断片を変える改正が無い", "done; for outdated, no later amendment changes a cited fragment")),
+                (1, tr!("outdated: 後の改正が引いている断片を変える。規則が読めないときも", "outdated: a later amendment changes a cited fragment; also when the rule cannot be parsed")),
+                (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
+            ],
+            examples: vec![
+                "rulec source fetch rules/印紙税.rule".into(),
+                "rulec source pin rules/印紙税.rule".into(),
+                "rulec source outdated rules/印紙税.rule".into(),
             ],
             codes: &[],
         },
@@ -746,6 +772,48 @@ fn refuse(msg: String) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// `rulec source fetch|pin|outdated <file.rule>` (§15.68). `fetch` and `outdated` are the
+/// only commands that read the network; `check` never does. `pin` rewrites the pin lines of
+/// the file and nothing else.
+fn source_cmd(files: &[&String]) -> ExitCode {
+    let verb = files.first().map(|s| s.as_str()).unwrap_or("");
+    if !matches!(verb, "fetch" | "pin" | "outdated") || files.len() != 2 {
+        return refuse(tr!("`rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
+    }
+    let path = files[1];
+    let Ok(src) = std::fs::read_to_string(path) else {
+        return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
+    };
+    let parsed = rulec::parse::parse(&src, path);
+    let Some(f) = parsed.file.filter(|_| parsed.diags.is_empty()) else {
+        let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+        print!("{}", rulec::findings_text(&parsed.diags, &lines));
+        return ExitCode::from(1);
+    };
+    let result = match verb {
+        "fetch" => rulec::sources::fetch(&f, path),
+        "outdated" => rulec::sources::outdated(&f, path),
+        _ => rulec::sources::pin(&f, path, &src).and_then(|(text, o)| {
+            if text != src {
+                std::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
+            }
+            Ok(o)
+        }),
+    };
+    match result {
+        Ok(o) => {
+            if o.lines.is_empty() {
+                println!("{}", tr!("{path}: 出典の宣言がありません", "{path}: no source is declared"));
+            }
+            for l in &o.lines {
+                println!("{l}");
+            }
+            ExitCode::from(if verb == "outdated" && o.changed { 1 } else { 0 })
+        }
+        Err(e) => refuse(e),
+    }
+}
+
 /// `--terse` shortens what a person reads; the JSON is already the machine-facing shape.
 fn terse_with_json() -> ExitCode {
     refuse(tr!(
@@ -901,6 +969,7 @@ fn main() -> ExitCode {
         }
         "coverage" => coverage(&files, json),
         "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html"), a.get("--audience") == Some("customer")),
+        "source" => source_cmd(&files),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {

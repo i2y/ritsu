@@ -39,6 +39,21 @@ to an enum is a compatible change on the wire, so the tools that guard
 the contract let it through — this is the check that stops it from
 passing quietly through a table with a `-` row.
 
+A rule that declares its documents with `source` and cites them with `@source fragment` is
+held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
+the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
+and rows that cite it), a missing copy is E039, a pin no citation uses is W119. `check` never
+reads the network: `rulec source fetch` brings the copies, `rulec source pin` writes the pins,
+and `rulec source outdated` asks e-Gov whether a later amendment changes a cited fragment.
+
+A rule in which two or more tables define the same output — a main rule and the special case
+that says `overrides` over it, a `clause` written as one line of prose among them — runs the
+first three checks over **those tables as one set**.
+Completeness is judged over their union. An overlap passes when a precedence is written and
+stops as E105 when none is. A row the rows taking precedence cover entirely is E102, and an
+`overrides` line whose rows meet none of its target's is W117. The approver's page says in one
+sentence which table is the exception to which.
+
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.

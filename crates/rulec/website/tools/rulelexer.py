@@ -35,10 +35,12 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sequence")
-HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "examples", "constraint")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sequence", "clause", "source")
+HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step")
+CLAUSE = ("when", "then", "always")
+SOURCE = ("law", "file", "asof")
 TYPES = ("money", "mass", "length", "rate", "number", "bool", "string", "date")
 TAX = ("incl_tax", "excl_tax")
 POLICIES = ("unique", "first")
@@ -77,7 +79,7 @@ class RuleLexer(RegexLexer):
             (r"(\()([A-Za-z_][A-Za-z0-9_]*)(\))",
              bygroups(Punctuation, Name.Attribute, Punctuation)),
             (words(MODIFIERS, suffix=r"\b"), Keyword),
-            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS, suffix=r"\b"),
+            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS + CLAUSE + SOURCE, suffix=r"\b"),
              Name.Builtin),
             (words(FUNCTIONS, suffix=r"\b"), Name.Function),
             (r"\bnot\b", Operator.Word),

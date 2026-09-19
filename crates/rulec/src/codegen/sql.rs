@@ -269,6 +269,40 @@ impl<'a> Gen<'a> {
         })
     }
 
+    /// The row columns the query produces, in the order it builds them: one per table, the
+    /// tables of a merged set in the order they are tried, each with the (merged) table its
+    /// rows are read from.
+    fn sql_members(&self) -> Vec<(String, String, &Table)> {
+        let mut out = Vec::new();
+        let mut k = 0;
+        for it in &self.f.items {
+            let Item::Table(pt) = it else { continue };
+            let Some(t) = self.c.table_at(pt) else { continue };
+            match self.set_for(t) {
+                Some(set) if set.merged() => {
+                    for m in set.members.iter().rev() {
+                        let member = self
+                            .f
+                            .items
+                            .iter()
+                            .find_map(|it| match it {
+                                Item::Table(u) if u.name.as_ref().is_some_and(|n| n.text == *m) => Some(u),
+                                _ => None,
+                            })
+                            .unwrap_or(pt);
+                        out.push((m.clone(), self.sql_row_col(member, k), t));
+                        k += 1;
+                    }
+                }
+                _ => {
+                    out.push((t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), self.sql_row_col(pt, k), t));
+                    k += 1;
+                }
+            }
+        }
+        out
+    }
+
     /// The name of a table's row column: `<alias>_row`, kept clear of every declared name.
     fn sql_row_col(&self, t: &Table, k: usize) -> String {
         let base = t.name.as_ref().map(pub_name).unwrap_or_else(|| format!("t{}", k + 1));
@@ -311,13 +345,8 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&od.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&od.name.text)), od.name.text, self.sql_col_doc(&od.name.text, &ty)));
         }
-        let mut k = 0;
-        for it in &self.f.items {
-            if let Item::Table(t) = it {
-                let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                o.push_str(&format!("--   {}  {}\n", q(&self.sql_row_col(t, k)), tr!("表 {tname} の行", "the row of table {tname}")));
-                k += 1;
-            }
+        for (tname, col, _) in self.sql_members() {
+            o.push_str(&format!("--   {}  {}\n", q(&col), tr!("表 {tname} の行", "the row of table {tname}")));
         }
         for g in &self.f.groups {
             let ms: Vec<String> = g.members.iter().map(|m| m.text.clone()).collect();
@@ -411,7 +440,8 @@ impl<'a> Gen<'a> {
         };
 
         let mut k = 0;
-        let mut tables: Vec<(&Table, String)> = Vec::new();
+        let mut guard_tables: Vec<&Table> = Vec::new();
+        let mut row_cols: Vec<String> = Vec::new();
         for it in &self.f.items {
             match it {
                 // A rule that walks a sequence is not generated for SQL at all (§15.56).
@@ -442,48 +472,108 @@ impl<'a> Gen<'a> {
                     ));
                     prev = name;
                 }
-                Item::Table(t) => {
-                    let row_col = self.sql_row_col(t, k);
+                Item::Table(pt) => {
+                    // The definition set is evaluated at its last member (DESIGN-draft §2.5);
+                    // at any other member's position the query builds nothing.
+                    let Some(t) = self.c.table_at(pt) else { continue };
                     let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                    let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
-                    // The row that matched: one WHEN per row, in order, so `policy first` is
-                    // the CASE's own rule and `policy unique` has been proved to make no
-                    // difference.
-                    stage += 1;
-                    let rows_cte = q(&format!("_c{stage}"));
-                    o.push_str(&format!(",\n-- {}\n{rows_cte} AS (\n  SELECT *, CASE\n", tr!("表 {tname}（{} {policy}）", "table {tname} ({} {policy})", crate::kw::POLICY)));
-                    for (ri, row) in t.rows.iter().enumerate() {
-                        let conds: Vec<String> = t
-                            .inputs
+                    // The tables to try, in the order they are tried, each with its rows of
+                    // the (merged) table. A table that stands alone is the one entry.
+                    let groups: Vec<(String, &Table, Vec<usize>)> = match self.set_for(t) {
+                        Some(set) if set.merged() => set
+                            .members
                             .iter()
                             .enumerate()
-                            .filter_map(|(ci, (col, _))| {
-                                let ty = self.ty_of(col);
-                                self.sql_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                            .rev()
+                            .map(|(mi, m)| {
+                                let member = self
+                                    .f
+                                    .items
+                                    .iter()
+                                    .find_map(|it| match it {
+                                        Item::Table(u) if u.name.as_ref().is_some_and(|n| n.text == *m) => Some(u),
+                                        _ => None,
+                                    })
+                                    .unwrap_or(pt);
+                                (m.clone(), member, (0..t.rows.len()).filter(|&i| set.member_of[i] == mi).collect())
                             })
-                            .collect();
-                        let cond = if conds.is_empty() { "TRUE".into() } else { conds.join(" AND ") };
-                        let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
-                        o.push_str(&format!("    WHEN {cond} THEN {}  -- {}\n", ri + 1, tr!("行{}: {}", "row {}: {}", ri + 1, cells.join(" | "))));
+                            .collect(),
+                        _ => vec![(tname.clone(), pt, (0..t.rows.len()).collect())],
+                    };
+                    let merged = groups.len() > 1;
+                    let mut cols_here: Vec<String> = Vec::new();
+                    for (mname, member, idxs) in &groups {
+                        let row_col = self.sql_row_col(member, k);
+                        let kind = if member.clause { tr!("節", "clause") } else { tr!("表", "table") };
+                        let head = if merged {
+                            tr!("{kind} {mname}（{tname} を定める。先に試した表か節が当たっていれば NULL）", "{kind} {mname} (defines {tname}; NULL when a table or clause tried earlier matched)")
+                        } else if member.clause {
+                            tr!("節 {tname}", "clause {tname}")
+                        } else {
+                            let policy = if member.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
+                            tr!("表 {tname}（{} {policy}）", "table {tname} ({} {policy})", crate::kw::POLICY)
+                        };
+                        // The row that matched: one WHEN per row, in order, so `policy first` is
+                        // the CASE's own rule and `policy unique` has been proved to make no
+                        // difference. In a merged set the tables tried earlier come first.
+                        stage += 1;
+                        let rows_cte = q(&format!("_c{stage}"));
+                        o.push_str(&format!(",\n-- {head}\n{rows_cte} AS (\n  SELECT *, CASE\n"));
+                        if !cols_here.is_empty() {
+                            let m = cols_here.iter().map(|c| format!("{} IS NOT NULL", q(c))).collect::<Vec<_>>().join(" OR ");
+                            o.push_str(&format!("    WHEN {m} THEN NULL  -- {}\n", tr!("先に試した表が当たった", "a table tried earlier matched")));
+                        }
+                        for &ri in idxs {
+                            let row = &t.rows[ri];
+                            let conds: Vec<String> = t
+                                .inputs
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(ci, (col, _))| {
+                                    let ty = self.ty_of(col);
+                                    self.sql_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                                })
+                                .collect();
+                            let cond = if conds.is_empty() { "TRUE".into() } else { conds.join(" AND ") };
+                            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+                            o.push_str(&format!("    WHEN {cond} THEN {}  -- {}\n", row.index, self.row_head(t, ri, &cells.join(" | "))));
+                        }
+                        o.push_str(&format!("  END AS {} FROM {prev}\n)", q(&row_col)));
+                        prev = rows_cte;
+                        row_cols.push(row_col.clone());
+                        cols_here.push(row_col);
+                        k += 1;
                     }
-                    o.push_str(&format!("  END AS {} FROM {prev}\n)", q(&row_col)));
-                    prev = rows_cte;
-                    // The output columns, keyed on that number.
+                    // The output columns, keyed on that number — on whichever table's number,
+                    // in a merged set.
                     let mut outs: Vec<String> = Vec::new();
                     for (oi, oc) in t.outputs.iter().enumerate() {
                         let mut arms: Vec<String> = Vec::new();
-                        for (ri, row) in t.rows.iter().enumerate() {
-                            arms.push(format!("WHEN {} THEN {}", ri + 1, out_value(self, &oc.name.text, row.outs.get(oi), &local, &mut sql)));
+                        if merged {
+                            for ((_, _, idxs), col) in groups.iter().zip(&cols_here) {
+                                for &ri in idxs {
+                                    arms.push(format!(
+                                        "WHEN {} = {} THEN {}",
+                                        q(col),
+                                        t.rows[ri].index,
+                                        out_value(self, &oc.name.text, t.rows[ri].outs.get(oi), &local, &mut sql)
+                                    ));
+                                }
+                            }
+                            outs.push(format!("CASE {} END AS {}", arms.join(" "), q(&local(&oc.name.text))));
+                        } else {
+                            for row in &t.rows {
+                                arms.push(format!("WHEN {} THEN {}", row.index, out_value(self, &oc.name.text, row.outs.get(oi), &local, &mut sql)));
+                            }
+                            outs.push(format!("CASE {} {} END AS {}", q(&cols_here[0]), arms.join(" "), q(&local(&oc.name.text))));
                         }
-                        outs.push(format!("CASE {} {} END AS {}", q(&row_col), arms.join(" "), q(&local(&oc.name.text))));
                     }
                     flush_binds(&mut o, &mut prev, &mut sql, &mut stage);
                     stage += 1;
                     let vals_cte = q(&format!("_c{stage}"));
                     o.push_str(&format!(",\n{vals_cte} AS (\n  SELECT *, {} FROM {prev}\n)", outs.join(", ")));
                     prev = vals_cte;
-                    tables.push((t, row_col));
-                    k += 1;
+                    guard_tables.push(t);
                 }
             }
         }
@@ -527,7 +617,7 @@ impl<'a> Gen<'a> {
         // W114: a pair of rows whose exclusivity could not be proven statically. The other
         // languages stop; here the row says what happened, and the runner stops on it.
         let mut contra: Vec<String> = Vec::new();
-        for (t, _) in &tables {
+        for t in &guard_tables {
             let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
             let Some(pairs) = self.w114.get(&tname) else { continue };
             for (i, j) in pairs {
@@ -550,7 +640,7 @@ impl<'a> Gen<'a> {
                 contra.push(format!(
                     "WHEN {} THEN {}",
                     conds.join(" AND "),
-                    lit(&tr!("表 {tname}: 行{} と 行{} が同時に当てはまりました", "table {tname}: row {} and row {} matched at the same time", i + 1, j + 1))
+                    lit(&tr!("表 {tname}: {} と {} が同時に当てはまりました", "table {tname}: {} and {} matched at the same time", self.row_name(t, *i), self.row_name(t, *j)))
                 ));
             }
         }
@@ -558,7 +648,7 @@ impl<'a> Gen<'a> {
         let mut select: Vec<String> = vec![q("_id")];
         select.extend(self.f.inputs.iter().map(|i| q(&local(&i.name.text))));
         select.extend(finals);
-        select.extend(tables.iter().map(|(_, rc)| q(rc)));
+        select.extend(row_cols.iter().map(|rc| q(rc)));
         select.push(q("_input_error"));
         if !contra.is_empty() {
             select.push(format!("CASE {} ELSE NULL END AS {}", contra.join(" "), q("_contradiction")));
@@ -634,13 +724,8 @@ impl<'a> Gen<'a> {
             })
             .collect();
         let mut rows: Vec<String> = Vec::new();
-        let mut k = 0;
-        for it in &self.f.items {
-            if let Item::Table(t) = it {
-                let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                rows.push(crate::json::Obj::new().str("table", &tname).str("column", &self.sql_row_col(t, k)).finish());
-                k += 1;
-            }
+        for (tname, col, _) in self.sql_members() {
+            rows.push(crate::json::Obj::new().str("table", &tname).str("column", &col).finish());
         }
         crate::json::Obj::new()
             .str("file", &format!("{alias}.sql"))
@@ -700,16 +785,19 @@ impl<'a> Gen<'a> {
             .map(|o| format!("({}, {}, \"{}\")", py(&o.name.text), py(&local(&o.name.text)), kind(&self.ty_of(&o.name.text))))
             .collect();
         let mut tables: Vec<String> = Vec::new();
-        let mut k = 0;
+        let mut labels: Vec<String> = Vec::new();
         let mut any_w114 = false;
-        for it in &self.f.items {
-            if let Item::Table(t) = it {
-                let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                tables.push(format!("({}, {})", py(&tname), py(&self.sql_row_col(t, k))));
-                if self.w114.get(&tname).is_some_and(|p| !p.is_empty()) {
-                    any_w114 = true;
+        for (tname, col, t) in self.sql_members() {
+            tables.push(format!("({}, {})", py(&tname), py(&col)));
+            let key = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+            if self.w114.get(&key).is_some_and(|p| !p.is_empty()) {
+                any_w114 = true;
+            }
+            for row in &t.rows {
+                let mine = row.origin.as_deref().map(|o| o == tname).unwrap_or(true);
+                if let (true, Some(l)) = (mine, &row.label) {
+                    labels.push(format!("({}, {}): {}", py(&tname), row.index, py(&l.text)));
                 }
-                k += 1;
             }
         }
         SQL_RUNNER
@@ -718,6 +806,7 @@ impl<'a> Gen<'a> {
             .replace("@INPUTS@", &ins.join(", "))
             .replace("@OUTPUTS@", &outs.join(", "))
             .replace("@TABLES@", &tables.join(", "))
+            .replace("@LABELS@", &labels.join(", "))
             .replace("@CONTRADICTION@", if any_w114 { "\"_contradiction\"" } else { "None" })
     }
 }
@@ -734,6 +823,7 @@ INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
+LABELS = {@LABELS@}
 CONTRADICTION = @CONTRADICTION@
 
 
@@ -802,7 +892,13 @@ for r in db.execute(SQL):
         raise AssertionError(r[CONTRADICTION])
     ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
     obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
-    rows = ",".join('{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c]) + "}" for t, c in TABLES)
+    rows = ",".join(
+        '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
+        + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
+        + "}"
+        for t, c in TABLES
+        if r[c] is not None
+    )
     print('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}")
 "#;
 

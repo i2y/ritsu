@@ -215,13 +215,13 @@ func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 	var size SizeClass
 	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
 		size = SizeClassS60
-		trace = append(trace, Fired{"サイズ判定", 1})
+		trace = append(trace, Fired{"サイズ判定", 1, ""})
 	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
 		size = SizeClassS80
-		trace = append(trace, Fired{"サイズ判定", 2})
+		trace = append(trace, Fired{"サイズ判定", 2, ""})
 	} else if true { // row 3: - | S100
 		size = SizeClassS100
-		trace = append(trace, Fired{"サイズ判定", 3})
+		trace = append(trace, Fired{"サイズ判定", 3, ""})
 	} else {
 		panic("unreachable: completeness was statically checked by rulec")
 	}
@@ -295,7 +295,7 @@ input that falls through it:
 error[E101]: Completeness gap: some input matches no row
   --> rules/ゆうパック運賃.rule:34 table 運賃表
    |
-34 | table 運賃表(fee_table)
+34 | table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
    |       ^^^^^^ the input space is not fully covered
    |
  An input that matches no row: あて先 = 山梨県, サイズ = S60
@@ -372,7 +372,7 @@ $ cargo test          # 326 tests; python3, node, rustc, ruby, go and swiftc are
 
 ## Where it stands
 
-24 rules taken from real published terms are checked, generated and run on every commit, and all 54 diagnostics are implemented. What is built:
+26 rules taken from real published terms are checked, generated and run on every commit, and all 64 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

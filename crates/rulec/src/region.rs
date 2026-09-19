@@ -287,8 +287,17 @@ fn coord_satisfies(c: &Coord, op: CmpOp, bound: Rat) -> bool {
     }
 }
 
-/// The table that decides a column, when one does.
-fn producing_table<'a>(f: &'a RuleFile, t: &Table, k: &str) -> Option<&'a Table> {
+/// The table that decides a column, when one does: the merged table of the set that defines
+/// it, which is the table itself when it stands alone.
+fn producing_table<'a>(f: &'a RuleFile, c: &'a Checked, t: &Table, k: &str) -> Option<&'a Table> {
+    let mine = t.name.as_ref().map(|n| n.text.as_str());
+    if let Some(s) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == k)) {
+        let its = s.table.name.as_ref().map(|n| n.text.as_str());
+        if its != mine && !s.members.iter().any(|m| Some(m.as_str()) == mine) {
+            return Some(&s.table);
+        }
+        return None;
+    }
     f.items.iter().find_map(|it| match it {
         Item::Table(u)
             if u.name.as_ref().map(|n| &n.text) != t.name.as_ref().map(|n| &n.text)
@@ -314,10 +323,10 @@ struct Upstream<'a> {
 }
 
 /// Every column of `t` that a table above it decides.
-fn upstreams<'a>(t: &'a Table, c: &Checked, f: &'a RuleFile) -> Vec<Upstream<'a>> {
+fn upstreams<'a>(t: &'a Table, c: &'a Checked, f: &'a RuleFile) -> Vec<Upstream<'a>> {
     let mut out = Vec::new();
     for (ci, (k, _)) in t.inputs.iter().enumerate() {
-        let Some(u) = producing_table(f, t, k) else { continue };
+        let Some(u) = producing_table(f, c, t, k) else { continue };
         let Some(oi) = u.outputs.iter().position(|o| o.name.text == *k) else { continue };
         let Some(reg) = TableRegion::build(u, c, f) else { continue };
         let Some(ty) = c.ty_of(k) else { continue };
@@ -923,6 +932,10 @@ pub struct TableCheck {
     /// whichever of the three kinds they are. The shadow-pair coverage of §9.2 demands a point
     /// "inside the intersection" for each of these pairs.
     pub overlaps: Vec<(usize, usize)>,
+    /// The pairs a declared precedence orders across two tables (0-based, the winning row
+    /// first), with whether the winner lies inside the loser: an exception, or a rule that
+    /// reaches beyond what it takes precedence over. The approver's page tells them apart.
+    pub edge_pairs: Vec<(usize, usize, bool)>,
     /// The rows that got E102 (0-based). They never match, so §9.2's row coverage leaves them
     /// out.
     pub dead: Vec<usize>,
@@ -1017,7 +1030,22 @@ fn outs_equal(a: &Row, b: &Row) -> bool {
 }
 
 /// Emits E101 / E102 / E105 / W105 / W110.
+/// The checks of one table on its own. The unit of checking is the definition set
+/// (DESIGN-draft §2.4); this is the set of one table, kept for callers that hold a table.
 pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
+    match c.set_of_table(t) {
+        Some(s) if s.members.len() == 1 => check_set(s, c, f, path, budget),
+        _ => check_set(&crate::defset::single(t), c, f, path, budget),
+    }
+}
+
+/// The checks of one definition set: completeness of the union, decisiveness of every
+/// overlap, reachability of every row, on the merged table (DESIGN-draft §1, §2.4).
+///
+/// For a set of one table this is exactly the check the table always had: the rows come in
+/// their own order, and the precedence relation is the policy's.
+pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
+    let t = &set.table;
     let inputs = &f.inputs;
     let mut out = Vec::new();
     let mut quiet = Vec::new();
@@ -1025,6 +1053,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     let mut nodes = 0i64;
     let mut w114: Vec<(usize, usize)> = Vec::new();
     let mut overlaps: Vec<(usize, usize)> = Vec::new();
+    let mut edge_pairs: Vec<(usize, usize, bool)> = Vec::new();
     let mut dead_rows: Vec<usize> = Vec::new();
     let empty = TableCheck {
         diags: Vec::new(),
@@ -1033,6 +1062,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         shadow,
         nodes: 0,
         overlaps: Vec::new(),
+        edge_pairs: Vec::new(),
         dead: Vec::new(),
     };
     let _ = inputs;
@@ -1040,8 +1070,8 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     if reg.axes.is_empty() || t.rows.is_empty() {
         return empty;
     }
+    let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
     if let Some((col, ty)) = &reg.unanalyzable {
-        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         return TableCheck {
             w114: Vec::new(),
             diags: vec![
@@ -1056,22 +1086,43 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             shadow: Shadow::default(),
             nodes: 0,
             overlaps: Vec::new(),
+            edge_pairs: Vec::new(),
             dead: Vec::new(),
         };
     }
-    let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-    let at = |line: usize| tr!("{path}:{line} 表 {tname}", "{path}:{line} table {tname}");
+    let merged = set.merged();
+    // Where a diagnostic points: the file, the line, and the table (or clause) the row was
+    // written in.
+    let at = |line: usize, mi: usize| tr!("{path}:{line} {} {}", "{path}:{line} {} {}", set.kind_word(mi), set.members[mi]);
+    // How a row is named. A row of a set of one table is `行3`; in a merged set the table is
+    // named too, and a labelled row shows its label beside the number. A clause is named as
+    // a clause: it has one row, and the row is the clause.
+    let rn = |i: usize| -> String {
+        let r = &t.rows[i];
+        if set.is_clause_row(i) {
+            return tr!("節 {}", "clause {}", set.row_table(i));
+        }
+        let base = if merged {
+            tr!("表 {} 行{}", "table {} row {}", set.row_table(i), r.index)
+        } else {
+            tr!("行{}", "row {}", r.index)
+        };
+        match &r.label {
+            Some(l) => tr!("{base}（{}）", "{base} ({})", l.text),
+            None => base,
+        }
+    };
     let head_span: Span = t.name.as_ref().map(|n| n.span.clone()).unwrap_or(t.span.clone());
+    let members_text = || (0..set.members.len()).map(|mi| format!("{} {}", set.kind_word(mi), set.members[mi])).collect::<Vec<_>>().join(if crate::i18n::ja() { "、" } else { ", " });
 
     // --- Overlaps and shadowing
     let mut shadowed = vec![false; t.rows.len()];
+    let mut effective = vec![false; set.edges.len()];
     for i in 0..t.rows.len() {
         for j in (i + 1)..t.rows.len() {
             if !reg.intersects(i, j) {
                 continue;
             }
-            let mut sub = vec![vec![false; 0]; 0];
-            let _ = &mut sub;
             let mut wpath = Vec::new();
             for ai in 0..reg.axes.len() {
                 let c0 = (0..reg.axes[ai].len())
@@ -1124,7 +1175,35 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     None => feas = Feasible::Unknown,
                 }
             }
-            match t.policy {
+            // What orders the pair: the policy of their table when they share one, the
+            // declared precedence when they do not. Rows come in evaluation order, so an
+            // ordered pair `i < j` always has `i` winning.
+            let same = set.same_member(i, j);
+            let ordered = set.comparable(i, j);
+            let tn_j = set.row_table(j).to_string();
+            if !same && ordered {
+                // A declared precedence between two tables. The overlap is what the
+                // `overrides` line is for, so nothing is reported; the pair is kept for the
+                // coverage obligation and for the approver's page, which says whether the
+                // winner lies inside the loser (an exception) or reaches beyond it.
+                if feas != Feasible::Unknown {
+                    overlaps.push((i, j));
+                    let contained = reg.contains(j, i);
+                    nodes += (reg.axes.len() * 4) as i64;
+                    edge_pairs.push((i, j, contained));
+                    for (k, e) in set.edges.iter().enumerate() {
+                        if set.member_of[i] == e.winner
+                            && set.member_of[j] == e.loser
+                            && e.loser_row.is_none_or(|r| r == j)
+                        {
+                            effective[k] = true;
+                        }
+                    }
+                }
+                continue;
+            }
+            let policy = if same { set.policy_of(j) } else { Policy::Unique };
+            match policy {
                 Policy::Unique if feas == Feasible::Unknown => {
                     // §8.1: a pair whose outputs are syntactically identical yields the same
                     // value whichever row wins, so it gets no guard.
@@ -1150,15 +1229,15 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     out.push(
                         Diag::warning(
                             "W114",
-                            tr!("未確認の重なり: 行{} と 行{} の両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both row {} and row {}", i + 1, j + 1),
+                            tr!("未確認の重なり: {} と {} の両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both {} and {}", rn(i), rn(j)),
                         )
-                        .at(at(t.rows[j].span.line))
-                        .table(tname.clone())
-                        .rowref(tname.clone(), i + 1)
-                        .rowref(tname.clone(), j + 1)
+                        .at(at(t.rows[j].span.line, set.member_of[j]))
+                        .table(tn_j.clone())
+                        .rowref(set.row_table(i).to_string(), t.rows[i].index)
+                        .rowref(tn_j.clone(), t.rows[j].index)
                         .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
-                        .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
-                        .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
+                        .mark(t.rows[i].span.clone(), rn(i))
+                        .mark(t.rows[j].span.clone(), rn(j))
                         .note(tr!("重なる条件: {}", "Overlapping condition: {}", reg.overlap_text(&t.rows[i], &t.rows[j])))
                         .note(if touches_define {
                             tr!("定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。", "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.")
@@ -1175,17 +1254,26 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             outs(&t.rows[i]),
                             outs(&t.rows[j])
                         ))
-                        .note(tr!(
-                            "存在しないなら: このままで構いません。生成コードには、万一この条件に当てはまる入力が来たとき黙って 行{} を選ばずエラーを返すガードが入ります。",
-                            "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row {}.",
-                            i + 1
-                        ))
+                        .note(if same {
+                            tr!(
+                                "存在しないなら: このままで構いません。生成コードには、万一この条件に当てはまる入力が来たとき黙って {} を選ばずエラーを返すガードが入ります。",
+                                "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking {}.",
+                                rn(i)
+                            )
+                        } else {
+                            tr!(
+                                "存在しないなら: このままで構いません。存在するなら、どちらが優先するかを、優先する表の `{o} {}` の行に書いてください。それまでは生成コードにガードが入ります。",
+                                "If none exists: leave it as is. If one does, say which takes precedence with an `{o} {}` line on the table that wins. Until then the generated code carries a guard.",
+                                set.row_table(i),
+                                o = crate::kw::OVERRIDES
+                            )
+                        })
                         .note(tr!("この警告は check --diff-base では新規分だけ表示されます。", "Under check --diff-base, only new instances of this warning are shown."))
                         .key(pair_key(&t.rows[i], &t.rows[j])),
                     );
                 }
                 Policy::Unique => {
-                    let same = t.rows[i].outs.len() == t.rows[j].outs.len();
+                    let same_len = t.rows[i].outs.len() == t.rows[j].outs.len();
                     // If a definition column takes part in the intersection, the witness has
                     // not been checked against the definition's body. The sieve will look at
                     // definition axes in M1 (§8.5). Until then, say so rather than stay silent.
@@ -1199,14 +1287,14 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         .map(|ai| reg.col_names[ai].clone())
                         .collect();
                     out.push(
-                        Diag::error("E105", tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当てはまります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1))
-                            .at(at(t.rows[j].span.line))
-                            .table(tname.clone())
-                            .rowref(tname.clone(), i + 1)
-                            .rowref(tname.clone(), j + 1)
+                        Diag::error("E105", tr!("行の重なり: 同じ入力が {} と {} の両方に当てはまります", "Overlapping rows: the same input matches {} and {}", rn(i), rn(j)))
+                            .at(at(t.rows[j].span.line, set.member_of[j]))
+                            .table(tn_j.clone())
+                            .rowref(set.row_table(i).to_string(), t.rows[i].index)
+                            .rowref(tn_j.clone(), t.rows[j].index)
                             .wit(pairs_to_witness(reg.witness_pairs(&wpath)))
-                            .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
-                            .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1))
+                            .mark(t.rows[i].span.clone(), rn(i))
+                            .mark(t.rows[j].span.clone(), rn(j))
                             .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
                             .note(match &built {
                                 // §6.2: a witness that involves definitions is shown only after
@@ -1215,7 +1303,16 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                                 Some(b) => tr!("この例を作る入力: {b}", "An input producing this example: {b}"),
                                 None => String::new(),
                             })
-                            .note(if same {
+                            .note(if !same {
+                                tr!(
+                                    "表 {} と 表 {} のどちらが優先するか書かれていません。優先する表の `{p}` の次に `{o} <相手>` を書いてください。順序に意味が無いなら、どちらかの行を直してください。",
+                                    "It is not written whether table {} or table {} takes precedence. Put `{o} <the other>` after `{p}` on the table that wins. If no order is meant, fix one of the rows.",
+                                    set.row_table(i),
+                                    set.row_table(j),
+                                    p = crate::kw::POLICY,
+                                    o = crate::kw::OVERRIDES
+                                )
+                            } else if same_len {
                                 tr!("`{p} {u}` では重なりは許されません。どちらが正しいか決めるか、順序に意味を持たせるなら `{p} {f}` を宣言してください。", "`{p} {u}` does not allow overlapping rows. Decide which row is right, or declare `{p} {f}` if the order is meant to matter.", p = crate::kw::POLICY, u = crate::kw::UNIQUE, f = crate::kw::FIRST)
                             } else {
                                 tr!("`{} {}` では重なりは許されません。", "`{} {}` does not allow overlapping rows.", crate::kw::POLICY, crate::kw::UNIQUE)
@@ -1249,14 +1346,14 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                     let same_out = outs_equal(&t.rows[i], &t.rows[j]);
                     let d = Diag::warning(
                         "W105",
-                        tr!("行の重なり: 同じ入力が 行{} と 行{} の両方に当てはまります", "Overlapping rows: the same input matches row {} and row {}", i + 1, j + 1),
+                        tr!("行の重なり: 同じ入力が {} と {} の両方に当てはまります", "Overlapping rows: the same input matches {} and {}", rn(i), rn(j)),
                     )
-                    .at(at(t.rows[j].span.line))
-                    .table(tname.clone())
-                    .rowref(tname.clone(), i + 1)
-                    .rowref(tname.clone(), j + 1)
-                    .mark(t.rows[i].span.clone(), tr!("行{}", "row {}", i + 1))
-                    .mark(t.rows[j].span.clone(), tr!("行{}", "row {}", j + 1));
+                    .at(at(t.rows[j].span.line, set.member_of[j]))
+                    .table(tn_j.clone())
+                    .rowref(tn_j.clone(), t.rows[i].index)
+                    .rowref(tn_j.clone(), t.rows[j].index)
+                    .mark(t.rows[i].span.clone(), rn(i))
+                    .mark(t.rows[j].span.clone(), rn(j));
                     let d = if confirmed {
                         d.wit(pairs_to_witness(reg.witness_pairs(&wpath)))
                             .note(tr!("両方に当てはまる例: {w}", "Both rows match: {w}"))
@@ -1271,7 +1368,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                         ))
                     };
                     let d = d
-                    .note(tr!("`{} {}` のため 行{} が勝ちます。意図通りですか。", "Because of `{} {}`, row {} wins. Is this intended?", crate::kw::POLICY, crate::kw::FIRST, i + 1))
+                    .note(tr!("`{} {}` のため {} が勝ちます。意図通りですか。", "Because of `{} {}`, {} wins. Is this intended?", crate::kw::POLICY, crate::kw::FIRST, rn(i)))
                     .key(pair_key(&t.rows[i], &t.rows[j]));
                     if contained {
                         shadow.structural += 1;
@@ -1290,23 +1387,47 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
         }
     }
 
+    // --- W117: a declared precedence that no pair of rows exercises
+    for (k, e) in set.edges.iter().enumerate() {
+        if effective[k] {
+            continue;
+        }
+        let winner = format!("{} {}", set.kind_word(e.winner), set.members[e.winner]);
+        let loser = match e.loser_row {
+            Some(r) => rn(r),
+            None => format!("{} {}", set.kind_word(e.loser), set.members[e.loser]),
+        };
+        out.push(
+            Diag::warning("W117", tr!("効かない例外: {winner} の行は {loser} の行と交わりません", "An exception with no effect: no row of {winner} meets a row of {loser}"))
+                .at(at(e.span.line, e.winner))
+                .table(set.members[e.winner].clone())
+                .mark(e.span.clone(), "")
+                .note(tr!(
+                    "`{}` は、両方に当てはまる入力があるときに、どちらが勝つかを決めます。交わる行が一つも無いので、この行は何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。",
+                    "`{}` decides which wins when an input matches both. No rows meet, so the line decides nothing. That is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule.",
+                    crate::kw::OVERRIDES
+                )),
+        );
+    }
+
     // --- Unreachable rows
     let ups = upstreams(t, c, f);
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
+        let winners = &set.beats[i];
         let dead = if reg.empty(i) || up_dead {
             true
-        } else if t.policy == Policy::TopDown && i > 0 {
-            // First check containment in a single earlier row. Every dead row of a staircase
+        } else if !winners.is_empty() {
+            // First check containment in a single winning row. Every dead row of a staircase
             // is caught here, and the test is cheap, being a per-axis subset test. Containment
             // in a union is needed only when several rows cover the row just together.
-            if (0..i).any(|e| reg.contains(e, i)) {
-                nodes += (i * reg.axes.len() * 4) as i64;
+            if winners.iter().any(|&e| reg.contains(e, i)) {
+                nodes += (winners.len() * reg.axes.len() * 4) as i64;
                 true
             } else {
-                // Earlier rows that do not intersect contribute nothing to the union, so drop
+                // Winning rows that do not intersect contribute nothing to the union, so drop
                 // them.
-                let earlier: Vec<usize> = (0..i).filter(|&e| reg.intersects(e, i)).collect();
+                let earlier: Vec<usize> = winners.iter().copied().filter(|&e| reg.intersects(e, i)).collect();
                 if earlier.is_empty() {
                     false
                 } else {
@@ -1320,15 +1441,28 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
             false
         };
         if dead {
+            let tn = set.row_table(i).to_string();
+            let by_position = set.policy_of(i) == Policy::TopDown && winners.iter().all(|&e| set.same_member(e, i));
+            let winner_tables: Vec<String> = {
+                let mut v: Vec<String> = Vec::new();
+                for &e in winners {
+                    let mi = set.member_of[e];
+                    let n = format!("{} {}", set.kind_word(mi), set.members[mi]);
+                    if set.members[mi] != tn && !v.contains(&n) {
+                        v.push(n);
+                    }
+                }
+                v
+            };
             dead_rows.push(i);
             out.push(
-                Diag::error("E102", tr!("行{} はどの入力にも当てはまりません", "Unreachable row: row {} never matches", i + 1))
-                    .at(at(t.rows[i].span.line))
-                    .table(tname.clone())
-                    .row(i + 1)
-                    .rowref(tname.clone(), i + 1)
+                Diag::error("E102", tr!("{} はどの入力にも当てはまりません", "Unreachable row: {} never matches", rn(i)))
+                    .at(at(t.rows[i].span.line, set.member_of[i]))
+                    .table(tn.clone())
+                    .row(t.rows[i].index)
+                    .rowref(tn.clone(), t.rows[i].index)
                     .fix_kind(crate::diag::FixKind::RemoveRow)
-                    .mark(t.rows[i].span.clone(), tr!("行{}: ここに到達する入力はありません", "row {}: no input reaches here", i + 1))
+                    .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)))
                     .note(if reg.unreachable_row[i] {
                         tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
                     } else if up_dead {
@@ -1336,8 +1470,10 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
                             "上流の表は、この行が名指しする値を、ほかの列がこの行の言うとおりであるときには出しません。片方ずつなら起こりますが、同時には起こりません。",
                             "The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not."
                         )
-                    } else if t.policy == Policy::TopDown {
+                    } else if by_position {
                         tr!("`{} {}` のため、この行の範囲は先行する行がすべて先に取ります。", "Because of `{} {}`, the earlier rows take all of this row's range first.", crate::kw::POLICY, crate::kw::FIRST)
+                    } else if !winner_tables.is_empty() {
+                        tr!("この行の範囲は、優先する {} の行がすべて先に取ります。", "The rows of {}, which take precedence, take all of this row's range first.", winner_tables.join(if crate::i18n::ja() { "、" } else { ", " }))
                     } else {
                         tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once.")
                     })
@@ -1355,37 +1491,47 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     let all: Vec<usize> = (0..t.rows.len()).collect();
     let hole = reg.find_hole(&all, &mut left, &ups, c);
     nodes += budget - left;
+    let anchor = set.members[0].clone();
     if let Some(hole) = hole {
         out.push(
             {
                 let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"))
-                    .at(at(head_span.line))
-                    .table(tname.clone())
+                    .at(at(head_span.line, 0))
+                    .table(anchor.clone())
                     .wit(pairs_to_witness(reg.witness_pairs(&hole)))
                     .mark(head_span.clone(), tr!("起こりうる入力を覆いきっていません", "the input space is not fully covered"))
                     .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
                     .note(tr!("ヒント: この入力に当てはまる行を足してください。", "hint: add a row that matches this input."));
+                let d = if merged {
+                    d.note(tr!(
+                        "{} を合わせても覆えていません。行はどの表に足してもよく、優先の順序はそのまま効きます。",
+                        "{} together do not cover it. The row may go in any of them; the declared precedence still applies.",
+                        members_text()
+                    ))
+                } else {
+                    d
+                };
                 // The rewritten form (§11 principle 3) as data: the row's input cells are the
                 // witness, and the output cells are copied from the first row purely to give
                 // a shape that parses. **The amount has to come from the written rule**, which
                 // the note says and `fix.text` — being prose-free and language independent —
-                // cannot.
+                // cannot. A merged set has no one table the row belongs to, so no `fix.text`.
                 match reg.row_text(&hole, t) {
-                    Some(row) => d
+                    Some(row) if !merged => d
                         .note(tr!(
                             "足す行の形: `{row}`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か旧実装のどれが出どころかを決めて、そこから書いてください。この一行が閉じるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
                             "The shape of the row to add: `{row}`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one."
                         ))
                         .fix(crate::diag::FixKind::AddRow, row),
-                    None => d,
+                    _ => d,
                 }
             },
         );
     } else if left < 0 {
         out.push(
             Diag::error("E109", tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"))
-                .at(at(head_span.line))
-                .table(tname.clone())
+                .at(at(head_span.line, 0))
+                .table(anchor.clone())
                 .mark(head_span.clone(), "")
                 .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
                 .note(tr!("列をグループでまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
@@ -1393,19 +1539,31 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
     }
 
     // --- W110: a `policy first` table with no overlaps
-    if t.policy == Policy::TopDown && !shadowed.iter().any(|x| *x) && t.rows.len() > 1 {
-        out.push(
-            Diag::warning("W110", tr!("この表には重なりがありません", "This table has no overlapping rows"))
-                .at(at(head_span.line))
-                .table(tname.clone())
-                .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
-                .mark(head_span.clone(), "")
-                .note(tr!("`{} {}` にすると、行の並べ替えが意味を変えないことを検査が保証します。", "With `{} {}`, the checker guarantees that reordering the rows does not change the meaning.", crate::kw::POLICY, crate::kw::UNIQUE)),
-        );
+    for (mi, pol) in set.policies.iter().enumerate() {
+        if *pol != Policy::TopDown {
+            continue;
+        }
+        let rows_of: Vec<usize> = (0..t.rows.len()).filter(|&i| set.member_of[i] == mi).collect();
+        if rows_of.len() > 1 && !rows_of.iter().any(|&i| shadowed[i]) {
+            let tn = set.members[mi].clone();
+            let (line, span) = if merged {
+                let first = &t.rows[rows_of[0]];
+                (first.span.line, first.span.clone())
+            } else {
+                (head_span.line, head_span.clone())
+            };
+            out.push(
+                Diag::warning("W110", tr!("この表には重なりがありません", "This table has no overlapping rows"))
+                    .at(at(line, mi))
+                    .table(tn)
+                    .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
+                    .mark(span, "")
+                    .note(tr!("`{} {}` にすると、行の並べ替えが意味を変えないことを検査が保証します。", "With `{} {}`, the checker guarantees that reordering the rows does not change the meaning.", crate::kw::POLICY, crate::kw::UNIQUE)),
+            );
+        }
     }
-    TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, dead: dead_rows }
+    TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, edge_pairs, dead: dead_rows }
 }
-
 impl TableRegion {
     /// Find a coordinate in the region of row `target` that `rows` do not cover.
     fn hole_within(&self, rows: &[usize], target: usize, budget: &mut i64) -> Option<Vec<usize>> {

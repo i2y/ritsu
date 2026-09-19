@@ -1,0 +1,39 @@
+rule 送料のただし書(shipping_proviso) v1
+description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN-draft §2 のスケッチ）"
+
+import std/都道府県
+
+enum サイズ区分(size_class) = S60(s60) | S80(s80)
+group 遠隔地 = 北海道, 沖縄県
+
+inputs
+  あて先(dest)    : 都道府県
+  サイズ(size)    : サイズ区分
+  会員(member)    : bool
+  注文金額(total) : money[円]  range >=0円 <=1000万円
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+table 運賃表(fee_table)  # 出典: 基本運賃表（スケッチ）別表第一
+policy unique
+| あて先      | サイズ | -> 基本運賃(base) : money[円] |
+| 遠隔地      | S60    | 1150円                        |
+| 遠隔地      | S80    | 1400円                        |
+| not: 遠隔地 | S60    | 820円                         |
+| not: 遠隔地 | S80    | 1050円                        |
+
+clause 通常(regular) -> 送料  # 出典: 第3条第1項（本文）
+  when always
+  then 基本運賃
+
+clause 無料(free) -> 送料  # 出典: 第3条第2項ただし書
+  when 注文金額 >=3900円 and 会員 true
+  then 0円
+  overrides 通常
+
+examples
+| あて先 | サイズ | 会員  | 注文金額 | -> 送料 |
+| 北海道 | S60    | true  | 3900円   | 0円     |
+| 北海道 | S60    | true  | 3899円   | 1150円  |
+| 東京都 | S80    | false | 10000円  | 1050円  |

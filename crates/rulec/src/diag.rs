@@ -95,6 +95,9 @@ pub enum FixKind {
     MarkContractOnly,
     ChangePolicy,
     AddExpected,
+    /// The pin of a source, as `rulec source pin` would write it: a `source` line with its
+    /// digest, or one `  <fragment> sha256:…` line (§15.68).
+    PinSource,
     /// No single mechanical edit is right. The reason is in the notes.
     None,
 }
@@ -112,6 +115,7 @@ impl FixKind {
             FixKind::MarkContractOnly => "mark_contract_only",
             FixKind::ChangePolicy => "change_policy",
             FixKind::AddExpected => "add_expected",
+            FixKind::PinSource => "pin_source",
             FixKind::None => "none",
         }
     }

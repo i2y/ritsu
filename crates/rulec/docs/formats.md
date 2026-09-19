@@ -53,7 +53,7 @@ still means the same thing, and `v` says which version wrote the line.
 | `key` | the identity `--diff-base` compares on. Two runs that name the same finding use the same key |
 
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
-`add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `none`.
+`add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`, `none`.
 `none` means no single mechanical edit is right; the reason is in `notes`.
 
 **`fix.text` is a form, not a decision.** It parses and it removes the code, and that much is
@@ -435,7 +435,7 @@ rulec only validates types and ranges (§10.2).
 | `tag` | no | a label for the record, shown in witnesses |
 | `ts` | no | when it happened |
 | `by` | no | where an input came from, when it was not read as it stood ([below](#where-a-value-came-from-by)). **rulec does not read it** |
-| `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |
+| `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order, with `"label"` added for a row that carries one; a `clause` is the one row of a table named after it. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |
 
 The generated code writes this line itself: every module has a record function that takes
 the inputs, the outputs and the rows that matched and returns the record, so a log of the

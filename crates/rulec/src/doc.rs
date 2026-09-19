@@ -55,6 +55,11 @@ fn source_cells(lines: &[&str], line: usize) -> Vec<String> {
     let Some(l) = lines.get(line.saturating_sub(1)) else { return Vec::new() };
     let (body, _) = split_comment(l);
     let t = body.trim();
+    // A label before the first bar is not a cell; it is shown in the `#` column instead.
+    let t = match t.find('|') {
+        Some(p) => &t[p..],
+        None => t,
+    };
     let t = t.strip_prefix('|').unwrap_or(t);
     let t = t.strip_suffix('|').unwrap_or(t);
     t.split('|').map(|c| c.trim().to_string()).collect()
@@ -140,7 +145,7 @@ fn producer(f: &RuleFile, col: &str) -> String {
             Item::Define(d) if d.name.text == col => return tr!("定義", "Definition"),
             Item::Table(t) if t.outputs.iter().any(|o| o.name.text == col) => {
                 let n = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                return tr!("表 {n} の出力", "Output of table {n}");
+                return if t.clause { tr!("節 {n} の出力", "Output of clause {n}") } else { tr!("表 {n} の出力", "Output of table {n}") };
             }
             _ => {}
         }
@@ -469,7 +474,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
                 md_esc(&d.name.text),
                 md_esc(&e),
                 md_esc(&range_text(c, &d.name.text)),
-                md_esc(&trailing_comment(&lines, d.name.span.line).unwrap_or_default())
+                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
             ));
         }
         for d in &defines {
@@ -479,7 +484,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
                 "| {} | Definition | `{}` |  | {} |\n",
                 md_esc(&d.name.text),
                 md_esc(&e),
-                md_esc(&trailing_comment(&lines, d.name.span.line).unwrap_or_default())
+                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
             ));
         }
         if !derived.is_empty() {
@@ -494,6 +499,11 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     for it in &f.items {
         let Item::Table(t) = it else { continue };
         o.push_str(&table_section(f, c, t, &lines, path));
+    }
+
+    // --- How an output that several tables define is decided (DESIGN-draft §2.7)
+    for set in c.sets.iter().filter(|s| s.merged()) {
+        o.push_str(&set_section(f, c, set, path));
     }
 
     // --- How the walk ends (§15.56). The arms are the whole of it: one move per verdict,
@@ -594,7 +604,12 @@ fn expr_src(lines: &[&str], line: usize) -> String {
         None => body,
     };
     // A derived-value declaration continues as `= expr  range >=… <=…`. The range is shown in
-    // its own column, so drop it from the expression.
+    // its own column, so drop it from the expression — and so is the citation (`@法 第91条`),
+    // which is shown in the notes.
+    let rhs = match rhs.find('@') {
+        Some(i) => &rhs[..i],
+        None => rhs,
+    };
     match rhs.find(&format!(" {} ", crate::kw::RANGE)) {
         Some(i) => rhs[..i].trim().to_string(),
         None => rhs.trim().to_string(),
@@ -618,23 +633,57 @@ fn with_notes(head: &mut Vec<String>, rows: &mut [Vec<String>], lines: &[&str], 
     head.push(tr!("注記", "Notes"));
 }
 
+/// `with_notes`, with each row's own citation (§15.68) in the same column, before its comment.
+fn with_notes_cites(head: &mut Vec<String>, rows: &mut [Vec<String>], lines: &[&str], row_lines: &[usize], cites: &[String]) {
+    let notes: Vec<String> = row_lines
+        .iter()
+        .enumerate()
+        .map(|(i, &l)| {
+            let com = trailing_comment(lines, l).unwrap_or_default();
+            let cite = cites.get(i).cloned().unwrap_or_default();
+            match (cite.is_empty(), com.is_empty()) {
+                (true, _) => com,
+                (false, true) => tr!("出典: {cite}", "Source: {cite}"),
+                (false, false) => tr!("出典: {cite}。{com}", "Source: {cite}. {com}"),
+            }
+        })
+        .collect();
+    if notes.iter().all(|n| n.is_empty()) {
+        return;
+    }
+    let width = head.len();
+    for (r, n) in rows.iter_mut().zip(notes) {
+        r.resize(width, String::new());
+        r.push(n);
+    }
+    head.push(tr!("注記", "Notes"));
+}
+
 fn md_table(head: &[String], rows: &[Vec<String>], numbered: bool) -> String {
+    let nums: Vec<String> = (1..=rows.len()).map(|i| i.to_string()).collect();
+    md_table_nums(head, rows, numbered.then_some(nums.as_slice()))
+}
+
+/// A table with a `#` column holding the given names: the row's number as written, or its
+/// label when it has one. A label reads as the row's name in the trace and in a later
+/// version, so it is what the approver sees too.
+fn md_table_nums(head: &[String], rows: &[Vec<String>], nums: Option<&[String]>) -> String {
     let mut o = String::from("|");
-    if numbered {
+    if nums.is_some() {
         o.push_str(" # |");
     }
     for h in head {
         o.push_str(&format!(" {} |", md_esc(h)));
     }
     o.push_str("\n|");
-    for _ in 0..head.len() + usize::from(numbered) {
+    for _ in 0..head.len() + usize::from(nums.is_some()) {
         o.push_str("---|");
     }
     o.push('\n');
     for (i, r) in rows.iter().enumerate() {
         o.push('|');
-        if numbered {
-            o.push_str(&format!(" {} |", i + 1));
+        if let Some(ns) = nums {
+            o.push_str(&format!(" {} |", md_esc(ns.get(i).map(|s| s.as_str()).unwrap_or(""))));
         }
         for k in 0..head.len() {
             o.push_str(&format!(" {} |", md_esc(r.get(k).map(|s| s.as_str()).unwrap_or(""))));
@@ -644,10 +693,232 @@ fn md_table(head: &[String], rows: &[Vec<String>], numbered: bool) -> String {
     o
 }
 
+/// The `#` column of a table: each row's label, or its number as written.
+fn row_nums(t: &Table) -> Vec<String> {
+    t.rows
+        .iter()
+        .map(|r| match &r.label {
+            Some(l) => l.text.clone(),
+            None => r.index.to_string(),
+        })
+        .collect()
+}
+
+/// The section of an output that several tables define: which takes precedence over which,
+/// whether as an exception (the winner lies inside the loser) or reaching beyond it, the order
+/// A note cell: the citation, then the comment.
+fn note_with_cite(cite: Option<&Cite>, com: Option<String>) -> String {
+    let com = com.unwrap_or_default();
+    match (cite, com.is_empty()) {
+        (None, _) => com,
+        (Some(c), true) => tr!("出典: {}", "Source: {}", cite_text(c)),
+        (Some(c), false) => tr!("出典: {}。{com}", "Source: {}. {com}", cite_text(c)),
+    }
+}
+
+/// A citation as the page names it: `法 別表第一`.
+fn cite_text(c: &Cite) -> String {
+    format!("{} {}", c.source, c.fragments.join(sep()))
+}
+
+/// The citation of a definition: which source, which fragment, and — for a law with a copy
+/// beside the rule — the fragment's text, quoted, so that the approver compares the rows
+/// with the source on one page (DESIGN-draft §3.6).
+fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> String {
+    let Some(c) = cite else { return String::new() };
+    let decl = f.sources.iter().find(|d| d.name.text == c.source);
+    let frags = c.fragments.join(sep());
+    let line = match decl.map(|d| &d.kind) {
+        Some(SourceKind::Law { id, asof }) => tr!("出典: {} {frags}（法令 {id}、{asof} 時点）", "Source: {} {frags} (law {id}, as of {asof})", c.source),
+        Some(SourceKind::File { path: p, hash }) => {
+            let h = hash.as_ref().map(|h| tr!("、sha256:{h}", ", sha256:{h}")).unwrap_or_default();
+            tr!("出典: {} {frags}（{p}{h}）", "Source: {} {frags} ({p}{h})", c.source)
+        }
+        None => tr!("出典: {} {frags}", "Source: {} {frags}", c.source),
+    };
+    let mut o = format!("{}\n\n", md_esc(&line));
+    if quote {
+        if let Some(d) = decl {
+            for frag in &c.fragments {
+                if let Some(text) = crate::sources::fragment_text(path, d, frag) {
+                    for l in text.lines() {
+                        o.push_str(&format!("> {}\n", md_esc(l)));
+                    }
+                    o.push('\n');
+                }
+            }
+        }
+    }
+    o
+}
+
+/// The section of an output that several tables or clauses define: which takes precedence
+/// over which, whether as an exception (the winner lies inside the loser) or reaching beyond
+/// it, the order they are tried in, and what `rulec check` verified over all of them together.
+fn set_section(f: &RuleFile, c: &Checked, set: &crate::defset::DefSet, path: &str) -> String {
+    let t = &set.table;
+    let key = &set.key;
+    let mut o = tr!("\n## {key} の決まり方\n\n", "\n## How {key} is decided\n\n");
+    let member = |mi: usize| format!("{} {}", set.kind_word(mi), set.members[mi]);
+    let rn = |i: usize| -> String {
+        let r = &t.rows[i];
+        if set.is_clause_row(i) {
+            return tr!("節 {}", "clause {}", set.row_table(i));
+        }
+        match &r.label {
+            Some(l) => tr!("表 {} 行{}（{}）", "table {} row {} ({})", set.row_table(i), r.index, l.text),
+            None => tr!("表 {} 行{}", "table {} row {}", set.row_table(i), r.index),
+        }
+    };
+    let r = region::check_set(set, c, f, path, region::DEFAULT_BUDGET);
+    let all: Vec<String> = (0..set.members.len()).map(member).collect();
+    let order: Vec<String> = (0..set.members.len()).rev().map(member).collect();
+    o.push_str(&tr!(
+        "{} を定めるのは {} で、{} の順に試して、最初に当てはまったものが答えになる。\n\n",
+        "{} is defined by {}; they are tried in the order {}, and the first that applies is the answer.\n\n",
+        key,
+        all.join(sep()),
+        order.join(if crate::i18n::ja() { "、" } else { ", " })
+    ));
+    for e in &set.edges {
+        let w = member(e.winner);
+        let loser = match e.loser_row {
+            Some(j) => rn(j),
+            None => member(e.loser),
+        };
+        let pairs: Vec<&(usize, usize, bool)> = r
+            .edge_pairs
+            .iter()
+            .filter(|(i, j, _)| set.member_of[*i] == e.winner && set.member_of[*j] == e.loser && e.loser_row.is_none_or(|x| x == *j))
+            .collect();
+        let shape = if pairs.is_empty() {
+            tr!("交わる行が無いので、この優先は効いていない（W117）", "no rows meet, so this precedence has no effect (W117)")
+        } else if pairs.iter().all(|p| p.2) {
+            tr!("交わる {} 対のすべてで、{w} の行は相手の行に収まる（例外）", "in all {} pairs that meet, the rows of {w} lie inside the other's (an exception)", pairs.len())
+        } else {
+            tr!("交わる {} 対のうち、{w} の行が相手の行の外にも及ぶものがある（優先）", "in some of the {} pairs that meet, the rows of {w} reach beyond the other's (precedence)", pairs.len())
+        };
+        o.push_str(&tr!("- {w} は {loser} に優先する。{shape}\n", "- {w} takes precedence over {loser}. {shape}\n"));
+    }
+    o.push_str(&tr!("\n**`rulec check` が確かめたこと**\n\n", "\n**What `rulec check` verified**\n\n"));
+    o.push_str(&tr!(
+        "- どの入力の組合せも、{} のいずれかの行に当てはまります（E101 完全性）\n",
+        "- Every combination of inputs matches some row of {} (E101 completeness)\n",
+        all.join(sep())
+    ));
+    o.push_str(&tr!(
+        "- どの入力にも当てはまらない行はありません（E102）\n",
+        "- There is no row that can never match (E102 unreachable row)\n"
+    ));
+    if r.w114.is_empty() {
+        o.push_str(&tr!(
+            "- 優先の書かれていない重なりはありません（E105）。二つの定義のどちらにも当てはまる入力は、上の優先で決まります\n",
+            "- No overlap is left without a precedence (E105). An input that matches two definitions is decided by the precedence above\n"
+        ));
+    } else {
+        let pairs: Vec<String> = r.w114.iter().map(|(i, j)| tr!("{} と {}", "{} and {}", rn(*i), rn(*j))).collect();
+        o.push_str(&tr!(
+            "- {} が重ならないことは**証明できていません**（W114）。生成コードに実行時のガードが入ります\n",
+            "- The exclusivity of {} is **not proven** (W114). The generated code carries a runtime guard\n",
+            pairs.join(sep())
+        ));
+    }
+    o
+}
+
+/// The text of a clause's `when` or `then` line as written, without the keyword and the
+/// trailing comment. It comes from the source line, so what the page shows is what the file
+/// says (§1.6).
+fn clause_text(lines: &[&str], line: usize, kw: &str) -> String {
+    let Some(l) = lines.get(line.saturating_sub(1)) else { return String::new() };
+    let (body, _) = split_comment(l);
+    let t = body.trim();
+    t.strip_prefix(kw).map(|r| r.trim()).unwrap_or(t).to_string()
+}
+
+/// The folded header of an output column: the type and the rounding, from the declarations.
+fn folded_out_header(f: &RuleFile, c: &Checked, n: &str) -> String {
+    let mut bits = vec![match c.ty_of(n) {
+        Some(Ty::Enum(e)) => e,
+        Some(t) => format!("{t}"),
+        None => String::new(),
+    }];
+    if let Some(rd) = f.outputs.iter().find(|q| q.name.text == *n).and_then(|q| q.rounding.as_ref()) {
+        bits.push(format!("{}({})", rd.mode, rd.grid.raw));
+    }
+    let bits: Vec<String> = bits.into_iter().filter(|b| !b.is_empty()).collect();
+    if bits.is_empty() {
+        format!("→ {n}")
+    } else {
+        tr!("→ {n}（{}）", "→ {n} ({})", bits.join(" / "))
+    }
+}
+
+/// A clause on the approver's page: the condition and the value as written, and what it
+/// takes precedence over. A clause is one row, so the page shows one row.
+fn clause_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], _path: &str) -> String {
+    let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+    let out = t.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    let mut o = tr!("\n## 節 {name} → {out}\n\n", "\n## Clause {name} → {out}\n\n");
+    o.push_str(&cite_section(f, t.cite.as_ref(), _path, true));
+    if let Some(cm) = trailing_comment(lines, t.span.line) {
+        o.push_str(&format!("{}\n\n", md_esc(&cm)));
+    }
+    o.push_str(&tr!("| 列 | 出どころ |\n|---|---|\n", "| Column | Source |\n|---|---|\n"));
+    for (col, _) in &t.inputs {
+        o.push_str(&format!("| {} | {} |\n", md_esc(col), md_esc(&producer(f, col))));
+    }
+    let dest = if f.outputs.iter().any(|q| q.name.text == out) {
+        tr!("この規則の出力", "Output of this rule")
+    } else {
+        tr!("後の表か節の列", "A column of a later table or clause")
+    };
+    o.push_str(&format!("| → {} | {} |\n", md_esc(&out), md_esc(&dest)));
+    let Some(row) = t.rows.first() else { return o };
+    let when = clause_text(lines, row.span.line, crate::kw::WHEN);
+    let then = clause_text(lines, row.out_spans.first().map(|s| s.line).unwrap_or(row.span.line), crate::kw::THEN);
+    let head = vec![tr!("条件", "Condition"), folded_out_header(f, c, &out)];
+    o.push('\n');
+    o.push_str(&md_table_nums(&head, &[vec![when, then]], Some(&["1".to_string()])));
+    if !t.overrides.is_empty() {
+        let ts: Vec<String> = t
+            .overrides
+            .iter()
+            .map(|r| match &r.row {
+                Some(l) => tr!("表 {} 行 {l}", "table {} row {l}", r.table),
+                None => r.table.clone(),
+            })
+            .collect();
+        o.push_str(&tr!("\nこの節は {} に優先する。\n", "\nThis clause takes precedence over {}.\n", ts.join(sep())));
+    }
+    if let Some(set) = c.set_of_table(t).filter(|s| s.merged()) {
+        o.push_str(&tr!(
+            "\n検査の結果は「{} の決まり方」の節にある。\n",
+            "\nWhat `rulec check` verified is under \"How {} is decided\".\n",
+            set.key
+        ));
+        return o;
+    }
+    o.push_str(&tr!("\n**`rulec check` が確かめたこと**\n\n", "\n**What `rulec check` verified**\n\n"));
+    o.push_str(&tr!(
+        "- どの入力の組合せも、この節に当てはまります（E101 完全性）\n",
+        "- Every combination of inputs matches this clause (E101 completeness)\n"
+    ));
+    o.push_str(&tr!(
+        "- この節に当てはまる入力があります（E102）\n",
+        "- Some input reaches this clause (E102 unreachable row)\n"
+    ));
+    o
+}
+
 fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &str) -> String {
+    if t.clause {
+        return clause_section(f, c, t, lines, path);
+    }
     let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
     let policy = if t.policy == Policy::Unique { crate::kw::UNIQUE } else { crate::kw::FIRST };
     let mut o = tr!("\n## 表 {name}（{} {policy}）\n\n", "\n## Table {name} ({} {policy})\n\n", crate::kw::POLICY);
+    o.push_str(&cite_section(f, t.cite.as_ref(), path, true));
 
     // The comment at the end of the `table` line is where the source of the table is written
     // (AGENTS.md §1). It goes right under the heading, before anything this rendering adds.
@@ -711,9 +982,10 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
     }
     let mut rows: Vec<Vec<String>> = t.rows.iter().map(|r| source_cells(lines, r.span.line)).collect();
     let row_lines: Vec<usize> = t.rows.iter().map(|r| r.span.line).collect();
-    with_notes(&mut head, &mut rows, lines, &row_lines);
+    let cites: Vec<String> = t.rows.iter().map(|r| r.cite.as_ref().map(cite_text).unwrap_or_default()).collect();
+    with_notes_cites(&mut head, &mut rows, lines, &row_lines, &cites);
     o.push('\n');
-    o.push_str(&md_table(&head, &rows, true));
+    o.push_str(&md_table_nums(&head, &rows, Some(&row_nums(t))));
 
     // The default row. Under `上から` (`first`), a last all-`-` row means "everything else gets
     // this".
@@ -779,6 +1051,17 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
             "\nGroups appearing in the cells of this table: {}. Their members are in the \"Groups\" section.\n",
             list.join(sep())
         ));
+    }
+
+    // A table that shares its output with others is verified as a set; the facts are under
+    // the set's own section (DESIGN-draft §2.7).
+    if let Some(set) = c.set_of_table(t).filter(|s| s.merged()) {
+        o.push_str(&tr!(
+            "\n検査の結果は「{} の決まり方」の節にある。\n",
+            "\nWhat `rulec check` verified is under \"How {} is decided\".\n",
+            set.key
+        ));
+        return o;
     }
 
     // Verified statements. This part alone writes nothing but what `rulec check` verified.
@@ -953,6 +1236,15 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         let Item::Table(t) = it else { continue };
         o.push_str(&customer_table(f, c, t, &lines));
     }
+    for set in c.sets.iter().filter(|s| s.merged()) {
+        let order: Vec<String> = set.members.iter().rev().map(|m| tr!("「{m}」", "\"{m}\"")).collect();
+        o.push_str(&tr!(
+            "\n{} は、{} の順に表を見て、最初に当てはまった行で決まります。\n",
+            "\n{} is decided by the first row that applies, looking at the tables in this order: {}.\n",
+            set.key,
+            order.join(sep())
+        ));
+    }
 
     // --- How the walk ends, when there is one.
     if let Some(fold) = &f.fold {
@@ -1052,8 +1344,40 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 }
 
 /// One table, for the customer: the source cells in plainer words, the column headings without
+/// A clause for the customer: the condition and the value as written, in one row.
+fn customer_clause(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> String {
+    let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+    let out = t.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    let mut o = format!("\n## {name}\n\n");
+    o.push_str(&cite_section(f, t.cite.as_ref(), "", false));
+    if let Some(cm) = trailing_comment(lines, t.span.line) {
+        o.push_str(&format!("{}\n\n", md_esc(&cm)));
+    }
+    let Some(row) = t.rows.first() else { return o };
+    let when = clause_text(lines, row.span.line, crate::kw::WHEN);
+    let then = clause_text(lines, row.out_spans.first().map(|s| s.line).unwrap_or(row.span.line), crate::kw::THEN);
+    let mut bits: Vec<String> = Vec::new();
+    if let Some(Ty::Money { tax: Some(tx), .. }) = c.ty_of(&out) {
+        bits.push(tax_words(&tx));
+    }
+    if let Some(rd) = f.outputs.iter().find(|q| q.name.text == out).and_then(|q| q.rounding.as_ref()) {
+        bits.push(rounding_words(rd));
+    }
+    let oh = if bits.is_empty() { format!("→ {out}") } else { tr!("→ {out}（{}）", "→ {out} ({})", bits.join(sep())) };
+    let head = vec![tr!("条件", "Condition"), oh];
+    o.push_str(&md_table_nums(&head, &[vec![when, then]], Some(&["1".to_string()])));
+    if !t.overrides.is_empty() {
+        let ts: Vec<String> = t.overrides.iter().map(|r| format!("「{}」", r.table)).collect();
+        o.push_str(&tr!("\nこの決まりは {} より優先します。\n", "\nThis rule takes precedence over {}.\n", ts.join(sep())));
+    }
+    o
+}
+
 /// aliases and types, and the groups a cell names spelled out underneath.
 fn customer_table(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> String {
+    if t.clause {
+        return customer_clause(f, c, t, lines);
+    }
     let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
     let mut o = format!("\n## {}\n\n", md_esc(&name));
     if let Some(cm) = trailing_comment(lines, t.span.line) {
@@ -1084,7 +1408,7 @@ fn customer_table(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Strin
         .iter()
         .map(|r| source_cells(lines, r.span.line).iter().map(|x| customer_cell(x)).collect())
         .collect();
-    o.push_str(&md_table(&head, &rows, true));
+    o.push_str(&md_table_nums(&head, &rows, Some(&row_nums(t))));
     if t.policy == Policy::TopDown {
         o.push_str(&tr!(
             "\n上から順に見て、最初に当てはまる行が答えです。\n",
@@ -1807,6 +2131,18 @@ fn md_to_html(md: &str) -> String {
     let mut table_name: Option<String> = None;
     let mut first_h2 = true;
     let mut para: Vec<String> = Vec::new();
+    // `> ` lines: the quoted text of a source fragment (§15.68).
+    let mut quote: Vec<String> = Vec::new();
+    fn flush_quote(o: &mut String, quote: &mut Vec<String>) {
+        if !quote.is_empty() {
+            o.push_str("<blockquote>\n");
+            for l in quote.iter() {
+                o.push_str(&format!("<p>{}</p>\n", inline_html(l)));
+            }
+            o.push_str("</blockquote>\n");
+            quote.clear();
+        }
+    }
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut list: Vec<(usize, String)> = Vec::new();
 
@@ -1848,11 +2184,11 @@ fn md_to_html(md: &str) -> String {
             o.push_str(&format!("<th>{}</th>", inline_html(h)));
         }
         o.push_str("</tr></thead>\n<tbody>\n");
-        for r in rows.iter().skip(1) {
+        for (k, r) in rows.iter().skip(1).enumerate() {
+            // The row's position, which is what the trace carries; the `#` cell may show a
+            // label instead of the number.
             let attrs = match (numbered, table_name, r.first()) {
-                (true, Some(t), Some(n)) if n.chars().all(|c| c.is_ascii_digit()) => {
-                    format!(" data-t=\"{}\" data-r=\"{n}\"", html_esc(t))
-                }
+                (true, Some(t), Some(_)) => format!(" data-t=\"{}\" data-r=\"{}\"", html_esc(t), k + 1),
                 _ => String::new(),
             };
             o.push_str(&format!("<tr{attrs}>"));
@@ -1867,6 +2203,14 @@ fn md_to_html(md: &str) -> String {
 
     for line in md.lines() {
         let t = line.trim_end();
+        if let Some(q) = t.strip_prefix("> ") {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            flush_table(&mut o, &mut rows, &table_name);
+            quote.push(q.to_string());
+            continue;
+        }
+        flush_quote(&mut o, &mut quote);
         if t.starts_with("<!--") {
             o.push_str(t);
             o.push('\n');
@@ -1891,7 +2235,10 @@ fn md_to_html(md: &str) -> String {
             table_name = h
                 .strip_prefix("表 ")
                 .map(|r| r.split('（').next().unwrap_or(r).to_string())
-                .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()));
+                .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()))
+                // `## 節 X → 出力` / `## Clause X → output`: a clause fires as `{"table":X,"row":1}`.
+                .or_else(|| h.strip_prefix("節 ").map(|r| r.split(" →").next().unwrap_or(r).to_string()))
+                .or_else(|| h.strip_prefix("Clause ").map(|r| r.split(" →").next().unwrap_or(r).to_string()));
             // A table's heading can be linked to (`#t-基本送料`), which is also how a
             // screenshot lands on it.
             match &table_name {
@@ -1933,6 +2280,7 @@ fn md_to_html(md: &str) -> String {
     flush_para(&mut o, &mut para);
     flush_list(&mut o, &mut list);
     flush_table(&mut o, &mut rows, &table_name);
+    flush_quote(&mut o, &mut quote);
     o
 }
 

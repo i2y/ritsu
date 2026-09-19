@@ -1,0 +1,9 @@
+error[E038]: Fragment `第91条` of source `措置法` has changed
+  --> tests/mutants/m_e038.rule:7 source 措置法
+  |
+7 |   第91条 sha256:0000000000000000
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:0000000000000000
+  |
+ The copy now: sha256:85faf53f6f6e8196
+ Definitions to reread: definition 軽減期間, table 軽減
+ Read the copy's diff (tests/mutants/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.

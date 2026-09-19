@@ -1,0 +1,9 @@
+error[E039]: There is no copy of fragment `第92条` of source `措置法`
+  --> tests/mutants/m_e039.rule:6 source 措置法
+  |
+6 | source 措置法 = law "332AC0000000026" asof 2026-04-01
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ Looked for: tests/mutants/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_92.xml
+ `rulec source fetch tests/mutants/m_e039.rule` fetches it from e-Gov into the copies. check never reads the network.
+ Cited by: table 軽減

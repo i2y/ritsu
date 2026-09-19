@@ -244,8 +244,11 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     let (c, out, _) = run(&["check", "tests/corpus"]);
     assert_eq!(c, 0, "{out}");
     let ok = out.lines().filter(|l| l.starts_with("ok ")).count();
+    // Only the rules: the directory also holds the copies of the sources they cite.
     let n = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"))
         .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
         .count();
     assert_eq!(ok, n, "コーパス {n} 本のはずが {ok} 本しか見ていない:\n{out}");
 

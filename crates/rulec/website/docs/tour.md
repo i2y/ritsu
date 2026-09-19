@@ -43,6 +43,9 @@ These are all the words that may start a line.
 | `sequence` | a named list of elements, for an example to walk |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
+| `overrides` | the tables, or labelled rows (`table:label`), declared above that every row of this table takes precedence over. Written after `policy` |
+| `clause` | one definition written as prose: `when <column> <cell> and …` (`when always` for no condition), `then <value>`, and optionally `overrides` |
+| `source` | a document the rule transcribes: a law on e-Gov (`law "<law id>" asof <date>`, with a pin line per cited fragment) or a file beside the rule (`file "<file>" sha256:…`). Tables, clauses, rows, derives and defines cite it with `@source fragment` |
 | `result` | assembles an output |
 | `examples` | an executable specification |
 

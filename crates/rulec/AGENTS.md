@@ -50,7 +50,7 @@ Two declarations are mandatory and are where most first drafts fail:
 - **`round` on every numeric output.** Without it the generated code would settle fractions
   silently.
 
-Five shapes are worth knowing before the first draft:
+A few shapes are worth knowing before the first draft:
 
 - **Tables stack.** A table's output column is a column of any later table, to any depth, and
   one table may produce several output columns. That, plus a `derive` used as a column, is how
@@ -76,6 +76,25 @@ Five shapes are worth knowing before the first draft:
   universe the completeness check quantifies over **and** the cap on the sequence. Nothing
   accumulates across elements; a sum belongs before the call. A rule has a `fold` or a
   `count`, never both (E031).
+
+- **A main rule and its special case are two tables, or a table and a clause.** Several
+  tables may define the same output, each transcribed from its own source, and the one that
+  takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`
+  for one labelled row). A row is labelled by a word before its first bar (`r3 | … |`), which
+  is also how the trace names it. A proviso whose conditions do not line up as columns is a
+  `clause`: `when <column> <cell> and …` (or `when always`), `then <value>`, and `overrides`
+  — one row written as prose, checked and generated as a one-row table. The definitions of
+  one output are checked together — completeness over their union, every overlap either
+  ordered by an `overrides` line or reported (E105) — and `doc` says which is the exception
+  (§7 of the grammar).
+
+- **A source is declared, cited and pinned.** `source 法 = law "342AC0000000023" asof
+  2026-04-01` names a law on e-Gov; `@法 別表第一` at the end of a table, clause, row, derive
+  or define line says what it transcribes; `rulec source fetch` puts a copy of each cited
+  fragment beside the rule and `rulec source pin` writes its digest under the `source` line.
+  `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
+  and `doc` quotes the fragment under the definition. A document with no fragments is
+  `source 郵便 = file "…" sha256:…`.
 
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"

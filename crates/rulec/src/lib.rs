@@ -21,6 +21,7 @@ macro_rules! tr {
 
 pub mod ast;
 pub mod backend;
+pub mod defset;
 pub mod diag;
 pub mod doc;
 pub mod enums;
@@ -44,6 +45,8 @@ pub mod region;
 pub mod replay;
 pub mod report;
 pub mod runtest;
+pub mod sha256;
+pub mod sources;
 pub mod types;
 pub mod vectors;
 pub mod verify;
@@ -86,43 +89,37 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
 
     let t = types::check(f, path);
     diags.extend(t.diags.iter().cloned());
-    // The one stage that reads another file: the enums declared outside it (§15.59, §15.60).
+    // The stages that read other files: the enums declared outside it (§15.59, §15.60), and
+    // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
+    diags.extend(sources::check(f, path));
     enrich_e104(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {
         return Report { diags, quiet, shadow, nodes };
     }
-    for it in &f.items {
-        if let ast::Item::Table(tb) = it {
-            let r = region::check_table(tb, &t, f, path, budget);
-            diags.extend(r.diags);
-            quiet.extend(r.quiet);
-            shadow.structural += r.shadow.structural;
-            shadow.equivalent += r.shadow.equivalent;
-            shadow.confirm += r.shadow.confirm;
-            nodes += r.nodes;
-        }
+    // The unit is the definition set: one table, or every table that defines one output
+    // (DESIGN-draft §2.4).
+    for set in &t.sets {
+        let r = region::check_set(set, &t, f, path, budget);
+        diags.extend(r.diags);
+        quiet.extend(r.quiet);
+        shadow.structural += r.shadow.structural;
+        shadow.equivalent += r.shadow.equivalent;
+        shadow.confirm += r.shadow.confirm;
+        nodes += r.nodes;
     }
     diags.extend(eval::check_examples(f, &t, path));
     Report { diags, quiet, shadow, nodes }
 }
 
-/// Per-table check results (shadowing pairs and dead rows) that the §9.2 coverage decision
-/// needs. Returned in table order.
+/// Per-set check results (shadowing pairs and dead rows) that the §9.2 coverage decision
+/// needs. Returned in the order of `c.sets`.
 pub fn table_checks(
     f: &ast::RuleFile,
     c: &types::Checked,
     path: &str,
 ) -> Vec<region::TableCheck> {
-    f.items
-        .iter()
-        .filter_map(|it| match it {
-            ast::Item::Table(tb) => {
-                Some(region::check_table(tb, c, f, path, region::DEFAULT_BUDGET))
-            }
-            _ => None,
-        })
-        .collect()
+    c.sets.iter().map(|s| region::check_set(s, c, f, path, region::DEFAULT_BUDGET)).collect()
 }
 
 pub fn has_error(ds: &[Diag]) -> bool {

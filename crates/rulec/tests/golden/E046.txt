@@ -1,0 +1,7 @@
+error[E046]: `clause` の形が読めません
+  --> tests/mutants/m_e046.rule:30
+   |
+30 | clause 無料(free) -> 送料  # 出典: 第3条第2項ただし書
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ `when` の行がありません
+   |
+ 形は `clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ、任意で `overrides <相手>` です。

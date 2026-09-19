@@ -36,6 +36,9 @@ pub struct Record {
     /// record carries them. The generated code's record function writes them (§15.35); a
     /// record made by hand may leave them out, and then this is empty.
     pub trace: Vec<(String, usize)>,
+    /// The label each entry of `trace` carried, when it did. A row keeps its label when a row
+    /// is inserted above it, so `replay` matches labelled rows by label rather than by number.
+    pub trace_labels: Vec<Option<String>>,
 }
 
 pub struct Problem {
@@ -355,6 +358,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
         // every row one the table has — a trace that names nothing real is a record from
         // some other version of the rule, and it is reported rather than read.
         let mut trace: Vec<(String, usize)> = Vec::new();
+        let mut trace_labels: Vec<Option<String>> = Vec::new();
         if let Some(t) = j.get("trace") {
             let hint = tr!(
                 "`trace` は `{{\"table\":表名,\"row\":行番号}}` の並びです。生成コードの record 関数が書きます。",
@@ -375,6 +379,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                         match (table, row, rows) {
                             (Some(name), Some(r), Some(n)) if r >= 1 && (r as usize) <= n => {
                                 trace.push((name.to_string(), r as usize));
+                                trace_labels.push(it.get("label").and_then(|x| x.as_str()).map(|l| l.to_string()));
                             }
                             (Some(name), _, None) => {
                                 bad("bad_trace", "trace", tr!("`trace`: 表 {name} はこの規則にありません", "`trace`: table {name} is not in this rule"), &hint);
@@ -403,7 +408,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
                 continue;
             }
         }
-        out.records.push(Record { line, tag, ts, input, observed, filled, trace });
+        out.records.push(Record { line, tag, ts, input, observed, filled, trace, trace_labels });
     }
     out
 }

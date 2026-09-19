@@ -53,6 +53,11 @@ pub enum Kind {
     Question,
     /// `..` — always an error (§3.1 forbids range notation), lexed so E010 can point at it.
     DotDot,
+    /// `@` — starts a citation: `@<source> <fragment>, …` at the end of a line (§15.68).
+    At,
+    /// `sha256:9e4edb5b6a1c0f42` — a pinned digest, one token so that the hex digits are
+    /// not read as a number with a unit.
+    Hash(String),
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +113,7 @@ fn is_delim(c: char) -> bool {
                 | '?'
                 | '、'
                 | '，'
+                | '@'
         )
 }
 
@@ -174,6 +180,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
 
         let single = match c {
             '|' => Some(Kind::Pipe),
+            '@' => Some(Kind::At),
             '→' => Some(Kind::Arrow),
             ':' => Some(Kind::Colon),
             '=' => Some(Kind::Eq),
@@ -262,6 +269,17 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
                 .mark(Span::new(line_no, start, clen), ""));
         }
         let word = text[i..i + n].to_string();
+        // A pinned digest is one token (§15.68). Read as a number, `9e4edb…` would become a
+        // value with a unit.
+        if word == "sha256" && text[i + n..].starts_with(':') {
+            let hex: String = text[i + n + 1..].chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+            if !hex.is_empty() {
+                let len = n + 1 + hex.len();
+                push(Kind::Hash(hex), len, &mut out);
+                i += len;
+                continue;
+            }
+        }
         push(Kind::Ident(word), n, &mut out);
         i += n;
     }

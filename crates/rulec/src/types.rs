@@ -321,6 +321,44 @@ pub struct Checked {
     /// in no row".
     pub used_values: HashSet<String>,
     pub diags: Vec<Diag>,
+    /// The definition sets: one per table, or one per output that several tables define
+    /// (DESIGN-draft §2.4). Everything downstream — the region checks, the evaluator, the
+    /// generators, the vectors, the approver's page — works on these.
+    pub sets: Vec<crate::defset::DefSet>,
+    /// Table name → its set, and whether the set is evaluated at that table's position.
+    pub set_of: HashMap<String, (usize, bool)>,
+}
+
+impl Checked {
+    /// The set a table belongs to.
+    pub fn set_of_table(&self, t: &Table) -> Option<&crate::defset::DefSet> {
+        let name = t.name.as_ref().map(|n| n.text.as_str()).unwrap_or("");
+        self.set_of.get(name).map(|(i, _)| &self.sets[*i])
+    }
+
+    /// The label of a row, by the table it was written in and its position there.
+    pub fn label_of(&self, table: &str, row: usize) -> Option<&str> {
+        let (i, _) = self.set_of.get(table)?;
+        let set = &self.sets[*i];
+        set.table
+            .rows
+            .iter()
+            .find(|r| r.index == row && r.origin.as_deref().map(|o| o == table).unwrap_or(true))
+            .and_then(|r| r.label.as_ref().map(|l| l.text.as_str()))
+    }
+
+    /// What to evaluate, check or generate at the position of `t`: the merged table of its
+    /// set when `t` is the member the set is evaluated at, `t`'s own copy when it stands
+    /// alone, and nothing when the set is evaluated at a later member.
+    pub fn table_at(&self, t: &Table) -> Option<&Table> {
+        let name = t.name.as_ref().map(|n| n.text.as_str()).unwrap_or("");
+        match self.set_of.get(name) {
+            Some((i, true)) => Some(&self.sets[*i].table),
+            Some((_, false)) => None,
+            // A table outside every set (examples, or a rule whose sets were not built).
+            None => None,
+        }
+    }
 }
 
 /// The names that only have a value **inside the walk**: a field of one element, and
@@ -382,6 +420,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         used: HashSet::new(),
         used_values: HashSet::new(),
         diags: Vec::new(),
+        sets: Vec::new(),
+        set_of: HashMap::new(),
     };
     let at = |line: usize| format!("{path}:{line}");
 
@@ -515,6 +555,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     const KEYWORDS: &[&str] = crate::kw::RESERVED;
     let mut named: Vec<(&str, &Span)> = Vec::new();
     named.push((f.name.text.as_str(), &f.name.span));
+    for s in &f.sources {
+        named.push((s.name.text.as_str(), &s.name.span));
+    }
     for i in &f.inputs {
         named.push((i.name.text.as_str(), &i.name.span));
     }
@@ -541,6 +584,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
                 for oc in &t.outputs {
                     named.push((oc.name.text.as_str(), &oc.name.span));
+                }
+                for row in &t.rows {
+                    if let Some(l) = &row.label {
+                        named.push((l.text.as_str(), &l.span));
+                    }
                 }
             }
         }
@@ -585,6 +633,51 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。名前がもとから ASCII なら別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3). A name that is already ASCII needs no alias."))
                 .note(tr!("宣言の位置に丸括弧で書いてください。例: 届け先(dest)", "Write it in parentheses at the declaration, e.g. 届け先(dest)")),
         );
+    }
+
+    // A table's or a clause's name is what the trace, an `overrides` line and a later version
+    // refer to, so two cannot share one (E034, the same rule as for row labels).
+    {
+        let mut seen: HashMap<&str, &Span> = HashMap::new();
+        for it in &f.items {
+            let Item::Table(t) = it else { continue };
+            let Some(n) = &t.name else { continue };
+            match seen.get(n.text.as_str()) {
+                Some(first) => c.diags.push(
+                    Diag::error("E034", tr!("表か節の名前 `{}` が二度あります", "The table or clause name `{}` appears twice", n.text))
+                        .at(at(n.span.line))
+                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
+                        .mark(n.span.clone(), tr!("同じ名前", "the same name"))
+                        .note(tr!(
+                            "表と節の名前は一つの名前空間です。記録の trace と `{}` の行がその名前で指します。どちらかを変えてください。",
+                            "Tables and clauses share one namespace: the trace and `{}` lines refer to them by name. Change one of the two.",
+                            crate::kw::OVERRIDES
+                        )),
+                ),
+                None => {
+                    seen.insert(&n.text, &n.span);
+                }
+            }
+        }
+    }
+
+    // Two sources cannot share a name either: a citation names one of them (E034).
+    {
+        let mut seen: HashMap<&str, &Span> = HashMap::new();
+        for s in &f.sources {
+            match seen.get(s.name.text.as_str()) {
+                Some(first) => c.diags.push(
+                    Diag::error("E034", tr!("出典の名前 `{}` が二度あります", "The source name `{}` appears twice", s.name.text))
+                        .at(at(s.name.span.line))
+                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
+                        .mark(s.name.span.clone(), tr!("同じ名前", "the same name"))
+                        .note(tr!("引用 `@名前` はこの名前で出典を指します。どちらかを変えてください。", "A citation `@name` refers to the source by this name. Change one of the two.")),
+                ),
+                None => {
+                    seen.insert(&s.name.text, &s.name.span);
+                }
+            }
+        }
     }
 
     // §5.1: items are a define-before-use pipeline, so a single forward pass is enough.
@@ -1134,6 +1227,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
     }
+    // The definition sets, once every table is typed (DESIGN-draft §2.4).
+    let (sets, set_of, ds) = crate::defset::build(f, path);
+    c.sets = sets;
+    c.set_of = set_of;
+    c.diags.extend(ds);
     c
 }
 
@@ -1469,9 +1567,33 @@ impl Checked {
 
     fn table(&mut self, t: &Table, path: &str) {
         let at = |line: usize| match &t.name {
+            Some(n) if t.clause => tr!("{path}:{line} 節 {}", "{path}:{line} clause {}", n.text),
             Some(n) => tr!("{path}:{line} 表 {}", "{path}:{line} table {}", n.text),
             None => tr!("{path}:{line} 例", "{path}:{line} examples"),
         };
+
+        // A label names a row for `overrides` lines, traces and later versions, so two rows
+        // of one table cannot share one (E034).
+        let mut seen: HashMap<&str, &Span> = HashMap::new();
+        for row in &t.rows {
+            let Some(l) = &row.label else { continue };
+            match seen.get(l.text.as_str()) {
+                Some(first) => self.diags.push(
+                    Diag::error("E034", tr!("行ラベル `{}` が二度あります", "The row label `{}` appears twice", l.text))
+                        .at(at(row.span.line))
+                        .mark((*first).clone(), tr!("最初の行", "the first row"))
+                        .mark(l.span.clone(), tr!("同じラベル", "the same label"))
+                        .note(tr!(
+                            "ラベルは表の中で一意です。`{}` の行と記録がそれで行を指します。どちらかを変えてください。",
+                            "A label is unique within its table: `{}` lines and records refer to the row by it. Change one of the two.",
+                            crate::kw::OVERRIDES
+                        )),
+                ),
+                None => {
+                    seen.insert(&l.text, &l.span);
+                }
+            }
+        }
 
         // Column headers must name something already in scope (§5.1).
         let mut col_ty: Vec<Ty> = Vec::new();
@@ -1524,6 +1646,9 @@ impl Checked {
                             _ => {}
                         }
                     }
+                    // Another table may define this output too (a definition set); the
+                    // column's scale is the coarsest grid every one of them sits on.
+                    let sc = lcm_i128(sc, *self.scales.get(&oc.name.text).unwrap_or(&1));
                     self.scales.insert(oc.name.text.clone(), sc);
 
                     // The column's range, likewise fixed by its cells: the smallest and the
@@ -1550,9 +1675,20 @@ impl Checked {
                         }
                     }
                     if known && !bounds.is_empty() {
-                        let lo = bounds.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b)).unwrap();
-                        let hi = bounds.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b)).unwrap();
+                        let mut lo = bounds.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b)).unwrap();
+                        let mut hi = bounds.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b)).unwrap();
+                        // Widened by what another table of the same output already put there.
+                        if let Some((Some(a), Some(b))) = self.ranges.get(&oc.name.text) {
+                            if a.cmp_to(lo) == std::cmp::Ordering::Less {
+                                lo = *a;
+                            }
+                            if b.cmp_to(hi) == std::cmp::Ordering::Greater {
+                                hi = *b;
+                            }
+                        }
                         self.ranges.insert(oc.name.text.clone(), (Some(lo), Some(hi)));
+                    } else if !known {
+                        self.ranges.remove(&oc.name.text);
                     }
                 }
                 self.syms.insert(
@@ -1578,7 +1714,13 @@ impl Checked {
                     }
                 }
                 if !vs.is_empty() {
-                    self.out_values.insert(oc.name.text.clone(), vs);
+                    // Joined with the values another table of the same output produces.
+                    let e = self.out_values.entry(oc.name.text.clone()).or_default();
+                    for v in vs {
+                        if !e.contains(&v) {
+                            e.push(v);
+                        }
+                    }
                 }
             }
         }

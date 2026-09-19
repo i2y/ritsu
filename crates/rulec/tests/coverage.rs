@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 15] = [
+const CORPUS: [&str; 17] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -20,6 +20,8 @@ const CORPUS: [&str; 15] = [
     "tests/corpus/所得税.rule",
     "tests/corpus/領収書の印紙税.rule",
     "tests/corpus/印紙税.rule",
+    "tests/corpus/印紙税の本則と軽減.rule",
+    "tests/corpus/送料のただし書.rule",
     "tests/corpus/全国運賃.rule",
     "tests/corpus/納入先照合.rule",
 ];
@@ -136,10 +138,13 @@ fn 境界の義務は素朴な数え上げと一致する() {
     use rulec::ast::*;
     // The collector never consults coverage.rs. It counts by looking at the shape of cells alone.
     fn naive(f: &rulec::ast::RuleFile, c: &rulec::types::Checked, dead: &[Vec<usize>]) -> usize {
+        let _ = f;
         let mut n = 0;
         let mut ti = 0;
-        for it in &f.items {
-            let Item::Table(t) = it else { continue };
+        // One (merged) table per definition set, which is what the dead-row lists are indexed
+        // by. A cell filled in for a column the row's own table lacks is `-` and counts nothing.
+        for set in &c.sets {
+            let t = &set.table;
             for (ri, row) in t.rows.iter().enumerate() {
                 if dead[ti].contains(&ri) {
                     continue;
@@ -206,6 +211,8 @@ fn 義務の件数を固定する() {
         ("tests/corpus/所得税.rule", 7, 12, 0),
         ("tests/corpus/領収書の印紙税.rule", 17, 28, 0),
         ("tests/corpus/印紙税.rule", 23, 41, 0),
+        ("tests/corpus/印紙税の本則と軽減.rule", 23, 41, 10),
+        ("tests/corpus/送料のただし書.rule", 6, 1, 1),
         ("tests/corpus/全国運賃.rule", 4, 4, 0),
         ("tests/corpus/納入先照合.rule", 7, 6, 0),
     ];

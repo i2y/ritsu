@@ -18,7 +18,7 @@ use crate::json::{quote, strs, Obj};
 use crate::types::Ty;
 
 /// The shape of one fired row in the record, for the output schema.
-const TRACE_SCHEMA: &str = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"table\":{\"type\":\"string\"},\"row\":{\"type\":\"integer\"}},\"required\":[\"table\",\"row\"]}}";
+const TRACE_SCHEMA: &str = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"table\":{\"type\":\"string\"},\"row\":{\"type\":\"integer\"},\"label\":{\"type\":\"string\"}},\"required\":[\"table\",\"row\"]}}";
 
 impl<'a> Gen<'a> {
     /// The tool as MCP lists it: name, description, `inputSchema` (the wire `in`),

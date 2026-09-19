@@ -26,6 +26,9 @@ description "<one line>"
 import std/<name>
 import proto "<file>" <Enum> -> <enum of this rule>
 import jsonschema "<file>" "<pointer>" -> <enum of this rule>
+source <name> = law "<law id>" asof <date>
+  <fragment> sha256:<digest>
+source <name> = file "<file>" sha256:<digest>
 enum   …
 group  …
 inputs
@@ -36,6 +39,8 @@ derive …          ┐
 define …          │  these three interleave freely, in dependency order
 table  …          ┘
 policy …
+overrides …
+clause …          (a one-row definition written as prose; interleaves with the three above)
 result …
 examples
   …
@@ -46,7 +51,8 @@ examples
 - `description` is one line, in quotes.
 - `inputs` and `outputs` are followed by indented declarations, one per line.
 - `derive`, `define` and `table` are a pipeline: each may use anything declared above it.
-- `policy` belongs to the `table` immediately above it.
+- `policy` belongs to the `table` immediately above it, and so does `overrides`: the tables or
+  labelled rows, declared above, that every row of this table takes precedence over (§7).
 - `examples` comes last.
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
@@ -245,6 +251,38 @@ refusal is not that a reader would be hard to start: a reader for the subset one
 to use is a reader that goes wrong quietly on the next one, and a value set that is quietly
 wrong is the one thing this must never be. Point at a JSON form of the document, which most
 toolchains can write.
+
+## 3.2 source — the documents a rule transcribes
+
+```rule
+source 法 = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source 措置法 = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
+
+table 本則(base)  @法 別表第一
+policy unique
+| 金額の記載あり | 契約金額 | -> 印紙税額 |
+| false          | -        | 200円       |  @法 別表第一  # 記載のないもの
+```
+
+A `source` names a document, after `import`. A `law` is a law on e-Gov, by its law id, read
+as of a date: the API returns one fragment at a time, so each fragment the rule cites is
+kept as a copy beside the rule (`sources/law/<law id>@<date>/<element>.xml`) and pinned by
+its digest on the line under the `source`. A `file` is a document with no addressable
+fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own line.
+
+`@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
+the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
+`第20条第2項`, `第20条第2項第3号`, `別表第一`; several are separated by `,`. It goes before the
+`#` comment. `check` holds the pins to the copies and never reads the network: a cited
+fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
+E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
+citation uses is W119. `rulec source fetch` brings the copies from e-Gov, `rulec source pin`
+writes the pins, and `rulec source outdated` asks e-Gov whether an amendment enforced after
+the date changes a cited fragment — the one question `check` cannot answer offline. The
+approver's page quotes the fragment's text under the definition that cites it.
 
 ## 4. inputs and outputs
 
@@ -563,6 +601,70 @@ table. An output column that introduces a new name declares its type there.
 There is no Any, Priority or Collect, and **completeness cannot be waived**: a table with a
 hole is E101 whichever policy it uses.
 
+### Row labels
+
+A row may carry a label before its first bar:
+
+```rule
+     | 金額の記載あり | 契約金額         | -> 印紙税額(tax) : money[円] |
+非課税 | true           | <1万円           | 0円                          |
+r3     | true           | >=1万円 <=10万円 | 200円                        |
+```
+
+A label names the row wherever a name is needed — in an `overrides` line, in the trace a
+generated function returns (`{"table":"本則","row":2,"label":"非課税"}`), in a later version —
+and it is unique within its table (E034). Rows without one are still counted by position, and
+`rulec fmt` aligns the labels as a column of their own.
+
+### Tables that share an output
+
+Several tables may define the same output: a main rule and its special cases, each transcribed
+from its own source. Each then has exactly one output column (E045), and which takes
+precedence is written on the table that wins, right after `policy`:
+
+```rule
+table 軽減(reduced_rate)
+policy unique
+overrides 本則
+| 軽減期間 | 金額の記載あり | 契約金額         | -> 印紙税額 |
+| true     | true           | >10万円 <=50万円 | 200円       |
+```
+
+`overrides` names tables declared above, or one labelled row of one (`本則:r3`), and says that
+every row of this table takes precedence over them. The exception is written after what it
+excepts: a target that is missing or declared below is E035, one that defines a different
+output is E036. The tables of one output are checked together — completeness over their
+union (E101), every overlap either ordered by an `overrides` line or reported (E105 / W114),
+and a row that the rows taking precedence over it cover entirely (E102). An `overrides` line
+whose rows meet none of its target's is W117. The generated code tries the tables from the last
+declared to the first and takes the first row that applies, and the trace names the table the
+row was written in.
+
+### Clauses
+
+A definition whose conditions do not line up as columns — a proviso, a main rule written as
+one sentence — is a `clause`: one row, written as prose.
+
+```rule
+clause 通常(regular) -> 送料
+  when always
+  then 基本運賃
+
+clause 無料(free) -> 送料
+  when 注文金額 >=3900円 and 会員 true
+  then 0円
+  overrides 通常
+```
+
+The heading names the clause and the output it defines (an `outputs` name, an intermediate an
+earlier table or clause introduced, or a new one with `-> 名前 : 型`). `when` is a list of
+`<column> <cell>` joined by `and`, the cell being any of the seven kinds above, the column
+anything a table's column may be; a clause with no condition writes `when always` (leaving the
+line out is E046, for the reason a blank cell is E008). `then` holds what an output cell holds:
+a literal or a name. `overrides` is the same line a table may carry. A clause is a table of one
+row whose other columns are `-`: it is checked, evaluated and generated as one, fires in the
+trace as `{"table":"無料","row":1}`, and the page shows its condition and its value as written.
+
 ### The seven kinds of cell
 
 | written | means |
@@ -651,13 +753,14 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `overrides` `clause` `source` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
 | functions | `min` `max` |
 | fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
 | count | `where` (and `over`, above) |
+| clause body | `when` `then` `always` |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

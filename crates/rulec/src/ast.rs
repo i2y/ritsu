@@ -178,6 +178,7 @@ pub struct DerivedDecl {
     pub expr: Expr,
     pub range: Option<Range>,
     pub span: Span,
+    pub cite: Option<Cite>,
 }
 
 #[derive(Debug, Clone)]
@@ -185,6 +186,43 @@ pub struct DefineDecl {
     pub name: Name,
     pub ty: TypeRef,
     pub expr: Expr,
+    pub span: Span,
+    pub cite: Option<Cite>,
+}
+
+/// `@<source> <fragment>, …` at the end of a table, clause, derive or define line, or of a
+/// row: which part of which document the definition transcribes (DESIGN-draft §3). The
+/// fragment is named as the document names it (`第91条`, `第20条第2項`, `別表第一`).
+#[derive(Debug, Clone)]
+pub struct Cite {
+    pub source: String,
+    pub fragments: Vec<String>,
+    pub span: Span,
+}
+
+/// What kind of document a `source` is.
+#[derive(Debug, Clone)]
+pub enum SourceKind {
+    /// A law on e-Gov, by its law id, read as of a date. Its fragments can be fetched one by
+    /// one, so each cited one is pinned on its own.
+    Law { id: String, asof: String },
+    /// A file beside the rule that has no addressable fragments; pinned whole.
+    File { path: String, hash: Option<String> },
+}
+
+/// One pinned fragment under a `source … = law` line: `  第91条 sha256:77aa00bb11cc22dd`.
+#[derive(Debug, Clone)]
+pub struct Pin {
+    pub fragment: String,
+    pub hash: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceDecl {
+    pub name: Name,
+    pub kind: SourceKind,
+    pub pins: Vec<Pin>,
     pub span: Span,
 }
 
@@ -227,8 +265,26 @@ pub struct Row {
     pub outs: Vec<OutCell>,
     pub out_spans: Vec<Span>,
     pub span: Span,
-    /// 1-based, as printed in diagnostics ("行3" / "row 3").
+    /// 1-based, as printed in diagnostics ("行3" / "row 3"). The position the row was written
+    /// at, which is what the trace reports whatever order the rows are evaluated in.
     pub index: usize,
+    /// The row's own citation, when it was taken from somewhere other than its table.
+    pub cite: Option<Cite>,
+    /// The label written before the first `|` (`r1 | … |`). It names the row where an
+    /// `overrides` line, a trace, or a later version needs to.
+    pub label: Option<Name>,
+    /// The table this row was written in, when the row sits in a merged definition set (a
+    /// table built from several tables that define the same output). `None` as parsed.
+    pub origin: Option<String>,
+}
+
+/// One target of an `overrides` line: a table (all of its rows) or one labelled row of it
+/// (`表:ラベル`).
+#[derive(Debug, Clone)]
+pub struct OverrideRef {
+    pub table: String,
+    pub row: Option<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -247,6 +303,15 @@ pub struct Table {
     pub outputs: Vec<OutCol>,
     pub rows: Vec<Row>,
     pub span: Span,
+    /// The definitions every row of this table takes precedence over (the `overrides` line
+    /// after `policy`). Each target is declared above this table.
+    pub overrides: Vec<OverrideRef>,
+    /// Written as a `clause`: one row, its columns those the `when` line names, its output
+    /// the `then` value. Everything downstream treats it as the one-row table it is; only the
+    /// page and the wording of a diagnostic call it a clause.
+    pub clause: bool,
+    /// The citation on the `table` or `clause` line.
+    pub cite: Option<Cite>,
 }
 
 #[derive(Debug, Clone)]
@@ -363,6 +428,8 @@ pub struct RuleFile {
     pub imports: Vec<(String, Span)>,
     /// The enums whose value set is declared outside this file (§15.59, §15.60).
     pub enum_imports: Vec<EnumImport>,
+    /// The documents the rule transcribes, with the pinned digests of what it cites (§15.68).
+    pub sources: Vec<SourceDecl>,
     pub enums: Vec<EnumDecl>,
     pub groups: Vec<GroupDecl>,
     pub inputs: Vec<VarDecl>,

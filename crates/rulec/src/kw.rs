@@ -17,6 +17,28 @@ pub const DERIVE: &str = "derive";
 pub const DEFINE: &str = "define";
 pub const TABLE: &str = "table";
 pub const POLICY: &str = "policy";
+/// The line after `policy`: the definitions this table's rows take precedence over. The
+/// exception is written after what it excepts, so the targets are always declared above.
+pub const OVERRIDES: &str = "overrides";
+/// A definition written as prose (DESIGN-draft §2.2): a condition, a value, and what it takes
+/// precedence over. It is one row of a one-row table, with the columns it does not name left
+/// as `-`.
+pub const CLAUSE: &str = "clause";
+/// The condition of a clause: `<column> <cell> and …`, or `always`.
+pub const WHEN: &str = "when";
+/// The value a clause gives its output: a literal or a name, as in an output cell.
+pub const THEN: &str = "then";
+/// The condition of a clause that applies to every input.
+pub const ALWAYS: &str = "always";
+/// A document a rule transcribes (DESIGN-draft §3): `source 法 = law "342AC0000000023" asof
+/// 2026-04-01`, with the pinned digest of every fragment cited, or `source 郵便 = file "…"
+/// sha256:…` for a document that has no fragments.
+pub const SOURCE: &str = "source";
+/// The two kinds of source, told apart by position after `=`; neither is a reserved name.
+pub const LAW: &str = "law";
+pub const FILE: &str = "file";
+/// The date a law is read as of (the e-Gov `asof` parameter).
+pub const ASOF: &str = "asof";
 pub const RESULT: &str = "result";
 pub const EXAMPLES: &str = "examples";
 /// A relation between two inputs that always holds. It narrows the input space the checks
@@ -34,7 +56,7 @@ pub const FOLD: &str = "fold";
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
-    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY,
+    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE,
 ];
 
 // --- Declaration modifiers
@@ -129,9 +151,10 @@ pub const JSONSCHEMA: &str = "jsonschema";
 /// with the same name is silently misread by the line-oriented syntax.
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT,
-    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, RESULT, EXAMPLES, RANGE, ROUND, CONTRACT_ONLY,
-    DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN, HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP,
-    WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY, EXHAUSTED, HELD, OVER,
+    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, RESULT,
+    EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
+    HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,
+    EXHAUSTED, HELD, OVER,
 ];
 
 /// Lists the words that may follow `policy`, for use in diagnostic text.

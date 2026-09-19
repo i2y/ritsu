@@ -65,9 +65,9 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         let key = if r.trace.is_empty() {
             fired.iter().map(|(t, r)| Fired::One { table: t.clone(), row: *r }).collect()
         } else {
-            transition(&r.trace, &fired)
+            transition(&r.trace, &fired, None)
         };
-        let rows_moved = !r.trace.is_empty() && r.trace != fired;
+        let rows_moved = !r.trace.is_empty() && !same_rows(&r.trace, &r.trace_labels, &fired, c);
         if !same {
             rep.mismatches.push(Mismatch { id, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
         } else if rows_moved {
@@ -137,7 +137,7 @@ pub fn diff(
                 input: r.input.clone(),
                 outs: pairs,
                 err: None,
-                fired: transition(&o_fired, &n_fired),
+                fired: transition(&o_fired, &n_fired, Some((old.1, new.1))),
             });
         }
     }
@@ -147,14 +147,21 @@ pub fn diff(
 /// Pair up the rows the two versions fired, table by table. The label (`表 基本送料 行2→行5`)
 /// is rendered from this afterwards — the transition itself is data, so nothing has to read a
 /// row number back out of a sentence.
-fn transition(old: &[(String, usize)], new: &[(String, usize)]) -> Vec<Fired> {
+///
+/// A labelled row is the same row whatever its number: when both versions label the rows
+/// and the labels agree, the pair reads as unmoved (the new number stands for both).
+fn transition(old: &[(String, usize)], new: &[(String, usize)], cs: Option<(&Checked, &Checked)>) -> Vec<Fired> {
     let mut out = Vec::new();
     let mut i = 0;
     let mut j = 0;
     while i < old.len() || j < new.len() {
         match (old.get(i), new.get(j)) {
             (Some((ta, ra)), Some((tb, rb))) if ta == tb => {
-                out.push(Fired::Moved { table: ta.clone(), from: Some(*ra), to: Some(*rb) });
+                let same_label = cs.is_some_and(|(oc, nc)| {
+                    matches!((oc.label_of(ta, *ra), nc.label_of(tb, *rb)), (Some(a), Some(b)) if a == b)
+                });
+                let from = if same_label { Some(*rb) } else { Some(*ra) };
+                out.push(Fired::Moved { table: ta.clone(), from, to: Some(*rb) });
                 i += 1;
                 j += 1;
             }
@@ -172,4 +179,18 @@ fn transition(old: &[(String, usize)], new: &[(String, usize)]) -> Vec<Fired> {
         }
     }
     out
+}
+
+/// Whether the rows a record carries are the rule's rows: the same tables in the same order,
+/// and for each the same label when the record has one and the rule labels the row, else the
+/// same number.
+fn same_rows(rec: &[(String, usize)], labels: &[Option<String>], fired: &[(String, usize)], c: &Checked) -> bool {
+    rec.len() == fired.len()
+        && rec.iter().enumerate().zip(fired).all(|((k, (ta, ra)), (tb, rb))| {
+            ta == tb
+                && match (labels.get(k).and_then(|l| l.as_deref()), c.label_of(tb, *rb)) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => ra == rb,
+                }
+        })
 }

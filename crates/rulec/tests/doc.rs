@@ -48,6 +48,8 @@ const CORPUS: &[&str] = &[
     "tests/corpus/所得税.rule",
     "tests/corpus/領収書の印紙税.rule",
     "tests/corpus/印紙税.rule",
+    "tests/corpus/印紙税の本則と軽減.rule",
+    "tests/corpus/送料のただし書.rule",
     "tests/corpus/全国運賃.rule",
     "tests/corpus/納入先照合.rule",
 ];

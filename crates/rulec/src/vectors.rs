@@ -596,10 +596,11 @@ fn count_pool(
     // `自動確定可 = false` and a count of 0 or 2. `place` cannot help: a count is not an input,
     // so there is nothing to place a number on. The pair is built here instead, out of the row's
     // own assignment for the other columns and a sequence of exactly that many counted elements.
-    for it in &f.items {
-        let Item::Table(t) = it else { continue };
-        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+    for set in &c.sets {
+        let t = &set.table;
         for (ri, row) in t.rows.iter().enumerate() {
+            let tname = set.row_table(ri).to_string();
+            let rn = row.index;
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 let Some(&(d, hit)) = counted.iter().find(|(d, _)| d.name.text == *col) else {
                     continue;
@@ -627,7 +628,7 @@ fn count_pool(
                     let why = tr!(
                         "境界両側: 表 {tname} 行{} {col} {b} の",
                         "boundary pair: table {tname} row {} {col} {b}",
-                        ri + 1
+                        rn
                     );
                     for (n, side) in [
                         (inside, tr!("{why}内側", "{why} inside")),
@@ -669,10 +670,11 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
     // satisfies the input cell" never touches a column a derived value decides, and the row
     // stays beaten by an earlier row under `first`. That showed up in the coverage auditor as
     // missing row coverage (クーポン併用 row 3, 適用順序 row 4, 素の割引 row 3).
-    for it in &f.items {
-        let Item::Table(t) = it else { continue };
-        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+    for set in &c.sets {
+        let t = &set.table;
         for (ri, row) in t.rows.iter().enumerate() {
+            let tname = set.row_table(ri).to_string();
+            let rn = row.index;
             let mut a = base.clone();
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
                 if !cands.contains_key(col) {
@@ -684,8 +686,8 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
                     a.insert(col.clone(), v);
                 }
             }
-            let seed = win_row(f, c, cands, &a, t, ri).unwrap_or(a);
-            out.push((seed.clone(), tr!("行を当てる: 表 {tname} 行{}", "row target: table {tname} row {}", ri + 1)));
+            let seed = win_row(f, c, cands, &a, set, ri).unwrap_or(a);
+            out.push((seed.clone(), tr!("行を当てる: 表 {tname} 行{}", "row target: table {tname} row {}", rn)));
 
             // Boundary-pair coverage: build a **pair** that steps on both sides of a boundary
             // with the row's other columns held fixed. `place` picks inputs in declaration order
@@ -710,7 +712,7 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
                     let why = tr!(
                         "境界両側: 表 {tname} 行{} {col} {b} の",
                         "boundary pair: table {tname} row {} {col} {b}",
-                        ri + 1
+                        rn
                     );
                     out.push((ain, tr!("{why}内側", "{why} inside")));
                     out.push((aout, tr!("{why}外側", "{why} outside")));
@@ -719,21 +721,27 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
         }
 
         // Shadow-pair coverage: the inside of the intersection (a point where row i wins while
-        // row j's conditions hold too).
-        if t.policy == Policy::TopDown {
-            for j in 1..t.rows.len() {
-                for i in 0..j {
-                    let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j], &BTreeSet::new())
-                    else {
-                        continue;
-                    };
-                    let Some(a) = win_row(f, c, cands, &a, t, i) else { continue };
-                    if row_holds(f, c, t, &t.rows[j], &a) {
-                        out.push((
-                            a,
-                            tr!("隠れ対: 表 {tname} 行{}∩行{}", "shadow pair: table {tname} row {} ∩ row {}", i + 1, j + 1),
-                        ));
-                    }
+        // row j's conditions hold too). The pairs are the ones the precedence relation orders
+        // — the earlier rows of a `first` table, and the rows of a table this one takes
+        // precedence over (DESIGN-draft §2.8).
+        for j in 1..t.rows.len() {
+            for &i in &set.beats[j] {
+                let Some(a) = reach_row(f, c, cands, &base, t, &t.rows[j], &BTreeSet::new())
+                else {
+                    continue;
+                };
+                let Some(a) = win_row(f, c, cands, &a, set, i) else { continue };
+                if row_holds(f, c, t, &t.rows[j], &a) {
+                    let (ti, tj) = (set.row_table(i), set.row_table(j));
+                    let (ni, nj) = (t.rows[i].index, t.rows[j].index);
+                    out.push((
+                        a,
+                        if ti == tj {
+                            tr!("隠れ対: 表 {ti} 行{ni}∩行{nj}", "shadow pair: table {ti} row {ni} ∩ row {nj}")
+                        } else {
+                            tr!("隠れ対: 表 {ti} 行{ni}∩表 {tj} 行{nj}", "shadow pair: table {ti} row {ni} ∩ table {tj} row {nj}")
+                        },
+                    ));
                 }
             }
         }
@@ -1105,8 +1113,15 @@ fn out_object(c: &Checked, v: &Vector) -> String {
 /// file is also a valid fixtures file, which `rulec fixtures lint` and `replay` accept.
 pub fn expected_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let fired: Vec<String> =
-        v.fired.iter().map(|(t, r)| format!("{{\"table\":\"{}\",\"row\":{r}}}", esc(t))).collect();
+    // A labelled row carries its label, as the generated record functions write it.
+    let fired: Vec<String> = v
+        .fired
+        .iter()
+        .map(|(t, r)| match c.label_of(t, *r) {
+            Some(l) => format!("{{\"table\":\"{}\",\"row\":{r},\"label\":\"{}\"}}", esc(t), esc(l)),
+            None => format!("{{\"table\":\"{}\",\"row\":{r}}}", esc(t)),
+        })
+        .collect();
     format!("{{\"in\":{},\"observed\":{},\"trace\":[{}]}}", in_object(f, c, v), out_object(c, v), fired.join(","))
 }
 
@@ -1388,19 +1403,22 @@ fn win_row(
     c: &Checked,
     cands: &BTreeMap<String, Vec<Val>>,
     seed: &BTreeMap<String, Val>,
-    t: &Table,
+    set: &crate::defset::DefSet,
     ri: usize,
 ) -> Option<BTreeMap<String, Val>> {
-    let tag = eval::row_tag(&t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), ri + 1);
+    let t = &set.table;
+    let tag = eval::row_tag(set.row_table(ri), t.rows[ri].index);
     let mut a = reach_row(f, c, cands, seed, t, &t.rows[ri], &BTreeSet::new())?;
     for _ in 0..t.rows.len() + 1 {
         let (_, fired, _) = eval::run_bindings(f, c, a.clone().into_iter().collect());
         if fired.contains(&tag) {
             return Some(a);
         }
-        // Knock out one row that currently wins ahead of it.
+        // Knock out one row that currently wins ahead of it: one the precedence relation
+        // puts before it (the earlier rows under `first`, or the rows of a table that takes
+        // precedence over this one).
         let mut moved = false;
-        for e in 0..ri {
+        for &e in &set.beats[ri] {
             if !row_holds(f, c, t, &t.rows[e], &a) {
                 continue;
             }
