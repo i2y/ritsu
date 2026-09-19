@@ -1,0 +1,37 @@
+rule 預け荷物料金(baggage_fee) v1
+description "航空券予約の預け荷物の超過料金。予約者の会員区分とキャビンで一人あたりの無料個数が決まり、無料の合計を超えた個数に一個 50 ドル。出典: τ²-bench airline policy（Sierra Research、MIT）の Checked bag allowance"
+
+enum 会員区分(membership) = regular | silver | gold
+enum キャビン(cabin) = basic_economy | economy | business
+
+inputs
+  会員区分(membership) : 会員区分
+  キャビン(cabin)      : キャビン
+  乗客数(passengers)   : number  range >=1 <=5
+  預け荷物数(bags)     : number  range >=0 <=50
+
+outputs
+  超過料金(fee) : money[USD, excl_tax]  round half_up(1USD)
+
+table 無料個数(free_bags)
+policy unique
+| 会員区分 | キャビン      | -> 一人あたり無料(free_each) : number |
+| regular  | basic_economy | 0                                     |
+| regular  | economy       | 1                                     |
+| regular  | business      | 2                                     |
+| silver   | basic_economy | 1                                     |
+| silver   | economy       | 2                                     |
+| silver   | business      | 3                                     |
+| gold     | basic_economy | 2                                     |
+| gold     | economy       | 3                                     |
+| gold     | business      | 4                                     |
+
+define 無料合計(free_total) : number = 一人あたり無料 × 乗客数
+define 超過個数(extra) : number = max(預け荷物数 - 無料合計, 0)
+define 超過料金(fee) : money[USD, excl_tax] = 超過個数 × 50USD
+
+examples
+| 会員区分 | キャビン      | 乗客数 | 預け荷物数 | -> 超過料金 |
+| regular  | basic_economy | 1      | 1          | 50USD       |
+| gold     | business      | 2      | 8          | 0USD        |
+| silver   | economy       | 3      | 7          | 50USD       |
