@@ -119,23 +119,26 @@ fn 整形は呼び出しの本体を二字下げる() {
 /// rule — applied twice under unaliased `->` names: two versions of a rule bundled, with a
 /// date table choosing between them (§15.71). The expansion used to give the renamed output
 /// the callee's own prefixed alias, the very identifier the callee's output column gets, so
-/// the generated TypeScript, JavaScript, Go and Swift declared one name twice.
+/// the generated TypeScript, JavaScript, Go and Swift declared one name twice. The callee
+/// rounds `half_up`, whose Python helper is `_round_half`: the SQL translator read that name
+/// as a mode and stopped `gen` for every language. `上乗せ` reads a rounded callee output
+/// in arithmetic, which needs that output's range, and adds a definition that is one bare
+/// literal, which Go and Swift typed as a plain integer.
 #[test]
 fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別子は衝突しない() {
     let d = std::env::temp_dir().join(format!("rulec-bundle-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
-    let callee = |name: &str, alias: &str, lo: &str, hi: &str| {
-        format!(
-            "rule {name}({alias}) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n\noutputs\n  税額(tax) : money[円]  round down(1円)\n\ntable 税額表(rates)\npolicy unique\n| 金額     | -> 税額(tax) : money[円] |\n| <=10万円 | {lo} |\n| >10万円  | {hi} |\n"
-        )
-    };
-    let old = callee("旧税額", "old_tax", "200円", "400円");
-    let new = callee("新税額", "new_tax", "0円", "300円");
+    // 旧: a table whose output column carries the output's name, rounded `half_up` (the
+    // Python helper `_round_half`). 新: a rate arithmetic held in 1/20000 円, rounded
+    // `half_down` — a callee output that has to come back to whole 円 before this rule
+    // reads it, through a helper the four compiled languages did not know by that name.
+    let old = "rule 旧税額(old_tax) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n\noutputs\n  税額(tax) : money[円]  round half_up(1円)\n\ntable 税額表(rates)\npolicy unique\n| 金額     | -> 税額(tax) : money[円] |\n| <=10万円 | 200円 |\n| >10万円  | 400円 |\n".to_string();
+    let new = "rule 新税額(new_tax) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n  率(rate)     : rate[step 0.01%]  range >=0% <=20%\n\noutputs\n  税額(tax) : money[円]  round half_down(1円)\n\ndefine 税額(tax) : money[円] = 金額 × 率 ÷ 2\n".to_string();
     std::fs::write(d.join("旧税額.rule"), &old).unwrap();
     std::fs::write(d.join("新税額.rule"), &new).unwrap();
     let bundle = format!(
-        "rule 束(bundle) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n  作成日(made) : date       range >=2024-04-01 <=2030-12-31\n\noutputs\n  税額(tax) : money[円]  round down(1円)\n\napply 旧(old) = \"旧税額.rule\" sha256:{}\n  金額 = 金額\n  税額 -> 旧税額\n\napply 新(new) = \"新税額.rule\" sha256:{}\n  金額 = 金額\n  税額 -> 新税額\n\ntable 選択(pick)\npolicy unique\n| 作成日       | -> 税額 |\n| <=2027-03-31 | 旧税額  |\n| >=2027-04-01 | 新税額  |\n\nexamples\n| 金額  | 作成日     | -> 税額 |\n| 5万円 | 2027-03-31 | 200円   |\n| 5万円 | 2027-04-01 | 0円     |\n",
+        "rule 束(bundle) v1\n\ninputs\n  金額(amount) : money[円]  range >=0円 <=100万円\n  作成日(made) : date       range >=2024-04-01 <=2030-12-31\n\noutputs\n  税額(tax) : money[円]  round down(1円)\n  上乗せ(extra) : money[円]  round half_up(1円)\n\napply 旧(old) = \"旧税額.rule\" sha256:{}\n  金額 = 金額\n  税額 -> 旧税額\n\napply 新(new) = \"新税額.rule\" sha256:{}\n  金額 = 金額\n  率 = 10.28%\n  税額 -> 新税額\n\ndefine 定数(fixed) : money[円] = 100円\ndefine 上乗せ(extra) : money[円] = 新税額 × 3 ÷ 2 + 定数\n\ntable 選択(pick)\npolicy unique\n| 作成日       | -> 税額 |\n| <=2027-03-31 | 旧税額  |\n| >=2027-04-01 | 新税額  |\n\nexamples\n| 金額    | 作成日     | -> 税額 | 上乗せ |\n| 5万円   | 2027-03-31 | 200円   | 3955円 |\n| 5万円   | 2027-04-01 | 2570円  | 3955円 |\n| 30001円 | 2027-04-01 | 1542円  | 2413円 |\n",
         rulec::sha256::short(old.as_bytes()),
         rulec::sha256::short(new.as_bytes())
     );

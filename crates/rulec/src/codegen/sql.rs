@@ -156,7 +156,11 @@ impl Sql {
                 "_min" => format!("LEAST({a}, {b})"),
                 "_max" => format!("GREATEST({a}, {b})"),
                 f => {
-                    let m = RoundMode::parse(f.trim_start_matches("_round_")).expect("a rounding call");
+                    // The Python helper's name, not the mode's keyword: `half_up` is spelled
+                    // `_round_half` and `half_even` `_round_bankers` there. A callee output
+                    // rounded `half_up`, expanded into an `apply`, was the first rounding call
+                    // in a definition with either — and it stopped `gen` for every language.
+                    let m = super::mode_from_fn(f.trim_start_matches("_round_")).expect("a rounding call");
                     // The mode reads its argument several times, so anything that is not
                     // already a column is bound to one first.
                     let x = if a.starts_with('"') || a.parse::<i128>().is_ok() { a } else { self.bind(a) };

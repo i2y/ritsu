@@ -2128,6 +2128,35 @@ impl Checked {
                     _ => None,
                 }
             }
+            Expr::Call(name, args, _) => {
+                use crate::num::RoundMode;
+                match (name.as_str(), args.as_slice()) {
+                    // A rounded value stays within its argument's bounds pushed out to the
+                    // grid, whichever way the mode rounds: down toward zero on the side
+                    // nearer zero, up away from it on the other. Without this a callee's
+                    // rounded output had no range, and a definition over it in the applying
+                    // rule had no range and no scale — and came out at the wrong scale in
+                    // every generated language (§15.72).
+                    (m, [x, g]) if RoundMode::parse(m).is_some() => {
+                        let (lo, hi) = self.interval(x, ty)?;
+                        let Expr::Lit(Lit::Num(n), _) = g else { return None };
+                        let grid = lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?;
+                        let out = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, grid);
+                        let inn = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, grid);
+                        Some((out(lo), inn(hi)))
+                    }
+                    (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
+                        let (al, ah) = self.interval(x, ty)?;
+                        let (bl, bh) = self.interval(y, ty)?;
+                        let pick = |a: Rat, b: Rat| {
+                            let less = a.cmp_to(b) == std::cmp::Ordering::Less;
+                            if (name == crate::kw::MIN) == less { a } else { b }
+                        };
+                        Some((pick(al, bl), pick(ah, bh)))
+                    }
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }

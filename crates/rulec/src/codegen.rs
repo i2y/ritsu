@@ -494,12 +494,25 @@ impl<'a> Gen<'a> {
                         }
                     }
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
-                        // Rounding snaps to a multiple of the grid, which is brought to x's scale.
+                        // Rounding snaps to a multiple of the grid, so the result is a whole
+                        // number of grid steps and comes back at the grid's scale — which is
+                        // what the checker records for it (`types::scale`). It used to stay at
+                        // x's scale with no division, so a callee output rounded to 1円 from a
+                        // value held in 1/20000 円 reached the applying rule 20,000 times too
+                        // large in every language (§15.72).
                         let mode = RoundMode::parse(m).unwrap();
-                        let gs = rescale(g, x.scale);
-                        Expr2 {
-                            text: format!("_round_{}({}, {})", mode_fn(mode), x.text, gs),
-                            scale: x.scale,
+                        let s = lcm(x.scale, g.scale);
+                        // A literal grid is folded to one number: `(1 * 100)` nested inside
+                        // the division below is a product gofmt would tighten.
+                        let gs = match g.text.parse::<i128>() {
+                            Ok(v) => (v * (s / g.scale)).to_string(),
+                            Err(_) => rescale(g, s),
+                        };
+                        let rounded = format!("_round_{}({}, {})", mode_fn(mode), rescale(x, s), gs);
+                        if s == g.scale {
+                            Expr2 { text: rounded, scale: s }
+                        } else {
+                            Expr2 { text: format!("({rounded} // {})", s / g.scale), scale: g.scale }
                         }
                     }
                     _ => Expr2 { text: "0".into(), scale: 1 },
@@ -640,6 +653,12 @@ fn mode_fn(m: RoundMode) -> &'static str {
         RoundMode::Bankers => "bankers",
         RoundMode::HalfDown => "half_down",
     }
+}
+
+/// The mode a Python helper's name stands for: the inverse of [`mode_fn`], for the one
+/// place that reads the Python spelling back (the SQL translator).
+pub(crate) fn mode_from_fn(name: &str) -> Option<RoundMode> {
+    [RoundMode::Up, RoundMode::Down, RoundMode::Half, RoundMode::Bankers, RoundMode::HalfDown].into_iter().find(|m| mode_fn(*m) == name)
 }
 
 fn rescale(e: &Expr2, to: i128) -> String {
@@ -1744,12 +1763,12 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_typed(&go_expr(&e.text)), tr!("導出", "derived value")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, local);
-                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_expr(&e.text), tr!("定義", "definition")));
+                    o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_typed(&go_expr(&e.text)), tr!("定義", "definition")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
                 Item::Count(_) => {}
@@ -2237,6 +2256,12 @@ impl<'a> Gen<'a> {
 }
 
 /// Adapt an expression built for Python to Go's spelling. Only integer division differs.
+/// A definition that is one literal (`define 介護保険料率 = 1.62%`) would be declared `int`
+/// by `:=`, and the first `+` with an `int64` neighbour would not compile (§15.72).
+fn go_typed(s: &str) -> String {
+    if s.parse::<i128>().is_ok() { format!("int64({s})") } else { s.to_string() }
+}
+
 fn go_expr(s: &str) -> String {
     let t = s
         .replace(" // ", " / ")
@@ -2244,6 +2269,7 @@ fn go_expr(s: &str) -> String {
         .replace("False", "false")
         .replace("_round_down(", "roundDown(")
         .replace("_round_up(", "roundUp(")
+        .replace("_round_half_down(", "roundHalfDown(")
         .replace("_round_half(", "roundHalf(")
         .replace("_round_bankers(", "roundBankers(")
         .replace("_min(", "minInt(")
@@ -2668,6 +2694,7 @@ fn ts_expr(s: &str) -> String {
         .replace("False", "false")
         .replace("_round_down(", "_roundDown(")
         .replace("_round_up(", "_roundUp(")
+        .replace("_round_half_down(", "_roundHalfDown(")
         .replace("_round_half(", "_roundHalf(")
         .replace("_round_bankers(", "_roundBankers(")
         .replace("_min(", "_min(")
@@ -3558,6 +3585,7 @@ fn rs_expr(s: &str) -> String {
         .replace("False", "false")
         .replace("_round_down(", "round_down(")
         .replace("_round_up(", "round_up(")
+        .replace("_round_half_down(", "round_half_down(")
         .replace("_round_half(", "round_half(")
         .replace("_round_bankers(", "round_bankers(")
         .replace("_min(", "min_i64(")
@@ -6487,12 +6515,18 @@ fn sw_round_fn(m: RoundMode) -> String {
 /// `max`. A rule may declare an input named `min` — `クーポン割引.rule` does — and a
 /// parameter shadows a global in Swift, so the call would resolve to the money the caller
 /// passed in.
+/// The Swift twin of [`go_typed`]: a bare literal would be an `Int`, not an `Int64`.
+fn sw_typed(s: &str) -> String {
+    if s.parse::<i128>().is_ok() { format!("Int64({s})") } else { s.to_string() }
+}
+
 fn sw_expr(s: &str) -> String {
     s.replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
         .replace("_round_down(", "_roundDown(")
         .replace("_round_up(", "_roundUp(")
+        .replace("_round_half_down(", "_roundHalfDown(")
         .replace("_round_half(", "_roundHalf(")
         .replace("_round_bankers(", "_roundBankers(")
 }
@@ -6775,7 +6809,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!(
                         "    let {} = {}  // {}\n",
                         self.sw_ident(&d.name.text),
-                        sw_expr(unparen(&self.expr(&d.expr, local).text)),
+                        sw_typed(&sw_expr(unparen(&self.expr(&d.expr, local).text))),
                         tr!("導出", "derived value")
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
@@ -6784,7 +6818,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!(
                         "    let {} = {}  // {}\n",
                         self.sw_ident(&d.name.text),
-                        sw_expr(unparen(&self.expr(&d.expr, local).text)),
+                        sw_typed(&sw_expr(unparen(&self.expr(&d.expr, local).text))),
                         tr!("定義", "definition")
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
