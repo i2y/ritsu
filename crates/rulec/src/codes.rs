@@ -967,8 +967,8 @@ pub fn ledger() -> Vec<Entry> {
                 "The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare."
             ),
             tr!(
-                "`rulec source fetch <file.rule>` が e-Gov から引用箇所を取って写しに置きます。写しは git に入れてください。",
-                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov into the copies. Commit the copies."
+                "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取って写しに置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, into the copies. Commit the copies."
             ),
             X_E039,
             &["E037", "E038"],

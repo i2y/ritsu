@@ -274,7 +274,8 @@ policy unique
 | false          | -        | 200円       |  @法 別表第一  # 記載のないもの
 ```
 
-A `source` names a document, after `import`. A `law` is a law on e-Gov, by its law id, read
+A `source` names a document, after `import`. A `law` is a law on e-Gov (the Japanese
+government's statute database), by its law id, read
 as of a date: the API returns one fragment at a time, so each fragment the rule cites is
 kept as a copy beside the rule (`sources/law/<law id>@<date>/<element>.xml`) and pinned by
 its digest on the line under the `source`. A `file` is a document with no addressable

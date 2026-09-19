@@ -45,7 +45,7 @@ These are all the words that may start a line.
 | `policy` | that table's hit policy (`unique` or `first`) |
 | `overrides` | when a table above defines the same output, says that this table's rows take precedence over it. The line after `policy`; `table:label` names one row |
 | `clause` | a one-line rule that does not fit a table, written as a sentence: `when <column> <cell> and …` (`when always` when there is no condition), `then <value>`, and `overrides` when needed |
-| `source` | a document the rule transcribes: a law on e-Gov (`law "<law id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
+| `source` | a document the rule transcribes: a law on e-Gov, the Japanese government's statute database (`law "<law id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
 | `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
 | `examples` | an executable specification |
@@ -480,7 +480,8 @@ define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91�
 table 本則(base)  @法 別表第一
 ```
 
-`source` declares a document: for a law on e-Gov, its law id and the date whose text is meant
+`source` declares a document: for a law, its id on e-Gov (the Japanese government's statute
+database) and the date whose text is meant
 (`asof`); for a file beside the rule, `file "料金表.pdf" sha256:…`. A table, a clause, a row, a
 derive or a define cites it at the end of its line, `@source 箇所`, naming the place the way the
 document does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一`.

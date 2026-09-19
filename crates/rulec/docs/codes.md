@@ -1211,7 +1211,7 @@ Related codes: [E037](#e037), [E039](#e039)
 
 **When.** The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare.
 
-**Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov into the copies. Commit the copies.
+**Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, into the copies. Commit the copies.
 
 **Smallest reproduction**:
 

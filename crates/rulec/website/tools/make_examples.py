@@ -369,7 +369,7 @@ EXAMPLES = [
     (
         "印紙税の本則と軽減.rule",
         "本則と特例を二つの表に分け、出典に縛る",
-        "上の印紙税と同じ決まりを、印紙税法の別表第一（本則）と、租税特別措置法第 91 条（軽減）の二つの表に分け、非課税の決まりを節にしたものです。それぞれの表が自分の出典を引用し、出典は e-Gov から取った写しのハッシュに縛られています。",
+        "上の印紙税と同じ決まりを、印紙税法の別表第一（本則）と、租税特別措置法第 91 条（軽減）の二つの表に分け、非課税の決まりを節にしたものです。それぞれの表が自分の出典を引用し、出典は政府の法令データベース（e-Gov 法令検索）から取った条文の写しのハッシュに縛られています。",
         [
             "**`overrides 本則` が、特例を本則に優先させます。** 一つの表に `軽減期間` の列を足す代わりに、原文ごとに表を分けて、どちらが勝つかを一行で書きます。検査は二つの表をまとめて、完全性と重なりを見ます。",
             "**非課税の決まりは `clause` です。** 別表第一では課税物件の表ではなく非課税物件の欄に書かれているので、表の行ではなく文のまま書いています。",
@@ -377,7 +377,7 @@ EXAMPLES = [
             "**行のラベル**（`r1` …）は、記録に出る名前であり、`overrides 本則:r3` のように行を指す名前です。",
         ],
         "A main rule and a reduced rate as two tables, held to their sources",
-        "The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy fetched from e-Gov.",
+        "The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy of the text fetched from e-Gov, the Japanese government's statute database.",
         [
             "**`overrides 本則` makes the exception take precedence over the main rule.** Instead of adding a `軽減期間` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.",
             "**The exemption is a `clause`.** In the appendix table it sits in the column of exempt documents, not in the table of taxable ones, so it is written as a sentence rather than a row.",

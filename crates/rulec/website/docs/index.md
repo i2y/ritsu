@@ -57,7 +57,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet, a published policy or a statute** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. From a statute, each table cites its article (`@法 第91条`) and is held to a copy fetched from e-Gov. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
+| **a spreadsheet, a published policy or a statute** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. From a statute, each table cites its article (`@法 第91条`) and is held to a copy of the text fetched from e-Gov, the Japanese government's statute database. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](compare.md#against-a-legacy-implementation) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
 
@@ -176,20 +176,22 @@ this is not "a tool for shipping fees" and not "a tool for e-commerce".
 
 ### A statute is written the same way
 
-A tax table such as Appendix Table 1 of the Stamp Tax Act is a table as it stands. The
-reduced rate in the Special Taxation Measures Act is a second table that takes precedence
-over it (`overrides`). A proviso whose conditions do not line up as columns is written as
-a sentence, one line of rule (`clause`). Any table can cite its article at the end of its
-line (`@法 別表第一`) and is held to the digest of a copy of that text fetched from e-Gov, so
-an amendment that changes the text stops the check and names the tables citing it
-(`source`). "The provisions of Article 20 apply, reading 'years of service' as 'period in
-office'" is written as exactly that substitution (`apply`).
+Statutes are full of table-shaped provisions. A tax table such as Appendix Table 1 of the
+Stamp Tax Act is a table as it stands, and a reduced rate, a proviso or a provision applied
+to another case sits on top of it. Each of those has its own way of being written.
 
-The checks judge completeness and overlaps over a main rule and its exceptions together,
+| In the statute | In the rule |
+|---|---|
+| **A main rule and an exception that takes precedence** (the stamp duty table and the reduced rate in the Special Taxation Measures Act) | two tables, with one line on the exception: `overrides 本則` |
+| **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
+| **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
+| **Which article it was transcribed from** | `@法 第91条` at the end of the line. The text is held to a copy fetched from e-Gov, the Japanese government's statute database, so an amendment that changes it stops the check and names the tables citing it |
+
+The checks judge completeness and overlaps over the main rule and its exceptions together,
 and for an applied rule they prove that what this rule passes stays inside the applied
-rule's ranges. The approver's page quotes the cited text from the copies. How to write them
-is in [Write a table](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working
-examples are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
+rule's ranges. The approver's page quotes the cited text. How to write them is in
+[Write a table](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working examples
+are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
 
 ### The one constraint: a cell sees only its own column
 

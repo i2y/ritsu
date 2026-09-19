@@ -1192,7 +1192,7 @@ examples
 
 ## A main rule and a reduced rate as two tables, held to their sources
 
-The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy fetched from e-Gov.
+The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy of the text fetched from e-Gov, the Japanese government's statute database.
 
 ```rule
 rule 印紙税の本則と軽減(stamp_duty_split) v1
