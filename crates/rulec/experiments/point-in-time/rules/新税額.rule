@@ -1,0 +1,18 @@
+rule 新税額(new_tax) v1
+description "新版の税額表"
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=100万円
+
+outputs
+  税額(tax) : money[円]  round down(1円)
+
+table 税額表(rates)
+policy unique
+| 金額      | -> 税額(tax) : money[円] |
+| <=10万円  | 0円                      |
+| >10万円   | 300円                    |
+
+examples
+| 金額   | -> 税額 |
+| 5万円  | 0円     |

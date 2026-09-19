@@ -1,0 +1,106 @@
+<Article Num="83_2">
+              <ArticleCaption>（配偶者特別控除）</ArticleCaption>
+              <ArticleTitle>第八十三条の二</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence Num="1">居住者が生計を一にする配偶者（第二条第一項第三十三号（定義）に規定する青色事業専従者等を除くものとし、合計所得金額が百三十三万円以下であるものに限る。）で控除対象配偶者に該当しないもの（合計所得金額が千万円以下である当該居住者の配偶者に限る。）を有する場合には、その居住者のその年分の総所得金額、退職所得金額又は山林所得金額から次の各号に掲げる場合の区分に応じ当該各号に定める金額を控除する。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が九百万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その居住者の配偶者の次に掲げる区分に応じそれぞれ次に定める金額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                  <Subitem1 Num="1">
+                    <Subitem1Title>イ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">合計所得金額が九十五万円以下である配偶者</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">三十八万円</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="2">
+                    <Subitem1Title>ロ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">合計所得金額が九十五万円を超え百三十万円以下である配偶者</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">三十八万円からその配偶者の合計所得金額のうち九十三万一円を超える部分の金額（当該超える部分の金額が五万円の整数倍の金額から三万円を控除した金額でないときは、五万円の整数倍の金額から三万円を控除した金額で当該超える部分の金額に満たないもののうち最も多い金額とする。）を控除した金額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="3">
+                    <Subitem1Title>ハ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">合計所得金額が百三十万円を超える配偶者</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">三万円</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が九百万円を超え九百五十万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その居住者の配偶者の前号イからハまでに掲げる区分に応じそれぞれ同号イからハまでに定める金額の三分の二に相当する金額（当該金額に一万円未満の端数がある場合には、これを切り上げた金額）</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が九百五十万円を超え千万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その居住者の配偶者の第一号イからハまでに掲げる区分に応じそれぞれ同号イからハまでに定める金額の三分の一に相当する金額（当該金額に一万円未満の端数がある場合には、これを切り上げた金額）</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">前項の規定は、同項に規定する生計を一にする配偶者が、次に掲げる場合に該当するときは、適用しない。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">当該配偶者が前項に規定する居住者として同項の規定の適用を受けている場合</Sentence>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">当該配偶者が、給与所得者の扶養控除等申告書又は従たる給与についての扶養控除等申告書に記載された源泉控除対象配偶者がある居住者として第百八十五条第一項第一号若しくは第二号（賞与以外の給与等に係る徴収税額）又は第百八十六条第一項第一号若しくは第二項第一号（賞与に係る徴収税額）の規定の適用を受けている場合（当該配偶者が、その年分の所得税につき、第百九十条（年末調整）の規定の適用を受けた者である場合又は確定申告書の提出をし、若しくは決定を受けた者である場合を除く。）</Sentence>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">当該配偶者が、公的年金等の受給者の扶養親族等申告書に記載された源泉控除対象配偶者がある居住者として第二百三条の三第一号から第三号まで（徴収税額）の規定の適用を受けている場合（当該配偶者がその年分の所得税につき確定申告書の提出をし、又は決定を受けた者である場合を除く。）</Sentence>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="3">
+                <ParagraphNum>３</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">第一項の規定による控除は、配偶者特別控除という。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

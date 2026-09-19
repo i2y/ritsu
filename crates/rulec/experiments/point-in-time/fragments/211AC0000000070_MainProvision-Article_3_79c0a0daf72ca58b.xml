@@ -1,0 +1,352 @@
+<Article Num="3">
+          <ArticleCaption>（定義）</ArticleCaption>
+          <ArticleTitle>第三条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum/>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「被保険者」とは、適用事業所に使用される者及び任意継続被保険者をいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、次の各号のいずれかに該当する者は、日雇特例被保険者となる場合を除き、被保険者となることができない。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">船員保険の被保険者（船員保険法（昭和十四年法律第七十三号）第二条第二項に規定する疾病任意継続被保険者を除く。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">臨時に使用される者であって、次に掲げるもの（イに掲げる者にあっては一月を超え、ロに掲げる者にあってはロに掲げる定めた期間を超え、引き続き使用されるに至った場合を除く。）</Sentence>
+              </ItemSentence>
+              <Subitem1 Num="1">
+                <Subitem1Title>イ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">日々雇い入れられる者</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="2">
+                <Subitem1Title>ロ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">二月以内の期間を定めて使用される者であって、当該定めた期間を超えて使用されることが見込まれないもの</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+            </Item>
+            <Item Num="3">
+              <ItemTitle>三</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">事業所又は事務所（第八十八条第一項及び第八十九条第一項を除き、以下単に「事業所」という。）で所在地が一定しないものに使用される者</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="4">
+              <ItemTitle>四</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">季節的業務に使用される者（継続して四月を超えて使用されるべき場合を除く。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="5">
+              <ItemTitle>五</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">臨時的事業の事業所に使用される者（継続して六月を超えて使用されるべき場合を除く。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="6">
+              <ItemTitle>六</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">国民健康保険組合の事業所に使用される者</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="7">
+              <ItemTitle>七</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">後期高齢者医療の被保険者（高齢者の医療の確保に関する法律（昭和五十七年法律第八十号）第五十条の規定による被保険者をいう。）及び同条各号のいずれかに該当する者で同法第五十一条の規定により後期高齢者医療の被保険者とならないもの（以下「後期高齢者医療の被保険者等」という。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="8">
+              <ItemTitle>八</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">厚生労働大臣、健康保険組合又は共済組合の承認を受けた者（健康保険の被保険者でないことにより国民健康保険の被保険者であるべき期間に限る。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="9">
+              <ItemTitle>九</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">事業所に使用される者であって、その一週間の所定労働時間が同一の事業所に使用される通常の労働者（当該事業所に使用される通常の労働者と同種の業務に従事する当該事業所に使用される者にあっては、厚生労働省令で定める場合を除き、当該者と同種の業務に従事する当該通常の労働者。以下この号において単に「通常の労働者」という。）の一週間の所定労働時間の四分の三未満である短時間労働者（一週間の所定労働時間が同一の事業所に使用される通常の労働者の一週間の所定労働時間に比し短い者をいう。以下この号において同じ。）又はその一月間の所定労働日数が同一の事業所に使用される通常の労働者の一月間の所定労働日数の四分の三未満である短時間労働者に該当し、かつ、イ又はロのいずれかの要件に該当するもの</Sentence>
+              </ItemSentence>
+              <Subitem1 Num="1">
+                <Subitem1Title>イ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">一週間の所定労働時間が二十時間未満であること。</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="2">
+                <Subitem1Title>ロ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">学校教育法（昭和二十二年法律第二十六号）第五十条に規定する高等学校の生徒、同法第八十三条に規定する大学の学生その他の厚生労働省令で定める者であること。</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="2">
+            <ParagraphNum>２</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「日雇特例被保険者」とは、適用事業所に使用される日雇労働者をいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、後期高齢者医療の被保険者等である者又は次の各号のいずれかに該当する者として厚生労働大臣の承認を受けたものは、この限りでない。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">適用事業所において、引き続く二月間に通算して二十六日以上使用される見込みのないことが明らかであるとき。</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">任意継続被保険者であるとき。</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="3">
+              <ItemTitle>三</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">その他特別の理由があるとき。</Sentence>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="3">
+            <ParagraphNum>３</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「適用事業所」とは、次の各号のいずれかに該当する事業所をいう。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">次に掲げる事業の事業所であって、常時五人以上の従業員を使用するもの</Sentence>
+              </ItemSentence>
+              <Subitem1 Num="1">
+                <Subitem1Title>イ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">物の製造、加工、選別、包装、修理又は解体の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="2">
+                <Subitem1Title>ロ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">土木、建築その他工作物の建設、改造、保存、修理、変更、破壊、解体又はその準備の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="3">
+                <Subitem1Title>ハ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">鉱物の採掘又は採取の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="4">
+                <Subitem1Title>ニ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">電気又は動力の発生、伝導又は供給の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="5">
+                <Subitem1Title>ホ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">貨物又は旅客の運送の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="6">
+                <Subitem1Title>ヘ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">貨物積卸しの事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="7">
+                <Subitem1Title>ト</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">焼却、清掃又はと殺の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="8">
+                <Subitem1Title>チ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">物の販売又は配給の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="9">
+                <Subitem1Title>リ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">金融又は保険の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="10">
+                <Subitem1Title>ヌ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">物の保管又は賃貸の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="11">
+                <Subitem1Title>ル</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">媒介周旋の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="12">
+                <Subitem1Title>ヲ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">集金、案内又は広告の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="13">
+                <Subitem1Title>ワ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">教育、研究又は調査の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="14">
+                <Subitem1Title>カ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">疾病の治療、助産その他医療の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="15">
+                <Subitem1Title>ヨ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">通信又は報道の事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="16">
+                <Subitem1Title>タ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">社会福祉法（昭和二十六年法律第四十五号）に定める社会福祉事業及び更生保護事業法（平成七年法律第八十六号）に定める更生保護事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="17">
+                <Subitem1Title>レ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">弁護士、公認会計士その他政令で定める者が法令の規定に基づき行うこととされている法律又は会計に係る業務を行う事業</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">前号に掲げるもののほか、国、地方公共団体又は法人の事業所であって、常時従業員を使用するもの</Sentence>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="4">
+            <ParagraphNum>４</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「任意継続被保険者」とは、適用事業所に使用されなくなったため、又は第一項ただし書に該当するに至ったため被保険者（日雇特例被保険者を除く。）の資格を喪失した者であって、喪失の日の前日まで継続して二月以上被保険者（日雇特例被保険者、任意継続被保険者又は共済組合の組合員である被保険者を除く。）であったもののうち、保険者に申し出て、継続して当該保険者の被保険者となった者をいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、船員保険の被保険者又は後期高齢者医療の被保険者等である者は、この限りでない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="5">
+            <ParagraphNum>５</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「報酬」とは、賃金、給料、俸給、手当、賞与その他いかなる名称であるかを問わず、労働者が、労働の対償として受けるすべてのものをいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、臨時に受けるもの及び三月を超える期間ごとに受けるものは、この限りでない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="6">
+            <ParagraphNum>６</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「賞与」とは、賃金、給料、俸給、手当、賞与その他いかなる名称であるかを問わず、労働者が、労働の対償として受けるすべてのもののうち、三月を超える期間ごとに受けるものをいう。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="7">
+            <ParagraphNum>７</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「被扶養者」とは、次に掲げる者で、日本国内に住所を有するもの又は外国において留学をする学生その他の日本国内に住所を有しないが渡航目的その他の事情を考慮して日本国内に生活の基礎があると認められるものとして厚生労働省令で定めるものをいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、後期高齢者医療の被保険者等である者その他この法律の適用を除外すべき特別の理由がある者として厚生労働省令で定める者は、この限りでない。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">被保険者（日雇特例被保険者であった者を含む。以下この項において同じ。）の直系尊属、配偶者（届出をしていないが、事実上婚姻関係と同様の事情にある者を含む。以下この項において同じ。）、子、孫及び兄弟姉妹であって、主としてその被保険者により生計を維持するもの</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">被保険者の三親等内の親族で前号に掲げる者以外のものであって、その被保険者と同一の世帯に属し、主としてその被保険者により生計を維持するもの</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="3">
+              <ItemTitle>三</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">被保険者の配偶者で届出をしていないが事実上婚姻関係と同様の事情にあるものの父母及び子であって、その被保険者と同一の世帯に属し、主としてその被保険者により生計を維持するもの</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="4">
+              <ItemTitle>四</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">前号の配偶者の死亡後におけるその父母及び子であって、引き続きその被保険者と同一の世帯に属し、主としてその被保険者により生計を維持するもの</Sentence>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="8">
+            <ParagraphNum>８</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「日雇労働者」とは、次の各号のいずれかに該当する者をいう。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">臨時に使用される者であって、次に掲げるもの（同一の事業所において、イに掲げる者にあっては一月を超え、ロに掲げる者にあってはロに掲げる定めた期間を超え、引き続き使用されるに至った場合（所在地の一定しない事業所において引き続き使用されるに至った場合を除く。）を除く。）</Sentence>
+              </ItemSentence>
+              <Subitem1 Num="1">
+                <Subitem1Title>イ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">日々雇い入れられる者</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+              <Subitem1 Num="2">
+                <Subitem1Title>ロ</Subitem1Title>
+                <Subitem1Sentence>
+                  <Sentence Num="1" WritingMode="vertical">二月以内の期間を定めて使用される者であって、当該定めた期間を超えて使用されることが見込まれないもの</Sentence>
+                </Subitem1Sentence>
+              </Subitem1>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">季節的業務に使用される者（継続して四月を超えて使用されるべき場合を除く。）</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="3">
+              <ItemTitle>三</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">臨時的事業の事業所に使用される者（継続して六月を超えて使用されるべき場合を除く。）</Sentence>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="9">
+            <ParagraphNum>９</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Function="main" Num="1" WritingMode="vertical">この法律において「賃金」とは、賃金、給料、手当、賞与その他いかなる名称であるかを問わず、日雇労働者が、労働の対償として受けるすべてのものをいう。</Sentence>
+              <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、三月を超える期間ごとに受けるものは、この限りでない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="10">
+            <ParagraphNum>１０</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「共済組合」とは、法律によって組織された共済組合をいう。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="11">
+            <ParagraphNum>１１</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「保険者番号」とは、厚生労働大臣が健康保険事業において保険者を識別するための番号として、保険者ごとに定めるものをいう。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="12">
+            <ParagraphNum>１２</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「被保険者等記号・番号」とは、保険者が被保険者又は被扶養者の資格を管理するための記号、番号その他の符号として、被保険者又は被扶養者ごとに定めるものをいう。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="13">
+            <ParagraphNum>１３</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">この法律において「電子資格確認」とは、保険医療機関等（第六十三条第三項各号に掲げる病院若しくは診療所又は薬局をいう。以下同じ。）から療養を受けようとする者又は第八十八条第一項に規定する指定訪問看護事業者から同項に規定する指定訪問看護を受けようとする者が、保険者に対し、個人番号カード（行政手続における特定の個人を識別するための番号の利用等に関する法律（平成二十五年法律第二十七号）第二条第七項に規定する個人番号カードをいう。）に記録された利用者証明用電子証明書（電子署名等に係る地方公共団体情報システム機構の認証業務に関する法律（平成十四年法律第百五十三号）第二十二条第一項に規定する利用者証明用電子証明書をいう。）を送信する方法その他の厚生労働省令で定める方法により、被保険者又は被扶養者の資格に係る情報（保険給付に係る費用の請求に必要な情報を含む。）の照会を行い、電子情報処理組織を使用する方法その他の情報通信の技術を利用する方法により、保険者から回答を受けて当該情報を当該保険医療機関等又は指定訪問看護事業者に提供し、当該保険医療機関等又は指定訪問看護事業者から被保険者又は被扶養者であることの確認を受けることをいう。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>

@@ -1,0 +1,10 @@
+$ 印紙税の本則と軽減.rule の asof を 2024-01-01 に戻して写し直し、outdated に問う
+法: 別表第一 を取りました（sha256:53e1f7d8716ee0d2）
+措置法: 第91条 を取りました（sha256:23d89a3f874b05af）
+法: 1 箇所のハッシュを固定しました
+措置法: 1 箇所のハッシュを固定しました
+ok 印紙税.rule
+
+$ rulec source outdated 印紙税.rule --lang ja
+error: e-Gov の答えが JSON として読めません: 1 文字目が読めません
+exit=2

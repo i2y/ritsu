@@ -1,0 +1,28 @@
+rule 束(bundle) v1
+description "作成日で旧版と新版を呼び分ける。版はファイル、切り替えは表"
+
+inputs
+  金額(amount)  : money[円]  range >=0円 <=100万円
+  作成日(made)  : date       range >=2024-04-01 <=2030-12-31
+
+outputs
+  税額(tax) : money[円]  round down(1円)
+
+apply 旧(old) = "旧税額.rule" sha256:890e63f29ad492eb
+  金額 = 金額
+  税額 -> 旧税額
+
+apply 新(new) = "新税額.rule" sha256:7cfcaa0477017ae7
+  金額 = 金額
+  税額 -> 新税額
+
+table 選択(pick)
+policy unique
+| 作成日       | -> 税額 |
+| <=2027-03-31 | 旧税額  |
+| >=2027-04-01 | 新税額  |
+
+examples
+| 金額   | 作成日     | -> 税額 |
+| 5万円  | 2027-03-31 | 200円   |
+| 5万円  | 2027-04-01 | 0円     |

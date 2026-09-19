@@ -6,3 +6,8 @@
 
 # Finder leaves these behind, and `git add -A` would take them.
 .DS_Store
+
+# The point-in-time experiment rebuilds its fetch cache from the archived fragments
+# (`unpack.py`); the cache is derived, the archive is what is kept.
+/experiments/point-in-time/cache
+/experiments/point-in-time/__pycache__

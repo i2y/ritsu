@@ -1,0 +1,67 @@
+<Article Num="12">
+            <ArticleCaption>（適用除外）</ArticleCaption>
+            <ArticleTitle>第十二条</ArticleTitle>
+            <Paragraph Num="1">
+              <ParagraphNum/>
+              <ParagraphSentence>
+                <Sentence Num="1" WritingMode="vertical">次の各号のいずれかに該当する者は、第九条及び第十条第一項の規定にかかわらず、厚生年金保険の被保険者としない。</Sentence>
+              </ParagraphSentence>
+              <Item Num="1">
+                <ItemTitle>一</ItemTitle>
+                <ItemSentence>
+                  <Sentence Function="main" Num="1" WritingMode="vertical">臨時に使用される者（船舶所有者に使用される船員を除く。）であつて、次に掲げるもの。</Sentence>
+                  <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、イに掲げる者にあつては一月を超え、ロに掲げる者にあつては定めた期間を超え、引き続き使用されるに至つた場合を除く。</Sentence>
+                </ItemSentence>
+                <Subitem1 Num="1">
+                  <Subitem1Title>イ</Subitem1Title>
+                  <Subitem1Sentence>
+                    <Sentence Num="1" WritingMode="vertical">日々雇い入れられる者</Sentence>
+                  </Subitem1Sentence>
+                </Subitem1>
+                <Subitem1 Num="2">
+                  <Subitem1Title>ロ</Subitem1Title>
+                  <Subitem1Sentence>
+                    <Sentence Num="1" WritingMode="vertical">二月以内の期間を定めて使用される者であつて、当該定めた期間を超えて使用されることが見込まれないもの</Sentence>
+                  </Subitem1Sentence>
+                </Subitem1>
+              </Item>
+              <Item Num="2">
+                <ItemTitle>二</ItemTitle>
+                <ItemSentence>
+                  <Sentence Num="1" WritingMode="vertical">所在地が一定しない事業所に使用される者</Sentence>
+                </ItemSentence>
+              </Item>
+              <Item Num="3">
+                <ItemTitle>三</ItemTitle>
+                <ItemSentence>
+                  <Sentence Function="main" Num="1" WritingMode="vertical">季節的業務に使用される者（船舶所有者に使用される船員を除く。）。</Sentence>
+                  <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、継続して四月を超えて使用されるべき場合は、この限りでない。</Sentence>
+                </ItemSentence>
+              </Item>
+              <Item Num="4">
+                <ItemTitle>四</ItemTitle>
+                <ItemSentence>
+                  <Sentence Function="main" Num="1" WritingMode="vertical">臨時的事業の事業所に使用される者。</Sentence>
+                  <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、継続して六月を超えて使用されるべき場合は、この限りでない。</Sentence>
+                </ItemSentence>
+              </Item>
+              <Item Num="5">
+                <ItemTitle>五</ItemTitle>
+                <ItemSentence>
+                  <Sentence Num="1" WritingMode="vertical">事業所に使用される者であつて、その一週間の所定労働時間が同一の事業所に使用される通常の労働者（当該事業所に使用される通常の労働者と同種の業務に従事する当該事業所に使用される者にあつては、厚生労働省令で定める場合を除き、当該者と同種の業務に従事する当該通常の労働者。以下この号において単に「通常の労働者」という。）の一週間の所定労働時間の四分の三未満である短時間労働者（一週間の所定労働時間が同一の事業所に使用される通常の労働者の一週間の所定労働時間に比し短い者をいう。以下この号において同じ。）又はその一月間の所定労働日数が同一の事業所に使用される通常の労働者の一月間の所定労働日数の四分の三未満である短時間労働者に該当し、かつ、イ又はロのいずれかの要件に該当するもの</Sentence>
+                </ItemSentence>
+                <Subitem1 Num="1">
+                  <Subitem1Title>イ</Subitem1Title>
+                  <Subitem1Sentence>
+                    <Sentence Num="1" WritingMode="vertical">一週間の所定労働時間が二十時間未満であること。</Sentence>
+                  </Subitem1Sentence>
+                </Subitem1>
+                <Subitem1 Num="2">
+                  <Subitem1Title>ロ</Subitem1Title>
+                  <Subitem1Sentence>
+                    <Sentence Num="1" WritingMode="vertical">学校教育法（昭和二十二年法律第二十六号）第五十条に規定する高等学校の生徒、同法第八十三条に規定する大学の学生その他の厚生労働省令で定める者であること。</Sentence>
+                  </Subitem1Sentence>
+                </Subitem1>
+              </Item>
+            </Paragraph>
+          </Article>

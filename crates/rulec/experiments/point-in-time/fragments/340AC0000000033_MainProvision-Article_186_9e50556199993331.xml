@@ -1,0 +1,110 @@
+<Article Num="186">
+              <ArticleCaption>（賞与に係る徴収税額）</ArticleCaption>
+              <ArticleTitle>第百八十六条</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence Num="1">賞与（賞与の性質を有する給与を含む。以下この条において同じ。）について第百八十三条第一項（源泉徴収義務）の規定により徴収すべき所得税の額は、次項の規定の適用がある場合を除き、次の各号に掲げる賞与の区分に応じ当該各号に定める税額とする。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">給与所得者の扶養控除等申告書を提出した居住者に対し、その提出の際に経由した給与等の支払者が支払う賞与</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">次に掲げる場合の区分に応じそれぞれ次に定める税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                  <Subitem1 Num="1">
+                    <Subitem1Title>イ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">その賞与の支払者がその支払を受ける居住者に対し前月中に支払つた又は支払うべきその他の給与等（以下この条において「通常の給与等」という。）がある場合（その賞与の支払者が支払う通常の給与等の支給期が月の整数倍の期間ごとと定められている場合にあつては、前月中に通常の給与等の支払がされない場合を含む。次号イ及び次項において同じ。）</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">前月中に支払つた又は支払うべき通常の給与等の金額（その賞与の支払者が支払う通常の給与等の支給期が月の整数倍の期間ごとと定められている場合には、その賞与の支払の直前に支払つた又は支払うべきその通常の給与等の前条第一項第一号に規定する月割額。次号イ及び次項において同じ。）、給与所得者の扶養控除等申告書に記載された主たる給与等に係る源泉控除対象配偶者及び源泉控除対象親族の有無及びその数に応じ別表第四の甲欄により求めた率をその賞与の金額に乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="2">
+                    <Subitem1Title>ロ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">イに掲げる場合以外の場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">その賞与の金額の六分の一（当該金額の計算の基礎となつた期間が六月を超える場合には、十二分の一。次号ロ及び次項において同じ。）に相当する金額並びに給与所得者の扶養控除等申告書に記載された主たる給与等に係る源泉控除対象配偶者及び源泉控除対象親族の有無及びその数に応ずる別表第二の甲欄に掲げる税額に六（当該賞与の金額の計算の基礎となつた期間が六月を超える場合には、十二。次号ロ及び次項において同じ。）を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">前号に掲げる賞与以外の賞与</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">次に掲げる場合の区分に応じそれぞれ次に定める税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                  <Subitem1 Num="1">
+                    <Subitem1Title>イ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">その賞与の支払者がその支払を受ける居住者に対し前月中に支払つた又は支払うべき通常の給与等がある場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">前月中に支払つた又は支払うべき通常の給与等の金額に応じ別表第四の乙欄により求めた率をその賞与の金額に乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="2">
+                    <Subitem1Title>ロ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">イに掲げる場合以外の場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">その賞与の金額の六分の一に相当する金額に応ずる別表第二の乙欄に掲げる税額に六を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">賞与の支払者がその支払を受ける居住者に対し前月中に支払つた又は支払うべき通常の給与等がある場合において、その賞与の金額が前月中に支払つた又は支払うべき通常の給与等の金額の十倍に相当する金額を超えるときは、当該賞与について第百八十三条第一項の規定により徴収すべき所得税の額は、次の各号に掲げる賞与の区分に応じ当該各号に定める税額とする。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">給与所得者の扶養控除等申告書を提出した居住者に対し、その提出の際に経由した給与等の支払者が支払う賞与</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その賞与の金額の六分の一に相当する金額と当該通常の給与等の金額との合計額並びに給与所得者の扶養控除等申告書に記載された主たる給与等に係る源泉控除対象配偶者及び源泉控除対象親族の有無及びその数に応ずる別表第二の甲欄に掲げる税額と当該通常の給与等の金額並びに当該申告書に記載された主たる給与等に係る源泉控除対象配偶者及び源泉控除対象親族の有無及びその数に応ずる別表第二の甲欄に掲げる税額との差額に六を乗じて計算した金額に相当する税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">前号に掲げる賞与以外の賞与</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その賞与の金額の六分の一に相当する金額と当該通常の給与等の金額との合計額に応ずる別表第二の乙欄に掲げる税額と当該通常の給与等の金額に応ずる別表第二の乙欄に掲げる税額との差額に六を乗じて計算した金額に相当する税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="3">
+                <ParagraphNum>３</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">給与所得者の扶養控除等申告書を提出した居住者に対し、その年最後に支払う給与等が第百九十条（年末調整）の規定の適用を受ける通常の給与等であり、かつ、当該通常の給与等の支払をする日の属する月に賞与を支払う場合において、当該賞与を支払う日の現況によりその年中にその居住者に対し支払うべきことが確定する給与等（その居住者がその年において他の給与等の支払者を経由して他の給与所得者の扶養控除等申告書を提出したことがある場合には、当該他の給与等の支払者がその年中にその居住者に対し支払うべきことが確定した給与等で政令で定めるものを含む。）につき同条の規定を適用した場合に同条に規定する不足額が生ずると見込まれるときは、当該賞与について第百八十三条第一項の規定により徴収すべき所得税の額は、第一項第一号又は前項第一号の規定にかかわらず、これらの規定による税額と当該不足額に相当する税額との合計額とすることができる。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

@@ -1,0 +1,22 @@
+rule 給与所得控除の経過措置(deduction_transition) v1
+description "令和7年改正の給与所得控除がどの年分から効くか。改正法の附則を引く試し"
+
+source 所得税法 = law "340AC0000000033" asof 2025-12-01
+  附則（令和七年三月三一日法律第一三号）第三条 sha256:61ad64afd4584adb
+
+inputs
+  年分(year) : number  range >=2020 <=2030
+
+outputs
+  新法(new_law) : bool
+
+table 適用(applies)  @所得税法 附則（令和七年三月三一日法律第一三号）第三条
+policy unique
+| 年分   | -> 新法(new_law) : bool |
+| <=2024 | false                   |
+| >=2025 | true                    |
+
+examples
+| 年分 | -> 新法 |
+| 2024 | false   |
+| 2025 | true    |

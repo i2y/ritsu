@@ -1,0 +1,1840 @@
+<AppdxTable>
+      <AppdxTableTitle>別表第四</AppdxTableTitle>
+      <RelatedArticleNum>　賞与に対する源泉徴収税額の算出率の表（第百八十六条関係）</RelatedArticleNum>
+      <TableStruct>
+        <Table>
+          <TableRow>
+            <TableColumn rowspan="5">
+              <Sentence>賞与の金額に乗ずべき率</Sentence>
+            </TableColumn>
+            <TableColumn colspan="16">
+              <Sentence>甲</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" colspan="2">
+              <Sentence>乙</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn colspan="16">
+              <Sentence>扶養親族等の数</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn colspan="2">
+              <Sentence>０人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>１人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>２人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>３人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>４人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>５人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>６人</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>７人以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn colspan="16">
+              <Sentence>前月の社会保険料等控除後の給与等の金額</Sentence>
+            </TableColumn>
+            <TableColumn colspan="2">
+              <Sentence>前月の社会保険料等控除後の給与等の金額</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>以上</Sentence>
+            </TableColumn>
+            <TableColumn>
+              <Sentence>未満</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none">
+              <Sentence>％</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none">
+              <Sentence>千円</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>６８千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>９４千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>１３３千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>１７１千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>２１０千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>２４３千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>２７５千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>３０８千円未満</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１３３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２６９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１７１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２９５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２１０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２７５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３７２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２８２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２６９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３１２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２９５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４０６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４３１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３７２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２８２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３１２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４０６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４３１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３００</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４４４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４９９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３３４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４４４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４９６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４９９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence>２３９千円未満</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３６３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４９６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５３１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５８８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３９５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４８４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４７７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５１３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５３１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５８８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４５５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４８４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５１３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５９１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６１８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６７１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６４７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６６３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５５７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６９３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５９１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６１８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７２３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７３９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６７１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７５４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６４７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６９９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６６３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７２０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７４１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６９３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７６２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７８３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７２３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７３９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８２５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７５４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８４８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２３９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２９６</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>６９９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７３０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７２０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７４１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７６２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７９６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７８３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８１８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８４１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８２５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８６５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８４８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８９０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７３０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７６４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７８７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８１０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７９６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８３３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８１８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８４１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８６５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９１１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８９０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９３７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７６４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>７８７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８１０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８３３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８７９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９０６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９３４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９１１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９６１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９３７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９８８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８０４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９１４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８７９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９４２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９０６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９３４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９９８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９６１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９８８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０５４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８５７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>８８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９１４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９８７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９４２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０４８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９９８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，１０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０５４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，１３９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２９６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２８</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９２６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３２１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３４６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>９８７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３９４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０４８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４１９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，０７８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，１０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４６８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，１３９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４９２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３２１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５３２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３４６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５６０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５８９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，３９４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４１９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４６８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，７０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，４９２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，７３０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５３２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，６６１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５６０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，６８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，５８９</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６１７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７３２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，６７４</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７８０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，７０２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，８０３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，７３０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，８２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>５２８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>１，１３５</Sentence>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>４１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，６６１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，５４８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，６８５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，５８０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７０８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，６１１</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７３２</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，６４３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７５６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，６７５</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，７８０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，７０６</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，８０３</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，７３８</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>２，８２７</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence>３，７７０</Sentence>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderBottom="none" BorderTop="none">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+            <TableColumn BorderBottom="none" BorderTop="none" colspan="2">
+              <Sentence/>
+            </TableColumn>
+          </TableRow>
+          <TableRow>
+            <TableColumn BorderTop="none">
+              <Sentence>４５</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，５４８千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，５８０千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，６１１千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，６４３千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，６７５千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，７０６千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，７３８千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>３，７７０千円以上</Sentence>
+            </TableColumn>
+            <TableColumn BorderTop="none" colspan="2">
+              <Sentence>１，１３５千円以上</Sentence>
+            </TableColumn>
+          </TableRow>
+        </Table>
+        <Remarks>
+          <RemarksLabel LineBreak="true">（注）　この表における用語については、次に定めるところによる。</RemarksLabel>
+          <Item Num="1">
+            <ItemTitle>（一）</ItemTitle>
+            <ItemSentence>
+              <Sentence>「扶養親族等」とは、控除対象配偶者及び控除対象扶養親族をいう。</Sentence>
+            </ItemSentence>
+          </Item>
+          <Item Num="2">
+            <ItemTitle>（二）</ItemTitle>
+            <ItemSentence>
+              <Sentence>「社会保険料等」とは、第七十四条第二項（社会保険料控除）に規定する社会保険料及び第七十五条第二項（小規模企業共済等掛金控除）に規定する小規模企業共済等掛金をいう。</Sentence>
+            </ItemSentence>
+          </Item>
+        </Remarks>
+        <Remarks>
+          <RemarksLabel>（備考）</RemarksLabel>
+          <Item Num="1">
+            <ItemTitle/>
+            <ItemSentence>
+              <Sentence>賞与の金額に乗ずべき率の求め方は、次のとおりである。</Sentence>
+            </ItemSentence>
+            <Subitem1 Num="1">
+              <Subitem1Title>（一）</Subitem1Title>
+              <Subitem1Sentence>
+                <Sentence>給与所得者の扶養控除等申告書の提出があつた居住者については、（四）に該当する場合を除き、</Sentence>
+              </Subitem1Sentence>
+              <Subitem2 Num="1">
+                <Subitem2Title>（１）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>まず、その居住者の前月中の給与等（賞与を除く。以下この表において同じ。）の金額から、その給与等の金額から控除される社会保険料等の金額（以下この表において「前月中の社会保険料等の金額」という。）を控除した金額を求める。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+              <Subitem2 Num="2">
+                <Subitem2Title>（２）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>次に、当該申告書により申告された扶養親族等（当該扶養親族等が第百九十四条第四項（給与所得者の扶養控除等申告書）に規定する国外居住親族（（二）において「国外居住親族」という。）である場合には、同項に規定する書類の提出又は提示がされた扶養親族等に限る。（二）において同じ。）の数と（１）により求めた金額とに応じて甲欄の「前月の社会保険料等控除後の給与等の金額」欄の該当する行を求める。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+              <Subitem2 Num="3">
+                <Subitem2Title>（３）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>（２）により求めた行と「賞与の金額に乗ずべき率」欄との交わるところに記載されている率が、その求める率である。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+            </Subitem1>
+            <Subitem1 Num="2">
+              <Subitem1Title>（二）</Subitem1Title>
+              <Subitem1Sentence>
+                <Sentence>（一）の場合において、給与所得者の扶養控除等申告書にその居住者が障害者、寡婦、寡夫又は勤労学生に該当する旨の記載があるとき（当該勤労学生が第二条第一項第三十二号ロ又はハ（定義）に掲げる者に該当するときは、当該申告書に勤労学生に該当する旨の記載があるほか、第百九十四条第三項に規定する書類の提出又は提示があつたとき）は、扶養親族等の数にこれらの一に該当するごとに１人を加算した数を、当該申告書にその居住者の控除対象配偶者又は扶養親族のうちに障害者又は第八十五条第二項（扶養親族等の判定の時期等）に規定する同居特別障害者（これらの障害者又は同居特別障害者が国外居住親族である場合には、第百九十四条第四項に規定する書類の提出又は提示がされた障害者又は当該同居特別障害者に限る。）がある旨の記載があるときは、扶養親族等の数にこれらの一に該当するごとに１人を加算した数を、それぞれ扶養親族等の数とする。</Sentence>
+              </Subitem1Sentence>
+            </Subitem1>
+            <Subitem1 Num="3">
+              <Subitem1Title>（三）</Subitem1Title>
+              <Subitem1Sentence>
+                <Sentence>給与所得者の扶養控除等申告書の提出がない居住者（従たる給与についての扶養控除等申告書の提出があつた居住者を含む。）については、（四）に該当する場合を除き、</Sentence>
+              </Subitem1Sentence>
+              <Subitem2 Num="1">
+                <Subitem2Title>（１）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>その居住者の前月中の給与等の金額から前月中の社会保険料等の金額を控除した金額を求める。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+              <Subitem2 Num="2">
+                <Subitem2Title>（２）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>（１）により求めた金額に応じて乙欄の「前月の社会保険料等控除後の給与等の金額」欄の該当する行を求める。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+              <Subitem2 Num="3">
+                <Subitem2Title>（３）</Subitem2Title>
+                <Subitem2Sentence>
+                  <Sentence>（２）により求めた行と「賞与の金額に乗ずべき率」欄との交わるところに記載されている率が、その求める率である。</Sentence>
+                </Subitem2Sentence>
+              </Subitem2>
+            </Subitem1>
+            <Subitem1 Num="4">
+              <Subitem1Title>（四）</Subitem1Title>
+              <Subitem1Sentence>
+                <Sentence>前月中の給与等の金額がない場合若しくは前月中の給与等の金額が前月中の社会保険料等の金額以下である場合又はその賞与の金額（当該金額から控除される社会保険料等の金額がある場合には、その控除後の金額）が前月中の給与等の金額から前月中の社会保険料等の金額を控除した金額の１０倍に相当する金額を超える場合には、この表によらず、第百八十六条第一項第一号ロ若しくは第二号ロ又は第二項（賞与に係る徴収税額）の規定（同条第三項の規定を含む。）により税額を計算する。</Sentence>
+              </Subitem1Sentence>
+            </Subitem1>
+            <Subitem1 Num="5">
+              <Subitem1Title>（五）</Subitem1Title>
+              <Subitem1Sentence>
+                <Sentence>（一）から（四）までの場合において、その居住者の受ける給与等の支給期が月の整数倍の期間ごとと定められているときは、その賞与の支払の直前に支払を受けた若しくは支払を受けるべき給与等の金額又はその給与等の金額から控除される社会保険料等の金額を当該倍数で除して計算した金額をもつて、それぞれ前月中の給与等の金額又は当該金額から控除される社会保険料等の金額とみなす。</Sentence>
+              </Subitem1Sentence>
+            </Subitem1>
+          </Item>
+        </Remarks>
+      </TableStruct>
+    </AppdxTable>

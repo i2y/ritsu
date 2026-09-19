@@ -1,0 +1,55 @@
+<Article Num="83_2">
+              <ArticleCaption>（配偶者特別控除）</ArticleCaption>
+              <ArticleTitle>第八十三条の二</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence>居住者が生計を一にする配偶者（他の居住者の扶養親族とされる者並びに第五十七条第一項（事業に専従する親族がある場合の必要経費の特例等）に規定する青色事業専従者に該当するもので同項に規定する給与の支払を受けるもの及び同条第三項に規定する事業専従者に該当するものを除くものとし、第二条第一項第三十号（定義）に規定する合計所得金額（以下この項及び次項において「合計所得金額」という。）が七十六万円未満であるものに限る。）で控除対象配偶者に該当しないものを有する場合には、その居住者のその年分の総所得金額、退職所得金額又は山林所得金額から次の各号に掲げるその配偶者の区分に応じ当該各号に定める金額を控除する。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence>合計所得金額が四十万円未満である配偶者</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence>三十八万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence>合計所得金額が四十万円以上七十五万円未満である配偶者</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence>三十八万円からその配偶者の合計所得金額のうち三十八万円を超える部分の金額（当該超える部分の金額が五万円の整数倍の金額から三万円を控除した金額でないときは、五万円の整数倍の金額から三万円を控除した金額で当該超える部分の金額に満たないもののうち最も多い金額とする。）を控除した金額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence>合計所得金額が七十五万円以上である配偶者</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence>三万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence>前項の規定は、同項に規定する居住者の合計所得金額が千万円を超える場合及び同項に規定する生計を一にする配偶者が同項に規定する居住者として同項の規定の適用を受けている場合には、適用しない。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+              <Paragraph Num="3">
+                <ParagraphNum>３</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence>第一項の規定による控除は、配偶者特別控除という。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

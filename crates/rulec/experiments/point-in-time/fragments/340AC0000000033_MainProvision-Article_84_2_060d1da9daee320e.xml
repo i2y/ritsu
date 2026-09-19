@@ -1,0 +1,84 @@
+<Article Num="84_2">
+              <ArticleCaption>（特定親族特別控除）</ArticleCaption>
+              <ArticleTitle>第八十四条の二</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence Num="1">居住者が生計を一にする年齢十九歳以上二十三歳未満の親族（その居住者の配偶者を除く。）及び児童福祉法第二十七条第一項第三号（都道府県の採るべき措置）の規定により同法第六条の四（定義）に規定する里親に委託された児童（第五十七条第一項（事業に専従する親族がある場合の必要経費の特例等）に規定する青色事業専従者に該当するもので同項に規定する給与の支払を受けるもの及び同条第三項に規定する事業専従者に該当するものを除くものとし、合計所得金額が百二十三万円以下であるものに限る。）で控除対象扶養親族に該当しないもの（以下この項及び次項において「特定親族」という。）を有する場合には、その居住者のその年分の総所得金額、退職所得金額又は山林所得金額から、その特定親族一人につきその特定親族の次の各号に掲げる区分に応じ当該各号に定める金額を控除する。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">合計所得金額が八十五万円以下である特定親族</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">六十三万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">合計所得金額が八十五万円を超え百十五万円以下である特定親族</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">六十三万円からその特定親族の合計所得金額のうち八十四万一円を超える部分の金額に二を乗じた金額（当該乗じた金額が十万円の整数倍の金額から八万円を控除した金額でないときは、十万円の整数倍の金額から八万円を控除した金額で当該乗じた金額に満たないもののうち最も多い金額とする。）を控除した金額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">合計所得金額が百十五万円を超え百二十万円以下である特定親族</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">六万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="4">
+                  <ItemTitle>四</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">合計所得金額が百二十万円を超える特定親族</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">三万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">前項の規定は、次に掲げる場合に該当するときは、適用しない。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">特定親族が前項に規定する居住者として同項の規定の適用を受けている場合</Sentence>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">特定親族が、給与所得者の扶養控除等申告書又は従たる給与についての扶養控除等申告書に記載された源泉控除対象親族（特定親族に限る。）がある居住者として第百八十五条第一項第一号若しくは第二号（賞与以外の給与等に係る徴収税額）又は第百八十六条第一項第一号若しくは第二項第一号（賞与に係る徴収税額）の規定の適用を受けている場合（当該居住者としてこれらの規定の適用を受けている特定親族が、その年分の所得税につき、第百九十条（年末調整）の規定の適用を受けた者である場合又は確定申告書の提出をし、若しくは決定を受けた者である場合を除く。）</Sentence>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Sentence Num="1">前二号に掲げる場合のほか、政令で定める場合</Sentence>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="3">
+                <ParagraphNum>３</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">第一項の規定による控除は、特定親族特別控除という。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

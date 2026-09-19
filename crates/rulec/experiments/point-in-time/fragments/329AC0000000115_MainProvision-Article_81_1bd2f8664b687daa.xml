@@ -1,0 +1,144 @@
+<Article Delete="false" Hide="false" Num="81">
+          <ArticleCaption>（保険料）</ArticleCaption>
+          <ArticleTitle>第八十一条</ArticleTitle>
+          <Paragraph Hide="false" Num="1" OldStyle="false">
+            <ParagraphNum/>
+            <ParagraphSentence>
+              <Sentence WritingMode="vertical">政府等は、厚生年金保険事業に要する費用（基礎年金拠出金を含む。）に充てるため、保険料を徴収する。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Hide="false" Num="2" OldStyle="false">
+            <ParagraphNum>２</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence WritingMode="vertical">保険料は、被保険者期間の計算の基礎となる各月につき、徴収するものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Hide="false" Num="3" OldStyle="false">
+            <ParagraphNum>３</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence WritingMode="vertical">保険料額は、標準報酬月額及び標準賞与額にそれぞれ保険料率を乗じて得た額とする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Hide="false" Num="4" OldStyle="false">
+            <ParagraphNum>４</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence WritingMode="vertical">保険料率は、次の表の上欄に掲げる月分の保険料について、それぞれ同表の下欄に定める率とする。</Sentence>
+            </ParagraphSentence>
+            <TableStruct>
+              <Table WritingMode="vertical">
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成十六年十月から平成十七年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百三十九・三四</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成十七年九月から平成十八年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百四十二・八八</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成十八年九月から平成十九年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百四十六・四二</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成十九年九月から平成二十年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百四十九・九六</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十年九月から平成二十一年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百五十三・五〇</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十一年九月から平成二十二年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百五十七・〇四</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十二年九月から平成二十三年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百六十・五八</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十三年九月から平成二十四年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百六十四・一二</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十四年九月から平成二十五年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百六十七・六六</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十五年九月から平成二十六年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百七十一・二〇</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十六年九月から平成二十七年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百七十四・七四</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十七年九月から平成二十八年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百七十八・二八</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十八年九月から平成二十九年八月までの月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百八十一・八二</Sentence>
+                  </TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">平成二十九年九月以後の月分</Sentence>
+                  </TableColumn>
+                  <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                    <Sentence WritingMode="vertical">千分の百八十三・〇〇</Sentence>
+                  </TableColumn>
+                </TableRow>
+              </Table>
+            </TableStruct>
+          </Paragraph>
+        </Article>

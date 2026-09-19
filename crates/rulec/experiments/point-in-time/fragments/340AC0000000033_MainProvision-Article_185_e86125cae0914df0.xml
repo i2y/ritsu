@@ -1,0 +1,181 @@
+<Article Num="185">
+              <ArticleCaption>（賞与以外の給与等に係る徴収税額）</ArticleCaption>
+              <ArticleTitle>第百八十五条</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence Num="1">次条に規定する賞与以外の給与等について第百八十三条第一項（源泉徴収義務）の規定により徴収すべき所得税の額は、次の各号に掲げる給与等の区分に応じ当該各号に定める税額とする。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">給与所得者の扶養控除等申告書を提出した居住者に対し、その提出の際に経由した給与等の支払者が支払う給与等</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">次に掲げる場合の区分に応じ、その給与等の金額（ロ、ハ、ニ又はヘに掲げる場合にあつては、それぞれ当該金額の二倍に相当する金額、当該金額の三倍に相当する金額、給与等の月割額又は給与等の日割額）並びに当該申告書に記載された源泉控除対象配偶者及び源泉控除対象親族（二以上の給与等の支払者から給与等の支払を受ける場合には第百九十四条第一項第六号（給与所得者の扶養控除等申告書）に規定する源泉控除対象配偶者及び源泉控除対象親族とし、当該申告書に記載された源泉控除対象配偶者又は源泉控除対象親族が同条第五項に規定する国外居住親族（第百八十七条（障害者控除等の適用を受ける者に係る徴収税額）及び第百九十条第二号ハ（年末調整）において「国外居住親族」という。）である場合には第百九十四条第五項に規定する書類の提出又は提示がされた源泉控除対象配偶者及び源泉控除対象親族に限る。次条において「主たる給与等に係る源泉控除対象配偶者及び源泉控除対象親族」という。）の有無及びその数に応ずる次に定める税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                  <Subitem1 Num="1">
+                    <Subitem1Title>イ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎月と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の甲欄に掲げる税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="2">
+                    <Subitem1Title>ロ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎半月と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の甲欄に掲げる税額の二分の一に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="3">
+                    <Subitem1Title>ハ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎旬と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の甲欄に掲げる税額の三分の一に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="4">
+                    <Subitem1Title>ニ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が月の整数倍の期間ごとと定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の甲欄に掲げる税額に当該倍数を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="5">
+                    <Subitem1Title>ホ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎日と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第三の甲欄に掲げる税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="6">
+                    <Subitem1Title>ヘ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">イからホまでに掲げる場合以外の場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第三の甲欄に掲げる税額にその支給日数を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">前号及び次号に掲げる給与等以外の給与等</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">次に掲げる場合の区分に応じ、その給与等の金額（ロ、ハ、ニ又はヘに掲げる場合にあつては、それぞれ当該金額の二倍に相当する金額、当該金額の三倍に相当する金額、給与等の月割額又は給与等の日割額）、従たる給与についての扶養控除等申告書の提出の有無並びに当該申告書に記載された第百九十五条第一項第三号（従たる給与についての扶養控除等申告書）に規定する源泉控除対象配偶者及び源泉控除対象親族（当該源泉控除対象配偶者又は源泉控除対象親族が同条第五項の記載がされた者である場合には、同項に規定する書類の提出又は提示がされた源泉控除対象配偶者及び源泉控除対象親族に限る。）の数に応ずる次に定める税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                  <Subitem1 Num="1">
+                    <Subitem1Title>イ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎月と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の乙欄に掲げる税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="2">
+                    <Subitem1Title>ロ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎半月と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の乙欄に掲げる税額の二分の一に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="3">
+                    <Subitem1Title>ハ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎旬と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の乙欄に掲げる税額の三分の一に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="4">
+                    <Subitem1Title>ニ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が月の整数倍の期間ごとと定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第二の乙欄に掲げる税額に当該倍数を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="5">
+                    <Subitem1Title>ホ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">給与等の支給期が毎日と定められている場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第三の乙欄に掲げる税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                  <Subitem1 Num="6">
+                    <Subitem1Title>ヘ</Subitem1Title>
+                    <Subitem1Sentence>
+                      <Column Num="1">
+                        <Sentence Num="1">イからホまでに掲げる場合以外の場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence Num="1">別表第三の乙欄に掲げる税額にその支給日数を乗じて計算した金額に相当する税額</Sentence>
+                      </Column>
+                    </Subitem1Sentence>
+                  </Subitem1>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">労働した日又は時間によつて算定され、かつ、労働した日ごとに支払を受ける給与等で政令で定めるもの</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">その給与等の金額に応じ、別表第三の丙欄に掲げる税額</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">前項第一号及び第二号に規定する月割額又は日割額の意義その他同項の規定の適用に関し必要な事項は、政令で定める。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>
