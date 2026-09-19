@@ -20,7 +20,7 @@ code</strong>.
 
 <p class="rc-hero__lede">
 A business rule — a shipping tariff, a coupon policy, an eligibility
-test — is written as one table a domain expert can read; rulec proves the
+test, a tax table — is written as one table a domain expert can read; rulec proves the
 table has no gaps, no contradictions and no dead rows, and then
 generates ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm with no runtime to install.
 <strong>The proof happens before the code exists</strong>: a rule that
@@ -57,7 +57,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
+| **a spreadsheet, a published policy or a statute** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. From a statute, each table cites its article (`@法 第91条`) and is held to a copy fetched from e-Gov. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](compare.md#against-a-legacy-implementation) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
 
@@ -144,6 +144,7 @@ class, an order**.
 - **Classification** — which period does this date fall in, which size band, which
   priority
 - **Routing** — which warehouse ships it, which desk handles it
+- **Statutory provisions** — a tax table, the reduced rate that takes precedence over it, a proviso, a provision applied to another case
 
 ### Money does not have to be involved
 
@@ -172,6 +173,23 @@ policy unique
 
 What decides it is the **shape of the decision**, not what the values happen to be. So
 this is not "a tool for shipping fees" and not "a tool for e-commerce".
+
+### A statute is written the same way
+
+A tax table such as Appendix Table 1 of the Stamp Tax Act is a table as it stands. The
+reduced rate in the Special Taxation Measures Act is a second table that takes precedence
+over it (`overrides`). A proviso whose conditions do not line up as columns is written as
+a sentence, one line of rule (`clause`). Any table can cite its article at the end of its
+line (`@法 別表第一`) and is held to the digest of a copy of that text fetched from e-Gov, so
+an amendment that changes the text stops the check and names the tables citing it
+(`source`). "The provisions of Article 20 apply, reading 'years of service' as 'period in
+office'" is written as exactly that substitution (`apply`).
+
+The checks judge completeness and overlaps over a main rule and its exceptions together,
+and for an applied rule they prove that what this rule passes stays inside the applied
+rule's ranges. The approver's page quotes the cited text from the copies. How to write them
+is in [Write a table](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working
+examples are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
 
 ### The one constraint: a cell sees only its own column
 
@@ -297,7 +315,7 @@ material, not from first-hand use.
 | **DMN** (the OMG standard) and its implementations — Apache KIE / Drools, Camunda, jDMN, Kogito | The industry standard for decision tables, with hit policies, and static gap/overlap analysis in some implementations ([Drools DMN](https://kie.apache.org/drools/dmn/), [dmn-check](https://github.com/red6/dmn-check)). [jDMN](https://github.com/goldmansachs/jdmn) generates Java | A DMN cell holds a FEEL expression, so completeness is hard in general and the analyses work over a subset. rulec keeps **a cell to its own column** — no cell spans two — which is what puts completeness and overlap on the decidable side. Units and tax class as types, mandatory rounding, an int64 proof, generating into several languages, and comparison against a legacy implementation are all outside DMN |
 | **Rules engines** — Drools DRL, IBM ODM, [GoRules / ZEN](https://github.com/gorules/zen), OpenRules, OpenL Tablets | Evaluate rules at runtime through a library or a service | rulec **ships no engine**. What comes out is a dependency-free ordinary function, and rulec is not present at runtime |
 | **Corticon** (Progress, commercial) | Rulesheets with a [conflict checker and a completeness checker](https://docs.progress.com/bundle/corticon-js-rule-modeling/page/The-conflict-checker.html). The closest in ambition | Commercial, with its own runtime. rulec hands over plain source and stops there — and carries the comparison side (verify / replay / diff) itself |
-| **[Catala](https://github.com/CatalaLang/catala)** (Inria) | A language for writing statute law as a program, correctness-first, compiling to several languages | The closest relative in spirit. Different in shape: Catala mirrors the structure of legal text (defaults and exceptions), not decision tables, and has neither unit types nor a story for matching a legacy implementation |
+| **[Catala](https://github.com/CatalaLang/catala)** (Inria) | A language for writing statute law as a program, correctness-first, compiling to several languages | The closest relative in spirit. Different in shape: Catala mirrors the structure of legal text (defaults and exceptions), not decision tables. rulec has exceptions that take precedence over a main rule, provisos and provisions applied to another case too, but its unit stays the table, with gaps and overlaps decided by rectangle arithmetic. Unit types and matching a legacy implementation are not Catala's |
 | **[Morphir](https://github.com/finos/morphir)** (FINOS) | Model business logic once in an IR and emit it to many targets | Broad by design; checking a decision table for completeness is not what it is for |
 
 **Where rulec sits is the combination**: cells narrow enough that gaps and overlaps are
@@ -359,6 +377,11 @@ are held by the types and the declarations.
 
 Nothing is approximated. When a check cannot prove something, it says
 so rather than passing.
+
+When several tables define one output — a main rule and its exceptions — they go through
+these checks **as one table**, and an overlap with no precedence written stops. A rule that
+cites a statute is also held to the digests of its copies, and a rule applied to another
+case to the applied rule's ranges.
 
 ### What is *not* proved
 

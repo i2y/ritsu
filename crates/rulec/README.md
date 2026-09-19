@@ -340,17 +340,21 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
                   `rulec mcp` serves the same commands as MCP tools where there is no shell
-src/              33 modules: kw, i18n, lex, parse, types, region, eval, fmt, json,
+src/              38 modules: kw, i18n, lex, parse, types, defset (the tables that define
+                  one output, as one set), region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
                   import (a draft from a sheet), xlsx (reading the workbook: ZIP, deflate,
                   the number formats), proto and jsonschema (the enums whose values are
                   declared outside the rule), enums (holding the two together),
                   mcp (the command table as MCP tools),
                   codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query),
+                  sources (a law on e-Gov, cited and pinned), apply (a rule applied to
+                  another case), vfs (reading at a git revision), sha256,
                   wasm (the checker as the site's playground)
-tests/corpus/     18 rules transcribed from real published terms
-tests/mutants/    19 files, each with one mistake planted in it
-tests/golden/     21 snapshots of diagnostic prose, in both languages
+tests/corpus/     28 rules transcribed from real published terms, and the copies of the
+                  statute text they cite
+tests/mutants/    33 files, each with one mistake planted in it
+tests/golden/     35 snapshots of diagnostic prose, in both languages
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
@@ -360,10 +364,11 @@ tests/            and the properties: threeway (every language agrees), readme, 
                   playground answers what the binary answers)
 ```
 
-Every one of those eighteen rules comes from **public information** — Japan Post's tariff,
-Yamato's size classes, the coupon terms of Rakuten and Yahoo, Article 7 of EU Regulation
-261/2004, the National Tax Agency's income-tax and stamp-duty tables, and the premium tables
-of 協会けんぽ and 日本年金機構. None of it is private data. The two premium tables are also
+Those rules come from **public information** — Japan Post's tariff, Yamato's size classes,
+the coupon terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National
+Tax Agency's income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation
+Measures Act as e-Gov publishes them, and the premium tables of 協会けんぽ and 日本年金機構 —
+or are sketches from the design record. None of it is private data. The two premium tables are also
 held, grade by grade, to the amounts printed in them.
 
 ```console
@@ -376,7 +381,7 @@ $ cargo test          # 326 tests; python3, node, rustc, ruby, go and swiftc are
 
 | | |
 |---|---|
-| **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it |
+| **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it; a main rule and its exceptions checked as one set, a statute's text pinned to its copy, a rule applied to another case held to the applied rule's ranges |
 | **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
