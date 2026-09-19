@@ -295,7 +295,7 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は法令の引用箇所を e-Gov から、ファイルの出典を その url から取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated はもとが変わったかを問い合わせる（法令なら後の改正、ファイルなら url の先。コミットで留めた GitHub の URL なら、何がいつ変えたかまで言う）",
+                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、何がいつ変えたかまで言う）",
                 "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
             ),
             params: vec![
@@ -304,8 +304,8 @@ fn commands() -> Vec<Cmd> {
             ],
             flags: vec![],
             exits: vec![
-                (0, tr!("済んだ。outdated では、もとが変わっていない", "done; for outdated, nothing the rule cites has moved on")),
-                (1, tr!("outdated: もとが変わっている（後の改正、または url の先）。規則が読めないときも", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
+                (0, tr!("済んだ。outdated では、引いている文書が変わっていない", "done; for outdated, nothing the rule cites has moved on")),
+                (1, tr!("outdated: 引いている文書が変わっている（後の改正、または `url` の先）。規則が読めないときも", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
                 (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
             ],
             examples: vec![

@@ -768,7 +768,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         }
         let Some(url) = url else {
             lines.push(tr!(
-                "{}: url がないので取り直せません（`{} \"…\"` を足すと取り直せます）",
+                "{}: `url` が無いので取り直せません（`{} \"…\"` を足すと取り直せます）",
                 "{}: no url, so the copy cannot be brought again (add `{} \"…\"` to it)",
                 d.name.text,
                 crate::kw::URL
@@ -800,7 +800,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         });
         if raw_on_a_branch(url) {
             lines.push(tr!(
-                "  この URL は枝を指しています。コミットを指す URL なら、来年取り直しても同じ写しが返ります",
+                "  この URL はブランチを指しています。コミットを指す URL なら、来年取り直しても同じ写しが返ります",
                 "  this URL names a branch; one that names a commit answers with the same copy next year"
             ));
         }
@@ -996,7 +996,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let name = &d.name.text;
         let Some(url) = url else {
             lines.push(tr!(
-                "{name}: url がないので、もとが変わったかは問い合わせられません（`{} \"…\"` を足すと問い合わせられます）",
+                "{name}: `url` が無いので、元の文書が変わったかを確かめられません（`{} \"…\"` を足すと確かめられます）",
                 "{name}: no url, so whether the original moved on cannot be asked (add `{} \"…\"` to it)",
                 crate::kw::URL
             ));
@@ -1049,7 +1049,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 }
                 if !newest.is_empty() {
                     lines.push(tr!(
-                        "  読み直したら、`{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"` に留め直して `rulec source fetch` と `rulec source pin` です",
+                        "  引いている行を読み直してから、`{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"` に固定し直し、`rulec source fetch` と `rulec source pin` を走らせてください",
                         "  once the rows are reread, repin it at `{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"`, then `rulec source fetch` and `rulec source pin`",
                         crate::kw::URL
                     ));
@@ -1072,12 +1072,12 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                     Some(b) => {
                         changed = true;
                         lines.push(tr!(
-                            "{name}: もとが変わっています（固定: sha256:{b}、いま: sha256:{now}）。`rulec source fetch` で取り直し、読み直してから `rulec source pin` です",
+                            "{name}: 元の文書が変わっています（固定: sha256:{b}、いま: sha256:{now}）。`rulec source fetch` で取り直し、引いている行を読み直してから `rulec source pin` で承認してください",
                             "{name}: the original has changed (pinned: sha256:{b}, now: sha256:{now}); bring it again with `rulec source fetch`, reread the rows, then `rulec source pin`"
                         ));
                         if opaque(path) {
                             lines.push(tr!(
-                                "  この形式は中身の差分が取れないので、変わったことしか言えません",
+                                "  この形式では中身の差分を取れないので、変わったということしか言えません",
                                 "  nothing here can diff this format, so all it can say is that it changed"
                             ));
                         }
@@ -1085,7 +1085,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 }
                 if raw_on_a_branch(url) {
                     lines.push(tr!(
-                        "  この URL は枝を指しています。コミットを指す URL なら、何がいつ変えたかまで言えます",
+                        "  この URL はブランチを指しています。コミットを指す URL なら、何がいつ変えたかまで言えます",
                         "  this URL names a branch; one that names a commit would say what changed it, and when"
                     ));
                 }
@@ -1121,7 +1121,7 @@ mod tests {
     /// whatever is on it today, so it must not be mistaken for one — `outdated` would then ask
     /// the repository a question about a moving target and report nothing.
     #[test]
-    fn 生のurlはコミットのときだけ点である() {
+    fn 生のurlはコミットのときだけ時点を指す() {
         let commit = "https://raw.githubusercontent.com/o/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/docs/t.md";
         let got = github_raw(commit).expect("コミットの URL が読めない");
         assert_eq!(got.0, "o");
@@ -1145,7 +1145,7 @@ mod tests {
     }
 
     #[test]
-    fn 問い合わせのパスは符号化される() {
+    fn 問い合わせのパスはパーセント符号化される() {
         assert_eq!(urlq("docs/料金表.md"), "docs/%E6%96%99%E9%87%91%E8%A1%A8.md");
         assert_eq!(urlq("a b/c.md"), "a%20b/c.md");
         assert_eq!(urlq("docs/t-1_2.md"), "docs/t-1_2.md");
