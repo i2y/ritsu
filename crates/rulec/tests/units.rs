@@ -261,3 +261,29 @@ fn 率の列の範囲はセルから決まる() {
     assert!(check(&rule("200%")).contains(&"E108".to_string()), "200% の列で 9×10¹⁸ 円が int64 に収まると言っている");
     assert!(!check(&rule("100%")).contains(&"E108".to_string()), "100% の列では収まるはず");
 }
+
+/// E108 is stated over the `result` expression too. The proof used to be called on the two
+/// `Item`s alone — `define` and `derive` — and `result` is neither, so a product assembled
+/// straight into the first output was never held to int64. The corpus could not notice:
+/// its widest proven interval is seven orders of magnitude below i64::MAX. Written as a
+/// definition the same product tripped E108; written as a result it checked `ok`, and the
+/// generated Rust, Go, Wasm and SQL then disagreed with the reference evaluator on the
+/// vectors, which reach both maxima.
+#[test]
+fn result_式も_int64_に収まることを証明する() {
+    let rule = |tail: &str| {
+        format!(
+            "rule t(t) v1\n\ninputs\n  x(x) : money[円, incl_tax]  range >=0円 <=1_000_000_000_000円\n  \
+             k(k) : number  range >=0 <=100_000_000\n\n\
+             outputs\n  y(y) : money[円, incl_tax]  round down(1円)\n\n{tail}"
+        )
+    };
+    let 定義ごし = rule("define p(p) : money[円, incl_tax] = x × k\n\nresult y = p\n");
+    let 直に = rule("result y = x × k\n");
+    assert!(check(&定義ごし).contains(&"E108".to_string()), "define では出ている");
+    assert!(check(&直に).contains(&"E108".to_string()), "result でも出なければならない");
+    // The same shape one order of magnitude down fits, so it is the magnitude that trips it
+    // and not the shape of `result` itself.
+    let 収まる = rule("result y = x × 1\n");
+    assert!(!check(&収まる).contains(&"E108".to_string()), "収まる積で出てはいけない");
+}

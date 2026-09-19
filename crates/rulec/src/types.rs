@@ -1086,6 +1086,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let got = c.expr_ty(&r.expr, path);
         if let Some(s) = c.syms.get(&r.name).cloned() {
             c.check_same(&s.ty, &got, &r.span, path, &tr!("結果", "result"));
+            // E108 holds for `result` too. The proof used to be stated over the two `Item`s
+            // alone, `define` and `derive`, and `result` is neither — so a product assembled
+            // straight into the first output was never held to int64. The corpus never
+            // stepped on it: its widest proven interval is seven orders of magnitude below
+            // i64::MAX, so nothing there can overflow whether it is proved or not (§15.9).
+            c.overflow(&r.expr, &s.ty, &r.span, path, &r.name);
         }
         // E015: `result` is sugar for the first output and nothing else — the evaluator and
         // the generated code both apply it there. Naming a later output used to type-check
