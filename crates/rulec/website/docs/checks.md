@@ -191,28 +191,6 @@ This is what `rulec doc` writes (excerpt; the command above asked for Japanese).
 
 ```markdown
 
-## Showing it to the customer
-
-```console
-$ rulec doc rules/ゆうパック運賃.rule --lang ja --audience customer > 運賃の案内.md
-```
-
-The same rule as the article a help centre publishes. Aliases, declared
-ranges and diagnostic codes are left out; what is added is **the case on
-either side of every threshold**, taken from the boundary-pair vectors,
-so a reader — or a model reading a retrieved page — is never left to
-decide what `<=60cm` means for 61cm.
-
-```markdown
-## 境目の例
-
-条件の境目の両側で、答えがどう変わるかです。
-
-- 三辺合計 が 60cm なら 運賃 1410円、61cm なら 運賃 1710円（あて先 北海道、重量 1g）
-- 三辺合計 が 80cm なら 運賃 1710円、81cm なら 運賃 2020円（あて先 北海道、重量 1g）
-…
-```
-
 ## グループ
 
 グループは列挙の一部に名前を付けたものです。表のセルに書かれた一語が、下の値をまとめて指しています。
@@ -273,3 +251,25 @@ against.
 
 [All the diagnostic codes](codes.md){ .md-button .md-button--primary }
 [Generate and call](generate.md){ .md-button }
+
+## Showing it to the customer
+
+```console
+$ rulec doc rules/ゆうパック運賃.rule --lang ja --audience customer > 運賃の案内.md
+```
+
+The same rule as the article a help centre publishes. Aliases, declared
+ranges and diagnostic codes are left out; what is added is **the case on
+either side of every threshold**, taken from the boundary-pair vectors,
+so a reader — or a model reading a retrieved page — is never left to
+decide what `<=60cm` means for 61cm.
+
+```markdown
+## 境目の例
+
+条件の境目の両側で、答えがどう変わるかです。
+
+- 三辺合計 が 60cm なら 運賃 1410円、61cm なら 運賃 1710円（あて先 北海道、重量 1g）
+- 三辺合計 が 80cm なら 運賃 1710円、81cm なら 運賃 2020円（あて先 北海道、重量 1g）
+…
+```
