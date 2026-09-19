@@ -300,7 +300,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 out_flag(&tr!("資料", "rendering")),
                 flag("--format", Some("html"), tr!("承認する人が自分の件を試せる一枚の HTML。生成した JavaScript がその場で動く", "one HTML page the approver can try a case on; the generated JavaScript runs in it")).choices(&["html"]),
-                flag("--audience", Some("approver|customer"), tr!("誰に見せるか。customer は、ヘルプセンターに載せる案内の形（別名も範囲も診断コードも出さず、境目の例を添える）。既定は approver", "who reads it. customer renders the article a help centre publishes (no aliases, ranges or diagnostic codes, and the cases on either side of every threshold); the default is approver")).choices(&["approver", "customer"]),
+                flag("--audience", Some("approver|customer"), tr!("誰に見せるか。customer はヘルプセンター向けの案内で、別名・範囲・診断コードを省き、境目の例を添える。既定は approver", "who reads it. customer renders the article a help centre publishes (no aliases, ranges or diagnostic codes, and the cases on either side of every threshold); the default is approver")).choices(&["approver", "customer"]),
             ],
             exits: vec![
                 (0, tr!("資料を書き出した", "rendered")),

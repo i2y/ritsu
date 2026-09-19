@@ -887,13 +887,13 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 
     // --- What the answer is, and what it is decided from.
     let outs: Vec<String> = f.outputs.iter().map(|od| md_esc(&od.name.text)).collect();
-    o.push_str(&tr!("\n## {}を決めるもの\n\n", "\n## What decides {}\n\n", outs.join(sep())));
+    o.push_str(&tr!("\n## {}の決まり方\n\n", "\n## What decides {}\n\n", outs.join(sep())));
     for i in &f.inputs {
         o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&customer_input(c, &i.name.text))));
     }
     if let Some(el) = &f.elements {
         o.push_str(&tr!(
-            "- **{}**: 一件ずつ順に見ていく並び。各件に {}\n",
+            "- **{}**: 一件ずつ順に見ていく並び。各件には {} があります\n",
             "- **{}**: a sequence, taken one element at a time. Each element carries {}\n",
             md_esc(&el.name.text),
             el.fields.iter().map(|fd| md_esc(&fd.name.text)).collect::<Vec<_>>().join(sep())
@@ -901,8 +901,10 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     }
     for od in &f.outputs {
         let words = customer_output(c, &od.name.text);
-        let rounding = od.rounding.as_ref().map(|r| tr!("端数は{}。", " Fractions are {}.", rounding_verb(r))).unwrap_or_default();
-        o.push_str(&tr!("\n**{}** は{}です。{}\n", "\n**{}** is {}.{}\n", md_esc(&od.name.text), words, rounding));
+        o.push_str(&match &od.rounding {
+            Some(r) => tr!("\n**{}**は{}で、端数は {}。\n", "\n**{}** is {}, {}.\n", md_esc(&od.name.text), words, rounding_verb(r)),
+            None => tr!("\n**{}**は{}です。\n", "\n**{}** is {}.\n", md_esc(&od.name.text), words),
+        });
     }
 
     // --- Groups: what one word in a table stands for.
@@ -930,7 +932,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     let counts: Vec<&crate::ast::CountDecl> =
         f.items.iter().filter_map(|i| if let Item::Count(d) = i { Some(d) } else { None }).collect();
     if !derived.is_empty() || !defines.is_empty() || !counts.is_empty() {
-        o.push_str(&tr!("\n## 途中で使う値\n\n", "\n## Values used along the way\n\n"));
+        o.push_str(&tr!("\n## 計算の途中で使う値\n\n", "\n## Values used along the way\n\n"));
         for d in &counts {
             let what = match &d.value {
                 Some(v) => tr!("{} が {} の件数", "the number of elements whose {} is {}", d.column.text, v.text),
@@ -971,7 +973,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 
     // --- The final answer, when it is a formula.
     if let Some(r) = &f.result {
-        o.push_str(&tr!("\n## 最後の計算\n\n`{}`\n", "\n## The final step\n\n`{}`\n", md_esc(&expr_src(&lines, r.span.line))));
+        o.push_str(&tr!("\n## 最後に行う計算\n\n`{}`\n", "\n## The final step\n\n`{}`\n", md_esc(&expr_src(&lines, r.span.line))));
     }
 
     // --- Either side of every threshold. These are the vectors the boundary-pair criterion
@@ -1002,7 +1004,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         pairs.iter().filter_map(|(_, a, b)| Some((a.as_ref()?, b.as_ref()?))).map(|(a, b)| (*a, *b)).collect();
     if !pairs.is_empty() {
         o.push_str(&tr!(
-            "\n## 境目の例\n\n条件の境目の両側で、答えがどう変わるかです。\n\n",
+            "\n## 境目の例\n\n条件の境目をまたぐと、答えがどう変わるかの例です。\n\n",
             "\n## At the thresholds\n\nHow the answer changes on either side of a threshold.\n\n"
         ));
         for (a, b) in pairs {
@@ -1011,7 +1013,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                 .input
                 .iter()
                 .filter(|(k, _)| *k != col)
-                .map(|(k, v)| format!("{k} {}", customer_val(c, k, v)))
+                .map(|(k, v)| tr!("{k}: {}", "{k} {}", customer_val(c, k, v)))
                 .collect();
             let outs = |v: &crate::vectors::Vector| -> String {
                 v.outputs
@@ -1021,11 +1023,11 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                         None => tr!("{n} は決まらない", "{n} undefined"),
                     })
                     .collect::<Vec<_>>()
-                    .join(sep())
+                    .join(if crate::i18n::ja() { "・" } else { ", " })
             };
             let held = if fixed.is_empty() { String::new() } else { tr!("（{}）", " ({})", fixed.join(sep())) };
             o.push_str(&tr!(
-                "- {col} が {} なら {}、{} なら {}{}\n",
+                "- {col}が {} のとき {}、{} のとき {}{}\n",
                 "- {col} {} → {}; {} → {}{}\n",
                 customer_val(c, col, &a.input[col]),
                 outs(a),
@@ -1137,12 +1139,12 @@ fn customer_cell(s: &str) -> String {
         return tr!("どれでも", "any");
     }
     if let Some(r) = t.strip_prefix(crate::kw::NOT).and_then(|r| r.strip_prefix(':')) {
-        return tr!("{} 以外", "other than {}", r.trim());
+        return tr!("{}以外", "other than {}", r.trim());
     }
     if crate::i18n::ja() {
         for (op, word) in [("<=", "以下"), (">=", "以上"), ("<", "未満"), (">", "より大きい")] {
             if let Some(r) = t.strip_prefix(op) {
-                return format!("{} {word}", r.trim());
+                return format!("{}{word}", r.trim());
             }
         }
     }
@@ -1199,9 +1201,9 @@ fn customer_input(c: &Checked, name: &str) -> String {
         Some(Ty::Enum(e)) => {
             let vs = c.enums.get(&e).cloned().unwrap_or_default();
             if vs.len() <= 8 {
-                tr!("{} のいずれか", "one of {}", vs.join(sep()))
+                tr!("{}のいずれか", "one of {}", vs.join(if crate::i18n::ja() { "・" } else { ", " }))
             } else {
-                tr!("{e}のいずれか（{}）", "one of {e} ({})", n_values(vs.len()))
+                tr!("{e}のいずれか", "one of {e}")
             }
         }
         Some(Ty::Opt(inner)) => match *inner {
@@ -1236,7 +1238,7 @@ fn customer_output(c: &Checked, name: &str) -> String {
         Some(Ty::Enum(e)) => {
             let vs = c.enums.get(&e).cloned().unwrap_or_default();
             if vs.len() <= 8 {
-                tr!("{} のいずれか", "one of {}", vs.join(sep()))
+                tr!("{}のいずれか", "one of {}", vs.join(if crate::i18n::ja() { "・" } else { ", " }))
             } else {
                 tr!("{e}のいずれか", "one of {e}")
             }
