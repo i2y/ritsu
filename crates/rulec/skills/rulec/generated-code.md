@@ -578,6 +578,27 @@ answer that changed with the carrying would be a disagreement. Nothing beyond `p
 
 ---
 
+## The Rust as a WASI module
+
+The Rust that `gen` writes has no dependencies and reaches the outside only through the
+standard library's stdin and stdout, so the same runner compiles unchanged for
+`wasm32-wasip1` and runs under wasmtime — the host a Shopify Function, an Extism plugin or
+any WASI-based platform gives a rule. `rulec test` runs it as a pass of its own when
+`wasmtime` is on the PATH and the target's standard library is installed
+(`rustup target add wasm32-wasip1`): the vectors go through the module and its answers are
+held to the same expected records (`via` is `wasm`). Without either, the pass is skipped and
+the report says so; it is not counted as a missing language.
+
+```console
+$ rustc --edition 2021 -O --target wasm32-wasip1 shipping_fee_runner.rs -o shipping_fee_runner.wasm
+$ wasmtime shipping_fee_runner.wasm < ../vectors/shipping_fee.jsonl
+```
+
+What runs in a platform's sandbox is the rule's module (`shipping_fee.rs`) inside the
+platform's own crate, built with the platform's settings for size; the runner is the shape
+`rulec test` uses to hold that module to the rule. [backends.md](backends.md#a-wasm-host-shopify-functions)
+says where the platform's input ends and the rule's begins.
+
 ## Keeping it in step with the rule
 
 The generated files are committed to git and CI re-derives them:

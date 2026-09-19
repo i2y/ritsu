@@ -34,6 +34,10 @@ pub struct Backend {
     /// a sequence is generated only for the backends that say yes, and the others are
     /// refused by name — a generated file that cannot run is worse than a missing one.
     pub folds: bool,
+    /// How to run the same runner as a WASI module under wasmtime (§15.63), for the languages
+    /// whose output compiles to `wasm32-wasip1` unchanged. `rulec test` runs it as a pass of its
+    /// own when wasmtime and the target's standard library are installed.
+    pub wasm: Option<fn(&str, &str) -> Plan>,
     /// How to start the rule as an MCP server (§15.44), for the languages that get one.
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
@@ -101,6 +105,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("python", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("python", "python3", &["-B", "_round_test.py"]),
         folds: true,
+        wasm: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
     },
     Backend {
@@ -122,6 +127,7 @@ pub const ALL: &[Backend] = &[
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
         folds: true,
+        wasm: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
     },
     Backend {
@@ -143,6 +149,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
         folds: true,
+        wasm: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
     },
     Backend {
@@ -172,6 +179,23 @@ pub const ALL: &[Backend] = &[
             )
         },
         folds: true,
+        // The same runner, compiled for WASI and run under wasmtime. Nothing in the generated
+        // Rust is platform-specific, so the source is the one above, unchanged.
+        wasm: Some(|alias, _| {
+            Plan::new("rust", "wasmtime", &[&format!("{alias}_runner.wasm")]).built(
+                "rustc",
+                &[
+                    "--edition",
+                    "2021",
+                    "-O",
+                    "--target",
+                    "wasm32-wasip1",
+                    &format!("{alias}_runner.rs"),
+                    "-o",
+                    &format!("{alias}_runner.wasm"),
+                ],
+            )
+        }),
         mcp: None,
     },
     Backend {
@@ -191,6 +215,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
         folds: true,
+        wasm: None,
         mcp: None,
     },
     Backend {
@@ -213,6 +238,7 @@ pub const ALL: &[Backend] = &[
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
         folds: true,
+        wasm: None,
         mcp: None,
     },
     Backend {
@@ -242,6 +268,7 @@ pub const ALL: &[Backend] = &[
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
         folds: true,
+        wasm: None,
         mcp: None,
     },
     Backend {
@@ -261,6 +288,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
         folds: false,
+        wasm: None,
         mcp: None,
     },
 ];

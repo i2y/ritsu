@@ -291,6 +291,29 @@ and labelled as unverified, it is.
 
 ---
 
+## A Wasm host: Shopify Functions
+
+A Shopify Function is a Wasm module that reads one JSON document on stdin (the cart, in the
+shape of the GraphQL input query the app declares) and writes one on stdout (the operations:
+a discount of a fixed amount or a percentage on some targets, or a validation error). No
+network, a limit on instructions, and the smaller the module the better — the shape the
+generated Rust already has, so it is not a ninth target: the module `gen` writes goes into
+the function's crate as it is, and `rulec test` holds it to the rule under wasmtime
+([generated-code.md](generated-code.md#the-rust-as-a-wasi-module)).
+
+The rule stays a rule: flat inputs, one decision. What the function adds is the boundary —
+the twenty lines that read the cart and flatten it into the rule's inputs, call the
+generated function, and turn its outputs into operations. "Three or more refrigerated
+items" and "the dearest line" are written in the rule (`count`, and `elements` with
+`fold`), so the boundary passes the lines through and does not decide anything. Keep it in
+the function's crate beside the generated `<alias>.rs`, with ordinary tests of its own; the
+generated part is the part the vectors cover.
+
+What the platform decides is out of the rule's reach. A shipping *rate* is not set by a
+function (the delivery functions rename, reorder and hide options; rates come from a carrier
+service), so a tariff like ゆうパック運賃 is served from the generated code behind an HTTP
+endpoint, and a discount table like クーポン割引 is the function itself.
+
 ## Where to read next
 
 - [reference.md](reference.md) — the grammar, so a generator can read a `.rule`

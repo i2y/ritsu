@@ -73,7 +73,10 @@ pub struct Outcome {
 
 pub struct Run {
     pub results: Vec<Outcome>,
+    /// Every "this was not run" note: a language whose toolchain is missing, or the Wasm pass.
     pub skipped: Vec<String>,
+    /// How many of the languages were skipped, for the summary's scope.
+    pub missing_langs: usize,
 }
 
 impl Run {
@@ -87,6 +90,17 @@ impl Run {
 /// path shut. Any attempt to fetch fails, so a dependency that sneaks in shows up here.
 fn closed() -> [(&'static str, &'static str); 2] {
     [("GOPROXY", "off"), ("GOFLAGS", "-mod=mod")]
+}
+
+/// Whether the toolchain can build for `wasm32-wasip1`: the target's standard library sits
+/// under the sysroot when `rustup target add wasm32-wasip1` has been run.
+fn wasi_target() -> bool {
+    let Ok(o) = Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
+    if !o.status.success() {
+        return false;
+    }
+    let root = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    Path::new(&root).join("lib").join("rustlib").join("wasm32-wasip1").join("lib").is_dir()
 }
 
 fn have(cmd: &str) -> bool {
@@ -142,7 +156,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
 
     // Which toolchains are here. The set of backends lives in src/backend.rs, so a new
     // language is a row there rather than five more blocks in this file.
-    let mut out = Run { results: Vec::new(), skipped: Vec::new() };
+    let mut out = Run { results: Vec::new(), skipped: Vec::new(), missing_langs: 0 };
     let present: Vec<&crate::backend::Backend> = crate::backend::ALL
         .iter()
         .filter(|b| {
@@ -158,6 +172,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             ok
         })
         .collect();
+    out.missing_langs = out.skipped.len();
     if present.is_empty() {
         return Err(tr!(
             "どの toolchain も無いので、生成物を走らせられません（{}）",
@@ -165,6 +180,26 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             crate::backend::ALL.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
         ));
     }
+    // The Rust runner once more as a WASI module under wasmtime (§15.63): the host a Shopify
+    // Function or an Extism plugin gives a rule. It needs wasmtime on the PATH and the
+    // wasm32-wasip1 standard library in the toolchain; without either the pass is skipped and
+    // said so, like a missing language, but not counted as one.
+    let wasm_host = if present.iter().any(|b| b.wasm.is_some()) {
+        if !have("wasmtime") {
+            out.skipped.push(tr!("wasmtime が無いので Wasm 側を飛ばしました", "wasmtime not found; skipped the Wasm side"));
+            false
+        } else if !wasi_target() {
+            out.skipped.push(tr!(
+                "wasm32-wasip1 の標準ライブラリが無いので Wasm 側を飛ばしました（rustup target add wasm32-wasip1）",
+                "the wasm32-wasip1 standard library is not installed; skipped the Wasm side (rustup target add wasm32-wasip1)"
+            ));
+            false
+        } else {
+            true
+        }
+    } else {
+        false
+    };
     // A `.pyc` counts as fresh when the source has the same length and the same
     // whole-second mtime, so a same-length edit within a second of the last run would
     // otherwise execute the old module and report a stale result as ok.
@@ -225,41 +260,51 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             if !wrote(dir, b.id, alias) {
                 continue;
             }
-            let mut diff = match exec(&(b.run)(alias, &pkg), Some(&vec_path)) {
-                Err(f) => Some(f),
-                Ok(got) => (got != want).then(|| first_diff(&got, &want)),
-            };
-            // Each refused input goes in on its own: the generated code raises on the first
-            // one it is given, so a file of them would only ever prove the first (§15.56).
-            if diff.is_none() {
-                for (k, line) in refused.iter().enumerate() {
-                    let one = dir.join("vectors").join(format!(".{alias}.refused.{k}.jsonl"));
-                    if std::fs::write(&one, format!("{line}\n")).is_err() {
-                        diff = Some(broken(tr!("断る入力を書けません", "cannot write the refused input")));
-                        break;
-                    }
-                    let got = exec(&(b.run)(alias, &pkg), Some(&one));
-                    let _ = std::fs::remove_file(&one);
-                    match got {
-                        // Refusing is what was asked for: the run stopped without an answer.
-                        Err(Failure::Broken(_)) => {}
-                        Err(f) => {
-                            diff = Some(f);
+            // One plan held to the rule: the vectors through it, then each refused input on its
+            // own — the generated code raises on the first one it is given, so a file of them
+            // would only ever prove the first (§15.56).
+            let held = |plan: &crate::backend::Plan| -> Option<Failure> {
+                let mut diff = match exec(plan, Some(&vec_path)) {
+                    Err(f) => Some(f),
+                    Ok(got) => (got != want).then(|| first_diff(&got, &want)),
+                };
+                if diff.is_none() {
+                    for (k, line) in refused.iter().enumerate() {
+                        let one = dir.join("vectors").join(format!(".{alias}.refused.{k}.jsonl"));
+                        if std::fs::write(&one, format!("{line}\n")).is_err() {
+                            diff = Some(broken(tr!("断る入力を書けません", "cannot write the refused input")));
                             break;
                         }
-                        Ok(said) => {
-                            diff = Some(Failure::Lines(tr!(
-                                "参照評価器が断る入力に答えました（{}行目）: {}",
-                                "answered an input the reference evaluator refuses (line {}): {}",
-                                k + 1,
-                                said.trim()
-                            )));
-                            break;
+                        let got = exec(plan, Some(&one));
+                        let _ = std::fs::remove_file(&one);
+                        match got {
+                            // Refusing is what was asked for: the run stopped without an answer.
+                            Err(Failure::Broken(_)) => {}
+                            Err(f) => {
+                                diff = Some(f);
+                                break;
+                            }
+                            Ok(said) => {
+                                diff = Some(Failure::Lines(tr!(
+                                    "参照評価器が断る入力に答えました（{}行目）: {}",
+                                    "answered an input the reference evaluator refuses (line {}): {}",
+                                    k + 1,
+                                    said.trim()
+                                )));
+                                break;
+                            }
                         }
                     }
                 }
-            }
+                diff
+            };
+            let diff = held(&(b.run)(alias, &pkg));
             out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), diff });
+            // The same runner as a WASI module, held to the same records (§15.63).
+            if let (Some(w), true) = (b.wasm, wasm_host) {
+                let diff = held(&w(alias, &pkg));
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasm", vectors: n, refused: refused.len(), diff });
+            }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
             if let Some(mcp) = b.mcp {
@@ -619,13 +664,13 @@ pub fn render(r: &Run) -> String {
     // What the run covered belongs in the summary. "All 2 matched." after four languages were
     // skipped reads as the whole claim holding, when the claim is that the reference evaluator
     // and **every** generated language agree.
-    let scope = if r.skipped.is_empty() {
+    let scope = if r.missing_langs == 0 {
         String::new()
     } else {
         tr!(
             "（{} 言語中 {} 言語を飛ばしました）",
             " ({} of {} languages skipped)",
-            r.skipped.len(),
+            r.missing_langs,
             crate::backend::ALL.len()
         )
     };
@@ -642,6 +687,7 @@ fn via(x: &Outcome) -> &'static str {
     match x.via {
         "mcp" => ", MCP",
         "mcp-http" => ", MCP/HTTP",
+        "wasm" => ", Wasm",
         _ => "",
     }
 }
