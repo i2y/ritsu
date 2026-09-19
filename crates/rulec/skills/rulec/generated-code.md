@@ -458,7 +458,10 @@ generated; SQL is refused by name, because one query has nowhere to carry a valu
 Every generated file names its source in its header — `rule 送料 v4, sha256:d98b4f699db8` — and
 `rulec api` gives the whole digest as `source_sha256`. It is the SHA-256 of the rule file's
 bytes, computed by rulec itself, so `gen --check` and a reader of the header agree on what was
-generated from what.
+generated from what. A rule transcribed from a document names it too — `Cites: 措置法 = law
+332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)` — one line per `source`, and
+`rulec api` lists the same under `sources`, so the file says which text of the law it was made
+from.
 
 ## The rows that matched
 

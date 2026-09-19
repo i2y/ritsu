@@ -120,7 +120,14 @@ fn range_text(c: &Checked, name: &str) -> String {
     };
     // What the source wrote as `100万円` must not be shown as `1000000円` (§1.6; the same
     // write-back as §2.1).
+    let is_date = matches!(c.ty_of(name), Some(Ty::Date));
     let s = |b: &Option<crate::num::Rat>| match b {
+        // A date is held as its day number (§2.1); the approver reads the calendar date the
+        // rule wrote, not `16161 〜 22279` (§15.71).
+        Some(v) if is_date => {
+            let (y, m, d) = crate::types::ord_to_date(*v);
+            format!("{y:04}-{m:02}-{d:02}")
+        }
         Some(v) => format!("{}{unit}", crate::types::fmt_big_pub(*v)),
         None => "…".into(),
     };
@@ -698,7 +705,17 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
     let decl = f.sources.iter().find(|d| d.name.text == c.source);
     let frags = if c.fragments.is_empty() { String::new() } else { format!(" {}", c.fragments.join(sep())) };
     let line = match decl.map(|d| &d.kind) {
-        Some(SourceKind::Law { id, asof }) => tr!("出典: {}{frags}（法令 {id}、{asof} 時点）", "Source: {}{frags} (law {id}, as of {asof})", c.source),
+        Some(SourceKind::Law { id, asof }) => {
+            // Which text that date reached: the copy's `revision.txt` says which revision
+            // e-Gov served — the date it came into force and the amending law (§15.71).
+            let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
+            let rev = std::fs::read_to_string(crate::sources::copy_dir(base, id, asof).join("revision.txt"))
+                .ok()
+                .and_then(|r| crate::sources::revision_words(r.trim()))
+                .map(|w| tr!("。{w}", "; {w}"))
+                .unwrap_or_default();
+            tr!("出典: {}{frags}（法令 {id}、{asof} 時点{rev}）", "Source: {}{frags} (law {id}, as of {asof}{rev})", c.source)
+        }
         Some(SourceKind::File { path: p, hash }) => {
             let h = hash.as_ref().map(|h| tr!("、sha256:{h}", ", sha256:{h}")).unwrap_or_default();
             tr!("出典: {}{frags}（{p}{h}）", "Source: {}{frags} ({p}{h})", c.source)
@@ -1679,10 +1696,30 @@ fn customer_cell(s: &str) -> String {
         return tr!("{}以外", "other than {}", r.trim());
     }
     if crate::i18n::ja() {
-        for (op, word) in [("<=", "以下"), (">=", "以上"), ("<", "未満"), (">", "より大きい")] {
-            if let Some(r) = t.strip_prefix(op) {
-                return format!("{}{word}", r.trim());
-            }
+        // One bound reads as a word; two read as the lower one then the upper one
+        // (`>10万円 <=50万円` → 「10万円より大きく 50万円以下」), the way the statute itself
+        // says it. The two-bound cell used to come out as 「10万円 <=50万円より大きい」 (§15.71).
+        let words: Vec<&str> = t.split_whitespace().collect();
+        let bounds: Vec<(&str, &str)> = words
+            .iter()
+            .filter_map(|w| [">=", "<=", ">", "<"].iter().find_map(|op| w.strip_prefix(op).map(|v| (*op, v))))
+            .collect();
+        if !bounds.is_empty() && bounds.len() == words.len() {
+            let word = |op: &str, last: bool| match (op, last) {
+                ("<=", _) => "以下",
+                (">=", _) => "以上",
+                ("<", _) => "未満",
+                (">", true) => "より大きい",
+                (">", false) => "より大きく",
+                _ => "",
+            };
+            let lower = bounds.iter().find(|(op, _)| *op == ">=" || *op == ">");
+            let upper = bounds.iter().find(|(op, _)| *op == "<=" || *op == "<");
+            return match (bounds.len(), lower, upper) {
+                (1, _, _) => format!("{}{}", bounds[0].1, word(bounds[0].0, true)),
+                (2, Some((lo, lv)), Some((ho, hv))) => format!("{lv}{} {hv}{}", word(lo, false), word(ho, true)),
+                _ => t.to_string(),
+            };
         }
     }
     t.to_string()

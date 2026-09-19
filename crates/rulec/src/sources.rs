@@ -18,16 +18,32 @@ use std::path::{Path, PathBuf};
 /// A fragment of a law, as the rule names it and as e-Gov addresses it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fragment {
-    /// As written: `第91条`, `第20条の2第3項`, `別表第一`.
+    /// As written: `第91条`, `第20条の2第3項`, `別表第一`, `附則（令和七年三月三一日法律第一三号）第3条`.
     pub name: String,
-    /// The e-Gov `elm` parameter: `MainProvision-Article_91`, `AppdxTable[1]`.
+    /// The e-Gov `elm` parameter: `MainProvision-Article_91`, `AppdxTable[1]`,
+    /// `SupplProvision-Article_3`. For an amending law's supplementary provisions it reads
+    /// `SupplProvision[?]-Article_3` until the position is looked up (§15.71): e-Gov counts
+    /// them in document order and does not take the amending law's number.
     pub elm: String,
+    /// The amending law whose supplementary provisions these are, spelled as e-Gov's
+    /// `AmendLawNum` spells it. Only the commands that read the network need its position.
+    pub amend: Option<String>,
 }
 
 impl Fragment {
-    /// The file the copy is kept in: the element path with the brackets made plain.
+    /// The file the copy is kept in: the element path with the brackets made plain. The
+    /// supplementary provisions of an amending law are filed under that law's number, which
+    /// the rule wrote, rather than under a position only the network knows.
     pub fn file(&self) -> String {
-        format!("{}.xml", self.elm.replace('[', "_").replace(']', ""))
+        match &self.amend {
+            Some(n) => format!("{}.xml", self.elm.replace("SupplProvision[?]", &format!("SupplProvision_{n}"))),
+            None => format!("{}.xml", self.elm.replace('[', "_").replace(']', "")),
+        }
+    }
+
+    /// The element path with the position of the supplementary provisions filled in.
+    fn elm_at(&self, k: usize) -> String {
+        self.elm.replace("[?]", &format!("[{k}]"))
     }
 }
 
@@ -61,17 +77,41 @@ fn number(s: &str) -> Option<u32> {
     if n == 0 { None } else { Some(n) }
 }
 
-/// The fragment a citation names. Articles, paragraphs and items of the main provisions,
-/// and appendix tables by their ordinal; supplementary provisions and sub-items wait for a
-/// rule that needs them (§15.68).
+/// The fragment a citation names. Articles, paragraphs and items of the main provisions;
+/// appendix tables by their ordinal; and the supplementary provisions (§15.71): the law's
+/// own as `附則第3条`, an amending law's as `附則（令和七年三月三一日法律第一三号）第3条` with
+/// the number spelled as the law's own heading spells it, either also whole without the
+/// article. Sub-items still wait for a rule that needs them.
 pub fn fragment(name: &str) -> Option<Fragment> {
     if let Some(rest) = name.strip_prefix("別表第") {
         let n = number(rest)?;
-        return Some(Fragment { name: name.to_string(), elm: format!("AppdxTable[{n}]") });
+        return Some(Fragment { name: name.to_string(), elm: format!("AppdxTable[{n}]"), amend: None });
     }
-    let rest = name.strip_prefix('第')?;
+    if let Some(rest) = name.strip_prefix("附則") {
+        let (amend, rest) = match rest.strip_prefix('（').or_else(|| rest.strip_prefix('(')) {
+            Some(r) => {
+                let end = r.find(|c: char| c == '）' || c == ')')?;
+                if end == 0 {
+                    return None;
+                }
+                let close = r[end..].chars().next()?.len_utf8();
+                (Some(r[..end].to_string()), &r[end + close..])
+            }
+            None => (None, rest),
+        };
+        let suffix = if rest.is_empty() { String::new() } else { article_suffix(rest)? };
+        let head = if amend.is_some() { "SupplProvision[?]" } else { "SupplProvision" };
+        return Some(Fragment { name: name.to_string(), elm: format!("{head}{suffix}"), amend });
+    }
+    let suffix = article_suffix(name)?;
+    Some(Fragment { name: name.to_string(), elm: format!("MainProvision{suffix}"), amend: None })
+}
+
+/// `第20条の2第3項第4号` as the tail of an element path: `-Article_20_2-Paragraph_3-Item_4`.
+fn article_suffix(s: &str) -> Option<String> {
+    let rest = s.strip_prefix('第')?;
     let (art, rest) = rest.split_once('条')?;
-    let mut elm = format!("MainProvision-Article_{}", number(art)?);
+    let mut elm = format!("-Article_{}", number(art)?);
     let mut rest = rest;
     // `第20条の2`: a sub-numbered article.
     if let Some(r) = rest.strip_prefix('の') {
@@ -92,7 +132,7 @@ pub fn fragment(name: &str) -> Option<Fragment> {
     if !rest.is_empty() {
         return None;
     }
-    Some(Fragment { name: name.to_string(), elm })
+    Some(elm)
 }
 
 /// The directory the copies of a law as of a date are kept in, beside the rule.
@@ -285,7 +325,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一` の形です。附則と号の細分はまだ受けません。", "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号` and `別表第一`. Supplementary provisions and sub-items are not read yet."))
+                                .note(tr!("書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です。号の細分はまだ受けません。", "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条`. Sub-items are not read yet."))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -351,6 +391,14 @@ pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Stri
     Some(xml_text(&xml))
 }
 
+/// Whether two copies of a fragment say the same thing: the text, not the markup. e-Gov
+/// rewrites the attributes and the line structure of articles an amendment did not touch —
+/// 38 of the 103 byte-level differences found across five laws had no difference in the text
+/// (§15.71) — and an amendment that changes no sentence is not one.
+pub fn same_text(a: &[u8], b: &[u8]) -> bool {
+    xml_text(&String::from_utf8_lossy(a)) == xml_text(&String::from_utf8_lossy(b))
+}
+
 /// Strip the tags of a law XML fragment into readable lines.
 pub fn xml_text(xml: &str) -> String {
     let breaks = ["Paragraph", "Item", "Subitem1", "ArticleCaption", "ArticleTitle", "AppdxTableTitle", "RelatedArticleNum", "TableRow", "Sentence"];
@@ -390,15 +438,33 @@ pub struct Outcome {
     pub changed: bool,
 }
 
-fn curl(url: &str) -> Result<Vec<u8>, String> {
+/// One request, once.
+fn curl_once(url: &str) -> Result<Vec<u8>, String> {
     let out = std::process::Command::new("curl")
         .args(["-fsSL", "--max-time", "120", url])
         .output()
         .map_err(|e| tr!("curl を起動できません: {e}", "cannot run curl: {e}"))?;
-    if !out.status.success() {
-        return Err(tr!("{url} を取れません: {}", "cannot fetch {url}: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    if out.status.success() {
+        Ok(out.stdout)
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
-    Ok(out.stdout)
+}
+
+/// One request, tried three times: e-Gov answers a busy hour with a refusal, and a scheduled
+/// job that stops on one is a job nobody reads (§15.71).
+fn curl(url: &str) -> Result<Vec<u8>, String> {
+    let mut last = String::new();
+    for attempt in 0..3u64 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2 * attempt));
+        }
+        match curl_once(url) {
+            Ok(body) => return Ok(body),
+            Err(e) => last = e,
+        }
+    }
+    Err(tr!("{url} を取れません（三度試しました）: {last}", "cannot fetch {url} (tried three times): {last}"))
 }
 
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
@@ -434,15 +500,171 @@ fn law_url(id: &str, asof: &str, elm: &str) -> String {
     format!("https://laws.e-gov.go.jp/api/2/law_data/{id}?asof={asof}&elm={elm}&law_full_text_format=xml")
 }
 
-/// Fetch one fragment: the XML and the revision id it came from.
-fn fetch_fragment(id: &str, asof: &str, fr: &Fragment) -> Result<(Vec<u8>, String), String> {
-    let body = curl(&law_url(id, asof, &fr.elm))?;
-    let text = String::from_utf8_lossy(&body);
-    let j = crate::json::parse(&text).map_err(|e| tr!("e-Gov の答えが JSON として読めません: {e}", "the e-Gov reply is not JSON: {e}"))?;
+/// One e-Gov reply as JSON. A busy e-Gov answers a request it accepted with a page that is
+/// not JSON; that is tried again, with a pause, before it is an error.
+fn fetch_json(url: &str) -> Result<crate::json::Json, String> {
+    let mut last = String::new();
+    for attempt in 0..3u64 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2 * attempt));
+        }
+        let body = curl(url)?;
+        let text = String::from_utf8_lossy(&body);
+        match crate::json::parse(&text) {
+            Ok(j) => return Ok(j),
+            Err(e) => last = tr!("e-Gov の答えが JSON として読めません: {e}", "the e-Gov reply is not JSON: {e}"),
+        }
+    }
+    Err(last)
+}
+
+/// The XML inside an e-Gov `law_data` reply, with the revision id it came from.
+fn law_xml(j: &crate::json::Json) -> Result<(Vec<u8>, String), String> {
     let b64 = j.get("law_full_text").and_then(|x| x.as_str()).ok_or_else(|| tr!("e-Gov の答えに law_full_text がありません", "the e-Gov reply has no law_full_text"))?;
     let xml = base64_decode(b64).ok_or_else(|| tr!("law_full_text を base64 として読めません", "law_full_text is not base64"))?;
     let rev = j.get("revision_info").and_then(|r| r.get("law_revision_id")).and_then(|x| x.as_str()).unwrap_or("").to_string();
     Ok((xml, rev))
+}
+
+/// The supplementary provisions of a law in document order, each with the number of the
+/// amending law it came with (`None` for the law's own): what `SupplProvision[k]` counts.
+pub fn suppl_ordinals(xml: &str) -> Vec<Option<String>> {
+    let mut out = Vec::new();
+    let mut rest = xml;
+    while let Some(i) = rest.find("<SupplProvision") {
+        let after = &rest[i + "<SupplProvision".len()..];
+        // `<SupplProvisionLabel>` begins the same way; only the element itself counts.
+        if !after.starts_with(|c: char| c == ' ' || c == '>' || c == '\n' || c == '\t' || c == '/') {
+            rest = after;
+            continue;
+        }
+        let end = after.find('>').unwrap_or(after.len());
+        let tag = &after[..end];
+        let num = tag.find("AmendLawNum=\"").map(|p| {
+            let v = &tag[p + "AmendLawNum=\"".len()..];
+            v[..v.find('"').unwrap_or(v.len())].to_string()
+        });
+        out.push(num);
+        rest = &after[end..];
+    }
+    out
+}
+
+/// Where an amending law's supplementary provisions sit in the law as of a date: the `k` of
+/// `SupplProvision[k]`, counted from one. One read of the whole law per date, kept for the
+/// command's duration — 14 MB for the special taxation measures law, so not once a fragment.
+fn suppl_index(id: &str, asof: &str, amend: &str, cache: &mut BTreeMap<String, Vec<Option<String>>>) -> Result<usize, String> {
+    let key = format!("{id}@{asof}");
+    if !cache.contains_key(&key) {
+        let j = fetch_json(&format!("https://laws.e-gov.go.jp/api/2/law_data/{id}?asof={asof}&law_full_text_format=xml"))?;
+        let (xml, _) = law_xml(&j)?;
+        cache.insert(key.clone(), suppl_ordinals(&String::from_utf8_lossy(&xml)));
+    }
+    cache[&key]
+        .iter()
+        .position(|n| n.as_deref() == Some(amend))
+        .map(|p| p + 1)
+        .ok_or_else(|| tr!("法令 {id} の {asof} 時点に、附則（{amend}）がありません", "the law {id} as of {asof} has no supplementary provisions of {amend}"))
+}
+
+/// Where the supplementary provisions found at `k0` as of one date sit as of `date`: e-Gov's
+/// order shifts by a few as laws come in (the 2025 income tax act's moved from 349 to 350
+/// between two dates), so the positions around `k0` are tried first, each one a small
+/// request, and the whole law is read only when none of them is it.
+fn suppl_index_near(id: &str, date: &str, amend: &str, k0: usize, cache: &mut BTreeMap<String, Vec<Option<String>>>) -> Result<usize, String> {
+    if !cache.contains_key(&format!("{id}@{date}")) {
+        for delta in [0i64, 1, 2, -1, 3, -2, 4, -3] {
+            let k = k0 as i64 + delta;
+            if k < 1 {
+                continue;
+            }
+            let Ok(body) = curl_once(&law_url(id, date, &format!("SupplProvision[{k}]"))) else { continue };
+            let Ok(j) = crate::json::parse(&String::from_utf8_lossy(&body)) else { continue };
+            let Ok((xml, _)) = law_xml(&j) else { continue };
+            if suppl_ordinals(&String::from_utf8_lossy(&xml)).first().is_some_and(|n| n.as_deref() == Some(amend)) {
+                return Ok(k as usize);
+            }
+        }
+    }
+    suppl_index(id, date, amend, cache)
+}
+
+/// Fetch one fragment as of `asof`: the XML and the revision id it came from. The position of
+/// an amending law's supplementary provisions is looked up as of `index_asof`, the date the
+/// rule reads the law at, and moved to `asof` from there when the two differ.
+fn fetch_fragment(
+    id: &str,
+    asof: &str,
+    index_asof: &str,
+    fr: &Fragment,
+    cache: &mut BTreeMap<String, Vec<Option<String>>>,
+) -> Result<(Vec<u8>, String), String> {
+    let elm = match &fr.amend {
+        Some(a) => {
+            let k0 = suppl_index(id, index_asof, a, cache)?;
+            let k = if asof == index_asof { k0 } else { suppl_index_near(id, asof, a, k0, cache)? };
+            fr.elm_at(k)
+        }
+        None => fr.elm.clone(),
+    };
+    law_xml(&fetch_json(&law_url(id, asof, &elm))?)
+}
+
+/// A law's number as a person names it, from its e-Gov id: `508AC0000000012` is
+/// 令和8年法律第12号 (Act No. 12 of 2026). Anything that is not an act is left as the id.
+pub fn law_num_text(id: &str) -> String {
+    let b = id.as_bytes();
+    if b.len() < 6 || !b[..3].iter().all(|c| c.is_ascii_digit()) || &id[3..5] != "AC" {
+        return id.to_string();
+    }
+    let (era, base) = match b[0] {
+        b'1' => ("明治", 1867),
+        b'2' => ("大正", 1911),
+        b'3' => ("昭和", 1925),
+        b'4' => ("平成", 1988),
+        b'5' => ("令和", 2018),
+        _ => return id.to_string(),
+    };
+    let year: u32 = id[1..3].parse().unwrap_or(0);
+    let num = id[5..].trim_start_matches('0');
+    let num = if num.is_empty() { "0" } else { num };
+    let ad = base + year;
+    tr!("{era}{year}年法律第{num}号", "Act No. {num} of {ad}")
+}
+
+/// What a copy's `revision.txt` says, for a person: the date the text came into force and the
+/// amending law, from a revision id like `332AC0000000026_20260401_508AC0000000012`.
+pub fn revision_words(rev: &str) -> Option<String> {
+    let mut it = rev.split('_');
+    let (_, date, amend) = (it.next()?, it.next()?, it.next()?);
+    if date.len() != 8 || !date.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let d = format!("{}-{}-{}", &date[..4], &date[4..6], &date[6..]);
+    let law = law_num_text(amend);
+    Some(tr!("{d} 施行、{law}による改正後", "in force from {d}, as amended by {law}"))
+}
+
+/// What changed between two copies, as lines: those only in the old copy with `-`, those only
+/// in the new with `+`, in order, at most `cap` of each. A sentence replaced shows as one of
+/// each — enough to see whether an amount or a date moved, which a digest cannot say.
+pub fn text_diff(old: &str, new: &str, cap: usize) -> Vec<String> {
+    let (a, b) = (xml_text(old), xml_text(new));
+    let al: Vec<&str> = a.lines().collect();
+    let bl: Vec<&str> = b.lines().collect();
+    let gone: Vec<&str> = al.iter().filter(|l| !bl.contains(l)).cloned().collect();
+    let came: Vec<&str> = bl.iter().filter(|l| !al.contains(l)).cloned().collect();
+    let mut out = Vec::new();
+    for (sign, ls) in [("-", gone), ("+", came)] {
+        for l in ls.iter().take(cap) {
+            out.push(format!("{sign} {l}"));
+        }
+        if ls.len() > cap {
+            let more = ls.len() - cap;
+            out.push(tr!("{sign} …（あと {more} 行）", "{sign} … ({more} more lines)"));
+        }
+    }
+    out
 }
 
 /// `rulec source fetch`: put a copy of every cited fragment beside the rule, saying which
@@ -451,6 +673,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
     let cites = citations(f);
     let mut lines = Vec::new();
     let mut changed = false;
+    let mut cache = BTreeMap::new();
     for d in &f.sources {
         let SourceKind::Law { id, asof } = &d.kind else { continue };
         let cdir = copy_dir(rule_path, id, asof);
@@ -462,16 +685,21 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 lines.push(tr!("{}: 引用箇所 `{frag}` の書き方が読めません", "{}: the fragment `{frag}` cannot be read", d.name.text));
                 continue;
             };
-            let (xml, rev) = fetch_fragment(id, asof, &fr)?;
+            let (xml, rev) = fetch_fragment(id, asof, asof, &fr, &mut cache)?;
             std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", cdir.display()))?;
             let p = cdir.join(fr.file());
             let before = std::fs::read(&p).ok();
-            let same = before.as_deref() == Some(xml.as_slice());
-            std::fs::write(&p, &xml).map_err(|e| format!("{}: {e}", p.display()))?;
+            // A copy whose text the fetch did not change keeps its bytes, so that the pin
+            // stays true: only the markup differed, and rewriting it would fail the next
+            // `check` (E038) over an amendment that changed nothing.
+            let same = before.as_deref().is_some_and(|b| same_text(b, &xml));
+            if !same {
+                std::fs::write(&p, &xml).map_err(|e| format!("{}: {e}", p.display()))?;
+            }
             if !rev.is_empty() {
                 let _ = std::fs::write(cdir.join("revision.txt"), format!("{rev}\n"));
             }
-            let h = crate::sha256::short(&xml);
+            let h = crate::sha256::short(if same { before.as_deref().unwrap_or(&xml) } else { &xml });
             lines.push(match before {
                 None => tr!("{}: {frag} を取りました（sha256:{h}）", "{}: fetched {frag} (sha256:{h})", d.name.text),
                 Some(_) if same => tr!("{}: {frag} は変わっていません（sha256:{h}）", "{}: {frag} is unchanged (sha256:{h})", d.name.text),
@@ -555,18 +783,38 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
 }
 
 /// `rulec source outdated`: ask e-Gov for the revisions of every law source enforced after
-/// its `asof`, and say which cited fragments differ there from the copies. The other command
-/// that reads the network; meant for a scheduled job, since `check` cannot know of an
-/// amendment on its own.
+/// its `asof`, and say which cited fragments differ there from the copies — in their text,
+/// what changed, and what to write next. The other command that reads the network; meant for
+/// a scheduled job, since `check` cannot know of an amendment on its own.
 pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
     let cites = citations(f);
     let mut lines = Vec::new();
     let mut changed = false;
+    let mut cache = BTreeMap::new();
+    // A rule that folds two periods reads the same law as of two dates (§15.71). An
+    // amendment is measured against the latest reading; an earlier one is old by design.
+    let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
+    for d in &f.sources {
+        if let SourceKind::Law { id, asof } = &d.kind {
+            let e = latest.entry(id.as_str()).or_insert(asof.as_str());
+            if asof.as_str() > *e {
+                *e = asof.as_str();
+            }
+        }
+    }
+    // The one date input, when there is exactly one: what the rows for the new text are keyed on.
+    let date_inputs: Vec<&str> = f.inputs.iter().filter(|i| i.ty.base == crate::kw::DATE).map(|i| i.name.text.as_str()).collect();
     for d in &f.sources {
         let SourceKind::Law { id, asof } = &d.kind else { continue };
-        let body = curl(&format!("https://laws.e-gov.go.jp/api/2/law_revisions/{id}"))?;
-        let text = String::from_utf8_lossy(&body);
-        let j = crate::json::parse(&text).map_err(|e| tr!("e-Gov の答えが JSON として読めません: {e}", "the e-Gov reply is not JSON: {e}"))?;
+        if latest.get(id.as_str()).is_some_and(|l| *l != asof.as_str()) {
+            lines.push(tr!(
+                "{}: 同じ法令をより後の時点で引く出典があるので、改正はそちらで問います",
+                "{}: another source reads this law as of a later date; amendments are asked about there",
+                d.name.text
+            ));
+            continue;
+        }
+        let j = fetch_json(&format!("https://laws.e-gov.go.jp/api/2/law_revisions/{id}"))?;
         let mut later: Vec<(String, String)> = Vec::new();
         if let Some(crate::json::Json::Arr(revs)) = j.get("revisions") {
             for r in revs {
@@ -585,27 +833,57 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
             continue;
         }
         let cdir = copy_dir(rule_path, id, asof);
-        let mut differs: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for (date, _) in &later {
-            for (frag, _) in cited_from(&cites, &d.name.text) {
-                let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
-                let (xml, _) = fetch_fragment(id, date, &fr)?;
-                let now = std::fs::read(cdir.join(fr.file())).ok();
-                if now.as_deref() != Some(xml.as_slice()) {
-                    differs.entry(date.clone()).or_default().push(frag.clone());
+        // Date → the fragments that change on that day, each with what changed. Each date is
+        // held to the text of the date before it, starting from the copy, so an amendment is
+        // reported once, on the day it comes into force, and not again on every later day.
+        let mut differs: BTreeMap<String, Vec<(String, Vec<String>)>> = BTreeMap::new();
+        for (frag, _) in cited_from(&cites, &d.name.text) {
+            let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
+            let mut prev = std::fs::read(cdir.join(fr.file())).ok();
+            for (date, _) in &later {
+                let (xml, _) = fetch_fragment(id, date, asof, &fr, &mut cache)?;
+                // The text, not the bytes: a revision that only re-marked the article is
+                // not an amendment of it.
+                if !prev.as_deref().is_some_and(|n| same_text(n, &xml)) {
+                    let diff = match &prev {
+                        Some(n) => text_diff(&String::from_utf8_lossy(n), &String::from_utf8_lossy(&xml), 8),
+                        None => Vec::new(),
+                    };
+                    differs.entry(date.clone()).or_default().push((frag.clone(), diff));
                 }
+                prev = Some(xml);
             }
         }
         for (date, _) in &later {
             match differs.get(date) {
                 Some(frags) => {
                     changed = true;
+                    let names: Vec<&str> = frags.iter().map(|(f, _)| f.as_str()).collect();
                     lines.push(tr!(
                         "{}: {date} 施行の改正で {} が変わります。その日から効く版には、読み直した規則が要ります",
                         "{}: the amendment enforced on {date} changes {}; the version in force from that day needs a reread rule",
                         d.name.text,
-                        frags.join(if crate::i18n::ja() { "、" } else { ", " })
+                        names.join(if crate::i18n::ja() { "、" } else { ", " })
                     ));
+                    // Where the landing is (§15.71): a second reading of the law as of that
+                    // day, and rows keyed on the date from which it applies.
+                    let name = format!("{}_{}", d.name.text, date.replace('-', ""));
+                    let rows = match date_inputs.as_slice() {
+                        [one] => tr!("{one} >={date} の行", "the rows for {one} >={date}"),
+                        _ => tr!("その日以後に効く行", "the rows in force from that day"),
+                    };
+                    lines.push(tr!(
+                        "  `{} {name} = {} \"{id}\" {} {date}` を足し、{rows}をそこから写してください",
+                        "  add `{} {name} = {} \"{id}\" {} {date}` and transcribe {rows} from it",
+                        crate::kw::SOURCE,
+                        crate::kw::LAW,
+                        crate::kw::ASOF
+                    ));
+                    for (frag, diff) in frags {
+                        for l in diff {
+                            lines.push(format!("  {frag}: {l}"));
+                        }
+                    }
                 }
                 None => lines.push(tr!("{}: {date} 施行の改正では、引用している箇所は変わりません", "{}: the amendment enforced on {date} leaves the cited fragments unchanged", d.name.text)),
             }
@@ -628,8 +906,54 @@ mod tests {
         assert_eq!(fragment("別表第一").unwrap().elm, "AppdxTable[1]");
         assert_eq!(fragment("別表第一").unwrap().file(), "AppdxTable_1.xml");
         assert_eq!(fragment("別表第十二").unwrap().elm, "AppdxTable[12]");
-        assert!(fragment("附則第3条").is_none());
         assert!(fragment("第3条ただし書").is_none());
+    }
+
+    #[test]
+    fn supplementary_provisions_are_named_by_their_amending_law() {
+        let own = fragment("附則第3条").unwrap();
+        assert_eq!(own.elm, "SupplProvision-Article_3");
+        assert_eq!(own.file(), "SupplProvision-Article_3.xml");
+        assert_eq!(fragment("附則").unwrap().elm, "SupplProvision");
+        let a = fragment("附則（令和七年三月三一日法律第一三号）第3条第2項").unwrap();
+        assert_eq!(a.elm, "SupplProvision[?]-Article_3-Paragraph_2");
+        assert_eq!(a.amend.as_deref(), Some("令和七年三月三一日法律第一三号"));
+        assert_eq!(a.file(), "SupplProvision_令和七年三月三一日法律第一三号-Article_3-Paragraph_2.xml");
+        assert_eq!(a.elm_at(244), "SupplProvision[244]-Article_3-Paragraph_2");
+        let whole = fragment("附則(令和六年三月三〇日法律第八号)").unwrap();
+        assert_eq!(whole.elm, "SupplProvision[?]");
+        assert_eq!(whole.file(), "SupplProvision_令和六年三月三〇日法律第八号.xml");
+        assert!(fragment("附則（）第3条").is_none());
+        assert!(fragment("附則の3").is_none());
+    }
+
+    #[test]
+    fn supplementary_provisions_are_counted_in_document_order() {
+        let xml = "<Law><MainProvision/><SupplProvision Extract=\"true\"><SupplProvisionLabel>附　則</SupplProvisionLabel></SupplProvision>\n<SupplProvision AmendLawNum=\"昭和四二年七月一三日法律第五六号\" Extract=\"true\"><SupplProvisionLabel>附　則</SupplProvisionLabel></SupplProvision><SupplProvision AmendLawNum=\"令和七年三月三一日法律第一三号\"></SupplProvision></Law>";
+        let ords = suppl_ordinals(xml);
+        assert_eq!(ords, vec![None, Some("昭和四二年七月一三日法律第五六号".into()), Some("令和七年三月三一日法律第一三号".into())]);
+        assert_eq!(ords.iter().position(|n| n.as_deref() == Some("令和七年三月三一日法律第一三号")).map(|p| p + 1), Some(3));
+    }
+
+    #[test]
+    fn a_law_number_reads_from_its_id() {
+        let s = law_num_text("508AC0000000012");
+        assert!(s == "令和8年法律第12号" || s == "Act No. 12 of 2026", "{s}");
+        let s = law_num_text("430AC0000000007");
+        assert!(s == "平成30年法律第7号" || s == "Act No. 7 of 2018", "{s}");
+        assert_eq!(law_num_text("508CO0000000012"), "508CO0000000012");
+        let w = revision_words("332AC0000000026_20260401_508AC0000000012").unwrap();
+        assert!(w.starts_with("2026-04-01"), "{w}");
+        assert!(revision_words("nonsense").is_none());
+    }
+
+    #[test]
+    fn a_diff_says_which_lines_moved() {
+        let a = "<Article><Sentence>平成二十六年四月一日から令和六年三月三十一日までの間</Sentence><Sentence>二百円</Sentence></Article>";
+        let b = "<Article><Sentence>平成二十六年四月一日から令和九年三月三十一日までの間</Sentence><Sentence>二百円</Sentence></Article>";
+        let d = text_diff(a, b, 8);
+        assert_eq!(d, vec!["- 平成二十六年四月一日から令和六年三月三十一日までの間", "+ 平成二十六年四月一日から令和九年三月三十一日までの間"]);
+        assert!(text_diff(a, a, 8).is_empty());
     }
 
     #[test]
@@ -648,6 +972,14 @@ mod tests {
         assert_eq!(base64_decode("YWJj").unwrap(), b"abc");
         assert_eq!(base64_decode("YWI=").unwrap(), b"ab");
         assert_eq!(base64_decode("YQ==").unwrap(), b"a");
+    }
+
+    #[test]
+    fn markup_alone_is_not_a_change() {
+        let a = "<Article Num=\"1\"><Paragraph Num=\"1\"><Sentence>甲は、乙とする。</Sentence></Paragraph></Article>";
+        let b = "<Article Num=\"1\">\n  <Paragraph Num=\"1\">\n    <Sentence Num=\"1\" WritingMode=\"vertical\">甲は、乙とする。</Sentence>\n  </Paragraph>\n</Article>";
+        assert!(same_text(a.as_bytes(), b.as_bytes()));
+        assert!(!same_text(a.as_bytes(), a.replace("乙", "丙").as_bytes()));
     }
 
     #[test]

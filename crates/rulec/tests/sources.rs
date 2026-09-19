@@ -134,7 +134,7 @@ table 表(t1)   @法 第1条
 fn ページは引いた断片を引用する() {
     let (c, out) = rulec(&root(), &["doc", RULE, "--lang", "ja"]);
     assert_eq!(c, 0, "{out}");
-    assert!(out.contains("出典: 措置法 第91条（法令 332AC0000000026、2026-04-01 時点）"), "{out}");
+    assert!(out.contains("出典: 措置法 第91条（法令 332AC0000000026、2026-04-01 時点。2026-04-01 施行、令和8年法律第12号による改正後）"), "{out}");
     assert!(out.contains("> 第九十一条"), "the article's title is quoted");
     assert!(out.contains("| 軽減期間 | 定義 | `作成日 <= 2027-03-31` |  | 出典: 措置法 第91条 |"), "the define's citation is a note, not part of its expression");
 }
@@ -154,5 +154,21 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
     assert!(codes(&whole, &p).iter().all(|c| c.starts_with('W')), "{:?}", codes(&whole, &p));
     let bare_law = format!("{head}table 表(t1)  @措置法\n| a | -> x |\n| - | true |\n");
     assert!(codes(&bare_law, &p).contains(&"E037".to_string()), "{:?}", codes(&bare_law, &p));
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Every generated file names the documents the rule transcribes, in the same words in every
+/// language (§15.71).
+#[test]
+fn 生成物のヘッダは出典を名指す() {
+    let d = std::env::temp_dir().join(format!("rulec-cites-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    let (c, out) = rulec(&root(), &["gen", RULE, "--out", &d.to_string_lossy(), "--lang", "en"]);
+    assert_eq!(c, 0, "{out}");
+    let py = std::fs::read_to_string(d.join("python/stamp_duty_split.py")).unwrap();
+    assert!(py.contains("# Cites: 法 = law 342AC0000000023 asof 2026-04-01 (別表第一 sha256:0ba69792e960021e)\n"), "{py}");
+    assert!(py.contains("# Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)\n"), "{py}");
+    let sql = std::fs::read_to_string(d.join("sql/stamp_duty_split.sql")).unwrap();
+    assert!(sql.contains("-- Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)\n"), "{sql}");
     let _ = std::fs::remove_dir_all(&d);
 }

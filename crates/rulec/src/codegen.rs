@@ -418,6 +418,22 @@ impl<'a> Gen<'a> {
                 a.hash.as_deref().unwrap_or("")
             ));
         }
+        // The documents the rule transcribes (§15.68): each law at the date it was read, with
+        // the pinned digest of every fragment cited, so the file says which text of the law it
+        // was made from — two dates when the rule folds two periods (§15.71).
+        for s in &self.f.sources {
+            let what = match &s.kind {
+                SourceKind::Law { id, asof } => {
+                    let pins: Vec<String> = s.pins.iter().map(|p| format!("{} sha256:{}", p.fragment, p.hash)).collect();
+                    let pinned = if pins.is_empty() { String::new() } else { format!(" ({})", pins.join(", ")) };
+                    format!("{} {id} {} {asof}{pinned}", crate::kw::LAW, crate::kw::ASOF)
+                }
+                SourceKind::File { path, hash } => {
+                    format!("{} {path}{}", crate::kw::FILE, hash.as_ref().map(|h| format!(" sha256:{h}")).unwrap_or_default())
+                }
+            };
+            h.push_str(&tr!("{comment} 出典: {} = {what}\n", "{comment} Cites: {} = {what}\n", s.name.text));
+        }
         h
     }
 }
@@ -5458,6 +5474,25 @@ impl Gen<'_> {
                     .str("path", &a.path)
                     .str("sha256", a.hash.as_deref().unwrap_or(""))
                     .finish()
+            }).collect::<Vec<_>>()))
+            // The documents transcribed, as the header names them (§15.71).
+            .raw("sources", crate::json::arr(&self.f.sources.iter().map(|s| {
+                let o = crate::json::Obj::new().str("name", &s.name.text);
+                match &s.kind {
+                    SourceKind::Law { id, asof } => o
+                        .str("kind", crate::kw::LAW)
+                        .str("id", id)
+                        .str("asof", asof)
+                        .raw("pins", crate::json::arr(&s.pins.iter().map(|p| {
+                            crate::json::Obj::new().str("fragment", &p.fragment).str("sha256", &p.hash).finish()
+                        }).collect::<Vec<_>>()))
+                        .finish(),
+                    SourceKind::File { path, hash } => o
+                        .str("kind", crate::kw::FILE)
+                        .str("path", path)
+                        .str("sha256", hash.as_deref().unwrap_or(""))
+                        .finish(),
+                }
             }).collect::<Vec<_>>()))
             .raw("python", python)
             .raw("typescript", typescript)

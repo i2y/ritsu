@@ -486,15 +486,15 @@ There are two kinds of document, cited and copied a little differently.
 | Document | Declared as | Cited as | Its copy |
 |---|---|---|---|
 | **A file beside the rule** (a policy PDF, a tariff sheet) | `source 郵便 = file "<file>" sha256:<digest>` | `@郵便`, or `@郵便 別紙1` to say where in it | the file itself; `rulec source pin` writes its digest on the `source` line |
-| **A statute** | `source 法 = law "<law id>" asof <date>`, the id being the law's id on e-Gov (the Japanese government's statute database) and the date saying which text is meant | `@法 第91条`, always with the article, named the way the statute does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一` | `rulec source fetch` brings each cited article from e-Gov into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
+| **A statute** | `source 法 = law "<law id>" asof <date>`, the id being the law's id on e-Gov (the Japanese government's statute database) and the date saying which text is meant | `@法 第91条`, always with the article, named the way the statute does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一`; supplementary provisions as `附則第3条`, an amending law's as `附則（令和七年三月三一日法律第一三号）第3条` | `rulec source fetch` brings each cited article from e-Gov into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
 
 From then on every `rulec check` confirms that the copies are there and that their digests
 are what the rule says. When a copy differs — the file was replaced, or the article was
 fetched again after an amendment — the check stops and names the tables, clauses and rows
 that cite it (E038), which is all there is to reread. `check` itself never reads the network.
 
-A statute has one more command to it. Whether an amendment enforced after `asof` changes a
-cited article is what `rulec source outdated` asks e-Gov; `check` cannot know of an amendment
+A statute has one more command to it. Whether an amendment enforced after `asof` changes the text of a
+cited article (its markup alone does not count) is what `rulec source outdated` asks e-Gov; `check` cannot know of an amendment
 until the copy is fetched again, so this belongs in a scheduled CI job. A file beside the rule
 raises no such question: when it is replaced, `check` sees its digest change on the spot.
 

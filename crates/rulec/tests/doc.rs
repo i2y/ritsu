@@ -230,6 +230,28 @@ fn 承認者が知るべきことが載る() {
     // against the third danger in §16).
     let (_, d, _) = run(&["doc", "tests/corpus/クーポン一枚.rule"]);
     assert!(d.contains("down(1円)"), "丸めを列に畳む: {d}");
+
+    // A date range reads as the calendar dates the rule wrote, not as day numbers (§15.71).
+    let (_, d, _) = run(&["doc", "tests/corpus/印紙税の本則と軽減.rule"]);
+    assert!(d.contains("| 作成日 | date | 2014-04-01 〜 2030-12-31 |"), "日付の範囲は日付で出す: {d}");
+    // Which text the copy is: the date it came into force and the amending law, from the
+    // copy's revision.txt (§15.71).
+    assert!(
+        d.contains("出典: 措置法 第91条（法令 332AC0000000026、2026-04-01 時点。2026-04-01 施行、令和8年法律第12号による改正後）"),
+        "写しの施行日と改正法を添える: {d}"
+    );
+}
+
+/// A cell with two bounds reads lower bound first, upper bound last, the way the statute says
+/// it; it used to come out as 「10万円 <=50万円より大きい」 (§15.71).
+#[test]
+fn お客向けの二つの境界は下限から上限へ読む() {
+    let (c, d, _) = run(&["doc", "tests/corpus/印紙税の本則と軽減.rule", "--audience", "customer"]);
+    assert_eq!(c, 0);
+    assert!(d.contains("| r3 | true | 1万円以上 10万円以下 | 200円 |"), "{d}");
+    assert!(d.contains("| r4 | true | 10万円より大きく 50万円以下 | 400円 |"), "{d}");
+    assert!(d.contains("| r13 | true | 50億円より大きい | 600000円 |"), "{d}");
+    assert!(d.contains("| 1 | 金額の記載あり true and 契約金額 <1万円 | 0円 |"), "節の条件はそのまま: {d}");
 }
 
 /// Where a table came from is written as a comment at the end of the `table` line, and a row

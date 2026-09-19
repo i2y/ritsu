@@ -622,3 +622,21 @@ fn swiftは目録から組んだ呼び出しが動く() {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// The documents a rule transcribes are in the inventory too, as the generated header names
+/// them (§15.71).
+#[test]
+fn 出典は目録に載る() {
+    let (c, out, _) = run(&["api", "tests/corpus/印紙税の本則と軽減.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let j = rulec::json::parse(&out).unwrap();
+    let Some(rulec::json::Json::Arr(srcs)) = j.get("sources") else { panic!("sources が無い: {out}") };
+    assert_eq!(srcs.len(), 2);
+    assert_eq!(s(&srcs[1], "name"), "措置法");
+    assert_eq!(s(&srcs[1], "kind"), "law");
+    assert_eq!(s(&srcs[1], "id"), "332AC0000000026");
+    assert_eq!(s(&srcs[1], "asof"), "2026-04-01");
+    let Some(rulec::json::Json::Arr(pins)) = srcs[1].get("pins") else { panic!("pins が無い: {out}") };
+    assert_eq!(s(&pins[0], "fragment"), "第91条");
+    assert_eq!(s(&pins[0], "sha256"), "85faf53f6f6e8196");
+}

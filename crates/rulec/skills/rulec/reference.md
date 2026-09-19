@@ -283,15 +283,21 @@ fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own
 
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
-`第20条第2項`, `第20条第2項第3号`, `別表第一`; several are separated by `,`. A `file` is cited
+`第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's
+own) or `附則（令和七年三月三一日法律第一三号）第3条` (an amending law's, its number spelled as the law's
+heading spells it); several are separated by `,`. A `file` is cited
 whole, `@郵便`, or with one word saying where in it, `@郵便 別紙1`; a law cited with no article
 is E037. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
 citation uses is W119. `rulec source fetch` brings the copies from e-Gov, `rulec source pin`
 writes the pins, and `rulec source outdated` asks e-Gov whether an amendment enforced after
-the date changes a cited fragment — the one question `check` cannot answer offline. The
-approver's page quotes the fragment's text under the definition that cites it.
+the date changes the text of a cited fragment (a revision that only re-marks the XML is not
+a change) — the one question `check` cannot answer offline. The
+approver's page quotes the fragment's text under the definition that cites it, with the date the copy's
+text came into force and the amending law. Every generated file names the sources in its header
+(`Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
+them under `sources`.
 
 ## 4. inputs and outputs
 
