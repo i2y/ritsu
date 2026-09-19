@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1190 458" width="1190" height="458" role="img" aria-label="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come nine languages." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
+<marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
+<marker id="head-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#9c6508"/></marker>
+</defs>
+<path d="M20,20.0 H148 L160,32.0 V120.0 H20 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M148,20.0 V32.0 H160 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="29" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">What you have</text>
+<text x="29" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">an internal policy</text>
+<text x="29" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">a spreadsheet, a tariff</text>
+<text x="29" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">code that runs today</text>
+<clipPath id="clip-1"><rect x="256" y="20" width="160" height="196" rx="10"/></clipPath>
+<rect x="256" y="20" width="160" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="256" y="20" width="160" height="5" fill="#4457d8" clip-path="url(#clip-1)"/>
+<text x="336.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Agent</text>
+<text x="336.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">reads and transcribes</text>
+<text x="336.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">imports the spreadsheet</text>
+<text x="336.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">cites the file with @</text>
+<path d="M512,20.0 H630 L642,32.0 V120.0 H512 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M630,20.0 V32.0 H642 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="521" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Table</text>
+<text x="633" y="42.0" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
+<text x="521" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">@規約 別紙1</text>
+<text x="521" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">pinned to the file</text>
+<clipPath id="clip-3"><rect x="738" y="20" width="160" height="196" rx="10"/></clipPath>
+<rect x="738" y="20" width="160" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="738" y="20" width="160" height="5" fill="#4457d8" clip-path="url(#clip-3)"/>
+<text x="818.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="818.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">proves no gap,</text>
+<text x="818.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">no overlap</text>
+<text x="818.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">holds it to the code</text>
+<text x="818.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">and to the records</text>
+<path d="M994,20.0 H1158 L1170,32.0 V120.0 H994 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1158,20.0 V32.0 H1170 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="1003" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Generated code</text>
+<text x="1003" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">nine languages, no runtime</text>
+<text x="1003" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the same answers as before</text>
+<line x1="160" y1="70" x2="256" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="208.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">reads</text>
+<line x1="416" y1="70" x2="512" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="464.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">writes</text>
+<line x1="642" y1="70" x2="738" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="690.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec check</text>
+<text x="690.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">pin too</text>
+<line x1="898" y1="70" x2="994" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="946.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec gen</text>
+<text x="946.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">once it passes</text>
+<path d="M489.0,132 H653.0 L665.0,144 V212 H489.0 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M653.0,132 V144 H665.0 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="498.0" y="154" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Mismatches</text>
+<text x="498.0" y="172" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">which rows, how many,</text>
+<text x="498.0" y="187" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">by how much</text>
+<line x1="738" y1="172" x2="665.0" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<line x1="489.0" y1="172" x2="416" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="577.0" y="227" font-size="11" font-weight="400" text-anchor="middle" fill="#4457d8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec verify / replay</text>
+<clipPath id="clip-person"><rect x="733.0" y="290" width="170" height="148" rx="10"/></clipPath>
+<rect x="733.0" y="290" width="170" height="148" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="733.0" y="290" width="170" height="5" fill="#9c6508" clip-path="url(#clip-person)"/>
+<text x="818.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Approver</text>
+<text x="818.0" y="362" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">compares the document</text>
+<text x="818.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">with the table</text>
+<text x="818.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">and signs off</text>
+<line x1="818.0" y1="216" x2="818.0" y2="290" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="826.0" y="257.0" font-size="10.5" font-weight="400" text-anchor="start" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec doc</text>
+</svg>

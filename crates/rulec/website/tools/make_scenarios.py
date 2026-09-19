@@ -61,6 +61,35 @@ FIGS["existing"] = dict(
     ),
 )
 
+FIGS["internal"] = dict(
+    ja=dict(
+        alt="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で引用してファイルごとハッシュを固定する。rulec が抜けと重なりを証明し、旧実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。承認する人は rulec doc の資料で文書と表を見比べる。通った表から九言語に生成する。",
+        nodes=[
+            ("sheet", ("手元のもの", ["社内の規程、規約", "Excel、料金表", "動いているコード"]), 130),
+            ("actor", ("エージェント", ["読んで表に写す", "Excel は import で", "出典を @ で引く"]), 150),
+            ("sheet", ("表", ["@規約 別紙1", "ファイルに固定"], ".rule"), 120),
+            ("actor", ("rulec", ["抜けと重なり", "を証明する", "旧実装や記録と", "突き合わせる"]), 150),
+            ("sheet", ("生成コード", ["九言語、依存ゼロ", "旧実装と同じ答え"]), 150),
+        ],
+        labels=[("", "読む"), ("", "写す"), ("rulec check", "pin も"), ("rulec gen", "通ったら")],
+        loop=(3, 1, ("食い違い", ["どの行で何件", "いくら違うか"]), "rulec verify / replay"),
+        detour=(3, ("承認する人", ["文書と表を", "見比べる", "承認する"]), "rulec doc"),
+    ),
+    en=dict(
+        alt="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come nine languages.",
+        nodes=[
+            ("sheet", ("What you have", ["an internal policy", "a spreadsheet, a tariff", "code that runs today"]), 140),
+            ("actor", ("Agent", ["reads and transcribes", "imports the spreadsheet", "cites the file with @"]), 160),
+            ("sheet", ("Table", ["@規約 別紙1", "pinned to the file"], ".rule"), 130),
+            ("actor", ("rulec", ["proves no gap,", "no overlap", "holds it to the code", "and to the records"]), 160),
+            ("sheet", ("Generated code", ["nine languages, no runtime", "the same answers as before"]), 176),
+        ],
+        labels=[("", "reads"), ("", "writes"), ("rulec check", "pin too"), ("rulec gen", "once it passes")],
+        loop=(3, 1, ("Mismatches", ["which rows, how many,", "by how much"]), "rulec verify / replay"),
+        detour=(3, ("Approver", ["compares the document", "with the table", "and signs off"]), "rulec doc"),
+    ),
+)
+
 FIGS["designing"] = dict(
     ja=dict(
         alt="決めたいこと（送料、クーポン、返品の可否、社内の判定基準）を、検討する人が表（.rule）に書く。rulec check が抜けと重なりを、それを起こす入力つきで返し、通るまで直す。通った表からは承認者向けの資料、お客向けの案内、改定の影響が出る。",

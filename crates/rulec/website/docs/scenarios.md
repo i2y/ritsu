@@ -1,12 +1,13 @@
 # How to use it, by role
 
-One tool, but **what you have in hand and what you want out** decide the path through it. Three readers, three paths. Start from the one closest to you.
+One tool, but **what you have in hand and what you want out** decide the path through it. Four readers, four paths. Start from the one closest to you.
 
 | You are | What you have | What you want | Read |
 |---|---|---|---|
 | **implementing** a public rule (a statute, a published policy, a tariff) | the article, or the policy PDF | code that does what the article says, and that notices the amendment | [1. Implementing an existing public rule](#1-implementing-an-existing-public-rule) |
-| **designing** a new rule (a new public rule, an internal rule, the terms of an online shop or a service) | the conditions, in prose or in your head | a table with no gap and no contradiction, and the pages that get it approved or published | [2. Designing a new rule](#2-designing-a-new-rule) |
-| **implementing** from a finished rule | a `.rule` that passes check | code in your own language that answers exactly like the table | [3. Implementing from a new rule](#3-implementing-from-a-new-rule) |
+| **implementing a rule of your own that already exists**: an internal policy, your service's terms or tariff, a spreadsheet, and perhaps an implementation that runs today | the policy document, the spreadsheet, the running code | code that does what the document says and answers like the current implementation | [2. Implementing an existing rule of your own](#2-implementing-an-existing-rule-of-your-own) |
+| **designing** a new rule (a new public rule, an internal rule, the terms of an online shop or a service) | the conditions, in prose or in your head | a table with no gap and no contradiction, and the pages that get it approved or published | [3. Designing a new rule](#3-designing-a-new-rule) |
+| **implementing** from a finished rule | a `.rule` that passes check | code in your own language that answers exactly like the table | [4. Implementing from a new rule](#4-implementing-from-a-new-rule) |
 
 The middle step is the same on every path: **nothing comes out of a table that does not pass `rulec check`** ([What it proves](checks.md)). Every command below is one of these:
 
@@ -113,6 +114,8 @@ The header of every generated file names the article, its date and its digest, s
 # Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)
 ```
 
+Where an implementation already runs, hold the table to it before anything is replaced, as in [2-3](#2-3-hold-it-to-the-code-that-runs-today).
+
 ### 1-6. Notice the amendment
 
 Statutes get amended. `check` is held to the copy, so this is the one way to learn of an amendment; put it in a weekly CI job.
@@ -138,14 +141,153 @@ Putting it in CI is on the [install page](install.md#in-ci). `outdated` exits 1 
 
 ---
 
-## 2. Designing a new rule
+## 2. Implementing an existing rule of your own
+
+An internal policy, the terms or the tariff of your own service, a spreadsheet someone keeps, code that already runs. The rule is not public, but it is decided and in force, and you want code that does the same. The lead role here is the **comparison**: unlike a statute, the document cannot be fetched again, so it is pinned whole by its digest; and where an implementation or past records exist, the table is held to them and every mismatch comes back by row.
+
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come nine languages](images/scenario-internal.svg#only-dark)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come nine languages](images/scenario-internal-light.svg#only-light)
+
+### 2-1. Start from what you have
+
+A spreadsheet becomes a first draft. Every guess is marked, so only the marked places need a look.
+
+```console
+$ rulec import xlsx 運賃表.xlsx --sheet 本則 --name 運賃 > rules/運賃.rule
+```
+
+```rule
+rule 運賃(imported) v1
+description "A draft that rulec import made from 運賃表.xlsx (sheet 本則). Every line marked guess is for a person to confirm"
+
+enum あて先_values(c1_kind) = 北海道(v1) | 沖縄県(v2) | 東京都(v3)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
+enum 重量_values(c2_kind) = <=2000g(v1) | >2000g(v2)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
+
+inputs
+  あて先(c1) : あて先_values
+  重量(c2) : 重量_values
+
+outputs
+  送料(o1) : money[円, incl_tax]  round down(1円)  # guess: the rounding's direction and grid come from the source; if it has none, write down that this is a placeholder; whether tax is included has to come from the source
+…
+```
+
+A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article). If all there is is the running code, hand that code to an agent to transcribe, and hold the table to the code in [2-3](#2-3-hold-it-to-the-code-that-runs-today). The running code is not touched.
+
+### 2-2. Pin the document as a file
+
+It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@規約`, or `@規約 別紙1` to say where in it.
+
+```rule
+source 規約 = file "配送規約.txt"
+
+table 基本送料(base_fee)  @規約 別紙1
+policy unique
+| 届け先      | 重量    | -> 基本送料 : money[円, incl_tax] |
+| 遠隔地      | <=2000g | 1200円                            |
+| 遠隔地      | >2000g  | 1800円                            |
+| not: 遠隔地 | <=2000g | 800円                             |
+| not: 遠隔地 | >2000g  | 1100円                            |
+```
+
+```console
+$ rulec source pin rules/shipping_fee.rule
+規約: pinned sha256:a4b42e3e6c346e56
+```
+
+When the document is replaced, `check` stops with E038 and names the tables that cite it. There is no `outdated` for a file, the way there is for a statute: whether the file changed is known on the spot, from its digest.
+
+```console
+$ rulec check rules/shipping_fee.rule
+error[E038]: The copy of source `規約` has changed
+  --> rules/shipping_fee.rule:6 source 規約
+  |
+6 | source 規約 = file "配送規約.txt" sha256:a4b42e3e6c346e56
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:a4b42e3e6c346e56
+  |
+ The copy now: sha256:a4b1a4052a111009
+ Definitions to reread: table 基本送料, table 負担判定
+ Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy.
+```
+
+The approver's page writes "Source: 規約 別紙1 (配送規約.txt, sha256:a4b42e3e6c346e56)" under the table's heading.
+
+### 2-3. Hold it to the code that runs today
+
+Where an implementation already runs, hold the table to it before anything is replaced. The legacy code is wrapped in an adapter of about twenty lines, and the cases built from the table's boundaries go through both. rulec prints the adapter's template; the one line to write is the call into the legacy code. The legacy code itself is not touched.
+
+```console
+$ rulec adapter rules/shipping_fee.rule --template python > adapter.py
+```
+
+```python
+# rulec adapter template (rule 送料).
+# It only exchanges JSON Lines over stdin/stdout. Call the legacy implementation from here.
+import json, sys
+
+sys.stdin.readline()  # handshake
+print(json.dumps({"ok": True, "impl": "legacy@REPLACE_ME"}), flush=True)
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    req = json.loads(line)
+    d = req["in"]  # inputs: 届け先, 重量, 注文金額, 会員
+
+    # Call the legacy implementation here.
+    got = 0  # TODO: legacy.compute(d)
+
+    print(json.dumps({"id": req["id"], "out": {"送料": got}}, ensure_ascii=False), flush=True)
+```
+
+```console
+$ rulec verify rules/shipping_fee.rule --adapter python3 adapter.py
+Compared 70 / matched 60 (85.714%)
+Counterpart: legacy@2024-03
+
+Affected 10 (14.286%)  amount +2,550
+  table 基本送料 row 2 / table 負担判定 row 2                  3 records  difference +150 uniform  total +450
+    Example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001 → rule 送料=900 / legacy 送料=750
+  table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference +300 uniform  total +2,100
+    Example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001 → rule 送料=1800 / legacy 送料=1500
+```
+
+Mismatches come grouped by the rows that matched. Here only the row for remote areas above 2 kg disagrees. Whether that is a defect in the legacy code, a transcription error in the table or a rounding convention is decided from the row and its example; a mismatch is not automatically anyone's bug.
+
+### 2-4. Hold it to past records
+
+Without running code, but with records of past cases (the inputs and the values that came out), the rule is applied to the records. Records are one JSON object per line; their shape is checked first, then they are replayed.
+
+```console
+$ rulec fixtures lint records.jsonl rules/shipping_fee.rule
+records.jsonl: 70 records (70 observed, 0 filled)
+No format problems.
+$ rulec replay rules/shipping_fee.rule --fixtures records.jsonl --terse
+Compared 70 / matched 60 (85.714%)
+Counterpart: records.jsonl
+
+Affected 10 (14.286%)  amount -1,700
+  table 基本送料 row 2 / table 負担判定 row 2                  3 records  difference -100 uniform  total -300
+  table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference -200 uniform  total -1,400
+```
+
+Both comparisons are described on [Compare and replay](compare.md).
+
+### 2-5. Approve and generate
+
+The approver gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-the-approver). Generating and holding the nine languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
+
+---
+
+## 3. Designing a new rule
 
 Shipping fees, coupon conditions, whether a return is accepted, an internal criterion, a new public rule: something still being decided that you want to settle as a table. The lead role here is the **check**: every gap and every contradiction comes back with a concrete input that shows it, so what you forgot to decide is visible before you decide.
 
 ![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision](images/scenario-designing.svg#only-dark)
 ![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision](images/scenario-designing-light.svg#only-light)
 
-### 2-1. Write the table first
+### 3-1. Write the table first
 
 Conditions as columns, the answer as the last column. "Hokkaido and Okinawa, 1,200 yen up to 2 kg" becomes one row.
 
@@ -180,7 +322,7 @@ $ rulec import csv tariff.csv --name 運賃 > rules/tariff.rule
 
 Whether your rule fits a table at all is settled first on [Does your rule fit](fit.md).
 
-### 2-2. Check it
+### 3-2. Check it
 
 ```console
 $ rulec check rules/shipping_fee.rule
@@ -210,7 +352,7 @@ error[E105]: Overlapping rows: the same input matches row 8 and row 22
 
 Fix until it passes. What you fix is the table, never code. The seven checks are on [What it proves](checks.md#the-seven).
 
-### 2-3. Write the examples
+### 3-3. Write the examples
 
 The answers you decided go into `examples`, and every `check` runs them. The "for instance" of a spec becomes a test that does not go away.
 
@@ -221,7 +363,7 @@ examples
 | 東京都 | 1999g | 800円   |
 ```
 
-### 2-4. Render the pages for approval and publication
+### 3-4. Render the pages for approval and publication
 
 From the same table, one page per reader. For the approver, the facts the table does not show: what was verified, which row hides which, which rounding is provisional. For the customer, no aliases and no diagnostic codes, and instead the answer on both sides of every threshold.
 
@@ -230,7 +372,7 @@ $ rulec doc rules/shipping_fee.rule > shipping_fee.md
 $ rulec doc rules/shipping_fee.rule --audience customer > shipping_fee_article.md
 ```
 
-### 2-5. Know the impact of a revision before it ships
+### 3-5. Know the impact of a revision before it ships
 
 When a rule is revised, how many cases move and by how much can be known first. With past records (one JSON object per line), both versions are applied to the same records.
 
@@ -247,18 +389,18 @@ Affected 10 (14.286%)  amount +1,700
   table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference +200 uniform  total +1,400
 ```
 
-Where an implementation already runs, `rulec verify` holds the table to it before anything is replaced. Both are on [Compare and replay](compare.md).
+Where an implementation already runs, [2-3](#2-3-hold-it-to-the-code-that-runs-today) holds the table to it before anything is replaced. Both are on [Compare and replay](compare.md).
 
 ---
 
-## 3. Implementing from a new rule
+## 4. Implementing from a new rule
 
 You have a `.rule` that passes check and want it inside your app or your batch, in your language. The lead role here is the **generated code**; what you write is the caller.
 
 ![From a table that passed check, rulec gen writes code in nine languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing.svg#only-dark)
 ![From a table that passed check, rulec gen writes code in nine languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing-light.svg#only-light)
 
-### 3-1. Generate
+### 4-1. Generate
 
 ```console
 $ rulec gen rules/shipping_fee.rule --out generated/
@@ -266,7 +408,7 @@ $ rulec gen rules/shipping_fee.rule --out generated/
 
 Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift get a function; SQL gets one query over a relation of inputs; Wasm gets one module. No runtime, no dependency.
 
-### 3-2. Read how to call it
+### 4-2. Read how to call it
 
 You do not read the generated code to call it; the inventory says how.
 
@@ -279,7 +421,7 @@ func ShippingFee(in Input) (YenInclTax, error)
 
 Values are integers in the declared unit (`1999` for 1,999 g, a rate as a number of steps) and enum members are spelled as the inventory spells them. The entry checks ranges and enums, so a value outside the declaration is refused rather than computed in silence. The details are on [Generate and call](generate.md#how-to-call-it-without-reading-it).
 
-### 3-3. Hold every language to the table
+### 4-3. Hold every language to the table
 
 Every generated language is run over the cases built from the table's boundaries and compared with the reference evaluator, byte for byte.
 
@@ -295,7 +437,7 @@ ok    shipping_fee (Wasm) 68 vectors
 
 A toolchain that is not installed is skipped, and the skip is reported.
 
-### 3-4. Wire it in
+### 4-4. Wire it in
 
 Pick the shape the destination takes.
 
@@ -309,7 +451,7 @@ Pick the shape the destination takes.
 
 Generated code is never edited. What you want changed is in the table, and a change to the table changes every language at once.
 
-### 3-5. Keep it in step when the table changes
+### 4-5. Keep it in step when the table changes
 
 Commit the generated code and regenerate in CI with `--check`. A table that changed while its generated code did not stops the build there.
 
