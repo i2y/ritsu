@@ -2135,7 +2135,17 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **理由**：Shopify Functions、Extism、Cloudflare Workers のような実行環境は、依存のない小さな Wasm を求める。生成する Rust は依存がゼロで、外部とのやり取りは標準入出力だけなので、一行も変えずにコンパイルできる。測ってみると、Claude利用料の runner は 0.23 秒でコンパイルでき、85 件のベクタの出力がネイティブと一字一句同じだった。「一致検査に乗らない言語は入れない」（§15.46）を実行環境にも当てはめた形で、環境側の設定（モジュールの大きさ、`panic` の扱い）は環境側の crate の仕事として残す。
 
-**捨てたもの**：九つ目の生成対象として Wasm component（WIT）を出す案。いまの Rust がそのまま WASI で動くので、増やす物が無い。component model が必要な相手が出てきたら、そのとき考える。Shopify の関数の形そのものを生成する案。カートの GraphQL を平らな入力に直す層は呼び出し側の仕事で（§15-6）、そこを生成するとこの道具が Shopify の入力の形を追いかけることになる。層の書き方は docs/backends.md に置いた。
+**捨てたもの**：九つ目の生成対象として Wasm component（WIT）を出す案。いまの Rust がそのまま WASI で動くので、増やす物が無い。component model が必要な相手が出てきたら、そのとき考える。**この判断は同じ日に §15.64 で覆した。**Shopify の関数の形そのものを生成する案。カートの GraphQL を平らな入力に直す層は呼び出し側の仕事で（§15-6）、そこを生成するとこの道具が Shopify の入力の形を追いかけることになる。層の書き方は docs/backends.md に置いた。
+
+### 15.64 Wasm を九つ目の生成対象にする（2026-09-19）
+
+**決定**：`wasm/` を生成対象に足す。中身は五つ。Rust と同じモジュール `<alias>.rs`、それを canonical ABI の `call: func(input: string) -> string` で包む crate root `<alias>_wasm.rs`、component model 向けの `<alias>.wit`、`rulec test` が回す Node の runner `<alias>_runner.mjs`、丸めヘルパの単体検査（`_round.rs` と `_round_test.mjs`）。`rustc` だけで組める（`-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib`。送料で 40 KB。`-O` だけだと 1.4 MB で、lto が効いて 110 KB、panic=abort と strip で 20 KB 台になる）。入出力は JSON のワイヤで、答えは各言語の `_record` が書く行と同じ、契約の外は `{"error":…}`。列挙に無い値も panic ではなく error で返す。`.wit` は同じ関数を world の export として名指しするだけなので、`wasm-tools component embed` と `component new` でモジュールに手を入れずに component になり、wasmtime の `--invoke` で呼べる。`rulec api` に `wasm` の項、`rulec test` に `(Wasm)` の行が出る。node か wasm32-unknown-unknown の標準ライブラリが無ければ、言語が無いときと同じ形で飛ばして言う。登録簿には `ready` の欄を足し、`tool` 一つでは言い尽くせない前提をそこに書く。
+
+**理由**：§15.63 では「Rust がそのまま WASI で動くので増やす物が無い」として component を退けた。だが WASI の runner は標準入出力を読む一本のプログラムで、関数を呼びたい相手（JavaScript のホスト、Extism、component が要る場所）には合わない。関数として呼べるモジュールと、その interface を名指しする `.wit` が無いと、Wasm への対応は「テストの一段」で止まり、機能として名前が付かない。八言語と並ぶ生成対象にすることで、`gen`・`test`・`api`・文書のすべてに載る。
+
+**WIT を `string -> string` にした理由**：入力を record、列挙を enum に写した型付きの interface のほうが読みやすい。だがそれには canonical ABI の record・list・string の配置を生成コードが自前で実装する必要があり、wit-bindgen を依存に入れずにやると数百行の glue になる。JSON はこの道具のワイヤそのもの（fixtures・adapter・MCP・vectors がみな同じ形）なので、component も同じワイヤで話す。型付きの interface が要る相手が出てきたら、`.wit` を足す形で広げられる。
+
+**捨てたもの**：`wasm32-wasip1` を対象にする案。WASI の import が付き、ブラウザや Extism では動かない。WASI の段（§15.63）はそのまま残す。Shopify Functions のように標準入出力で話す置き場の証拠になる。cargo のプロジェクトを生成する案。`rustc` 一発で組めるのが Rust 側と同じ約束で、cargo が要るなら「依存ゼロ」が崩れる。
 
 ## 16. この設計で最も危うい点
 

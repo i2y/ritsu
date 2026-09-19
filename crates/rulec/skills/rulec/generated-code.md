@@ -1,6 +1,6 @@
 # The generated code
 
-`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL — a module in each,
+`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm — a module in each,
 a package in Go's case, and one query in SQL's. There is no runtime to install and nothing to
 configure: a function takes the declared inputs and returns the declared outputs, and the
 query takes a relation of them. This file says what shape that code has, what it guarantees,
@@ -24,7 +24,8 @@ spelling each language gives them, and the errors the code can raise. The shape 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
 TypeScript and JavaScript import nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
-Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`.
+Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`; the
+generated Wasm module imports nothing, not even WASI.
 The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim. The server that offers the rule as an MCP tool
 ([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
@@ -46,7 +47,7 @@ read. The branches are written once, in the twin that also returns
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
-`NewType`; Ruby, JavaScript and SQL have nowhere to put a unit, so they document it instead.
+`NewType`, and the Wasm module is the Rust one; Ruby, JavaScript and SQL have nowhere to put a unit, so they document it instead.
 `YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
 Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
 anywhere.
@@ -185,7 +186,9 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 
 **There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby, Go and SQL. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
-make at run time is already made by the compiler. Swift is in the same position.
+make at run time is already made by the compiler. Swift is in the same position, and so is
+the Wasm module, which is the Rust one behind a door that turns an unknown value into an
+`error` line before the module is reached.
 
 Errors come back as `Err(RuleError)`, whose two variants carry the same distinction as
 Python's two exception classes: `RuleError::Input` is a contract violation by the caller, and
@@ -365,6 +368,65 @@ coupon_step` builds the rule and its runner together, with no `Package.swift` an
 fetch. The runner carries `@main` rather than being called `main.swift`, because top-level
 code is only allowed in a file of that name and the rule has to be able to sit beside it.
 
+### Wasm
+
+```
+wasm/
+├── shipping_fee.rs           the same module rust/ gets
+├── shipping_fee_wasm.rs      the crate root: that module behind the canonical ABI
+├── shipping_fee.wit          the world, for the component model
+├── shipping_fee_runner.mjs   the Node runner `rulec test` drives
+└── _round.rs, _round_test.mjs
+```
+
+One file to build, with `rustc` alone — `rulec api` prints this line under `wasm.build`:
+
+```console
+$ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
+    --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
+```
+
+The module exports the canonical ABI of one function, `call: func(input: string) -> string`:
+`cabi_realloc` to place the input in the module's memory, `call(ptr, len)`, which returns a
+pointer to a (pointer, length) pair holding the answer, and `cabi_post_call(ret)` to free it.
+The input is a JSON object with the inputs by name, in the wire form of
+[formats.md](formats.md) (a record with them under `"in"` is read the same way); the answer
+is the record line the other languages' `_record` writes, or `{"error":"…"}` for an input
+outside the contract — an unknown enum value included, so a host is answered rather than
+trapped. The module imports nothing, so it instantiates with an empty import object anywhere
+WebAssembly runs; the shipping rule is forty kilobytes.
+
+```js
+const { instance } = await WebAssembly.instantiate(bytes, {});
+const ex = instance.exports;
+function call(text) {
+  const b = new TextEncoder().encode(text);
+  const ptr = ex.cabi_realloc(0, 0, 1, b.length);
+  new Uint8Array(ex.memory.buffer, ptr, b.length).set(b);
+  const ret = ex.call(ptr, b.length);
+  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2); // views after the call: the memory may have grown
+  const out = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, p, n));
+  ex.cabi_post_call(ret);
+  return out;
+}
+call('{"届け先":"北海道","重量":2500,"注文金額":12000,"会員":"ゴールド"}');
+// {"in":{…},"observed":{"送料":1800},"trace":[{"table":"基本送料","row":2},{"table":"負担判定","row":3}]}
+```
+
+The `.wit` names the same function as the export of a world, so the module becomes a
+component with no change to it, and a component host calls it like any other:
+
+```console
+$ wasm-tools component embed shipping_fee.wit shipping_fee.wasm -o shipping_fee.embedded.wasm
+$ wasm-tools component new shipping_fee.embedded.wasm -o shipping_fee.component.wasm
+$ wasmtime run --invoke 'call("{\"届け先\":\"北海道\",\"重量\":1,\"注文金額\":0,\"会員\":\"一般\"}")' shipping_fee.component.wasm
+```
+
+`rulec test` builds the module and holds it to the vectors through the runner
+(`ok shipping_fee (Wasm) 70 vectors`), and skips the language with a note when `node` or the
+`wasm32-unknown-unknown` standard library (`rustup target add wasm32-unknown-unknown`) is
+missing.
+
 ---
 
 ## A rule that walks a sequence
@@ -388,8 +450,8 @@ The body is a loop over that list, with the rule's own tables inside it and one 
 verdict. What comes out of the loop goes through the same rounding and the same return the
 rule would have had without it. `rulec api` lists the sequence as the last parameter, with the
 element's fields under `elements`, and the record written for one call carries the sequence as
-an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift are generated;
-SQL is refused by name, because one query has nowhere to carry a value from row to row.
+an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and Wasm are
+generated; SQL is refused by name, because one query has nowhere to carry a value from row to row.
 
 ## The rows that matched
 
@@ -408,6 +470,7 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 | Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row}` |
 | Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:)` |
 | SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number |
+| Wasm | none: the answer of `call` is the record line, `trace` beside `observed` | `{"table":…,"row":…}` objects in that line |
 
 The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
 `replay` report clusters by, so a trace taken from a log reads against the approved document
@@ -441,6 +504,7 @@ for it.
 | Go | `func CouponStepRecord(in Input, out Output, trace []Fired, tag string) string` |
 | Swift | `couponStepRecord(…, out: Output, trace: [Fired], tag: String = "") -> String` |
 | SQL | none: the answer is the row, and the runner writes the record from it |
+| Wasm | none: the record line is what `call` returns |
 
 The generated runner prints exactly this line for every vector, and the expected file `gen`
 writes beside the vectors is in the same format, so `rulec test` holds the record function
@@ -578,26 +642,23 @@ answer that changed with the carrying would be a disagreement. Nothing beyond `p
 
 ---
 
-## The Rust as a WASI module
+## The Rust runner as a WASI module
 
-The Rust that `gen` writes has no dependencies and reaches the outside only through the
-standard library's stdin and stdout, so the same runner compiles unchanged for
-`wasm32-wasip1` and runs under wasmtime — the host a Shopify Function, an Extism plugin or
-any WASI-based platform gives a rule. `rulec test` runs it as a pass of its own when
-`wasmtime` is on the PATH and the target's standard library is installed
-(`rustup target add wasm32-wasip1`): the vectors go through the module and its answers are
-held to the same expected records (`via` is `wasm`). Without either, the pass is skipped and
-the report says so; it is not counted as a missing language.
+Apart from the `wasm/` target above, the Rust runner itself compiles unchanged for
+`wasm32-wasip1`: it reads stdin and writes stdout through the standard library, which is what
+a WASI command does, and it is the shape a Shopify Function has. When `wasmtime` is on the
+PATH and that target's standard library is installed (`rustup target add wasm32-wasip1`),
+`rulec test` runs the runner that way too and holds its answers to the same expected records
+(`via` is `wasm`, the line reads `(Rust, Wasm)`). Without either, that pass is skipped with a
+note and not counted as a missing language.
 
 ```console
 $ rustc --edition 2021 -O --target wasm32-wasip1 shipping_fee_runner.rs -o shipping_fee_runner.wasm
 $ wasmtime shipping_fee_runner.wasm < ../vectors/shipping_fee.jsonl
 ```
 
-What runs in a platform's sandbox is the rule's module (`shipping_fee.rs`) inside the
-platform's own crate, built with the platform's settings for size; the runner is the shape
-`rulec test` uses to hold that module to the rule. [backends.md](backends.md#a-wasm-host-shopify-functions)
-says where the platform's input ends and the rule's begins.
+[backends.md](backends.md#a-wasm-host-shopify-functions) says which of the two shapes a
+platform takes and where its input ends and the rule's begins.
 
 ## Keeping it in step with the rule
 

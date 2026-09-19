@@ -92,22 +92,7 @@ fn closed() -> [(&'static str, &'static str); 2] {
     [("GOPROXY", "off"), ("GOFLAGS", "-mod=mod")]
 }
 
-/// Whether the toolchain can build for `wasm32-wasip1`: the target's standard library sits
-/// under the sysroot when `rustup target add wasm32-wasip1` has been run.
-fn wasi_target() -> bool {
-    let Ok(o) = Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
-    if !o.status.success() {
-        return false;
-    }
-    let root = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    Path::new(&root).join("lib").join("rustlib").join("wasm32-wasip1").join("lib").is_dir()
-}
-
-fn have(cmd: &str) -> bool {
-    ["--version", "version"]
-        .iter()
-        .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
-}
+use crate::backend::{have, rust_target};
 
 /// Report the first line that disagrees, with its line number. No thousand-line diffs.
 fn first_diff(got: &str, want: &str) -> Failure {
@@ -160,16 +145,20 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     let present: Vec<&crate::backend::Backend> = crate::backend::ALL
         .iter()
         .filter(|b| {
-            let ok = have(b.tool);
-            if !ok {
+            if !have(b.tool) {
                 out.skipped.push(tr!(
                     "{} が無いので {} 側を飛ばしました",
                     "{} not found; skipped the {} side",
                     b.tool,
                     b.name
                 ));
+                return false;
             }
-            ok
+            if let Some(Err(why)) = b.ready.map(|r| r()) {
+                out.skipped.push(why);
+                return false;
+            }
+            true
         })
         .collect();
     out.missing_langs = out.skipped.len();
@@ -188,7 +177,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
         if !have("wasmtime") {
             out.skipped.push(tr!("wasmtime が無いので Wasm 側を飛ばしました", "wasmtime not found; skipped the Wasm side"));
             false
-        } else if !wasi_target() {
+        } else if !rust_target("wasm32-wasip1") {
             out.skipped.push(tr!(
                 "wasm32-wasip1 の標準ライブラリが無いので Wasm 側を飛ばしました（rustup target add wasm32-wasip1）",
                 "the wasm32-wasip1 standard library is not installed; skipped the Wasm side (rustup target add wasm32-wasip1)"

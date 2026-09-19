@@ -42,6 +42,27 @@ pub struct Backend {
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
     pub mcp: Option<fn(&str) -> Plan>,
+    /// What else has to be there beyond `tool`, checked before the language is run; the Err is
+    /// the note `rulec test` prints when it skips the language for that reason.
+    pub ready: Option<fn() -> Result<(), String>>,
+}
+
+/// Whether a command answers `--version` or `version`.
+pub fn have(cmd: &str) -> bool {
+    ["--version", "version"]
+        .iter()
+        .any(|a| std::process::Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+}
+
+/// Whether the Rust toolchain can build for `target`: its standard library sits under the
+/// sysroot once `rustup target add <target>` has been run.
+pub fn rust_target(target: &str) -> bool {
+    let Ok(o) = std::process::Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
+    if !o.status.success() {
+        return false;
+    }
+    let root = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    std::path::Path::new(&root).join("lib").join("rustlib").join(target).join("lib").is_dir()
 }
 
 /// One command to run, with an optional build that has to succeed first.
@@ -107,6 +128,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
+        ready: None,
     },
     Backend {
         id: "typescript",
@@ -129,6 +151,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
+        ready: None,
     },
     Backend {
         id: "javascript",
@@ -151,6 +174,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
+        ready: None,
     },
     Backend {
         id: "rust",
@@ -197,6 +221,7 @@ pub const ALL: &[Backend] = &[
             )
         }),
         mcp: None,
+        ready: None,
     },
     Backend {
         id: "ruby",
@@ -217,6 +242,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: None,
+        ready: None,
     },
     Backend {
         id: "go",
@@ -240,6 +266,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: None,
+        ready: None,
     },
     Backend {
         id: "swift",
@@ -270,6 +297,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasm: None,
         mcp: None,
+        ready: None,
     },
     Backend {
         id: "sql",
@@ -290,8 +318,62 @@ pub const ALL: &[Backend] = &[
         folds: false,
         wasm: None,
         mcp: None,
+        ready: None,
+    },
+    Backend {
+        id: "wasm",
+        name: "Wasm",
+        tool: "rustc",
+        lang: Lang::Rs,
+        // The module is the Rust one; what differs is the door. `<alias>_wasm.rs` is the crate
+        // root that exports the canonical ABI, `<alias>.wit` names the world, and the Node
+        // runner drives the built module through that ABI (§15.64).
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("wasm/{alias}.rs"), g.rust()),
+                (format!("wasm/{alias}_wasm.rs"), g.rs_wasm()),
+                (format!("wasm/{alias}.wit"), g.wit()),
+                (format!("wasm/{alias}_runner.mjs"), crate::codegen::wasm_runner_js(alias)),
+                ("wasm/_round.rs".into(), crate::codegen::round_wasm_rust()),
+                ("wasm/_round_test.mjs".into(), crate::codegen::round_tests_wasm_js()),
+            ]
+        },
+        run: |alias, _| {
+            let args = wasm_rustc(&format!("{alias}_wasm.rs"), &format!("{alias}.wasm"));
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            Plan::new("wasm", "node", &[&format!("{alias}_runner.mjs")]).built("rustc", &refs)
+        },
+        round: |_| {
+            let args = wasm_rustc("_round.rs", "_round.wasm");
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            Plan::new("wasm", "node", &["_round_test.mjs"]).built("rustc", &refs)
+        },
+        folds: true,
+        wasm: None,
+        mcp: None,
+        ready: Some(|| {
+            if !have("node") {
+                return Err(tr!("node が無いので Wasm 側を飛ばしました", "node not found; skipped the Wasm side"));
+            }
+            if !rust_target("wasm32-unknown-unknown") {
+                return Err(tr!(
+                    "wasm32-unknown-unknown の標準ライブラリが無いので Wasm 側を飛ばしました（rustup target add wasm32-unknown-unknown）",
+                    "the wasm32-unknown-unknown standard library is not installed; skipped the Wasm side (rustup target add wasm32-unknown-unknown)"
+                ));
+            }
+            Ok(())
+        }),
     },
 ];
+
+/// The rustc invocation for a Wasm module: the flags of `codegen::WASM_RUSTC_FLAGS`, the
+/// source, the output.
+fn wasm_rustc(src: &str, out: &str) -> Vec<String> {
+    let mut v: Vec<String> = vec!["--edition".into(), "2021".into()];
+    v.extend(crate::codegen::WASM_RUSTC_FLAGS.split(' ').map(|s| s.to_string()));
+    v.extend([src.to_string(), "-o".to_string(), out.to_string()]);
+    v
+}
 
 /// The backend with this id, for the places that address one by name.
 pub fn by_id(id: &str) -> Option<&'static Backend> {

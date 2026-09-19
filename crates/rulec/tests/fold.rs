@@ -174,13 +174,13 @@ fn takeは一意か先頭かを書かせる() {
 /// produce a file that cannot run (§15.56). SQL is the one that cannot: a single query has
 /// nowhere to carry a value from row to row and stop early.
 #[test]
-fn 七言語に生成し_SQLは名指しで断る() {
+fn 八言語に生成し_SQLは名指しで断る() {
     let d = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
-    for lang in ["python", "typescript", "javascript", "rust", "ruby", "go", "swift"] {
+    for lang in ["python", "typescript", "javascript", "rust", "ruby", "go", "swift", "wasm"] {
         assert!(out.join(lang).exists(), "{lang} に生成されていない");
     }
     assert!(!out.join("sql").exists(), "SQL は書けないはず");

@@ -4,8 +4,8 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift, and one query in SQL,
-and an ordinary Go package. No runtime to install, no configuration, and no
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift, one query in SQL,
+one Wasm module, and an ordinary Go package. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
 
@@ -13,7 +13,7 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Eight are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL — and **Java
+Nine are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm — and **Java
 and Kotlin are planned**. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
@@ -31,6 +31,7 @@ exists.
 | Java | planned | a JDK; single-file execution means the runner needs no build tool |
 | Kotlin | planned | kotlinc |
 | SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
+| Wasm | supported | `rustc` with the `wasm32-unknown-unknown` target, and `node` for the agreement check. The module itself imports nothing |
 
 One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
@@ -161,9 +162,10 @@ Four rules keep it readable.
   against the source side by side is the only way it is meant to be read.
 - **Units live in the type** wherever there is a type to hold them: a
   newtype in Rust, a one-field struct in Swift, a defined type in Go, a
-  branded `bigint` in TypeScript, a `NewType` in Python. Confusing
-  `YenInclTax` with `YenExclTax` stops at compile time. Ruby, JavaScript
-  and SQL have nowhere to put a unit, so there it is documented instead.
+  branded `bigint` in TypeScript, a `NewType` in Python, and the Rust
+  newtype again in the Wasm module. Confusing `YenInclTax` with
+  `YenExclTax` stops at compile time. Ruby, JavaScript and SQL have
+  nowhere to put a unit, so there it is documented instead.
 - **Rounding goes through its own helper**, because Python's and Ruby's
   integer division rounds toward −∞ while Rust, Swift, Go, TypeScript,
   JavaScript and SQL truncate toward zero.
@@ -334,33 +336,41 @@ generated code, and the rounding helpers get their own unit vectors —
 table-level agreement alone would hide a helper bug in a table that
 never produces fractions.
 
-## The same code inside a Wasm host
+## Wasm: one module for any host
 
-The generated Rust has no dependencies and reaches the outside only through
-stdin and stdout, so it compiles for `wasm32-wasip1` unchanged. When
-`wasmtime` is on the PATH and the target's standard library is installed
-(`rustup target add wasm32-wasip1`), `rulec test` runs the Rust runner once
-more as a WASI module and holds it to the same expected records:
+The ninth target is a module rather than a function in a language. `wasm/` holds the same
+Rust module `rust/` gets, a crate root that puts it behind the canonical ABI of
+`call: func(input: string) -> string`, a `.wit` that names that function as the export of a
+world, and the Node runner `rulec test` drives. `rustc` alone builds it, with no cargo and no
+crate; the shipping rule comes to forty kilobytes and imports nothing.
+
+```console
+$ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
+    --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
+```
+
+A host writes a JSON object of the inputs into the module's memory, calls `call`, and reads
+the record line back — the same line every other language's `_record` writes, or
+`{"error":"…"}` for an input outside the contract. With the `.wit`, `wasm-tools component new`
+makes a component of the module without a change, and a component runtime such as wasmtime
+invokes it as `call("{…}")`. [Generated code](generated-code.md#wasm) shows the host, the
+component step, and what `rulec api` says under `wasm`.
+
+`rulec test` builds the module and holds it to the vectors like every other language:
 
 ```console
 $ rulec test generated/
 ok    shipping_fee (Rust) 68 vectors
 ok    shipping_fee (Rust, Wasm) 68 vectors
+ok    shipping_fee (Wasm) 68 vectors
 …
 ```
 
-Without wasmtime the pass is skipped and the report says so; it is not
-counted as a missing language.
-
-This is the host a Shopify Function, an Extism plugin or a Cloudflare
-Worker gives a rule: one small module, no network, a limit on
-instructions. The rule's module goes into the platform's own crate as it
-is, and the platform-specific part — reading a cart and flattening it into
-the rule's inputs, turning the outputs into discount operations — stays a
-boundary of twenty lines beside it. [Targeting a language rulec does not
-generate](backends.md#a-wasm-host-shopify-functions) says where that
-boundary runs, and what such a function can decide (a discount) and cannot
-(a shipping rate).
+The second line is a different thing from the third: the Rust runner itself compiled for
+`wasm32-wasip1` and run under wasmtime, the shape a platform that speaks through stdin and
+stdout takes, such as a Shopify Function. [Targeting a language rulec does not
+generate](backends.md#a-wasm-host-shopify-functions) says which shape a platform takes and
+where its boundary runs.
 
 ## Is the vector suite itself complete?
 

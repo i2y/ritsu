@@ -4202,151 +4202,7 @@ mod r;
 
 use std::io::Read;
 
-/// One flat JSON object as (key, value) pairs, values kept as their source text.
-fn fields(line: &str) -> Vec<(String, String)> {{
-    let b: Vec<char> = line.chars().collect();
-    let mut i = 0usize;
-    // Step into the object under "in" and read the pairs of the one level below it.
-    while i < b.len() && !(b[i] == '"' && b[i..].starts_with(&['"', 'i', 'n', '"'])) {{
-        i += 1;
-    }}
-    pairs_from(&b, i).0
-}}
-
-/// The pairs of the object starting at or after `i`, and the index just past its closing
-/// brace. A value that is itself an object or an array is kept whole, as its source text.
-fn pairs_from(b: &[char], mut i: usize) -> (Vec<(String, String)>, usize) {{
-    let mut out = Vec::new();
-    while i < b.len() && b[i] != '{{' {{
-        i += 1;
-    }}
-    i += 1;
-    while i < b.len() && b[i] != '}}' {{
-        while i < b.len() && b[i] != '"' && b[i] != '}}' {{
-            i += 1;
-        }}
-        if i >= b.len() || b[i] == '}}' {{
-            break;
-        }}
-        let (k, ni) = string_at(b, i);
-        i = ni;
-        while i < b.len() && b[i] != ':' {{
-            i += 1;
-        }}
-        i += 1;
-        while i < b.len() && b[i] == ' ' {{
-            i += 1;
-        }}
-        let v = if b[i] == '"' {{
-            let (v, ni) = string_at(b, i);
-            i = ni;
-            v
-        }} else if b[i] == '[' || b[i] == '{{' {{
-            let (v, ni) = balanced(b, i);
-            i = ni;
-            v
-        }} else {{
-            let s = i;
-            while i < b.len() && b[i] != ',' && b[i] != '}}' {{
-                i += 1;
-            }}
-            b[s..i].iter().collect::<String>().trim().to_string()
-        }};
-        out.push((k, v));
-    }}
-    (out, i + 1)
-}}
-
-/// The source text of one bracketed value, quotes respected.
-fn balanced(b: &[char], i: usize) -> (String, usize) {{
-    let (open, close) = if b[i] == '[' {{ ('[', ']') }} else {{ ('{{', '}}') }};
-    let (mut depth, mut j) = (0i32, i);
-    while j < b.len() {{
-        if b[j] == '"' {{
-            let (_, nj) = string_at(b, j);
-            j = nj;
-            continue;
-        }}
-        if b[j] == open {{
-            depth += 1;
-        }}
-        if b[j] == close {{
-            depth -= 1;
-            if depth == 0 {{
-                j += 1;
-                break;
-            }}
-        }}
-        j += 1;
-    }}
-    (b[i..j].iter().collect(), j)
-}}
-
-/// An array of flat objects, as the pairs of each (§15.56).
-fn rows(v: &str) -> Vec<Vec<(String, String)>> {{
-    let b: Vec<char> = v.chars().collect();
-    let (mut i, mut out) = (0usize, Vec::new());
-    while i < b.len() {{
-        if b[i] == '{{' {{
-            let (p, ni) = pairs_from(&b, i);
-            out.push(p);
-            i = ni;
-        }} else {{
-            i += 1;
-        }}
-    }}
-    out
-}}
-
-/// The string starting at `i`, and the index just past its closing quote.
-fn string_at(b: &[char], i: usize) -> (String, usize) {{
-    let (mut i, mut s) = (i + 1, String::new());
-    while i < b.len() && b[i] != '"' {{
-        if b[i] == '\\' && i + 1 < b.len() {{
-            i += 1;
-            s.push(match b[i] {{
-                'n' => '\n',
-                't' => '\t',
-                c => c,
-            }});
-        }} else {{
-            s.push(b[i]);
-        }}
-        i += 1;
-    }}
-    (s, i + 1)
-}}
-
-fn get<'a>(d: &'a [(String, String)], k: &str) -> &'a str {{
-    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).unwrap_or("")
-}}
-
-fn n(d: &[(String, String)], k: &str) -> i64 {{
-    get(d, k).parse().unwrap_or(0)
-}}
-
-fn s<'a>(d: &'a [(String, String)], k: &str) -> &'a str {{
-    get(d, k)
-}}
-
-fn b(d: &[(String, String)], k: &str) -> bool {{
-    get(d, k) == "true"
-}}
-
-/// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool uses.
-fn ord(s: &str) -> i64 {{
-    let p: Vec<i64> = s.split('-').map(|x| x.parse().unwrap_or(0)).collect();
-    let (y, m, d) = (p[0], p[1], p[2]);
-    let y2 = if m <= 2 {{ y - 1 }} else {{ y }};
-    let era = if y2 >= 0 {{ y2 }} else {{ y2 - 399 }} / 400;
-    let yoe = y2 - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
-}}
-
-fn main() {{
+{helpers}fn main() {{
     let mut src = String::new();
     std::io::stdin().read_to_string(&mut src).unwrap();
     for line in src.lines() {{
@@ -4360,11 +4216,446 @@ fn main() {{
 }}
 "#,
             ver = env!("CARGO_PKG_VERSION"),
+            helpers = RS_JSON_HELPERS,
             binds = binds,
             first = first,
             second = second
         )
     }
+
+    /// The rule as one Wasm module for any host (§15.64): the module `rust/` gets, behind the
+    /// canonical ABI of `call: func(input: string) -> string`. A JavaScript host drives the
+    /// core module through `cabi_realloc`, `call` and `cabi_post_call`; with the `.wit` beside
+    /// it, `wasm-tools component new` makes a component of the same file without a change.
+    pub fn rs_wasm(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        // An unknown enum value is answered as an error, where the runner would panic: a host
+        // gets a line it can read, not a trap.
+        let bind_of = |src: &str, name: &str, ty: &Ty| -> String {
+            match ty {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    format!(
+                        "match r::{cls}::parse(s({src}, {name:?})) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}"
+                    )
+                }
+                Ty::Bool => format!("b({src}, {name:?})"),
+                Ty::Date => format!("ord(s({src}, {name:?}))"),
+                Ty::Number => format!("n({src}, {name:?})"),
+                Ty::Str => format!("s({src}, {name:?}).to_string()"),
+                _ => format!("r::{}(n({src}, {name:?}))", self.rs_ty(ty)),
+            }
+        };
+        let mut binds = String::new();
+        for (i, inp) in self.f.inputs.iter().enumerate() {
+            binds.push_str(&format!("    let a{i} = {};\n", bind_of("&d", &inp.name.text, &self.ty_of(&inp.name.text))));
+        }
+        let n_ins = self.f.inputs.len();
+        let has_seq = self.f.elements.is_some();
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| format!("{}: {}", pub_name(&fd.name), bind_of("e", &fd.name.text, &self.ty_of(&fd.name.text))))
+                .collect();
+            binds.push_str(&format!(
+                "    let mut a{n_ins}: Vec<r::Element> = Vec::new();\n    for e in &rows(s(&d, {:?})) {{\n        a{n_ins}.push(r::Element {{ {} }});\n    }}\n",
+                el.name.text,
+                fields.join(", ")
+            ));
+        }
+        let pass = |clone: bool| -> String {
+            let mut v: Vec<String> = self
+                .f
+                .inputs
+                .iter()
+                .enumerate()
+                .map(|(i, inp)| {
+                    if clone && matches!(self.ty_of(&inp.name.text), Ty::Str) {
+                        format!("a{i}.clone()")
+                    } else {
+                        format!("a{i}")
+                    }
+                })
+                .collect();
+            if has_seq {
+                v.push(format!("&a{n_ins}"));
+            }
+            v.join(", ")
+        };
+        let (first, second) = (pass(true), pass(false));
+        let mut o = format!(
+            "// Code generated by rulec {}. DO NOT EDIT.\n#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\nuse std::alloc::{{alloc, realloc, Layout}};\n\n",
+            env!("CARGO_PKG_VERSION")
+        );
+        o.push_str(RS_JSON_HELPERS);
+        o.push_str(RS_JSON_STR);
+        o.push_str(RS_WASM_ABI);
+        o.push_str(&format!(
+            "/// The inputs read, the rule called, the record line written.\nfn answer(text: &str) -> String {{\n    let chars: Vec<char> = text.chars().collect();\n    let top = pairs_from(&chars, 0).0;\n    // A record carries the inputs under \"in\"; a bare object is the inputs themselves.\n    let inner: Option<String> = top.iter().find(|(k, _)| k == \"in\").map(|(_, v)| v.clone());\n    let d = match inner {{\n        Some(v) => pairs_from(&v.chars().collect::<Vec<_>>(), 0).0,\n        None => top,\n    }};\n{binds}    match r::{alias}_traced({first}) {{\n        Ok((got, trace)) => r::{alias}_record({second}, got, &trace, \"\"),\n        Err(e) => error(&e.to_string()),\n    }}\n}}\n"
+        ));
+        o
+    }
+
+    /// The rule's interface for the component model (§15.64): one world exporting
+    /// `call: func(input: string) -> string`, the JSON wire on both sides, with the inputs and
+    /// outputs in the doc comments so that a reader of the `.wit` knows what to send.
+    pub fn wit(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let world = wit_name(&alias);
+        let mut o = format!("package rulec:{world}@{};\n\n", wit_version(&self.f.version));
+        o.push_str(&format!("/// Rule {} v{}", self.f.name.text, self.f.version));
+        if let Some(d) = &self.f.description {
+            o.push_str(&format!(": {}", d.replace('\n', " ")));
+        }
+        o.push_str(&format!("\nworld {world} {{\n"));
+        o.push_str(
+            "    /// One call. `input` is a JSON object with the rule's inputs by their names, in the\n    /// wire form (whole numbers in the declared unit, enum values by name, dates as\n    /// YYYY-MM-DD); a record with them under \"in\" is read the same way. Back comes the\n    /// record line {\"in\":…,\"out\":…,\"trace\":[…]}, or {\"error\":\"…\"} for an input outside\n    /// the contract.\n    ///\n    /// Inputs:\n",
+        );
+        for i in &self.f.inputs {
+            o.push_str(&format!("    ///   {}: {}\n", i.name.text, self.ty_of(&i.name.text)));
+        }
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<String> =
+                el.fields.iter().map(|fd| format!("{}: {}", fd.name.text, self.ty_of(&fd.name.text))).collect();
+            o.push_str(&format!("    ///   {}: a list of objects, each with {}\n", el.name.text, fields.join(", ")));
+        }
+        o.push_str("    /// Outputs:\n");
+        for od in &self.f.outputs {
+            o.push_str(&format!("    ///   {}: {}\n", od.name.text, self.ty_of(&od.name.text)));
+        }
+        o.push_str("    export call: func(input: string) -> string;\n}\n");
+        o
+    }
+
+    /// The `wasm` entry of `rulec api`: the files, the build line, and the names of the
+    /// exports a host needs.
+    pub fn api_wasm(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let world = wit_name(&alias);
+        crate::json::Obj::new()
+            .str("source", &format!("{alias}_wasm.rs"))
+            .str("module", &format!("{alias}.wasm"))
+            .str("build", &format!("rustc --edition 2021 {WASM_RUSTC_FLAGS} {alias}_wasm.rs -o {alias}.wasm"))
+            .str("wit", &format!("{alias}.wit"))
+            .str("package", &format!("rulec:{world}@{}", wit_version(&self.f.version)))
+            .str("world", &world)
+            .str("call", "call")
+            .str("call_signature", "call: func(input: string) -> string")
+            .str("post_return", "cabi_post_call")
+            .str("realloc", "cabi_realloc")
+            .str("memory", "memory")
+            .str("runner", &format!("{alias}_runner.mjs"))
+            .str(
+                "component",
+                &format!("wasm-tools component embed {alias}.wit {alias}.wasm -o {alias}.embedded.wasm && wasm-tools component new {alias}.embedded.wasm -o {alias}.component.wasm"),
+            )
+            .finish()
+    }
+}
+
+/// The JSON string escaper the generated Rust module and the Wasm entry share.
+pub(crate) const RS_JSON_STR: &str = "fn json_str(s: &str) -> String {\n    let mut o = String::from(\"\\\"\");\n    for ch in s.chars() {\n        match ch {\n            '\"' => o.push_str(\"\\\\\\\"\"),\n            '\\\\' => o.push_str(\"\\\\\\\\\"),\n            c if (c as u32) < 32 => o.push_str(&format!(\"\\\\u{:04x}\", c as u32)),\n            c => o.push(c),\n        }\n    }\n    o.push('\"');\n    o\n}\n\n";
+
+/// The flags the Wasm module is built with, as one line for `rulec api` and as arguments for
+/// `rulec test`: size over speed, no unwinding, no symbols — 22 KB for a tariff rather than
+/// 1.4 MB.
+pub const WASM_RUSTC_FLAGS: &str =
+    "-C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib";
+
+/// The JSON reading the generated Rust runner and the Wasm entry share: one flat object as
+/// (key, value) pairs, values kept as their source text, and a reader for each wire type.
+pub(crate) const RS_JSON_HELPERS: &str = r##"/// One flat JSON object as (key, value) pairs, values kept as their source text.
+fn fields(line: &str) -> Vec<(String, String)> {
+    let b: Vec<char> = line.chars().collect();
+    let mut i = 0usize;
+    // Step into the object under "in" and read the pairs of the one level below it.
+    while i < b.len() && !(b[i] == '"' && b[i..].starts_with(&['"', 'i', 'n', '"'])) {
+        i += 1;
+    }
+    pairs_from(&b, i).0
+}
+
+/// The pairs of the object starting at or after `i`, and the index just past its closing
+/// brace. A value that is itself an object or an array is kept whole, as its source text.
+fn pairs_from(b: &[char], mut i: usize) -> (Vec<(String, String)>, usize) {
+    let mut out = Vec::new();
+    while i < b.len() && b[i] != '{' {
+        i += 1;
+    }
+    i += 1;
+    while i < b.len() && b[i] != '}' {
+        while i < b.len() && b[i] != '"' && b[i] != '}' {
+            i += 1;
+        }
+        if i >= b.len() || b[i] == '}' {
+            break;
+        }
+        let (k, ni) = string_at(b, i);
+        i = ni;
+        while i < b.len() && b[i] != ':' {
+            i += 1;
+        }
+        i += 1;
+        while i < b.len() && b[i] == ' ' {
+            i += 1;
+        }
+        let v = if b[i] == '"' {
+            let (v, ni) = string_at(b, i);
+            i = ni;
+            v
+        } else if b[i] == '[' || b[i] == '{' {
+            let (v, ni) = balanced(b, i);
+            i = ni;
+            v
+        } else {
+            let s = i;
+            while i < b.len() && b[i] != ',' && b[i] != '}' {
+                i += 1;
+            }
+            b[s..i].iter().collect::<String>().trim().to_string()
+        };
+        out.push((k, v));
+    }
+    (out, i + 1)
+}
+
+/// The source text of one bracketed value, quotes respected.
+fn balanced(b: &[char], i: usize) -> (String, usize) {
+    let (open, close) = if b[i] == '[' { ('[', ']') } else { ('{', '}') };
+    let (mut depth, mut j) = (0i32, i);
+    while j < b.len() {
+        if b[j] == '"' {
+            let (_, nj) = string_at(b, j);
+            j = nj;
+            continue;
+        }
+        if b[j] == open {
+            depth += 1;
+        }
+        if b[j] == close {
+            depth -= 1;
+            if depth == 0 {
+                j += 1;
+                break;
+            }
+        }
+        j += 1;
+    }
+    (b[i..j].iter().collect(), j)
+}
+
+/// An array of flat objects, as the pairs of each (§15.56).
+fn rows(v: &str) -> Vec<Vec<(String, String)>> {
+    let b: Vec<char> = v.chars().collect();
+    let (mut i, mut out) = (0usize, Vec::new());
+    while i < b.len() {
+        if b[i] == '{' {
+            let (p, ni) = pairs_from(&b, i);
+            out.push(p);
+            i = ni;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// The string starting at `i`, and the index just past its closing quote.
+fn string_at(b: &[char], i: usize) -> (String, usize) {
+    let (mut i, mut s) = (i + 1, String::new());
+    while i < b.len() && b[i] != '"' {
+        if b[i] == '\\' && i + 1 < b.len() {
+            i += 1;
+            s.push(match b[i] {
+                'n' => '\n',
+                't' => '\t',
+                c => c,
+            });
+        } else {
+            s.push(b[i]);
+        }
+        i += 1;
+    }
+    (s, i + 1)
+}
+
+fn get<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
+    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).unwrap_or("")
+}
+
+fn n(d: &[(String, String)], k: &str) -> i64 {
+    get(d, k).parse().unwrap_or(0)
+}
+
+fn s<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
+    get(d, k)
+}
+
+fn b(d: &[(String, String)], k: &str) -> bool {
+    get(d, k) == "true"
+}
+
+/// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool uses.
+fn ord(s: &str) -> i64 {
+    let p: Vec<i64> = s.split('-').map(|x| x.parse().unwrap_or(0)).collect();
+    let (y, m, d) = (p[0], p[1], p[2]);
+    let y2 = if m <= 2 { y - 1 } else { y };
+    let era = if y2 >= 0 { y2 } else { y2 - 399 } / 400;
+    let yoe = y2 - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+"##;
+
+/// The canonical ABI of `call: func(input: string) -> string`, written once for every rule.
+pub(crate) const RS_WASM_ABI: &str = r##"/// The canonical ABI's allocator: the host allocates the input string here, and the module
+/// frees it once read.
+#[no_mangle]
+pub unsafe extern "C" fn cabi_realloc(old: *mut u8, old_size: usize, align: usize, new_size: usize) -> *mut u8 {
+    if new_size == 0 {
+        return align as *mut u8;
+    }
+    let p = if old_size == 0 {
+        alloc(Layout::from_size_align_unchecked(new_size, align))
+    } else {
+        realloc(old, Layout::from_size_align_unchecked(old_size, align), new_size)
+    };
+    if p.is_null() {
+        std::process::abort();
+    }
+    p
+}
+
+/// `call: func(input: string) -> string`: the input is (pointer, length) of UTF-8 in this
+/// module's memory, and what comes back points at a (pointer, length) pair for the answer,
+/// which `cabi_post_call` frees.
+#[no_mangle]
+pub unsafe extern "C" fn call(ptr: *mut u8, len: usize) -> *mut [u32; 2] {
+    let input = String::from_raw_parts(ptr, len, len);
+    let out = answer(&input);
+    drop(input);
+    let s = out.into_boxed_str();
+    let n = s.len();
+    let p = Box::into_raw(s) as *mut u8;
+    Box::into_raw(Box::new([p as u32, n as u32]))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cabi_post_call(ret: *mut [u32; 2]) {
+    let r = Box::from_raw(ret);
+    let (p, n) = (r[0] as *mut u8, r[1] as usize);
+    drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, n) as *mut str));
+}
+
+fn error(message: &str) -> String {
+    format!("{{\"error\":{}}}", json_str(message))
+}
+
+"##;
+
+/// A WIT identifier from an ASCII alias: lowercase kebab-case, starting with a letter.
+fn wit_name(alias: &str) -> String {
+    let mut s: String = alias.chars().map(|c| if c == '_' { '-' } else { c.to_ascii_lowercase() }).collect();
+    if !s.starts_with(|c: char| c.is_ascii_lowercase()) {
+        s.insert_str(0, "r-");
+    }
+    s
+}
+
+/// `1` as `1.0.0`: a WIT package version is a semver.
+fn wit_version(v: &str) -> String {
+    let mut parts: Vec<String> = v
+        .split('.')
+        .map(|p| p.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
+        .map(|p| if p.is_empty() { "0".to_string() } else { p })
+        .collect();
+    parts.truncate(3);
+    while parts.len() < 3 {
+        parts.push("0".to_string());
+    }
+    parts.join(".")
+}
+
+/// The Node runner `rulec test` drives: the module built from `<alias>_wasm.rs`, one vector per
+/// line of stdin through `call`, the record line out.
+pub fn wasm_runner_js(alias: &str) -> String {
+    format!("// Code generated by rulec {}. DO NOT EDIT.\n{}", env!("CARGO_PKG_VERSION"), WASM_RUNNER_JS.replace("ALIAS", alias))
+}
+
+const WASM_RUNNER_JS: &str = r#"import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const { instance } = await WebAssembly.instantiate(readFileSync(join(here, "ALIAS.wasm")), {});
+const ex = instance.exports;
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+// One call through the canonical ABI of `call: func(input: string) -> string`. The views on
+// the memory are taken after the call, because the memory may have grown during it.
+function call(text) {
+  const bytes = enc.encode(text);
+  const ptr = ex.cabi_realloc(0, 0, 1, bytes.length);
+  new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+  const ret = ex.call(ptr, bytes.length);
+  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2);
+  const out = dec.decode(new Uint8Array(ex.memory.buffer, p, n));
+  ex.cabi_post_call(ret);
+  return out;
+}
+
+for (const line of readFileSync(0, "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const out = call(line);
+  if (out.startsWith('{"error":')) {
+    console.error(out);
+    process.exit(1);
+  }
+  console.log(out);
+}
+"#;
+
+/// The rounding helpers as a module of their own, so that the Wasm side runs the same unit
+/// vectors as every other language (§8.5).
+pub fn round_wasm_rust() -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(dead_code, unused_parens)]\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    o.push_str(round_rs().trim_start_matches('\n'));
+    for m in ["down", "up", "half", "half_down", "bankers"] {
+        o.push_str(&format!("\n#[no_mangle]\npub extern \"C\" fn rulec_round_{m}(x: i64, g: i64) -> i64 {{\n    round_{m}(x, g)\n}}\n"));
+    }
+    o
+}
+
+pub fn round_tests_wasm_js() -> String {
+    let mut o = format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport {{ readFileSync }} from \"node:fs\";\nimport {{ dirname, join }} from \"node:path\";\nimport {{ fileURLToPath }} from \"node:url\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst {{ instance }} = await WebAssembly.instantiate(readFileSync(join(here, \"_round.wasm\")), {{}});\nconst ex = instance.exports;\n\nconst CASES = [\n",
+        env!("CARGO_PKG_VERSION"),
+        tr!(
+            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+        )
+    );
+    for (m, x, g, want) in round_cases() {
+        o.push_str(&format!("  [\"{}\", {x}n, {g}n, {want}n],\n", mode_fn(m)));
+    }
+    o.push_str(
+        "];\n\nlet bad = 0;\nfor (const [mode, x, g, want] of CASES) {\n  const got = ex[\"rulec_round_\" + mode](x, g);\n  if (got !== want) {\n    console.log(`NG ${mode}(${x}, ${g}) = ${got}, want ${want}`);\n    bad += 1;\n  }\n}\nif (bad > 0) {\n  process.exit(1);\n}\n",
+    );
+    let line = tr!("ok {{}} 件", "ok {{}} cases").replace("{}", "${CASES.length}");
+    o.push_str(&format!("console.log(`{line}`);\n"));
+    o
 }
 
 pub fn round_tests_rust() -> String {
@@ -5064,6 +5355,7 @@ impl Gen<'_> {
             .raw("go", go)
             .raw("swift", swift)
             .raw("sql", self.api_sql())
+            .raw("wasm", self.api_wasm())
             .finish()
     }
 }
@@ -7187,9 +7479,7 @@ impl<'a> Gen<'a> {
             params.push(format!("{}: &[Element]", pub_name(&el.name)));
         }
         let mut o = String::new();
-        o.push_str(
-            "fn json_str(s: &str) -> String {\n    let mut o = String::from(\"\\\"\");\n    for ch in s.chars() {\n        match ch {\n            '\"' => o.push_str(\"\\\\\\\"\"),\n            '\\\\' => o.push_str(\"\\\\\\\\\"),\n            c if (c as u32) < 32 => o.push_str(&format!(\"\\\\u{:04x}\", c as u32)),\n            c => o.push(c),\n        }\n    }\n    o.push('\"');\n    o\n}\n\n",
-        );
+        o.push_str(RS_JSON_STR);
         if civil_needed(self.f, self.c) {
             o.push_str(
                 "fn civil(days: i64) -> String {\n    let z = days + 719468;\n    let era = if z >= 0 { z } else { z - 146096 } / 146097;\n    let doe = z - era * 146097;\n    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;\n    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);\n    let mp = (5 * doy + 2) / 153;\n    let d = doy - (153 * mp + 2) / 5 + 1;\n    let m = if mp < 10 { mp + 3 } else { mp - 9 };\n    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };\n    format!(\"{y:04}-{m:02}-{d:02}\")\n}\n\n",

@@ -4,13 +4,13 @@
 $ rulec gen rules/ --out generated/
 ```
 
-出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・Swift のモジュールと、普通の Go パッケージと、SQL の一つの問い合わせです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
+出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・Swift のモジュールと、普通の Go パッケージと、SQL の一つの問い合わせと、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
 
 検査を通らない規則からは、何も生成されません。
 
 ## 対応する出力言語
 
-いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL の八つで、**Java・Kotlin に対応予定**です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
+いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL・Wasm の九つで、**Java・Kotlin に対応予定**です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
 
 | | 状態 | 要るもの |
 |---|---|---|
@@ -24,6 +24,7 @@ $ rulec gen rules/ --out generated/
 | Java | 対応予定 | JDK。単一ファイル実行でビルドツール無しに走らせられます |
 | Kotlin | 対応予定 | kotlinc |
 | SQL | 対応済み | `python3`。その標準添付の `sqlite3` で一致検査を回します。問い合わせ自体は PostgreSQL 向けに書いてあります。**畳み込み（`fold`）のある規則にだけは生成しません** |
+| Wasm | 対応済み | `wasm32-unknown-unknown` を入れた `rustc` と、一致検査に使う `node`。モジュール自体は何も import しません |
 
 一つだけ決めていることがあります。**一致検査に乗らない言語は入れません。** 参照評価器とバイト単位で突き合わせられない生成物は、「証明済み」という看板の外側にあることになるからです。三つめの TypeScript を足すのに掛かった実コストは生成器に約 700 行で、五つめの Ruby も六つめの Swift も同じくらいでした。ただし Ruby のときは手で直したファイルが二十数個あったのに対して、Swift で足したのは対象言語をまとめた一覧の一行だけです。
 
@@ -113,7 +114,7 @@ func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 読める形であることを、生成器は四つで守っています。
 
 - **セルを省略しません。** 手前の分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です。
-- **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby と JavaScript と SQL は単位を置ける型が無いので、そこは注記で伝えます。
+- **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`、Wasm のモジュールは Rust のものなので同じ newtype。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby と JavaScript と SQL は単位を置ける型が無いので、そこは注記で伝えます。
 - **丸めは自前のヘルパで行います。** Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・TypeScript・JavaScript・SQL は 0 方向で食い違うので、言語の素の除算には任せません。
 - **言語の組み込み関数をそのまま呼びません。** 入力のエイリアスが `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています。
 
@@ -208,20 +209,28 @@ ok    丸めヘルパ (Go) 単体ベクタ
 
 出力の「ベクタ」は、**規則の境界から自動で作ったテストケース**のことです。出どころが規則の境界であって、生成コードではないところが要点です。丸めヘルパにも専用のテストが付きます — 表ごとの一致だけを見ていると、端数の出ない表ではヘルパの誤りが隠れてしまうからです。
 
-## 同じコードを Wasm でも動かす
+## Wasm: どの実行環境にも入る一つのモジュール
 
-生成した Rust は依存がなく、外部とのやり取りは標準入出力だけです。そのため `wasm32-wasip1` 向けにそのままコンパイルできます。`wasmtime` が PATH にあり、この target の標準ライブラリが入っていれば（`rustup target add wasm32-wasip1`）、`rulec test` は Rust の runner を WASI モジュールとしても走らせ、同じ期待値と比べます。
+九つ目の生成対象は、言語の関数ではなくモジュールです。`wasm/` には、`rust/` と同じ Rust のモジュール、それを canonical ABI の `call: func(input: string) -> string` で包む crate root、その関数を world の export として名指しする `.wit`、`rulec test` が回す Node の runner が入ります。cargo もクレートも要らず、`rustc` だけで組めます。送料の規則で 40 KB、import は一つもありません。
+
+```console
+$ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
+    --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
+```
+
+ホストは、入力を JSON のオブジェクトにしてモジュールのメモリに書き、`call` を呼んで、記録の行を読み取ります。行の形はほかの言語の `_record` が書くものと同じで、契約の外の入力には `{"error":"…"}` が返ります。`.wit` があるので、`wasm-tools component new` でモジュールを変えずに component にでき、wasmtime のような component の実行環境からは `call("{…}")` の形で呼べます。ホストの書き方、component にする手順、`rulec api` の `wasm` の項は[生成物](generated-code.md#wasm)にあります。
+
+`rulec test` はモジュールを組み、ほかの言語と同じようにベクタと突き合わせます。
 
 ```console
 $ rulec test generated/ --lang ja
 ok    shipping_fee (Rust) ベクタ 68 件
 ok    shipping_fee (Rust, Wasm) ベクタ 68 件
+ok    shipping_fee (Wasm) ベクタ 68 件
 …
 ```
 
-wasmtime が無いときはこの段を飛ばし、飛ばしたことを報告します。言語が足りない場合とは別に数えます。
-
-Shopify Functions、Extism、Cloudflare Workers のような実行環境が求めるのは、まさにこの形です。依存のない小さなモジュールが一つあればよく、ネットワークは使えず、命令数にも上限があります。規則のモジュールは、そうした環境のプロジェクトにそのまま組み込めます。環境ごとに書くのは、カートの内容を規則の入力に変換する部分と、規則の出力を割引の操作に変換する部分だけで、二十行ほどの薄い層です。この層の切り方と、関数で決められること（割引）と決められないこと（配送料）は、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions) にまとめてあります。
+二行目と三行目は別のものです。二行目は Rust の runner そのものを `wasm32-wasip1` 向けにコンパイルして wasmtime で走らせたもので、Shopify Functions のように標準入出力でやり取りする実行環境の形です。どの実行環境がどちらの形を取り、その境界をどこで切るかは、[一覧に無い言語へ生成する](backends.md#a-wasm-host-shopify-functions)にまとめてあります。
 
 ## テストケースの側は足りているか
 

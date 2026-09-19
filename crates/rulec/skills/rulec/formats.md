@@ -132,7 +132,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); or `wasm`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-as-a-wasi-module)) |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); or `wasm`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); the `wasm/` target itself is a language of its own in this list, reached through its runner |
 | `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
 | `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
@@ -265,7 +265,14 @@ meaning is in [generated-code.md](generated-code.md).
         "dialect":"postgresql","runs_on":["postgresql","sqlite"],
         "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
                     "range":{"min":0,"max":1000000},"optional":false}],
-        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}]}}
+        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}]},
+ "wasm":{"source":"coupon_step_wasm.rs","module":"coupon_step.wasm",
+         "build":"rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib coupon_step_wasm.rs -o coupon_step.wasm",
+         "wit":"coupon_step.wit","package":"rulec:coupon-step@1.0.0","world":"coupon-step",
+         "call":"call","call_signature":"call: func(input: string) -> string",
+         "post_return":"cabi_post_call","realloc":"cabi_realloc","memory":"memory",
+         "runner":"coupon_step_runner.mjs",
+         "component":"wasm-tools component embed coupon_step.wit coupon_step.wasm -o coupon_step.embedded.wasm && wasm-tools component new coupon_step.embedded.wasm -o coupon_step.component.wasm"}}
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
@@ -276,7 +283,7 @@ and `record_signature`, the function that writes one call as a fixtures record
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
 `couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift; SQL spells no member, an
-enum being its own name there). `unit`, `range` and `rounding` are absent when the
+enum being its own name there, and the Wasm module reads and writes the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
 module that serves the rule as one MCP tool
@@ -296,7 +303,12 @@ parameter's `range` means. SQL has no entry for such a rule — `rulec gen` does
 function to name: it gives the file, the relation the query reads (`input`) and its `id`
 column, the `guard` column that carries the entry guard's sentence, the `columns` of that
 relation as the query declares them, the `outputs`, and under `rows` the column that carries
-each table's matched row ([generated-code.md](generated-code.md#sql)).
+each table's matched row ([generated-code.md](generated-code.md#sql)). The `wasm` entry
+names no function in a language either: it gives the source and the module it builds into
+(`build` is the whole command), the `.wit` with its `package` and `world`, the exports a host
+calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `rulec test`
+drives, and the `component` line that wraps the module for the component model
+([generated-code.md](generated-code.md#wasm)).
 
 ## `schema` and `adapter`
 

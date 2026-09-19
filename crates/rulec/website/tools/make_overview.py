@@ -64,13 +64,14 @@ HERE = pathlib.Path(__file__).resolve().parent
 # backend added without touching this diagram fails, and so does a name dropped from it.
 # This sheet said six languages for two releases after there were eight.
 LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("JavaScript", "javascript"),
-         ("Rust", "rust"), ("Ruby", "ruby"), ("Go", "go"), ("Swift", "swift"), ("SQL", "sql")]
+         ("Rust", "rust"), ("Ruby", "ruby"), ("Go", "go"), ("Swift", "swift"), ("SQL", "sql"),
+         ("Wasm", "wasm")]
 
 JA = dict(
     alt="表を書く。rulec は一行を入力の組み合わせの一区画にして並べ、隙間も重なりも無いことを"
         "計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が"
         "返ってきて、行を足してもう一度。運賃がいくらかだけは人が決める。証明できた表からだけ、"
-        "依存ゼロの Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL が出る。",
+        "依存ゼロの Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL・Wasm が出る。",
     table=("表", "業務の人が読んで、承認する", ".rule"),
     head=("あて先", "重量", "→ 運賃"),
     rows=[("近畿圏", "<=2kg", "800円"),
@@ -94,7 +95,7 @@ JA = dict(
            "        fee = 1300",
            "    return YenInclTax(_round_up(fee, 10)), trace"],
           ["依存ゼロ・エンジンなし", "どれも同じ答え"], ".py"),
-    langs=["Python・TypeScript・JavaScript", "Rust・Ruby・Go・Swift・SQL"],
+    langs=["Python・TypeScript・JavaScript", "Rust・Ruby・Go・Swift・SQL・Wasm"],
     check="rulec check", gen="rulec gen", proved="通ったら",
     falls="それを起こす入力", again="行を足して、もう一度",
 )
@@ -104,7 +105,7 @@ EN = dict(
         "by computation that the boxes leave no gap and no overlap. If there is a gap, "
         "back comes the input that falls through it (Destination = Overseas, Weight = 2001g): "
         "add the row and run again - only what the fee is takes a person. Only a proved "
-        "table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL.",
+        "table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm.",
     table=("Table", "a domain expert reads and approves it", ".rule"),
     head=("Destination", "Weight", "→ Fee"),
     rows=[("Domestic", "<=2kg", "8USD"),
@@ -128,7 +129,7 @@ EN = dict(
            "        fee = 13",
            "    return USDInclTax(_round_up(fee, 1)), trace"],
           ["zero dependencies, no engine,", "the same answer from every one"], ".py"),
-    langs=["Python, TypeScript, JavaScript,", "Rust, Ruby, Go, Swift and SQL"],
+    langs=["Python, TypeScript, JavaScript,", "Rust, Ruby, Go, Swift, SQL, Wasm"],
     check="rulec check", gen="rulec gen", proved="once it passes",
     falls="the input that causes it", again="add the row, run again",
 )

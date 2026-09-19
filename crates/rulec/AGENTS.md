@@ -2,7 +2,7 @@
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL.
+anyone runs it, and turned into ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the
@@ -174,7 +174,7 @@ reach. A row only goes in when it names every input.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL, and the vectors. It refuses to generate
+Writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL, Wasm, and the vectors. It refuses to generate
 from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
 signatures, parameters with units and ranges, enum member spellings, errors — so you never
 have to read the generated code to integrate it

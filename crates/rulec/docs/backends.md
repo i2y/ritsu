@@ -1,7 +1,7 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL. This page is about the
-eighth target — a language nobody planned for, a workflow engine's expression language, a
+`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm. This page is about the
+tenth target — a language nobody planned for, a workflow engine's expression language, a
 spreadsheet formula, a database.
 
 The short answer: **you do not have to modify rulec, and you do not have to give up the
@@ -282,7 +282,8 @@ Whatever the language's own type system can carry, carry it — and say plainly 
 Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
 `NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
 Ruby, JavaScript and SQL cannot hold a unit at all, so there it is documented instead, and the
-`.rbs` that ships with the Ruby module says so too.
+`.rbs` that ships with the Ruby module says so too; the Wasm module is the Rust one, so the
+unit rides in it and the `.wit` states it for the wire.
 
 The rule that decides whether a target may be built in has not moved: **it must be able to
 join the byte-for-byte agreement check.** A generated artifact the suite cannot run is outside
@@ -293,13 +294,19 @@ and labelled as unverified, it is.
 
 ## A Wasm host: Shopify Functions
 
-A Shopify Function is a Wasm module that reads one JSON document on stdin (the cart, in the
-shape of the GraphQL input query the app declares) and writes one on stdout (the operations:
-a discount of a fixed amount or a percentage on some targets, or a validation error). No
-network, a limit on instructions, and the smaller the module the better — the shape the
-generated Rust already has, so it is not a ninth target: the module `gen` writes goes into
-the function's crate as it is, and `rulec test` holds it to the rule under wasmtime
-([generated-code.md](generated-code.md#the-rust-as-a-wasi-module)).
+Two shapes of Wasm come out of `rulec gen`, and a platform takes one or the other. The
+`wasm/` target is a module that exports a function — `call: func(input: string) -> string`
+in the canonical ABI, with a `.wit` that makes a component of it — for a host that calls
+into it: a script host, an Extism plugin, a component runtime
+([generated-code.md](generated-code.md#wasm)). A Shopify Function is the other shape: a WASI
+command that reads one JSON document on stdin (the cart, in the shape of the GraphQL input
+query the app declares) and writes one on stdout (the operations: a discount of a fixed
+amount or a percentage on some targets, or a validation error). That is what the Rust runner
+is, and it compiles for `wasm32-wasip1` unchanged
+([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)). No network, a
+limit on instructions, and the smaller the module the better — the shape the generated Rust
+already has, so neither is a target of the platform's own: the module `gen` writes goes into
+the function's crate as it is, and `rulec test` holds it to the rule.
 
 The rule stays a rule: flat inputs, one decision. What the function adds is the boundary —
 the twenty lines that read the cart and flatten it into the rule's inputs, call the
