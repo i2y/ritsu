@@ -15,3 +15,7 @@
 # The generated code of the library seed is rebuilt by `rulec gen`; only the rules and
 # their sources are kept.
 /experiments/library/generated
+
+# The OPA measurement rebuilds its inputs from `rulec gen` (`run.sh`); the policies, the
+# case builder and the report it printed are what is kept.
+/experiments/opa/out
