@@ -11,3 +11,7 @@
 # (`unpack.py`); the cache is derived, the archive is what is kept.
 /experiments/point-in-time/cache
 /experiments/point-in-time/__pycache__
+
+# The generated code of the library seed is rebuilt by `rulec gen`; only the rules and
+# their sources are kept.
+/experiments/library/generated

@@ -30,7 +30,10 @@ fragments: the ones the corpus cites (別表第一, 第91条) and the ones a pay
   `reports/suppl.log` — a rule citing an amending law's supplementary provision, fetched,
   pinned, checked and rendered; `reports/outdated-suppl.log` and `reports/outdated-2024.log` —
   `rulec source outdated` on that rule and on the stamp tax rule read as of 2024-01-01, with
-  the diffs and the landing lines it prints since §15.71.
+  the diffs and the landing lines it prints since §15.71; `reports/library.log` and
+  `reports/library-outdated.log` — the rules of `../library` checked, generated and run in
+  the nine targets, and asked about later amendments (the pension cap's three staged raises
+  come back with their diffs).
 - `rules/` — `厚生年金の上限改定.rule` (the three staged raises of the pension cap in one file,
   keyed on 月分), `束.rule` with its two callees (two versions bundled, a date table picking
   the output), and `給与所得控除の経過措置.rule` (the supplementary-provision citation).

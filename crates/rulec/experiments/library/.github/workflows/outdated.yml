@@ -1,0 +1,51 @@
+name: outdated
+
+# Once a week, ask e-Gov whether an amendment enforced after each rule's
+# `asof` changes a cited article. `rulec source outdated` exits 1 when one
+# does and prints what changed and the `source` line to add; that output
+# becomes an issue. Exit 2 (e-Gov unreachable) fails the job instead, so a
+# silent week is never mistaken for a quiet one.
+
+on:
+  schedule:
+    - cron: "0 21 * * 0"   # Monday 06:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  outdated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: i2y/rulec@v0.6.0
+      - name: Ask e-Gov, one rule at a time
+        id: ask
+        env:
+          RULEC_LANG: ja
+        run: |
+          set -o pipefail
+          status=0
+          for f in rules/*.rule; do
+            # e-Gov throttles bursts; a pause between rules keeps the retries rare.
+            sleep 20
+            rulec source outdated "$f" | tee -a outdated.txt || s=$?
+            case "${s:-0}" in
+              0) ;;
+              1) status=1 ;;
+              *) exit "$s" ;;
+            esac
+            unset s
+          done
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+      - name: Open or update the issue
+        if: steps.ask.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="改正で引用箇所が変わります（$(date +%Y-%m-%d)）"
+          body="$(printf '```\n%s\n```\n' "$(grep -v '変わりません' outdated.txt)")"
+          n="$(gh issue list --label outdated --state open --json number --jq '.[0].number')"
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "$title" --label outdated --body "$body"; fi

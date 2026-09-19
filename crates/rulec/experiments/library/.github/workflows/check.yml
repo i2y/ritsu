@@ -1,0 +1,32 @@
+name: check
+
+# Every push and pull request: the rules pass check, the committed generated
+# code matches a fresh generation, and the generated code answers like the
+# reference evaluator in every language the runner has.
+#
+# `uses: i2y/rulec@<tag>` installs that release (rulec's action.yml). The
+# rules here cite supplementary provisions and rely on `Cites:` headers, which
+# ship in the release after 0.5.0; pin that tag once it exists.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: i2y/rulec@v0.6.0
+      - run: rulec fmt --check rules/
+      - run: rulec check rules/
+      - run: rulec gen rules/ --out generated/ --check
+      - run: rulec coverage rules/
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v5
+        with: { node-version: "22" }
+      - uses: actions/setup-go@v6
+        with: { go-version: "1.22" }
+      - run: rulec test generated/

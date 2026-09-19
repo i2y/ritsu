@@ -1,0 +1,30 @@
+name: release
+
+# A tag `v*` publishes the generated code of every rule, one archive per
+# language, with SHA256SUMS. What is published is what `check.yml` held to
+# the reference evaluator; nothing is generated here that was not committed.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: i2y/rulec@v0.6.0
+      - run: rulec check rules/ && rulec gen rules/ --out generated/ --check
+      - name: One archive per language
+        run: |
+          mkdir -p dist
+          for lang in python typescript javascript rust ruby go swift sql wasm; do
+            tar -C generated -czf "dist/rules-${GITHUB_REF_NAME}-${lang}.tar.gz" "$lang" vectors
+          done
+          (cd dist && shasum -a 256 *.tar.gz > SHA256SUMS)
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file RELEASE.md

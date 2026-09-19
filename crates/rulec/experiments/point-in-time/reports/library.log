@@ -1,0 +1,148 @@
+$ rulec check rules/ --lang ja
+ok rules/一般の厚生年金保険料.rule
+ok rules/健康保険料.rule
+ok rules/協会けんぽ健康保険料.rule
+ok rules/厚生年金保険料.rule
+ok rules/雇用保険料.rule
+real 0.37
+user 0.02
+sys 0.00
+
+$ rulec coverage rules/ --lang ja
+rules/一般の厚生年金保険料.rule
+ベクタ 64 件
+  行カバー                 32 / 32    満たす
+  境界の両側カバー         62 / 62    満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          0 / 0     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+rules/健康保険料.rule
+ベクタ 1216 件
+  行カバー                 52 / 52    満たす
+  境界の両側カバー         98 / 98    満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          2 / 2     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+rules/協会けんぽ健康保険料.rule
+ベクタ 8671 件
+  行カバー                101 / 101   満たす
+  境界の両側カバー        100 / 100   満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          0 / 0     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+rules/厚生年金保険料.rule
+ベクタ 391 件
+  行カバー                 32 / 32    満たす
+  境界の両側カバー         62 / 62    満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          0 / 0     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+rules/雇用保険料.rule
+ベクタ 42 件
+  行カバー                  4 / 4     満たす
+  境界の両側カバー          4 / 4     満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          1 / 1     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+
+$ rulec gen rules/ --out generated --lang ja
+real 46.59
+user 46.40
+sys 0.16
+go
+javascript
+python
+ruby
+rust
+sql
+swift
+typescript
+vectors
+wasm
+
+$ rulec test generated --lang ja
+ok    employment_insurance (Python) ベクタ 42 件
+ok    employment_insurance (Python, MCP) ベクタ 42 件
+ok    employment_insurance (Python, MCP/HTTP) ベクタ 42 件
+ok    employment_insurance (TypeScript) ベクタ 42 件
+ok    employment_insurance (TypeScript, MCP) ベクタ 42 件
+ok    employment_insurance (TypeScript, MCP/HTTP) ベクタ 42 件
+ok    employment_insurance (JavaScript) ベクタ 42 件
+ok    employment_insurance (JavaScript, MCP) ベクタ 42 件
+ok    employment_insurance (JavaScript, MCP/HTTP) ベクタ 42 件
+ok    employment_insurance (Rust) ベクタ 42 件
+ok    employment_insurance (Rust, Wasm) ベクタ 42 件
+ok    employment_insurance (Ruby) ベクタ 42 件
+ok    employment_insurance (Go) ベクタ 42 件
+ok    employment_insurance (Swift) ベクタ 42 件
+ok    employment_insurance (SQL) ベクタ 42 件
+ok    employment_insurance (Wasm) ベクタ 42 件
+ok    kenpo_premium (Python) ベクタ 1216 件
+ok    kenpo_premium (Python, MCP) ベクタ 1216 件
+ok    kenpo_premium (Python, MCP/HTTP) ベクタ 1216 件
+ok    kenpo_premium (TypeScript) ベクタ 1216 件
+ok    kenpo_premium (TypeScript, MCP) ベクタ 1216 件
+ok    kenpo_premium (TypeScript, MCP/HTTP) ベクタ 1216 件
+ok    kenpo_premium (JavaScript) ベクタ 1216 件
+ok    kenpo_premium (JavaScript, MCP) ベクタ 1216 件
+ok    kenpo_premium (JavaScript, MCP/HTTP) ベクタ 1216 件
+ok    kenpo_premium (Rust) ベクタ 1216 件
+ok    kenpo_premium (Rust, Wasm) ベクタ 1216 件
+ok    kenpo_premium (Ruby) ベクタ 1216 件
+ok    kenpo_premium (Go) ベクタ 1216 件
+ok    kenpo_premium (Swift) ベクタ 1216 件
+ok    kenpo_premium (SQL) ベクタ 1216 件
+ok    kenpo_premium (Wasm) ベクタ 1216 件
+ok    kyokai_kenpo_premium (Python) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Python, MCP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Python, MCP/HTTP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (TypeScript) ベクタ 8671 件
+ok    kyokai_kenpo_premium (TypeScript, MCP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (TypeScript, MCP/HTTP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (JavaScript) ベクタ 8671 件
+ok    kyokai_kenpo_premium (JavaScript, MCP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (JavaScript, MCP/HTTP) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Rust) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Rust, Wasm) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Ruby) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Go) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Swift) ベクタ 8671 件
+ok    kyokai_kenpo_premium (SQL) ベクタ 8671 件
+ok    kyokai_kenpo_premium (Wasm) ベクタ 8671 件
+ok    pension_premium (Python) ベクタ 391 件
+ok    pension_premium (Python, MCP) ベクタ 391 件
+ok    pension_premium (Python, MCP/HTTP) ベクタ 391 件
+ok    pension_premium (TypeScript) ベクタ 391 件
+ok    pension_premium (TypeScript, MCP) ベクタ 391 件
+ok    pension_premium (TypeScript, MCP/HTTP) ベクタ 391 件
+ok    pension_premium (JavaScript) ベクタ 391 件
+ok    pension_premium (JavaScript, MCP) ベクタ 391 件
+ok    pension_premium (JavaScript, MCP/HTTP) ベクタ 391 件
+ok    pension_premium (Rust) ベクタ 391 件
+ok    pension_premium (Rust, Wasm) ベクタ 391 件
+ok    pension_premium (Ruby) ベクタ 391 件
+ok    pension_premium (Go) ベクタ 391 件
+ok    pension_premium (Swift) ベクタ 391 件
+ok    pension_premium (SQL) ベクタ 391 件
+ok    pension_premium (Wasm) ベクタ 391 件
+ok    pension_premium_general (Python) ベクタ 64 件
+ok    pension_premium_general (Python, MCP) ベクタ 64 件
+ok    pension_premium_general (Python, MCP/HTTP) ベクタ 64 件
+ok    pension_premium_general (TypeScript) ベクタ 64 件
+ok    pension_premium_general (TypeScript, MCP) ベクタ 64 件
+ok    pension_premium_general (TypeScript, MCP/HTTP) ベクタ 64 件
+ok    pension_premium_general (JavaScript) ベクタ 64 件
+ok    pension_premium_general (JavaScript, MCP) ベクタ 64 件
+ok    pension_premium_general (JavaScript, MCP/HTTP) ベクタ 64 件
+ok    pension_premium_general (Rust) ベクタ 64 件
+ok    pension_premium_general (Rust, Wasm) ベクタ 64 件
+ok    pension_premium_general (Ruby) ベクタ 64 件
+ok    pension_premium_general (Go) ベクタ 64 件
+ok    pension_premium_general (Swift) ベクタ 64 件
+ok    pension_premium_general (SQL) ベクタ 64 件
+ok    pension_premium_general (Wasm) ベクタ 64 件
+
+89 件すべて一致しました。
+real 17.77
+user 15.09
+sys 3.58
