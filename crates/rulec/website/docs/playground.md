@@ -37,7 +37,7 @@ input falls through, and gives the shape of the row that closes it.
    closes the one point the witness names, because the tool does not invent an amount and
    does not guess where the band ends.
 3. **Open *generated code*.** Everything `rulec gen` writes for this table: Python,
-   TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm, each with its runner, the rule as
+   TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm, each with its runner, the rule as
    an MCP server, and the test vectors built from the table's own boundaries.
 4. **Open *the approver's page*.** What `rulec doc --format html` renders for whoever signs
    the table off — and it is not a picture of the answer: the page runs the generated

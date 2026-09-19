@@ -119,6 +119,10 @@ pub struct Gen<'a> {
 
 mod sql;
 pub use sql::round_tests_sql;
+mod php;
+pub use php::round_tests_php;
+mod java;
+pub use java::{java_class, round_tests_java};
 mod tool;
 
 impl<'a> Gen<'a> {
@@ -2817,6 +2821,8 @@ pub enum Lang {
     Rb,
     Sw,
     Sql,
+    Php,
+    Java,
 }
 
 /// The few spellings shared code needs to know per language. Keeping them in one row each
@@ -2857,7 +2863,9 @@ impl Lang {
                 if_head: |c| format!("if {c}"),
                 close: "end",
             },
-            Lang::Ts => Spelling {
+            // PHP is spelled like TypeScript here — braces, `&&`, `//` — and differs only
+            // where §15.77 says it does: `intdiv` for division, and typed parameters.
+            Lang::Ts | Lang::Php | Lang::Java => Spelling {
                 comment: "//",
                 and: " && ",
                 if_head: |c| format!("if ({c}) {{"),
@@ -5405,6 +5413,83 @@ impl Gen<'_> {
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
+        // --- PHP. The type is written down (§15.77) but carries no unit, so a param's
+        // `type` is what the signature says and the `unit` field beside it says the rest.
+        let php_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &pub_name(&i.name), &self.php_api_ty(&ty), &ty)
+            })
+            // The alias here is the declared name, as in Python and Ruby: PHP takes its
+            // arguments by position, and `$` belongs to the spelling, not to the name.
+            .chain(self.elements_json("Element[]", |n| pub_name(n), |t| self.php_api_ty(t)))
+            .collect();
+        let php_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.php_api_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let php_fname = self.php_fname();
+        let php_ret = if outs.len() == 1 {
+            self.php_api_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let php_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                format!(
+                    "{} {}",
+                    self.php_api_ty(&self.ty_of(&i.name.text)),
+                    crate::codegen::php::php_var_pub(&pub_name(&i.name))
+                )
+            })
+            .chain(
+                self.f
+                    .elements
+                    .iter()
+                    .map(|el| format!("array {}", crate::codegen::php::php_var_pub(&pub_name(&el.name)))),
+            )
+            .collect();
+        let php_sig = format!("function {php_fname}({}): {php_ret}", php_args.join(", "));
+        let php_traced = format!("function {php_fname}_traced({}): array", php_args.join(", "));
+        let php = crate::json::Obj::new()
+            .str("module", &format!("{alias}.php"))
+            // The namespace every name below sits in: a caller writes `use` for it, or
+            // qualifies the call, and nothing here needs an autoloader.
+            .str("namespace", &self.php_ns())
+            .str("function", &php_fname)
+            .str("signature", &php_sig)
+            .str("traced", &format!("{php_fname}_traced"))
+            .str("traced_signature", &php_traced)
+            .str("record", &format!("{php_fname}_record"))
+            .str("record_signature", &format!(
+                "function {php_fname}_record({}, {php_ret} {}, array {}, string {} = ''): string",
+                php_args.join(", "),
+                crate::codegen::php::php_var_pub(&r_out),
+                crate::codegen::php::php_var_pub(&r_trace),
+                crate::codegen::php::php_var_pub(&r_tag)
+            ))
+            .raw("params", crate::json::arr(&php_in))
+            .str("returns", &php_ret)
+            .raw("outputs", crate::json::arr(&php_outs))
+            // A PHP enum member is a case on the enum's own type, spelled in upper case as
+            // Python and TypeScript spell theirs (`CouponKind::PERCENT`).
+            .raw("enums", self.enums_json(|t, a| format!("{}::{}", crate::codegen::php::php_name(t), crate::codegen::php::php_name(&a.to_uppercase()))))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .finish();
+
         // --- Swift. The unit is in the type here, as it is in Rust, so a param's `type`
         // is the brand and the `unit` field beside it repeats what that brand stands for.
         let sw_in: Vec<String> = self
@@ -5466,6 +5551,69 @@ impl Gen<'_> {
             // enum's own type (`Band.short`).
             .raw("enums", self.enums_json(|_, a| sw_name(a)))
             .raw("errors", crate::json::strs(&["RuleError.input", "RuleError.contradiction"]))
+            .finish();
+
+        // --- Java. `long` is the int64 the proof is about, and no brand rides in the
+        // type (§15.78), so a param's `type` is what the signature says and `unit` says the
+        // rest.
+        let jv_in: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.value_json(&i.name.text, &self.java_name_of(&pub_name(&i.name)), &self.java_api_ty(&ty), &ty)
+            })
+            .chain(self.elements_json("List<Element>", |n| crate::codegen::java::java_name_pub(&pub_name(n)), |t| self.java_api_ty(t)))
+            .collect();
+        let jv_outs: Vec<String> = outs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                let v = self.value_json(&od.name.text, &pub_name(&od.name), &self.java_api_ty(&ty), &ty);
+                match self.rounding_json(od) {
+                    Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
+                    None => v,
+                }
+            })
+            .collect();
+        let jv_cls = self.java_class();
+        let jv_fname = self.java_fname();
+        let jv_ret = if outs.len() == 1 {
+            self.java_api_ty(&self.ty_of(&outs[0].name.text))
+        } else {
+            "Output".into()
+        };
+        let jv_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("{} {}", self.java_api_ty(&self.ty_of(&i.name.text)), self.java_name_of(&pub_name(&i.name))))
+            .chain(self.f.elements.iter().map(|el| format!("List<Element> {}", self.java_name_of(&pub_name(&el.name)))))
+            .collect();
+        let java = crate::json::Obj::new()
+            .str("module", &format!("{jv_cls}.java"))
+            .str("class", &jv_cls)
+            .str("function", &jv_fname)
+            .str("signature", &format!("public static {jv_ret} {jv_fname}({})", jv_args.join(", ")))
+            .str("traced", &format!("{jv_fname}Traced"))
+            .str("traced_signature", &format!("public static Traced {jv_fname}Traced({})", jv_args.join(", ")))
+            .str("record", &format!("{jv_fname}Record"))
+            .str("record_signature", &format!(
+                "public static String {jv_fname}Record({}, {jv_ret} {}, List<Fired> {}, String {})",
+                jv_args.join(", "),
+                self.java_name_of(&r_out),
+                self.java_name_of(&r_trace),
+                self.java_name_of(&r_tag)
+            ))
+            // Everything is nested in the one class, so a caller says `Rule.Member` where
+            // Python says `Module.Member`.
+            .str("build", "javac --release 17 -encoding UTF-8 -d classes *.java")
+            .raw("params", crate::json::arr(&jv_in))
+            .str("returns", &jv_ret)
+            .raw("outputs", crate::json::arr(&jv_outs))
+            .raw("enums", self.enums_json(|t, a| format!("{}.{}", crate::codegen::java_class(t), a.to_uppercase())))
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .finish();
 
         // --- Go
@@ -5556,8 +5704,10 @@ impl Gen<'_> {
             .raw("javascript", javascript)
             .raw("rust", rust)
             .raw("ruby", ruby)
+            .raw("php", php)
             .raw("go", go)
             .raw("swift", swift)
+            .raw("java", java)
             .raw("sql", self.api_sql())
             .raw("wasm", self.api_wasm())
             .finish()
@@ -6288,6 +6438,8 @@ impl<'a> Gen<'a> {
             Lang::Rb => self.rb_cell(cell, var, ty, scale),
             Lang::Sw => self.sw_cell(cell, var, ty, scale),
             Lang::Sql => self.sql_cell(cell, var, ty, scale),
+            Lang::Php => self.php_cell(cell, var, ty, scale),
+            Lang::Java => self.java_cell(cell, var, ty, scale),
         }
     }
 }

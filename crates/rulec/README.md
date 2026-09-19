@@ -2,7 +2,7 @@
 
 **A harness for an agent turning table-shaped business rules into code.**
 
-Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and SQL functions, and a Wasm module. **The
+Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and SQL functions, and a Wasm module. **The
 proof is finished before the code exists.**
 
 ```rule
@@ -255,7 +255,7 @@ settled is still written out (`elif True:`), because reading the output against 
 the only way it is meant to be read. **Units ride in the type wherever the language has one
 to ride in**: a newtype in Rust, a one-field struct in Swift, a defined type in Go, a branded
 bigint in TypeScript, a `NewType` in Python that `mypy --strict` is run over, and the Rust newtype again in
-the Wasm module, which is the Rust one. Ruby, JavaScript and SQL have
+the Wasm module, which is the Rust one. Ruby, PHP, JavaScript, Java and SQL have
 none, so there the unit is declared in the signature, or in the header of the query, and stated in a comment, and the `.rbs`
 that ships with the Ruby module says as much. **Rounding goes through a helper of its own**, because integer division does
 not agree between them — Python and Ruby floor toward −∞, Go and Rust truncate toward zero.
@@ -372,7 +372,7 @@ or are sketches from the design record. None of it is private data. The two prem
 held, grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 326 tests; python3, node, rustc, ruby, go and swiftc are used where present
+$ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc and a JDK are used where present
 ```
 
 ## Where it stands
@@ -382,13 +382,15 @@ $ cargo test          # 326 tests; python3, node, rustc, ruby, go and swiftc are
 | | |
 |---|---|
 | **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it; a main rule and its exceptions checked as one set, a statute's text pinned to its copy, a rule applied to another case held to the applied rule's ranges |
-| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
-**Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm** today; **Java and Kotlin** are planned.
+**Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm** — eleven
+targets, all shipped. Kotlin and Scala are not on the list because they do not need to be:
+the generated Java is an ordinary class on the classpath, and the JVM does the rest.
 
 You do not have to wait for the list, and nothing here has to change. A target outside it —
 another language, a workflow engine's expression language, a spreadsheet formula — can be
@@ -404,9 +406,10 @@ against SQL, by hand, as it was done before SQL had a backend of its own.
 | JavaScript | shipped | `node` alone, or a browser — the TypeScript with its types taken off, as an ES module (`.mjs`) |
 | Rust | shipped | `rustc` alone — no cargo, no crates |
 | Ruby | shipped | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and an `.rbs` ships alongside |
+| PHP | shipped | `php` 8.2 or newer — `ext/json` is compiled in, so no composer; native enums and typed parameters, and every division is `intdiv` |
 | Go | shipped | `go` |
 | Swift | shipped | `swiftc` alone — no SwiftPM and no `Package.swift`; units ride in the type as they do in Rust |
-| Java / Kotlin | planned | a JDK / kotlinc |
+| Java | shipped | a JDK — `javac` and `java`, no Maven and no Gradle. Compiled at `--release 17`, so it runs on 17, 21 and 25 alike; `long` is the int64 the overflow proof is about |
 | SQL | shipped | `python3`, whose standard-library `sqlite3` is where the agreement check runs the query. Written for PostgreSQL. Not a function but one query over a relation of inputs: a row of the table is a `WHEN`, the rows that matched are columns, and a million rows go through in one statement |
 | Wasm | shipped | `rustc` with the `wasm32-unknown-unknown` target — one module that exports `call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component of it; `node` runs the agreement check |
 

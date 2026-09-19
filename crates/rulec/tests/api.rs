@@ -91,16 +91,22 @@ fn 署名とガードが生成物と一致する() {
         let rs = std::fs::read_to_string(dir.join("rust").join(s(rs_j, "module"))).unwrap();
         let sw_j = j.get("swift").unwrap();
         let sw = std::fs::read_to_string(dir.join("swift").join(s(sw_j, "module"))).unwrap();
+        let php_j = j.get("php").unwrap();
+        let php = std::fs::read_to_string(dir.join("php").join(s(php_j, "module"))).unwrap();
+        let jv_j = j.get("java").unwrap();
+        let jv = std::fs::read_to_string(dir.join("java").join(s(jv_j, "module"))).unwrap();
 
         assert!(py.contains(&s(py_j, "signature")), "python の署名が違う: {}", s(py_j, "signature"));
         assert!(ts.contains(&s(ts_j, "signature")), "typescript の署名が違う: {}", s(ts_j, "signature"));
         assert!(rs.contains(&s(rs_j, "signature")), "rust の署名が違う: {}", s(rs_j, "signature"));
         assert!(go.contains(&s(go_j, "signature")), "go の署名が違う: {}", s(go_j, "signature"));
         assert!(sw.contains(&s(sw_j, "signature")), "swift の署名が違う: {}", s(sw_j, "signature"));
+        assert!(php.contains(&s(php_j, "signature")), "php の署名が違う: {}", s(php_j, "signature"));
+        assert!(jv.contains(&s(jv_j, "signature")), "java の署名が違う: {}", s(jv_j, "signature"));
         // The traced twin (§15.33) is part of the inventory too, and has to be in the file
         // exactly as the inventory spells it.
         assert!(js.contains(&s(js_j, "signature")), "javascript の署名が違う: {}", s(js_j, "signature"));
-        for (lang, file, j) in [("python", &py, py_j), ("typescript", &ts, ts_j), ("javascript", &js, js_j), ("rust", &rs, rs_j), ("go", &go, go_j), ("swift", &sw, sw_j)] {
+        for (lang, file, j) in [("python", &py, py_j), ("typescript", &ts, ts_j), ("javascript", &js, js_j), ("rust", &rs, rs_j), ("go", &go, go_j), ("swift", &sw, sw_j), ("php", &php, php_j), ("java", &jv, jv_j)] {
             let sig = s(j, "traced_signature");
             assert!(file.contains(&sig), "{lang} の traced の署名が違う: {sig}");
             assert!(sig.contains(&s(j, "traced")), "{lang}: traced の名前が署名に無い: {sig}");
@@ -119,6 +125,28 @@ fn 署名とガードが生成物と一致する() {
                 assert!(
                     py.contains(&format!("if not {lo} <= {alias} <= {hi}:")),
                     "python のガードが範囲と食い違う: {alias} {lo}..{hi}"
+                );
+            }
+        }
+        // PHP and Java declare the kind of every parameter, so their guard is the range
+        // alone — the one Go, Rust and Swift emit (§15.77, §15.78).
+        for p in arr(php_j, "params") {
+            if let Some(r) = p.get("range") {
+                let (lo, hi) = (r.get("min").unwrap(), r.get("max").unwrap());
+                let v = format!("${}", s(p, "alias"));
+                assert!(
+                    php.contains(&format!("if ({v} < {lo} || {v} > {hi}) {{")),
+                    "php のガードが範囲と食い違う: {v} {lo}..{hi}\n{php}"
+                );
+            }
+        }
+        for p in arr(jv_j, "params") {
+            if let Some(r) = p.get("range") {
+                let (lo, hi) = (r.get("min").unwrap(), r.get("max").unwrap());
+                let v = s(p, "alias");
+                assert!(
+                    jv.contains(&format!("if ({v} < {lo}L || {v} > {hi}L) {{")),
+                    "java のガードが範囲と食い違う: {v} {lo}..{hi}\n{jv}"
                 );
             }
         }
@@ -394,11 +422,15 @@ fn 生成物の文書が実物の名前を使っている() {
     let (dir, j) = setup("doc", "tests/corpus/クーポン一枚.rule");
     let py_j = j.get("python").unwrap();
     let go_j = j.get("go").unwrap();
+    let php_j = j.get("php").unwrap();
+    let jv_j = j.get("java").unwrap();
     for want in [
         s(py_j, "signature"),
         s(go_j, "signature"),
         s(py_j, "traced_signature"),
         s(go_j, "traced_signature"),
+        s(php_j, "traced_signature"),
+        s(jv_j, "traced_signature"),
         "RuleInputError".into(),
         "RuleContradictionError".into(),
         "rulec api".into(),
@@ -655,7 +687,7 @@ fn wasiの項は実際に組めて同じ答えを返す() {
     assert!(rust.join(s(w, "source")).exists(), "{} が無い", s(w, "source"));
     assert_eq!(s(w, "run"), format!("wasmtime {}", s(w, "module")));
     // The column is closed at one: no other language claims the shape.
-    for id in ["python", "typescript", "javascript", "ruby", "go", "swift", "sql", "wasm"] {
+    for id in ["python", "typescript", "javascript", "ruby", "php", "go", "swift", "java", "sql", "wasm"] {
         if let Some(e) = j.get(id) {
             assert!(e.get("wasi").is_none(), "{id} に wasi の項がある");
         }

@@ -26,6 +26,11 @@ pub struct Backend {
     pub lang: Lang,
     /// The files it writes, as (path under the output directory, contents).
     pub files: fn(&Gen, &str, &str) -> Vec<(String, String)>,
+    /// What this backend names a rule's files, when that is not the alias. Java's public
+    /// class has to be the name of the file it lives in, so its module is `ShippingFee.java`
+    /// where the other ten write `shipping_fee.…`; `rulec test` finds what was written for a
+    /// rule by this stem, and `None` means the alias itself.
+    pub stem: Option<fn(&str) -> String>,
     /// How to run the generated runner over the vectors, relative to the output directory.
     pub run: fn(&str, &str) -> Plan,
     /// How to run the unit vectors of the rounding helpers.
@@ -111,6 +116,11 @@ impl Plan {
 /// more would only switch toolchains on somebody's machine for nothing.
 const GO_MIN: &str = "1.21";
 
+/// How the generated Java is compiled, in `rulec test` and in the `build` line of
+/// `rulec api` alike, so that the two cannot part company (the same arrangement the two
+/// Wasm shapes have).
+pub const JAVAC_FLAGS: &[&str] = &["--release", "17", "-encoding", "UTF-8", "-d", "classes"];
+
 /// Every language `rulec gen` writes, in the order they are reported.
 pub const ALL: &[Backend] = &[
     Backend {
@@ -127,6 +137,7 @@ pub const ALL: &[Backend] = &[
                 (format!("python/{alias}_page.html"), g.page()),
             ]
         },
+        stem: None,
         // `-B` and a cleared cache: a `.pyc` counts as fresh when the source has the same
         // length and the same whole-second mtime, so a same-length edit within a second of
         // the last run would otherwise execute the old module and report it as ok.
@@ -151,6 +162,7 @@ pub const ALL: &[Backend] = &[
                 (format!("typescript/{alias}_page.html"), g.page()),
             ]
         },
+        stem: None,
         run: |alias, _| {
             Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_runner.ts")])
         },
@@ -176,6 +188,7 @@ pub const ALL: &[Backend] = &[
                 (format!("javascript/{alias}_page.html"), g.page()),
             ]
         },
+        stem: None,
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
         folds: true,
@@ -195,6 +208,7 @@ pub const ALL: &[Backend] = &[
                 ("rust/_round_test.rs".into(), crate::codegen::round_tests_rust()),
             ]
         },
+        stem: None,
         // rustc takes no dependencies and needs no project file, so one invocation builds
         // the rule and its runner together through a `#[path] mod`.
         run: |alias, _| {
@@ -234,8 +248,32 @@ pub const ALL: &[Backend] = &[
                 ("ruby/_round_test.rb".into(), crate::codegen::round_tests_ruby()),
             ]
         },
+        stem: None,
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
+        folds: true,
+        wasi: None,
+        mcp: None,
+        ready: None,
+    },
+    Backend {
+        id: "php",
+        name: "PHP",
+        tool: "php",
+        lang: Lang::Php,
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("php/{alias}.php"), g.php()),
+                (format!("php/{alias}_runner.php"), g.php_runner()),
+                ("php/_round_test.php".into(), crate::codegen::round_tests_php()),
+            ]
+        },
+        stem: None,
+        // `-n` ignores the machine's php.ini, the way `-B` keeps Python off a stale cache:
+        // what runs here must not depend on somebody's local settings. `ext/json` is compiled
+        // into every 8.x build and cannot be switched off, so nothing is lost by it.
+        run: |alias, _| Plan::new("php", "php", &["-n", &format!("{alias}_runner.php")]),
+        round: |_| Plan::new("php", "php", &["-n", "_round_test.php"]),
         folds: true,
         wasi: None,
         mcp: None,
@@ -258,6 +296,7 @@ pub const ALL: &[Backend] = &[
                 (format!("go/{pkg}/round_test.go"), crate::codegen::round_tests_go(pkg)),
             ]
         },
+        stem: None,
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
         folds: true,
@@ -277,6 +316,7 @@ pub const ALL: &[Backend] = &[
                 ("swift/_round_test.swift".into(), crate::codegen::round_tests_swift()),
             ]
         },
+        stem: None,
         // Two files, one module: top-level code is only allowed in `main.swift`, so the
         // runner carries `@main` instead and the pair compiles as it stands. `-Onone` is
         // deliberate — nothing here is measured for speed, and the optimizer is the slowest
@@ -297,6 +337,55 @@ pub const ALL: &[Backend] = &[
         ready: None,
     },
     Backend {
+        id: "java",
+        name: "Java",
+        // `javac` builds and `java` runs; `ready` asks for the second one, because a JDK is
+        // what has to be there and a JRE alone would compile nothing.
+        tool: "javac",
+        lang: Lang::Java,
+        // The public class has to be the file's name, so the file is named after the class
+        // and not after the alias the other backends use.
+        files: |g, _alias, _pkg| {
+            let cls = g.java_class();
+            vec![
+                (format!("java/{cls}.java"), g.java()),
+                (format!("java/{cls}Runner.java"), g.java_runner()),
+                ("java/_RoundTest.java".into(), crate::codegen::round_tests_java()),
+            ]
+        },
+        stem: Some(crate::codegen::java_class),
+        // `--release 17` is the floor the output claims (§15.78) rather than whatever JDK is
+        // installed, `-encoding UTF-8` is what a JDK before 18 needs to read a Japanese
+        // identifier, and `-d classes` keeps the build's output out of the source directory.
+        run: |alias, _| {
+            let cls = crate::codegen::java_class(alias);
+            Plan::new("java", "java", &["-cp", "classes", &format!("{cls}Runner")]).built(
+                "javac",
+                &JAVAC_FLAGS
+                    .iter()
+                    .copied()
+                    .chain([format!("{cls}.java"), format!("{cls}Runner.java")].iter().map(|s| s.as_str()))
+                    .collect::<Vec<&str>>(),
+            )
+        },
+        round: |_| {
+            Plan::new("java", "java", &["-cp", "classes", "_RoundTest"]).built(
+                "javac",
+                &JAVAC_FLAGS.iter().copied().chain(["_RoundTest.java"]).collect::<Vec<&str>>(),
+            )
+        },
+        folds: true,
+        wasi: None,
+        mcp: None,
+        ready: Some(|| {
+            if have("java") {
+                Ok(())
+            } else {
+                Err(tr!("java が無いので Java 側を飛ばしました", "java not found; skipped the Java side"))
+            }
+        }),
+    },
+    Backend {
         id: "sql",
         name: "SQL",
         // The query runs on PostgreSQL; the agreement check runs it on the SQLite that ships
@@ -310,6 +399,7 @@ pub const ALL: &[Backend] = &[
                 ("sql/_round_test.py".into(), crate::codegen::round_tests_sql()),
             ]
         },
+        stem: None,
         run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
         folds: false,
@@ -335,6 +425,7 @@ pub const ALL: &[Backend] = &[
                 ("wasm/_round_test.mjs".into(), crate::codegen::round_tests_wasm_js()),
             ]
         },
+        stem: None,
         run: |alias, _| {
             let args = wasm_rustc(&format!("{alias}_wasm.rs"), &format!("{alias}.wasm"));
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -380,6 +471,11 @@ fn wasm_rustc(src: &str, out: &str) -> Vec<String> {
     v.extend(crate::codegen::WASM_RUSTC_FLAGS.split(' ').map(|s| s.to_string()));
     v.extend([src.to_string(), "-o".to_string(), out.to_string()]);
     v
+}
+
+/// What this backend calls the files it wrote for `alias`.
+pub fn stem(b: &Backend, alias: &str) -> String {
+    b.stem.map(|f| f(alias)).unwrap_or_else(|| alias.to_string())
 }
 
 /// The backend with this id, for the places that address one by name.

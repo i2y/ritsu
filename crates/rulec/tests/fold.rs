@@ -174,16 +174,20 @@ fn takeは一意か先頭かを書かせる() {
 /// produce a file that cannot run (§15.56). SQL is the one that cannot: a single query has
 /// nowhere to carry a value from row to row and stop early.
 #[test]
-fn 八言語に生成し_SQLは名指しで断る() {
+fn 十言語に生成し_SQLは名指しで断る() {
     let d = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
-    for lang in ["python", "typescript", "javascript", "rust", "ruby", "go", "swift", "wasm"] {
-        assert!(out.join(lang).exists(), "{lang} に生成されていない");
+    // Every backend that says it can write a walk, taken from the registry rather than
+    // listed again here: the count in this test's name is the one `folds` decides.
+    for b in rulec::backend::ALL.iter().filter(|b| b.folds) {
+        assert!(out.join(b.id).exists(), "{} に生成されていない", b.id);
     }
-    assert!(!out.join("sql").exists(), "SQL は書けないはず");
+    for b in rulec::backend::ALL.iter().filter(|b| !b.folds) {
+        assert!(!out.join(b.id).exists(), "{} は書けないはず", b.id);
+    }
     assert!(said.contains("SQL"), "書けない言語を名指ししていない: {said}");
 
     let p = write(&d, "ex.rule", &format!("{RULE}\nexamples\n| 行ゾーン | 閾値 | 行運賃 | -> 運賃 |\n| 近畿圏 | 500円 | 800円 | 800円 |\n"));

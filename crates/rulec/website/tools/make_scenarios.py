@@ -34,26 +34,26 @@ FIGS = {}
 
 FIGS["existing"] = dict(
     ja=dict(
-        alt="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、九言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。",
+        alt="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、十一言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。",
         nodes=[
             ("sheet", ("法令・規約", ["e-Gov の条文", "規約の PDF", "料金表"]), 118),
             ("actor", ("エージェント", ["条文を読む", "表に写す", "出典を @ で引く"]), 150),
             ("sheet", ("表", ["@法 第91条", "写しに固定"], ".rule"), 120),
-            ("actor", ("rulec", ["写しと照合する", "抜けと重なり", "を証明する", "九言語に生成"]), 150),
-            ("sheet", ("生成コード", ["九言語、依存ゼロ", "ヘッダに出典と", "時点が刻まれる"]), 150),
+            ("actor", ("rulec", ["写しと照合する", "抜けと重なり", "を証明する", "十一言語に生成"]), 150),
+            ("sheet", ("生成コード", ["十一言語、依存ゼロ", "ヘッダに出典と", "時点が刻まれる"]), 150),
         ],
         labels=[("", "読む"), ("", "写す"), ("rulec check", "fetch と pin も"), ("rulec gen", "通ったら")],
         loop=(3, 1, ("改正", ["いつから何が", "変わるか"]), "rulec source outdated"),
         detour=(3, ("承認する人", ["条文と表を", "見比べる", "承認する"]), "rulec doc"),
     ),
     en=dict(
-        alt="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates nine languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread.",
+        alt="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates eleven languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread.",
         nodes=[
             ("sheet", ("Statute, policy", ["an article on e-Gov", "a policy PDF", "a tariff sheet"]), 130),
             ("actor", ("Agent", ["reads the article", "writes the table", "cites it with @"]), 150),
             ("sheet", ("Table", ["@法 第91条", "pinned to a copy"], ".rule"), 120),
-            ("actor", ("rulec", ["holds it to the copy", "proves no gap,", "no overlap", "emits nine languages"]), 160),
-            ("sheet", ("Generated code", ["nine languages, no runtime", "header names the source", "and its date"]), 176),
+            ("actor", ("rulec", ["holds it to the copy", "proves no gap,", "no overlap", "emits eleven languages"]), 160),
+            ("sheet", ("Generated code", ["eleven languages, no runtime", "header names the source", "and its date"]), 176),
         ],
         labels=[("", "reads"), ("", "writes"), ("rulec check", "fetch, pin too"), ("rulec gen", "once it passes")],
         loop=(3, 1, ("Amendment", ["what changes,", "from when"]), "rulec source outdated"),
@@ -63,26 +63,26 @@ FIGS["existing"] = dict(
 
 FIGS["internal"] = dict(
     ja=dict(
-        alt="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で引用してファイルごとハッシュを固定する。rulec が抜けと重なりを証明し、旧実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。承認する人は rulec doc の資料で文書と表を見比べる。通った表から九言語に生成する。",
+        alt="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で引用してファイルごとハッシュを固定する。rulec が抜けと重なりを証明し、旧実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。承認する人は rulec doc の資料で文書と表を見比べる。通った表から十一言語に生成する。",
         nodes=[
             ("sheet", ("手元のもの", ["社内の規程、規約", "Excel、料金表", "動いているコード"]), 130),
             ("actor", ("エージェント", ["読んで表に写す", "Excel は import で", "出典を @ で引く"]), 150),
             ("sheet", ("表", ["@規約 別紙1", "ファイルに固定"], ".rule"), 120),
             ("actor", ("rulec", ["抜けと重なり", "を証明する", "旧実装や記録と", "突き合わせる"]), 150),
-            ("sheet", ("生成コード", ["九言語、依存ゼロ", "旧実装と同じ答え"]), 150),
+            ("sheet", ("生成コード", ["十一言語、依存ゼロ", "旧実装と同じ答え"]), 150),
         ],
         labels=[("", "読む"), ("", "写す"), ("rulec check", "pin も"), ("rulec gen", "通ったら")],
         loop=(3, 1, ("食い違い", ["どの行で何件", "いくら違うか"]), "rulec verify / replay"),
         detour=(3, ("承認する人", ["文書と表を", "見比べる", "承認する"]), "rulec doc"),
     ),
     en=dict(
-        alt="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come nine languages.",
+        alt="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come eleven languages.",
         nodes=[
             ("sheet", ("What you have", ["an internal policy", "a spreadsheet, a tariff", "code that runs today"]), 140),
             ("actor", ("Agent", ["reads and transcribes", "imports the spreadsheet", "cites the file with @"]), 160),
             ("sheet", ("Table", ["@規約 別紙1", "pinned to the file"], ".rule"), 130),
             ("actor", ("rulec", ["proves no gap,", "no overlap", "holds it to the code", "and to the records"]), 160),
-            ("sheet", ("Generated code", ["nine languages, no runtime", "the same answers as before"]), 176),
+            ("sheet", ("Generated code", ["eleven languages, no runtime", "the same answers as before"]), 176),
         ],
         labels=[("", "reads"), ("", "writes"), ("rulec check", "pin too"), ("rulec gen", "once it passes")],
         loop=(3, 1, ("Mismatches", ["which rows, how many,", "by how much"]), "rulec verify / replay"),
@@ -121,23 +121,23 @@ FIGS["designing"] = dict(
 
 FIGS["implementing"] = dict(
     ja=dict(
-        alt="検査を通った表（.rule）から rulec gen が九言語のコードを出し、rulec test が参照評価器と突き合わせる。実装する人は rulec api で呼び方を読み、関数・SQL・Wasm・MCP サーバのどれかを自分のアプリやバッチやエージェントに組み込む。生成物は編集せず、表が変われば CI の gen --check が止める。",
+        alt="検査を通った表（.rule）から rulec gen が十一言語のコードを出し、rulec test が参照評価器と突き合わせる。実装する人は rulec api で呼び方を読み、関数・SQL・Wasm・MCP サーバのどれかを自分のアプリやバッチやエージェントに組み込む。生成物は編集せず、表が変われば CI の gen --check が止める。",
         nodes=[
             ("sheet", ("表", ["検査を通った規則"], ".rule"), 118),
-            ("actor", ("rulec", ["九言語に生成", "参照評価器と", "突き合わせる", "呼び方の一覧"]), 150),
+            ("actor", ("rulec", ["十一言語に生成", "参照評価器と", "突き合わせる", "呼び方の一覧"]), 150),
             ("sheet", ("生成コード", ["関数（七言語）", "SQL の問い合わせ", "Wasm のモジュール", "MCP サーバ"]), 150),
             ("person", ("実装する人", ["呼び出し側を書く", "生成物は編集しない", "CI に置く"]), 160),
             ("sheet", ("動くもの", ["アプリ、バッチ", "エージェントのツール", "ブラウザ"]), 150),
         ],
-        labels=[("rulec gen", ""), ("rulec test", "九言語が同じ答え"), ("rulec api", "呼び方を読む"), ("", "組み込む")],
+        labels=[("rulec gen", ""), ("rulec test", "どれも同じ答え"), ("rulec api", "呼び方を読む"), ("", "組み込む")],
         loop=None,
         detour=None,
     ),
     en=dict(
-        alt="From a table that passed check, rulec gen writes code in nine languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build.",
+        alt="From a table that passed check, rulec gen writes code in eleven languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build.",
         nodes=[
             ("sheet", ("Table", ["a rule that passed check"], ".rule"), 150),
-            ("actor", ("rulec", ["emits nine languages", "holds each to the", "reference evaluator", "lists how to call it"]), 160),
+            ("actor", ("rulec", ["emits eleven languages", "holds each to the", "reference evaluator", "lists how to call it"]), 160),
             ("sheet", ("Generated code", ["functions (seven languages)", "one SQL query", "one Wasm module", "an MCP server"]), 176),
             ("person", ("Implementer", ["writes the caller", "never edits the output", "puts it in CI"]), 150),
             ("sheet", ("What runs", ["an app, a batch", "an agent's tool", "a browser"]), 130),

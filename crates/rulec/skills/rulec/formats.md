@@ -249,6 +249,12 @@ meaning is in [generated-code.md](generated-code.md).
          "enums":[{"name":"クーポン種別","alias":"CouponKind",
                    "values":[{"name":"率引き","alias":"PERCENT"}]}],
          "errors":["RuleInputError","RuleContradictionError"]},
+ "php":{"module":"coupon_step.php","namespace":"CouponStep","function":"coupon_step",
+        "signature":"function coupon_step(int $subtotal, int $applied, …): Output",
+        "params":[…],"returns":"Output","outputs":[…],
+        "enums":[{"name":"クーポン種別","alias":"CouponKind",
+                  "values":[{"name":"率引き","alias":"CouponKind::PERCENT"}]}],
+        "errors":["RuleInputError","RuleContradictionError"]},
  "go":{"package":"couponstep","func":"CouponStep",
        "signature":"func CouponStep(in Input) (Output, error)",
        "input_type":"Input","input_fields":[…],
@@ -261,6 +267,13 @@ meaning is in [generated-code.md](generated-code.md).
           "enums":[{"name":"クーポン種別","alias":"CouponKind",
                     "values":[{"name":"率引き","alias":"percent"}]}],
           "errors":["RuleError.input","RuleError.contradiction"]},
+ "java":{"module":"CouponStep.java","class":"CouponStep","function":"couponStep",
+         "signature":"public static Output couponStep(long subtotal, long applied, …)",
+         "build":"javac --release 17 -encoding UTF-8 -d classes *.java",
+         "params":[…],"returns":"Output","outputs":[…],
+         "enums":[{"name":"クーポン種別","alias":"CouponKind",
+                   "values":[{"name":"率引き","alias":"CouponKind.PERCENT"}]}],
+         "errors":["RuleInputError","RuleContradictionError"]},
  "sql":{"file":"coupon_step.sql","input":"coupon_step_input","id":"_id","guard":"_input_error",
         "dialect":"postgresql","runs_on":["postgresql","sqlite"],
         "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
@@ -281,8 +294,9 @@ one does — the twin that returns the rows that matched beside the outputs — 
 and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
-`CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby,
-`couponstep.CouponKindPercent` in Go, `CouponKind.percent` in Swift; SQL spells no member, an
+`CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby
+and in PHP, `CouponKind.PERCENT` in Java, `couponstep.CouponKindPercent` in Go,
+`CouponKind.percent` in Swift; SQL spells no member, an
 enum being its own name there, and the Wasm module reads and writes the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
 type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the

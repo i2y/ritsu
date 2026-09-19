@@ -1,7 +1,7 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm. This page is about the
-tenth target — a language nobody planned for, a workflow engine's expression language, a
+`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm. This page is about the
+twelfth target — a language nobody planned for, a workflow engine's expression language, a
 spreadsheet formula, a database.
 
 The short answer: **you do not have to modify rulec, and you do not have to give up the
@@ -18,7 +18,7 @@ target.
 | | Generating from outside | A built-in backend |
 |---|---|---|
 | Where the code lives | your own generator, any language | `src/codegen.rs` |
-| Changes to rulec | none | a `Lang` variant and ~700 lines |
+| Changes to rulec | none | a `Lang` variant and a file of its own, about 1,100 lines |
 | Reaches | anything you can run | anything with a runner |
 | Gets `rulec gen`, `rulec test`, `rulec api` | no | yes |
 | Evidence | `rulec verify` over the generated cases | the agreement test in the suite |
@@ -255,12 +255,18 @@ Worth doing when a target is used often enough that regenerating it should be on
 when its output should be held by the suite rather than by you. It buys `rulec gen`,
 `rulec test`, an entry in `rulec api`, and a place in the agreement test.
 
-What it costs, measured on TypeScript and again on Ruby: **about 500 to 700 lines in
-`src/codegen.rs`**, plus one row elsewhere.
+What it costs, measured four times. The third target, TypeScript, took **about 700 lines of
+emitter**, and the fifth, Ruby, about 500.
+
+The tenth took 1,098 and the eleventh 1,293, both in a file of their own under
+`src/codegen/` — and most of what is above the earlier figures is the doc comments that say
+why each decision went the way it did. Plus one row elsewhere.
 
 That "one row" is recent. Adding Ruby meant editing twenty-two files, because the set of
 backends was written out again in seven separate lists. It now lives once, in
-`src/backend.rs`, and `gen`, `test`, `api` and the test suites all walk it.
+`src/backend.rs`, and `gen`, `test`, `api` and the test suites all walk it. What is left
+outside is prose, and a test holds that to the registry too: a paragraph that names three of
+the targets and not the rest fails.
 
 The pieces, in the order they are usually written:
 
@@ -273,17 +279,21 @@ The pieces, in the order they are usually written:
    stdout. This is what lets the target join the agreement test.
 4. `round_tests_<lang>()` — the five rounding modes against the reference values.
 5. An arm in `Gen::cell()`, and an entry in `Gen::api()`.
-6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, and
-   how to run them. Nothing else has to be told about the language — `rulec gen` writes it,
+6. **A row in `src/backend.rs`**: the id, the name, the toolchain, the files it writes, how
+   to run them, and — where the files are not named after the rule's alias, as Java's are
+   not — what it does name them. Nothing else has to be told about the language — `rulec gen` writes it,
    `rulec test` runs it, the agreement test compares it, and the test that holds the
    documents to the registry starts requiring the prose to name it.
 
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
 Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
 `NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
-Ruby, JavaScript and SQL cannot hold a unit at all, so there it is documented instead, and the
-`.rbs` that ships with the Ruby module says so too; the Wasm module is the Rust one, so the
-unit rides in it and the `.wit` states it for the wire.
+Ruby, PHP, JavaScript, Java and SQL cannot hold a unit at all, so there it is documented
+instead, and the `.rbs` that ships with the Ruby module says so too; the Wasm module is the
+Rust one, so the unit rides in it and the `.wit` states it for the wire. Carrying *something*
+still pays where the unit cannot ride: PHP and Java declare the kind of every parameter, so
+their entry guard is the one Go, Rust and Swift emit — the range alone — while the three
+languages that declare nothing have to ask at the door whether a number is an integer.
 
 The rule that decides whether a target may be built in has not moved: **it must be able to
 join the byte-for-byte agreement check.** A generated artifact the suite cannot run is outside
@@ -291,6 +301,36 @@ the claim, and inside the repository that is not allowed. Outside it, generated 
 and labelled as unverified, it is.
 
 ---
+
+## A plugin for the host's own system
+
+A fair question, once there are eleven targets: why not a mode that packages the output as a
+plugin for each one's own ecosystem — an npm package, a gem, a composer package, a Maven
+artifact, a WordPress plugin, a Rails engine?
+
+The question turns out to be two questions, and they have opposite answers.
+
+**A package manifest is configuration.** The package name, the version, the licence, the
+namespace, the organisation's scope: none of that is in the `.rule`, so the tool would have to
+invent it or grow a configuration file to be told it — and "no runtime and no configuration"
+is the whole promise of the output. It is also the part `verify` cannot hold to anything: an
+agreement check compares answers, not metadata. The line that is already drawn explains it:
+**a manifest is written only when the file will not run without one.** `go.mod` is there
+because `go run` needs it; a `Cargo.toml` was considered and dropped for the same reason in
+reverse. Neither of the two newest targets needed one — a `require_once` and a `javac`
+invocation are enough. Packaging a *library* of rules is a real job, but it is one the
+library's repository does once, not one the generator does per rule.
+
+**A host's plugin shape moves.** Shopify Functions changed target, entry point and input
+transport inside a year ([below](#a-wasm-host-shopify-functions)). A page that goes stale says
+so to anyone who reads the date; generated scaffolding that goes stale looks authoritative.
+That is why the boundary belongs in your code and this page holds the recipe.
+
+What the tool does generate is a **door**, and a door has to meet three conditions: it speaks
+the wire the tool already speaks (JSON), it needs no SDK, and `rulec test` can drive it over
+the vectors. The MCP server, the approver's page and the canonical-ABI Wasm module are the
+doors that met all three. Anything that does not is a recipe — the two below are the worked
+ones — plus `verify`, which holds whatever you build to the rule just the same.
 
 ## A Wasm host: Shopify Functions
 

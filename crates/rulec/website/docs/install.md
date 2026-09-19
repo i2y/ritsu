@@ -52,10 +52,11 @@ Nothing, for the checks. `rulec check`, `fmt`, `gen`, `vectors`,
 
 Two steps reach outside:
 
-- **`rulec test`** runs the generated Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift,
-  SQL and Wasm and compares them with the reference evaluator. It needs `python3`,
-  `node`, `rustc`, `ruby`, `go` and `swiftc` on the path (the SQL runs on the `sqlite3` inside
-  that `python3`); without one it says which side it skipped and does not fail.
+- **`rulec test`** runs the generated Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
+  Swift, Java, SQL and Wasm and compares them with the reference evaluator. It needs
+  `python3`, `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK on the path (the SQL runs
+  on the `sqlite3` inside that `python3`); without one it says which side it skipped and does
+  not fail.
 - **`rulec verify`** starts your adapter as a child process, so it needs
   whatever that adapter is written in.
 

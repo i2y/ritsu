@@ -4,13 +4,13 @@
 $ rulec gen rules/ --out generated/
 ```
 
-出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・Swift のモジュールと、普通の Go パッケージと、SQL の一つの問い合わせと、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
+出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift のモジュールと、Java のクラスと、普通の Go パッケージと、SQL の一つの問い合わせと、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
 
 検査を通らない規則からは、何も生成されません。
 
 ## 対応する出力言語
 
-いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・Go・Swift・SQL・Wasm の九つで、**Java・Kotlin に対応予定**です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
+いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm の十一言語です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
 
 | | 状態 | 要るもの |
 |---|---|---|
@@ -19,10 +19,10 @@ $ rulec gen rules/ --out generated/
 | JavaScript | 対応済み | `node` だけ、あるいはブラウザ。TypeScript から型を取り除いたもので、ES モジュール（`.mjs`）として出ます |
 | Rust | 対応済み | `rustc` だけ（cargo もクレートも要りません） |
 | Ruby | 対応済み | `ruby` 3.x か 4.x。`json` が標準添付なので gem は要りません。モジュールの隣に `.rbs` も出ます |
+| PHP | 対応済み | `php` 8.2 以降。`ext/json` は本体に入っているので composer は要りません。列挙と型付きの引数を使い、割り算はすべて `intdiv` です |
 | Go | 対応済み | `go` |
 | Swift | 対応済み | `swiftc` だけ（SwiftPM も `Package.swift` も要りません）。Rust と同じく単位が型に載ります |
-| Java | 対応予定 | JDK。単一ファイル実行でビルドツール無しに走らせられます |
-| Kotlin | 対応予定 | kotlinc |
+| Java | 対応済み | JDK。`javac` と `java` だけで、Maven も Gradle も要りません。`--release 17` で組むので 17・21・25 のどれでも動きます。Kotlin や Scala からはそのまま呼べます |
 | SQL | 対応済み | `python3`。その標準添付の `sqlite3` で一致検査を回します。問い合わせ自体は PostgreSQL 向けに書いてあります。**畳み込み（`fold`）のある規則にだけは生成しません** |
 | Wasm | 対応済み | `wasm32-unknown-unknown` を入れた `rustc` と、一致検査に使う `node`。モジュール自体は何も import しません |
 
@@ -114,8 +114,8 @@ func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 読める形であることを、生成器は四つで守っています。
 
 - **セルを省略しません。** 手前の分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です。
-- **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`、Wasm のモジュールは Rust のものなので同じ newtype。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby と JavaScript と SQL は単位を置ける型が無いので、そこは注記で伝えます。
-- **丸めは自前のヘルパで行います。** Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・TypeScript・JavaScript・SQL は 0 方向で食い違うので、言語の素の除算には任せません。
+- **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`、Wasm のモジュールは Rust のものなので同じ newtype。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby・PHP・JavaScript・Java・SQL は単位を置ける型が無いので、そこは注記で伝えます。ただし PHP と Java は引数の種類そのものは宣言するので、入口の検査は範囲だけで済みます。
+- **丸めは自前のヘルパで行います。** Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・Java・TypeScript・JavaScript・PHP の `intdiv`・SQL は 0 方向で食い違うので、言語の素の除算には任せません。
 - **言語の組み込み関数をそのまま呼びません。** 入力のエイリアスが `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています。
 
 参照評価器（rulec の中にある「正解」の実装）と生成した各言語が同じ答えを返すことは、境界から自動で作ったテストケースを全部に流し、**決まった形の JSON にしてバイト単位で**突き合わせて確かめています。

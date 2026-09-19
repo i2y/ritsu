@@ -4,7 +4,7 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift, one query in SQL,
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java, one query in SQL,
 one Wasm module, and an ordinary Go package. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
@@ -13,8 +13,8 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Nine are supported today — Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm — and **Java
-and Kotlin are planned**. The point is that one table should be able to give the
+Eleven are supported today — Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift,
+Java, SQL and Wasm. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
 exists.
@@ -26,10 +26,10 @@ exists.
 | JavaScript | supported | just `node`, or a browser — the TypeScript with its types taken off, as an ES module |
 | Rust | supported | just `rustc` — no cargo, no crates |
 | Ruby | supported | `ruby` 3.x or 4.x — `json` is standard library, so no gem, and a `.rbs` ships beside the module |
+| PHP | supported | `php` 8.2 or newer — `ext/json` is built in, so no composer; native enums, typed parameters, and `intdiv` for every division |
 | Go | supported | `go` |
 | Swift | supported | just `swiftc` — no SwiftPM, no `Package.swift`; units ride in the type as they do in Rust |
-| Java | planned | a JDK; single-file execution means the runner needs no build tool |
-| Kotlin | planned | kotlinc |
+| Java | supported | a JDK — `javac` and `java`, no Maven and no Gradle. Built at `--release 17`, so 17, 21 and 25 all take it; Kotlin and Scala call the class as it stands |
 | SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
 | Wasm | supported | `rustc` with the `wasm32-unknown-unknown` target, and `node` for the agreement check. The module itself imports nothing |
 
@@ -164,8 +164,10 @@ Four rules keep it readable.
   newtype in Rust, a one-field struct in Swift, a defined type in Go, a
   branded `bigint` in TypeScript, a `NewType` in Python, and the Rust
   newtype again in the Wasm module. Confusing `YenInclTax` with
-  `YenExclTax` stops at compile time. Ruby, JavaScript and SQL have
-  nowhere to put a unit, so there it is documented instead.
+  `YenExclTax` stops at compile time. Ruby, PHP, JavaScript, Java and SQL
+  have nowhere to put a unit, so there it is documented instead — though
+  PHP and Java still declare every parameter's kind, which is why their
+  entry guard asks about the range alone.
 - **Rounding goes through its own helper**, because Python's and Ruby's
   integer division rounds toward −∞ while Rust, Swift, Go, TypeScript,
   JavaScript and SQL truncate toward zero.

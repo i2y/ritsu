@@ -159,6 +159,19 @@ fn agentsとreadmeのciが同じ行を言う() {
     }
 }
 
+/// Whether a paragraph names this language, as a word rather than as a run of letters.
+///
+/// `JavaScript` is not `Java`. Matching on the substring would have counted every paragraph
+/// that names JavaScript as naming Java too, and the check would then have passed exactly
+/// the paragraphs that forgot the eleventh target (§15.78).
+pub fn names_it(para: &str, n: &str) -> bool {
+    para.match_indices(n).any(|(i, _)| {
+        let before = para[..i].chars().next_back();
+        let after = para[i + n.len()..].chars().next();
+        !before.is_some_and(|c| c.is_ascii_alphanumeric()) && !after.is_some_and(|c| c.is_ascii_alphanumeric())
+    })
+}
+
 /// The set of target languages, held to `src/backend.rs` wherever a document enumerates it.
 ///
 /// Adding Ruby meant editing twenty-odd places by hand, and the only thing that caught an
@@ -181,11 +194,11 @@ fn 文書が並べる対象言語はレジストリと同じ() {
             if para.trim_start().starts_with("```") {
                 continue;
             }
-            let named: Vec<&&str> = names.iter().filter(|n| para.contains(**n)).collect();
+            let named: Vec<&&str> = names.iter().filter(|n| names_it(para, n)).collect();
             if named.len() < 3 || named.len() == names.len() {
                 continue;
             }
-            let missing: Vec<&&str> = names.iter().filter(|n| !para.contains(**n)).collect();
+            let missing: Vec<&&str> = names.iter().filter(|n| !names_it(para, n)).collect();
             panic!(
                 "{name}:{at}: 対象言語を {} つ並べて {:?} を落としています。\n  段落: {}",
                 named.len(),

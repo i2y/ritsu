@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1112 458" width="1112" height="458" role="img" aria-label="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、九言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1112 458" width="1112" height="458" role="img" aria-label="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、十一言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
@@ -30,11 +30,11 @@
 <text x="771.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">写しと照合する</text>
 <text x="771.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">抜けと重なり</text>
 <text x="771.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">を証明する</text>
-<text x="771.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">九言語に生成</text>
+<text x="771.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">十一言語に生成</text>
 <path d="M942,20.0 H1080 L1092,32.0 V120.0 H942 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1080,20.0 V32.0 H1092 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="951" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">生成コード</text>
-<text x="951" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">九言語、依存ゼロ</text>
+<text x="951" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">十一言語、依存ゼロ</text>
 <text x="951" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">ヘッダに出典と</text>
 <text x="951" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">時点が刻まれる</text>
 <line x1="138" y1="70" x2="234" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>

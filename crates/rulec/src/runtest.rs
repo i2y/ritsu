@@ -248,7 +248,7 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             // Not every rule is generated for every backend: a rule that walks a sequence is
             // written only where the walk can be (§15.56). What is not there is not run, and
             // saying "cannot start" about a file nobody wrote would read as a broken machine.
-            if !wrote(dir, b.id, alias) {
+            if !wrote(dir, b.id, &crate::backend::stem(b, alias)) {
                 continue;
             }
             // One plan held to the rule: the vectors through it, then each refused input on its
@@ -450,10 +450,10 @@ fn via_mcp(
 }
 
 /// Whether this backend has anything for this rule under the output directory.
-fn wrote(dir: &Path, id: &str, alias: &str) -> bool {
+fn wrote(dir: &Path, id: &str, stem: &str) -> bool {
     let d = dir.join(id);
     let named = |p: &Path| -> bool {
-        p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(alias))
+        p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(stem))
     };
     let Ok(rd) = std::fs::read_dir(&d) else { return false };
     rd.flatten().any(|e| {

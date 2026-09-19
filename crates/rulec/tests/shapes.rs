@@ -113,6 +113,50 @@ fn sw_typechecks(dir: &Path, module: &str) {
     assert!(err.trim().is_empty(), "生成した Swift が警告を出している:\n{err}");
 }
 
+/// The generated PHP has to parse, and the file has to load — PHP raises at compile time
+/// for a duplicate name or a constant expression it cannot fold, which is what the keyword
+/// suffix and the group constants exist to avoid (§15.77).
+fn php_loads(dir: &Path, module: &str) {
+    if !have("php") {
+        eprintln!("注意: php が無いので PHP 側を飛ばした");
+        return;
+    }
+    let o = Command::new("php")
+        .current_dir(dir.join("php"))
+        .args(["-n", "-l", &format!("{module}.php")])
+        .output()
+        .expect("php を起動できない");
+    assert!(o.status.success(), "生成した PHP が構文として通らない:\n{}", String::from_utf8_lossy(&o.stdout));
+    let o = Command::new("php")
+        .current_dir(dir.join("php"))
+        .args(["-n", "-r", &format!("require_once '{module}.php';")])
+        .output()
+        .expect("php を起動できない");
+    assert!(o.status.success(), "生成した PHP が読み込めない:\n{}", String::from_utf8_lossy(&o.stdout));
+}
+
+/// The generated Java has to compile, module and runner together, at the floor the output
+/// claims (§15.78). A warning counts as a failure for the same reason it does in Swift: the
+/// file says DO NOT EDIT, so nobody can quiet one.
+fn java_compiles(dir: &Path, class: &str) {
+    if !have("javac") {
+        eprintln!("注意: javac が無いので Java 側を飛ばした");
+        return;
+    }
+    let mut args: Vec<String> = rulec::backend::JAVAC_FLAGS.iter().map(|s| s.to_string()).collect();
+    args.push(format!("{class}.java"));
+    args.push(format!("{class}Runner.java"));
+    let o = Command::new("javac")
+        .current_dir(dir.join("java"))
+        .args(["-Xlint:all"])
+        .args(&args)
+        .output()
+        .expect("javac を起動できない");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "生成した Java が通らない:\n{err}");
+    assert!(err.trim().is_empty(), "生成した Java が警告を出している:\n{err}");
+}
+
 /// The generated TypeScript runner has to at least load. It is the other half of the pair
 /// that calls the rule by its bare name, so it is the other one a rule aliased `d` broke.
 fn ts_runs(dir: &Path, module: &str) {
@@ -161,6 +205,8 @@ fn 読まれない列があっても生成物はコンパイルできる() {
     go_builds(&dir, "unusedcol");
     py_imports(&dir, "unused_col");
     rb_loads(&dir, "unused_col");
+    php_loads(&dir, "unused_col");
+    java_compiles(&dir, "UnusedCol");
     sw_typechecks(&dir, "unused_col");
     let go = std::fs::read_to_string(dir.join("go").join("unusedcol").join("unused_col.go")).unwrap();
     // The cell is still written out, so that the branch and the row stay 1:1.
@@ -210,6 +256,8 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     go_builds(&dir, "boolonly");
     py_imports(&dir, "bool_only");
     rb_loads(&dir, "bool_only");
+    php_loads(&dir, "bool_only");
+    java_compiles(&dir, "BoolOnly");
     sw_typechecks(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
     assert!(go.contains("return false, nil, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
@@ -261,6 +309,8 @@ fn 全部asciiで書いた規則も生成物はコンパイルできる() {
     go_builds(&dir, "bulkfee");
     py_imports(&dir, "bulk_fee");
     rb_loads(&dir, "bulk_fee");
+    php_loads(&dir, "bulk_fee");
+    java_compiles(&dir, "BulkFee");
     sw_typechecks(&dir, "bulk_fee");
     let py = std::fs::read_to_string(dir.join("python").join("bulk_fee.py")).unwrap();
     assert!(py.contains("def bulk_fee(weight: Gram, member: MemberKind) -> YenInclTax:"), "{py}");
@@ -310,6 +360,8 @@ result 結果 = 中間
     go_builds(&dir, "aliasdemo");
     py_imports(&dir, "alias_demo");
     rb_loads(&dir, "alias_demo");
+    php_loads(&dir, "alias_demo");
+    java_compiles(&dir, "AliasDemo");
     sw_typechecks(&dir, "alias_demo");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -364,6 +416,8 @@ result 可否 = 可否
     assert!(sw.contains("try keywordDemoTraced(where: `where`, kind: kind).0"), "{sw}");
     py_imports(&dir, "keyword_demo");
     rb_loads(&dir, "keyword_demo");
+    php_loads(&dir, "keyword_demo");
+    java_compiles(&dir, "KeywordDemo");
     go_builds(&dir, "keyworddemo");
     sw_typechecks(&dir, "keyword_demo");
     let _ = std::fs::remove_dir_all(&dir);
@@ -410,6 +464,8 @@ fn ランナーの局所変数と同じ名前の規則でも生成物は動く()
     let dir = generate("locald", &collide_rule("d"));
     py_imports(&dir, "d");
     rb_loads(&dir, "d");
+    php_loads(&dir, "d");
+    java_compiles(&dir, "D");
     go_builds(&dir, "d");
     sw_typechecks(&dir, "d");
     ts_runs(&dir, "d");

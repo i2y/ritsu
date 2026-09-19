@@ -546,7 +546,7 @@ fn playgroundの表は絵の表と同じ() {
 /// `src/backend.rs` wherever a document enumerates it, but a sentence that says "seven
 /// languages" names none of them, so nothing caught the home page saying that after the
 /// eighth arrived. The registry knows the number; a page that spells it out has to agree.
-const COUNTS: [(&str, usize); 12] = [
+const COUNTS: [(&str, usize); 18] = [
     ("六つの言語", 6),
     ("七つの言語", 7),
     ("八つの言語", 8),
@@ -559,7 +559,22 @@ const COUNTS: [(&str, usize); 12] = [
     ("seven languages", 7),
     ("eight languages", 8),
     ("nine languages", 9),
+    ("十言語", 10),
+    ("十一言語", 11),
+    ("十の言語", 10),
+    ("十一の言語", 11),
+    ("ten languages", 10),
+    ("eleven languages", 11),
 ];
+
+/// The same word-boundary rule `tests/docs.rs` applies: `JavaScript` does not name Java.
+fn named_as_word(para: &str, n: &str) -> bool {
+    para.match_indices(n).any(|(i, _)| {
+        let before = para[..i].chars().next_back();
+        let after = para[i + n.len()..].chars().next();
+        !before.is_some_and(|c| c.is_ascii_alphanumeric()) && !after.is_some_and(|c| c.is_ascii_alphanumeric())
+    })
+}
 
 fn repo_docs() -> Vec<(String, String)> {
     let mut out = vec![("README.md".to_string(), read("README.md")), ("AGENTS.md".to_string(), read("AGENTS.md"))];
@@ -600,11 +615,11 @@ fn サイトが並べる対象言語はレジストリと同じ() {
             if para.trim_start().starts_with("```") {
                 continue;
             }
-            let named = names.iter().filter(|n| para.contains(**n)).count();
+            let named = names.iter().filter(|n| named_as_word(para, n)).count();
             if named < 4 || named == names.len() {
                 continue;
             }
-            let missing: Vec<&&str> = names.iter().filter(|n| !para.contains(**n)).collect();
+            let missing: Vec<&&str> = names.iter().filter(|n| !named_as_word(para, n)).collect();
             panic!(
                 "{name}: 対象言語を {named} つ並べて {missing:?} を落としています。\n  段落: {}",
                 para.trim().chars().take(160).collect::<String>()

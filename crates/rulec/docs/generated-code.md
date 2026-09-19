@@ -1,6 +1,6 @@
 # The generated code
 
-`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm — a module in each,
+`rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm — a module in each,
 a package in Go's case, and one query in SQL's. There is no runtime to install and nothing to
 configure: a function takes the declared inputs and returns the declared outputs, and the
 query takes a relation of them. This file says what shape that code has, what it guarantees,
@@ -24,7 +24,10 @@ spelling each language gives them, and the errors the code can raise. The shape 
 **No dependencies.** The generated Python imports `enum` and `typing`; the generated
 TypeScript and JavaScript import nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
-Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`; the
+PHP requires nothing at all and needs no composer; the generated
+Swift imports nothing at all and needs no package manifest; the generated Go imports `fmt`;
+the generated Java imports `java.util.List` and `java.util.ArrayList` and needs no Maven and
+no Gradle; the
 generated Wasm module imports nothing, not even WASI.
 The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim. The server that offers the rule as an MCP tool
@@ -47,7 +50,10 @@ read. The branches are written once, in the twin that also returns
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
-`NewType`, and the Wasm module is the Rust one; Ruby, JavaScript and SQL have nowhere to put a unit, so they document it instead.
+`NewType`, and the Wasm module is the Rust one; Ruby, PHP, JavaScript, Java and SQL have
+nowhere to put a unit, so they document it instead. PHP and Java still declare the *kind* of
+every parameter — `int`, `string`, `bool`, the enum itself — which is why their entry guard
+asks only about the range.
 `YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
 Swift, Go and TypeScript, and fails type checking in Python. Every value is an integer in its declared unit; no floating point appears
 anywhere.
@@ -184,9 +190,10 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby, Go and SQL. A value
+**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby and SQL. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
-make at run time is already made by the compiler. Swift is in the same position, and so is
+make at run time is already made by the compiler. Swift, PHP, Java and Go are in the same
+position, and so is
 the Wasm module, which is the Rust one behind a door that turns an unknown value into an
 `error` line before the module is reached.
 
@@ -248,6 +255,55 @@ fires.
 It still does not refuse grams where yen were meant. RBS has no newtype either, and
 `type yen = Integer` is *the same type* as `type gram = Integer` — measured with `steep`, not
 assumed (§15.23). Units stay a matter of the declaration and the comment.
+
+### PHP
+
+```php
+CouponStep\coupon_step($subtotal, $applied, $kind, $rate, $face, $dup);
+```
+
+One file, in a namespace named after the rule, with free functions in it. `declare(strict_types=1)`
+is on, and every parameter has a declared type — `int`, `string`, `bool`, or the enum itself —
+so a float where an integer was asked for is a `TypeError` at the door rather than a value
+that quietly rounds.
+
+**Every division is `intdiv`.** PHP's `/` returns a *float* as soon as the division is not
+exact, and a float is exact only to 2^53 where the overflow proof (E108) is about int64. That
+would lose the low digits of a yen amount silently, at the one place the proof cannot see, so
+the operator never appears: `intdiv` truncates toward zero, which is what the generator's
+own `//` means wherever it writes one.
+
+**The unit is not in the type**, as in Ruby. `money[円, incl_tax]` and `mass[g]` are both
+`int`, and which is which is stated in the doc comment above the function and in `rulec api`.
+What PHP *can* hold is the kind, which is why the entry guard here asks about the range alone.
+
+```php
+require_once __DIR__ . '/coupon_step.php';
+
+$out = CouponStep\coupon_step(10000, 0, CouponStep\CouponKind::PERCENT, 10, 0, false);
+echo $out->ok, ' ', $out->raw;      // true 1000
+```
+
+An enum is a native backed enum whose cases are the aliases in upper case
+(`CouponKind::PERCENT`) and whose backing value *is* the source name — which is also what the
+wire carries, so `CouponKind::from($s)` is the whole conversion and nothing keeps a second
+table.
+
+With one output the function returns that value; with two or more it returns an `Output`, a
+final class of promoted readonly properties. The traced twin returns `[$value, $trace]`, which
+the caller destructures.
+
+Errors are `RuleInputError extends \InvalidArgumentException` for a contract violation by the
+caller and `RuleContradictionError extends \RuntimeException` for the runtime guard below —
+the same split as Python's two exception classes.
+
+It needs no composer and no autoloader: one `require_once` is enough, `ext/json` has been
+compiled into every build since 8.0, and the file uses nothing newer than 8.1. The floor is
+**8.2**, because 8.1 is where security support ended.
+
+**One thing PHP does that the other ten do not**: an integer that overflows becomes a float
+rather than wrapping. E108 proves no intermediate leaves int64, so a rule that passed `check`
+cannot reach it — but it is worth knowing which side of the proof the language sits on.
 
 ### Go
 
@@ -316,6 +372,54 @@ An enum is a `String`-backed Swift enum whose raw value *is* the source name —
 what the wire format carries — so `.rawValue` and `init?(rawValue:)` are the whole conversion
 in both directions and no parser is generated. It is `CaseIterable`, so `.allCases` is the
 list. **There is no entry guard on an enum input**, for the reason given under Rust.
+
+### Java
+
+```java
+CouponStep.couponStep(subtotal, applied, kind, rate, face, dup);
+```
+
+One public class named after the rule, with everything nested inside it: the enums, the
+errors, `Fired`, `Output` and the static methods. Nested, not top-level, because two rules
+generated into the same directory would otherwise each want to be `RuleInputError.java`.
+
+**`long` is the int64 the proof is about.** No widening, no `BigInteger`, no check at the
+door: what E108 proves about every intermediate is exactly what the machine word holds.
+Overflow wraps rather than trapping, as it does in Go and Rust.
+
+**The unit is not in the type.** Java has no zero-cost wrapper, so `money[円, incl_tax]` and
+`mass[g]` are both `long` and the javadoc says which is which. The kind *is* declared, so the
+entry guard asks about the range alone.
+
+```java
+var out = CouponStep.couponStep(10000, 0, CouponStep.CouponKind.PERCENT, 10, 0, false);
+System.out.println(out.ok() + " " + out.raw());   // true 1000
+```
+
+An enum is a Java enum whose constants are the aliases in upper case
+(`CouponKind.PERCENT`); `value()` gives the source name the wire carries, and
+`CouponKind.from(String)` reads one back, refusing an unknown value at the door.
+
+With one output the method returns that value; with two or more it returns `Output`, a
+record. The traced twin returns `Traced`, a record of `value()` and `trace()` — Java has no
+tuple, and a pair with the concrete type in it reads better at the call site than a generic
+one.
+
+Errors are `RuleInputError extends IllegalArgumentException` and
+`RuleContradictionError extends RuntimeException`.
+
+**It builds with the JDK alone**: `javac --release 17 -encoding UTF-8 -d classes *.java`, then
+`java -cp classes`. No Maven, no Gradle, no dependency — `java.util.List` and
+`java.util.ArrayList` are the only imports, and the runner reads the wire with a JSON reader
+written into it, because the JDK still has none (JEP 540 is an incubator proposed for a later
+release). `--release 17` is not the newest LTS but the **floor**: what a generated artifact
+has to decide is the oldest release it runs on, and `rulec test` compiles at that floor rather
+than at whatever JDK is installed. Kotlin and Scala call the class as it stands.
+
+Two things are pinned that would otherwise follow the machine: `-encoding UTF-8`, because a
+JDK before 18 reads source in the platform's charset and a Japanese identifier would arrive as
+mojibake; and `Locale.ROOT` on every `String.format`, because `%04d` under a locale with its
+own digits would not write the bytes the other ten targets write.
 
 ### SQL
 
@@ -460,7 +564,7 @@ The body is a loop over that list, with the rule's own tables inside it and one 
 verdict. What comes out of the loop goes through the same rounding and the same return the
 rule would have had without it. `rulec api` lists the sequence as the last parameter, with the
 element's fields under `elements`, and the record written for one call carries the sequence as
-an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift and Wasm are
+an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL is refused by name, because one query has nowhere to carry a value from row to row.
 
 ## The digest in the header
@@ -477,7 +581,8 @@ a reader of the generated code go and look at the document it was transcribed fr
 
 ## The rows that matched
 
-Beside every function there is a twin with `_traced` on its name (`Traced` in Go and Swift).
+Beside every function there is a twin with `_traced` on its name, spelled `Traced` wherever the
+language's own convention capitalises it (the table below says which).
 It takes the same inputs and returns, beside the outputs, the rows that matched: one per
 table, in order, each as the table's name and its 1-based row number. The plain function
 calls it and drops the trace, so the branches exist once, in the traced one.
@@ -489,8 +594,10 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 | JavaScript | `coupon_step_traced(…)`, returning `[out, trace]` | `{ table, row, label? }` |
 | Rust | `coupon_step_traced(…) -> Result<(Output, Vec<Fired>), RuleError>` | `Fired { table: &'static str, row: u32, label: &'static str }` |
 | Ruby | `CouponStep.coupon_step_traced(…)`, returning `[output, trace]` | `Fired`, a `Struct` of `table`, `row` and `label` |
+| PHP | `function coupon_step_traced(int $subtotal, int $applied, CouponKind $kind, int $rate, int $face, bool $dup): array`, returning `[$out, $trace]` | `Fired`, a final class of readonly `table`, `row` and `label` |
 | Go | `func CouponStepTraced(in Input) (Output, []Fired, error)` | `Fired{Table, Row, Label}` |
 | Swift | `couponStepTraced(…) throws -> (Output, [Fired])` | `Fired(table:row:label:)`, `label` defaulting to `""` |
+| Java | `public static Traced couponStepTraced(long subtotal, long applied, CouponKind kind, long rate, long face, boolean dup)` | `Fired`, a record of `table`, `row` and `label`; `Traced` is the pair of `value()` and `trace()` |
 | SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number; NULL for a table that another table of the same output beat |
 | Wasm | none: the answer of `call` is the record line, `trace` beside `observed` | `{"table":…,"row":…}` objects in that line, with `"label"` when the row has one |
 
@@ -505,7 +612,8 @@ produced the right amount from the wrong row fails there. `rulec api` names the 
 
 ## A record of one call
 
-Every module also has a function with `_record` on its name (`Record` in Go and Swift). It
+Every module also has a function with `_record` on its name, `Record` where the language
+capitalises. It
 takes the inputs, what the rule returned, the rows that matched and a tag, and gives back
 one line in the fixtures format of [formats.md](formats.md#fixtures-rulec-fixtures-lint-replay-diff):
 
@@ -526,8 +634,10 @@ for it.
 | JavaScript | `coupon_step_record(…, out, trace, tag = "")` |
 | Rust | `coupon_step_record(…, out: Output, trace: &[Fired], tag: &str) -> String` |
 | Ruby | `CouponStep.coupon_step_record(…, out, trace, tag = "")` |
+| PHP | `function coupon_step_record(…, Output $out, array $trace, string $tag = ''): string` |
 | Go | `func CouponStepRecord(in Input, out Output, trace []Fired, tag string) string` |
 | Swift | `couponStepRecord(…, out: Output, trace: [Fired], tag: String = "") -> String` |
+| Java | `public static String couponStepRecord(…, Output out, List<Fired> trace, String tag)` |
 | SQL | none: the answer is the row, and the runner writes the record from it |
 | Wasm | none: the record line is what `call` returns |
 

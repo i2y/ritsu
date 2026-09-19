@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E046, E101-E115, W105, W110, W111, W114-W119) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E046, E101-E115, W105, W110, W111, W114-W119) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -19,7 +19,7 @@ collection ("any line is refrigerated", "three or more items"), to pattern match
 strings, or to scoring and optimisation. Flatten collection facts at the boundary and pass
 the scalar in; keep iteration in the caller.
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm today; Java and Kotlin are planned.
+`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
 A language only goes in once its output can be held against the reference evaluator byte for
 byte, so whatever `rulec gen` writes is covered by `rulec test`.
 
@@ -41,7 +41,7 @@ bundled here.
 
 You are the first user of this tool. It exists so that a business rule — a shipping tariff, a
 coupon policy, an eligibility test — can be written as one table, **proved** correct before
-anyone runs it, and turned into ordinary Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL and Wasm.
+anyone runs it, and turned into ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
 
 Your job is the middle of that: take a source of truth (a published policy, a spreadsheet, a
 legacy implementation) and produce a `.rule` that passes `rulec check`, then generate the
@@ -243,7 +243,7 @@ reach. A row only goes in when it names every input.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, TypeScript, JavaScript, Rust, Ruby, Go, Swift, SQL, Wasm, and the vectors. It refuses to generate
+Writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and the vectors. It refuses to generate
 from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
 signatures, parameters with units and ranges, enum member spellings, errors — so you never
 have to read the generated code to integrate it
@@ -265,7 +265,7 @@ one module for any host, behind `call: func(input: string) -> string` in the can
 with a `.wit` that makes a component of it; `rulec api` says under `wasm` how to build it
 with `rustc` alone and what to call.
 
-For a target none of the nine covers — another language, a workflow engine's expression
+For a target none of the eleven covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
 generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
 with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
@@ -274,7 +274,7 @@ with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
-`node`, `rustc`, `ruby`, `go` and `swiftc`, plus the `wasm32-unknown-unknown` target for the
+`node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
 Wasm side, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
