@@ -229,3 +229,41 @@ policy unique
         rulec::check_source(&without, "region.rule").iter().map(|d| d.code).collect();
     assert!(!codes.contains(&"E101"), "起こり得ない組み合わせが穴として要求されている: {codes:?}");
 }
+
+/// An output cell holding a **name** is not a value this check can compare against a cell below.
+/// The parser writes both readings of a bare word as `Name` (§3.2), and the one that matters
+/// here is the second: `長い` in the cell of a numeric column stands for the input of that name,
+/// not for an enum value spelled that way. Read as a value it matches no numeric cell, so every
+/// row below is judged to have no producer — and a substitution table, which is how 準用 is
+/// written, comes back rejected with E102 in full.
+#[test]
+fn 名前を出す上流の列は下流の行を殺さない() {
+    let src = "\
+rule t(t) v1
+
+enum 区分(kind) = 甲(a) | 乙(b)
+
+inputs
+  区分(kind)  : 区分
+  長い(long)  : number range >=0 <=40
+  短い(short) : number range >=0 <=3
+
+outputs
+  額(amount) : money[円] round down(1円)
+
+table 読替(sub)
+policy unique
+| 区分 | -> 期間(span) : number |
+| 甲   | 長い                   |
+| 乙   | 短い                   |
+
+table 下(down)
+policy unique
+| 期間 | -> 額(amount) : money[円] |
+| <10  | 1000円                    |
+| >=10 | 5000円                    |
+";
+    assert!(dead_rows(src).is_empty(), "名前を出す上流のせいで下流の行が殺されている");
+    let codes: Vec<&str> = rulec::check_source(src, "region.rule").iter().map(|d| d.code).collect();
+    assert!(!codes.contains(&"E101"), "名前の出す値域が下流に届いていない: {codes:?}");
+}

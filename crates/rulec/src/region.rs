@@ -378,7 +378,18 @@ fn upstream_blocked(
         let mut producible = false;
         for ri in 0..up.table.rows.len() {
             let v = match up.table.rows[ri].outs.get(up.oi) {
-                Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) => w.clone(),
+                // A bare word in an output cell is either an enum value or the name of
+                // something declared (§3.2); the parser cannot tell them apart and writes
+                // both as `Name`. Only the first reading names a value this check can
+                // compare. A declared name stands for whatever it holds at run time, so the
+                // value that row produces is not known here, and the row below must be
+                // assumed reachable. The evaluator resolves the same two readings the same
+                // way round, by looking the binding up first (`eval.rs`).
+                Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w))
+                    if !c.syms.contains_key(w) =>
+                {
+                    w.clone()
+                }
                 _ => {
                     // An output this reading cannot name is assumed to reach the row.
                     producible = true;
