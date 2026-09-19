@@ -25,6 +25,10 @@ jobs:
       - run: rulec coverage rules/
       - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
+      # The NumPy target is read by an evaluator that imports numpy, so without
+      # this the language is skipped and the run stays green — the one way this
+      # check narrows quietly.
+      - run: python3 -m pip install --quiet numpy
       - uses: actions/setup-node@v5
         with: { node-version: "22" }
       - uses: actions/setup-go@v6

@@ -276,7 +276,7 @@ with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
-Wasm side, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
+Wasm side and `numpy` under `python3` for the NumPy one, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
