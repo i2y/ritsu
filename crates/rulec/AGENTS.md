@@ -262,6 +262,16 @@ outputs appear, and the line the generated code would log is shown — it is the
 JavaScript itself that runs, so the page says nothing the code does not. Same rule: built in
 CI per change, never committed.
 
+### For the customer: `rulec doc --audience customer`
+
+`rulec doc <file> --lang ja --audience customer` renders the same rule as the article a help
+centre publishes, so that whatever answers customers — a person, a search, a model reading
+retrieved pages — reads a page that is complete, carries the version, and spells out the
+cases on either side of every threshold. The thresholds come from the boundary-pair vectors,
+so the article says "60cm → 1410円, 61cm → 1710円" where the table says `<=60cm`. Aliases,
+ranges and diagnostic codes are left out. Regenerate it whenever the rule changes; like the
+approver's rendering, it is a product of the file, never a source.
+
 ---
 
 ## 2. Language

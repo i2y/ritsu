@@ -317,6 +317,14 @@ Already machine-readable and take no `--format`.
 is that shape; `--format html` is the same document as one page with a form on it, where the
 generated JavaScript runs the case the approver types in.
 
+`--audience customer` renders the same rule as the article a help centre publishes: the
+inputs in plain words, the tables with `-` as "any" and `not:` as "other than", the rounding
+as a sentence, and **the cases on either side of every threshold** — the boundary-pair
+vectors of `rulec vectors`, one line per pair. Aliases, declared ranges, diagnostic codes and
+the list of what `rulec check` verified are left out: they are for the approver. It is
+markdown only (`--format html` cannot be combined with it), and under `--out` it is written
+as `<alias>.customer.md`, beside the approver's `<alias>.md`.
+
 ## `mcp`
 
 `rulec mcp` speaks the Model Context Protocol over stdio: one JSON-RPC 2.0 message per line

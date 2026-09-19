@@ -300,6 +300,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 out_flag(&tr!("資料", "rendering")),
                 flag("--format", Some("html"), tr!("承認する人が自分の件を試せる一枚の HTML。生成した JavaScript がその場で動く", "one HTML page the approver can try a case on; the generated JavaScript runs in it")).choices(&["html"]),
+                flag("--audience", Some("approver|customer"), tr!("誰に見せるか。customer は、ヘルプセンターに載せる案内の形（別名も範囲も診断コードも出さず、境目の例を添える）。既定は approver", "who reads it. customer renders the article a help centre publishes (no aliases, ranges or diagnostic codes, and the cases on either side of every threshold); the default is approver")).choices(&["approver", "customer"]),
             ],
             exits: vec![
                 (0, tr!("資料を書き出した", "rendered")),
@@ -309,6 +310,7 @@ fn commands() -> Vec<Cmd> {
             examples: vec![
                 "rulec doc rules/送料.rule --lang ja > doc.md".into(),
                 "rulec doc rules/送料.rule --lang ja --format html > doc.html".into(),
+                "rulec doc rules/送料.rule --lang ja --audience customer > help.md".into(),
                 "rulec doc rules/ --out docs/".into(),
             ],
             codes: &[],
@@ -898,7 +900,7 @@ fn main() -> ExitCode {
             verify(&files, &a.rest, json)
         }
         "coverage" => coverage(&files, json),
-        "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html")),
+        "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html"), a.get("--audience") == Some("customer")),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {
@@ -1292,7 +1294,11 @@ fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
 /// direction. **Not treated as a generated file** — it is never committed; CI renders it and
 /// pastes it into the PR. The biggest danger is a stale rendering that lingers looking
 /// authoritative, so no long-lived artifact is produced.
-fn doc(files: &[&String], out_dir: Option<&str>, html: bool) -> ExitCode {
+fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> ExitCode {
+    if html && customer {
+        eprintln!("{}", tr!("error: 顧客向けの案内は markdown だけです。--format html と --audience customer は同時に指定できません", "error: the customer rendering is markdown only; --format html and --audience customer cannot be combined"));
+        return ExitCode::from(2);
+    }
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1318,13 +1324,15 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool) -> ExitCode {
             // The page runs the generated JavaScript — the same code `rulec gen` writes.
             let js = rulec::codegen::Gen::new(&f, &c, &src).javascript();
             rulec::doc::render_html(&f, &c, &src, path, &js)
+        } else if customer {
+            rulec::doc::render_customer(&f, &c, &src, path)
         } else {
             rulec::doc::render(&f, &c, &src, path)
         };
         match out_dir {
             Some(d) => {
                 let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-                let p = format!("{d}/{alias}.{}", if html { "html" } else { "md" });
+                let p = format!("{d}/{alias}.{}", if html { "html" } else if customer { "customer.md" } else { "md" });
                 if let Some(dir) = std::path::Path::new(&p).parent() {
                     let _ = std::fs::create_dir_all(dir);
                 }
