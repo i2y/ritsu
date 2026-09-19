@@ -185,7 +185,7 @@ to another case sits on top of it. Each of those has its own way of being writte
 | **A main rule and an exception that takes precedence** (the stamp duty table and the reduced rate in the Special Taxation Measures Act) | two tables, with one line on the exception: `overrides 本則` |
 | **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
 | **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
-| **Which article it was transcribed from** | `@法 第91条` at the end of the line. The text is held to a copy fetched from e-Gov, the Japanese government's statute database, so an amendment that changes it stops the check and names the tables citing it |
+| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@法 第91条` at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it |
 
 The checks judge completeness and overlaps over the main rule and its exceptions together,
 and for an applied rule they prove that what this rule passes stays inside the applied
