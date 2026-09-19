@@ -15,6 +15,8 @@ The middle step is the same on every path: **nothing comes out of a table that d
 $ rulec --help
 ```
 
+Every step below is one of three kinds: **something to hand to an agent, something rulec does, or something a person decides**. Transcribing an article or a policy into a table, drafting from a spreadsheet, the one line of an adapter around legacy code, wiring the generated code in: all of that an agent can do. Proving there is no gap and no overlap, pinning a source, holding the table to a legacy implementation or to past records, checking that nine languages agree: rulec does that, mechanically. What stays with a person is deciding the conditions, approving, ruling on which side of a mismatch is wrong, and rereading a source after an amendment or a replacement. Under each heading below is who does that step.
+
 ---
 
 ## 1. Implementing an existing public rule
@@ -25,6 +27,8 @@ You have a statute or a published policy and want code that does exactly what it
 ![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates nine languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing-light.svg#only-light)
 
 ### 1-1. Transcribe, citing the article
+
+Who: the agent
 
 An agent or a person transcribes; what matters is that every table or row ends with **`@source article`**, so that where it came from stays with it. For a statute, `source` names the law's id on e-Gov (the Japanese government's statute database) and the date the text is read as of.
 
@@ -45,6 +49,8 @@ The whole notation is in [Write a table](tour.md#where-it-was-transcribed-from-s
 
 ### 1-2. Fetch the copy and pin it
 
+Who: the agent
+
 `check` never reads the network. The article's copy lives beside the rule, and its digest is written into the rule. Two commands:
 
 ```console
@@ -57,6 +63,8 @@ $ rulec source pin rules/stamp_duty.rule
 `pin` writes one line under the `source`: `  第91条 sha256:85faf53f6f6e8196`. The copies go to `sources/law/<law id>@<date>/`; commit them.
 
 ### 1-3. Check
+
+Who: rulec. The agent fixes the table until it passes
 
 ```console
 $ rulec check rules/stamp_duty.rule
@@ -81,6 +89,8 @@ A missing pin is E037, a missing copy E039; `rulec explain E038` explains any of
 
 ### 1-4. Show it to the approver
 
+Who: a person, the approver. rulec renders the page
+
 Comparing the article with the table is a person's job. `rulec doc` renders the page, quoting the cited article from the copy.
 
 ```console
@@ -100,6 +110,8 @@ The approver compares the rows with that quotation and nothing else. How to read
 
 ### 1-5. Generate and hold the code to the table
 
+Who: the agent. rulec checks that the nine languages agree
+
 ```console
 $ rulec gen rules/stamp_duty.rule --out generated/
 $ rulec test generated/
@@ -117,6 +129,8 @@ The header of every generated file names the article, its date and its digest, s
 Where an implementation already runs, hold the table to it before anything is replaced, as in [2-3](#2-3-hold-it-to-the-code-that-runs-today).
 
 ### 1-6. Notice the amendment
+
+Who: rulec, weekly in CI. A person rereads the article and decides
 
 Statutes get amended. `check` is held to the copy, so this is the one way to learn of an amendment; put it in a weekly CI job.
 
@@ -150,6 +164,8 @@ An internal policy, the terms or the tariff of your own service, a spreadsheet s
 
 ### 2-1. Start from what you have
 
+Who: the agent. A person confirms every line marked guess
+
 A spreadsheet becomes a first draft. Every guess is marked, so only the marked places need a look.
 
 ```console
@@ -175,6 +191,8 @@ outputs
 A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article). If all there is is the running code, hand that code to an agent to transcribe, and hold the table to the code in [2-3](#2-3-hold-it-to-the-code-that-runs-today). The running code is not touched.
 
 ### 2-2. Pin the document as a file
+
+Who: the agent. rulec notices a replaced document
 
 It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@規約`, or `@規約 別紙1` to say where in it.
 
@@ -213,6 +231,8 @@ error[E038]: The copy of source `規約` has changed
 The approver's page writes "Source: 規約 別紙1 (配送規約.txt, sha256:a4b42e3e6c346e56)" under the table's heading.
 
 ### 2-3. Hold it to the code that runs today
+
+Who: the agent, for the adapter's one line and verify. A person rules on each mismatch
 
 Where an implementation already runs, hold the table to it before anything is replaced. The legacy code is wrapped in an adapter of about twenty lines, and the cases built from the table's boundaries go through both. rulec prints the adapter's template; the one line to write is the call into the legacy code. The legacy code itself is not touched.
 
@@ -257,6 +277,8 @@ Mismatches come grouped by the rows that matched. Here only the row for remote a
 
 ### 2-4. Hold it to past records
 
+Who: the agent. A person rules on each mismatch
+
 Without running code, but with records of past cases (the inputs and the values that came out), the rule is applied to the records. Records are one JSON object per line; their shape is checked first, then they are replayed.
 
 ```console
@@ -276,6 +298,8 @@ Both comparisons are described on [Compare and replay](compare.md).
 
 ### 2-5. Approve and generate
 
+Who: a person approves, the agent generates
+
 The approver gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-the-approver). Generating and holding the nine languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
 
 ---
@@ -288,6 +312,8 @@ Shipping fees, coupon conditions, whether a return is accepted, an internal crit
 ![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision](images/scenario-designing-light.svg#only-light)
 
 ### 3-1. Write the table first
+
+Who: a person decides the conditions. The agent or the person writes the table
 
 Conditions as columns, the answer as the last column. "Hokkaido and Okinawa, 1,200 yen up to 2 kg" becomes one row.
 
@@ -324,6 +350,8 @@ Whether your rule fits a table at all is settled first on [Does your rule fit](f
 
 ### 3-2. Check it
 
+Who: rulec. A person answers each witness
+
 ```console
 $ rulec check rules/shipping_fee.rule
 ```
@@ -354,6 +382,8 @@ Fix until it passes. What you fix is the table, never code. The seven checks are
 
 ### 3-3. Write the examples
 
+Who: the person who decided the answers. The agent may write them into the file
+
 The answers you decided go into `examples`, and every `check` runs them. The "for instance" of a spec becomes a test that does not go away.
 
 ```rule
@@ -365,6 +395,8 @@ examples
 
 ### 3-4. Render the pages for approval and publication
 
+Who: rulec (rulec doc). The approver and the customer read
+
 From the same table, one page per reader. For the approver, the facts the table does not show: what was verified, which row hides which, which rounding is provisional. For the customer, no aliases and no diagnostic codes, and instead the answer on both sides of every threshold.
 
 ```console
@@ -373,6 +405,8 @@ $ rulec doc rules/shipping_fee.rule --audience customer > shipping_fee_article.m
 ```
 
 ### 3-5. Know the impact of a revision before it ships
+
+Who: rulec (rulec diff). A person decides whether it ships
 
 When a rule is revised, how many cases move and by how much can be known first. With past records (one JSON object per line), both versions are applied to the same records.
 
@@ -402,6 +436,8 @@ You have a `.rule` that passes check and want it inside your app or your batch, 
 
 ### 4-1. Generate
 
+Who: the agent
+
 ```console
 $ rulec gen rules/shipping_fee.rule --out generated/
 ```
@@ -409,6 +445,8 @@ $ rulec gen rules/shipping_fee.rule --out generated/
 Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, Go and Swift get a function; SQL gets one query over a relation of inputs; Wasm gets one module. No runtime, no dependency.
 
 ### 4-2. Read how to call it
+
+Who: the agent
 
 You do not read the generated code to call it; the inventory says how.
 
@@ -422,6 +460,8 @@ func ShippingFee(in Input) (YenInclTax, error)
 Values are integers in the declared unit (`1999` for 1,999 g, a rate as a number of steps) and enum members are spelled as the inventory spells them. The entry checks ranges and enums, so a value outside the declaration is refused rather than computed in silence. The details are on [Generate and call](generate.md#how-to-call-it-without-reading-it).
 
 ### 4-3. Hold every language to the table
+
+Who: rulec (rulec test)
 
 Every generated language is run over the cases built from the table's boundaries and compared with the reference evaluator, byte for byte.
 
@@ -439,6 +479,8 @@ A toolchain that is not installed is skipped, and the skip is reported.
 
 ### 4-4. Wire it in
 
+Who: the agent
+
 Pick the shape the destination takes.
 
 | Destination | What to use | Where to read |
@@ -452,6 +494,8 @@ Pick the shape the destination takes.
 Generated code is never edited. What you want changed is in the table, and a change to the table changes every language at once.
 
 ### 4-5. Keep it in step when the table changes
+
+Who: CI (rulec gen --check)
 
 Commit the generated code and regenerate in CI with `--check`. A table that changed while its generated code did not stops the build there.
 
