@@ -2,7 +2,7 @@
 
 **A harness for an agent turning table-shaped business rules into code.**
 
-Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and SQL functions, and a Wasm module. **The
+Write the table, and out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and SQL functions, a Wasm module, and a NumPy plan. **The
 proof is finished before the code exists.**
 
 ```rule
@@ -257,7 +257,8 @@ to ride in**: a newtype in Rust, a one-field struct in Swift, a defined type in 
 bigint in TypeScript, a `NewType` in Python that `mypy --strict` is run over, and the Rust newtype again in
 the Wasm module, which is the Rust one. Ruby, PHP, JavaScript, Java and SQL have
 none, so there the unit is declared in the signature, or in the header of the query, and stated in a comment, and the `.rbs`
-that ships with the Ruby module says as much. **Rounding goes through a helper of its own**, because integer division does
+that ships with the Ruby module says as much. The NumPy plan has no signature to carry one:
+the unit and the scale are fields of the plan itself, and `rulec api` prints them. **Rounding goes through a helper of its own**, because integer division does
 not agree between them — Python and Ruby floor toward −∞, Go and Rust truncate toward zero.
 **Nothing builtin is called bare**, so an input aliased `min` or `list` cannot break the
 output.
@@ -382,14 +383,17 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 | | |
 |---|---|
 | **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it; a main rule and its exceptions checked as one set, a statute's text pinned to its copy, a rule applied to another case held to the applied rule's ranges |
-| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
+| **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |
 
 ### Output languages
 
-**Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm** — eleven
-targets, all shipped. Kotlin and Scala are not on the list because they do not need to be:
+**Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy** — twelve
+targets, all shipped. NumPy is the one that is not a language: the rule travels as data and a
+fixed evaluator decides whole columns at once.
+
+Kotlin and Scala are not on the list because they do not need to be: Kotlin and Scala are not on the list because they do not need to be:
 the generated Java is an ordinary class on the classpath, and the JVM does the rest.
 
 You do not have to wait for the list, and nothing here has to change. A target outside it —
@@ -412,6 +416,7 @@ against SQL, by hand, as it was done before SQL had a backend of its own.
 | Java | shipped | a JDK — `javac` and `java`, no Maven and no Gradle. Compiled at `--release 17`, so it runs on 17, 21 and 25 alike; `long` is the int64 the overflow proof is about |
 | SQL | shipped | `python3`, whose standard-library `sqlite3` is where the agreement check runs the query. Written for PostgreSQL. Not a function but one query over a relation of inputs: a row of the table is a `WHEN`, the rows that matched are columns, and a million rows go through in one statement |
 | Wasm | shipped | `rustc` with the `wasm32-unknown-unknown` target — one module that exports `call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component of it; `node` runs the agreement check |
+| NumPy | shipped | `python3` and `numpy` — not generated code but the rule as data (`<alias>.json`) beside one fixed evaluator (`rulec_np.py`), which builds a closure over whole columns when the plan is loaded. A table is one `np.select`; `unique` needs no runtime uniqueness test because E105 settled it, and int64 is safe to compute in because E108 did. A rule that walks a sequence is refused by name |
 
 **A language that cannot join the agreement check does not get added**: output that cannot
 be compared byte for byte against the reference evaluator sits outside the word "proved".

@@ -102,11 +102,19 @@ fn 評価器と生成コードが全言語で一致する() {
 
     // Which languages can run here. The set is src/backend.rs; this file used to name
     // each one twice and a sixth would have needed both spots (§15.20).
+    // `tool` is not the whole story. A backend can need something else on top of the command
+    // it names — numpy under `python3`, node and a wasm target under `rustc` — which is what
+    // `ready` says. Filtering on the tool alone made this suite fail on a machine that was
+    // only missing the extra, where `rulec test` would have skipped the language and said so.
+    let ready = |b: &rulec::backend::Backend| b.ready.map(|r| r()).unwrap_or(Ok(()));
     let present: Vec<&rulec::backend::Backend> =
-        rulec::backend::ALL.iter().filter(|b| have(b.tool)).collect();
+        rulec::backend::ALL.iter().filter(|b| have(b.tool) && ready(b).is_ok()).collect();
     for b in rulec::backend::ALL {
         if !present.iter().any(|p| p.id == b.id) {
-            eprintln!("注意: {} が無いので {} を飛ばした", b.tool, b.name);
+            match ready(b) {
+                Err(why) if have(b.tool) => eprintln!("注意: {why}"),
+                _ => eprintln!("注意: {} が無いので {} を飛ばした", b.tool, b.name),
+            }
         }
     }
     assert!(!present.is_empty(), "どの toolchain も無いので一致を確かめられない");

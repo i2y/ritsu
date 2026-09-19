@@ -15,7 +15,7 @@ The middle step is the same on every path: **nothing comes out of a table that d
 $ rulec --help
 ```
 
-Every step below is one of three kinds: **something to hand to an agent, something rulec does, or something a person decides**. Transcribing an article or a policy into a table, drafting from a spreadsheet, the one line of an adapter around legacy code, wiring the generated code in: all of that an agent can do. Proving there is no gap and no overlap, pinning a source, holding the table to a legacy implementation or to past records, checking that eleven languages agree: rulec does that, mechanically. What stays with a person is deciding the conditions, approving, ruling on which side of a mismatch is wrong, and rereading a source after an amendment or a replacement. Under each heading below is who does that step.
+Every step below is one of three kinds: **something to hand to an agent, something rulec does, or something a person decides**. Transcribing an article or a policy into a table, drafting from a spreadsheet, the one line of an adapter around legacy code, wiring the generated code in: all of that an agent can do. Proving there is no gap and no overlap, pinning a source, holding the table to a legacy implementation or to past records, checking that twelve languages agree: rulec does that, mechanically. What stays with a person is deciding the conditions, approving, ruling on which side of a mismatch is wrong, and rereading a source after an amendment or a replacement. Under each heading below is who does that step.
 
 ---
 
@@ -23,8 +23,8 @@ Every step below is one of three kinds: **something to hand to an agent, somethi
 
 You have a statute or a published policy and want code that does exactly what it says. The lead role here is the **source**: which row came from which article, held to a copy of the text, so that an amendment is noticed.
 
-![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates eleven languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing.svg#only-dark)
-![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates eleven languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing-light.svg#only-light)
+![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing.svg#only-dark)
+![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing-light.svg#only-light)
 
 ### 1-1. Transcribe, citing the article
 
@@ -110,7 +110,7 @@ The approver compares the rows with that quotation and nothing else. How to read
 
 ### 1-5. Generate and hold the code to the table
 
-Who: the agent. rulec checks that the eleven languages agree
+Who: the agent. rulec checks that the twelve languages agree
 
 ```console
 $ rulec gen rules/stamp_duty.rule --out generated/
@@ -159,8 +159,8 @@ Putting it in CI is on the [install page](install.md#in-ci). `outdated` exits 1 
 
 An internal policy, the terms or the tariff of your own service, a spreadsheet someone keeps, code that already runs. The rule is not public, but it is decided and in force, and you want code that does the same. The lead role here is the **comparison**: unlike a statute, the document cannot be fetched again, so it is pinned whole by its digest; and where an implementation or past records exist, the table is held to them and every mismatch comes back by row.
 
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come eleven languages](images/scenario-internal.svg#only-dark)
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come eleven languages](images/scenario-internal-light.svg#only-light)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal.svg#only-dark)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal-light.svg#only-light)
 
 ### 2-1. Start from what you have
 
@@ -300,7 +300,7 @@ Both comparisons are described on [Compare and replay](compare.md).
 
 Who: a person approves, the agent generates
 
-The approver gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-the-approver). Generating and holding the eleven languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
+The approver gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-the-approver). Generating and holding the twelve languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
 
 ---
 
@@ -431,8 +431,8 @@ Where an implementation already runs, [2-3](#2-3-hold-it-to-the-code-that-runs-t
 
 You have a `.rule` that passes check and want it inside your app or your batch, in your language. The lead role here is the **generated code**; what you write is the caller.
 
-![From a table that passed check, rulec gen writes code in eleven languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing.svg#only-dark)
-![From a table that passed check, rulec gen writes code in eleven languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing-light.svg#only-light)
+![From a table that passed check, rulec gen writes code in twelve languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing.svg#only-dark)
+![From a table that passed check, rulec gen writes code in twelve languages and rulec test holds each to the reference evaluator. The implementer reads how to call it from rulec api and puts the function, the SQL query, the Wasm module or the MCP server into an app, a batch or an agent. Generated code is never edited; when the table changes, gen --check in CI stops the build](images/scenario-implementing-light.svg#only-light)
 
 ### 4-1. Generate
 
@@ -442,7 +442,7 @@ Who: the agent
 $ rulec gen rules/shipping_fee.rule --out generated/
 ```
 
-Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs; Wasm gets one module. No runtime, no dependency.
+Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs; Wasm gets one module; NumPy gets the rule as data and one fixed evaluator. No runtime, no dependency.
 
 ### 4-2. Read how to call it
 

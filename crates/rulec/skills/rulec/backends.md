@@ -1,7 +1,7 @@
 # Targeting a language rulec does not generate
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm. This page is about the
-twelfth target — a language nobody planned for, a workflow engine's expression language, a
+`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy. This page is about the
+thirteenth target — a language nobody planned for, a workflow engine's expression language, a
 spreadsheet formula, a database.
 
 The short answer: **you do not have to modify rulec, and you do not have to give up the
@@ -290,7 +290,9 @@ Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Pyth
 `NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
 Ruby, PHP, JavaScript, Java and SQL cannot hold a unit at all, so there it is documented
 instead, and the `.rbs` that ships with the Ruby module says so too; the Wasm module is the
-Rust one, so the unit rides in it and the `.wit` states it for the wire. Carrying *something*
+Rust one, so the unit rides in it and the `.wit` states it for the wire; the NumPy plan has no
+type system to lean on at all, so the unit and the scale are fields of the plan and `rulec api`
+prints them. Carrying *something*
 still pays where the unit cannot ride: PHP and Java declare the kind of every parameter, so
 their entry guard is the one Go, Rust and Swift emit — the range alone — while the three
 languages that declare nothing have to ask at the door whether a number is an integer.
@@ -304,7 +306,7 @@ and labelled as unverified, it is.
 
 ## A plugin for the host's own system
 
-A fair question, once there are eleven targets: why not a mode that packages the output as a
+A fair question, once there are twelve targets: why not a mode that packages the output as a
 plugin for each one's own ecosystem — an npm package, a gem, a composer package, a Maven
 artifact, a WordPress plugin, a Rails engine?
 

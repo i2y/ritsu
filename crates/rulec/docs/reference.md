@@ -506,7 +506,7 @@ time does not change what can be said about it.
 ### What a fold generates
 
 `rulec gen` writes the walk in **Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm** —
-every target but SQL, which is refused by name below.
+every target but SQL and NumPy, which are refused by name below.
 The sequence is an argument like any other input — an array of objects on the wire (§10.2),
 each element's fields integers in their canonical unit — and every field gets the same entry
 guard an input gets. `rulec test` runs the generated walk over the vectors and holds it to the

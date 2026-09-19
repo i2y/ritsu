@@ -246,7 +246,8 @@ outputs
 
 There may be several outputs. They become a `NamedTuple` in Python, an
 `interface` in TypeScript, a plain object in JavaScript, a `Struct` in
-Ruby, a final class in PHP, a record in Java, a struct in Rust, Swift and Go, one column
+Ruby, a final class in PHP, a record in Java, a struct in Rust, Swift and Go, one array per
+output in NumPy, one column
 each in SQL, and the keys of the
 answer's `observed` object from the Wasm module — and **rounding applies once per
 output**.
@@ -303,7 +304,7 @@ What is in the parentheses is the **grid**: `up(10円)` rounds to a
 multiple of 10 yen, so −4.2 yen becomes −10 yen.
 
 The negative direction is pinned because **integer division in Python and
-Ruby rounds toward −∞ while in Rust, Swift, Go, Java, TypeScript, JavaScript,
+Ruby rounds toward −∞ while in Rust, Swift, Go, Java, TypeScript, JavaScript, NumPy,
 PHP's `intdiv`, SQL and the Wasm module it truncates toward zero**. Left to the host language, one rule
 would answer differently in each. The generated code goes through its own helper, and
 that they all agree is checked by unit vectors on every run.

@@ -53,7 +53,7 @@ from diagram import DARK, LIGHT, FONT, fit, esc, text, card, sheet, arrow, marke
 # for two releases after there were four, which is what the check is for.
 LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("JavaScript", "javascript"),
          ("Rust", "rust"), ("Ruby", "ruby"), ("PHP", "php"), ("Go", "go"), ("Swift", "swift"),
-         ("Java", "java"), ("SQL", "sql"), ("Wasm", "wasm")]
+         ("Java", "java"), ("SQL", "sql"), ("Wasm", "wasm"), ("NumPy", "numpy")]
 
 JA = dict(
     alt="エージェントが資料を読んで表（.rule）を書き、rulec check にかける。"
@@ -68,7 +68,7 @@ JA = dict(
     diagnosis=("診断", ["どこが", "どう直すか", "それを起こす入力"], "JSON"),
     question=("具体例つきの質問", ["「山梨県あての S60 の", "運賃はいくらですか」"]),
     answer=("答え", ["金額", "丸めの向き"]),
-    code=("生成コード", ["Python・TypeScript・JavaScript", "Rust・Ruby・PHP・Go", "Swift・Java・SQL・Wasm", "依存ゼロ・どれも同じ答え"]),
+    code=("生成コード", ["Python・TypeScript・JavaScript", "Rust・Ruby・PHP・Go", "Swift・Java・SQL・Wasm・NumPy", "依存ゼロ・どれも同じ答え"]),
     check="rulec check", gen="rulec gen",
     loop="通るまで繰り返す", passed="通ったら",
     only="決められないことだけ", back="ループへ戻る",
@@ -89,7 +89,7 @@ EN = dict(
     diagnosis=("Diagnosis", ["where", "how to fix it", "an input that shows it"], "JSON"),
     question=("A concrete question", ["“What is the fee to 山梨県", "at size S60?”"]),
     answer=("Answer", ["an amount,", "which way to round"]),
-    code=("Generated code", ["Python, TypeScript, JavaScript,", "Rust, Ruby, PHP, Go, Swift,", "Java, SQL, Wasm — from a proved", "table, no runtime, one answer"]),
+    code=("Generated code", ["Python, TypeScript, JavaScript,", "Rust, Ruby, PHP, Go, Swift, Java,", "SQL, Wasm, NumPy — from a proved", "table, no runtime, one answer"]),
     check="rulec check", gen="rulec gen",
     loop="until it passes", passed="once it passes",
     only="only what it cannot decide", back="back into the loop",

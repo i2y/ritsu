@@ -230,7 +230,7 @@ EXAMPLES = [
             "**`fold` は、判定ごとの行き先を書くところです。** `next`（次へ）、`stop with <値>`（そこで打ち切る）、`take_unique <値>`（一件だけ採る。二件当たれば実行時にエラー）、`keep_max <値> by <鍵>`（鍵がいちばん大きいものを持ち越す）。行き先の無い判定があれば E024 で止まります。",
             "**要素ゼロ件のときと、最後まで見終えたときの答えは必須です**（E022・E023）。空の並びは必ず来ますし、「持ち越していたものを返す」も書いて初めて決まります（`exhausted -> held`）。",
             "**例は `sequence` に名前を付けて指します。** 例のセルに書けるのは値一つなので、並びのほうに名前を付けます。行がゼロ本の `sequence` が、要素ゼロ件の例です。",
-            "**SQL にだけは生成しません。** 一つの問い合わせには、行から行へ値を持ち越して途中で打ち切る場所がないからです。SQL 以外の対象には出て、参照評価器と一致することを毎回確かめています。",
+            "**SQL と NumPy には生成しません。** 一つの問い合わせには、行から行へ値を持ち越して途中で打ち切る場所がないからです。NumPy のほうは、要素から要素へ状態を運ぶ走査が列の演算ではないからです。ほかの対象には出て、参照評価器と一致することを毎回確かめています。",
         ],
         "A sequence walked into one answer",
         "The caller passes the rows of a tariff sheet and the rule walks them in order. A table judges one element at a time, and `fold` says what each verdict does: go on, halt, take this one, hold the best so far. It is **the one shape that takes a number of things that is not fixed**.",
@@ -240,7 +240,7 @@ EXAMPLES = [
             "**The fold gives every verdict somewhere to go** — `next`, `stop with <value>`, `take_unique <value>` (a second element that also takes is a run-time error), `keep_max <value> by <key>`. A verdict with no arm stops at E024.",
             "**The answer for no elements, and for a walk that reached the end, are both required** (E022, E023). An empty sequence always turns up, and answering with what is held is a choice made by writing it (`exhausted -> held`).",
             "**An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.",
-            "**SQL is the one target that does not get it.** One query has no place to carry a value from row to row and stop partway. Every other target is generated, and agrees with the reference evaluator on every commit.",
+            "**SQL and NumPy are the two targets that do not get it.** One query has no place to carry a value from row to row and stop partway, and a walk that carries state from element to element is not a column operation. Every other target is generated, and agrees with the reference evaluator on every commit.",
         ],
     ),
     (

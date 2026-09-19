@@ -22,7 +22,7 @@ code</strong>.
 A business rule — a shipping tariff, a coupon policy, an eligibility
 test, a tax table — is written as one table a domain expert can read; rulec proves the
 table has no gaps, no contradictions and no dead rows, and then
-generates ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with no runtime to install.
+generates ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with no runtime to install, and a NumPy plan for a host that decides whole columns at once.
 <strong>The proof happens before the code exists</strong>: a rule that
 cannot be proved does not generate.
 </p>
@@ -37,8 +37,8 @@ cannot be proved does not generate.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm](images/overview.svg?v=052d7be9#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm](images/overview-light.svg?v=052d7be9#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview.svg?v=ee9b4a99#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview-light.svg?v=ee9b4a99#only-light)
 </div>
 
 That is the whole of it in one picture. A table goes in; rulec turns each row into a box,
@@ -80,7 +80,7 @@ rulec is **a harness for handing that rewrite to an AI agent**. It has four side
 |---|---|
 | **The way in is a table** | What the agent copies the policy into is one table a person can read. Being readable by someone other than its author is what makes approval possible at all |
 | **The guard is the checker** | If the copied table has a gap or a contradiction, it stops before anything runs, holding the exact input that causes it. There is no "probably fine" |
-| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm that nobody edits by hand. **A target outside those eight — another language, a workflow engine's expressions, a spreadsheet formula — can be generated today by asking an agent**, with the comparison against the rule coming along ([other targets](backends.md)). For an agent that calls the rule rather than embeds it, the same function comes out as one MCP tool ([the rule as a tool](generate.md#the-rule-as-a-tool-for-an-agent)) |
+| **The way out is code** | Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy that nobody edits by hand. **A target outside those twelve — another language, a workflow engine's expressions, a spreadsheet formula — can be generated today by asking an agent**, with the comparison against the rule coming along ([other targets](backends.md)). For an agent that calls the rule rather than embeds it, the same function comes out as one MCP tool ([the rule as a tool](generate.md#the-rule-as-a-tool-for-an-agent)) |
 | **There is something to hand a person** | A document to approve, a page to try a case on, and a diff saying how many records move and by how much. What the agent cannot decide on its own becomes a question for a human |
 
 The agent's own instructions are in [For agents](agents.md), and the
@@ -104,9 +104,9 @@ makes it or takes it. Every arrow runs card → sheet or sheet → card, so
 **who produces what, and who consumes it** is the geometry itself rather
 than a caption.
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm functions generated from the proved table, and the impact known before you deploy](images/flow.svg?v=052d7be9#only-dark)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved table, and the impact known before you deploy](images/flow.svg?v=ee9b4a99#only-dark)
 
-![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm functions generated from the proved table, and the impact known before you deploy](images/flow-light.svg?v=052d7be9#only-light)
+![The agent writes the table, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved table, and the impact known before you deploy](images/flow-light.svg?v=ee9b4a99#only-light)
 
 Three colours, three paths: **grey** for what enters and leaves the whole
 system, **indigo** for the loop between the agent and rulec, **amber** for
@@ -214,8 +214,8 @@ Because a cell can only see its own column, **tables stack as deep as you like**
 table produces is written as a column of the next.
 
 <div class="rc-overview" markdown>
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=052d7be9#only-dark)
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=052d7be9#only-light)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=ee9b4a99#only-dark)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=ee9b4a99#only-light)
 </div>
 
 What to look at is **the word that appears twice**. `band` leaves the first table and arrives
@@ -322,7 +322,7 @@ material, not from first-hand use.
 
 **Where rulec sits is the combination**: cells narrow enough that gaps and overlaps are
 exactly decidable, a witness (the input itself) attached every time, units and rounding held
-by types and declarations, eleven languages out with zero dependencies, comparison against the
+by types and declarations, twelve languages out with zero dependencies, comparison against the
 old implementation and against past records — and **all of it drivable by an agent through
 `--format json` alone**. Each piece exists somewhere already. The assembly, and treating an
 agent as the first user, is the position.
@@ -360,8 +360,8 @@ and whether an earlier row takes a later row's stretch first. Same table in all 
 thing changed.
 
 <div class="rc-overview" markdown>
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=052d7be9#only-dark)
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=052d7be9#only-light)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=ee9b4a99#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=ee9b4a99#only-light)
 </div>
 
 The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They

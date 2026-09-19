@@ -148,6 +148,43 @@ pub const ALL: &[Backend] = &[
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
         ready: None,
     },
+    // The twelfth target is the one that is not a language: the rule travels as data and a
+    // fixed evaluator reads it. It is here rather than in a package of its own because the
+    // claim is the same claim — `rulec test` runs it over the vectors like the others, and a
+    // plan that disagreed with the reference evaluator would be as red as generated code is.
+    Backend {
+        id: "numpy",
+        name: "NumPy",
+        tool: "python3",
+        lang: Lang::Py,
+        files: |g, alias, _pkg| {
+            vec![
+                (format!("numpy/{alias}.json"), g.np_plan()),
+                ("numpy/rulec_np.py".into(), crate::codegen::np_runtime()),
+                (format!("numpy/{alias}_runner.py"), g.np_runner()),
+                ("numpy/_round_test.py".into(), crate::codegen::round_tests_numpy()),
+            ]
+        },
+        stem: None,
+        run: |alias, _| Plan::new("numpy", "python3", &["-B", &format!("{alias}_runner.py")]),
+        round: |_| Plan::new("numpy", "python3", &["-B", "_round_test.py"]),
+        // A walk carries state from element to element, which is not a column operation.
+        folds: false,
+        wasi: None,
+        mcp: None,
+        ready: Some(|| {
+            let ok = std::process::Command::new("python3")
+                .args(["-c", "import numpy"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if ok {
+                Ok(())
+            } else {
+                Err(tr!("numpy が無いので NumPy 側を飛ばしました", "numpy not found; skipped the NumPy side"))
+            }
+        }),
+    },
     Backend {
         id: "typescript",
         name: "TypeScript",

@@ -718,7 +718,7 @@ examples
 - **The fold gives every verdict somewhere to go** — `next`, `stop with <value>`, `take_unique <value>` (a second element that also takes is a run-time error), `keep_max <value> by <key>`. A verdict with no arm stops at E024.
 - **The answer for no elements, and for a walk that reached the end, are both required** (E022, E023). An empty sequence always turns up, and answering with what is held is a choice made by writing it (`exhausted -> held`).
 - **An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.
-- **SQL is the one target that does not get it.** One query has no place to carry a value from row to row and stop partway. Every other target is generated, and agrees with the reference evaluator on every commit.
+- **SQL and NumPy are the two targets that do not get it.** One query has no place to carry a value from row to row and stop partway, and a walk that carries state from element to element is not a column operation. Every other target is generated, and agrees with the reference evaluator on every commit.
 
 ## Counting a sequence, and deciding from the count
 

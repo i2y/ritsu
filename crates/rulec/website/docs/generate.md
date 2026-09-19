@@ -4,7 +4,7 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java, one query in SQL,
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java, a plan for NumPy, one query in SQL,
 one Wasm module, and an ordinary Go package. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
 property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
@@ -13,8 +13,8 @@ A rule that does not pass `check` generates nothing.
 
 ## Output languages
 
-Eleven are supported today — Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift,
-Java, SQL and Wasm. The point is that one table should be able to give the
+Twelve are supported today — Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift,
+Java, SQL, Wasm and NumPy. The point is that one table should be able to give the
 front end, the back end, the mobile app and the database the same answer,
 and that this is *provable* through the agreement check that already
 exists.
@@ -32,6 +32,7 @@ exists.
 | Java | supported | a JDK — `javac` and `java`, no Maven and no Gradle. Built at `--release 17`, so 17, 21 and 25 all take it; Kotlin and Scala call the class as it stands |
 | SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
 | Wasm | supported | `rustc` with the `wasm32-unknown-unknown` target, and `node` for the agreement check. The module itself imports nothing |
+| NumPy | supported | `python3` and `numpy`. Not generated code but the rule as data beside one fixed evaluator, which builds a closure over whole columns when the plan is loaded. **A rule that walks a sequence is the one thing it does not get** |
 
 One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
@@ -157,6 +158,8 @@ already the records the next revision is diffed over.
 
 Four rules keep it readable.
 
+- **NumPy is outside all of this**, because it is not generated code: the rule travels as
+  data and one fixed evaluator reads it.
 - **No cell is elided.** A condition an earlier branch already settled is
   still written (`elif True:`), because reading the generated code
   against the source side by side is the only way it is meant to be read.

@@ -119,6 +119,8 @@ pub struct Gen<'a> {
 
 mod sql;
 pub use sql::round_tests_sql;
+mod numpy;
+pub use numpy::{np_runtime, round_tests_numpy};
 mod php;
 pub use php::round_tests_php;
 mod java;
@@ -5708,6 +5710,7 @@ impl Gen<'_> {
             .raw("go", go)
             .raw("swift", swift)
             .raw("java", java)
+            .raw("numpy", self.api_numpy())
             .raw("sql", self.api_sql())
             .raw("wasm", self.api_wasm())
             .finish()

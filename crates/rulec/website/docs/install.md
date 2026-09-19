@@ -53,7 +53,7 @@ Nothing, for the checks. `rulec check`, `fmt`, `gen`, `vectors`,
 Two steps reach outside:
 
 - **`rulec test`** runs the generated Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
-  Swift, Java, SQL and Wasm and compares them with the reference evaluator. It needs
+  Swift, Java, NumPy, SQL and Wasm and compares them with the reference evaluator. It needs
   `python3`, `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK on the path (the SQL runs
   on the `sqlite3` inside that `python3`); without one it says which side it skipped and does
   not fail.

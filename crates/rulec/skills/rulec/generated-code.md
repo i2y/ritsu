@@ -1,7 +1,8 @@
 # The generated code
 
 `rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm — a module in each,
-a package in Go's case, and one query in SQL's. There is no runtime to install and nothing to
+a package in Go's case, and one query in SQL's. NumPy is the twelfth and the odd one out: it is
+not generated code at all but the rule as data, read by one fixed evaluator (see below). There is no runtime to install and nothing to
 configure: a function takes the declared inputs and returns the declared outputs, and the
 query takes a relation of them. This file says what shape that code has, what it guarantees,
 and how to call it.
@@ -33,7 +34,9 @@ The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side 
 is a checked property rather than a claim. The server that offers the rule as an MCP tool
 ([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
 own modules alone in JavaScript, and the generated SQL defines no function: its rounding is
-arithmetic inside the query.
+arithmetic inside the query. **NumPy is the one exception, and a deliberate one**: the plan is
+data, and the evaluator that reads it imports `numpy`. That is the target — a host that wants
+whole columns decided at once already has numpy, and the dependency is its own.
 
 **Deterministic.** The same `.rule` and the same rulec version produce the same bytes. The
 formatter is built in — no `gofmt` or `black` runs afterwards, because that would make the
@@ -50,8 +53,9 @@ read. The branches are written once, in the twin that also returns
 
 **Units live in the type** wherever the language has one to hold them. Rust uses a newtype,
 Swift a one-field struct, Go a defined type, TypeScript a branded `bigint`, Python a
-`NewType`, and the Wasm module is the Rust one; Ruby, PHP, JavaScript, Java and SQL have
-nowhere to put a unit, so they document it instead. PHP and Java still declare the *kind* of
+`NewType`, and the Wasm module is the Rust one; Ruby, PHP, JavaScript, Java, SQL and the NumPy
+plan have nowhere to put a unit, so they document it instead — for NumPy in the plan itself,
+where every column carries its unit and its scale, and in what `rulec api` prints. PHP and Java still declare the *kind* of
 every parameter — `int`, `string`, `bool`, the enum itself — which is why their entry guard
 asks only about the range.
 `YenInclTax` and `YenExclTax` are different types, and mixing them fails to compile in Rust,
@@ -190,7 +194,7 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the Japanese name that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby and SQL. A value
+**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby, SQL and NumPy — the last of which checks a whole column with one `np.isin`. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
 make at run time is already made by the compiler. Swift, PHP, Java and Go are in the same
 position, and so is
@@ -565,7 +569,8 @@ verdict. What comes out of the loop goes through the same rounding and the same 
 rule would have had without it. `rulec api` lists the sequence as the last parameter, with the
 element's fields under `elements`, and the record written for one call carries the sequence as
 an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
-generated; SQL is refused by name, because one query has nowhere to carry a value from row to row.
+generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from
+row to row, and a walk is not a column operation.
 
 ## The digest in the header
 
@@ -600,6 +605,7 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 | Java | `public static Traced couponStepTraced(long subtotal, long applied, CouponKind kind, long rate, long face, boolean dup)` | `Fired`, a record of `table`, `row` and `label`; `Traced` is the pair of `value()` and `trace()` |
 | SQL | none: the answer is the row | one column per table, `decide_row`, holding the row number; NULL for a table that another table of the same output beat |
 | Wasm | none: the answer of `call` is the record line, `trace` beside `observed` | `{"table":…,"row":…}` objects in that line, with `"label"` when the row has one |
+| NumPy | `rule.traced(**{column: sequence})`, returning `(outputs, fired)` | one `(picked, rows)` pair per definition set: `picked[i]` indexes `rows`, and each entry is the `{"table":…,"row":…,"label"?:…}` the row was written in |
 
 The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
 `replay` report clusters by, so a trace taken from a log reads against the approved document
@@ -640,6 +646,7 @@ for it.
 | Java | `public static String couponStepRecord(…, Output out, List<Fired> trace, String tag)` |
 | SQL | none: the answer is the row, and the runner writes the record from it |
 | Wasm | none: the record line is what `call` returns |
+| NumPy | none: the plan names no function, and the runner writes the record from the columns |
 
 The generated runner prints exactly this line for every vector, and the expected file `gen`
 writes beside the vectors is in the same format, so `rulec test` holds the record function

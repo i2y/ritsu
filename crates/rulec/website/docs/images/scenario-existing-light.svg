@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 458" width="1160" height="458" role="img" aria-label="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates eleven languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 458" width="1160" height="458" role="img" aria-label="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
@@ -30,11 +30,11 @@
 <text x="788.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">holds it to the copy</text>
 <text x="788.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">proves no gap,</text>
 <text x="788.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">no overlap</text>
-<text x="788.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">emits eleven languages</text>
+<text x="788.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">emits twelve languages</text>
 <path d="M964,20.0 H1128 L1140,32.0 V120.0 H964 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1128,20.0 V32.0 H1140 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="973" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Generated code</text>
-<text x="973" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">eleven languages, no runtime</text>
+<text x="973" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">twelve languages, no runtime</text>
 <text x="973" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">header names the source</text>
 <text x="973" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">and its date</text>
 <line x1="150" y1="70" x2="246" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>

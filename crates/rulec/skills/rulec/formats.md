@@ -297,8 +297,10 @@ member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeS
 `CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby
 and in PHP, `CouponKind.PERCENT` in Java, `couponstep.CouponKindPercent` in Go,
 `CouponKind.percent` in Swift; SQL spells no member, an
-enum being its own name there, and the Wasm module reads and writes the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
-type has none. The Ruby entry also carries `rbs`, the path of the signature file that ships
+enum being its own name there, and the Wasm module and the NumPy plan read and write the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
+type has none. The NumPy entry is shaped differently from the rest, because it names no
+function: it carries `plan` and `runtime`, the two files, `load`, `call` and `traced`, and
+`columns` and `outputs` in place of parameters. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
 module that serves the rule as one MCP tool
 ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)). A rule that walks a

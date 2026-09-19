@@ -4,13 +4,13 @@
 $ rulec gen rules/ --out generated/
 ```
 
-出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift のモジュールと、Java のクラスと、普通の Go パッケージと、SQL の一つの問い合わせと、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。
+出るのは普通の Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift のモジュールと、Java のクラスと、普通の Go パッケージと、SQL の一つの問い合わせと、Wasm の一つのモジュールです。ランタイムも設定も要らず、標準ライブラリの外に依存もありません — 最後の一つは主張ではなく**検査された性質**です。`rulec test` が Go 側を `GOPROXY=off` で走らせています。NumPy だけは別で、出るのはコードではなく、規則そのものと、それを読む固定の評価器です。こちらは numpy に依存します。列ごとまとめて判定したいホストが、もう持っているはずのものです。
 
 検査を通らない規則からは、何も生成されません。
 
 ## 対応する出力言語
 
-いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm の十一言語です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
+いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy の十二言語です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
 
 | | 状態 | 要るもの |
 |---|---|---|
@@ -24,6 +24,7 @@ $ rulec gen rules/ --out generated/
 | Swift | 対応済み | `swiftc` だけ（SwiftPM も `Package.swift` も要りません）。Rust と同じく単位が型に載ります |
 | Java | 対応済み | JDK。`javac` と `java` だけで、Maven も Gradle も要りません。`--release 17` で組むので 17・21・25 のどれでも動きます。Kotlin や Scala からはそのまま呼べます |
 | SQL | 対応済み | `python3`。その標準添付の `sqlite3` で一致検査を回します。問い合わせ自体は PostgreSQL 向けに書いてあります。**畳み込み（`fold`）のある規則にだけは生成しません** |
+| NumPy | 対応済み | `python3` と `numpy`。コードではなく規則そのものを data として書き出し、隣に置いた固定の評価器が読み込み時に列ごとの閉包を組みます。**並びをたどる規則だけは生成しません** |
 | Wasm | 対応済み | `wasm32-unknown-unknown` を入れた `rustc` と、一致検査に使う `node`。モジュール自体は何も import しません |
 
 一つだけ決めていることがあります。**一致検査に乗らない言語は入れません。** 参照評価器とバイト単位で突き合わせられない生成物は、「証明済み」という看板の外側にあることになるからです。三つめの TypeScript を足すのに掛かった実コストは生成器に約 700 行で、五つめの Ruby も六つめの Swift も同じくらいでした。ただし Ruby のときは手で直したファイルが二十数個あったのに対して、Swift で足したのは対象言語をまとめた一覧の一行だけです。
@@ -113,6 +114,7 @@ func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 
 読める形であることを、生成器は四つで守っています。
 
+- **NumPy だけは別です。** 生成したコードではなく、規則そのものを data として配り、固定の評価器がそれを読みます。
 - **セルを省略しません。** 手前の分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です。
 - **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`、Wasm のモジュールは Rust のものなので同じ newtype。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby・PHP・JavaScript・Java・SQL は単位を置ける型が無いので、そこは注記で伝えます。ただし PHP と Java は引数の種類そのものは宣言するので、入口の検査は範囲だけで済みます。
 - **丸めは自前のヘルパで行います。** Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・Java・TypeScript・JavaScript・PHP の `intdiv`・SQL は 0 方向で食い違うので、言語の素の除算には任せません。
