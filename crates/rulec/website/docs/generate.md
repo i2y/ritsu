@@ -334,6 +334,34 @@ generated code, and the rounding helpers get their own unit vectors —
 table-level agreement alone would hide a helper bug in a table that
 never produces fractions.
 
+## The same code inside a Wasm host
+
+The generated Rust has no dependencies and reaches the outside only through
+stdin and stdout, so it compiles for `wasm32-wasip1` unchanged. When
+`wasmtime` is on the PATH and the target's standard library is installed
+(`rustup target add wasm32-wasip1`), `rulec test` runs the Rust runner once
+more as a WASI module and holds it to the same expected records:
+
+```console
+$ rulec test generated/
+ok    shipping_fee (Rust) 68 vectors
+ok    shipping_fee (Rust, Wasm) 68 vectors
+…
+```
+
+Without wasmtime the pass is skipped and the report says so; it is not
+counted as a missing language.
+
+This is the host a Shopify Function, an Extism plugin or a Cloudflare
+Worker gives a rule: one small module, no network, a limit on
+instructions. The rule's module goes into the platform's own crate as it
+is, and the platform-specific part — reading a cart and flattening it into
+the rule's inputs, turning the outputs into discount operations — stays a
+boundary of twenty lines beside it. [Targeting a language rulec does not
+generate](backends.md#a-wasm-host-shopify-functions) says where that
+boundary runs, and what such a function can decide (a discount) and cannot
+(a shipping rate).
+
 ## Is the vector suite itself complete?
 
 ```console
