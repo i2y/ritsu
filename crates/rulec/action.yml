@@ -2,14 +2,14 @@ name: rulec
 description: Put one release of rulec on the PATH, verified against the checksums published with it.
 author: Yasushi Itoh
 
-# `uses: i2y/rulec@v0.4.1` installs release v0.4.1: the ref the action is
+# `uses: i2y/rulec@v0.5.0` installs release v0.5.0: the ref the action is
 # referenced with is the release, so the action and the binary cannot drift
 # apart. Nothing else is done here — the gate is five `run:` lines anyone can
 # read, and posting a diff to a pull request is one line of `gh` (DESIGN §12).
 
 inputs:
   version:
-    description: The release to install, as its tag (v0.4.1). Empty means the ref this action was referenced with.
+    description: The release to install, as its tag (v0.5.0). Empty means the ref this action was referenced with.
     required: false
     default: ""
   sha256:
