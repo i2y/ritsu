@@ -2059,7 +2059,13 @@ impl<'a> Gen<'a> {
                     self.go_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
                 })
                 .collect();
-            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            // A set cell comes in parentheses so that it can sit beside other conditions; alone
+            // on the `if`, gofmt strips them, so they are stripped here.
+            let cond: String = match conds.as_slice() {
+                [] => "true".to_string(),
+                [one] => unparen(one).to_string(),
+                many => many.join(" && "),
+            };
             let kw = if ri == 0 { "\tif" } else { " else if" };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
             if ri == 0 {
@@ -5168,7 +5174,9 @@ impl<'a> Gen<'a> {
                 Lit::Str(s) => format!("{s:?}"),
             }
         };
-        let members = |ls: &Vec<Lit>| -> String {
+        // A set is compared value by value. `[A, B].include?(x)` would do, but steep types
+        // that literal as `Array[A | B]` and refuses `x`, whose type is the whole enum.
+        let any_of = |ls: &Vec<Lit>, neg: bool| -> String {
             let mut out: Vec<String> = Vec::new();
             for l in ls {
                 if let Lit::Word(w) = l {
@@ -5179,7 +5187,8 @@ impl<'a> Gen<'a> {
                 }
                 out.push(lit(l));
             }
-            format!("[{}]", out.join(", "))
+            let (op, join) = if neg { ("!=", " && ") } else { ("==", " || ") };
+            format!("({})", out.iter().map(|v| format!("{var} {op} {v}")).collect::<Vec<_>>().join(join))
         };
         Some(match cell {
             Cell::DontCare => return None,
@@ -5192,12 +5201,12 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} == {}", lit(l)),
-            Cell::Set(ls) => format!("{}.include?({var})", members(ls)),
+            Cell::Set(ls) => any_of(ls, false),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
                 format!("!GROUP_{}.include?({var})", self.ident(w))
             }
-            Cell::Not(ls) => format!("!{}.include?({var})", members(ls)),
+            Cell::Not(ls) => any_of(ls, true),
             Cell::Cmp(cs) => cs
                 .iter()
                 .map(|(o, l)| {
@@ -7634,4 +7643,3 @@ impl<'a> Gen<'a> {
 pub fn round_tests_javascript() -> String {
     strip_types(&round_tests_typescript())
 }
-
