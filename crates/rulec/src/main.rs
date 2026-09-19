@@ -295,7 +295,7 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は e-Gov から引用した箇所を取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated は後の改正で引用箇所が変わるかを問い合わせる",
+                "出典の写しを扱う。fetch は法令の引用箇所を e-Gov から取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated は法令の後の改正で引用箇所が変わるかを問い合わせる",
                 "handle the copies of a rule's sources: fetch brings the cited fragments from e-Gov to the rule's side, pin writes the copies' digests into the rule, outdated asks whether a later amendment changes them"
             ),
             params: vec![

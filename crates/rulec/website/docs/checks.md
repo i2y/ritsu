@@ -44,8 +44,8 @@ held to its copies: every cited fragment has a copy beside the rule and its dige
 the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
 and rows that cite it), a missing copy is E039, a pin no citation uses is W119. `check` never
 reads the network: `rulec source fetch` brings the copies, `rulec source pin` writes the pins,
-and `rulec source outdated` asks e-Gov, the Japanese government's statute database, whether a
-later amendment changes a cited fragment.
+and, for a statute, `rulec source outdated` asks e-Gov, the Japanese government's statute
+database, whether a later amendment changes a cited fragment.
 
 A rule that applies another (`apply`, the way a statute applies one provision to another case
 with its terms read differently) is held to the applied rule's digest (E040), has to substitute

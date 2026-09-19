@@ -491,9 +491,12 @@ There are two kinds of document, cited and copied a little differently.
 From then on every `rulec check` confirms that the copies are there and that their digests
 are what the rule says. When a copy differs — the file was replaced, or the article was
 fetched again after an amendment — the check stops and names the tables, clauses and rows
-that cite it (E038), which is all there is to reread. `check` itself never reads the network;
-whether a later amendment changes a cited article is what `rulec source outdated` asks e-Gov,
-and it belongs in a scheduled CI job.
+that cite it (E038), which is all there is to reread. `check` itself never reads the network.
+
+A statute has one more command to it. Whether an amendment enforced after `asof` changes a
+cited article is what `rulec source outdated` asks e-Gov; `check` cannot know of an amendment
+until the copy is fetched again, so this belongs in a scheduled CI job. A file beside the rule
+raises no such question: when it is replaced, `check` sees its digest change on the spot.
 
 The approver's page quotes the cited text from the copies.
 
