@@ -377,9 +377,12 @@ fn provenance(rep: &Report) -> Vec<String> {
 /// "How many records move" and "how much money moves" are different questions, and it is
 /// the latter that sways an approval.
 fn impact(rep: &Report, c: &Checked) -> String {
+    // A record the counterpart could not answer is listed apart and is out of the
+    // denominator, so it is out of the numerator too: otherwise a counterpart that answers
+    // eighteen records and declines the rest is "affected" a thousand percent.
     let n = rep.total - rep.errored;
-    let pct = if n == 0 { 0.0 } else { rep.mismatches.len() as f64 * 100.0 / n as f64 };
-    let all: Vec<&Mismatch> = rep.mismatches.iter().collect();
+    let all: Vec<&Mismatch> = rep.mismatches.iter().filter(|m| m.err.is_none()).collect();
+    let pct = if n == 0 { 0.0 } else { all.len() as f64 * 100.0 / n as f64 };
     let money: Vec<String> = deltas(&all, c)
         .iter()
         .map(|(name, d)| {
@@ -390,7 +393,7 @@ fn impact(rep: &Report, c: &Checked) -> String {
     tr!(
         "影響 {} 件 ({pct:.3}%){}",
         "Affected {} ({pct:.3}%){}",
-        rep.mismatches.len(),
+        all.len(),
         money.join("")
     )
 }
