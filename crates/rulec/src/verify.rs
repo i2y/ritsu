@@ -167,7 +167,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              for sc.Scan() {{\n\t\t\
              var req struct {{\n\t\t\tID  int            `json:\"id\"`\n\t\t\tIn  map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
-             // ここで旧実装を呼ぶ。入力は {} 。\n\t\t\
+             // ここで旧実装を呼ぶ。入力は {}。\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
              b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
@@ -202,7 +202,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              if not line:\n        \
              continue\n    \
              req = json.loads(line)\n    \
-             d = req[\"in\"]  # 入力は {} \n\n    \
+             d = req[\"in\"]  # 入力は {}\n\n    \
              # ここで旧実装を呼ぶ。\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
              print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
