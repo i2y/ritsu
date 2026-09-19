@@ -16,7 +16,7 @@
 <text x="309.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">九言語に生成</text>
 <text x="309.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">参照評価器と</text>
 <text x="309.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">突き合わせる</text>
-<text x="309.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">呼び方の目録</text>
+<text x="309.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">呼び方の一覧</text>
 <path d="M480,20.0 H618 L630,32.0 V120.0 H480 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M618,20.0 V32.0 H630 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
 <text x="489" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">生成コード</text>

@@ -808,7 +808,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let SourceKind::Law { id, asof } = &d.kind else { continue };
         if latest.get(id.as_str()).is_some_and(|l| *l != asof.as_str()) {
             lines.push(tr!(
-                "{}: 同じ法令をより後の時点で引く出典があるので、改正はそちらで問います",
+                "{}: 同じ法令をもっと後の時点で引用している出典があるので、改正はそちらで確かめます",
                 "{}: another source reads this law as of a later date; amendments are asked about there",
                 d.name.text
             ));
