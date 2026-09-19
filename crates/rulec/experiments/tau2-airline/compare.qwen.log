@@ -1,0 +1,22 @@
+│      Sims by severity       -                                                │
+│   👤 User Errors            0 errors                                         │
+│      Sims by severity       -                                                │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+│      Sims by severity       -                                                │
+│   👤 User Errors            0 errors                                         │
+│      Sims by severity       -                                                │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+| run | tasks | trials | avg reward | pass^1 | pass^2 | pass^3 | pass^4 |
+|---|---|---|---|---|---|---|---|
+| without tools | 15 | 1 | 0.800 | 0.800 |  |  |  |
+| with tools | 15 | 1 | 0.867 | 0.867 |  |  |  |
+
+with tools: rulec tools called cancellation_verdict ×6
+
+| task | without | with |
+|---|---|---|
+| 41 | 1.00 | 0.00 |
+| 43 | 0.00 | 1.00 |
+| 47 | 0.00 | 1.00 |
