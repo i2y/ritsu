@@ -121,9 +121,9 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     for mut a in applies {
         a.at += shift;
         let an = a.name.text.clone();
-        let at = |line: usize| tr!("{path}:{line} 呼び出し {an}", "{path}:{line} apply {an}");
+        let at = |line: usize| tr!("{path}:{line} 準用 {an}", "{path}:{line} apply {an}");
         let e044 = |what: String, note: String| {
-            Diag::error("E044", tr!("`{an}` を呼び出せません: {what}", "`{an}` cannot be applied: {what}"))
+            Diag::error("E044", tr!("`{an}` を準用できません: {what}", "`{an}` cannot be applied: {what}"))
                 .at(at(a.span.line))
                 .mark(a.span.clone(), "")
                 .note(note)
@@ -145,18 +145,18 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         let h = crate::sha256::short(&bytes);
         match &a.hash {
             None => out.push(
-                Diag::error("E040", tr!("呼び先 `{}` のハッシュが固定されていません", "The digest of the callee `{}` is not pinned", a.path))
+                Diag::error("E040", tr!("元の規則 `{}` のハッシュが固定されていません", "The digest of the callee `{}` is not pinned", a.path))
                     .at(at(a.span.line))
                     .mark(a.span.clone(), "")
-                    .note(tr!("いまの呼び先は sha256:{h} です。承認したものとして固定するなら、見出しを次のとおりにしてください（`rulec source pin` も書きます）。", "The callee is sha256:{h} now. To pin it as the one approved, make the heading the following (`rulec source pin` writes it too)."))
+                    .note(tr!("いまの元の規則は sha256:{h} です。この内容で承認するなら、見出しを次のとおりにしてください（`rulec source pin` でも書けます）。", "The callee is sha256:{h} now. To pin it as the one approved, make the heading the following (`rulec source pin` writes it too)."))
                     .fix(crate::diag::FixKind::PinSource, header_line(&a, &h)),
             ),
             Some(p) if *p != h => out.push(
-                Diag::error("E040", tr!("呼び先 `{}` が変わっています", "The callee `{}` has changed", a.path))
+                Diag::error("E040", tr!("元の規則 `{}` が変わっています", "The callee `{}` has changed", a.path))
                     .at(at(a.span.line))
                     .mark(a.span.clone(), tr!("固定: sha256:{p}", "pinned: sha256:{p}"))
-                    .note(tr!("いまの呼び先: sha256:{h}", "The callee now: sha256:{h}"))
-                    .note(tr!("`rulec diff` でこの規則の答えが何件いくら動くかを見てから、見出しを次のとおり書き換えて固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
+                    .note(tr!("いまの元の規則: sha256:{h}", "The callee now: sha256:{h}"))
+                    .note(tr!("`rulec diff` でこの規則の答えが何件いくら動くかを見てから、見出しを次のとおり書き換えてハッシュを固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
                     .fix(crate::diag::FixKind::PinSource, header_line(&a, &h)),
             ),
             _ => {}
@@ -171,7 +171,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         if parsed.file.as_ref().is_some_and(|cf| !cf.applies.is_empty()) {
             out.push(e044(
                 tr!("`{}` 自身が `{}` を持っています", "`{}` itself has an `{}`", a.path, crate::kw::APPLY),
-                tr!("呼び出しは一段までです。準用の準用は、呼び先を展開して書いてください。", "An apply goes one level. A provision applied through another is written expanded."),
+                tr!("準用は一段までです。準用の準用は、元の規則の中身をこの規則に書き写してください。", "An apply goes one level. A provision applied through another is written expanded."),
             ));
             done.push(a);
             continue;
@@ -187,7 +187,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 codes.dedup();
                 out.push(e044(
                     tr!("`{}` が check を通りません（{}）", "`{}` does not pass check ({})", a.path, codes.join(", ")),
-                    tr!("呼び先を先に直してください。壊れた規則を展開しても壊れた規則です。", "Fix the callee first. A broken rule expanded is a broken rule."),
+                    tr!("先に元の規則を直してください。通らない規則を準用しても、通らない規則になるだけです。", "Fix the callee first. A broken rule expanded is a broken rule."),
                 ));
                 done.push(a);
                 continue;
@@ -195,8 +195,8 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         };
         if cf.elements.is_some() || cf.fold.is_some() || cf.items.iter().any(|it| matches!(it, Item::Count(_))) {
             out.push(e044(
-                tr!("`{}` は列を歩く規則です", "`{}` walks a sequence", a.path),
-                tr!("歩く規則の呼び出しは、まだ受けません。", "Applying a rule that walks a sequence is not accepted yet."),
+                tr!("`{}` は並びを順に見ていく規則です", "`{}` walks a sequence", a.path),
+                tr!("並びを順に見ていく規則の準用は、まだできません。", "Applying a rule that walks a sequence is not accepted yet."),
             ));
             done.push(a);
             continue;
@@ -211,13 +211,13 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             if k != 1 {
                 out.push(
                     Diag::error("E041", if k == 0 {
-                        tr!("呼び先の入力 `{n}` が束縛されていません", "The callee input `{n}` is not bound")
+                        tr!("元の規則の入力 `{n}` の読み替えがありません", "The callee input `{n}` is not bound")
                     } else {
-                        tr!("呼び先の入力 `{n}` が二度束縛されています", "The callee input `{n}` is bound twice")
+                        tr!("元の規則の入力 `{n}` の読み替えが二度あります", "The callee input `{n}` is bound twice")
                     })
                     .at(at(a.span.line))
                     .mark(a.span.clone(), "")
-                    .note(tr!("呼び先の入力は全部、`<入力> = <値>` の行で明示に束縛します。それが読替えです。", "Every callee input is bound explicitly by a `<input> = <value>` line; that is the substitution.")),
+                    .note(tr!("元の規則の入力は全部、`<元の入力> = <この規則の値>` の行で読み替えを書きます。", "Every callee input is bound explicitly by a `<input> = <value>` line; that is the substitution.")),
                 );
                 bad = true;
             }
@@ -228,7 +228,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     Diag::error("E041", tr!("`{}` に `{}` という入力はありません", "`{}` has no input called `{}`", a.path, b.input))
                         .at(at(b.span.line))
                         .mark(b.span.clone(), "")
-                        .note(tr!("呼び先の入力: {}", "The callee's inputs: {}", cf.inputs.iter().map(|i| i.name.text.clone()).collect::<Vec<_>>().join(", "))),
+                        .note(tr!("元の規則の入力: {}", "The callee's inputs: {}", cf.inputs.iter().map(|i| i.name.text.clone()).collect::<Vec<_>>().join(", "))),
                 );
                 bad = true;
             }
@@ -239,7 +239,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     Diag::error("E041", tr!("`{}` に `{}` という出力はありません", "`{}` has no output called `{}`", a.path, ob.output))
                         .at(at(ob.span.line))
                         .mark(ob.span.clone(), "")
-                        .note(tr!("呼び先の出力: {}", "The callee's outputs: {}", cf.outputs.iter().map(|o| o.name.text.clone()).collect::<Vec<_>>().join(", "))),
+                        .note(tr!("元の規則の出力: {}", "The callee's outputs: {}", cf.outputs.iter().map(|o| o.name.text.clone()).collect::<Vec<_>>().join(", "))),
                 );
                 bad = true;
             }
@@ -266,7 +266,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                         Diag::error("E035", tr!("`{}` の指す先 `{target}` が `{}` にありません", "The target `{target}` of `{}` is not in `{}`", crate::kw::EXCEPT, a.path))
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
-                            .note(tr!("指せるのは呼び先の表か節の名前、または `表:行ラベル` です。行にはラベルが要ります。", "A target is a table or clause of the callee, or `table:label`. A row needs a label.")),
+                            .note(tr!("書けるのは元の規則の表か節の名前、または `表:行ラベル` です。行を指すにはラベルが要ります。", "A target is a table or clause of the callee, or `table:label`. A row needs a label.")),
                     );
                     bad = true;
                 }
@@ -286,8 +286,8 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 for oc in &t.outputs {
                     if cc.ty_of(&oc.name.text).is_some_and(|ty| callee_enum(&ty)) {
                         out.push(e044(
-                            tr!("表 {} の出力 `{}` は呼び先が宣言した列挙です", "the output `{}` of table {} is an enum the callee declares", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), oc.name.text),
-                            tr!("呼び先の列挙を出す表と節の展開は、まだ受けません。入力の列挙は `with` で写せます。", "Expanding a table or clause that produces one of the callee's enums is not accepted yet. An enum input is mapped with `with`."),
+                            tr!("表 {} の出力 `{}` は、元の規則が宣言した列挙です", "the output `{}` of table {} is an enum the callee declares", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), oc.name.text),
+                            tr!("元の規則の列挙を出力に持つ表や節は、まだ準用できません。入力の列挙なら `with` で値を対応づけられます。", "Expanding a table or clause that produces one of the callee's enums is not accepted yet. An enum input is mapped with `with`."),
                         ));
                         bad = true;
                     }
@@ -371,15 +371,15 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                         // Every row went with the bindings: the literal bound to a column
                         // matched none, or the enum values the rows name stand for nothing here.
                         None => out.push(
-                            Diag::warning("W118", tr!("{} {} の行は、この呼び出しではどれも到達しません", "No row of {} {} is reached in this apply", if t.clause { tr!("節", "clause") } else { tr!("表", "table") }, rn.text(&tn)))
+                            Diag::warning("W118", tr!("{} {} の行は、この準用ではどれも当たりません", "No row of {} {} is reached in this apply", if t.clause { tr!("節", "clause") } else { tr!("表", "table") }, rn.text(&tn)))
                                 .at(at(a.span.line))
                                 .table(rn.text(&tn))
                                 .mark(a.span.clone(), "")
                                 .note(tr!(
-                                    "束縛した値がこの表のどの行にも当てはまりません。呼び先が自分の入力の上で完全なことは変わりません。",
+                                    "読み替えた値では、この表のどの行にも当たりません。元の規則が自分の入力の範囲で完全なことは変わりません。",
                                     "What is bound matches no row of this table. The callee is still complete over its own inputs."
                                 ))
-                                .note(tr!("この呼び出しに要らない表なら、`{} {}` で外せます。", "If this apply does not need the table, `{} {}` leaves it out.", crate::kw::EXCEPT, tn)),
+                                .note(tr!("この準用に要らない表なら、`{} {}` で外せます。", "If this apply does not need the table, `{} {}` leaves it out.", crate::kw::EXCEPT, tn)),
                         ),
                     }
                 }
@@ -416,7 +416,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 });
             if taken {
                 out.push(
-                    Diag::error("E041", tr!("呼び先の出力 `{}` の名前 `{}` は、この規則に既にあります", "The name `{}` for the callee output `{}` is already declared in this rule", od.name.text, target.text))
+                    Diag::error("E041", tr!("元の規則の出力 `{}` に付けた名前 `{}` は、この規則に既にあります", "The name `{}` for the callee output `{}` is already declared in this rule", od.name.text, target.text))
                         .at(at(a.span.line))
                         .mark(a.span.clone(), "")
                         .note(tr!("`{} -> <別の名前>` で改名してください。", "Rename it with `{} -> <another name>`.", od.name.text)),
@@ -789,7 +789,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     for a in &f.applies {
         let Some(cal) = &a.callee else { continue };
         let an = &a.name.text;
-        let at = |line: usize| tr!("{path}:{line} 呼び出し {an}", "{path}:{line} apply {an}");
+        let at = |line: usize| tr!("{path}:{line} 準用 {an}", "{path}:{line} apply {an}");
         // Interval of what a binding passes.
         let interval = |b: &Binding| -> Option<(Option<Rat>, Option<Rat>)> {
             match &b.value {
@@ -817,7 +817,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         Diag::error("E041", tr!("`{n}` という名前はこの規則にありません", "There is no name `{n}` in this rule"))
                             .at(at(b.span.line))
                             .mark(b.span.clone(), "")
-                            .note(tr!("束縛できるのは、この規則の入力・導出・定義・表や節の出力か、リテラルです。", "A binding takes an input, a derived value, a definition, a table or clause output of this rule, or a literal.")),
+                            .note(tr!("読み替え先に書けるのは、この規則の入力・導出・定義・表や節の出力か、リテラルです。", "A binding takes an input, a derived value, a definition, a table or clause output of this rule, or a literal.")),
                     ),
                     Some(ty) => {
                         let bare = |t: Ty| match t {
@@ -834,7 +834,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                                         out.push(bad_map(&at(b.span.line), &b.span, tr!("`{from}` は {ce} の値ではありません", "`{from}` is not a value of {ce}")));
                                     }
                                     if !callee_vals.contains(to) {
-                                        out.push(bad_map(&at(b.span.line), &b.span, tr!("`{to}` は呼び先の {ke} の値ではありません", "`{to}` is not a value of the callee's {ke}")));
+                                        out.push(bad_map(&at(b.span.line), &b.span, tr!("`{to}` は元の規則の {ke} の値ではありません", "`{to}` is not a value of the callee's {ke}")));
                                     }
                                 }
                                 let unmapped: Vec<&String> = caller_vals
@@ -846,7 +846,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                                         &at(b.span.line),
                                         &b.span,
                                         tr!(
-                                            "{ce} の値 {} に対応する呼び先の値がありません。`{} <値> -> <値>` で全部を対応させてください（同じ綴りは書かなくて構いません）。",
+                                            "{ce} の値 {} にあたる元の規則の値がありません。`{} <この規則の値> -> <元の規則の値>` で全部の値を対応づけてください（同じ綴りの値は書かなくて構いません）。",
                                             "The values {} of {ce} stand for no value of the callee. Map every value with `{} <value> -> <value>` (a value spelled the same on both sides needs no entry).",
                                             unmapped.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(", "),
                                             crate::kw::WITH
@@ -854,10 +854,10 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                                     ));
                                 }
                             }
-                            (Ty::Enum(_), _) | (_, Ty::Enum(_)) => out.push(bad_map(&at(b.span.line), &b.span, tr!("`{n}` は {ty} で、呼び先の `{}` は {cty} です", "`{n}` is {ty}; the callee's `{}` is {cty}", cin.name))),
+                            (Ty::Enum(_), _) | (_, Ty::Enum(_)) => out.push(bad_map(&at(b.span.line), &b.span, tr!("`{n}` は {ty} で、元の規則の `{}` は {cty} です", "`{n}` is {ty}; the callee's `{}` is {cty}", cin.name))),
                             _ => {
                                 if !ty.unifies(&cty) && !cty.unifies(&ty) {
-                                    out.push(bad_map(&at(b.span.line), &b.span, tr!("`{n}` は {ty} で、呼び先の `{}` は {cty} です", "`{n}` is {ty}; the callee's `{}` is {cty}", cin.name)));
+                                    out.push(bad_map(&at(b.span.line), &b.span, tr!("`{n}` は {ty} で、元の規則の `{}` は {cty} です", "`{n}` is {ty}; the callee's `{}` is {cty}", cin.name)));
                                 }
                             }
                         }
@@ -873,7 +873,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         _ => false,
                     };
                     if !ok {
-                        out.push(bad_map(&at(b.span.line), &b.span, tr!("このリテラルは呼び先の `{}`（{cty}）の値ではありません", "This literal is not a value of the callee's `{}` ({cty})", cin.name)));
+                        out.push(bad_map(&at(b.span.line), &b.span, tr!("このリテラルは元の規則の `{}`（{cty}）の値ではありません", "This literal is not a value of the callee's `{}` ({cty})", cin.name)));
                     }
                 }
             }
@@ -885,10 +885,10 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 Some((lo, hi)) => (lo, hi),
                 None => {
                     out.push(
-                        Diag::error("E043", tr!("`{}` に渡す値の到達区間が分かりません", "The interval of what is passed to `{}` is not known", cin.name))
+                        Diag::error("E043", tr!("`{}` に渡す値の取りうる範囲が分かりません", "The interval of what is passed to `{}` is not known", cin.name))
                             .at(at(b.span.line))
                             .mark(b.span.clone(), "")
-                            .note(tr!("呼び先の `{}` は range {} の上で検査されています。渡す側に範囲が要ります。", "The callee's `{}` was checked over range {}; the value passed needs a range.", cin.name, range_text(r))),
+                            .note(tr!("元の規則の `{}` は range {} の上で検査されています。渡す側にも範囲が要ります。", "The callee's `{}` was checked over range {}; the value passed needs a range.", cin.name, range_text(r))),
                     );
                     continue;
                 }
@@ -907,12 +907,12 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 let witness = if below { lo } else { hi };
                 let w = witness.map(|v| fmt(v, &cty)).unwrap_or_else(|| tr!("上限なし", "unbounded"));
                 out.push(
-                    Diag::error("E043", tr!("`{}` に渡す値が、呼び先の範囲の外に出ます", "A value passed to `{}` leaves the callee's range", cin.name))
+                    Diag::error("E043", tr!("`{}` に渡す値が、元の規則の範囲の外に出ます", "A value passed to `{}` leaves the callee's range", cin.name))
                         .at(at(b.span.line))
-                        .mark(b.span.clone(), tr!("渡す側の到達区間: {}", "what is passed: {}", interval_text(lo, hi, &cty)))
+                        .mark(b.span.clone(), tr!("渡す値の取りうる範囲: {}", "what is passed: {}", interval_text(lo, hi, &cty)))
                         .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {} = {w} is outside range {} of `{}` in `{}`.", cin.name, a.path, cin.name, range_text(r)))
                         .note(tr!(
-                            "呼び先の完全性はその範囲の上で証明されていて、外の点には定義がありません。渡す側の範囲を狭めるか、その領域をこの規則の節で定めてください。どちらにするかは業務の判断です。",
+                            "元の規則の完全性はその範囲の上で証明されていて、外の値には定義がありません。渡す側の範囲を狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。",
                             "The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision."
                         )),
                 );
@@ -953,10 +953,10 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     BindValue::Lit(l) => lit_text(l),
                 };
                 out.push(
-                    Diag::error("E043", tr!("呼び先の制約 `{} {} {}` が、この規則の宣言から導けません", "The callee's constraint `{} {} {}` does not follow from this rule's declarations", k.left, k.op.word(), k.right))
+                    Diag::error("E043", tr!("元の規則の制約 `{} {} {}` が、この規則の宣言から導けません", "The callee's constraint `{} {} {}` does not follow from this rule's declarations", k.left, k.op.word(), k.right))
                         .at(at(a.span.line))
                         .mark(a.span.clone(), "")
-                        .note(tr!("呼び先では `{}` と `{}` にその関係があると宣言されていて、完全性はそれを信じて検査されました。ここでは `{}` と `{}` を渡します。", "The callee declares that relation between `{}` and `{}`, and its completeness was checked believing it. Here `{}` and `{}` are passed.", k.left, k.right, shown(bl), shown(br)))
+                        .note(tr!("元の規則は `{}` と `{}` にその関係があると宣言していて、完全性はそれを前提に検査されています。ここでは `{}` と `{}` を渡します。", "The callee declares that relation between `{}` and `{}`, and its completeness was checked believing it. Here `{}` and `{}` are passed.", k.left, k.right, shown(bl), shown(br)))
                         .note(tr!("同じ関係を `{} {} {} {}` として宣言するか、範囲でそれが成り立つようにしてください。", "Declare the same relation as `{} {} {} {}`, or make the ranges imply it.", crate::kw::CONSTRAINT, shown(bl), k.op.word(), shown(br))),
                 );
             }
@@ -966,7 +966,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
 }
 
 fn bad_map(at: &str, sp: &Span, what: String) -> Diag {
-    Diag::error("E042", tr!("束縛の型が合いません", "A binding does not agree in type"))
+    Diag::error("E042", tr!("読み替えの型が合いません", "A binding does not agree in type"))
         .at(at.to_string())
         .mark(sp.clone(), "")
         .note(what)
@@ -1003,7 +1003,7 @@ fn range_text(r: &Range) -> String {
 
 fn interval_text(lo: Option<Rat>, hi: Option<Rat>, ty: &Ty) -> String {
     let f = |v: Option<Rat>| v.map(|v| crate::coverage::show_rat(v, ty)).unwrap_or_else(|| "…".to_string());
-    format!("{} .. {}", f(lo), f(hi))
+    tr!("{} 〜 {}", "{} .. {}", f(lo), f(hi))
 }
 
 fn lit_text(l: &Lit) -> String {

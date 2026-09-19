@@ -295,17 +295,17 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は e-Gov から引用した断片を取って規則の隣に置き、pin は写しのハッシュを規則に固定し、outdated は後の改正で断片が変わるかを訊く",
+                "出典の写しを扱う。fetch は e-Gov から引用した箇所を取って規則の隣に置き、pin は写しのハッシュを規則に書き込み、outdated は後の改正で引用箇所が変わるかを問い合わせる",
                 "handle the copies of a rule's sources: fetch brings the cited fragments from e-Gov to the rule's side, pin writes the copies' digests into the rule, outdated asks whether a later amendment changes them"
             ),
             params: vec![
-                ("fetch|pin|outdated", tr!("fetch と outdated は網を見る（curl を呼ぶ）。pin は規則ファイルの固定行だけを書き換える", "fetch and outdated read the network (through curl); pin rewrites only the pin lines of the rule file")),
+                ("fetch|pin|outdated", tr!("fetch と outdated は通信する（curl を呼ぶ）。pin は規則ファイルのハッシュの行だけを書き換える", "fetch and outdated read the network (through curl); pin rewrites only the pin lines of the rule file")),
                 ("<file.rule>", tr!("`source` の宣言と `@` の引用を持つ規則", "a rule with `source` lines and `@` citations")),
             ],
             flags: vec![],
             exits: vec![
-                (0, tr!("済んだ。outdated では、引いている断片を変える改正が無い", "done; for outdated, no later amendment changes a cited fragment")),
-                (1, tr!("outdated: 後の改正が引いている断片を変える。規則が読めないときも", "outdated: a later amendment changes a cited fragment; also when the rule cannot be parsed")),
+                (0, tr!("済んだ。outdated では、引用箇所を変える改正が無い", "done; for outdated, no later amendment changes a cited fragment")),
+                (1, tr!("outdated: 後の改正で引用箇所が変わる。規則が読めないときも", "outdated: a later amendment changes a cited fragment; also when the rule cannot be parsed")),
                 (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
             ],
             examples: vec![

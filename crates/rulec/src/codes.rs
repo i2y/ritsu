@@ -931,13 +931,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E037",
-            tr!("引用した断片が固定されていません", "A cited fragment is not pinned"),
+            tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
-                "`@出典 断片` で引いた断片に、`source` の行の下の `  断片 sha256:…` の固定行が無いとき。`file` の出典なら、行に `sha256:…` が無いとき。断片の書き方や引用・宣言の形が読めないときも同じです。固定が無ければ、写しが改訂されても check は何も言えません（§15.68）。",
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。箇所の書き方や、引用・宣言の形が読めないときも同じです。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
                 "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A fragment name, a citation or a `source` line whose shape cannot be read is reported the same way. Without a pin, a revised copy passes check in silence (§15.68)."
             ),
             tr!(
-                "原本を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を走らせて、いまの写しのハッシュを固定してください。",
+                "原文を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を実行して、いまの写しのハッシュを書き込んでください。",
                 "Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest."
             ),
             X_E037,
@@ -946,13 +946,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(ARTICLE_1),
         err(
             "E038",
-            tr!("出典の断片が変わっています", "A source fragment has changed"),
+            tr!("引用した箇所が変わっています", "A source fragment has changed"),
             tr!(
-                "固定したハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。引いている表・節・行を名指しするので、読み直す範囲はそこだけです。",
+                "規則に書いてあるハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。その箇所を引用している表・節・行を名指しするので、読み直すのはそこだけで済みます。",
                 "The pinned digest differs from the digest of the copy beside the rule. It fails in the pull request that refreshed the copy, and names the tables, clauses and rows that cite the fragment, which is all there is to reread."
             ),
             tr!(
-                "写しの差分を読み、写した行がまだ正しければ `fix.text` の行に書き換えて固定し直してください（`rulec source pin` も書きます）。行が変わるなら、先に行を直します。",
+                "写しの差分を読み、写した行がまだ正しければ `fix.text` のとおりハッシュの行を書き換えてください（`rulec source pin` でも書けます）。行が変わるなら、先に行を直します。",
                 "Read the copy's diff; if the transcribed rows still hold, rewrite the pin line as `fix.text` says (`rulec source pin` writes it too). If the rows have to change, change them first."
             ),
             X_E038,
@@ -963,11 +963,11 @@ pub fn ledger() -> Vec<Entry> {
             "E039",
             tr!("出典の写しがありません", "There is no copy of a source"),
             tr!(
-                "引いた断片の写し `sources/law/<法令ID>@<日付>/<要素>.xml` が規則の隣に無いとき、または `file` の出典が読めないとき。check は網を見ないので、写しが無ければ照合できません。",
+                "引用した箇所の写し `sources/law/<法令ID>@<日付>/<要素>.xml` が規則の隣に無いとき、または `file` の出典が読めないとき。check は通信しないので、写しが無ければ照合できません。",
                 "The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare."
             ),
             tr!(
-                "`rulec source fetch <file.rule>` が e-Gov から断片を取って写しに置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` が e-Gov から引用箇所を取って写しに置きます。写しは git に入れてください。",
                 "`rulec source fetch <file.rule>` fetches the fragment from e-Gov into the copies. Commit the copies."
             ),
             X_E039,
@@ -975,13 +975,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E040",
-            tr!("呼び先が固定したハッシュと違います", "The callee differs from its pinned digest"),
+            tr!("準用する元の規則が、書いてあるハッシュと違います", "The callee differs from its pinned digest"),
             tr!(
-                "`apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある呼び先ファイルのハッシュが違うとき。呼び先が改正されれば、それを準用するこの規則の答えも変わっています。固定が無ければ、その変化を誰も承認しないまま通ります（§15.69）。",
+                "`apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある元の規則のファイルのハッシュが違うとき。元の規則が改正されれば、それを準用するこの規則の答えも変わっています。ハッシュを書いておかないと、その変化を誰も承認しないまま通ってしまいます（§15.69）。",
                 "The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it (§15.69)."
             ),
             tr!(
-                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、動きを承認したら、`fix.text` の見出しに書き換えるか `rulec source pin <file.rule>` を走らせて固定し直してください。",
+                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、それでよければ、見出しを `fix.text` のとおり書き換えるか `rulec source pin <file.rule>` を実行してハッシュを書き直してください。",
                 "See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again."
             ),
             X_E040,
@@ -990,13 +990,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(CALLEE),
         err(
             "E041",
-            tr!("呼び出しの束縛が合いません", "The bindings of an apply do not match the callee"),
+            tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
             tr!(
-                "呼び先の入力に束縛されていないものがあるとき、呼び先に無い入力や出力を名指ししたとき、呼び先の出力に付けた名前がこの規則に既にあるとき、`apply` のブロックの形が読めないとき。読替えは全部の入力を明示に束縛することで書くので、足りない束縛は「読替えが書かれていない」と同じです（§15.69）。",
+                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を名指ししたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、足りなければ「読み替えが書いてない」のと同じです（§15.69）。",
                 "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten (§15.69)."
             ),
             tr!(
-                "呼び先の入力を一つずつ `<呼び先の入力> = <値>` で束縛し、出力は `<呼び先の出力> -> <名前>` で改名してください。呼び先の入力と出力の名前は文面に並びます。",
+                "元の規則の入力を一つずつ `<元の規則の入力> = <この規則の値>` で読み替え、出力は `<元の規則の出力> -> <名前>` で名前を付けてください。元の規則の入力と出力の名前は文面に並びます。",
                 "Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message."
             ),
             X_E041,
@@ -1005,13 +1005,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(CALLEE),
         err(
             "E042",
-            tr!("束縛の型が合いません", "A binding does not agree in type"),
+            tr!("読み替えの型が合いません", "A binding does not agree in type"),
             tr!(
-                "束縛した値の型が呼び先の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値に対応する呼び先の値が無いとき（同じ綴りの値は自動で対応します）、`with` が知らない値を名指ししたとき、リテラルが呼び先の型の値でないときも同じです。",
+                "読み替えた値の型が、元の規則の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値にあたる元の規則の値が無いとき（同じ綴りの値はそのまま対応します）、`with` にどちらにも無い値を書いたとき、リテラルが元の規則の型の値でないときも同じです。",
                 "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type."
             ),
             tr!(
-                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <呼び先の値>, …` で、この規則の列挙の値を全部対応させます。これが「『退職』とあるのは『任期の終了』と読み替える」の形です。",
+                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` で、この規則の列挙の値を全部対応づけます。「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。",
                 "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\"."
             ),
             X_E042,
@@ -1020,13 +1020,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(ENUM_CALLEE),
         err(
             "E043",
-            tr!("渡す値が呼び先の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
+            tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
             tr!(
-                "束縛した値の到達区間が、呼び先の入力の `range` の外に出るとき（外に出る点を証人として示します）、または呼び先の `constraint` がこの規則の宣言から導けないとき。呼び先の完全性はその範囲と制約の上で証明されていて、外の点には定義がありません。`fix.text` は付けません。呼び先に行を足すのは別の承認の単位だからです（§15.69）。",
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（はみ出す値を一つ例に挙げます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです（§15.69）。",
                 "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval (§15.69)."
             ),
             tr!(
-                "この規則の入力の範囲を呼び先の範囲まで狭めるか、外れる領域をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。",
+                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。",
                 "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`."
             ),
             X_E043,
@@ -1035,13 +1035,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(CALLEE),
         err(
             "E044",
-            tr!("その規則は呼び出せません", "That rule cannot be applied"),
+            tr!("その規則は準用できません", "That rule cannot be applied"),
             tr!(
-                "呼び先が読めないとき、呼び先が `check` を通らないとき（出たコードを添えます）、呼び先自身が `apply` を持つとき、呼び先が列を歩く規則（`elements`、`fold`、`count`）のとき、呼び先の表や節が呼び先自身の列挙を出すとき。壊れた規則を展開しても壊れた規則で、準用の準用は一段に畳んでから書きます。",
+                "元の規則が読めないとき、元の規則が `check` を通らないとき（出たコードを添えます）、元の規則自身が `apply` を持つとき、元の規則が並びを順に見ていく規則（`elements`、`fold`、`count`）のとき、元の規則の表や節が元の規則自身の列挙を出力に持つとき。通らない規則を準用しても通らない規則になるだけで、準用の準用は一段に書き直してから書きます。",
                 "The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level."
             ),
             tr!(
-                "呼び先を先に直してください。`apply` を持つ規則や列を歩く規則を準用するなら、展開した形をこの規則に書いてください。",
+                "先に元の規則を直してください。`apply` を持つ規則や、並びを順に見ていく規則を準用するなら、その中身をこの規則に書き写してください。",
                 "Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule."
             ),
             X_E044,
@@ -1342,25 +1342,25 @@ pub fn ledger() -> Vec<Entry> {
         ),
         warn(
             "W119",
-            tr!("固定した断片が引かれていません", "A pinned fragment is not cited"),
+            tr!("ハッシュを書いた箇所が引用されていません", "A pinned fragment is not cited"),
             tr!(
-                "`source` の下に固定行があるのに、その断片を引く `@` が規則のどこにも無いとき。引用を消したあとの残りです。",
+                "`source` の下にハッシュの行があるのに、その箇所を引用する `@` が規則のどこにも無いとき。引用を消したあとの残りです。",
                 "A pin line sits under a `source` line, but no `@` in the rule cites that fragment. It is what remains after a citation was removed."
             ),
-            tr!("固定行を消してください。`rulec source pin` が消します。", "Remove the pin line; `rulec source pin` does."),
+            tr!("その行を消してください。`rulec source pin` が消します。", "Remove the pin line; `rulec source pin` does."),
             X_W119,
             &["E037"],
         )
         .with_files(ARTICLE_1),
         warn(
             "W118",
-            tr!("呼び先の表の行が、この呼び出しではどれも到達しません", "No row of an applied table is reached in this apply"),
+            tr!("準用した表の行が、この規則ではどれも当たりません", "No row of an applied table is reached in this apply"),
             tr!(
-                "準用した表か節の**全行**が、この規則では到達しないとき。束縛した値がその表の条件に届かないか、この規則のほかの定義（`overrides 呼び出し:表` で優先する節など）が全部先に取っています。一部の行が届かないだけなら何も言いません。呼び先の表はこの規則より広い範囲に書かれているのが普通で、その行は `doc` が「この準用で使われない行」として挙げます（§15.69）。",
+                "準用した表か節の**全行**が、この規則では当たらないとき。読み替えた値がその表の条件に届かないか、この規則のほかの定義（`overrides 準用名:表` で優先する節など）が全部先に取っています。一部の行が当たらないだけなら何も言いません。元の規則の表はこの規則より広い範囲に書かれているのが普通で、そうした行は `doc` が「この準用では当たらない行」として挙げます（§15.69）。",
                 "**Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69)."
             ),
             tr!(
-                "その表がこの呼び出しに要らないなら `except <表>` で外してください。要るはずなら、束縛か `with` の対応を見直してください。",
+                "その表がこの準用に要らないなら `except <表>` で外してください。要るはずなら、読み替えか `with` の値の対応を見直してください。",
                 "If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping."
             ),
             X_W118,

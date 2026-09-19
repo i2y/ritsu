@@ -43,10 +43,10 @@ These are all the words that may start a line.
 | `sequence` | a named list of elements, for an example to walk |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
-| `overrides` | the tables, or labelled rows (`table:label`), declared above that every row of this table takes precedence over. Written after `policy` |
-| `clause` | one definition written as prose: `when <column> <cell> and …` (`when always` for no condition), `then <value>`, and optionally `overrides` |
-| `source` | a document the rule transcribes: a law on e-Gov (`law "<law id>" asof <date>`, with a pin line per cited fragment) or a file beside the rule (`file "<file>" sha256:…`). Tables, clauses, rows, derives and defines cite it with `@source fragment` |
-| `apply` | another rule, applied with every input bound (`<callee input> = <value>`, enums mapped with `with`), some of its definitions left out with `except`, and its outputs taken under a name (`<callee output> -> <name>`). The heading pins the callee file's digest |
+| `overrides` | when a table above defines the same output, says that this table's rows take precedence over it. The line after `policy`; `table:label` names one row |
+| `clause` | a one-line rule that does not fit a table, written as a sentence: `when <column> <cell> and …` (`when always` when there is no condition), `then <value>`, and `overrides` when needed |
+| `source` | a document the rule transcribes: a law on e-Gov (`law "<law id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
+| `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
 | `examples` | an executable specification |
 
@@ -400,6 +400,141 @@ result 送料 = 基本送料 × 負担率
 The operations are addition and subtraction, multiplication by a
 constant, multiplication by a rate, `min`, `max`, and the five rounding
 modes. **There is no loop and no recursion.**
+
+## A main rule and its exceptions as two tables
+
+A tariff usually comes with a main rule and an exception that takes precedence over it:
+"a contract for more than 100,000 yen is taxed at the reduced rate until 31 March 2027". It
+can be written as one table with a `軽減期間` column, but when the sources are two — the
+appendix table of the Stamp Tax Act and Article 91 of the Special Taxation Measures Act — two
+tables read better against them.
+
+```rule
+table 本則(base)  @法 別表第一
+policy unique
+   | 金額の記載あり | 契約金額          | -> 印紙税額(tax) : money[円] |
+r1 | false          | -                 | 200円                        |
+r3 | true           | >=1万円 <=10万円  | 200円                        |
+r4 | true           | >10万円 <=50万円  | 400円                        |
+r5 | true           | >50万円 <=100万円 | 1000円                       |
+
+table 軽減(reduced_rate)  @措置法 第91条
+policy unique
+overrides 本則
+| 軽減期間 | 金額の記載あり | 契約金額          | -> 印紙税額 |
+| true     | true           | >10万円 <=50万円  | 200円       |
+| true     | true           | >50万円 <=100万円 | 500円       |
+```
+
+`overrides 本則` declares that the rows of this table take precedence over the rows of
+table 本則 (an excerpt; the real tables have more rows). `r1` at the head of a row is a label,
+which is how a single row is named: `overrides 本則:r4`.
+
+The checks treat the tables that define one output **as one set**. Completeness is judged over
+both together, and when there is a hole, which table gets the row is a person's decision. Where
+rows meet, an `overrides` line settles it and the overlap passes; without one it is E105. A row
+of the main table that the exception covers entirely is E102, and an `overrides` line whose rows
+meet none of the other's is W117.
+
+The generated code tries the later table first and takes the first row that applies. The trace
+names the table the row was written in and its position there, plus the label when it has one.
+The approver's page says, in one sentence, "table 軽減 takes precedence over table 本則; in
+all 10 pairs that meet, the rows of 軽減 lie inside the other's (an exception)".
+
+## A rule written as a sentence: clause
+
+A one-line rule whose conditions do not line up as columns — a proviso, typically — is not
+forced into a table. It is a `clause`.
+
+```rule
+clause 通常(regular) -> 送料  # Article 3(1), the main text
+  when always
+  then 基本運賃
+
+clause 無料(free) -> 送料  # Article 3(2), the proviso
+  when 注文金額 >=3900円 and 会員 true
+  then 0円
+  overrides 通常
+```
+
+`when` joins `<column> <cell>` pairs with `and`, the cell being any of the seven kinds a table
+cell may hold. A rule with no condition writes `when always` (so that a forgotten line cannot be
+mistaken for one, the same reason a blank cell is refused). `then` holds what an output cell
+holds: a literal or a name.
+
+A clause is treated as **a table with one row**: checked, generated and traced by the same
+machinery, firing as `{"table":"無料","row":1}`. It mixes with tables through `overrides`.
+
+## Where it was transcribed from: source and @
+
+A rule transcribed from a law or a published policy can say where each part came from.
+
+```rule
+source 法 = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source 措置法 = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+
+define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
+
+table 本則(base)  @法 別表第一
+```
+
+`source` declares a document: for a law on e-Gov, its law id and the date whose text is meant
+(`asof`); for a file beside the rule, `file "料金表.pdf" sha256:…`. A table, a clause, a row, a
+derive or a define cites it at the end of its line, `@source 箇所`, naming the place the way the
+document does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一`.
+
+`rulec source fetch` brings a copy of every cited place from e-Gov into `sources/` beside the
+rule, and `rulec source pin` writes the digest of each copy on the line under `source`. From
+then on every `rulec check` confirms that the copies are there and that their digests are what
+the rule says. When a refreshed copy differs, the check stops and names the tables, clauses and
+rows that cite that place (E038), which is all there is to reread. `check` itself never reads
+the network; whether a later amendment changes a cited place is what `rulec source outdated`
+asks e-Gov, and it belongs in a scheduled CI job.
+
+The approver's page quotes the cited text from the copies.
+
+## Applying another rule: apply
+
+"The provisions of Article 20 apply to part-time staff. In this case, 'years of service' shall
+be read as 'period in office'." A statute written this way is saying that the rule of Article
+20 is used once more with its inputs replaced. `apply` writes exactly that.
+
+```rule
+apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # Article 31
+  勤続年数 = 在職期間
+  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
+  基本給 = 報酬月額
+  except 減額
+  手当 -> 非常勤手当
+```
+
+The heading names the rule file being applied and the digest of that file. The lines under it
+are the substitutions: every input of the applied rule, without exception, and what this rule
+passes for it (an input, a derive, a define, an earlier table's output, or a literal). Two enums
+are matched value by value with `with`; a value spelled the same on both sides needs no entry.
+`except` leaves definitions of the applied rule out ("Article 20 (excluding paragraph 2)").
+The applied rule's outputs become values of this rule, renamed with `->`.
+
+`rulec check` first checks the applied rule whole, on its own ground, then expands its tables
+and clauses into this rule under names like `退職手当:支給表` and checks the result as one
+rule — so completeness and overlaps are proved on the rule as applied. Three things more are
+checked: that no substitution is missing (E041), that the types agree (E042), and that **what
+this rule passes stays inside the applied rule's ranges** (E043). Declare the period in office
+from 0 and it stops with "在職期間 = 0 is outside range >=1 <=40 of 勤続年数 in 退職手当.rule":
+the applied rule's completeness was proved over that range and no further, and whether to narrow
+the range or to define the excess in a clause of this rule is a business decision.
+
+When the applied rule is amended, the digest no longer matches and the check stops with E040.
+`rulec diff` shows how many answers of this rule move and by how much; once that is accepted,
+`rulec source pin` writes the new digest. Rows of the applied rule's tables that this rule's
+ranges never reach are not errors: the approver's page lists them as unused by this apply, and
+only a table none of whose rows is reached draws W118.
+
+The generated code carries the applied rule expanded, and the trace says
+`{"table":"退職手当:支給表","row":1,"label":"短期"}`. An apply goes one level, and a rule
+that walks a sequence cannot be applied (E044).
 
 ## Saying which combinations cannot happen
 

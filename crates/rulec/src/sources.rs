@@ -243,7 +243,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         Diag::error("E037", tr!("出典 `{name}` のハッシュが固定されていません", "The digest of source `{name}` is not pinned"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), "")
-                            .note(tr!("いまの写しのハッシュは sha256:{h} です。承認したものとして固定するなら、次の行に書き換えてください。", "The copy's digest is sha256:{h}. To pin it as the one approved, rewrite the line as follows."))
+                            .note(tr!("いまの写しのハッシュは sha256:{h} です。この内容で承認するなら、次のとおり書き換えてください。", "The copy's digest is sha256:{h}. To pin it as the one approved, rewrite the line as follows."))
                             .fix(crate::diag::FixKind::PinSource, file_line(d, &h)),
                     ),
                     Some(p) if *p != h => out.push(
@@ -268,7 +268,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 for (frag, whos) in &cited {
                     let Some(fr) = fragment(frag) else {
                         out.push(
-                            Diag::error("E037", tr!("断片 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
+                            Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一` の形です。附則と号の細分はまだ受けません。", "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号` and `別表第一`. Supplementary provisions and sub-items are not read yet."))
@@ -279,11 +279,11 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                     let p = cdir.join(fr.file());
                     let Ok(bytes) = std::fs::read(&p) else {
                         out.push(
-                            Diag::error("E039", tr!("出典 `{name}` の断片 `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
+                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("探した先: {}", "Looked for: {}", p.display()))
-                                .note(tr!("`rulec source fetch {rule_path}` が e-Gov から取ってきて写しに置きます。check は網を見ません。", "`rulec source fetch {rule_path}` fetches it from e-Gov into the copies. check never reads the network."))
+                                .note(tr!("`rulec source fetch {rule_path}` が e-Gov から取ってきて写しに置きます。check は通信しません。", "`rulec source fetch {rule_path}` fetches it from e-Gov into the copies. check never reads the network."))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -291,15 +291,15 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                     let h = crate::sha256::short(&bytes);
                     match d.pins.iter().find(|p| p.fragment == *frag) {
                         None => out.push(
-                            Diag::error("E037", tr!("出典 `{name}` の断片 `{frag}` が固定されていません", "Fragment `{frag}` of source `{name}` is not pinned"))
+                            Diag::error("E037", tr!("出典 `{name}` の `{frag}` のハッシュが固定されていません", "Fragment `{frag}` of source `{name}` is not pinned"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos)))
-                                .note(tr!("写しのハッシュは sha256:{h} です。承認したものとして固定するなら、`{}` の行の下に次の行を足してください（`rulec source pin` も書きます）。", "The copy's digest is sha256:{h}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
+                                .note(tr!("写しのハッシュは sha256:{h} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{h}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &h)),
                         ),
                         Some(pin) if pin.hash != h => out.push(
-                            Diag::error("E038", tr!("出典 `{name}` の断片 `{frag}` が変わっています", "Fragment `{frag}` of source `{name}` has changed"))
+                            Diag::error("E038", tr!("出典 `{name}` の `{frag}` が変わっています", "Fragment `{frag}` of source `{name}` has changed"))
                                 .at(at(pin.span.line, name))
                                 .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
                                 .note(tr!("いまの写し: sha256:{h}", "The copy now: sha256:{h}"))
@@ -313,7 +313,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 for pin in &d.pins {
                     if !cited.iter().any(|(frag, _)| *frag == pin.fragment) {
                         out.push(
-                            Diag::warning("W119", tr!("出典 `{name}` の断片 `{}` は固定されていますが、引かれていません", "Fragment `{}` of source `{name}` is pinned but not cited", pin.fragment))
+                            Diag::warning("W119", tr!("出典 `{name}` の `{}` はハッシュが固定されていますが、引用されていません", "Fragment `{}` of source `{name}` is pinned but not cited", pin.fragment))
                                 .at(at(pin.span.line, name))
                                 .mark(pin.span.clone(), "")
                                 .note(tr!("引用を消したあとの残りです。`rulec source pin` が消します。", "It is what remains after a citation was removed. `rulec source pin` removes it.")),
@@ -442,7 +442,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let cdir = copy_dir(rule_path, id, asof);
         for (frag, _) in cited_from(&cites, &d.name.text) {
             let Some(fr) = fragment(&frag) else {
-                lines.push(tr!("{}: 断片 `{frag}` の書き方が読めません", "{}: the fragment `{frag}` cannot be read", d.name.text));
+                lines.push(tr!("{}: 引用箇所 `{frag}` の書き方が読めません", "{}: the fragment `{frag}` cannot be read", d.name.text));
                 continue;
             };
             let (xml, rev) = fetch_fragment(id, asof, &fr)?;
@@ -485,7 +485,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
         if a.hash.as_deref() != Some(h.as_str()) {
             let line = lines.get(a.span.line - 1).copied().unwrap_or("");
             edits.push((a.span.line - 1, 1, vec![set_hash(line, &h)]));
-            report.push(tr!("{}: 呼び先 `{}` を sha256:{h} に固定しました", "{}: pinned the callee `{}` at sha256:{h}", a.name.text, a.path));
+            report.push(tr!("{}: 元の規則 `{}` のハッシュを sha256:{h} に固定しました", "{}: pinned the callee `{}` at sha256:{h}", a.name.text, a.path));
         }
     }
     for d in &f.sources {
@@ -521,7 +521,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                 let old: Vec<String> = d.pins.iter().map(|p| pin_line(&p.fragment, &p.hash)).collect();
                 if old != new_pins {
                     edits.push((d.span.line, d.pins.len(), new_pins.clone()));
-                    report.push(tr!("{}: {} 断片を固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
+                    report.push(tr!("{}: {} 箇所のハッシュを固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
                 }
             }
         }
@@ -590,7 +590,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                         frags.join(if crate::i18n::ja() { "、" } else { ", " })
                     ));
                 }
-                None => lines.push(tr!("{}: {date} 施行の改正は、引いている断片を変えません", "{}: the amendment enforced on {date} leaves the cited fragments unchanged", d.name.text)),
+                None => lines.push(tr!("{}: {date} 施行の改正では、引用している箇所は変わりません", "{}: the amendment enforced on {date} leaves the cited fragments unchanged", d.name.text)),
             }
         }
     }

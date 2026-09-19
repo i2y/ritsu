@@ -1189,3 +1189,217 @@ examples
 - **Two outputs from one halved amount, rounded two ways.** The table's notes say: deducted from salary, half a yen or less is dropped and more than half is carried up; paid in cash, less than half is dropped and half or more is carried up. The second is `half_up`; the first is `half_down`. At the grade whose half is 6,599.5 yen the two outputs differ by one yen.
 - **The rates are inputs.** They change by prefecture and by year; baking them into the rule would mean rewriting the table at every revision. A `derive` adds the care-insurance rate to the health-insurance rate, and a table picks which applies by whether the person is a category-2 care insured.
 - **Every grade is held to the printed table.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over all 100 of them and requires every one to agree.
+
+## A main rule and a reduced rate as two tables, held to their sources
+
+The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy fetched from e-Gov.
+
+```rule
+rule 印紙税の本則と軽減(stamp_duty_split) v1
+description "不動産の譲渡に関する契約書（第1号文書）の印紙税額。本則の表に、令和9年3月31日までの軽減税率の表が優先する"
+
+source 法 = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source 措置法 = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+
+inputs
+  契約金額(amount)       : money[円]  range >=0円 <=10000億円
+  金額の記載あり(stated) : bool
+  作成日(made)           : date  range >=2014-04-01 <=2030-12-31
+
+outputs
+  印紙税額(tax) : money[円]  round down(1円)
+
+define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
+
+table 本則(base)  @法 別表第一  # 第1号文書の欄
+policy unique
+         | 金額の記載あり | 契約金額             | -> 印紙税額(tax) : money[円] |
+記載なし | false          | -                    | 200円                        |
+r3       | true           | >=1万円 <=10万円     | 200円                        |
+r4       | true           | >10万円 <=50万円     | 400円                        |
+r5       | true           | >50万円 <=100万円    | 1000円                       |
+r6       | true           | >100万円 <=500万円   | 2000円                       |
+r7       | true           | >500万円 <=1000万円  | 10000円                      |
+r8       | true           | >1000万円 <=5000万円 | 20000円                      |
+r9       | true           | >5000万円 <=1億円    | 60000円                      |
+r10      | true           | >1億円 <=5億円       | 100000円                     |
+r11      | true           | >5億円 <=10億円      | 200000円                     |
+r12      | true           | >10億円 <=50億円     | 400000円                     |
+r13      | true           | >50億円              | 600000円                     |
+
+clause 非課税(exempt) -> 印紙税額  @法 別表第一  # 第1号文書の非課税物件の欄（記載された契約金額が1万円未満のもの）
+  when 金額の記載あり true and 契約金額 <1万円
+  then 0円
+
+table 軽減(reduced_rate)  @措置法 第91条
+policy unique
+overrides 本則
+| 軽減期間 | 金額の記載あり | 契約金額             | -> 印紙税額 |
+| true     | true           | >10万円 <=50万円     | 200円       |
+| true     | true           | >50万円 <=100万円    | 500円       |
+| true     | true           | >100万円 <=500万円   | 1000円      |
+| true     | true           | >500万円 <=1000万円  | 5000円      |
+| true     | true           | >1000万円 <=5000万円 | 10000円     |
+| true     | true           | >5000万円 <=1億円    | 30000円     |
+| true     | true           | >1億円 <=5億円       | 60000円     |
+| true     | true           | >5億円 <=10億円      | 160000円    |
+| true     | true           | >10億円 <=50億円     | 320000円    |
+| true     | true           | >50億円              | 480000円    |
+
+examples
+| 契約金額   | 金額の記載あり | 作成日     | -> 印紙税額 |
+| 30000000円 | true           | 2026-09-16 | 10000円     |
+| 30000000円 | true           | 2027-04-01 | 20000円     |
+| 100000円   | true           | 2026-09-16 | 200円       |
+| 5000円     | true           | 2026-09-16 | 0円         |
+| 0円        | false          | 2026-09-16 | 200円       |
+```
+
+**What this one shows**
+
+- **`overrides 本則` makes the exception take precedence over the main rule.** Instead of adding a `軽減期間` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.
+- **The exemption is a `clause`.** In the appendix table it sits in the column of exempt documents, not in the table of taxable ones, so it is written as a sentence rather than a row.
+- **`source` and `@` hold the rule to its documents.** `rulec source fetch` brings copies of the appendix table and Article 91 from e-Gov, `rulec source pin` writes their digests. When the text changes, the check stops and names the tables that cite that place (E038).
+- **Row labels** (`r1` …) are the names the trace reports and the names `overrides 本則:r3` points at.
+
+## A proviso written as a sentence
+
+A tariff table decides the base fee, and two clauses decide the shipping fee: the main text ("regular") and the proviso that makes a member's order of 3,900 yen or more free. The proviso's conditions do not line up as columns, so it is a `clause`, not a table.
+
+```rule
+rule 送料のただし書(shipping_proviso) v1
+description "通常便の送料。運賃表で基本運賃を決め、会員の 3,900円 以上の注文を無料にするただし書が本則に優先する（DESIGN-draft §2 のスケッチ）"
+
+import std/都道府県
+
+enum サイズ区分(size_class) = S60(s60) | S80(s80)
+group 遠隔地 = 北海道, 沖縄県
+
+inputs
+  あて先(dest)    : 都道府県
+  サイズ(size)    : サイズ区分
+  会員(member)    : bool
+  注文金額(total) : money[円]  range >=0円 <=1000万円
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+table 運賃表(fee_table)  # 出典: 基本運賃表（スケッチ）別表第一
+policy unique
+| あて先      | サイズ | -> 基本運賃(base) : money[円] |
+| 遠隔地      | S60    | 1150円                        |
+| 遠隔地      | S80    | 1400円                        |
+| not: 遠隔地 | S60    | 820円                         |
+| not: 遠隔地 | S80    | 1050円                        |
+
+clause 通常(regular) -> 送料  # 出典: 第3条第1項（本文）
+  when always
+  then 基本運賃
+
+clause 無料(free) -> 送料  # 出典: 第3条第2項ただし書
+  when 注文金額 >=3900円 and 会員 true
+  then 0円
+  overrides 通常
+
+examples
+| あて先 | サイズ | 会員  | 注文金額 | -> 送料 |
+| 北海道 | S60    | true  | 3900円   | 0円     |
+| 北海道 | S60    | true  | 3899円   | 1150円  |
+| 東京都 | S80    | false | 10000円  | 1050円  |
+```
+
+**What this one shows**
+
+- **A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{"table":"無料","row":1}`.
+- **`overrides 通常` makes the proviso take precedence over the main text.** The approver's page says "clause 無料 takes precedence over clause 通常; in the 1 pair that meets, its row lies inside the other's (an exception)".
+- **A group without an alias** (`group 遠隔地 = 北海道, 沖縄県`) is allowed; the generated identifiers number it.
+
+## The rule the next one applies
+
+The rule applied by the next example. Years of service and the reason for leaving decide the number of months paid, and a clause reducing the allowance on voluntary resignation takes precedence over the main rule. It is a sketch from the design document, not a real statute.
+
+```rule
+rule 退職手当(retirement_allowance) v1
+description "退職手当の本則。勤続年数で支給月数を決め、自己都合退職の減額が本則に優先する（DESIGN-draft §5 のスケッチ）"
+
+enum 事由(reason_kind) = 定年(retirement_age) | 自己都合(voluntary) | 死亡(death)
+
+inputs
+  勤続年数(years)  : number    range >=1 <=40
+  退職事由(reason) : 事由
+  基本給(base_pay) : money[円]  range >=10万円 <=100万円
+
+outputs
+  手当(allowance) : money[円]  round down(1円)
+
+table 支給表(schedule)  # 出典: 第20条第1項（スケッチ）
+policy unique
+     | 勤続年数 | 退職事由       | -> 支給月数(months) : number |
+短期 | <10      | 定年, 自己都合 | 5                            |
+中期 | >=10 <25 | 定年, 自己都合 | 20                           |
+長期 | >=25     | 定年, 自己都合 | 40                           |
+死亡 | -        | 死亡           | 40                           |
+
+define 満額(full) : money[円] = 基本給 × 支給月数
+define 減額後(reduced) : money[円] = 満額 × 80%
+
+clause 本則(main) -> 手当  # 出典: 第20条第1項（スケッチ）
+  when always
+  then 満額
+
+clause 減額(reduction) -> 手当  # 出典: 第20条第2項（スケッチ）
+  when 退職事由 自己都合
+  then 減額後
+  overrides 本則
+
+examples
+| 勤続年数 | 退職事由 | 基本給 | -> 手当  |
+| 3        | 定年     | 30万円 | 150万円  |
+| 3        | 自己都合 | 30万円 | 120万円  |
+| 30       | 死亡     | 30万円 | 1200万円 |
+```
+
+**What this one shows**
+
+- **It is checked and generated on its own.** The rule that applies it writes this file's digest in its heading and is held to it.
+- **The `減額` clause can be left out by the applying rule with `except`** — "Article 20 (excluding paragraph 2) applies".
+
+## Applying another rule with its terms read differently
+
+The retirement allowance rule above, applied to part-time staff: "years of service" is read as "period in office", "reason for leaving" as "how the term ended", and the reduction clause is not applied.
+
+```rule
+rule 非常勤退職手当(part_time_allowance) v1
+description "非常勤職員の退職手当。退職手当の規定を、在職期間と任期終了事由に読み替えて準用し、減額の規定は準用しない（DESIGN-draft §5 のスケッチ）"
+
+enum 終了事由(end_kind) = 任期満了(term_end) | 辞職(resignation)
+
+inputs
+  在職期間(tenure)       : number    range >=1 <=3
+  任期終了事由(end_reason) : 終了事由
+  報酬月額(monthly_pay)  : money[円]  range >=10万円 <=50万円
+
+outputs
+  非常勤手当(allowance) : money[円]  round down(1円)
+
+apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条（スケッチ）
+  勤続年数 = 在職期間
+  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
+  基本給 = 報酬月額
+  except 減額
+  手当 -> 非常勤手当
+
+examples
+| 在職期間 | 任期終了事由 | 報酬月額 | -> 非常勤手当 |
+| 3        | 任期満了     | 30万円   | 150万円       |
+| 3        | 辞職         | 30万円   | 150万円       |
+```
+
+**What this one shows**
+
+- **A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with 任期満了 -> 定年, 辞職 -> 自己都合`.
+- **The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.
+- **The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{"table":"退職手当:支給表","row":1,"label":"短期"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.
+- **When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.

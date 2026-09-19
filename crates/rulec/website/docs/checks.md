@@ -46,13 +46,14 @@ and rows that cite it), a missing copy is E039, a pin no citation uses is W119. 
 reads the network: `rulec source fetch` brings the copies, `rulec source pin` writes the pins,
 and `rulec source outdated` asks e-Gov whether a later amendment changes a cited fragment.
 
-A rule that applies another (`apply`, a provision applied mutatis mutandis) is held to the
-callee's digest (E040), binds every callee input (E041) with agreeing types (E042), and has to
-keep what it passes inside the callee's ranges and constraints (E043, with the point outside
-as the witness); a callee that cannot be applied — it applies a rule itself, walks a sequence,
-or fails check — is E044. The callee's definitions are expanded into the rule and checked with
-it; its rows the rule never reaches stay silent, and only a whole table none of whose rows is
-reached is W118.
+A rule that applies another (`apply`, the way a statute applies one provision to another case
+with its terms read differently) is held to the applied rule's digest (E040), has to substitute
+every input of the applied rule (E041) with agreeing types (E042), and has to keep what it
+passes inside the applied rule's ranges and constraints (E043, with a value outside them as the
+example). A rule that cannot be applied — it applies a rule itself, walks a sequence, or fails
+check — is E044. The applied rule's tables and clauses are expanded into the rule and checked
+with it; the rows this rule never reaches stay silent, and only a whole table none of whose
+rows is reached is W118.
 
 A rule in which two or more tables define the same output — a main rule and the special case
 that says `overrides` over it, a `clause` written as one line of prose among them — runs the

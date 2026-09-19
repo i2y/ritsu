@@ -366,6 +366,76 @@ EXAMPLES = [
             "**Every grade is held to the printed table.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over all 100 of them and requires every one to agree.",
         ],
     ),
+    (
+        "印紙税の本則と軽減.rule",
+        "本則と特例を二つの表に分け、出典に縛る",
+        "上の印紙税と同じ決まりを、印紙税法の別表第一（本則）と、租税特別措置法第 91 条（軽減）の二つの表に分け、非課税の決まりを節にしたものです。それぞれの表が自分の出典を引用し、出典は e-Gov から取った写しのハッシュに縛られています。",
+        [
+            "**`overrides 本則` が、特例を本則に優先させます。** 一つの表に `軽減期間` の列を足す代わりに、原文ごとに表を分けて、どちらが勝つかを一行で書きます。検査は二つの表をまとめて、完全性と重なりを見ます。",
+            "**非課税の決まりは `clause` です。** 別表第一では課税物件の表ではなく非課税物件の欄に書かれているので、表の行ではなく文のまま書いています。",
+            "**`source` と `@` が出典を縛ります。** `rulec source fetch` が e-Gov から別表第一と第 91 条の写しを取り、`rulec source pin` がハッシュを書きます。条文が変われば、その箇所を引用している表を名指しして止まります（E038）。",
+            "**行のラベル**（`r1` …）は、記録に出る名前であり、`overrides 本則:r3` のように行を指す名前です。",
+        ],
+        "A main rule and a reduced rate as two tables, held to their sources",
+        "The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy fetched from e-Gov.",
+        [
+            "**`overrides 本則` makes the exception take precedence over the main rule.** Instead of adding a `軽減期間` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.",
+            "**The exemption is a `clause`.** In the appendix table it sits in the column of exempt documents, not in the table of taxable ones, so it is written as a sentence rather than a row.",
+            "**`source` and `@` hold the rule to its documents.** `rulec source fetch` brings copies of the appendix table and Article 91 from e-Gov, `rulec source pin` writes their digests. When the text changes, the check stops and names the tables that cite that place (E038).",
+            "**Row labels** (`r1` …) are the names the trace reports and the names `overrides 本則:r3` points at.",
+        ],
+    ),
+    (
+        "送料のただし書.rule",
+        "ただし書を、文のまま書く",
+        "運賃表が基本運賃を決め、送料は二つの節で決まります。本文の「通常」と、会員の 3,900 円以上の注文を無料にするただし書です。ただし書は条件が列に並ばないので、表ではなく `clause` で書いています。",
+        [
+            "**`clause` は一行の表です。** `when` に条件、`then` に値。検査も生成も記録も表と同じで、記録には `{\"table\":\"無料\",\"row\":1}` と出ます。",
+            "**`overrides 通常` で、ただし書が本文に優先します。** 承認用の資料は「節 無料 は 節 通常 に優先する。交わる 1 対のすべてで、無料の行は通常の行に収まる（例外）」と書きます。",
+            "**別名の無い群**（`group 遠隔地 = 北海道, 沖縄県`）も書けます。生成コードの識別子には順番の名前が付きます。",
+        ],
+        "A proviso written as a sentence",
+        "A tariff table decides the base fee, and two clauses decide the shipping fee: the main text (\"regular\") and the proviso that makes a member's order of 3,900 yen or more free. The proviso's conditions do not line up as columns, so it is a `clause`, not a table.",
+        [
+            "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"無料\",\"row\":1}`.",
+            "**`overrides 通常` makes the proviso take precedence over the main text.** The approver's page says \"clause 無料 takes precedence over clause 通常; in the 1 pair that meets, its row lies inside the other's (an exception)\".",
+            "**A group without an alias** (`group 遠隔地 = 北海道, 沖縄県`) is allowed; the generated identifiers number it.",
+        ],
+    ),
+    (
+        "退職手当.rule",
+        "準用される側の規則",
+        "次の例が準用する元の規則です。勤続年数と退職事由で支給月数を決め、自己都合退職の減額の節が本則に優先します。法令そのものではなく、設計文書の例を規則にした架空のものです。",
+        [
+            "**この規則は単独で検査され、単独で生成できます。** 準用する側は、このファイルのハッシュを見出しに書いて縛ります。",
+            "**`減額` の節は、準用する側が `except` で外せます。** 「第 20 条（第 2 項を除く。）の規定は…準用する」の形です。",
+        ],
+        "The rule the next one applies",
+        "The rule applied by the next example. Years of service and the reason for leaving decide the number of months paid, and a clause reducing the allowance on voluntary resignation takes precedence over the main rule. It is a sketch from the design document, not a real statute.",
+        [
+            "**It is checked and generated on its own.** The rule that applies it writes this file's digest in its heading and is held to it.",
+            "**The `減額` clause can be left out by the applying rule with `except`** — \"Article 20 (excluding paragraph 2) applies\".",
+        ],
+    ),
+    (
+        "非常勤退職手当.rule",
+        "ほかの規則を読み替えて準用する",
+        "上の退職手当の規則を、非常勤職員に準用します。「勤続年数」を「在職期間」と、「退職事由」を「任期終了事由」と読み替え、減額の節は準用しません。",
+        [
+            "**読み替えは `<元の規則の入力> = <この規則の値>` です。** 列挙どうしは `with 任期満了 -> 定年, 辞職 -> 自己都合` で値を対応づけます。",
+            "**渡す値が元の規則の範囲に収まることを check が確かめます（E043）。** 在職期間は 1〜3 年で、勤続年数の 1〜40 年に収まります。0 から書けば、その値を例に挙げて止まります。",
+            "**元の規則の表は、この規則の中に展開されて検査・生成されます。** 記録は `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}` と、元の表の名前で返ります。勤続年数 10 年以上の行はこの規則では当たらないので、エラーにはせず、承認用の資料に「この準用では当たらない行」として挙がります。",
+            "**元の規則が変われば E040 で止まります。** `rulec diff` で何件いくら動くかを見て、それでよければ `rulec source pin` でハッシュを書き直します。",
+        ],
+        "Applying another rule with its terms read differently",
+        "The retirement allowance rule above, applied to part-time staff: \"years of service\" is read as \"period in office\", \"reason for leaving\" as \"how the term ended\", and the reduction clause is not applied.",
+        [
+            "**A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with 任期満了 -> 定年, 辞職 -> 自己都合`.",
+            "**The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.",
+            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.",
+            "**When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.",
+        ],
+    ),
 ]
 
 JA_HEAD = """# 例で見る

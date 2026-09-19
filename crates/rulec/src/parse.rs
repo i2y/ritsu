@@ -872,7 +872,7 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "形は `@<出典> <断片>` で、断片は `,` で区切って並べられます（`@法 第20条, 第21条`）。出典は `{}` で宣言した名前です。",
+                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。出典は `{}` で宣言した名前です。",
                         "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`). The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
@@ -925,7 +925,7 @@ impl P {
             }
         }
         let shape = tr!(
-            "形は `{s} <名前> = {l} \"<法令ID>\" {a} <日付>` か `{s} <名前> = {f} \"<ファイル>\" [sha256:<ハッシュ>]` です。`{l}` の下には引用した断片ごとに `  <断片> sha256:<ハッシュ>` の行が並びます（`rulec source pin` が書きます）。",
+            "形は `{s} <名前> = {l} \"<法令ID>\" {a} <日付>` か `{s} <名前> = {f} \"<ファイル>\" [sha256:<ハッシュ>]` です。`{l}` の下には引用した箇所ごとに `  <箇所> sha256:<ハッシュ>` の行が並びます（`rulec source pin` が書きます）。",
             "The shape is `{s} <name> = {l} \"<law id>\" {a} <date>` or `{s} <name> = {f} \"<file>\" [sha256:<digest>]`. Under `{l}`, one `  <fragment> sha256:<digest>` line per cited fragment (`rulec source pin` writes them).",
             s = crate::kw::SOURCE,
             l = crate::kw::LAW,
@@ -1001,7 +1001,7 @@ impl P {
         let span = span_of(head);
         self.i += 1;
         let shape = tr!(
-            "形は `{a} <名前> = \"<規則ファイル>\" sha256:<ハッシュ>` の下に `<呼び先の入力> = <値>`（列挙なら `with <値> -> <値>, …` を続ける）、`{e} <相手>, …`、`<呼び先の出力> -> <名前>` を一行ずつです。",
+            "形は `{a} <名前> = \"<規則ファイル>\" sha256:<ハッシュ>` の下に、`<元の規則の入力> = <この規則の値>`（列挙なら `with <値> -> <値>, …` を続ける）、`{e} <準用しない定義>, …`、`<元の規則の出力> -> <名前>` を一行ずつ書きます。",
             "The shape is `{a} <name> = \"<rule file>\" sha256:<digest>`, then one `<callee input> = <value>` line each (for an enum, followed by `with <value> -> <value>, …`), `{e} <target>, …`, and `<callee output> -> <name>` lines.",
             a = crate::kw::APPLY,
             e = crate::kw::EXCEPT
@@ -1138,7 +1138,7 @@ impl P {
             }
         }
         let Some((name, k)) = self.name_at(head, 1) else {
-            bad(self, span.clone(), tr!("呼び出しの名前がありません", "the apply has no name"));
+            bad(self, span.clone(), tr!("準用の名前がありません", "the apply has no name"));
             return None;
         };
         if !head.get(k).is_some_and(|t| t.is(&Kind::Eq)) {

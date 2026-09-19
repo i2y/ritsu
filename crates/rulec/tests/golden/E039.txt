@@ -1,9 +1,9 @@
-error[E039]: 出典 `措置法` の断片 `第92条` の写しがありません
+error[E039]: 出典 `措置法` の `第92条` の写しがありません
   --> tests/mutants/m_e039.rule:6 出典 措置法
   |
 6 | source 措置法 = law "332AC0000000026" asof 2026-04-01
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
  探した先: tests/mutants/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_92.xml
- `rulec source fetch tests/mutants/m_e039.rule` が e-Gov から取ってきて写しに置きます。check は網を見ません。
+ `rulec source fetch tests/mutants/m_e039.rule` が e-Gov から取ってきて写しに置きます。check は通信しません。
  引いている: 表 軽減

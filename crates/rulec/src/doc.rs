@@ -893,7 +893,7 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
     match &callee {
         Some((cf, _)) => {
             o.push_str(&tr!(
-                "規則 **{}** v{} を、次の読替えで適用する。\n\n",
+                "規則 **{}** v{} を、次のように読み替えて準用する。\n\n",
                 "Rule **{}** v{} is applied with the following substitutions.\n\n",
                 cf.name.text,
                 cf.version
@@ -902,10 +902,10 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
                 o.push_str(&format!("{}\n\n", md_esc(d)));
             }
         }
-        None => o.push_str(&tr!("呼び先 `{}` は読めなかった。\n\n", "The callee `{}` could not be read.\n\n", a.path)),
+        None => o.push_str(&tr!("元の規則 `{}` は読めなかった。\n\n", "The callee `{}` could not be read.\n\n", a.path)),
     }
     o.push_str(&tr!(
-        "| 呼び先の入力 | この規則で渡す値 | 値の読替え |\n|---|---|---|\n",
+        "| 元の規則の入力 | この規則の値 | 値の対応 |\n|---|---|---|\n",
         "| Callee input | What this rule passes | Value mapping |\n|---|---|---|\n"
     ));
     for b in &a.bindings {
@@ -932,11 +932,11 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
                 kind.unwrap_or_else(|| tr!("行 {t}", "row {t}"))
             })
             .collect();
-        o.push_str(&tr!("\n適用しない定義: {}。\n", "\nLeft out: {}.\n", kinds.join(sep())));
+        o.push_str(&tr!("\n準用しない定義: {}。\n", "\nLeft out: {}.\n", kinds.join(sep())));
     }
     if !a.outputs.is_empty() {
         o.push_str(&tr!(
-            "\n| 呼び先の出力 | この規則での名前 |\n|---|---|\n",
+            "\n| 元の規則の出力 | この規則での名前 |\n|---|---|\n",
             "\n| Callee output | Its name in this rule |\n|---|---|\n"
         ));
         for ob in &a.outputs {
@@ -975,7 +975,7 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
     }
     if !unused.is_empty() {
         o.push_str(&tr!(
-            "\nこの準用で使われない行（この規則の範囲では到達しない）: {}。\n",
+            "\nこの準用では当たらない行（この規則の入力の範囲では届かない）: {}。\n",
             "\nRows this apply never uses (unreachable from this rule's ranges): {}.\n",
             unused.join(if crate::i18n::ja() { "；" } else { "; " })
         ));
@@ -999,7 +999,7 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
             inner.push_str(&set_section(cf, cc, set, &a.callee_path));
         }
         // One heading level down: the callee's sections sit under this apply.
-        o.push_str(&inner.replace("\n## ", "\n### ").replace("\n**`rulec check` が確かめたこと**", "\n**呼び先の `rulec check` が確かめたこと**").replace("\n**What `rulec check` verified**", "\n**What `rulec check` verified of the callee**"));
+        o.push_str(&inner.replace("\n## ", "\n### ").replace("\n**`rulec check` が確かめたこと**", "\n**元の規則の `rulec check` が確かめたこと**").replace("\n**What `rulec check` verified**", "\n**What `rulec check` verified of the callee**"));
     }
     o
 }

@@ -1511,15 +1511,15 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
         let sp = f.applies.iter().find(|a| a.name.text == *an).map(|a| a.span.clone()).unwrap_or_else(|| t.rows[mine[0]].span.clone());
         let tn = set.members[mi].clone();
         out.push(
-            Diag::warning("W118", tr!("{} {} の行は、この呼び出しではどれも到達しません", "No row of {} {} is reached in this apply", set.kind_word(mi), tn))
+            Diag::warning("W118", tr!("{} {} の行は、この準用ではどれも当たりません", "No row of {} {} is reached in this apply", set.kind_word(mi), tn))
                 .at(at(sp.line, mi))
                 .table(tn.clone())
                 .mark(sp, "")
                 .note(tr!(
-                    "束縛した値がこの表の条件に届かないか、この規則のほかの定義が先に取っています。呼び先が自分の入力の上で完全なことは変わりません。",
+                    "読み替えた値がこの表の条件に届かないか、この規則のほかの定義が先に取っています。元の規則が自分の入力の範囲で完全なことは変わりません。",
                     "What is bound never reaches this table's conditions, or other definitions of this rule take precedence first. The callee is still complete over its own inputs."
                 ))
-                .note(tr!("この呼び出しに要らない表なら、`{} {}` で外せます。", "If this apply does not need the table, `{} {}` leaves it out.", crate::kw::EXCEPT, tn.rsplit(':').next().unwrap_or(&tn))),
+                .note(tr!("この準用に要らない表なら、`{} {}` で外せます。", "If this apply does not need the table, `{} {}` leaves it out.", crate::kw::EXCEPT, tn.rsplit(':').next().unwrap_or(&tn))),
         );
     }
 
