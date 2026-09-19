@@ -1,6 +1,6 @@
 //! The documentation site must not promise what the tool does not do either.
 //!
-//! `website/docs/` and `website/docs-ja/` hold eight authored pages each; the rest
+//! `website/docs/` and `website/docs-ja/` hold ten authored pages each; the rest
 //! are copied in from this repository by `website/sync.sh` and are not committed,
 //! so they are checked where they live (`tests/docs.rs`, `tests/codes.rs`,
 //! `tests/formats.rs`, `tests/api.rs`). What is checked here is the site's own
@@ -26,6 +26,7 @@ const AUTHORED: &[&str] = &[
     "index.md",
     "playground.md",
     "install.md",
+    "scenarios.md",
     "tour.md",
     "checks.md",
     "generate.md",

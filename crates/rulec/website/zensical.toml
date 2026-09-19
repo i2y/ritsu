@@ -22,6 +22,7 @@ nav = [
   { Home = "index.md" },
   { "Try it in the browser" = "playground.md" },
   { Install = "install.md" },
+  { "How to use it, by role" = "scenarios.md" },
   { "Write a table (.rule)" = "tour.md" },
   { "What it proves" = "checks.md" },
   { "Generate and call" = "generate.md" },

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1112 458" width="1112" height="458" role="img" aria-label="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、九言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が言い、表を読み直す。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
+<marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
+<marker id="head-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#9c6508"/></marker>
+</defs>
+<path d="M20,20.0 H126 L138,32.0 V120.0 H20 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M126,20.0 V32.0 H138 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="29" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">法令・規約</text>
+<text x="29" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">e-Gov の条文</text>
+<text x="29" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">規約の PDF</text>
+<text x="29" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">料金表</text>
+<clipPath id="clip-1"><rect x="234" y="20" width="150" height="196" rx="10"/></clipPath>
+<rect x="234" y="20" width="150" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="234" y="20" width="150" height="5" fill="#4457d8" clip-path="url(#clip-1)"/>
+<text x="309.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">エージェント</text>
+<text x="309.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">条文を読む</text>
+<text x="309.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">表に写す</text>
+<text x="309.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">出典を @ で引く</text>
+<path d="M480,20.0 H588 L600,32.0 V120.0 H480 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M588,20.0 V32.0 H600 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="489" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">表</text>
+<text x="591" y="42.0" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
+<text x="489" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">@法 第91条</text>
+<text x="489" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">写しに固定</text>
+<clipPath id="clip-3"><rect x="696" y="20" width="150" height="196" rx="10"/></clipPath>
+<rect x="696" y="20" width="150" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="696" y="20" width="150" height="5" fill="#4457d8" clip-path="url(#clip-3)"/>
+<text x="771.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="771.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">写しと照合する</text>
+<text x="771.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">抜けと重なり</text>
+<text x="771.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">を証明する</text>
+<text x="771.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">九言語に生成</text>
+<path d="M942,20.0 H1080 L1092,32.0 V120.0 H942 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1080,20.0 V32.0 H1092 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="951" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">生成コード</text>
+<text x="951" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">九言語、依存ゼロ</text>
+<text x="951" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">ヘッダに出典と</text>
+<text x="951" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">時点が刻まれる</text>
+<line x1="138" y1="70" x2="234" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="186.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">読む</text>
+<line x1="384" y1="70" x2="480" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="432.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">写す</text>
+<line x1="600" y1="70" x2="696" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="648.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec check</text>
+<text x="648.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">fetch と pin も</text>
+<line x1="846" y1="70" x2="942" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="894.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec gen</text>
+<text x="894.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">通ったら</text>
+<path d="M452.0,132 H616.0 L628.0,144 V212 H452.0 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M616.0,132 V144 H628.0 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="461.0" y="154" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">改正</text>
+<text x="461.0" y="172" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">いつから何が</text>
+<text x="461.0" y="187" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">変わるか</text>
+<line x1="696" y1="172" x2="628.0" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<line x1="452.0" y1="172" x2="384" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="540.0" y="227" font-size="11" font-weight="400" text-anchor="middle" fill="#4457d8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec source outdated</text>
+<clipPath id="clip-person"><rect x="686.0" y="290" width="170" height="148" rx="10"/></clipPath>
+<rect x="686.0" y="290" width="170" height="148" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="686.0" y="290" width="170" height="5" fill="#9c6508" clip-path="url(#clip-person)"/>
+<text x="771.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">承認する人</text>
+<text x="771.0" y="362" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">条文と表を</text>
+<text x="771.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">見比べる</text>
+<text x="771.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">承認する</text>
+<line x1="771.0" y1="216" x2="771.0" y2="290" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="779.0" y="257.0" font-size="10.5" font-weight="400" text-anchor="start" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec doc</text>
+</svg>
