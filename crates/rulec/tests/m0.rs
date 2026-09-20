@@ -52,6 +52,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e010.rule", &[("E010", 1)], "`..` を書いた"),
         ("m_e011.rule", &[("E011", 1)], "公開面の別名を消した"),
         ("m_e101.rule", &[("E101", 1)], "群から 山梨県 を落とした"),
+        ("m_e101c.rule", &[("E101", 1)], "constraint の陰に隠れた穴（§15.98。0 で埋めた点だけ見ていた）"),
         ("m_e101d.rule", &[("E101", 1), ("E107", 1)], "日付の境界に穴を開けた"),
         ("m_e102.rule", &[("E102", 1), ("W105", 6)], "catch-all の後ろに行を足した"),
         ("m_e102b.rule", &[("E102", 3), ("E107", 2)], "上流が出さない値を下流が名指しした"),
@@ -520,7 +521,11 @@ impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
 /// generated" is a decision rather than a gap.
 #[test]
 fn 変異はコーパスから作り直せる() {
-    const BY_HAND: &[&str] = &["m_e116.rule", "m_w120.rule", "m_e032.rule", "m_e033.rule"];
+    // `m_e101c.rule` is written here rather than cut from a corpus rule: the shape it needs
+    // is a `constraint` whose forbidden corner hides an uncovered box (§15.98), and no
+    // corpus rule has one.
+    const BY_HAND: &[&str] =
+        &["m_e116.rule", "m_w120.rule", "m_e032.rule", "m_e033.rule", "m_e101c.rule"];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let tmp = std::env::temp_dir().join(format!("rulec-mutants-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);

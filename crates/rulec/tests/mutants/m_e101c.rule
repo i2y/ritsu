@@ -1,0 +1,20 @@
+rule 篩の穴(sieve_gap) v1
+description "§15.98: 甲=1 の枝には行が無い。0 で埋めた点 (甲=1, 乙=0) は constraint が禁じるが、(甲=1, 乙=1) は起きる"
+
+inputs
+  甲(a) : number  range >=0 <=1
+  乙(b) : number  range >=0 <=1
+
+constraint 甲 <= 乙
+
+outputs
+  答(r) : number  round down(1)
+
+table 判定(t)
+policy unique
+| 甲 | 乙 | -> 答(r) : number |
+| 0  | -  | 1                 |
+
+examples
+| 甲 | 乙 | -> 答 |
+| 0  | 0  | 1     |

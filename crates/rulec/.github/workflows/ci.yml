@@ -227,17 +227,86 @@ jobs:
           exit $bad
 
       # The certificate is evidence only if something other than rulec can read it, so the
-      # re-checker reads all thirty (DESIGN §15.96). It needs nothing but python3.
+      # re-checker reads all thirty (DESIGN §15.96). It needs nothing but python3. With
+      # `--rule` it also holds the certificate to the text it is about: the digest, and
+      # every cell read back out of the file at the byte span the certificate names
+      # (§15.97).
       - name: The certificates re-check, without rulec
         run: |
           set -eu -o pipefail
+          n=0
           for f in tests/corpus/*.rule; do
-            cargo run --quiet --locked -- certificate "$f"
-          done | python3 tools/recheck.py | grep -Ev '^  ' | tail -3
-          echo "all certificates re-checked"
+            cargo run --quiet --locked -- certificate "$f" > /tmp/cert.json
+            python3 tools/recheck.py --rule "$f" /tmp/cert.json | grep "the file says the same"
+            n=$((n + 1))
+          done
+          echo "$n certificates re-checked, each against its own text"
 
       - name: fmt and the committed output are current
         run: |
           set -eu
           cargo run --quiet --locked -- fmt --check tests/corpus/
           cargo run --quiet --locked -- check tests/corpus/
+
+  # The Lean development (DESIGN §15.97): the meaning of a rule, the checks a
+  # certificate has to pass, and the theorems that say a `true` from each check
+  # settles the matching claim. `lake build` is what makes "proved" a fact about
+  # this commit rather than about a laptop — and the program it builds is the
+  # checks themselves, so running it over the corpus is the proofs applied to
+  # thirty documents.
+  proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-proofs-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-proofs-${{ runner.os }}-
+
+      # The toolchain is pinned by `proofs/lean-toolchain`, so the cache key is
+      # that file: a new Lean is a change in the repository, read as such.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.elan
+            proofs/.lake
+          key: lean-${{ runner.os }}-${{ hashFiles('proofs/lean-toolchain', 'proofs/RulecCert/*.lean', 'proofs/Main.lean') }}
+          restore-keys: lean-${{ runner.os }}-
+
+      - name: elan, for Lean
+        run: |
+          set -eu
+          if [ ! -x "$HOME/.elan/bin/lake" ]; then
+            curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: The proofs build
+        run: |
+          set -eu
+          cd proofs
+          lake build
+          lean --version
+
+      - name: Every certificate passes the checks the theorems are about
+        run: |
+          set -eu -o pipefail
+          cargo build --release --locked
+          for f in tests/corpus/*.rule; do
+            ./target/release/rulec certificate "$f" > /tmp/cert.json
+            ./proofs/.lake/build/bin/rulec-recheck --rule "$f" /tmp/cert.json | tail -2 | head -1
+          done
+          echo "every certificate in the corpus was held to the proved checks"
+
+      - name: The corpus passes both re-checkers, and nothing is left open
+        run: cargo test --release --locked --test lean

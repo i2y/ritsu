@@ -234,6 +234,89 @@ fn 制約で閉じた穴は証明書に出て_再検査される() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The certificate quotes the file: every cell is read back out of the `.rule` text at the
+/// byte span the certificate names, and the box a row states is the one its own cell
+/// describes. A quote that has been edited, a span that has been moved, and a row number
+/// used twice all have to fail (§15.97).
+#[test]
+fn 証明書はファイルを引用する() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let run = |text: &str| {
+        use std::io::Write;
+        let mut p = Command::new("python3")
+            .current_dir(root())
+            .args(["tools/recheck.py", "--rule", "tests/corpus/印紙税.rule"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("python3 を起動できない");
+        p.stdin.as_mut().unwrap().write_all(text.as_bytes()).unwrap();
+        let o = p.wait_with_output().unwrap();
+        (
+            o.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr),
+        )
+    };
+    let (code, said) = run(&cert);
+    assert_eq!(code, 0, "そのままの証明書が通らない:\n{said}");
+    assert!(said.contains("cells read back from it"), "セルを読み戻していない:\n{said}");
+
+    for (what, forged) in [
+        // The quote says something the file does not.
+        ("引用を書き換える", cert.replace(r#""len":8,"text":"<1万円""#, r#""len":8,"text":"<2万円""#)),
+        // The span is moved to another place on the line.
+        ("引用の場所をずらす", cert.replace(r#""line":19,"col":30,"len":8"#, r#""line":19,"col":31,"len":8"#)),
+        // Two rows with one number leaves the pair between them unexamined.
+        ("行番号をぶつける", cert.replacen(r#"{"row":3,"label""#, r#"{"row":2,"label""#, 1)),
+        // A row in the middle said to be written in another table, which would then be
+        // written among this one's rows.
+        ("出どころを偽る", {
+            let pat = r#""origin":"税額""#;
+            let at = cert.match_indices(pat).nth(11).map(|(i, _)| i).expect("行が足りない");
+            let mut f = cert.clone();
+            f.replace_range(at..at + pat.len(), r#""origin":"別の表""#);
+            f
+        }),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = run(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+}
+
+/// The point that reaches a row has to be one the sieve admits, and the certificate carries
+/// the values behind it so that can be checked at all.
+#[test]
+fn 到達の点は篩を通る() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rulec-cert-sieve-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let p = dir.join("con.rule");
+    std::fs::write(&p, BY_CONSTRAINT).unwrap();
+    let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""at_values""#), "点の値が出ていない:\n{cert}");
+    assert_eq!(recheck(&cert).0, 0, "そのままの証明書が通らない");
+
+    // The point for row 3 moved to one the constraint forbids: 全条件一致数 > 会社名一致数.
+    let forged = cert.replace(r#""at_values":["1","1"]"#, r#""at_values":["9","1"]"#);
+    assert_ne!(forged, cert, "証明書の形が変わっていて、偽れていない");
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "制約を破る点が通ってしまった:\n{said}");
+    assert!(said.contains("no input reaches"), "何が悪いか言っていない:\n{said}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// What the certificate does **not** cover is said out loud, because a certificate that
 /// looks complete is worse than one that names its edges (§15.47).
 #[test]

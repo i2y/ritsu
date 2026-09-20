@@ -1,0 +1,10 @@
+name = "rulec_cert"
+version = "0.1.0"
+defaultTargets = ["RulecCert", "rulec-recheck"]
+
+[[lean_lib]]
+name = "RulecCert"
+
+[[lean_exe]]
+name = "rulec-recheck"
+root = "Main"

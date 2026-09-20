@@ -116,7 +116,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 79 deliberately broken
+   and that implementation has not been proved correct. The evidence is 80 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, 28 rules transcribed from
    real published terms passing on every commit, and the reference evaluator agreeing with
    twelve languages. **Evidence, not proof**
@@ -128,6 +128,19 @@ overflows an `i64`, and that the rows of each `unique` table cover the domain ex
 It shares no code with the checker above, so agreement is two unrelated tools saying the
 same thing, and disagreement comes back with the input that shows it
 ([generate](generate.md#a-second-opinion-on-the-rust)).
+
+**The evidence can be handed over, and the checks behind it are proved.** `rulec
+certificate` writes out what the five proofs rest on — the tree that tiles the input space,
+the axis each pair of rows of a `unique` table parts on, a point that reaches every row
+with the values behind it, and the interval and the type of every computed value — together
+with where each cell stands in your file, down to the byte, and what stands there. Two
+programs re-check it: `tools/recheck.py`, one dependency-free file, and the program
+`proofs/` builds, a Lean 4 development in which the meaning of a table, the checks, and the
+theorems that each check settles its claim are all written down and machine-checked. That
+moves what (4) asks you to take on trust from 42,000 lines of Rust to a few hundred lines
+of checking whose soundness is proved. It does not remove (4) — whether the tool *produces*
+a right certificate is still evidence — but a certificate that passes now means something
+exact. See [formats](formats.md) for the document and both re-checkers.
 
 ## Reading a diagnostic
 

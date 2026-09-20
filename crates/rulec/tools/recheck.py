@@ -33,10 +33,15 @@ What it checks, per table:
     `constraint` that cannot hold there, or a derived value whose coordinate lies outside
     what the derive can produce. Both of those are re-checked here from the ranges.
 
-What it does **not** check: the units, a leaf that rests on an upstream table (re-checking
-one needs that table's own region, and the summary says how many there were), and — before
-all of them — that the table stated here is the table in the `.rule` file. The certificate
-states its own universe; comparing that with the rule is what `rulec doc` is for.
+Given `--rule <file.rule>` it also checks that the certificate is **about that text**: the
+digest matches, and every cell of every row is read back out of the file at the byte span
+the certificate names and held beside the parsed form it states. A literal is turned into
+a number by looking it up among the axis's own boundary coordinates, so no unit table is
+needed here; a literal that is not one of them is counted and reported rather than passed.
+
+What it does **not** check: a leaf that rests on an upstream table (re-checking one needs
+that table's own region, and the summary says how many there were), and the pairs W114
+left undecided, which are listed rather than proved.
 
 Exit code 0 when every table holds, 1 when one does not, 2 on a certificate it cannot
 read. No dependencies; Python 3.9 or later.
@@ -45,6 +50,7 @@ read. No dependencies; Python 3.9 or later.
 import hashlib
 import json
 import math
+import re
 import sys
 from fractions import Fraction
 
@@ -103,11 +109,12 @@ def interval(e, ranges):
         grid = interval(args[1], ranges) if len(args) > 1 else None
         if grid is None or grid[0] != grid[1] or grid[0] == 0:
             return None
+        # Down to the grid on the low side and up on the high side — `floor` and `ceil`,
+        # not "toward zero" and "away from zero". Rounding -7 to a grid of 5 can give -10,
+        # which is below the toward-zero reading of -5, so that reading claimed an interval
+        # the value can leave (§15.99).
         g = abs(grid[0])
-        sign = lambda v: -1 if v < 0 else 1
-        toward = lambda v: sign(v) * math.floor(abs(v) / g) * g
-        away = lambda v: sign(v) * math.ceil(abs(v) / g) * g
-        return (toward(inner[0]), away(inner[1]))
+        return (math.floor(inner[0] / g) * g, math.ceil(inner[1] / g) * g)
     return None
 
 
@@ -280,6 +287,23 @@ def check_cover(t):
     return seen
 
 
+def axis_splits(axis, tests):
+    """Whether every value the cell compares against falls outside every coordinate of the
+    axis. §6.2 compresses a column to the boundaries its cells name, so this holds by
+    construction — and it is what makes "the coordinate is taken" the same statement as
+    "every value in it satisfies the comparison". It is checked, not assumed."""
+    for _, v in tests:
+        for b in (axis.get("bounds") or []):
+            if b is None:
+                continue
+            lo, hi = num(b[0]), num(b[1])
+            if lo is not None and hi is not None and lo == hi:
+                continue
+            if not ((hi is not None and hi <= v) or (lo is not None and v <= lo)):
+                return False
+    return True
+
+
 def coord_admits(bound, op, value):
     """Whether a whole coordinate satisfies one comparison. A coordinate is a point or an
     open interval between two boundaries, and the boundaries are exactly the values the
@@ -318,6 +342,10 @@ def box_from_cells(t, row, groups):
             tests = [(x["op"], num(x["value"])) for x in cell["tests"]]
             if any(v is None for _, v in tests):
                 return None  # a literal whose value the certificate could not resolve
+            if not axis_splits(axis, tests):
+                raise Bad(
+                    f"{axis['column']}: the cell compares against a value that falls inside "
+                    f"a coordinate, so the axis does not stand for what the cell says")
             hit = []
             for i in range(len(coords)):
                 b = bounds[i]
@@ -331,6 +359,45 @@ def box_from_cells(t, row, groups):
     return out
 
 
+def sieve_admits(t, values, at):
+    """Whether the values behind a reach point really can occur: each inside the coordinate
+    it stands for, each derived column inside its own reach, and every constraint on two of
+    this table's columns satisfied. Returns None when they can, or why not.
+
+    Without this the reachability claim would only say "the row's box is not empty", which
+    is not what E102 is about."""
+    axes, col = t["axes"], [a["column"] for a in t["axes"]]
+    if values is None or len(values) != len(axes):
+        return "the certificate states no values behind it"
+    vs = [None if v is None else num(v) for v in values]
+    for ai, (v, c) in enumerate(zip(vs, at)):
+        b = (axes[ai].get("bounds") or [None] * len(axes[ai]["coords"]))[c]
+        if b is None or v is None:
+            continue
+        lo, hi = num(b[0]), num(b[1])
+        if lo is not None and hi is not None and lo == hi:
+            if v != lo:
+                return f"{axes[ai]['column']} = {v} is not {lo}"
+        else:
+            if lo is not None and not v > lo:
+                return f"{axes[ai]['column']} = {v} is not above {lo}"
+            if hi is not None and not v < hi:
+                return f"{axes[ai]['column']} = {v} is not below {hi}"
+        reach = t.get("_reach_of", {}).get(axes[ai]["column"])
+        if reach is not None and axes[ai]["kind"] == "derived" and not (reach[0] <= v <= reach[1]):
+            return f"{axes[ai]['column']} = {v} is outside what its own expression reaches"
+    for k in t["constraints"]:
+        if k["left"] not in col or k["right"] not in col:
+            continue
+        x, y = vs[col.index(k["left"])], vs[col.index(k["right"])]
+        if x is None or y is None:
+            continue
+        ok = {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[k["op"]]
+        if not ok:
+            return f"{k['left']} {k['op']} {k['right']} does not hold at {x}, {y}"
+    return None
+
+
 def check_table(t):
     """Re-check one table. Returns a one-line summary; raises Bad on a claim that fails."""
     name = t["table"]
@@ -338,6 +405,10 @@ def check_table(t):
     rows = {r["row"]: r for r in t["rows"]}
     if not rows:
         raise Bad(f"{name}: no rows")
+    if len(rows) != len(t["rows"]):
+        # Everything below looks a row up by its number. Two rows sharing one would leave
+        # the pair between them unexamined, because neither is earlier than the other.
+        raise Bad(f"{name}: two rows are given the same number")
     for r in t["rows"]:
         if len(r["accepts"]) != len(axes):
             raise Bad(f"{name}: row {r['row']} states {len(r['accepts'])} axes, the table has {len(axes)}")
@@ -403,6 +474,10 @@ def check_table(t):
                     f"{name}: the point for row {row} sits at {axes[ai]['column']} = "
                     f"{axes[ai]['coords'][c]}, which that row does not take"
                 )
+        if t.get("_sieve") is not None:
+            why = sieve_admits(t, r.get("at_values"), at)
+            if why is not None:
+                raise Bad(f"{name}: the point for row {row} is one no input reaches — {why}")
         if t["policy"] == "first":
             for earlier in sorted(n for n in rows if n < row):
                 if all(c in rows[earlier]["accepts"][ai] for ai, c in enumerate(at)):
@@ -438,6 +513,191 @@ def check_table(t):
             f"{len(reached)} rows reached{unused_note}{cover_note}{boxes}{note}")
 
 
+OPS = ("<=", ">=", "<", ">")
+
+
+def split_cmp(text):
+    """`>=1000円 <20000円` as [(op, literal)], or None where it is not a comparison."""
+    out, s = [], text.strip()
+    while s:
+        op = next((o for o in OPS if s.startswith(o)), None)
+        if op is None:
+            return None
+        s = s[len(op):].lstrip()
+        j = len(s)
+        for k in range(1, len(s)):
+            if any(s.startswith(o, k) for o in OPS):
+                j = k
+                break
+        lit = s[:j].strip()
+        if lit.endswith(" and"):
+            lit = lit[:-4].strip()
+        if not lit:
+            return None
+        out.append((op, lit))
+        s = s[j:].lstrip()
+        if s.startswith("and "):
+            s = s[4:].lstrip()
+    return out or None
+
+
+def parse_cell(text):
+    """The shape of a cell as the file writes it. `("lit", s)` is a bare literal, which is
+    a word on an enum column and an `=` comparison on a numeric one."""
+    s = text.strip()
+    if s in ("", "-"):
+        return ("any",)
+    if s == "none":
+        return ("nothing",)
+    if s.startswith("not:"):
+        return ("not", [w.strip() for w in s[4:].split(",") if w.strip()])
+    if any(s.startswith(o) for o in OPS):
+        cs = split_cmp(s)
+        return ("cmp", cs) if cs else None
+    if "," in s:
+        return ("is", [w.strip() for w in s.split(",")])
+    return ("lit", s)
+
+
+MULT = {"万": 10000, "億": 100000000, "兆": 1000000000000}
+NUMLIT = re.compile(r"^(-?[0-9][0-9_]*(?:\.[0-9]+)?)(万|億|兆)?(.*)$")
+
+
+def lit_key(text):
+    """A literal as (number, unit) where it is one, so that `1万円` and `10000円` are the
+    same literal. §2.1 allows one myriad multiplier and then the unit."""
+    m = NUMLIT.match(text.strip())
+    if not m:
+        return ("t", text.strip())
+    n = Fraction(m.group(1).replace("_", ""))
+    if m.group(2):
+        n *= MULT[m.group(2)]
+    return ("n", n, m.group(3).strip())
+
+
+def boundary_values(axis):
+    """Every coordinate that stands for one value, by the text the axis writes it as. A
+    cell's literal is a boundary of its own column (§6.2), so this is enough to turn the
+    text in the file into the number the certificate claims for it."""
+    out = {}
+    for co, b in zip(axis["coords"], axis.get("bounds") or []):
+        if b and b[0] is not None and b[0] == b[1]:
+            out[lit_key(co)] = num(b[0])
+    return out
+
+
+def check_cells(cert, path):
+    """The table stated here is the table in the file. Returns (cells read back, literals
+    whose number could not be pinned)."""
+    with open(path, "rb") as fh:
+        lines = fh.read().split(b"\n")
+    read = loose = apart = 0
+    for t in cert["tables"]:
+        axes = t["axes"]
+        # Rows written in one table have a cell in the same columns and in no others, so a
+        # cell the certificate shows nothing for has to be one no row of that table shows.
+        shape, lines_of = {}, {}
+        for r in t["rows"]:
+            src = r.get("source")
+            if src is None:
+                continue
+            here = tuple(sp is None for sp in src)
+            o = r.get("origin", "")
+            was = shape.setdefault(o, here)
+            if was != here:
+                raise Bad(f"{t['table']}: rows of `{o}` disagree about which columns they "
+                          f"have a cell in")
+            at = [sp["line"] for sp in src if sp is not None]
+            if at:
+                lo, hi = lines_of.get(o, (min(at), max(at)))
+                lines_of[o] = (min(lo, *at), max(hi, *at))
+        # Each table of a merged set is written in one block, so the rows of one origin
+        # take a run of lines that no other origin's rows fall inside.
+        for a, (alo, ahi) in lines_of.items():
+            for b, (blo, bhi) in lines_of.items():
+                if a < b and alo <= bhi and blo <= ahi:
+                    raise Bad(f"{t['table']}: rows of `{a}` and `{b}` are written among "
+                              f"each other, which no two tables are")
+        for r in t["rows"]:
+            src = r.get("source")
+            if src is None:
+                # A row an `apply` brought in: it is written in another file, and that
+                # file's own certificate is where it is read back.
+                apart += 1
+                continue
+            if len(src) != len(axes):
+                raise Bad(f"{t['table']}: row {r['row']} names {len(src)} cells, the table has {len(axes)} columns")
+            for ai, (sp, st) in enumerate(zip(src, r["tests"])):
+                if sp is None:
+                    # A column the `when` line of a clause does not mention: there is no
+                    # cell in the file to read back, only the clause.
+                    if st["cell"] != "any":
+                        raise Bad(f"{t['table']}: row {r['row']}, {axes[ai]['column']}: "
+                                  f"nothing is written there, and the certificate reads `{st['cell']}`")
+                    continue
+                line = lines[sp["line"] - 1] if 0 < sp["line"] <= len(lines) else b""
+                got = line[sp["col"]:sp["col"] + sp["len"]].decode("utf-8", "replace")
+                if got != sp["text"]:
+                    raise Bad(
+                        f"{t['table']}: row {r['row']}, {axes[ai]['column']}: the file says "
+                        f"`{got}` where the certificate quotes `{sp['text']}`")
+                shape = parse_cell(sp["text"])
+                if shape is None:
+                    raise Bad(f"{t['table']}: row {r['row']}, {axes[ai]['column']}: `{sp['text']}` is not a cell this program can read")
+                loose += cell_agrees(t, axes[ai], r["row"], shape, st)
+                read += 1
+    return read, loose, apart
+
+
+def cell_agrees(t, axis, row, shape, st):
+    """Hold the parsed cell beside the text it came from. Returns how many literals this
+    program could not turn into a number."""
+    where = f"{t['table']}: row {row}, {axis['column']}"
+    kind = st["cell"]
+    if shape[0] == "any":
+        if kind != "any":
+            raise Bad(f"{where}: the file leaves the cell open, the certificate reads it as `{kind}`")
+        return 0
+    if shape[0] == "nothing":
+        if kind != "none":
+            raise Bad(f"{where}: the file says `none`, the certificate reads it as `{kind}`")
+        return 0
+    if shape[0] in ("is", "not"):
+        if kind != shape[0] or list(st.get("words", [])) != shape[1]:
+            raise Bad(f"{where}: the words in the file are not the ones the certificate states")
+        return 0
+    if shape[0] == "lit":
+        if kind == "is":
+            if list(st.get("words", [])) != [shape[1]]:
+                raise Bad(f"{where}: the file writes `{shape[1]}`, the certificate reads {st.get('words')}")
+            return 0
+        if kind == "cmp" and len(st["tests"]) == 1 and st["tests"][0]["op"] == "=":
+            return literal_agrees(where, axis, shape[1], st["tests"][0]["value"])
+        raise Bad(f"{where}: the file writes one literal, the certificate reads it as `{kind}`")
+    # a comparison
+    if kind != "cmp":
+        raise Bad(f"{where}: the file compares, the certificate reads the cell as `{kind}`")
+    if len(shape[1]) != len(st["tests"]):
+        raise Bad(f"{where}: the file makes {len(shape[1])} comparisons, the certificate states {len(st['tests'])}")
+    loose = 0
+    for (op, lit), x in zip(shape[1], st["tests"]):
+        if op != x["op"]:
+            raise Bad(f"{where}: the file writes `{op}`, the certificate states `{x['op']}`")
+        loose += literal_agrees(where, axis, lit, x["value"])
+    return loose
+
+
+def literal_agrees(where, axis, text, value):
+    """1 when the literal is not a boundary of this axis and its number cannot be pinned."""
+    bounds = boundary_values(axis)
+    k = lit_key(text)
+    if k not in bounds:
+        return 1
+    if value is None or bounds[k] != num(value):
+        raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as {value}")
+    return 0
+
+
 def check(cert):
     """Re-check one rule's certificate. Returns (lines, ok)."""
     out = [f"{cert['rule']} ({cert['alias']} v{cert['version']}, sha256:{cert['source_sha256'][:12]}) "
@@ -470,6 +730,7 @@ def check(cert):
         out.append("  no table states a certificate")
     for t in cert["tables"]:
         t["_reach_of"] = reach
+        t["_sieve"] = True
         try:
             out.append("  " + check_table(t))
         except Bad as e:
@@ -509,6 +770,14 @@ def main(argv):
                     digest = hashlib.sha256(fh.read()).hexdigest()
                 if digest == cert["source_sha256"]:
                     lines.append(f"  the digest is {rule}'s")
+                    try:
+                        read, loose, apart = check_cells(cert, rule)
+                        rest = f", {loose} literals not pinned to a boundary" if loose else ""
+                        rest += f", {apart} rows written in an applied rule" if apart else ""
+                        lines.append(f"  the file says the same: {read} cells read back from it{rest}")
+                    except Bad as e:
+                        lines.append(f"  FAILED {e}")
+                        ok = False
                 else:
                     lines.append(f"  FAILED the certificate is about another text than {rule}")
                     ok = False

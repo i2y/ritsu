@@ -619,7 +619,7 @@ Worth saying in the same breath.
    proof — instead of silently picking a row, the generated code raises.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
-   correct. The evidence is 79 deliberately broken rules each producing
+   correct. The evidence is 80 deliberately broken rules each producing
    the diagnostic it should, and 30 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 
@@ -633,6 +633,17 @@ checker that proved the table, so where the two agree, two unrelated tools say
 the same thing — and where they disagree, one of them is wrong and the input
 that shows it comes back. On the corpus, 73 harnesses verify in 155 seconds.
 What it does not reach: the table itself (1), and every target but this one.
+
+**And the checks behind the evidence are proved.** `rulec certificate` writes
+out what the five proofs rest on, small enough to hand over and to re-check in
+milliseconds — including where every cell of the table stands in your file, to
+the byte. `proofs/` is a Lean 4 development in which what a table means, the
+checks a certificate has to pass, and the theorems that each check settles its
+claim are all written down and machine-checked; the program it builds runs
+those very checks. That moves what (4) asks you to take on trust from 42,000
+lines of Rust to a few hundred lines whose soundness is proved. Writing it
+found a soundness bug in the completeness check, and two more in the
+dependency-free re-checker beside it.
 
 [What it proves, in detail](checks.md){ .md-button }
 

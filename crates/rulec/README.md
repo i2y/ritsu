@@ -55,9 +55,11 @@ What is **not** proved matters just as much.
    check into a runtime guard** — the one place with no static proof. It returns an error
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
-   implementation, which has not itself been proved correct. The evidence is 79 deliberately
+   implementation, which has not itself been proved correct. The evidence is 80 deliberately
    broken rules each producing the diagnostic it should, and 30 rules — 28 transcribed from real
-   published terms checked, generated and run on every commit. Evidence, not proof.
+   published terms checked, generated and run on every commit. Evidence, not proof. What
+   *is* proved is the step after it: the certificate below, and that the checks it has to
+   pass imply the claims.
 
 **A model checker reads the Rust.** Beside the generated module, `gen` writes proof
 harnesses for [Kani](https://model-checking.github.io/kani/), behind `#[cfg(kani)]` so
@@ -72,14 +74,23 @@ installed.
 
 **And the evidence can be handed over.** `rulec certificate` prints what all five proofs
 rest on: the tree that tiles the input space with the row that covers each box, the axis on
-which each pair of rows of a `unique` table parts, a point that reaches every row, and the
-interval and the type every computed value is forced into. `tools/recheck.py` — one
-dependency-free file that shares no code with rulec — recomputes each box from the cell it
-was read from and holds the rest to those claims, in milliseconds. None of it asks the
-reader to search, which is the difference between evidence and running the same program
-twice. What stays stated: what a literal's unit resolves to, the pairs (3) could not settle
-— and, before all of them, that the cells it states are the cells you wrote, which the
-digest ties to one file and `rulec doc` shows a person.
+which each pair of rows of a `unique` table parts, a point that reaches every row with the
+values behind it, and the interval and the type every computed value is forced into. It
+also says where every cell stands in your file, down to the byte, and quotes it.
+`tools/recheck.py` — one dependency-free file that shares no code with rulec — recomputes
+each box from the cell it was read from, reads every cell back out of the `.rule` text and
+holds the rest to those claims, in milliseconds. None of it asks the reader to search,
+which is the difference between evidence and running the same program twice.
+
+**And the checks are proved to imply the claims.** `proofs/` is a Lean 4 development in
+four parts: what a table means, the checks a certificate has to pass written as functions,
+the theorems that each check settles its claim, and a program that runs those very
+functions over a real certificate. `lake build` checks the proofs; the program it produces
+re-checks the corpus in CI. Writing it found a soundness bug in the completeness check —
+the sieve was asked about one corner of a box instead of the box (§15.98) — and two in the
+re-checker. What stays stated: the pairs (3) could not settle, a leaf resting on a table
+above, rows an `apply` brought in from another file, and what a literal's unit resolves to
+where that literal is not one of the axis's own boundaries.
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 

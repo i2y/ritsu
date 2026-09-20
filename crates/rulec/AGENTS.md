@@ -250,9 +250,8 @@ Beside the Rust module, `<alias>_proof.rs` holds proof harnesses for the
 [Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so
 `rustc` never reads them: over **every** input in the declared domain rather than over the
 vectors, no table falls through, no contradiction guard fires, nothing overflows an `i64`,
-and the rows of each `unique` table cover the domain exactly once. `rulec test --proofs`
-runs them where `kani` is installed, and `rulec api` names the file and every harness in it
-([docs/generated-code.md](docs/generated-code.md)).
+and each `unique` table's rows cover the domain exactly once. `rulec test --proofs` runs
+them where `kani` is installed ([docs/generated-code.md](docs/generated-code.md)).
 
 For a target none of the eleven covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
@@ -262,10 +261,11 @@ with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to 
 ### `rulec certificate <file.rule>`
 
 The evidence behind all five proofs, as one JSON object something other than rulec can
-re-check: the tree that tiles the input space, the axis on which each pair of rows of a
-`unique` table parts, a point that reaches each row, and the interval and type of every
-computed value. `tools/recheck.py` is one such program, dependency-free; `--rule <file>`
-also ties the certificate to that text ([docs/formats.md](docs/formats.md)).
+re-check: the tree tiling the input space, the axis each pair of rows of a `unique` table
+parts on, a point reaching each row with its values, every computed value's interval and
+type, and where each cell stands in the file. `tools/recheck.py` re-checks it with no
+dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
+`--rule <file>` ties it to that text, cell by cell ([docs/formats.md](docs/formats.md)).
 
 ### `rulec test generated/ --format json`
 
@@ -455,6 +455,7 @@ rounding or an unsourced amount is seen by the person who can overrule it.
 | [docs/formats.md](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
 | [docs/generated-code.md](docs/generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | [docs/backends.md](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
+| `proofs/` (Lean 4) | what a table means, the checks a certificate has to pass, and the theorems that a `true` from each one settles the matching claim. `lake build` checks them; the program it builds re-checks certificates |
 | `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
 | `README.md` | the worked example, the excerpts of generated code, and how to run the suite |
 | <https://i2y.github.io/rulec/> | the same references as pages, plus the tour and the worked rules written for a person — English, and Japanese under `/ja/` |

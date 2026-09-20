@@ -118,6 +118,25 @@ impl Axis {
         }
     }
 
+    /// The witness value as a plain number on the axis's own scale: the coordinate a
+    /// point names stands for this value, and the bounds in the certificate are written on
+    /// the same scale. `None` where the coordinate stands for no number at all — an enum,
+    /// a flag — which is also every coordinate the sieve has nothing to say about.
+    ///
+    /// `witness_val` below is the reader's form: a rate comes out as its wire count and a
+    /// date as `YYYY-MM-DD`, neither of which can be compared with a bound. The re-checker
+    /// needs the number, so the certificate carries both (§15.97).
+    pub(crate) fn witness_num(&self, i: usize) -> Option<Rat> {
+        match self {
+            Axis::Enum { .. } | Axis::Bool => None,
+            Axis::Num { coords, step, .. } => match coords.get(i) {
+                Some(Coord::Point(v)) => Some(*v),
+                Some(Coord::Open(a, b)) => Some(inside(*a, *b, *step)),
+                None => None,
+            },
+        }
+    }
+
     /// The same witness value, typed, for the structured half of a diagnostic. Numbers come
     /// out as integers in the canonical unit and dates as `YYYY-MM-DD`, which is the wire
     /// shape of §10.2 — a caller can hand a witness straight to a vector or a fixture.
@@ -751,18 +770,17 @@ impl TableRegion {
             return None;
         }
         if rows.is_empty() {
-            let mut p = path.clone();
-            while p.len() < self.axes.len() {
-                p.push(0);
-            }
             // A gap proven infeasible is not reported. An undecidable gap is kept (we only ever
             // drop in the direction of over-reporting; §6.1). The tables above count here too:
             // demanding a row for a combination they cannot produce would contradict the E102
             // that names such a row dead.
-            if self.feasible(&p) == Feasible::No || self.upstream_dead_at(&p, ups, chk) {
-                return None;
-            }
-            return Some(p);
+            //
+            // **Every point of the box is asked about, not one corner of it** (§15.98). Padding
+            // the path with zeros and sieving that single point dismissed a whole subtree
+            // whenever the corner happened to be impossible — a `constraint` that forbids
+            // (甲=1, 乙=0) hid the gap at (甲=1, 乙=1), and `check` said ok while the generated
+            // code hit its own `unreachable!`.
+            return self.first_reachable(path, ups, chk, budget);
         }
         if ai == self.axes.len() {
             return None;
@@ -782,6 +800,58 @@ impl TableRegion {
                 return Some(h);
             }
             path.pop();
+        }
+        None
+    }
+
+    /// The first point of this box the sieve does not rule out, or nothing when it rules
+    /// out every one of them (§15.98). Called only where no row takes the box, so the point
+    /// it finds is a gap and the emptiness it reports is a box no input reaches.
+    ///
+    /// The box is rejected as a whole first, which is one interval test and settles the
+    /// common case; the walk below only runs where that is not enough, and it is charged to
+    /// the same budget as the rest of the search, so an overrun becomes E109 rather than a
+    /// silent pass.
+    fn first_reachable(
+        &self,
+        path: &[usize],
+        ups: &[Upstream],
+        chk: &Checked,
+        budget: &mut i64,
+    ) -> Option<Vec<usize>> {
+        if self.feasible(path) == Feasible::No {
+            return None;
+        }
+        let mut p = path.to_vec();
+        self.first_reachable_rec(&mut p, ups, chk, budget)
+    }
+
+    fn first_reachable_rec(
+        &self,
+        p: &mut Vec<usize>,
+        ups: &[Upstream],
+        chk: &Checked,
+        budget: &mut i64,
+    ) -> Option<Vec<usize>> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        if p.len() == self.axes.len() {
+            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) {
+                return None;
+            }
+            return Some(p.clone());
+        }
+        let ai = p.len();
+        for c in 0..self.axes[ai].len() {
+            p.push(c);
+            let keep = self.feasible(p) != Feasible::No;
+            let got = if keep { self.first_reachable_rec(p, ups, chk, budget) } else { None };
+            p.pop();
+            if got.is_some() {
+                return got;
+            }
         }
         None
     }
@@ -1942,6 +2012,19 @@ pub struct CertRow {
     /// keeps the word (the certificate carries the groups), and a don't-care is empty.
     pub tests: Vec<CertCell>,
     pub accepts: Vec<Vec<usize>>,
+    /// Where each cell stands in the file, as `(line, byte column, byte length)`, in the
+    /// same order as `tests`. A re-checker that has the file can read the cell back out of
+    /// it and hold the parsed form beside the text it came from (§15.97).
+    ///
+    /// Empty for a row an `apply` brought in: that row is written in **another** file, and
+    /// a span into this one would point at the `apply` line. `None` where there is no cell
+    /// to point at — a column the `when` line of a `clause` does not mention, or one a
+    /// merged member table does not have (§15.31). The certificate says so rather than
+    /// quoting the wrong text.
+    pub spans: Vec<Option<(usize, usize, usize)>>,
+    /// The member table the row was written in. Rows that share one were written in one
+    /// table, so they have a cell in the same columns and in no others.
+    pub origin: String,
 }
 
 /// One cell, as the re-checker reads it.
@@ -1965,9 +2048,11 @@ pub struct CertTable {
     pub disjoint: Vec<(usize, usize, usize)>,
     /// The pairs the check could not settle either way (W114). They are stated, not proved.
     pub undecided: Vec<(usize, usize)>,
-    /// For each row, a point that reaches it: the coordinate on every axis, and the input
-    /// that point stands for.
-    pub reach: Vec<(usize, Vec<usize>, Vec<(String, crate::diag::WVal)>)>,
+    /// For each row, a point that reaches it: the coordinate on every axis, the input that
+    /// point stands for, and the same input as plain numbers on the axes' own scale. The
+    /// last of these is what a re-checker can compare with the bounds (§15.97); the one
+    /// before it is what a reader can put in a fixture.
+    pub reach: Vec<(usize, Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>)>,
     /// Rows a `apply` brought in that this rule's own bindings leave unused (§15.69). They
     /// are outside the reachability claim, and the certificate says which they are rather
     /// than passing over them.
@@ -2066,6 +2151,16 @@ impl TableRegion {
                 accepts: (0..self.axes.len())
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
                     .collect(),
+                origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                spans: if applied.get(ri).copied().unwrap_or(false) {
+                    Vec::new()
+                } else {
+                    (0..self.axes.len())
+                        .map(|ai| {
+                            row.cell_spans.get(self.display_of[ai]).map(|s| (s.line, s.col, s.len))
+                        })
+                        .collect()
+                },
             })
             .collect();
 
@@ -2099,7 +2194,10 @@ impl TableRegion {
             match self.reach_point(ri, unique) {
                 Some(p) => {
                     let input = self.witness_pairs(&p);
-                    reach.push((ri + 1, p, input));
+                    let nums = (0..self.axes.len())
+                        .map(|ai| self.axes[ai].witness_num(p.get(ai).copied().unwrap_or(0)))
+                        .collect();
+                    reach.push((ri + 1, p, input, nums));
                 }
                 None if applied.get(ri).copied().unwrap_or(false) => unused.push(ri + 1),
                 None => {}
@@ -2161,6 +2259,9 @@ pub enum Cover {
     /// a derived value whose coordinate lies outside what the derive can produce.
     ByConstraint(usize),
     ByDerived(usize),
+    /// Every point of the box was asked about one at a time, and the sieve ruled each one
+    /// out. The re-checker redoes exactly that (§15.98).
+    ByPoints,
     /// The upstream table cannot produce this value. **Stated, not proved**: re-checking it
     /// needs the upstream table's own region, which this certificate does not carry.
     ByUpstream(String),
@@ -2191,22 +2292,25 @@ impl TableRegion {
             return None;
         }
         if rows.is_empty() {
-            let mut p = path.clone();
-            while p.len() < self.axes.len() {
-                p.push(0);
-            }
+            // The reason has to hold for the **whole box**, not for one point of it
+            // (§15.98): an axis the path has not fixed keeps its declared range, which is
+            // what `span_of_name` does when the path is short.
             for (k, con) in self.constraints.iter().enumerate() {
-                if self.constraint_impossible(con, &p) {
+                if self.constraint_impossible(con, path) {
                     return Some(Cover::ByConstraint(k));
                 }
             }
-            for ai2 in 0..self.axes.len() {
-                if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, &p) {
+            for ai2 in 0..path.len() {
+                if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, path) {
                     return Some(Cover::ByDerived(ai2));
                 }
             }
-            if self.upstream_dead_at(&p, ups, chk) {
-                return Some(Cover::ByUpstream(self.witness_text(&p)));
+            if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
+                return Some(Cover::ByUpstream(self.witness_text(path)));
+            }
+            // Point by point, then: the box is only impossible when every point in it is.
+            if self.first_reachable(path, ups, chk, budget).is_none() {
+                return Some(Cover::ByPoints);
             }
             // A hole. `check` reports it as E101 and the rule does not pass, so there is no
             // certificate to write.

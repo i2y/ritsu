@@ -1,0 +1,300 @@
+/-
+  Reading a certificate (DESIGN §15.97).
+
+  Everything in this file is plumbing: JSON in, the structures `RulecCert.Certified` and
+  `RulecCert.Values` are stated over, out. It proves nothing and is trusted to the extent
+  that a misreading can only make the checker **refuse** a certificate it should accept —
+  every field it cannot make sense of becomes a `none`, and a `none` reaching a check makes
+  that check fail. The one thing a misreading here could do is check the wrong document, and
+  that is what the digest and the cell spans are for.
+-/
+import Lean
+import RulecCert.Certified
+import RulecCert.Cells
+import RulecCert.Values
+
+namespace RulecCert
+open Lean
+
+/-! ## Numbers -/
+
+/-- A rational as the certificate writes it: `"7/2"`, `"3"`, `"-5"`. -/
+def ratOfString (s : String) : Option Rat :=
+  match s.splitOn "/" with
+  | [a] => (a.trimAscii.toInt?).map (fun n => (n : Rat))
+  | [a, b] => do
+      let n ← a.trimAscii.toInt?
+      let d ← b.trimAscii.toInt?
+      if d = 0 then none else some ((n : Rat) / (d : Rat))
+  | _ => none
+
+/-- A number as JSON writes it, or as a string. Booleans and enum names have no number,
+    and the reader gives them zero — nothing in the sieve reads a coordinate that has no
+    span, so the value is never looked at. -/
+def ratOfJson : Json → Option Rat
+  | .num n => some ((n.mantissa : Rat) / ((10 ^ n.exponent : Nat) : Rat))
+  | .str s => ratOfString s
+  | .bool _ => some 0
+  | .null => none
+  | _ => none
+
+def optRat : Json → Option Rat
+  | .null => none
+  | j => ratOfJson j
+
+/-! ## Small helpers over `Lean.Json` -/
+
+def field (j : Json) (k : String) : Option Json := (j.getObjVal? k).toOption
+def arr (j : Json) : Option (Array Json) := (j.getArr?).toOption
+def str (j : Json) : Option String := (j.getStr?).toOption
+def nat (j : Json) : Option Nat := (j.getNat?).toOption
+
+def fieldArr (j : Json) (k : String) : Array Json :=
+  (field j k >>= arr).getD #[]
+
+def fieldStr (j : Json) (k : String) : String := (field j k >>= str).getD ""
+
+def fieldNat (j : Json) (k : String) : Option Nat := field j k >>= nat
+
+/-- The pairs of an object, in the order it was written. -/
+def objPairs (j : Json) : List (String × Json) :=
+  match j with
+  | .obj m => m.toArray.toList.map (fun p => (p.1, p.2))
+  | _ => []
+
+/-! ## Types -/
+
+/-- `"money[円,税込]"`, `"qty[個]"`, `"rate"`, `"number"`. Anything else is unknown, and a
+    value whose type cannot be read is reported rather than checked. -/
+def tyOfString (s : String) : Option Ty :=
+  if s == "rate" then some .rate
+  else if s == "number" then some .number
+  else if s.startsWith "money[" && s.endsWith "]" then
+    let inner := ((s.drop 6).dropEnd 1).toString
+    match inner.splitOn "," with
+    | [c] => some (.money c none)
+    | [c, t] => some (.money c (some t))
+    | _ => none
+  else if s.contains '[' && s.endsWith "]" then some (.dim s)
+  else none
+
+/-! ## Expressions -/
+
+partial def exprOfJson (j : Json) : Option Expr :=
+  match field j "name" >>= str with
+  | some n => some (.name n)
+  | none =>
+    match field j "num" with
+    | some _ => do
+        let v ← (field j "value" >>= optRat)
+        let t := (field j "type" >>= str >>= tyOfString).getD Ty.number
+        some (.lit v t)
+    | none =>
+      match field j "op" >>= str with
+      | some op => do
+          let l ← field j "l" >>= exprOfJson
+          let r ← field j "r"
+          if op == "+" then some (.add l (← exprOfJson r))
+          else if op == "-" then some (.sub l (← exprOfJson r))
+          else if op == "*" then some (.mul l (← exprOfJson r))
+          else if op == "/" then do
+            -- §2.3 (E115): the divisor is a constant, so the checker only knows that form.
+            let k ← field r "value" >>= optRat
+            let kt := (field r "type" >>= str >>= tyOfString).getD Ty.number
+            some (.divc l k kt)
+          else none
+      | none =>
+        match field j "call" >>= str with
+        | some c => do
+            let args := fieldArr j "args"
+            let a ← args[0]? >>= exprOfJson
+            if c == "min" && args.size == 2 then some (.minOf a (← args[1]? >>= exprOfJson))
+            else if c == "max" && args.size == 2 then some (.maxOf a (← args[1]? >>= exprOfJson))
+            else if args.size == 2 then do
+              let g ← args[1]? >>= fun x => field x "value" >>= optRat
+              some (.roundTo a g)
+            else none
+        | none => none
+
+/-! ## One table -/
+
+/-- The span a pair of bounds describes: equal ends are one value, unequal ends the open
+    interval between them (§6.2). A `null` is a coordinate with no number at all. -/
+def coordOfJson (j : Json) : Option Coord :=
+  match arr j with
+  | some a =>
+    match a[0]?, a[1]? with
+    | some lo, some hi =>
+      let l := optRat lo
+      let h := optRat hi
+      match l, h with
+      | some x, some y => if x = y then some (.exactly x) else some (.between l h)
+      | _, _ => some (.between l h)
+    | _, _ => none
+  | none => none
+
+def cmpOfString (s : String) : Option Cmp :=
+  if s == "<=" then some .le else if s == "<" then some .lt
+  else if s == ">=" then some .ge else if s == ">" then some .gt
+  else if s == "=" then some .eq else none
+
+mutual
+
+/-- The cover as the certificate writes it. The three impossible leaves — a constraint, a
+    derive out of reach, every point ruled out one at a time — become the same node here:
+    the checker recomputes which of them holds rather than taking the hint. -/
+partial def coverOfJson : Option Json → Option Cover
+  | none => none
+  | some c =>
+    match field c "split" >>= arr with
+    | some kids => (kidsOfJson kids.toList).map Cover.split
+    | none =>
+      match fieldNat c "row" with
+      | some i => some (.row i)
+      | none =>
+        if (field c "upstream").isSome then some .upstream
+        else if (field c "constraint").isSome || (field c "derived_axis").isSome
+          || (field c "every_point_ruled_out").isSome then some .impossible
+        else none
+
+partial def kidsOfJson : List Json → Option Kids
+  | [] => some .nil
+  | k :: ks => do
+      let a ← coverOfJson (some k)
+      let b ← kidsOfJson ks
+      some (.cons a b)
+
+end
+
+/-- Where a cell stands in the file, and what the certificate says stands there. -/
+structure SrcSpan where
+  line : Nat
+  col : Nat
+  len : Nat
+  text : String
+
+/-- One row, as the cell check reads it. -/
+structure ReadRow where
+  index : Nat
+  origin : String
+  tests : List CellTest
+  accepts : List (List Nat)
+  /-- `none` for a row an `apply` brought in; `none` inside for a column the row has no
+      cell in. -/
+  source : Option (List (Option SrcSpan))
+
+structure ReadTable where
+  name : String
+  cert : Certified
+  /-- Column names, in axis order; the report and the cell check use them. -/
+  columns : List String
+  /-- What each coordinate of each axis is written as. -/
+  labels : List (List String)
+  /-- What each coordinate of each axis stands for, where it stands for a number. -/
+  spans : List (List (Option Coord))
+  rowsRaw : List ReadRow
+  /-- Rows for which the certificate states no point because the tool called them unused. -/
+  unused : List Nat
+  /-- Leaves the cover rests on an upstream table for. -/
+  upstream : Bool
+
+/-- The words a cell names, with the members of any group among them — a cell may write
+    the group's name, and the certificate carries what it stands for. -/
+def cellWords (groups : String → List String) (j : Json) : List String :=
+  let ws := (fieldArr j "words").toList.filterMap str
+  ws ++ ws.flatMap groups
+
+def cellOfJson (groups : String → List String) (j : Json) : Option CellTest :=
+  match fieldStr j "cell" with
+  | "any" => some CellTest.any
+  | "none" => some CellTest.nothing
+  | "is" => some (CellTest.isIn (cellWords groups j))
+  | "not" => some (CellTest.notIn (cellWords groups j))
+  | "cmp" => do
+      let ts ← (fieldArr j "tests").toList.mapM (fun x => do
+        let op ← cmpOfString (fieldStr x "op")
+        let v ← field x "value" >>= optRat
+        some (op, v))
+      some (CellTest.cmp ts)
+  | _ => none
+
+def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
+  match j with
+  | .null => none
+  | _ => (arr j).map (fun a => a.toList.map (fun x =>
+      match x with
+      | .null => none
+      | _ => do
+          let line ← fieldNat x "line"
+          let col ← fieldNat x "col"
+          let len ← fieldNat x "len"
+          some { line := line, col := col, len := len, text := fieldStr x "text" }))
+
+def readTable (rangesOf : String → Option Span2) (groups : String → List String)
+    (j : Json) : Option ReadTable := do
+  let name := fieldStr j "table"
+  let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
+                else if fieldStr j "policy" == "first" then some Policy.first else none)
+  let axes := fieldArr j "axes"
+  let columns := axes.toList.map (fun a => fieldStr a "column")
+  let arities := axes.toList.map (fun a => (fieldArr a "coords").size)
+  let coords : List (List (Option Coord)) := axes.toList.map (fun a =>
+    let bs := fieldArr a "bounds"
+    (List.range (fieldArr a "coords").size).map (fun c =>
+      match bs[c]? with
+      | some b => coordOfJson b
+      | none => none))
+  -- A constraint counts for this table only when both its columns are axes of it.
+  let cons : List Constraint := (fieldArr j "constraints").toList.filterMap (fun k => do
+    let l ← columns.idxOf? (fieldStr k "left")
+    let r ← columns.idxOf? (fieldStr k "right")
+    let op ← cmpOfString (fieldStr k "op")
+    some { left := l, op := op, right := r })
+  -- A derived column can only produce values its own expression can reach.
+  let reach : List (Option Ival) := columns.map (fun n =>
+    if (axes.toList.find? (fun a => fieldStr a "column" == n)).map
+        (fun a => fieldStr a "kind") == some "derived" then
+      (rangesOf n).map (fun I => (some I.1, some I.2))
+    else none)
+  let rows : List Row := (fieldArr j "rows").toList.filterMap (fun r => do
+    let i ← fieldNat r "row"
+    let box := (fieldArr r "accepts").toList.map (fun xs =>
+      (arr xs).getD #[] |>.toList.filterMap nat)
+    some { index := i, box := box })
+  let told : List (Nat × Nat × Nat) := (fieldArr j "disjoint").toList.filterMap (fun d => do
+    let a ← fieldNat d "a"; let b ← fieldNat d "b"; let ax ← fieldNat d "axis"
+    some (a, b, ax))
+  let undec : List (Nat × Nat) := (fieldArr j "undecided").toList.filterMap (fun d => do
+    let a ← fieldNat d "a"; let b ← fieldNat d "b"; some (a, b))
+  let wit : List (Nat × Point × List Rat) := (fieldArr j "reach").toList.filterMap (fun w => do
+    let i ← fieldNat w "row"
+    let at_ := (fieldArr w "at").toList.filterMap nat
+    -- `at_values` is the machine-readable half of the witness: one number per axis, on
+    -- the axis's own scale, or `null` for a coordinate that stands for no number.
+    let vs := (fieldArr w "at_values").toList.map (fun v => (optRat v).getD 0)
+    some (i, at_, vs))
+  let cover ← coverOfJson (field j "cover")
+  let rowsRaw : List ReadRow := (fieldArr j "rows").toList.filterMap (fun r => do
+    let i ← fieldNat r "row"
+    let tests ← (fieldArr r "tests").toList.mapM (cellOfJson groups)
+    let accepts := (fieldArr r "accepts").toList.map (fun xs =>
+      (arr xs).getD #[] |>.toList.filterMap nat)
+    some { index := i, origin := fieldStr r "origin", tests := tests, accepts := accepts
+           source := (field r "source").bind srcOfJson })
+  some {
+    name := name
+    columns := columns
+    labels := axes.toList.map (fun a => (fieldArr a "coords").toList.filterMap str)
+    spans := coords
+    rowsRaw := rowsRaw
+    unused := (fieldArr j "unused").toList.filterMap nat
+    upstream := cover.leansOnUpstream
+    cert := {
+      arities := arities, rows := rows, policy := policy
+      sieve := { coords := coords, cons := cons, reach := reach }
+      cover := cover
+      told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
+      witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
+      undecided := fun a b => (undec.find? (fun u => u.1 == a && u.2 == b)).isSome } }
+
+end RulecCert

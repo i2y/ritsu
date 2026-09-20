@@ -101,8 +101,49 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
 }
 
 /// The certificate of one rule, as one JSON object.
+/// The bytes a span names, read back out of the file. A span that is not there gives the
+/// empty string, and the checker sees the cell as one it could not read.
+fn at_span(src: &str, line: usize, col: usize, len: usize) -> String {
+    let Some(text) = src.lines().nth(line.wrapping_sub(1)) else { return String::new() };
+    if col + len > text.len() || !text.is_char_boundary(col) || !text.is_char_boundary(col + len) {
+        return String::new();
+    }
+    text[col..col + len].to_string()
+}
+
+/// Where every cell of a row stands in the file, and what stands there. `null` for a row
+/// an `apply` brought in — it is written in another file — and for one cell of a `clause`
+/// row the `when` line does not mention.
+fn source_json(src: &str, spans: &[Option<(usize, usize, usize)>], tests: &[CertCell]) -> String {
+    if spans.is_empty() {
+        return "null".into();
+    }
+    arr(&spans
+        .iter()
+        .enumerate()
+        .map(|(ai, s)| match s {
+            None => "null".into(),
+            // A cell the row does not have: a merged member without this column, or a
+            // column a `clause` does not mention. The span it was padded with points at
+            // the row, not at a cell, so the certificate shows nothing rather than that.
+            Some((line, col, len))
+                if matches!(tests.get(ai), Some(CertCell::Any))
+                    && at_span(src, *line, *col, *len) != "-" =>
+            {
+                "null".into()
+            }
+            Some((line, col, len)) => Obj::new()
+                .int("line", *line as i128)
+                .int("col", *col as i128)
+                .int("len", *len as i128)
+                .str("text", &at_span(src, *line, *col, *len))
+                .finish(),
+        })
+        .collect::<Vec<_>>())
+}
+
 pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
-    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(table_json)).collect();
+    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src))).collect();
     let mut ranges = Obj::new();
     let mut names: Vec<&String> = c.ranges.keys().collect();
     names.sort();
@@ -140,7 +181,7 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
         .finish()
 }
 
-fn table_json(t: CertTable) -> String {
+fn table_json(t: CertTable, src: &str) -> String {
     let axes: Vec<String> = t
         .axes
         .iter()
@@ -171,6 +212,8 @@ fn table_json(t: CertTable) -> String {
                 .str("label", &r.label)
                 .raw("cells", crate::json::strs(&r.cells))
                 .raw("tests", arr(&r.tests.iter().map(cell_json).collect::<Vec<_>>()))
+                .str("origin", &r.origin)
+                .raw("source", source_json(src, &r.spans, &r.tests))
                 .raw("accepts", arr(&accepts))
                 .finish()
         })
@@ -185,7 +228,7 @@ fn table_json(t: CertTable) -> String {
     let reach: Vec<String> = t
         .reach
         .iter()
-        .map(|(row, at, input)| {
+        .map(|(row, at, input, nums)| {
             let mut ins = Obj::new();
             for (k, v) in input {
                 ins = ins.raw(k, v.json());
@@ -194,6 +237,16 @@ fn table_json(t: CertTable) -> String {
                 .int("row", *row as i128)
                 .raw("at", arr(&at.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
                 .raw("values", ins.finish())
+                .raw(
+                    "at_values",
+                    arr(&nums
+                        .iter()
+                        .map(|v| match v {
+                            Some(q) => crate::json::quote(&rat(q)),
+                            None => "null".into(),
+                        })
+                        .collect::<Vec<_>>()),
+                )
                 .finish()
         })
         .collect();
@@ -228,6 +281,7 @@ fn cover_json(c: &Cover) -> String {
         Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
         Cover::ByUpstream(what) => Obj::new().str("upstream", what).finish(),
+        Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
     }
 }
 

@@ -339,9 +339,12 @@ drives, and the `component` line that wraps the module for the component model
 
 One object per rule: the **evidence** behind all five things `check` proves — completeness,
 the overlaps, the unreachable rows, the units and int64 — small enough that a program which
-shares no code with rulec can re-check it in milliseconds. `tools/recheck.py` is that
-program: no dependencies, one file, and the tests hold it to forged certificates as well as
-to the corpus.
+shares no code with rulec can re-check it in milliseconds. Two such programs read it.
+`tools/recheck.py` has no dependencies and fits in one file. `proofs/` is a Lean 4
+development that states the meaning of a rule, writes the checks as functions, and
+**proves** that a `true` from each one settles the matching claim; the program `lake build`
+produces runs those very functions, so what it prints is the theorems applied to one
+document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
 {"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.11.0",
@@ -351,10 +354,14 @@ to the corpus.
  "tables":[{"table":"適用判定","policy":"unique",
    "axes":[{"column":"残高A","kind":"derived","coords":["999円","1000円","1001円"],
             "bounds":[[null,"1000"],["1000","1000"],["1000",null]]}],
-   "rows":[{"row":1,"label":"","cells":["<= 1000円","-"],"accepts":[[0,1],[0,1,2]]}],
+   "rows":[{"row":1,"label":"","cells":["<= 1000円","-"],
+            "tests":[{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]},{"cell":"any"}],
+            "origin":"適用判定",
+            "source":[{"line":21,"col":2,"len":9,"text":"<=1000円"},{"line":21,"col":15,"len":1,"text":"-"}],
+            "accepts":[[0,1],[0,1,2]]}],
    "disjoint":[{"a":1,"b":3,"axis":0}],
    "undecided":[{"a":1,"b":2}],
-   "reach":[{"row":1,"at":[0,0],"values":{"残高A":999,"残高B":3979}}],
+   "reach":[{"row":1,"at":[0,0],"values":{"残高A":999,"残高B":3979},"at_values":["999","3979"]}],
    "unused":[],
    "constraints":[],
    "cover":{"split":[{"row":1},{"row":1},{"split":[{"row":3},{"row":2},{"row":2}]}]}}]}
@@ -367,32 +374,58 @@ to the corpus.
 | `values` | every value the rule computes: the type the rule declares for it, the expression as a tree, the interval the ranges force it into, the scale it is stored at, and the integer that interval reaches. Two things are re-checked from this: the units (§2.1, E103), by deriving each node's type from the leaves up — a name's from `types`, a literal's from the `type` it carries — and int64 (§7.4, E108), by interval arithmetic over the same expression. A literal also carries the value its unit resolves to, so the re-checker does arithmetic and not units |
 | `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2) and, for a numeric axis, each coordinate as a closed interval in `bounds`. `kind` is `input`, `derived`, `define` or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker |
 | `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"any"}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
+| `origin` | the table the row was written in. Rows of one table have a cell in the same columns and in no others, and are written in a run of lines no other table's rows fall inside — both of which the re-checker holds them to |
+| `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` the re-checker reads the file and compares. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
 | `undecided` | the pairs the check could not settle either way — the W114 warning, stated rather than proved. A pair in neither list is a certificate that does not hold |
-| `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns. Under `policy first` the point is also outside every row above it |
+| `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns, and `at_values` those values as plain numbers on the axes' own scale — which is what lets the re-checker show the point is one the sieve admits, and not merely one inside the row's box. Under `policy first` the point is also outside every row above it |
 | `unused` | rows an `apply` brought in that this rule's bindings leave unused (§15.69). They are outside the reachability claim, and are named rather than passed over |
-| `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, or `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range. `{"upstream":…}` is **stated, not proved**: re-checking one needs the upstream table's own region, which this certificate does not carry. `null` when the walk ran past the budget |
+| `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range, or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"upstream":…}` is **stated, not proved**: re-checking one needs the upstream table's own region, which this certificate does not carry. `null` when the walk ran past the budget |
 | `constraints` | the `constraint` lines a cover leaf points at |
 
-**Where it stops.** Three things are stated and cannot be re-checked from the document
-alone: what a literal's unit resolves to (`1万円` → `10000`), a cover leaf that rests on an
-upstream table, and the pairs W114 could not settle. And, before all of them, the step this
-certificate cannot take: that the cells stated here are the cells in the `.rule` file. The
-digest ties it to one text — `python3 tools/recheck.py --rule rules/送料.rule` checks that —
-but only a program that parses the file could say the cells were read right, and
-`tools/recheck.py` deliberately does not, because a re-checker that shares the tool's reading
-of a rule is not independent of it. Holding the certificate's cells against the rule is what
-`rulec doc` renders for a person. A rule that does not pass `check` produces no certificate
-at all.
+**What "proved" means here.** `proofs/RulecCert/Semantics.lean` says what a table claims:
+under `unique`, every point the rule is **asked about** is taken by exactly one row; every
+row answers somewhere; and a value keeps the type it is declared with and fits int64. Asked
+about means the values behind the point satisfy every `constraint` the rule declares and put
+every derived column inside the interval its own expression forces — which is what rulec
+decides, and no more: whether some real input produces a given derived value is not settled
+by anything here. Each check is then a theorem: `Certified.unique`, `Certified.complete`,
+`Certified.reached`, `eval_type_of_typeOf`, `stored_in_i64`. One of them,
+`mem_boxOf_cmp_iff`, is what ties the boxes to the cells: a coordinate is taken exactly when
+every value in it satisfies the cell, **provided** no value a cell compares against falls
+strictly inside a coordinate — §6.2's construction, which the checkers verify rather than
+assume.
+
+**Where it stops.** Four things are stated and cannot be re-checked from the document alone:
+what a literal's unit resolves to (`1万円` → `10000`) except where that literal is one of the
+axis's own boundaries, a cover leaf that rests on an upstream table, the pairs W114 could not
+settle, and the rows an `apply` brought in — those are written in the applied rule, and its
+own certificate is where they are read back. `tools/recheck.py` does parse the cell text it
+reads out of the file and holds the certificate's operators and numbers to it; the Lean
+program does not, because a checker that parses a rule the way rulec parses it is not
+independent of it — it reads each cell back byte for byte and recomputes the box from the
+parsed form instead. A rule that does not pass `check` produces no certificate at all.
 
 ```console
-$ rulec certificate rules/健康保険料.rule | python3 tools/recheck.py --rule rules/健康保険料.rule
+$ rulec certificate rules/健康保険料.rule > cert.json
+$ python3 tools/recheck.py --rule rules/健康保険料.rule cert.json
 健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.11.0
   units: 4 values keep the type the rule declares
   int64: 4 values fit
   等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells
   適用料率: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells
   the digest is rules/健康保険料.rule's
+  the file says the same: 52 cells read back from it
+
+$ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/健康保険料.rule cert.json
+健康保険料 (0.11.0), re-checked against the Lean proofs
+  values: 4 typed, 4 held to int64, 0 not re-checked
+  等級: 50 rows — complete, 50 rows reached, no two rows meet
+    50 boxes read back from the cells they were written as
+  適用料率: 2 rows — complete, 2 rows reached, no two rows meet
+    2 boxes read back from the cells they were written as
+  the digest is rules/健康保険料.rule's, and 52 cells are read back out of it
+OK: every claim this program states was proved, by the theorems in RulecCert.Sound.
 ```
 
 Exit code 0 when every table holds, 1 when a claim does not, 2 for a certificate it cannot
