@@ -8,13 +8,13 @@ arm64), with the SHA-256 of each beside it, on the
 ## The release binary
 
 ```console
-$ v=v0.9.0; t=aarch64-apple-darwin
+$ v=v0.10.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-rulec-v0.9.0-aarch64-apple-darwin.tar.gz: OK
+rulec-v0.10.0-aarch64-apple-darwin.tar.gz: OK
 $ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
 $ rulec --version
-rulec 0.9.0
+rulec 0.10.0
 ```
 
 `t` is one of `aarch64-apple-darwin`, `x86_64-apple-darwin`,
@@ -30,7 +30,7 @@ $ git clone https://github.com/i2y/rulec
 $ cd rulec
 $ cargo install --path .
 $ rulec --version
-rulec 0.9.0
+rulec 0.10.0
 ```
 
 A recent stable Rust is all that is needed — rulec has **zero
@@ -133,7 +133,7 @@ it runs on.
 
 ## In CI
 
-`uses: i2y/rulec@v0.9.0` puts that release on the runner's `PATH`,
+`uses: i2y/rulec@v0.10.0` puts that release on the runner's `PATH`,
 verified against the checksums published with it. The ref the action is
 referenced with is the release, so by default the two cannot drift apart
 (`with: { version: v0.4.0 }` is how you ask for another one on purpose).
@@ -151,7 +151,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base reads origin/main
-    - uses: i2y/rulec@v0.9.0
+    - uses: i2y/rulec@v0.10.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --out generated/ --check
@@ -189,7 +189,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # origin/main is where the old version is read from
-    - uses: i2y/rulec@v0.9.0
+    - uses: i2y/rulec@v0.10.0
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
