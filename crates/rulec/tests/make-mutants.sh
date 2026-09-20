@@ -179,7 +179,7 @@ awk '{ sub(/^\| 遠隔地   \| <=1000円 \| スキップ                    \|/,
 # `overrides` pointing at a table that defines a different output
 awk '{ sub(/^  overrides 通常$/, "  overrides 運賃表"); print }'      "$C/送料のただし書.rule" > "$M/m_e036.rule"
 # A clause takes precedence over a table that decides two outputs at once
-awk '{ print } /^\| 金 \| -        \| 0円                              \| 150%                        \|$/ { print ""; print "clause 特例(special) -> 送料"; print "  when 帯 金"; print "  then 0円"; print "  overrides 送料表" }' "$C/会員特典.rule" > "$M/m_e045.rule"
+awk '/^\| 金 \| / && /150%/ { print; print ""; print "clause 特例(special) -> 送料"; print "  when 帯 金"; print "  then 0円"; print "  overrides 送料表"; next } { print }' "$C/会員特典.rule" > "$M/m_e045.rule"
 
 # --- The syntax errors (§15.93). Their minimal example lives in the ledger, but the ledger's
 # rule is four lines long: what it cannot show is that the diagnostic lands on the right line

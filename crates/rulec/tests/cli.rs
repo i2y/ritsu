@@ -76,8 +76,10 @@ fn show_shadow_で構造的も一覧に出る() {
 #[test]
 fn fmt_は冪等で_check_は直すべきものを言う() {
     // The corpus must always be formatted (the same practice as with gofmt; §1.5).
-    let (c, out, _) = run(&["fmt", "--check", "tests/corpus/ゆうパック運賃.rule",
-                            "tests/corpus/クーポン割引.rule", "tests/corpus/クーポン併用.rule"]);
+    // **The whole of it.** Three files were named here and the rest was never looked at, so
+    // `会員特典.rule` sat unformatted until CI ran `fmt --check` over the directory
+    // (DESIGN §15.94). A directory, not a list, is what keeps this honest.
+    let (c, out, _) = run(&["fmt", "--check", "tests/corpus/"]);
     assert_eq!(c, 0, "コーパスが整形されていない: {out}");
 
     // Applying it twice changes nothing.

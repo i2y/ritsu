@@ -271,9 +271,16 @@ def headers(src):
         if line.startswith("table "):
             name = re.match(r"table\s+([^\s(]+)", line).group(1)
         elif line.startswith("|") and "->" in line and name:
+            # `->` marks where the output columns begin, and only the first one carries
+            # it: the canonical form drops it from the rest (AGENTS §Write). Reading each
+            # cell for its own arrow made a second output look like an input the moment
+            # `rulec fmt` folded the header.
             cells = [c.strip() for c in line.strip("|").split("|")]
-            ins = [c for c in cells if not c.startswith("->")]
-            outs = [re.match(r"->\s*([^\s(:]+)", c).group(1) for c in cells if c.startswith("->")]
+            at = next(i for i, c in enumerate(cells) if c.startswith("->"))
+            ins = cells[:at]
+            outs = [
+                re.match(r"(?:->\s*)?([^\s(:]+)", c).group(1) for c in cells[at:]
+            ]
             out.append((name, ins, outs))
             name = None
     return out
