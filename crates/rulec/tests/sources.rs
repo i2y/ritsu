@@ -455,3 +455,115 @@ fn build_with(script: &str, spec: &str) {
 fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
+
+/// The refusals that need no network: a document that is not there, a fragment that is cited
+/// but not pinned, and a citation whose shape cannot be read.
+///
+/// Each says what to do next, and that wording is the whole point of the diagnostic — a
+/// digest to paste, the forms a citation may take, the path that was looked for. None of the
+/// three was exercised (§15.91); the copies in the corpus are all present and correct, so the
+/// error side of `sources::check` was reached only where a mutant seeded it.
+#[test]
+fn 写しが無い_固定が無い_引用が読めない() {
+    let d = scratch("sources-errors");
+    let rule = |src: &str, cite: &str| {
+        format!(
+            "rule t(t) v1\n\nsource 料金表 = file \"{src}\"\n\n\
+             inputs\n  a(a) : bool\n\n\
+             outputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
+             table 運賃表(fee_table)  @料金表 {cite}\n\
+             | a | -> 運賃 |\n| - | 990円   |\n"
+        )
+    };
+
+    // (1) The document is not beside the rule. The message names the path it looked for.
+    let p = d.join("a.rule");
+    let missing = rule("無い文書.md", "表1");
+    std::fs::write(&p, &missing).unwrap();
+    let ds = rulec::check_source(&missing, &p.to_string_lossy());
+    let e039 = ds.iter().find(|x| x.code == "E039").expect("写しが無ければ E039");
+    assert!(
+        e039.notes.join(" ").contains("無い文書.md"),
+        "探した先を言わない: {:?}",
+        e039.notes
+    );
+
+    // (2) The document is there and the fragment was taken out, but nothing is pinned. The
+    // message carries the digest to paste, and `fix` carries the line itself.
+    std::fs::write(d.join("料金表.md"), "| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n").unwrap();
+    let src = rule("料金表.md", "表1");
+    std::fs::write(&p, &src).unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let ds = rulec::check_source(&src, &p.to_string_lossy());
+    let e037 = ds
+        .iter()
+        .find(|x| x.code == "E037" && x.title.contains("表1"))
+        .expect("固定が無ければ E037");
+    let tsv = std::fs::read_to_string(d.join("料金表.md.fragments/表1.tsv")).unwrap();
+    let want = rulec::sha256::short(tsv.as_bytes());
+    assert!(
+        e037.notes.iter().any(|n| n.contains(&want)),
+        "貼れるハッシュを言わない ({want}): {:?}",
+        e037.notes
+    );
+    assert!(
+        e037.fix.text.as_deref().is_some_and(|t| t.contains(&want)),
+        "fix が固定の行を持っていない: {:?}",
+        e037.fix.text
+    );
+
+    // (3) A citation whose shape is not one of the forms. The message lists them.
+    let bad = rule("料金表.md", "だい1ひょう");
+    std::fs::write(&p, &bad).unwrap();
+    let ds = rulec::check_source(&bad, &p.to_string_lossy());
+    let e037 = ds
+        .iter()
+        .find(|x| x.code == "E037" && x.title.contains("だい1ひょう"))
+        .unwrap_or_else(|| panic!("読めない引用が E037 にならない: {:?}", ds.iter().map(|x| (x.code, &x.title)).collect::<Vec<_>>()));
+    // A document is cited by table, and the message says so in both spellings. (A law is
+    // cited by article and has its own wording; that branch needs a law's copies.)
+    let notes = e037.notes.join(" ");
+    assert!(notes.contains("表3") && notes.contains("table3"), "書ける形を並べない: {notes}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `source pin` writes a fragment's digest, and writes it **again** when the document has
+/// moved on — replacing the line rather than adding a second one.
+#[test]
+fn pinは変わった写しの固定を書き換える() {
+    let d = scratch("sources-repin");
+    let doc = |fee: &str| format!("| あて先 | 運賃 |\n|---|---|\n| 近畿 | {fee} |\n");
+    std::fs::write(d.join("料金表.md"), doc("990円")).unwrap();
+    let src = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\n\
+               inputs\n  a(a) : bool\n\n\
+               outputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
+               table 運賃表(fee_table)  @料金表 表1\n| a | -> 運賃 |\n| - | 990円   |\n";
+    let p = d.join("a.rule");
+    std::fs::write(&p, src).unwrap();
+    for cmd in [["source", "fetch", "a.rule"], ["source", "pin", "a.rule"]] {
+        let (c, out) = rulec(&d, &cmd);
+        assert_eq!(c, 0, "{out}");
+    }
+    let first = std::fs::read_to_string(&p).unwrap();
+    assert_eq!(first.matches("  表1 sha256:").count(), 1, "{first}");
+
+    // The document is revised. `check` says the copy changed; `fetch` takes the new table out
+    // and `pin` replaces the digest in place.
+    std::fs::write(d.join("料金表.md"), doc("1100円")).unwrap();
+    let after_edit = std::fs::read_to_string(&p).unwrap();
+    let cs = codes(&after_edit, &p);
+    assert!(cs.contains(&"E038".to_string()), "写しが変わったのに言わない: {cs:?}");
+    for cmd in [["source", "fetch", "a.rule"], ["source", "pin", "a.rule"]] {
+        let (c, out) = rulec(&d, &cmd);
+        assert_eq!(c, 0, "{out}");
+    }
+    let second = std::fs::read_to_string(&p).unwrap();
+    assert_eq!(second.matches("  表1 sha256:").count(), 1, "固定の行が二本になった:\n{second}");
+    assert_ne!(
+        first.lines().find(|l| l.contains("表1 sha256:")),
+        second.lines().find(|l| l.contains("表1 sha256:")),
+        "固定が書き換わっていない"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
