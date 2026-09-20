@@ -933,8 +933,8 @@ pub fn ledger() -> Vec<Entry> {
             "E037",
             tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
-                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
-                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). Without a pin, a revised copy passes check in silence (§15.68)."
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書の断片は表なので、`表3`（文書順に三つめの表）か `table3` 以外の書き方は読めません（§15.82）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
+                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). Without a pin, a revised copy passes check in silence (§15.68)."
             ),
             tr!(
                 "原文を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を実行して、いまの写しのハッシュを書き込んでください。",
@@ -963,12 +963,12 @@ pub fn ledger() -> Vec<Entry> {
             "E039",
             tr!("出典の写しがありません", "There is no copy of a source"),
             tr!(
-                "引用した箇所の写し `sources/law/<法令ID>@<日付>/<要素>.xml` が規則の隣に無いとき、または `file` の出典が読めないとき。check は通信しないので、写しが無ければ照合できません。",
-                "The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare."
+                "引用した箇所の写し（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら `<文書>.fragments/表3.tsv`（`料金表.md.fragments/表3.tsv`））が規則の隣に無いとき、または `file` の出典そのものが読めないとき。check は通信もしなければ文書も読み解かないので、写しが無ければ照合できません。",
+                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `<document>.fragments/表3.tsv` (`料金表.md.fragments/表3.tsv`) for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
             ),
             tr!(
-                "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取って写しに置きます。写しは git に入れてください。",
-                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, into the copies. Commit the copies."
+                "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies."
             ),
             X_E039,
             &["E037", "E038"],

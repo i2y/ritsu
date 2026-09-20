@@ -287,3 +287,23 @@ wb.save(sys.argv[1])
     assert!(out.contains("| 遠隔地 | 2026-04-01 | 18.3% | 1200円 |"), "{out}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// A workbook's fragments are its sheets, in the order the workbook lists them, so that
+/// `@料金表 表2` names the second sheet however much prose the first one holds (§15.82).
+#[test]
+fn 帳簿の断片はシートで_順番はシートの順番() {
+    if !have("python3") {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let d = dir("fragments");
+    let x = book(&d, "運賃.xlsx", &FEE.replace("COMP", "deflate"));
+    let p = std::path::PathBuf::from(&x);
+    let bytes = std::fs::read(&p).unwrap();
+    let ts = rulec::extract::tables(&p, &bytes).unwrap();
+    assert_eq!(ts.len(), 2, "a sheet is a table, prose and all");
+    assert_eq!(ts[0], vec![vec!["このシートは説明です"]]);
+    assert_eq!(ts[1][0], vec!["あて先", "サイズ", "改定日", "割引率", "運賃"]);
+    assert_eq!(ts[1][2], vec!["近畿圏", "S80", "2026-04-01", "18.3%", "1310円"]);
+    let _ = std::fs::remove_dir_all(&d);
+}

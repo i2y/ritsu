@@ -436,7 +436,14 @@ impl<'a> Gen<'a> {
                 }
                 SourceKind::File { path, url, hash } => {
                     let u = url.as_ref().map(|u| format!(" {} {u}", crate::kw::URL)).unwrap_or_default();
-                    format!("{} {path}{u}{}", crate::kw::FILE, hash.as_ref().map(|h| format!(" sha256:{h}")).unwrap_or_default())
+                    // The tables taken out of the document, as a law's articles are (§15.82).
+                    let pins: Vec<String> = s.pins.iter().map(|p| format!("{} sha256:{}", p.fragment, p.hash)).collect();
+                    let pinned = if pins.is_empty() { String::new() } else { format!(" ({})", pins.join(", ")) };
+                    format!(
+                        "{} {path}{u}{}{pinned}",
+                        crate::kw::FILE,
+                        hash.as_ref().map(|h| format!(" sha256:{h}")).unwrap_or_default()
+                    )
                 }
             };
             h.push_str(&tr!("{comment} 出典: {} = {what}\n", "{comment} Cites: {} = {what}\n", s.name.text));
@@ -5698,6 +5705,9 @@ impl Gen<'_> {
                         .str("path", path)
                         .str("url", url.as_deref().unwrap_or(""))
                         .str("sha256", hash.as_deref().unwrap_or(""))
+                        .raw("pins", crate::json::arr(&s.pins.iter().map(|p| {
+                            crate::json::Obj::new().str("fragment", &p.fragment).str("sha256", &p.hash).finish()
+                        }).collect::<Vec<_>>()))
                         .finish(),
                 }
             }).collect::<Vec<_>>()))

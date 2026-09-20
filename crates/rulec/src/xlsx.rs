@@ -613,14 +613,20 @@ fn ref_col(r: &str) -> Option<usize> {
     (n > 0).then_some(n)
 }
 
-/// One sheet as a grid of text: the sheet's name, and its rows.
-///
-/// Rows and columns that hold nothing at all are left out, so a table that starts at C4 is
-/// read as a table and not as two empty columns and three empty rows. What is left is
-/// rectangular, and `import`'s first row is its header, exactly as with a CSV.
-pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>>), String> {
+/// A workbook read once: what every sheet needs to be read, and the sheets in the order the
+/// workbook lists them. One read serves a whole book (§15.82), since a document's fragments
+/// are its sheets and the shared strings are read once for all of them.
+struct Book {
+    es: Vec<Entry>,
+    shared: Vec<String>,
+    styles: Vec<(Fmt, String)>,
+    sheets: Vec<(String, String)>,
+    date1904: bool,
+}
+
+fn book(bytes: &[u8]) -> Result<Book, String> {
     let es = entries(bytes)?;
-    let book = part(bytes, &es, "xl/workbook.xml")?.ok_or_else(|| {
+    let wb = part(bytes, &es, "xl/workbook.xml")?.ok_or_else(|| {
         tr!("xlsx ではありません（xl/workbook.xml がありません）", "not an xlsx (there is no xl/workbook.xml)")
     })?;
     let rels = relations(&part(bytes, &es, "xl/_rels/workbook.xml.rels")?.unwrap_or_default());
@@ -629,7 +635,7 @@ pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>
 
     let mut sheets: Vec<(String, String)> = Vec::new();
     let mut date1904 = false;
-    walk(&book, |n| {
+    walk(&wb, |n| {
         if let Node::Open { name, attrs, .. } = n {
             match name {
                 "workbookPr" => {
@@ -650,10 +656,28 @@ pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>
     if sheets.is_empty() {
         return Err(tr!("xlsx にシートがありません", "the xlsx has no sheets"));
     }
+    Ok(Book { es, shared, styles, sheets, date1904 })
+}
+
+/// Every sheet of a workbook, in the order the workbook lists them: the name and the grid. An
+/// empty sheet comes back as an empty grid, so that a sheet's position is what it looks like
+/// in the book — which is what a citation of `表3` counts (§15.82).
+pub fn grids(bytes: &[u8]) -> Result<Vec<(String, Vec<Vec<String>>)>, String> {
+    let b = book(bytes)?;
+    b.sheets.iter().map(|(n, t)| Ok((n.clone(), sheet(bytes, &b, t)?))).collect()
+}
+
+/// One sheet as a grid of text: the sheet's name, and its rows.
+///
+/// Rows and columns that hold nothing at all are left out, so a table that starts at C4 is
+/// read as a table and not as two empty columns and three empty rows. What is left is
+/// rectangular, and `import`'s first row is its header, exactly as with a CSV.
+pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>>), String> {
+    let b = book(bytes)?;
     let (name, target) = match want {
-        None => sheets[0].clone(),
-        Some(w) => sheets.iter().find(|(n, _)| n == w).cloned().ok_or_else(|| {
-            let all: Vec<&str> = sheets.iter().map(|(n, _)| n.as_str()).collect();
+        None => b.sheets[0].clone(),
+        Some(w) => b.sheets.iter().find(|(n, _)| n == w).cloned().ok_or_else(|| {
+            let all: Vec<&str> = b.sheets.iter().map(|(n, _)| n.as_str()).collect();
             tr!(
                 "`{w}` というシートはありません。あるのは: {}",
                 "there is no sheet called `{w}`; the workbook has: {}",
@@ -661,7 +685,16 @@ pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>
             )
         })?,
     };
-    let xml = part(bytes, &es, &target)?
+    let g = sheet(bytes, &b, &target)?;
+    if g.is_empty() {
+        return Err(tr!("シート `{name}` は空です", "the sheet `{name}` is empty"));
+    }
+    Ok((name, g))
+}
+
+fn sheet(bytes: &[u8], b: &Book, target: &str) -> Result<Vec<Vec<String>>, String> {
+    let (shared, styles, date1904) = (&b.shared, &b.styles, b.date1904);
+    let xml = part(bytes, &b.es, target)?
         .ok_or_else(|| tr!("シート {target} が xlsx にありません", "the sheet {target} is not in the xlsx"))?;
 
     // Only cells that hold something are kept, so an empty row or column simply never
@@ -710,7 +743,7 @@ pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>
         _ => {}
     });
     if cells.is_empty() {
-        return Err(tr!("シート `{name}` は空です", "the sheet `{name}` is empty"));
+        return Ok(Vec::new());
     }
 
     let mut cols: Vec<usize> = cells.keys().map(|(_, c)| *c).collect();
@@ -719,9 +752,8 @@ pub fn grid(bytes: &[u8], want: Option<&str>) -> Result<(String, Vec<Vec<String>
     let mut rows: Vec<usize> = cells.keys().map(|(r, _)| *r).collect();
     rows.sort_unstable();
     rows.dedup();
-    let grid = rows
+    Ok(rows
         .iter()
         .map(|r| cols.iter().map(|c| cells.get(&(*r, *c)).cloned().unwrap_or_default()).collect())
-        .collect();
-    Ok((name, grid))
+        .collect())
 }

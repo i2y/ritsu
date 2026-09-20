@@ -268,6 +268,7 @@ source 措置法 = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
 source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
 source 規約 = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
+  表1 sha256:a583ec8586bbf596
 
 table 本則(base)  @法 別表第一
 policy unique
@@ -279,22 +280,31 @@ A `source` names a document, after `import`. A `law` is a law on e-Gov (the Japa
 government's statute database), by its law id, read
 as of a date: the API returns one fragment at a time, so each fragment the rule cites is
 kept as a copy beside the rule (`sources/law/<law id>@<date>/<element>.xml`) and pinned by
-its digest on the line under the `source`. A `file` is a document with no addressable
-fragments — a tariff sheet, a PDF — beside the rule, pinned whole on its own line. A `url` on
+its digest on the line under the `source`. A `file` is a document beside the rule — a tariff
+sheet, a workbook, a policy in Markdown — pinned whole on its own line. A `url` on
 it says where that copy came from, so `rulec source fetch` can bring it again and `rulec source
 outdated` can ask whether the original has moved on; a document that arrived from a person has
 no address and leaves it out.
+
+**A document's fragments are its tables.** `表1` is the first table of the document in document
+order and `table1` is the same name in English; for a workbook a table is a sheet. A cited table
+is taken out of the document by `rulec source fetch`, written beside it as
+`<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and pinned under the `source` line exactly as a law's articles
+are — so a revision of the document that moves a cited table fails the check, and one that does
+not, does not. The formats read here are csv, md and xlsx; a PDF or a scan needs an extractor
+that is not this program, and until it can be plugged in such a document is cited whole.
 
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
 `第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's
 own) or `附則（令和七年三月三一日法律第一三号）第3条` (an amending law's, its number spelled as the law's
 heading spells it); several are separated by `,`. A `file` is cited
-whole, `@郵便`, or with one word saying where in it, `@郵便 別紙1`; a law cited with no article
-is E037. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
+whole, `@郵便`, or by one of its tables, `@郵便 表1`; a law cited with no article is E037, and so
+is a document fragment named anything but `表<n>` or `table<n>`. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
-citation uses is W119. `rulec source fetch` brings the copies — from e-Gov for a law, from the `url` for a file —
+citation uses is W119. `rulec source fetch` brings the copies — from e-Gov for a law, from the `url` for a file, and
+out of the document itself for a cited table —
 `rulec source pin` writes the pins, and `rulec source outdated` asks whether the original has
 moved on, which is the one question `check` cannot answer offline. For a law it asks e-Gov
 whether an amendment enforced after the date changes the text of a cited fragment (a revision
@@ -310,8 +320,9 @@ the pin: the answer is then that the bytes differ, which for a PDF or a spreadsh
 anything can say — and a page that changes its footer says it too. A commit is to a file what
 `asof` is to a law, and pinning one is what makes this question worth asking. `GITHUB_TOKEN`
 or `GH_TOKEN` is passed on when it is set; without one the API allows sixty requests an hour. The
-approver's page quotes the fragment's text under the definition that cites it, with the date the copy's
-text came into force and the amending law. Every generated file names the sources in its header
+approver's page quotes the fragment under the definition that cites it: an article as its text,
+with the date that text came into force and the amending law; a document's table as the table
+itself, beside the rows transcribed from it. Every generated file names the sources in its header
 (`Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
 them under `sources`, a file source carrying its `url` in both.
 

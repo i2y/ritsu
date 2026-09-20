@@ -872,8 +872,8 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも書けます。出典は `{}` で宣言した名前です。",
-                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`. The source is a name a `{}` line declares.",
+                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。出典は `{}` で宣言した名前です。",
+                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`, or by one of its tables, `@郵便 表1`. The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
             );
@@ -882,8 +882,8 @@ impl P {
             bad(self);
             return (head, None);
         };
-        // The places cited, if any: a `file` source is cited whole (`@郵便`) or with a word
-        // saying where in it (`@郵便 別紙1`); a law needs its article, which the check says.
+        // The places cited, if any: a `file` source is cited whole (`@郵便`) or by one of its
+        // tables (`@郵便 表1`); a law needs its article, which the check says.
         let mut fragments: Vec<String> = Vec::new();
         let mut k = 1;
         while k < rest.len() {
@@ -927,8 +927,8 @@ impl P {
             }
         }
         let shape = tr!(
-            "形は `{s} <名前> = {l} \"<法令ID>\" {a} <日付>` か `{s} <名前> = {f} \"<ファイル>\" [sha256:<ハッシュ>]` です。`{l}` の下には引用した箇所ごとに `  <箇所> sha256:<ハッシュ>` の行が並びます（`rulec source pin` が書きます）。",
-            "The shape is `{s} <name> = {l} \"<law id>\" {a} <date>` or `{s} <name> = {f} \"<file>\" [sha256:<digest>]`. Under `{l}`, one `  <fragment> sha256:<digest>` line per cited fragment (`rulec source pin` writes them).",
+            "形は `{s} <名前> = {l} \"<法令ID>\" {a} <日付>` か `{s} <名前> = {f} \"<ファイル>\" [sha256:<ハッシュ>]` です。その下には引用した箇所ごとに `  <箇所> sha256:<ハッシュ>` の行が並びます（法令なら `第91条`、文書なら `表1`。`rulec source pin` が書きます）。",
+            "The shape is `{s} <name> = {l} \"<law id>\" {a} <date>` or `{s} <name> = {f} \"<file>\" [sha256:<digest>]`. Under either, one `  <fragment> sha256:<digest>` line per cited fragment — an article for a law, a table for a document (`rulec source pin` writes them).",
             s = crate::kw::SOURCE,
             l = crate::kw::LAW,
             a = crate::kw::ASOF,

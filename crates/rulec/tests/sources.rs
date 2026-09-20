@@ -139,8 +139,9 @@ fn ページは引いた断片を引用する() {
     assert!(out.contains("| 軽減期間 | 定義 | `作成日 <= 2027-03-31` |  | 出典: 措置法 第91条 |"), "the define's citation is a note, not part of its expression");
 }
 
-/// A file beside the rule is cited whole (`@郵便`) or with a word saying where in it; a law
-/// is copied an article at a time, so a citation of a law without one is E037.
+/// A file beside the rule is cited whole (`@郵便`); a law is copied an article at a time, so a
+/// citation of a law without one is E037. A document's fragments are its tables, so a word
+/// that is not one (`別紙1`) is E037 too (§15.82).
 #[test]
 fn ファイルは丸ごと引用でき_法令は箇所が要る() {
     let d = scratch("whole");
@@ -149,11 +150,63 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
     let head = format!(
         "rule t(t) v1\n\nsource 郵便 = file \"料金表.txt\" sha256:{h}\nsource 措置法 = law \"332AC0000000026\" asof 2026-04-01\n  第91条 sha256:85faf53f6f6e8196\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n"
     );
-    let whole = format!("{head}table 表(t1)  @郵便\n| a | -> x |\n| - | true |\n\ntable 表2(t2)  @郵便 別紙1\n| a | -> y(y) : bool |\n| - | true |\n\ntable 表3(t3)  @措置法 第91条\n| a | -> z(z) : bool |\n| - | true |\n");
+    let whole = format!("{head}table 表(t1)  @郵便\n| a | -> x |\n| - | true |\n\ntable 表3(t3)  @措置法 第91条\n| a | -> z(z) : bool |\n| - | true |\n");
     let p = d.join("a.rule");
     assert!(codes(&whole, &p).iter().all(|c| c.starts_with('W')), "{:?}", codes(&whole, &p));
     let bare_law = format!("{head}table 表(t1)  @措置法\n| a | -> x |\n| - | true |\n");
     assert!(codes(&bare_law, &p).contains(&"E037".to_string()), "{:?}", codes(&bare_law, &p));
+    let odd = format!("{head}table 表(t1)  @郵便 別紙1\n| a | -> x |\n| - | true |\n");
+    let ds = rulec::check_source(&odd, &p.to_string_lossy());
+    let e = ds.iter().find(|x| x.code == "E037").expect("E037");
+    assert!(e.notes.iter().any(|n| n.contains("表3")), "the note says how a document's fragment is written: {:?}", e.notes);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A document's tables are fragments, held to their copies exactly as a law's articles are
+/// (§15.82): `fetch` takes them out of the document, `pin` writes their digests, `check`
+/// reads the copies and never the document, and `doc` quotes the table under the rows.
+#[test]
+fn 文書の表は断片として写され固定される() {
+    let d = scratch("fragments");
+    let doc = "# 料金表\n\n前書き。\n\n| あて先 | S60 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n";
+    std::fs::write(d.join("料金表.md"), doc).unwrap();
+    let rule = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\nenum あて先(dest) = 近畿(kinki) | 関東(kanto)\n\ninputs\n  あて先(dest) : あて先\n\noutputs\n  運賃(fee) : money[円]  round up(10円)\n\ntable 運賃表(fee_table)  @料金表 表1\n| あて先 | -> 運賃 |\n| 近畿   | 990円   |\n| 関東   | 880円   |\n";
+    let p = d.join("a.rule");
+    std::fs::write(&p, rule).unwrap();
+
+    // No copy yet: the digest of the document is not pinned (E037) and the table has not been
+    // taken out of it (E039). `check` says where to look; it does not read the document.
+    let cs = codes(rule, &p);
+    assert!(cs.contains(&"E037".to_string()) && cs.contains(&"E039".to_string()), "{cs:?}");
+
+    let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("表1") && out.contains("3") && out.contains("2"), "the report says the size of the table: {out}");
+    let tsv = std::fs::read_to_string(d.join("料金表.md.fragments/表1.tsv")).unwrap();
+    assert_eq!(tsv, "あて先\tS60\n近畿\t990円\n関東\t880円\n", "the copy is the table, one row per line");
+
+    let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let after = std::fs::read_to_string(&p).unwrap();
+    let pin = format!("  表1 sha256:{}", rulec::sha256::short(tsv.as_bytes()));
+    assert!(after.contains(&pin), "the fragment is pinned under the source line:\n{after}");
+    assert!(rulec::check_source(&after, &p.to_string_lossy()).iter().all(|x| x.code.starts_with('W')), "{after}");
+
+    // The table under the rows, for the approver.
+    let (c, out) = rulec(&d, &["doc", "a.rule", "--lang", "ja"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("出典: 料金表 表1（料金表.md"), "{out}");
+    assert!(out.contains("> | 近畿 | 990円 |"), "the fragment is quoted as the table it is:\n{out}");
+
+    // A price moves in the document: both the document and the table it holds are reported,
+    // and the row to reread is named.
+    std::fs::write(d.join("料金表.md"), doc.replace("880円", "900円")).unwrap();
+    let (c, _) = rulec(&d, &["source", "fetch", "a.rule"]);
+    assert_eq!(c, 0);
+    let ds = rulec::check_source(&after, &p.to_string_lossy());
+    let moved: Vec<&str> = ds.iter().filter(|x| x.code == "E038").map(|x| x.title.as_str()).collect();
+    assert_eq!(moved.len(), 2, "the document and the fragment both moved: {ds:?}");
+    assert!(ds.iter().any(|x| x.code == "E038" && x.notes.iter().any(|n| n.contains("運賃表"))), "{ds:?}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

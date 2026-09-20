@@ -1140,7 +1140,7 @@ Related codes: [E035](#e035), [E045](#e045)
 
 `error` — **A cited fragment is not pinned**
 
-**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). Without a pin, a revised copy passes check in silence (§15.68).
+**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). Without a pin, a revised copy passes check in silence (§15.68).
 
 **Fix.** Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest.
 
@@ -1209,9 +1209,9 @@ Related codes: [E037](#e037), [E039](#e039)
 
 `error` — **There is no copy of a source**
 
-**When.** The copy `sources/law/<law id>@<date>/<element>.xml` of a cited fragment is not beside the rule, or a `file` source cannot be read. check never reads the network, so without a copy there is nothing to compare.
+**When.** The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `<document>.fragments/表3.tsv` (`料金表.md.fragments/表3.tsv`) for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare.
 
-**Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, into the copies. Commit the copies.
+**Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies.
 
 **Smallest reproduction**:
 

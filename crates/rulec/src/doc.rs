@@ -728,10 +728,14 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
     let mut o = format!("{}\n\n", md_esc(&line));
     if quote {
         if let Some(d) = decl {
+            // A law's fragment is prose and its bars are escaped; a document's fragment is a
+            // table and is quoted as one, so that the approver reads the table and not its
+            // markup (§15.82).
+            let as_table = matches!(d.kind, SourceKind::File { .. });
             for frag in &c.fragments {
                 if let Some(text) = crate::sources::fragment_text(path, d, frag) {
                     for l in text.lines() {
-                        o.push_str(&format!("> {}\n", md_esc(l)));
+                        o.push_str(&format!("> {}\n", if as_table { l.to_string() } else { md_esc(l) }));
                     }
                     o.push('\n');
                 }
@@ -2387,14 +2391,25 @@ fn md_to_html(md: &str) -> String {
     // `> ` lines: the quoted text of a source fragment (§15.68).
     let mut quote: Vec<String> = Vec::new();
     fn flush_quote(o: &mut String, quote: &mut Vec<String>) {
-        if !quote.is_empty() {
-            o.push_str("<blockquote>\n");
+        if quote.is_empty() {
+            return;
+        }
+        o.push_str("<blockquote>\n");
+        // A document's fragment is a table, and is quoted as one (§15.82).
+        if quote.iter().all(|l| l.starts_with('|')) {
+            let mut rows: Vec<Vec<String>> = quote
+                .iter()
+                .filter(|l| !l.starts_with("|---"))
+                .map(|l| l.trim_matches('|').split('|').map(|c| c.trim().replace("\\|", "|")).collect())
+                .collect();
+            flush_table(o, &mut rows, &None);
+        } else {
             for l in quote.iter() {
                 o.push_str(&format!("<p>{}</p>\n", inline_html(l)));
             }
-            o.push_str("</blockquote>\n");
-            quote.clear();
         }
+        o.push_str("</blockquote>\n");
+        quote.clear();
     }
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut list: Vec<(usize, String)> = Vec::new();

@@ -134,11 +134,17 @@ A few shapes are worth knowing before the first draft:
   or define line says what it transcribes; `rulec source fetch` puts a copy of each cited
   fragment beside the rule and `rulec source pin` writes its digest under the `source` line.
   `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
-  and `doc` quotes the fragment under the definition. A document with no fragments is
+  and `doc` quotes the fragment under the definition. Any other document is
   `source 郵便 = file "…" sha256:…`, and a `url "…"` on it says where that copy came from, so
   `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a commit
   (`raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>`) the answer names the commits
-  that touched it, otherwise it can only say that the bytes differ.
+  that touched it, otherwise it can only say that the bytes differ. **A document's fragments
+  are its tables**: `@郵便 表1` cites the first table of the document in document order (a
+  sheet, in a workbook), `fetch` takes it out and writes it beside the document as
+  `<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and from there it is pinned, checked and quoted exactly as a
+  law's article is. Cite the table the rows came from and a revision that moves it fails the
+  check, naming the rows to reread. The formats read are csv, md and xlsx; a PDF is cited
+  whole until there is an extractor to plug in.
 
 - **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
   sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with

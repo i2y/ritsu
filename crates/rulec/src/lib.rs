@@ -30,6 +30,7 @@ pub mod eval;
 pub mod fixtures;
 pub mod fmt;
 pub mod i18n;
+pub mod extract;
 pub mod import;
 pub mod codegen;
 pub mod codes;

@@ -295,11 +295,11 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、何がいつ変えたかまで言う）",
-                "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
+                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から、引いている表は文書そのものから取り出して）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、何がいつ変えたかまで言う）",
+                "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url, a cited table out of the document itself — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
             ),
             params: vec![
-                ("fetch|pin|outdated", tr!("fetch と outdated は通信する（curl を呼ぶ）。pin は規則ファイルのハッシュの行だけを書き換える", "fetch and outdated read the network (through curl); pin rewrites only the pin lines of the rule file")),
+                ("fetch|pin|outdated", tr!("fetch と outdated は通信する（curl を呼ぶ）。引いている表を文書から取り出すのも fetch で、check は文書を読み解かない。pin は規則ファイルのハッシュの行だけを書き換える", "fetch and outdated read the network (through curl); fetch is also where a cited table is taken out of a document, since check never reads one; pin rewrites only the pin lines of the rule file")),
                 ("<file.rule>", tr!("`source` の宣言と `@` の引用を持つ規則", "a rule with `source` lines and `@` citations")),
             ],
             flags: vec![],

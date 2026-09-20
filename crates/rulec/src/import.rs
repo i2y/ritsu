@@ -59,7 +59,7 @@ fn classify(raw: &str) -> Cell {
 }
 
 /// RFC 4180, near enough: quotes, doubled quotes inside them, commas, CRLF, a BOM.
-fn parse_csv(src: &str) -> Vec<Vec<String>> {
+pub(crate) fn parse_csv(src: &str) -> Vec<Vec<String>> {
     let src = src.strip_prefix('\u{feff}').unwrap_or(src);
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut row: Vec<String> = Vec::new();

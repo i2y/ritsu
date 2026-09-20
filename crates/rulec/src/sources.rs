@@ -272,6 +272,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
         match &d.kind {
             SourceKind::File { path, hash, .. } => {
                 let p = dir.join(path);
+                let cited = cited_from(&cites, name);
                 let Ok(bytes) = std::fs::read(&p) else {
                     out.push(
                         Diag::error("E039", tr!("出典 `{name}` の写し `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
@@ -306,6 +307,72 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                     ),
                     _ => {}
                 }
+                // The fragments of a document are held to their copies as a law's are
+                // (§15.82): the document itself is pinned above, each cited table beside it.
+                let cdir = crate::extract::copy_dir(&p);
+                for (frag, whos) in &cited {
+                    // A document may be cited whole — a law is told it cannot be.
+                    if frag.is_empty() {
+                        continue;
+                    }
+                    if crate::extract::fragment(frag).is_none() {
+                        out.push(
+                            Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
+                                .at(at(d.span.line, name))
+                                .mark(d.span.clone(), "")
+                                .note(tr!("文書の断片は表で、`表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `表3` (the third table in document order) or `table3`. Naming a heading is not read yet."))
+                                .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
+                        );
+                        continue;
+                    }
+                    let fp = cdir.join(crate::extract::fragment_file(frag));
+                    let Ok(fb) = std::fs::read(&fp) else {
+                        // Which of the two it is, the extension already says: a format with no
+                        // reader here will never have a copy, and the rule should cite the
+                        // document whole until there is an extractor to plug in (§15.82).
+                        let how = match crate::extract::unreadable(&p) {
+                            Some(why) => tr!(
+                                "{why}。抽出器を繋げるまでは、この文書は `@{name}` と丸ごと引いてください。",
+                                "{why}. Until an extractor can be plugged in, cite this document whole: `@{name}`."
+                            ),
+                            None => tr!(
+                                "`rulec source fetch {rule_path}` が文書から取り出して隣に置きます。check は文書を読み解きません。",
+                                "`rulec source fetch {rule_path}` takes it out of the document and puts it beside it. check does not read the document itself."
+                            ),
+                        };
+                        out.push(
+                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
+                                .at(at(d.span.line, name))
+                                .mark(d.span.clone(), "")
+                                .note(tr!("探した先: {}", "Looked for: {}", fp.display()))
+                                .note(how)
+                                .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
+                        );
+                        continue;
+                    };
+                    let fh = crate::sha256::short(&fb);
+                    match d.pins.iter().find(|p| p.fragment == *frag) {
+                        None => out.push(
+                            Diag::error("E037", tr!("出典 `{name}` の `{frag}` のハッシュが固定されていません", "Fragment `{frag}` of source `{name}` is not pinned"))
+                                .at(at(d.span.line, name))
+                                .mark(d.span.clone(), "")
+                                .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos)))
+                                .note(tr!("写しのハッシュは sha256:{fh} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{fh}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
+                                .fix(crate::diag::FixKind::PinSource, pin_line(frag, &fh)),
+                        ),
+                        Some(pin) if pin.hash != fh => out.push(
+                            Diag::error("E038", tr!("出典 `{name}` の `{frag}` が変わっています", "Fragment `{frag}` of source `{name}` has changed"))
+                                .at(at(pin.span.line, name))
+                                .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
+                                .note(tr!("いまの写し: sha256:{fh}", "The copy now: sha256:{fh}"))
+                                .note(tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(whos)))
+                                .note(tr!("写しの差分（{}）を読み、写した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", fp.display()))
+                                .fix(crate::diag::FixKind::PinSource, pin_line(frag, &fh)),
+                        ),
+                        _ => {}
+                    }
+                }
+                unused_pins(d, &cited, name, rule_path, &mut out);
             }
             SourceKind::Law { id, asof } => {
                 let cdir = copy_dir(rule_path, id, asof);
@@ -365,31 +432,48 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         _ => {}
                     }
                 }
-                for pin in &d.pins {
-                    if !cited.iter().any(|(frag, _)| *frag == pin.fragment) {
-                        out.push(
-                            Diag::warning("W119", tr!("出典 `{name}` の `{}` はハッシュが固定されていますが、引用されていません", "Fragment `{}` of source `{name}` is pinned but not cited", pin.fragment))
-                                .at(at(pin.span.line, name))
-                                .mark(pin.span.clone(), "")
-                                .note(tr!("引用を消したあとの残りです。`rulec source pin` が消します。", "It is what remains after a citation was removed. `rulec source pin` removes it.")),
-                        );
-                    }
-                }
+                unused_pins(d, &cited, name, rule_path, &mut out);
             }
         }
     }
     out
 }
 
-/// The text of a fragment's copy, for the approver's page: the XML with its tags removed,
-/// one line per paragraph, item or table row.
+/// W119: a pin whose citation is gone. The same for a law's articles and a document's tables.
+fn unused_pins(d: &SourceDecl, cited: &[(String, Vec<&str>)], name: &str, rule_path: &str, out: &mut Vec<Diag>) {
+    let at = |line: usize| tr!("{rule_path}:{line} 出典 {name}", "{rule_path}:{line} source {name}");
+    for pin in &d.pins {
+        if !cited.iter().any(|(frag, _)| *frag == pin.fragment) {
+            out.push(
+                Diag::warning("W119", tr!("出典 `{name}` の `{}` はハッシュが固定されていますが、引用されていません", "Fragment `{}` of source `{name}` is pinned but not cited", pin.fragment))
+                    .at(at(pin.span.line))
+                    .mark(pin.span.clone(), "")
+                    .note(tr!("引用を消したあとの残りです。`rulec source pin` が消します。", "It is what remains after a citation was removed. `rulec source pin` removes it.")),
+            );
+        }
+    }
+}
+
+/// A fragment's copy as the approver's page quotes it: an article as its text, the XML with
+/// its tags removed and one line per paragraph, item or table row; a document's table as a
+/// Markdown table (§15.82).
 pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<String> {
-    let SourceKind::Law { id, asof } = &d.kind else { return None };
-    let fr = fragment(frag)?;
     // A source inherited through an `apply` keeps its copies beside the rule it came from.
     let base = d.base.as_deref().unwrap_or(rule_path);
-    let xml = std::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
-    Some(xml_text(&xml))
+    match &d.kind {
+        SourceKind::Law { id, asof } => {
+            let fr = fragment(frag)?;
+            let xml = std::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
+            Some(xml_text(&xml))
+        }
+        // A document's fragment is a table, and it is quoted as one (§15.82).
+        SourceKind::File { path, .. } => {
+            crate::extract::fragment(frag)?;
+            let doc = Path::new(base).parent().unwrap_or(Path::new(".")).join(path);
+            let tsv = std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
+            Some(crate::extract::markdown(&crate::extract::from_tsv(&tsv)))
+        }
+    }
 }
 
 /// Whether two copies of a fragment say the same thing: the text, not the markup. e-Gov
@@ -766,6 +850,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         if d.base.is_some() {
             continue;
         }
+        let p = dir.join(path);
         let Some(url) = url else {
             lines.push(tr!(
                 "{}: `url` が無いので取り直せません（`{} \"…\"` を足すと取り直せます）",
@@ -773,10 +858,12 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 d.name.text,
                 crate::kw::URL
             ));
+            // A document handed over by a person has no address, but it is here, and the
+            // tables the rule cites still have to come out of it (§15.82).
+            changed |= fragments(d, &p, &cites, &mut lines)?;
             continue;
         };
         let body = curl(url)?;
-        let p = dir.join(path);
         let before = std::fs::read(&p).ok();
         let same = before.as_deref() == Some(body.as_slice());
         if !same {
@@ -804,8 +891,78 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 "  this URL names a branch; one that names a commit answers with the same copy next year"
             ));
         }
+        changed |= fragments(d, &p, &cites, &mut lines)?;
     }
     Ok(Outcome { lines, changed })
+}
+
+/// The tables a rule cites from a document, taken out of it and written beside it as copies
+/// (§15.82). It happens here and never in `check`, which is what lets the extractor be slow,
+/// or remote, or not a program at all: what is checked afterwards is the copy.
+fn fragments(
+    d: &SourceDecl,
+    doc: &Path,
+    cites: &[(String, String, String, Span)],
+    lines: &mut Vec<String>,
+) -> Result<bool, String> {
+    let name = &d.name.text;
+    let frags: Vec<String> =
+        cited_from(cites, name).into_iter().map(|(f, _)| f).filter(|f| !f.is_empty()).collect();
+    if frags.is_empty() {
+        return Ok(false);
+    }
+    // A document that cannot be read, or a format with no reader here, is one source's
+    // problem and is said as one line: the other sources of the rule still get their copies.
+    let tables = match std::fs::read(doc).map_err(|e| e.to_string()).and_then(|b| crate::extract::tables(doc, &b)) {
+        Ok(ts) => ts,
+        Err(why) => {
+            lines.push(format!("{name}: {why}"));
+            return Ok(false);
+        }
+    };
+    let cdir = crate::extract::copy_dir(doc);
+    let mut changed = false;
+    for frag in frags {
+        let Some(n) = crate::extract::fragment(&frag) else {
+            lines.push(tr!(
+                "{name}: 引用箇所 `{frag}` の書き方が読めません（`表3` の形です）",
+                "{name}: the fragment `{frag}` cannot be read (the form is `表3`)"
+            ));
+            continue;
+        };
+        let Some(g) = tables.get(n - 1).filter(|g| !g.is_empty()) else {
+            lines.push(tr!(
+                "{name}: {frag} がありません。この文書にある表は {} 個です",
+                "{name}: there is no {frag}; the document has {} tables",
+                tables.len()
+            ));
+            continue;
+        };
+        let text = crate::extract::tsv(g);
+        std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", cdir.display()))?;
+        let fp = cdir.join(crate::extract::fragment_file(&frag));
+        let before = std::fs::read_to_string(&fp).ok();
+        if before.as_deref() != Some(text.as_str()) {
+            std::fs::write(&fp, &text).map_err(|e| format!("{}: {e}", fp.display()))?;
+        }
+        let h = crate::sha256::short(text.as_bytes());
+        let (rows, cols) = (g.len(), g.iter().map(|r| r.len()).max().unwrap_or(0));
+        lines.push(match before {
+            None => tr!(
+                "{name}: {frag} を取り出しました（{rows} 行 × {cols} 列、sha256:{h}）",
+                "{name}: took out {frag} ({rows} rows by {cols} columns, sha256:{h})"
+            ),
+            Some(b) if b == text => tr!("{name}: {frag} は変わっていません（sha256:{h}）", "{name}: {frag} is unchanged (sha256:{h})"),
+            Some(_) => {
+                changed = true;
+                tr!(
+                    "{name}: {frag} が変わりました（いま sha256:{h}）。引いている行を読み直し、`rulec source pin` で承認してください",
+                    "{name}: {frag} changed (now sha256:{h}); reread the rows that cite it, then approve it with `rulec source pin`"
+                )
+            }
+        });
+    }
+    Ok(changed)
 }
 
 /// `rulec source pin`: rewrite the pins from the copies — the fragments cited, in order, each
@@ -834,12 +991,37 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
         }
         match &d.kind {
             SourceKind::File { path, hash, .. } => {
-                let bytes = std::fs::read(dir.join(path)).map_err(|e| format!("{path}: {e}"))?;
+                let p = dir.join(path);
+                let bytes = std::fs::read(&p).map_err(|e| format!("{path}: {e}"))?;
                 let h = crate::sha256::short(&bytes);
                 if hash.as_deref() != Some(h.as_str()) {
                     let line = lines.get(d.span.line - 1).copied().unwrap_or("");
                     edits.push((d.span.line - 1, 1, vec![set_hash(line, &h)]));
                     report.push(tr!("{}: sha256:{h} を固定しました", "{}: pinned sha256:{h}", d.name.text));
+                }
+                // The tables cited from the document, each pinned at its copy (§15.82). The
+                // document's own digest stays on the line above: the copy is a step away
+                // from it, and a step that an extractor may take differently.
+                let cdir = crate::extract::copy_dir(&p);
+                let mut new_pins: Vec<String> = Vec::new();
+                for (frag, _) in cited_from(&cites, &d.name.text) {
+                    if frag.is_empty() || crate::extract::fragment(&frag).is_none() {
+                        continue;
+                    }
+                    match std::fs::read(cdir.join(crate::extract::fragment_file(&frag))) {
+                        Ok(bytes) => new_pins.push(pin_line(&frag, &crate::sha256::short(&bytes))),
+                        Err(_) => {
+                            if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
+                                new_pins.push(pin_line(&frag, &p.hash));
+                            }
+                            report.push(tr!("{}: {frag} の写しがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
+                        }
+                    }
+                }
+                let old: Vec<String> = d.pins.iter().map(|p| pin_line(&p.fragment, &p.hash)).collect();
+                if old != new_pins {
+                    edits.push((d.span.line, d.pins.len(), new_pins.clone()));
+                    report.push(tr!("{}: {} 箇所のハッシュを固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
                 }
             }
             SourceKind::Law { id, asof } => {
@@ -1048,9 +1230,16 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                     }
                 }
                 if !newest.is_empty() {
+                    // Which of the cited tables the newer copy moved. One more request, only
+                    // when the path was touched, and only to say it more precisely; a failure
+                    // here leaves the answer above standing.
+                    let raw = format!("https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}");
+                    if let Ok(body) = curl(&raw) {
+                        lines.extend(fragment_lines(moved_fragments(d, path, &body, &cites)));
+                    }
                     lines.push(tr!(
-                        "  引いている行を読み直してから、`{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"` に固定し直し、`rulec source fetch` と `rulec source pin` を走らせてください",
-                        "  once the rows are reread, repin it at `{} \"https://raw.githubusercontent.com/{owner}/{repo}/{newest}/{p}\"`, then `rulec source fetch` and `rulec source pin`",
+                        "  引いている行を読み直してから、`{} \"{raw}\"` に固定し直し、`rulec source fetch` と `rulec source pin` を走らせてください",
+                        "  once the rows are reread, repin it at `{} \"{raw}\"`, then `rulec source fetch` and `rulec source pin`",
                         crate::kw::URL
                     ));
                 }
@@ -1075,7 +1264,12 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                             "{name}: 元の文書が変わっています（固定: sha256:{b}、いま: sha256:{now}）。`rulec source fetch` で取り直し、引いている行を読み直してから `rulec source pin` で承認してください",
                             "{name}: the original has changed (pinned: sha256:{b}, now: sha256:{now}); bring it again with `rulec source fetch`, reread the rows, then `rulec source pin`"
                         ));
-                        if opaque(path) {
+                        let moved = moved_fragments(d, path, &body, &cites);
+                        let told = moved.is_some();
+                        lines.extend(fragment_lines(moved));
+                        // A format nothing here can read is a format nothing here can diff —
+                        // unless the rule cites tables out of it, which were just compared.
+                        if opaque(path) && !told {
                             lines.push(tr!(
                                 "  この形式では中身の差分を取れないので、変わったということしか言えません",
                                 "  nothing here can diff this format, so all it can say is that it changed"
@@ -1111,6 +1305,51 @@ fn urlq(s: &str) -> String {
 fn opaque(path: &str) -> bool {
     let p = path.to_ascii_lowercase();
     [".pdf", ".xlsx", ".xls", ".docx", ".doc", ".zip", ".png", ".jpg"].iter().any(|e| p.ends_with(e))
+}
+
+/// Which of the cited tables differ in a newer copy of a document, and which do not: the
+/// question `outdated` could not ask of a file before, when all it could say was that the
+/// bytes had moved (§15.82). An empty answer with fragments cited means the document changed
+/// somewhere the rule does not transcribe — which is worth saying out loud.
+fn moved_fragments(
+    d: &SourceDecl,
+    path: &str,
+    body: &[u8],
+    cites: &[(String, String, String, Span)],
+) -> Option<Vec<String>> {
+    let frags: Vec<String> =
+        cited_from(cites, &d.name.text).into_iter().map(|(f, _)| f).filter(|f| !f.is_empty()).collect();
+    if frags.is_empty() {
+        return None;
+    }
+    let tables = crate::extract::tables(Path::new(path), body).ok()?;
+    let mut out = Vec::new();
+    for frag in frags {
+        let Some(n) = crate::extract::fragment(&frag) else { continue };
+        let now = tables.get(n - 1).map(|g| crate::sha256::short(crate::extract::tsv(g).as_bytes()));
+        let pinned = d.pins.iter().find(|p| p.fragment == frag).map(|p| p.hash.clone());
+        if now.is_none() || now != pinned {
+            out.push(frag);
+        }
+    }
+    Some(out)
+}
+
+/// What `outdated` says about the cited tables of a document that moved.
+fn fragment_lines(moved: Option<Vec<String>>) -> Vec<String> {
+    let sep = if crate::i18n::ja() { "、" } else { ", " };
+    match moved {
+        None => Vec::new(),
+        Some(fs) if fs.is_empty() => vec![tr!(
+            "  引いている表は変わっていません。動いたのは、この規則が写していないところです",
+            "  the tables it cites are unchanged: what moved is somewhere this rule does not transcribe"
+        )],
+        Some(fs) => vec![tr!(
+            "  引いている表のうち {} が変わります。読み直すのはその表を引いている行だけです",
+            "  of the tables it cites, {} changed; the rows that cite them are all there is to reread",
+            fs.join(sep)
+        )],
+    }
 }
 
 #[cfg(test)]
