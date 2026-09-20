@@ -159,8 +159,8 @@ Putting it in CI is on the [install page](install.md#in-ci). `outdated` exits 1 
 
 An internal policy, the terms or the tariff of your own service, a spreadsheet someone keeps, code that already runs. The rule is not public, but it is decided and in force, and you want code that does the same. The lead role here is the **comparison**: unlike a statute, the document cannot be fetched again, so it is pinned whole by its digest; and where an implementation or past records exist, the table is held to them and every mismatch comes back by row.
 
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal.svg#only-dark)
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document is cited with @ and pinned whole by its digest. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal-light.svg#only-light)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal.svg#only-dark)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal-light.svg#only-light)
 
 ### 2-1. Start from what you have
 
@@ -194,12 +194,12 @@ A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article)
 
 Who: the agent. rulec notices a replaced document
 
-It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@規約`, or `@規約 別紙1` to say where in it.
+It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@規約`, or — to say **which table of the document was transcribed** — as `@規約 表1`.
 
 ```rule
-source 規約 = file "配送規約.txt"
+source 規約 = file "配送規約.md"
 
-table 基本送料(base_fee)  @規約 別紙1
+table 基本送料(base_fee)  @規約 表1
 policy unique
 | 届け先      | 重量    | -> 基本送料 : money[円, incl_tax] |
 | 遠隔地      | <=2000g | 1200円                            |
@@ -208,12 +208,19 @@ policy unique
 | not: 遠隔地 | >2000g  | 1100円                            |
 ```
 
+Citing a table makes `rulec source fetch` take that table out of the document and write it beside it. A sheet is a table in a workbook (`.xlsx`), a `w:tbl` in a Word file (`.docx`), and what it looks like in Markdown and CSV. A PDF or a scan cannot be read here: hand an extractor (docling and the like) to `--via`, or cite the document whole as `@規約`.
+
 ```console
+$ rulec source fetch rules/shipping_fee.rule
+規約: took out 表1 (3 rows by 3 columns, sha256:c846fef7727dd6e0)
 $ rulec source pin rules/shipping_fee.rule
-規約: pinned sha256:a4b42e3e6c346e56
+規約: pinned sha256:d1156fa90a72194c
+規約: pinned 1 fragments
 ```
 
-When the document is replaced, `check` stops with E038 and names the tables that cite it. There is no `outdated` for a file, the way there is for a statute: whether the file changed is known on the spot, from its digest.
+From here on, **an amount in the table has to be a value the copy shows**, which is what catches a mistyped digit.
+
+When the document is replaced, `check` stops with E038 and names the tables that cite it; whether the file changed is known on the spot, from its digest. With a `url "…"` on it, `rulec source outdated` asks where it came from, and says whether a cited table moved or only something this rule does not transcribe.
 
 ```console
 $ rulec check rules/shipping_fee.rule
@@ -228,7 +235,26 @@ error[E038]: The copy of source `規約` has changed
  Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy.
 ```
 
-The approver's page writes "Source: 規約 別紙1 (配送規約.txt, sha256:a4b42e3e6c346e56)" under the table's heading.
+A mistyped digit looks like this. `1100円` written as `1000円` sits on the rounding grid, leaves no gap and overlaps nothing: every other check stays green and these two are what fail.
+
+```console
+$ rulec check rules/shipping_fee.rule
+error[E116]: The amount of row 4 is not in the copy it cites
+  --> rules/shipping_fee.rule:24 table 基本送料 row 4
+   |
+24 | | not: 遠隔地 | >2000g  | 1000円      |
+   |                           ^^^^^^ not in the copy: 1000円
+   |
+ The copy cited: 規約 表1
+ An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. …
+
+warning[W120]: The copy of 表1 states values no row uses
+ Stated in the copy, used by no row: 1100円
+```
+
+The two name both halves of the same slip. W120 also catches **a row that was never transcribed** — the completeness check cannot, because the inputs of a dropped row fall into one of the rows that remain.
+
+The approver's page quotes the copy under the table's heading — "Source: 規約 表1 (配送規約.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (規約 表1) shows (E116)*. The source table above, the rule's table below, and that line between them.
 
 ### 2-3. Hold it to the code that runs today
 

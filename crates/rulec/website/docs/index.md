@@ -185,7 +185,7 @@ to another case sits on top of it. Each of those has its own way of being writte
 | **A main rule and an exception that takes precedence** (the stamp duty table and the reduced rate in the Special Taxation Measures Act) | two tables, with one line on the exception: `overrides 本則` |
 | **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
 | **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
-| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@法 第91条` at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it |
+| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@法 第91条` — or `@規約 表1` for a tariff sheet or a company rule — at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it; cite a table and **an amount that is not in that copy fails too** |
 
 The checks judge completeness and overlaps over the main rule and its exceptions together,
 and for an applied rule they prove that what this rule passes stays inside the applied
@@ -382,16 +382,20 @@ so rather than passing.
 
 When several tables define one output — a main rule and its exceptions — they go through
 these checks **as one table**, and an overlap with no precedence written stops. A rule that
-cites a statute is also held to the digests of its copies, and a rule applied to another
+cites a statute or a tariff sheet is also held to the digests of its copies — and, where it
+cites a table, to **the amounts that table shows** (E116, W120) — and a rule applied to another
 case to the applied rule's ranges.
 
 ### What is *not* proved
 
 Worth saying in the same breath.
 
-1. **That the table matches reality.** Transcribe the tariff wrong and
-   everything stays green. What gets proved is what can be said about
-   the table you wrote.
+1. **That the table matches reality.** What gets proved is what can be
+   said about the table you wrote. Cite the document a table came from
+   (`@source 表1`) and a mistyped amount does fail (E116, W120) — but
+   even then what is shown is agreement with the copy, not with the
+   world. With no citation, transcribe the tariff wrong and everything
+   stays green.
 2. **That the generated code answers like the table.** That is a
    **test**, not a proof: vectors built from the boundaries are fed to
    the reference evaluator and to every generated language and compared

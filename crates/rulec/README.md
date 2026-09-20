@@ -41,8 +41,11 @@ space rather than sampled.
 
 What is **not** proved matters just as much.
 
-1. **That the table matches reality.** Transcribe the tariff wrong and everything stays
-   green. What is proved is only what can be said about the table as written.
+1. **That the table matches reality.** What is proved is only what can be said about the
+   table as written. Cite the document a table was transcribed from (`@source 表1`) and an
+   amount that disagrees with the copy does fail (E116, W120) — but even then what is shown is
+   agreement with the copy, not with the world. With no citation, transcribe the tariff wrong
+   and everything stays green.
 2. **That the generated code answers like the table.** That is a *test*, not a proof: test
    cases built from the boundaries are run through the reference evaluator and every
    generated language, and compared byte for byte. Strong evidence, not an equivalence
@@ -73,7 +76,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](https://i2y.github.io/rulec/checks/) |
+| **a spreadsheet or a published policy** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it — and with the document cited (`@source 表1`), a mistyped amount comes back too | `rulec import xlsx`, then `rulec check` — [What it proves](https://i2y.github.io/rulec/checks/) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](https://i2y.github.io/rulec/compare/) |
 
@@ -387,7 +390,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 | | |
 |---|---|
-| **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it; a main rule and its exceptions checked as one set, a statute's text pinned to its copy, a rule applied to another case held to the applied rule's ranges |
+| **the checker** | completeness, overlap, unreachable rows, units, rounding, overflow, examples — each with the input that causes it; a main rule and its exceptions checked as one set, a statute's text pinned to its copy, a transcribed table held to the amounts that copy shows, a rule applied to another case held to the applied rule's ranges |
 | **the generators** | Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy, with the agreement between the reference evaluator and every generated language checked byte for byte on canonical JSON, the rows that matched included. The test cases are built from the boundaries, and a separate judge checks that the set of them meets three coverage criteria |
 | **`verify`** | stand the legacy implementation up as a process and see whether it answers the same |
 | **`replay`** | validate past records, replay them, diff two versions, write the Markdown for a pull request |

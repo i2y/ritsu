@@ -47,6 +47,24 @@ reads the network: `rulec source fetch` brings the copies, `rulec source pin` wr
 and, for a statute, `rulec source outdated` asks e-Gov, the Japanese government's statute
 database, whether a later amendment changes the text of a cited fragment.
 
+**What is cited from a document is a table.** For a tariff sheet or a company rule, `@source
+表1` takes that table out of the document, writes it beside it, and holds the rule to that copy
+ever after (a sheet in a workbook, a table in a Word file, what it looks like in Markdown and
+CSV; for a PDF or a scan, hand an extractor to `--via`). That is where **one more check** comes
+in.
+
+- **E116** — an amount a row writes is nowhere in the copy it cites. This is the error no
+  check of the table alone can reach: `1100円` written as `1000円` sits on the rounding grid,
+  leaves no gap and overlaps nothing.
+- **W120** — a number the copy states as a whole cell is used by no row, which is what **a row
+  that was never transcribed** looks like. Completeness cannot see it: the inputs of a dropped
+  row fall into one of the rows that remain.
+
+Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで`
+becomes `<=1949000円`) and an amount is not. The approver's page quotes the copy under the
+table and adds a line to what was verified: every amount in this table is a value the copy
+shows.
+
 A rule that applies another (`apply`, the way a statute applies one provision to another case
 with its terms read differently) is held to the applied rule's digest (E040), has to substitute
 every input of the applied rule (E041) with agreeing types (E042), and has to keep what it
@@ -80,8 +98,11 @@ mix; every intermediate fits in int64. Those five are shown exhaustively — not
 
 Three things it does **not** prove, and they are kept beside the word:
 
-1. **That the table matches reality.** Transcribe the tariff wrong and everything stays green.
-   What is proved is what can be said about the table *as written*
+1. **That the table matches reality.** What is proved is what can be said about the table *as
+   written*. Cite the document a table was transcribed from (`@source 表1`) and an amount that
+   disagrees with the copy does fail (E116, W120) — but even then what is shown is agreement
+   with the copy, not with the world. With no citation, transcribe the tariff wrong and
+   everything stays green
 2. **That the generated code answers like the table.** That is a *test*: cases built from the
    boundaries run through the reference evaluator and every generated language, compared byte
    for byte. Strong evidence, not an equivalence proof

@@ -340,6 +340,7 @@ EXAMPLES = [
             "**健康保険料と同じ形です。** 表が 50 等級から 32 等級になり、上限が 650,000 円になるだけで、折半と二つの端数処理はそのままです。同じ形の規則は、同じ形に写せます。",
             "**この表では二つの端数処理が同じ答えになります。** 18.3% × 標準報酬月額は必ず偶数の円なので、折半額に端数が出ません。規則には二つの丸め方が書いてありますが、この料率では表に現れない、ということまで `examples` が示しています。",
             "**印刷された 32 等級すべてと突き合わせてあります。** 表の折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、全件一致することをテストが確かめます。",
+            "**写し元の Excel に縛ってあります。** `source` が日本年金機構の保険料額表（`.xlsx`）そのものを指し、`@機構 表1` がその一枚目のシートを引きます。`rulec source fetch` がシートを取り出して規則の隣に置き、以後 `rulec check` は、**この表の 32 個の標準報酬月額がその写しに出てくる値であること**を確かめます（E116）。`470000円` を `480000円` と写せば、刻みにも載っていて抜けも重なりもないのに、そこだけが落ちます。",
         ],
         "The employees' pension grade table",
         "The premium table for employees' pension from 日本年金機構 (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.",
@@ -347,6 +348,7 @@ EXAMPLES = [
             "**The same shape as the health-insurance rule.** Fifty grades become thirty-two and the ceiling is 650,000 yen; the halving and the two ways of settling the sen are unchanged. Rules of one shape transcribe into rules of one shape.",
             "**Here the two ways agree.** 18.3% of a standard remuneration is always an even number of yen, so the half has no fraction. The rule states both roundings; the `examples` show that at this rate the difference never appears.",
             "**All 32 printed grades are held to the rule.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over them and requires every one to agree.",
+            "**And the table is held to the workbook it came from.** The `source` line points at 日本年金機構's own `.xlsx` and `@機構 表1` cites its first sheet; `rulec source fetch` takes that sheet out and keeps it beside the rule, and every `rulec check` then requires **each of the 32 standard remunerations to be a value that copy shows** (E116). Write `470000円` as `480000円` and it fails there alone — on the rounding grid, no gap, no overlap.",
         ],
     ),
     (
