@@ -133,6 +133,14 @@ jobs:
           wasmtime --version && psql --version
           psql -c 'select version()'
 
+      # `website/docs-ja/` is half copied in by sync.sh and gitignored — the Japanese
+      # pages share the English diagrams rather than keeping a second copy. The link
+      # test walks those pages, so on a fresh checkout it looks at a tree that is not
+      # there yet. `docs.yml` runs sync.sh as part of build.sh; this job has to as
+      # well (DESIGN §15.94).
+      - name: Copy in the documents the site shares
+        run: ./website/sync.sh
+
       - name: cargo test
         run: cargo test --locked
 
