@@ -96,7 +96,14 @@ What `rulec check` proves is not a shape but a **property of the table**: every 
 declared range matches some row; no input matches two; every row can be reached; units never
 mix; every intermediate fits in int64. Those five are shown exhaustively — not sampled.
 
-Three things it does **not** prove, and they are kept beside the word:
+**Why it can be exhaustive at all.** A cell only ever tests its own column (`<=2000g` is the
+weight column, `遠隔地` the destination column), so a row is the product of its columns'
+conditions — one box of the input space — and a numeric column only has to be cut where the
+table itself cuts it. The declared range therefore falls into a **finite number of boxes**, and
+looking at all of them terminates. The cell language is kept narrow to keep that true. Nothing
+is waved through when it does not terminate either: over the budget, E109 stops.
+
+Four things it does **not** prove, and they are kept beside the word:
 
 1. **That the table matches reality.** What is proved is what can be said about the table *as
    written*. Cite the document a table was transcribed from (`@source 表1`) and an amount that
@@ -106,7 +113,13 @@ Three things it does **not** prove, and they are kept beside the word:
 2. **That the generated code answers like the table.** That is a *test*: cases built from the
    boundaries run through the reference evaluator and every generated language, compared byte
    for byte. Strong evidence, not an equivalence proof
-3. **The row pairs W114 could not settle.** Those move to a guard at run time
+3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
+   do not overlap" is not always provable, and the pairs where it was not are always named
+4. **That the checker itself is right.** The five above come out of rulec's own implementation,
+   and that implementation has not been proved correct. The evidence is 35 deliberately broken
+   rules (`tests/mutants/`) each producing the diagnostic it should, 28 rules transcribed from
+   real published terms passing on every commit, and the reference evaluator agreeing with
+   twelve languages. **Evidence, not proof**
 
 ## Reading a diagnostic
 

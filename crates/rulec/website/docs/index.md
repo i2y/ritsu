@@ -509,6 +509,11 @@ Worth saying in the same breath.
    that none exists can be constructed, **W114 names the pair and the
    obligation moves to a runtime guard**. That one spot has no static
    proof — instead of silently picking a row, the generated code raises.
+4. **That the checker itself is right.** The proofs above come out of
+   rulec's own implementation, which has not itself been proved
+   correct. The evidence is 35 deliberately broken rules each producing
+   the diagnostic it should, and 28 rules transcribed from real
+   published terms passing on every commit. **Evidence, not proof.**
 
 [What it proves, in detail](checks.md){ .md-button }
 

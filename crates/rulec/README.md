@@ -54,6 +54,10 @@ What is **not** proved matters just as much.
    rows nor its impossibility could be constructed, **W114 names the pair and moves the
    check into a runtime guard** — the one place with no static proof. It returns an error
    rather than silently picking a side.
+4. **That the checker itself is right.** The proofs above come out of rulec's own
+   implementation, which has not itself been proved correct. The evidence is 35 deliberately
+   broken rules each producing the diagnostic it should, and 28 rules transcribed from real
+   published terms checked, generated and run on every commit. Evidence, not proof.
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 
