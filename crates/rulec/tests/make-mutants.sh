@@ -4,10 +4,16 @@
 #
 # Lines are identified by content alone. Depending on whitespace would make the substitution miss
 # silently the moment `rulec fmt` changes a column width, turning a mutant into an "unbroken file".
+#
+# The files it writes are committed, like the diagrams and the playground's wasm, and like them
+# they are a build product: `変異はコーパスから作り直せる` in tests/m0.rs re-runs this into a
+# temporary directory and holds the committed copies to it, so a corpus rule that moves on
+# leaves a failing test rather than a mutant that is quietly no longer that rule with one
+# seeded error. `$1` is where to write, for that test.
 set -eu
 cd "$(dirname "$0")/.."
 C=tests/corpus
-M=tests/mutants
+M=${1:-tests/mutants}
 mkdir -p "$M"
 y="$C/ゆうパック運賃.rule"
 k="$C/クーポン割引.rule"
@@ -139,5 +145,40 @@ awk '{ print } /^result /{ print "result 送料 = 送料" }'                 "$C
 # interval of the derived value was computed before the diagnostic, and a divisor whose
 # range contains zero asserted its way out of the process.
 awk '{ sub(/税込金額 ÷ 100円/, "税込金額 ÷ 税込金額"); print }'            "$C/ポイント付与.rule" > "$M/m_e115.rule"
+
+# --- Five more codes that had no mutant at all (§15.92). The syntax errors keep their
+# minimal example in the ledger — a misplaced character has no amount attached to it — but
+# these five change what a real table answers, or what it is allowed to say.
+k="$C/期間区分.rule"
+# A name that is one of the language's own words: the line-oriented parser reads the
+# declaration as the start of a section.
+awk '{ sub(/^  注文日\(order_date\) : date/, "  range(order_date) : date"); print }'  "$k" > "$M/m_e009.rule"
+# Subtracting one date from another. §2.1 has said since the beginning that a date has no
+# arithmetic, and until §15.84 nothing enforced it.
+awk '{ print } /^  注文日\(order_date\)/ { print ""; print "derive 差(gap) : date = 注文日 - 注文日  range >=2026-01-01 <=2026-12-31" }' "$k" > "$M/m_e048.rule"
+# A word after the range that belongs to no modifier. It used to be dropped in silence.
+awk '{ sub(/range >=1cm <=170cm/, "range >=1cm <=170cm incl_tax"); print }'         "$y" > "$M/m_e047.rule"
+# A rate off the step its own column declares: it has no runtime representation.
+awk '{ sub(/18\.3%/, "18.35%"); print }'                          "$C/厚生年金保険料.rule" > "$M/m_e114.rule"
+# `policy first` on a table whose rows do not overlap: the order is claimed to matter and
+# does not, so `unique` would prove more.
+awk '{ sub(/^policy unique/, "policy first"); print }'                    "$C/送料.rule" > "$M/m_w110.rule"
+# `result` naming an output other than the first: `result` is sugar for the first one.
+awk '{ sub(/^result 送料 =/, "result 大口 ="); print }'                     "$C/送料.rule" > "$M/m_e015.rule"
+
+# --- The last of the seedable codes (§15.92). What is left after these keeps its minimal
+# example in the ledger and nothing more: E109 needs `--budget` (it is about scale, not about
+# what a rule says), E110 needs a column's type *and* its cells changed, and W114 needs two
+# derived values sharing an input — a shape no transcription in the corpus has.
+# An example that does not say which sequence it walks
+awk '/^\| 運賃行   \| -> 運賃 \|$/ { print "| -> 運賃 |"; next } /^\| 近い一件 \|/ { print "| 800円   |"; next } /^\| 空       \|/ { print "| 0円     |"; next } { print }' "$f" > "$M/m_e025.rule"
+# A `sequence` whose header does not name the element's fields
+awk '{ sub(/^\| 行ゾーン \| 閾値   \| 行運賃 \|$/, "| 行ゾーン | 閾値 |"); print }'    "$f" > "$M/m_e026.rule"
+# A verdict no element can land on
+awk '{ sub(/^\| 遠隔地   \| <=1000円 \| スキップ                    \|/, "| 遠隔地   | <=1000円 | 打ち切り                    |"); print }' "$f" > "$M/m_w115.rule"
+# `overrides` pointing at a table that defines a different output
+awk '{ sub(/^  overrides 通常$/, "  overrides 運賃表"); print }'      "$C/送料のただし書.rule" > "$M/m_e036.rule"
+# A clause takes precedence over a table that decides two outputs at once
+awk '{ print } /^\| 金 \| -        \| 0円                              \| 150%                        \|$/ { print ""; print "clause 特例(special) -> 送料"; print "  when 帯 金"; print "  then 0円"; print "  overrides 送料表" }' "$C/会員特典.rule" > "$M/m_e045.rule"
 
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// The member tier the fee table branches on. `PLATINUM` is the value the rules beside this
+// file have not been told about: it is what makes E032 and E033 two steps of one loop.
+enum MemberTier {
+  MEMBER_TIER_UNSPECIFIED = 0;
+  MEMBER_TIER_BASIC = 1;
+  MEMBER_TIER_GOLD = 2;
+  MEMBER_TIER_PLATINUM = 3;
+}

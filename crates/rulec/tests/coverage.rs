@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 19] = [
+const CORPUS: [&str; 28] = [
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -26,6 +26,15 @@ const CORPUS: [&str; 19] = [
     "tests/corpus/非常勤退職手当.rule",
     "tests/corpus/全国運賃.rule",
     "tests/corpus/納入先照合.rule",
+    "tests/corpus/Claude利用料.rule",
+    "tests/corpus/ポイント付与.rule",
+    "tests/corpus/予約取消可否.rule",
+    "tests/corpus/会員特典.rule",
+    "tests/corpus/値引の充当.rule",
+    "tests/corpus/決済手数料.rule",
+    "tests/corpus/補償証明書.rule",
+    "tests/corpus/評価ランク.rule",
+    "tests/corpus/預け荷物料金.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -220,7 +229,22 @@ fn 義務の件数を固定する() {
         ("tests/corpus/非常勤退職手当.rule", 2, 0, 0),
         ("tests/corpus/全国運賃.rule", 4, 4, 0),
         ("tests/corpus/納入先照合.rule", 7, 6, 0),
+        ("tests/corpus/Claude利用料.rule", 34, 0, 0),
+        ("tests/corpus/ポイント付与.rule", 3, 0, 0),
+        ("tests/corpus/予約取消可否.rule", 6, 0, 15),
+        ("tests/corpus/会員特典.rule", 12, 4, 3),
+        ("tests/corpus/値引の充当.rule", 2, 0, 0),
+        ("tests/corpus/決済手数料.rule", 3, 3, 0),
+        ("tests/corpus/補償証明書.rule", 8, 0, 9),
+        ("tests/corpus/評価ランク.rule", 4, 3, 6),
+        ("tests/corpus/預け荷物料金.rule", 9, 0, 0),
     ];
+    // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
+    // honest the same way; this one had no such guard, and nine rules had drifted out of it
+    // — their vector suites were generated and run, and never audited (§15.92).
+    for rel in CORPUS {
+        assert!(PINNED.iter().any(|(p, ..)| p == &rel), "{rel} の固定値がありません");
+    }
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
     for (rel, rows, bounds, shadows) in PINNED {
         let (f, c, vs) = load(rel);

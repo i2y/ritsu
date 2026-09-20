@@ -112,6 +112,28 @@ fn 変異は決めたコードだけを出す() {
         // computed before the diagnostic, and a divisor whose range contains zero asserted
         // its way out of the process (§15.88).
         ("m_e115.rule", &[("E115", 1)], "割る数が定数でない（かつては検査器ごと落ちていた）"),
+        // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
+        // example in the ledger — a misplaced character has no amount attached — but these
+        // change what a real table answers, or what it is allowed to claim.
+        ("m_e009.rule", &[("E009", 1), ("E012", 2), ("W111", 1)], "入力の名前を言語の語にした"),
+        ("m_e015.rule", &[("E015", 1), ("E103", 1)], "`result` が最初でない出力を名指した"),
+        ("m_e047.rule", &[("E047", 1)], "範囲の後ろに税区分を書いた（黙って捨てられていた）"),
+        ("m_e048.rule", &[("E048", 1), ("E112", 1), ("W111", 1)], "日付から日付を引いた"),
+        ("m_e114.rule", &[("E114", 3)], "率をその列の刻みに載らない値にした"),
+        ("m_w110.rule", &[("W105", 1), ("W110", 1)], "重ならない表に `policy first` を付けた"),
+        // The last of the seedable ones. What is left keeps its minimal example in the
+        // ledger and nothing more: E109 needs `--budget` (tests/cli.rs passes it), E110 needs
+        // a column's type *and* its cells changed at once, and W114 needs two derived values
+        // sharing an input — a shape no transcription has (§15.92).
+        ("m_e025.rule", &[("E025", 1), ("W116", 2)], "例がどの並びを歩くのか言っていない"),
+        ("m_e026.rule", &[("E026", 1)], "`sequence` の見出しが要素の欄と合っていない"),
+        ("m_e036.rule", &[("E036", 1)], "`overrides` の相手が別の出力を定めている"),
+        ("m_e045.rule", &[("E045", 1)], "出力を二つ決める表に、節が優先している"),
+        ("m_w115.rule", &[("W111", 1), ("W115", 1)], "どの要素も landing しない判定に行き先がある"),
+        // Two gates of one loop, with the contract beside them (tests/mutants/contracts/).
+        // They are written by hand: the seed is in the `.proto`, not in a corpus rule.
+        ("m_e032.rule", &[("E032", 1)], "契約の列挙に値が増え、規則がそれを知らない"),
+        ("m_e033.rule", &[("E033", 1)], "増えた値に行も `default` も無い"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -464,4 +486,59 @@ impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
         let _ = self.next(); // the empty string before the leading `|`
         self.next().map(|s| vec![s.to_string()]).unwrap_or_default()
     }
+}
+
+/// The mutants are a build product, and this is what holds them to their source.
+///
+/// `tests/make-mutants.sh` seeds one error into a corpus rule. The files it writes are
+/// committed — fourteen test files read them — but nothing ran the script, so **a corpus rule
+/// that moved on left a mutant that was quietly no longer that rule with one seeded error**
+/// (§15.92). `m0` would keep passing: it checks the codes of the files on disk, whatever they
+/// have become. The same shape as the committed `rulec.wasm`, which does have such a test.
+///
+/// A few mutants are written by hand rather than seeded — the two that need a document beside
+/// them (E116, W120) and the copies under `sources/`. They are named here so that "not
+/// generated" is a decision rather than a gap.
+#[test]
+fn 変異はコーパスから作り直せる() {
+    const BY_HAND: &[&str] = &["m_e116.rule", "m_w120.rule", "m_e032.rule", "m_e033.rule"];
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tmp = std::env::temp_dir().join(format!("rulec-mutants-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let out = std::process::Command::new("sh")
+        .current_dir(root)
+        .arg("tests/make-mutants.sh")
+        .arg(&tmp)
+        .output()
+        .expect("make-mutants.sh を起動できない");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let names = |d: &std::path::Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".rule"))
+            .collect();
+        v.sort();
+        v
+    };
+    let (have, made) = (names(&root.join("tests/mutants")), names(&tmp));
+    let seeded: Vec<String> =
+        have.iter().filter(|n| !BY_HAND.contains(&n.as_str())).cloned().collect();
+    assert_eq!(
+        seeded, made,
+        "変異の顔ぶれが生成器と違います。足したなら make-mutants.sh にも足し、\
+         手で置いたものなら BY_HAND に名前を書いてください"
+    );
+    for n in &made {
+        let a = std::fs::read_to_string(root.join("tests/mutants").join(n)).unwrap();
+        let b = std::fs::read_to_string(tmp.join(n)).unwrap();
+        assert_eq!(
+            a, b,
+            "{n} がコーパスから作り直したものと違います。\
+             コーパスを直したなら `sh tests/make-mutants.sh` で焼き直してください"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
 }
