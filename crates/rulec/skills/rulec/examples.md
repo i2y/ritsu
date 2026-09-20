@@ -1407,3 +1407,126 @@ examples
 - **The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.
 - **The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{"table":"退職手当:支給表","row":1,"label":"短期"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.
 - **When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.
+
+## A temperature and a volume decide the label
+
+A transcription of a food storage standard. A temperature in degrees Celsius, a volume in millilitres, and a column that is allowed to hold "not decided yet", all in one rule.
+
+```rule
+rule 保存基準(storage) v1
+description "食品の保存温度と容量から、貼る表示と取るべき措置を決める（食品衛生法の規格基準のスケッチ）"
+
+enum 区分(kind) = 冷凍(frozen) | 冷蔵(chilled) | 常温(ambient)
+enum 措置(action) = 適合(ok) | 要冷却(cool) | 廃棄(discard)
+
+inputs
+  保存温度(temp)   : temperature[℃]  range >=-30℃ <=40℃
+  容量(volume)     : volume[mL]       range >=0mL <=5000mL
+  表示区分(label)  : 区分
+  再検区分(recheck) : 区分?
+
+outputs
+  判定(verdict) : 措置
+  表示(text)    : string
+
+table 温度判定(temp_of)
+policy unique
+| 表示区分 | 保存温度   | -> 適温(in_range) : bool |
+| 冷凍     | <=-15℃     | true                     |
+| 冷凍     | >-15℃      | false                    |
+| 冷蔵     | >=0℃ <=10℃ | true                     |
+| 冷蔵     | <0℃        | false                    |
+| 冷蔵     | >10℃       | false                    |
+| 常温     | -          | true                     |
+
+table 再検判定(recheck_of)
+policy unique
+| 再検区分 | 容量     | -> 小分け(small) : bool |
+| none     | -        | false                   |
+| 冷凍     | -        | true                    |
+| 冷蔵     | <=1000mL | true                    |
+| 冷蔵     | >1000mL  | false                   |
+| 常温     | -        | false                   |
+
+table 措置判定(action_of)
+policy first
+| 適温  | 小分け | 保存温度 | -> 判定(verdict) : 措置 | 表示(text) : string |
+| true  | -      | -        | 適合                    | "適合"              |
+| false | true   | -        | 要冷却                  | "要冷却・小分け"    |
+| false | -      | >25℃     | 廃棄                    | "廃棄"              |
+| false | -      | -        | 要冷却                  | "要冷却"            |
+
+examples
+| 保存温度 | 容量   | 表示区分 | 再検区分 | -> 判定 | 表示             |
+| -20℃     | 500mL  | 冷凍     | none     | 適合    | "適合"           |
+| -10℃     | 500mL  | 冷凍     | 冷凍     | 要冷却  | "要冷却・小分け" |
+| 5℃       | 1000mL | 冷蔵     | none     | 適合    | "適合"           |
+| 30℃      | 2000mL | 冷蔵     | 冷蔵     | 廃棄    | "廃棄"           |
+| 15℃      | 500mL  | 冷蔵     | none     | 要冷却  | "要冷却"         |
+```
+
+**What this one shows**
+
+- **A temperature is a scale to compare against, and nothing more.** A ℃ has a displaced zero, so it can be neither added nor doubled; comparison and `range` are all there is, and `気温 - 気温` stops at E048.
+- **`区分?` is a column that may hold nothing.** Only the cell `none` accepts it, and it never appears in an expression — null is kept out of arithmetic by making the table branch on it.
+- **An output may be a string**, such as the label a person reads. A string cannot be a table's *input* column (E110): a value that decides a branch belongs in an enum.
+
+## Area, noise and overtime decide the measure and the cost
+
+A sketch of Japan's office hygiene rules and its noise-exposure guidance. Three dimensions — area, sound and time — and a declared relation between two inputs.
+
+```rule
+rule 事務所の衛生基準(office_standard) v1
+description "床面積と天井高から気積を、騒音と残業時間と合わせて、事業者が取る措置と負担額を決める（事務所衛生基準規則と騒音障害防止のスケッチ）"
+
+enum 措置(action) = 適合(ok) | 要改善(improve) | 使用停止(stop)
+
+inputs
+  在籍(people)   : number          range >=1 <=200
+  床面積(floor)  : area[m2]        range >=1m2 <=2000m2
+  占有面積(used) : area[m2]        range >=1m2 <=2000m2
+  騒音(noise)    : sound[dB]       range >=0dB <=130dB
+  残業(overtime) : duration[h]     range >=0h <=200h
+
+# 占有している面積が床面積を超えることはない。検査はこの外側に行を求めない
+constraint 占有面積 <= 床面積
+
+outputs
+  判定(verdict)  : 措置
+  負担額(cost)   : money[円, incl_tax]  round half_even(100円)
+
+derive 余裕(spare) : area[m2] = 床面積 - 占有面積  range >=-1999m2 <=1999m2
+
+table 広さ判定(space_of)
+policy first
+| 余裕  | -> 狭い(tight) : bool |
+| <10m2 | true                  |
+| -     | false                 |
+
+table 措置判定(action_of)
+policy first
+| 騒音   | 残業 | 狭い | 在籍 | -> 判定(verdict) : 措置 | 率(rate) : rate[step 10%] |
+| >=90dB | -    | -    | -    | 使用停止                | 100%                      |
+| >=85dB | -    | -    | -    | 要改善                  | 50%                       |
+| -      | >45h | -    | -    | 要改善                  | 50%                       |
+| -      | -    | true | >=50 | 使用停止                | 100%                      |
+| -      | -    | true | -    | 要改善                  | 30%                       |
+| -      | -    | -    | -    | 適合                    | 0%                        |
+
+define 負担額(cost) : money[円, incl_tax] = 10000円 × 率
+
+examples
+| 在籍 | 床面積 | 占有面積 | 騒音 | 残業 | -> 判定  | 負担額  |
+| 10   | 100m2  | 50m2     | 60dB | 10h  | 適合     | 0円     |
+| 10   | 100m2  | 95m2     | 60dB | 10h  | 要改善   | 3000円  |
+| 10   | 100m2  | 50m2     | 86dB | 10h  | 要改善   | 5000円  |
+| 10   | 100m2  | 50m2     | 95dB | 10h  | 使用停止 | 10000円 |
+| 10   | 100m2  | 50m2     | 60dB | 60h  | 要改善   | 5000円  |
+```
+
+**What this one shows**
+
+- **`constraint 占有面積 <= 床面積` is a relation the caller guarantees.** Completeness then demands no row outside it, every witness becomes a case somebody could really send, and the generated code refuses a violating input at the door.
+- **An area is a dimension of its own, not the product of two lengths.** `縦 × 横` is E103: this tool does no dimensional analysis, and will not invent a dimension to hold a product.
+- **A sound level is another scale to compare against.** It is logarithmic, so adding two decibels is not two sounds' worth.
+- **`round half_even` is one of the five roundings**, the one that sends a tie to the even side — the direction accounting usually asks for.

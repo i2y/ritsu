@@ -438,8 +438,43 @@ EXAMPLES = [
             "**When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.",
         ],
     ),
+(
+        "保存基準.rule",
+        "温度と容量で、貼る表示を決める",
+        "食品の保存基準を写したものです。摂氏の温度、ミリリットルの容量、そして「まだ決まっていない」を持てる列が一度に出てきます。",
+        [
+            "**温度は比べるだけの型です。** `℃` は 0 が「無い」を意味しない目盛りなので、足し算も倍にすることもできません。書けるのは比較と `range` だけで、`気温 - 気温` は E048 で止まります。",
+            "**`区分?` は、値がまだ無いことを持てる列です。** セルの `none` でだけ受けられて、式には出てきません。null を算術から締め出すために、表で場合分けさせる形になっています。",
+            "**出力は文字列でもかまいません。** 貼る表示のように、そのまま人が読む値です。ただし文字列は表の入力の列にはできません（E110）——分岐を決める値は列挙にします。",
+        ],
+        "A temperature and a volume decide the label",
+        "A transcription of a food storage standard. A temperature in degrees Celsius, a volume in millilitres, and a column that is allowed to hold \"not decided yet\", all in one rule.",
+        [
+            "**A temperature is a scale to compare against, and nothing more.** A ℃ has a displaced zero, so it can be neither added nor doubled; comparison and `range` are all there is, and `気温 - 気温` stops at E048.",
+            "**`区分?` is a column that may hold nothing.** Only the cell `none` accepts it, and it never appears in an expression — null is kept out of arithmetic by making the table branch on it.",
+            "**An output may be a string**, such as the label a person reads. A string cannot be a table's *input* column (E110): a value that decides a branch belongs in an enum.",
+        ],
+    ),
+    (
+        "事務所の衛生基準.rule",
+        "面積と騒音と残業から、措置と負担を決める",
+        "事務所衛生基準規則と騒音障害防止のスケッチです。面積・音量・時間という三つの次元と、入力どうしの関係の宣言が出てきます。",
+        [
+            "**`constraint 占有面積 <= 床面積` は、呼び出し側が守ると約束した関係です。** 検査はその外側に行を求めず、診断が返す入力は必ず実在しうる一件になり、生成コードは違反する入力を入口で断ります。",
+            "**面積は長さの積ではなく、独立した次元です。** `縦 × 横` は E103 で止まります——この道具は次元解析をしないので、積を入れる次元を黙って作ることはしません。",
+            "**音量の dB も比べるだけです。** 対数の目盛りなので、二つ足しても音が二つ分にはなりません。",
+            "**`round half_even` は五つの丸めのうちの一つです。** 同点を偶数側へ寄せる、会計でよく使われる向きです。",
+        ],
+        "Area, noise and overtime decide the measure and the cost",
+        "A sketch of Japan's office hygiene rules and its noise-exposure guidance. Three dimensions — area, sound and time — and a declared relation between two inputs.",
+        [
+            "**`constraint 占有面積 <= 床面積` is a relation the caller guarantees.** Completeness then demands no row outside it, every witness becomes a case somebody could really send, and the generated code refuses a violating input at the door.",
+            "**An area is a dimension of its own, not the product of two lengths.** `縦 × 横` is E103: this tool does no dimensional analysis, and will not invent a dimension to hold a product.",
+            "**A sound level is another scale to compare against.** It is logarithmic, so adding two decibels is not two sounds' worth.",
+            "**`round half_even` is one of the five roundings**, the one that sends a tie to the even side — the direction accounting usually asks for.",
+        ],
+    ),
 ]
-
 JA_HEAD = """# 例で見る
 
 ここにあるのは全部、**このリポジトリのテストが毎回走らせている規則**です。`rulec check` を通り、書いてある例が実行され、参照評価器と生成したどの言語も同じ答えを返すことまで確かめられています。そのままコピーして動かせます。

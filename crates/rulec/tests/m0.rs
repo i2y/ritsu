@@ -134,6 +134,25 @@ fn 変異は決めたコードだけを出す() {
         // They are written by hand: the seed is in the `.proto`, not in a corpus rule.
         ("m_e032.rule", &[("E032", 1)], "契約の列挙に値が増え、規則がそれを知らない"),
         ("m_e033.rule", &[("E033", 1)], "増えた値に行も `default` も無い"),
+        // §15.93. The syntax errors, seeded into a real rule. The ledger's minimal example is
+        // four lines long and cannot show that the diagnostic lands on the right line of a
+        // sixty-line table. Where a seed cascades it is pinned as it is: a lexer error does
+        // leave the rest of the file headless, and pretending otherwise would be the fiction.
+        ("m_e001.rule", &[("E001", 1)], "文字列を閉じなかった"),
+        ("m_e002.rule", &[("E002", 1), ("E004", 5)], "識別子を始められない文字を置いた"),
+        ("m_e003.rule", &[("E003", 1)], "一行目が `rule` でない"),
+        ("m_e004.rule", &[("E004", 1), ("E005", 1)], "行の先頭に語が無い"),
+        ("m_e005.rule", &[("E005", 1)], "その位置に書けない語を置いた"),
+        ("m_e006.rule", &[("E006", 1)], "列挙の宣言から `=` を落とした"),
+        ("m_e007.rule", &[("E007", 1)], "無い方式を `policy` に書いた"),
+        ("m_e013.rule", &[("E013", 1)], "無い取込先を指した"),
+        ("m_e017.rule", &[("E017", 1)], "`constraint` が関係の形をしていない"),
+        ("m_e018.rule", &[("E018", 1)], "`constraint` の片側が表の出力"),
+        ("m_e019.rule", &[("E019", 3)], "例が制約の外にある"),
+        ("m_e020.rule", &[("E020", 1)], "`elements` に名前が無い"),
+        // Two edits, because either alone is a different error. §11 calls E110 the internal
+        // breakwater — what is confirmed is that it fires rather than a table being skipped.
+        ("m_e110.rule", &[("E110", 1)], "検査器が畳めない型の列を作った"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very

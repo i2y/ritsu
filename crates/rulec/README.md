@@ -56,7 +56,7 @@ What is **not** proved matters just as much.
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
    implementation, which has not itself been proved correct. The evidence is 35 deliberately
-   broken rules each producing the diagnostic it should, and 28 rules transcribed from real
+   broken rules each producing the diagnostic it should, and 30 rules — 28 transcribed from real
    published terms checked, generated and run on every commit. Evidence, not proof.
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
@@ -364,7 +364,8 @@ src/              38 modules: kw, i18n, lex, parse, types, defset (the tables th
                   sources (a law on e-Gov, cited and pinned), apply (a rule applied to
                   another case), vfs (reading at a git revision), sha256,
                   wasm (the checker as the site's playground)
-tests/corpus/     28 rules transcribed from real published terms, and the copies of the
+tests/corpus/     30 rules: 28 transcribed from real published terms, 2 written to use the
+                  words a transcription never reaches; and the copies of the
                   statute text they cite
 tests/mutants/    33 files, each with one mistake planted in it
 tests/golden/     35 snapshots of diagnostic prose, in both languages
@@ -390,7 +391,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 ## Where it stands
 
-28 rules taken from real published terms are checked, generated and run on every commit, and all 74 diagnostics are implemented. What is built:
+30 rules — 28 taken from real published terms, 2 written to reach the rest of the language — are checked, generated and run on every commit, and all 74 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

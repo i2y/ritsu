@@ -1,0 +1,50 @@
+rule 保存基準(storage) v1
+description "食品の保存温度と容量から、貼る表示と取るべき措置を決める（食品衛生法の規格基準のスケッチ）"
+
+enum 区分(kind) = 冷凍(frozen) | 冷蔵(chilled) | 常温(ambient)
+enum 措置(action) = 適合(ok) | 要冷却(cool) | 廃棄(discard)
+
+inputs
+  保存温度(temp)   : temperature[℃]  range >=-30℃ <=40℃
+  容量(volume)     : volume[mL]       range >=0mL <=5000mL
+  表示区分(label)  : 区分
+  再検区分(recheck) : 区分?
+
+outputs
+  判定(verdict) : 措置
+  表示(text)    : string
+
+table 温度判定(temp_of)
+policy unique
+| 表示区分 | 保存温度   | -> 適温(in_range) : bool |
+| 冷凍     | <=-15℃     | true                     |
+| 冷凍     | >-15℃      | false                    |
+| 冷蔵     | >=0℃ <=10℃ | true                     |
+| 冷蔵     | <0℃        | false                    |
+| 冷蔵     | >10℃       | false                    |
+| 常温     | -          | true                     |
+
+table 再検判定(recheck_of)
+policy unique
+| 再検区分 | 容量     | -> 小分け(small) : bool |
+| none     | -        | false                   |
+| 冷凍     | -        | true                    |
+| 冷蔵     | <=1000mL | true                    |
+| 冷蔵     | >1000mL  | false                   |
+| 常温     | -        | false                   |
+
+table 措置判定(action_of)
+policy first
+| 適温  | 小分け | 保存温度 | -> 判定(verdict) : 措置 | 表示(text) : string |
+| true  | -      | -        | 適合                    | "適合"              |
+| false | true   | -        | 要冷却                  | "要冷却・小分け"    |
+| false | -      | >25℃     | 廃棄                    | "廃棄"              |
+| false | -      | -        | 要冷却                  | "要冷却"            |
+
+examples
+| 保存温度 | 容量   | 表示区分 | 再検区分 | -> 判定 | 表示             |
+| -20℃     | 500mL  | 冷凍     | none     | 適合    | "適合"           |
+| -10℃     | 500mL  | 冷凍     | 冷凍     | 要冷却  | "要冷却・小分け" |
+| 5℃       | 1000mL | 冷蔵     | none     | 適合    | "適合"           |
+| 30℃      | 2000mL | 冷蔵     | 冷蔵     | 廃棄    | "廃棄"           |
+| 15℃      | 500mL  | 冷蔵     | none     | 要冷却  | "要冷却"         |

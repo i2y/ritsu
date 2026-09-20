@@ -62,6 +62,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/非常勤退職手当.rule", "part_time_allowance"),
     ("tests/corpus/全国運賃.rule", "freight"),
     ("tests/corpus/納入先照合.rule", "supplier_match"),
+    ("tests/corpus/保存基準.rule", "storage"),
+    ("tests/corpus/事務所の衛生基準.rule", "office_standard"),
     ("tests/corpus/Claude利用料.rule", "claude_usage_fee"),
     ("tests/corpus/預け荷物料金.rule", "baggage_fee"),
     ("tests/corpus/予約取消可否.rule", "cancel_verdict"),

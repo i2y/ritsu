@@ -181,4 +181,39 @@ awk '{ sub(/^  overrides 通常$/, "  overrides 運賃表"); print }'      "$C/�
 # A clause takes precedence over a table that decides two outputs at once
 awk '{ print } /^\| 金 \| -        \| 0円                              \| 150%                        \|$/ { print ""; print "clause 特例(special) -> 送料"; print "  when 帯 金"; print "  then 0円"; print "  overrides 送料表" }' "$C/会員特典.rule" > "$M/m_e045.rule"
 
+# --- The syntax errors (§15.93). Their minimal example lives in the ledger, but the ledger's
+# rule is four lines long: what it cannot show is that the diagnostic lands on the right line
+# of a sixty-line table, and that a lexer error says where it started rather than reporting
+# the rest of the file. Several of these cascade on purpose, and the cascade is pinned too.
+s="$C/送料.rule"
+# A string that is not closed
+awk '{ if (/^description /) sub(/"$/, ""); print }'                        "$s" > "$M/m_e001.rule"
+# A character that can start no identifier. The lines after it are read as headless.
+awk '{ sub(/^policy unique$/, "policy unique €"); print }'                 "$s" > "$M/m_e002.rule"
+# The file does not begin with `rule`
+awk 'NR==1 { sub(/^rule /, "ruel ") } { print }'                           "$s" > "$M/m_e003.rule"
+# A line with no word at its head
+awk '{ print } /^outputs$/ { print "| 1 |" }'                              "$s" > "$M/m_e004.rule"
+# A word that cannot stand where it is written
+awk 'END { print "overrides 運賃表" } { print }'                            "$s" > "$M/m_e005.rule"
+# A declaration with no `=`
+awk '{ sub(/= 一般\(basic\)/, "一般(basic)"); print }'                      "$s" > "$M/m_e006.rule"
+# A policy that is not one
+awk '{ sub(/^policy unique$/, "policy 適当"); print }'                      "$s" > "$M/m_e007.rule"
+# An import of something that is not there
+awk '{ print } /^rule /{ print ""; print "import std/無い" }'               "$s" > "$M/m_e013.rule"
+# A `constraint` that is not a relation at all
+awk '/^table / && !done { print "constraint 重量"; print ""; done=1 } { print }'          "$s" > "$M/m_e017.rule"
+# A `constraint` with a table output on one side; it relates inputs
+awk '/^table / && !done { print "constraint 重量 <= 基本送料"; print ""; done=1 } { print }' "$s" > "$M/m_e018.rule"
+# An example outside what the constraint says can happen
+awk '/^table / && !done { print "constraint 商品合計 <= 値引"; print ""; done=1 } { print }' "$C/会員特典.rule" > "$M/m_e019.rule"
+# An `elements` line with no name
+awk '{ sub(/^elements 運賃行\(freight_rows\)$/, "elements"); print }'       "$f" > "$M/m_e020.rule"
+
+# A column of a type the region IR cannot hold. It takes two edits — the type and the cells
+# that read it — because either alone is a different error; §11 calls E110 the internal
+# breakwater, and what is confirmed here is that it fires before anything is skipped.
+awk '{ sub(/^  キャビン\(cabin\)                : キャビン/, "  キャビン(cabin) : string"); gsub(/\| basic_economy/, "| \"basic_economy\""); gsub(/\| economy/, "| \"economy\""); gsub(/\| business/, "| \"business\""); print }' "$C/予約取消可否.rule" > "$M/m_e110.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"
