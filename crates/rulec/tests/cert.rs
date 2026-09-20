@@ -1,11 +1,12 @@
 //! The certificate (DESIGN §15.96) and the program that re-checks it.
 //!
-//! `rulec certificate` states two of the five things `check` proves, in evidence small
-//! enough to hand over: for a `unique` table, the axis on which each pair of rows parts,
-//! and for every row, a point that reaches it. `tools/recheck.py` holds the certificate to
-//! those claims and shares no code with the tool — so what is tested here is the pair. The
-//! corpus has to pass, and a certificate that has been tampered with has to fail: a
-//! re-checker that accepts anything proves nothing.
+//! `rulec certificate` states all five things `check` proves, in evidence small enough to
+//! hand over: the tree that tiles the input space, the axis on which each pair of rows of a
+//! `unique` table parts, a point that reaches every row, the interval every computed value
+//! is forced into, and the type it keeps. `tools/recheck.py` holds the certificate to those
+//! claims and shares no code with the tool — so what is tested here is the pair. The corpus
+//! has to pass, and a certificate that has been tampered with has to fail: a re-checker
+//! that accepts anything proves nothing.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -113,6 +114,35 @@ fn 偽った証明書は落ちる() {
     }
 }
 
+/// The digest ties a certificate to one text. Pointed at another file, it has to refuse.
+#[test]
+fn 証明書はどのファイルのものかを言う() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rulec-cert-sha-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let p = dir.join("c.json");
+    let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    std::fs::write(&p, &cert).unwrap();
+    let run = |rule: &str| {
+        let o = Command::new("python3")
+            .current_dir(root())
+            .args(["tools/recheck.py", "--rule", rule, p.to_str().unwrap()])
+            .output()
+            .expect("python3 を起動できない");
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    let (code, said) = run("tests/corpus/印紙税.rule");
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("digest"), "{said}");
+    let (code, said) = run("tests/corpus/送料.rule");
+    assert_eq!(code, 1, "別のファイルを指しても通ってしまった:\n{said}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The other half of the tampering: the cover and the int64 claim, on a rule that has both
 /// a deep cover and values with an interval.
 #[test]
@@ -134,6 +164,10 @@ fn 偽った覆いとint64も落ちる() {
         ("区間を狭く言う", cert.replace(r#""interval":["0","173750"]"#, r#""interval":["0","2"]"#)),
         // The stored integer said to fit where it does not.
         ("刻みを偽る", cert.replace(r#""scale":20000"#, r#""scale":200000000000000"#)),
+        // A box widened without touching the cell it was read from.
+        ("箱を広げる", cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1)),
+        // A type that does not follow from the expression.
+        ("型を偽る", cert.replace(r#""name":"合算率","type":"rate""#, r#""name":"合算率","type":"money[円]""#)),
     ] {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
         let (code, said) = recheck(&forged);
@@ -208,7 +242,7 @@ fn 証明書は自分の届く先を言う() {
     let cut = doc.find("## `certificate`").expect("formats.md に certificate の節が無い");
     let sect = &doc[cut..doc[cut + 4..].find("\n## ").map(|i| cut + 4 + i).unwrap_or(doc.len())];
     let low = sect.to_lowercase();
-    for want in ["completeness", "int64", "recheck.py", "undecided", "does not pass `check`"] {
+    for want in ["completeness", "int64", "recheck.py", "undecided", "does not pass `check`", "units", "--rule"] {
         assert!(low.contains(want), "formats.md の certificate の節が `{want}` を言っていない");
     }
 }

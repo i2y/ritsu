@@ -11,6 +11,9 @@ arguments, and says for each table what it re-checked.
 
 What it checks, per rule:
 
+  * **the units** (§2.1): every value's type is derived here from the leaves up — a name's
+    type is the one the rule declares, a literal's is what its unit says — and has to come
+    out as the type the rule declares for the value. Units that do not meet stop here.
   * **int64** (§7.4): every named value's interval is recomputed here, by interval
     arithmetic over the declared ranges and the expression the certificate carries, and the
     integer it stores at its scale has to fit in a signed 64-bit word.
@@ -39,6 +42,7 @@ Exit code 0 when every table holds, 1 when one does not, 2 on a certificate it c
 read. No dependencies; Python 3.9 or later.
 """
 
+import hashlib
 import json
 import math
 import sys
@@ -50,6 +54,7 @@ class Bad(Exception):
 
 
 I64_MAX = 2**63 - 1
+GROUPS = {}
 
 
 def num(x):
@@ -104,6 +109,85 @@ def interval(e, ranges):
         away = lambda v: sign(v) * math.ceil(abs(v) / g) * g
         return (toward(inner[0]), away(inner[1]))
     return None
+
+
+def unify(a, b):
+    """Two types meet when they are the same, or when one is money with no tax flag and the
+    other is the same currency with one — which is how a bare amount is written (§2.1)."""
+    if a == b:
+        return a
+    for x, y in ((a, b), (b, a)):
+        if x.startswith("money[") and y.startswith("money[") and y.startswith(x[:-1] + ","):
+            return y
+    return None
+
+
+DIMENSIONED = lambda t: t.startswith("money[") or ("[" in t and not t.startswith("money["))
+
+
+def type_of(e, types):
+    """The type of an expression, derived here by the rules of §2.3 rather than taken from
+    the certificate. A leaf states its own type — a name's is declared, a literal's is what
+    its unit says — and everything above them is derived, so units that do not meet stop
+    here the same way E103 stops the check."""
+    if "name" in e:
+        t = types.get(e["name"])
+        if t is None:
+            raise Bad(f"{e['name']}: no type is declared for it")
+        return t
+    if "num" in e:
+        return e.get("type", "?")
+    if "op" in e:
+        a, b = type_of(e["l"], types), type_of(e["r"], types)
+        op = e["op"]
+        if op in ("+", "-"):
+            t = unify(a, b)
+            if t is None:
+                raise Bad(f"`{a}` {op} `{b}`: the units do not meet")
+            return t
+        if op == "*":
+            if DIMENSIONED(a) and DIMENSIONED(b):
+                raise Bad(f"`{a}` * `{b}`: two dimensions multiplied, which has no type here")
+            return a if DIMENSIONED(a) else (b if DIMENSIONED(b) else ("rate" if "rate" in (a, b) else a))
+        if op == "/":
+            if unify(a, b) is not None:
+                return "number"
+            if DIMENSIONED(b):
+                raise Bad(f"`{a}` / `{b}`: divided by another dimension")
+            return a
+        raise Bad(f"an operator this program does not know: {op}")
+    if "call" in e:
+        args = [type_of(x, types) for x in e.get("args", [])]
+        if not args:
+            raise Bad(f"{e['call']}: called with nothing")
+        if e["call"] in ("min", "max"):
+            if len(args) > 1 and unify(args[0], args[1]) is None:
+                raise Bad(f"{e['call']}(`{args[0]}`, `{args[1]}`): the units do not meet")
+        return args[0]
+    raise Bad("an expression this program cannot read")
+
+
+def declares_as(want, got):
+    """What a declaration may call a value. A rate and a count are both dimensionless and
+    share one runtime form, so `達成率 : rate = 合計点 / 50` and `基本点 : number = 税込 /
+    100円` are both allowed to name theirs (§2.1). Only a declaration gets that latitude —
+    inside an expression the rule above stays strict, so a rate still cannot be added to a
+    count."""
+    return unify(want, got) is not None or {want, got} == {"rate", "number"}
+
+
+def check_types(cert):
+    """Units (§2.1, E103): every value's type is derived here from the leaves up, and has to
+    come out as the type the rule declares for it."""
+    types = cert.get("types", {})
+    n = 0
+    for v in cert.get("values", []):
+        got = type_of(v["expr"], types)
+        want = v.get("type")
+        if want is not None and not declares_as(want, got):
+            raise Bad(f"{v['name']}: the expression gives `{got}`, the rule declares `{want}`")
+        n += 1
+    return n
 
 
 def check_values(cert):
@@ -196,6 +280,57 @@ def check_cover(t):
     return seen
 
 
+def coord_admits(bound, op, value):
+    """Whether a whole coordinate satisfies one comparison. A coordinate is a point or an
+    open interval between two boundaries, and the boundaries are exactly the values the
+    cells compare against — so a comparison is constant over a coordinate."""
+    lo, hi = bound
+    if lo is not None and hi is not None and lo == hi:
+        v = lo
+        return {"<=": v <= value, "<": v < value, ">=": v >= value, ">": v > value, "=": v == value}[op]
+    if op in ("<=", "<"):
+        return hi is not None and hi <= value
+    if op in (">=", ">"):
+        return lo is not None and lo >= value
+    return False
+
+
+def box_from_cells(t, row, groups):
+    """The box the row's own cells describe, recomputed here. A certificate that widens a
+    box without changing the cell is caught by this and by nothing else."""
+    out = []
+    for ai, axis in enumerate(t["axes"]):
+        cell = row["tests"][ai]
+        coords, bounds = axis["coords"], axis.get("bounds", [None] * len(axis["coords"]))
+        kind = cell["cell"]
+        if kind == "any":
+            out.append(list(range(len(coords))))
+        elif kind == "none":
+            out.append([0] if coords and coords[0] == "none" else [])
+        elif kind in ("is", "not"):
+            words = set()
+            for w in cell["words"]:
+                words.add(w)
+                words.update(groups.get(w, []))
+            hit = [i for i, c in enumerate(coords) if c in words]
+            out.append(hit if kind == "is" else [i for i in range(len(coords)) if i not in set(hit)])
+        elif kind == "cmp":
+            tests = [(x["op"], num(x["value"])) for x in cell["tests"]]
+            if any(v is None for _, v in tests):
+                return None  # a literal whose value the certificate could not resolve
+            hit = []
+            for i in range(len(coords)):
+                b = bounds[i]
+                if b is None:
+                    return None
+                if all(coord_admits((num(b[0]), num(b[1])), op, v) for op, v in tests):
+                    hit.append(i)
+            out.append(hit)
+        else:
+            return None
+    return out
+
+
 def check_table(t):
     """Re-check one table. Returns a one-line summary; raises Bad on a claim that fails."""
     name = t["table"]
@@ -210,6 +345,22 @@ def check_table(t):
             n = len(axes[ai]["coords"])
             if any(not isinstance(c, int) or c < 0 or c >= n for c in coords):
                 raise Bad(f"{name}: row {r['row']} names a coordinate axis {ai} does not have")
+
+    # (0) The box each row states is the box its own cells describe.
+    from_cells = 0
+    for r in t["rows"]:
+        if "tests" not in r:
+            continue
+        got = box_from_cells(t, r, GROUPS)
+        if got is None:
+            continue
+        for ai, coords in enumerate(got):
+            if sorted(coords) != sorted(r["accepts"][ai]):
+                raise Bad(
+                    f"{name}: row {r['row']}'s box on {axes[ai]['column']} is not what its cell "
+                    f"`{r['cells'][ai]}` describes"
+                )
+        from_cells += 1
 
     # (1) No two rows of a `unique` table meet.
     pairs = 0
@@ -282,8 +433,9 @@ def check_table(t):
     kinds = {a["kind"] for a in axes}
     note = "" if kinds == {"input"} else f" (columns: {', '.join(sorted(kinds))})"
     unused_note = f", {len(unused)} unused" if unused else ""
+    boxes = f", {from_cells} boxes read back from their cells" if from_cells else ""
     return (f"{name}: {t['policy']}, {len(rows)} rows — {pairs} pairs disjoint, "
-            f"{len(reached)} rows reached{unused_note}{cover_note}{note}")
+            f"{len(reached)} rows reached{unused_note}{cover_note}{boxes}{note}")
 
 
 def check(cert):
@@ -291,7 +443,15 @@ def check(cert):
     out = [f"{cert['rule']} ({cert['alias']} v{cert['version']}, sha256:{cert['source_sha256'][:12]}) "
            f"— certificate by rulec {cert['rulec']}"]
     ok = True
+    global GROUPS
+    GROUPS = cert.get("groups", {})
     ranges = {k: (v[0], v[1]) for k, v in cert.get("ranges", {}).items()}
+    try:
+        n = check_types(cert)
+        out.append(f"  units: {n} values keep the type the rule declares")
+    except Bad as e:
+        out.append(f"  FAILED units: {e}")
+        ok = False
     try:
         checked, skipped = check_values(cert)
         rest = f", {skipped} not re-checkable here" if skipped else ""
@@ -319,6 +479,14 @@ def check(cert):
 
 
 def main(argv):
+    rule = None
+    if "--rule" in argv:
+        i = argv.index("--rule")
+        if i + 1 >= len(argv):
+            print("--rule wants a file", file=sys.stderr)
+            return 2
+        rule = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
     texts = []
     if argv:
         for p in argv:
@@ -336,6 +504,14 @@ def main(argv):
                 print(f"{where}: not a certificate this program can read: {e}", file=sys.stderr)
                 worst = max(worst, 2)
                 continue
+            if rule is not None:
+                with open(rule, "rb") as fh:
+                    digest = hashlib.sha256(fh.read()).hexdigest()
+                if digest == cert["source_sha256"]:
+                    lines.append(f"  the digest is {rule}'s")
+                else:
+                    lines.append(f"  FAILED the certificate is about another text than {rule}")
+                    ok = False
             print("\n".join(lines))
             if not ok:
                 worst = max(worst, 1)

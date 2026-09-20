@@ -1519,7 +1519,7 @@ impl Checked {
         }
     }
 
-    fn expr_ty(&mut self, e: &Expr, path: &str) -> Ty {
+    pub(crate) fn expr_ty(&mut self, e: &Expr, path: &str) -> Ty {
         match e {
             Expr::Name(n, sp) => {
                 self.used.insert(n.clone());

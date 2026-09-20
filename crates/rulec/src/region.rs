@@ -1937,7 +1937,20 @@ pub struct CertRow {
     pub row: usize,
     pub label: String,
     pub cells: Vec<String>,
+    /// The same cells, resolved far enough that the box can be **recomputed** rather than
+    /// believed: a comparison keeps its operator and the value its unit stands for, a word
+    /// keeps the word (the certificate carries the groups), and a don't-care is empty.
+    pub tests: Vec<CertCell>,
     pub accepts: Vec<Vec<usize>>,
+}
+
+/// One cell, as the re-checker reads it.
+pub enum CertCell {
+    Any,
+    Nothing,
+    Is(Vec<String>),
+    Not(Vec<String>),
+    Cmp(Vec<(&'static str, Option<Rat>)>),
 }
 
 /// What the certificate says about one table.
@@ -1979,7 +1992,37 @@ pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) ->
     // callee's row, and §15.69 keeps it out of the coverage demand. The certificate says so.
     let applied: Vec<bool> = (0..t.rows.len()).map(|i| set.applied[set.member_of[i]].is_some()).collect();
     let cover = reg.cover(t, c, f, DEFAULT_BUDGET);
-    Some(reg.certificate(t, &w114, &f.inputs, &applied, cover))
+    Some(reg.certificate(t, &w114, &f.inputs, &applied, cover, c))
+}
+
+/// One cell, resolved only as far as the units: the re-checker does the geometry.
+fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
+    let word = |l: &Lit| match l {
+        Lit::Word(w) => w.clone(),
+        Lit::Str(s) => s.clone(),
+        other => format!("{other:?}"),
+    };
+    match cell {
+        None | Some(Cell::DontCare) => CertCell::Any,
+        Some(Cell::Nothing) => CertCell::Nothing,
+        Some(Cell::Lit(Lit::Word(w))) => CertCell::Is(vec![w.clone()]),
+        Some(Cell::Lit(l)) => CertCell::Cmp(vec![("=", ty.as_ref().and_then(|t| lit_rat(l, t)))]),
+        Some(Cell::Set(ls)) => CertCell::Is(ls.iter().map(word).collect()),
+        Some(Cell::Not(ls)) => CertCell::Not(ls.iter().map(word).collect()),
+        Some(Cell::Cmp(cs)) => CertCell::Cmp(
+            cs.iter()
+                .map(|(o, l)| {
+                    let op = match o {
+                        CmpOp::Le => "<=",
+                        CmpOp::Lt => "<",
+                        CmpOp::Ge => ">=",
+                        CmpOp::Gt => ">",
+                    };
+                    (op, ty.as_ref().and_then(|t| lit_rat(l, t)))
+                })
+                .collect(),
+        ),
+    }
 }
 
 impl TableRegion {
@@ -1991,7 +2034,7 @@ impl TableRegion {
     /// that is reached is reached by some point, and naming the point turns the check into
     /// one lookup. Neither asks the reader to search, which is the whole difference between
     /// evidence and a second run of the same program.
-    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], applied: &[bool], cover: Option<Cover>) -> CertTable {
+    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], applied: &[bool], cover: Option<Cover>, chk: &Checked) -> CertTable {
         let unique = t.policy == crate::ast::Policy::Unique;
         let axes: Vec<CertAxis> = (0..self.axes.len())
             .map(|ai| CertAxis {
@@ -2017,6 +2060,9 @@ impl TableRegion {
                 row: ri + 1,
                 label: row.label.as_ref().map(|l| l.text.clone()).unwrap_or_default(),
                 cells: row.cells.iter().map(cell_text).collect(),
+                tests: (0..self.axes.len())
+                    .map(|ai| cert_cell(row.cells.get(self.display_of[ai]), chk.ty_of(&self.col_names[ai])))
+                    .collect(),
                 accepts: (0..self.axes.len())
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
                     .collect(),

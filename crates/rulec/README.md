@@ -70,14 +70,16 @@ back. On the corpus, 73 harnesses verify in 155 seconds. What it does not reach:
 itself (1), and every target but this one. `rulec test --proofs` runs it where `kani` is
 installed.
 
-**And the evidence can be handed over.** `rulec certificate` prints what four of the five
-proofs rest on: the tree that tiles the input space with the rows that cover it, the axis on
+**And the evidence can be handed over.** `rulec certificate` prints what all five proofs
+rest on: the tree that tiles the input space with the row that covers each box, the axis on
 which each pair of rows of a `unique` table parts, a point that reaches every row, and the
-interval every computed value is forced into. `tools/recheck.py` — one dependency-free file
-that shares no code with rulec — holds the certificate to those claims in milliseconds. None
-of it asks the reader to search, which is the difference between evidence and running the
-same program twice. The units are not in it, and no certificate can say that the table it
-states is the table you wrote.
+interval and the type every computed value is forced into. `tools/recheck.py` — one
+dependency-free file that shares no code with rulec — recomputes each box from the cell it
+was read from and holds the rest to those claims, in milliseconds. None of it asks the
+reader to search, which is the difference between evidence and running the same program
+twice. What stays stated: what a literal's unit resolves to, the pairs (3) could not settle
+— and, before all of them, that the cells it states are the cells you wrote, which the
+digest ties to one file and `rulec doc` shows a person.
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 

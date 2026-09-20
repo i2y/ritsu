@@ -300,11 +300,11 @@ with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
 
 ### `rulec certificate <file.rule>`
 
-The evidence behind four of the five proofs, as one JSON object something other than rulec
-can re-check: the tree that tiles the input space, the axis on which each pair of rows of a
-`unique` table parts, a point that reaches each row, and the interval of every computed
-value. `tools/recheck.py` is one such program, dependency-free. Not in it: the units
-([formats.md](formats.md)).
+The evidence behind all five proofs, as one JSON object something other than rulec can
+re-check: the tree that tiles the input space, the axis on which each pair of rows of a
+`unique` table parts, a point that reaches each row, and the interval and type of every
+computed value. `tools/recheck.py` is one such program, dependency-free; `--rule <file>`
+also ties the certificate to that text ([formats.md](formats.md)).
 
 ### `rulec test generated/ --format json`
 

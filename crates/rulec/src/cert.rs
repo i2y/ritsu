@@ -19,7 +19,7 @@
 use crate::ast::{BinOp, Expr, Item, Lit, RuleFile};
 use crate::json::{arr, Obj};
 use crate::num::Rat;
-use crate::region::{CertTable, Cover, certificate_of};
+use crate::region::{CertCell, CertTable, Cover, certificate_of};
 use crate::types::Checked;
 
 /// A rational as the checker reads it: `"7/2"`, or `"3"` when it is whole. An end that is
@@ -41,7 +41,11 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
         // resolved here and travels beside the text: the checker does arithmetic, not units.
         Expr::Lit(Lit::Num(n), _) => {
             let v = crate::types::lit_value_in_pub(n, ty).or_else(|| crate::types::lit_value_in_pub(n, &crate::types::lit_ty_pub(n)));
-            Obj::new().str("num", &n.raw).raw("value", v.map(|r| crate::json::quote(&rat(&r))).unwrap_or_else(|| "null".into())).finish()
+            Obj::new()
+                .str("num", &n.raw)
+                .raw("value", v.map(|r| crate::json::quote(&rat(&r))).unwrap_or_else(|| "null".into()))
+                .str("type", &crate::types::lit_value_in_pub(n, ty).map(|_| ty.to_string()).unwrap_or_else(|| crate::types::lit_ty_pub(n).to_string()))
+                .finish()
         }
         Expr::Lit(l, _) => Obj::new().str("lit", &format!("{l:?}")).finish(),
         Expr::Bin(l, op, r, _) => Obj::new()
@@ -85,6 +89,7 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
         out.push(
             Obj::new()
                 .str("name", &name.text)
+                .str("type", &sym.ty.to_string())
                 .raw("expr", expr_json(e, &sym.ty))
                 .raw("interval", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi))))
                 .int("scale", sc)
@@ -111,7 +116,25 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
         .str("version", &f.version)
         .str("source_sha256", &crate::sha256::hex(src.as_bytes()))
         .str("rulec", env!("CARGO_PKG_VERSION"))
+        .raw("types", {
+            let mut ts = Obj::new();
+            let mut names: Vec<&String> = c.syms.keys().collect();
+            names.sort();
+            for n in names {
+                ts = ts.str(n, &c.syms[n].ty.to_string());
+            }
+            ts.finish()
+        })
         .raw("ranges", ranges.finish())
+        .raw("groups", {
+            let mut g = Obj::new();
+            let mut names: Vec<&String> = c.groups.keys().collect();
+            names.sort();
+            for n in names {
+                g = g.raw(n, crate::json::strs(&c.groups[n].1));
+            }
+            g.finish()
+        })
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
         .finish()
@@ -147,6 +170,7 @@ fn table_json(t: CertTable) -> String {
                 .int("row", r.row as i128)
                 .str("label", &r.label)
                 .raw("cells", crate::json::strs(&r.cells))
+                .raw("tests", arr(&r.tests.iter().map(cell_json).collect::<Vec<_>>()))
                 .raw("accepts", arr(&accepts))
                 .finish()
         })
@@ -204,5 +228,31 @@ fn cover_json(c: &Cover) -> String {
         Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
         Cover::ByUpstream(what) => Obj::new().str("upstream", what).finish(),
+    }
+}
+
+/// One cell for the re-checker: the operator and the value its unit stands for, or the
+/// words, or nothing at all for a don't-care.
+fn cell_json(c: &CertCell) -> String {
+    match c {
+        CertCell::Any => Obj::new().str("cell", "any").finish(),
+        CertCell::Nothing => Obj::new().str("cell", "none").finish(),
+        CertCell::Is(ws) => Obj::new().str("cell", "is").raw("words", crate::json::strs(ws)).finish(),
+        CertCell::Not(ws) => Obj::new().str("cell", "not").raw("words", crate::json::strs(ws)).finish(),
+        CertCell::Cmp(cs) => Obj::new()
+            .str("cell", "cmp")
+            .raw(
+                "tests",
+                arr(&cs
+                    .iter()
+                    .map(|(op, v)| {
+                        Obj::new()
+                            .str("op", op)
+                            .raw("value", v.as_ref().map(|r| crate::json::quote(&rat(r))).unwrap_or_else(|| "null".into()))
+                            .finish()
+                    })
+                    .collect::<Vec<_>>()),
+            )
+            .finish(),
     }
 }
