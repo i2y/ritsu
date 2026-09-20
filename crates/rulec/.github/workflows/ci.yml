@@ -226,6 +226,16 @@ jobs:
           echo "$rules rules, $harnesses harnesses verified"
           exit $bad
 
+      # The certificate is evidence only if something other than rulec can read it, so the
+      # re-checker reads all thirty (DESIGN §15.96). It needs nothing but python3.
+      - name: The certificates re-check, without rulec
+        run: |
+          set -eu -o pipefail
+          for f in tests/corpus/*.rule; do
+            cargo run --quiet --locked -- certificate "$f"
+          done | python3 tools/recheck.py | grep -Ev '^  ' | tail -3
+          echo "all certificates re-checked"
+
       - name: fmt and the committed output are current
         run: |
           set -eu

@@ -2581,7 +2581,7 @@ impl Checked {
     /// Interval arithmetic from the declared input ranges. The right-hand side of a derived
     /// value is a linear combination of inputs only, so addition, subtraction, and constant
     /// multiples are all that is needed (§5.2).
-    fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
+    pub(crate) fn interval(&self, e: &Expr, ty: &Ty) -> Option<(Rat, Rat)> {
         match e {
             // A name without a range bounds nothing. A rate used to be assumed to lie within
             // 0..100% here, which a table column holding 150% quietly contradicted (§15.34);
@@ -2710,7 +2710,7 @@ fn unreadable_step(tr: &TypeRef, ty: &Ty) -> Option<crate::lex::Num> {
 impl Checked {
     /// The scale of an expression: the lcm for addition and subtraction, the product for
     /// multiplication, and the divisor's numerator times for division by a constant.
-    fn scale(&self, e: &Expr) -> Option<i128> {
+    pub(crate) fn scale(&self, e: &Expr) -> Option<i128> {
         fn lcm(a: i128, b: i128) -> i128 {
             fn g(mut a: i128, mut b: i128) -> i128 {
                 while b != 0 {

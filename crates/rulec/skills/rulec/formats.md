@@ -335,6 +335,62 @@ calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `ru
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
 
+## `certificate`
+
+One object per rule: the **evidence** behind four of the five things `check` proves —
+completeness, the overlaps, the unreachable rows, and int64 — small enough that a program
+which shares no code with rulec can re-check it in milliseconds. `tools/recheck.py` is that
+program: no dependencies, one file, and the tests hold it to forged certificates as well as
+to the corpus.
+
+```json
+{"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.11.0",
+ "ranges":{"合計":["0","1000000"],"割引A":["0","100000"],"残高A":["-100000","1000000"]},
+ "values":[{"name":"残高A","expr":{"op":"-","l":{"name":"合計"},"r":{"name":"割引A"}},
+            "interval":["-100000","1000000"],"scale":1,"stored_max":"1000000"}],
+ "tables":[{"table":"適用判定","policy":"unique",
+   "axes":[{"column":"残高A","kind":"derived","coords":["999円","1000円","1001円"],
+            "bounds":[[null,"1000"],["1000","1000"],["1000",null]]}],
+   "rows":[{"row":1,"label":"","cells":["<= 1000円","-"],"accepts":[[0,1],[0,1,2]]}],
+   "disjoint":[{"a":1,"b":3,"axis":0}],
+   "undecided":[{"a":1,"b":2}],
+   "reach":[{"row":1,"at":[0,0],"values":{"残高A":999,"残高B":3979}}],
+   "unused":[],
+   "constraints":[],
+   "cover":{"split":[{"row":1},{"row":1},{"split":[{"row":3},{"row":2},{"row":2}]}]}}]}
+```
+
+| field | meaning |
+|---|---|
+| `ranges` | every name's declared range, as exact rationals (`"7/2"`, an open end `null`). The int64 claim is re-checked from these |
+| `values` | every value the rule computes: the expression as a tree, the interval the ranges force it into, the scale it is stored at, and the integer that interval reaches. Re-checking one is interval arithmetic over the same expression (§7.4, E108). A literal carries the value its unit resolves to, so the re-checker does arithmetic and not units |
+| `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2) and, for a numeric axis, each coordinate as a closed interval in `bounds`. `kind` is `input`, `derived`, `define` or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker |
+| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, beside the cells it was written with, so the box can be held against the rule's own text |
+| `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
+| `undecided` | the pairs the check could not settle either way — the W114 warning, stated rather than proved. A pair in neither list is a certificate that does not hold |
+| `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns. Under `policy first` the point is also outside every row above it |
+| `unused` | rows an `apply` brought in that this rule's bindings leave unused (§15.69). They are outside the reachability claim, and are named rather than passed over |
+| `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, or `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range. `{"upstream":…}` is **stated, not proved**: re-checking one needs the upstream table's own region, which this certificate does not carry. `null` when the walk ran past the budget |
+| `constraints` | the `constraint` lines a cover leaf points at |
+
+**What it does not carry.** The units (re-checking a typing derivation is nearly re-doing
+inference, and it buys the least). And, before all of them, the step this certificate cannot
+take: that the table stated here is the table in the `.rule` file. The certificate states its
+own universe, and holding that against the rule is what `rulec doc` renders for a person to
+read — tampering that widens a row's own box is accepted here for exactly that reason. A rule
+that does not pass `check` produces no certificate at all.
+
+```console
+$ rulec certificate rules/健康保険料.rule | python3 tools/recheck.py
+健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.11.0
+  int64: 4 values fit
+  等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered
+  適用料率: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered
+```
+
+Exit code 0 when every table holds, 1 when a claim does not, 2 for a certificate it cannot
+read.
+
 ## `schema` and `adapter`
 
 Already machine-readable and take no `--format`.

@@ -22,6 +22,7 @@ macro_rules! tr {
 pub mod ast;
 pub mod apply;
 pub mod backend;
+pub mod cert;
 pub mod defset;
 pub mod diag;
 pub mod doc;

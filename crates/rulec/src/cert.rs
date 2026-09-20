@@ -1,0 +1,208 @@
+//! The certificate (§15.96): the evidence behind two of the five proofs, in a form a
+//! program that shares no code with this one can re-check in milliseconds.
+//!
+//! What `check` prints is a verdict. A reader who does not want to trust this
+//! implementation has, until now, had nothing to hold it to — the proofs are exhaustive,
+//! but exhaustive inside a program nobody else has read. Two of them have evidence small
+//! enough to hand over:
+//!
+//! * **no two rows of a `unique` table meet** — for each pair, the one axis on which their
+//!   coordinates do not meet. Checking one pair is one set intersection.
+//! * **every row is reached** — for each row, a point inside it, given both as coordinates
+//!   and as the input it stands for. Checking one row is one lookup.
+//!
+//! Neither asks the reader to search, which is the difference between evidence and running
+//! the same program twice. What is **not** here: completeness (the split tree, a decision of
+//! its own), int64, and units. And no certificate covers the step before all of them — that
+//! the table in this file is the table the rule's author wrote (§15.47).
+
+use crate::ast::{BinOp, Expr, Item, Lit, RuleFile};
+use crate::json::{arr, Obj};
+use crate::num::Rat;
+use crate::region::{CertTable, Cover, certificate_of};
+use crate::types::Checked;
+
+/// A rational as the checker reads it: `"7/2"`, or `"3"` when it is whole. An end that is
+/// not there is `null`.
+fn rat(r: &Rat) -> String {
+    if r.den == 1 { r.num.to_string() } else { format!("{}/{}", r.num, r.den) }
+}
+
+fn end(r: &Option<Rat>) -> String {
+    r.as_ref().map(|v| crate::json::quote(&rat(v))).unwrap_or_else(|| "null".into())
+}
+
+/// One expression as a tree the checker can walk. Only the shapes §5 allows appear: a name,
+/// a number, the four operators, and a call (a rounding, `min`, `max`).
+fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
+    match e {
+        Expr::Name(n, _) => Obj::new().str("name", n).finish(),
+        // A literal carries its unit (`10%`, `1万円`), so the value it stands for is
+        // resolved here and travels beside the text: the checker does arithmetic, not units.
+        Expr::Lit(Lit::Num(n), _) => {
+            let v = crate::types::lit_value_in_pub(n, ty).or_else(|| crate::types::lit_value_in_pub(n, &crate::types::lit_ty_pub(n)));
+            Obj::new().str("num", &n.raw).raw("value", v.map(|r| crate::json::quote(&rat(&r))).unwrap_or_else(|| "null".into())).finish()
+        }
+        Expr::Lit(l, _) => Obj::new().str("lit", &format!("{l:?}")).finish(),
+        Expr::Bin(l, op, r, _) => Obj::new()
+            .str(
+                "op",
+                match op {
+                    BinOp::Add => "+",
+                    BinOp::Sub => "-",
+                    BinOp::Mul => "*",
+                    BinOp::Div => "/",
+                    _ => "?",
+                },
+            )
+            .raw("l", expr_json(l, ty))
+            .raw("r", expr_json(r, ty))
+            .finish(),
+        Expr::Call(name, args, _) => Obj::new()
+            .str("call", name)
+            .raw("args", arr(&args.iter().map(|a| expr_json(a, ty)).collect::<Vec<_>>()))
+            .finish(),
+    }
+}
+
+/// Every named value the rule computes, with the expression, the interval the declared
+/// ranges force it into, and the integer that interval stores at its scale (§7.4, E108).
+/// Re-checking one is interval arithmetic over the same expression — which is why the
+/// ranges travel with it.
+fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
+    let mut out = Vec::new();
+    for it in &f.items {
+        let (name, e) = match it {
+            Item::Derived(d) => (&d.name, &d.expr),
+            Item::Define(d) => (&d.name, &d.expr),
+            _ => continue,
+        };
+        let Some(sym) = c.syms.get(&name.text) else { continue };
+        let (Some((lo, hi)), Some(sc)) = (c.interval(e, &sym.ty), c.scale(e)) else { continue };
+        let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
+        let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
+        let stored = mag.mul(Rat::int(sc));
+        out.push(
+            Obj::new()
+                .str("name", &name.text)
+                .raw("expr", expr_json(e, &sym.ty))
+                .raw("interval", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi))))
+                .int("scale", sc)
+                .str("stored_max", &(stored.num / stored.den).to_string())
+                .finish(),
+        );
+    }
+    out
+}
+
+/// The certificate of one rule, as one JSON object.
+pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
+    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(table_json)).collect();
+    let mut ranges = Obj::new();
+    let mut names: Vec<&String> = c.ranges.keys().collect();
+    names.sort();
+    for n in names {
+        let (lo, hi) = &c.ranges[n];
+        ranges = ranges.raw(n, format!("[{},{}]", end(lo), end(hi)));
+    }
+    Obj::new()
+        .str("rule", &f.name.text)
+        .str("alias", f.name.ascii.as_deref().unwrap_or(&f.name.text))
+        .str("version", &f.version)
+        .str("source_sha256", &crate::sha256::hex(src.as_bytes()))
+        .str("rulec", env!("CARGO_PKG_VERSION"))
+        .raw("ranges", ranges.finish())
+        .raw("values", arr(&values_json(f, c)))
+        .raw("tables", arr(&tables))
+        .finish()
+}
+
+fn table_json(t: CertTable) -> String {
+    let axes: Vec<String> = t
+        .axes
+        .iter()
+        .map(|a| {
+            let bounds: Vec<String> = a
+                .bounds
+                .iter()
+                .map(|b| match b {
+                    Some((lo, hi)) => format!("[{},{}]", end(lo), end(hi)),
+                    None => "null".into(),
+                })
+                .collect();
+            Obj::new()
+                .str("column", &a.name)
+                .str("kind", a.kind)
+                .raw("coords", crate::json::strs(&a.coords))
+                .raw("bounds", arr(&bounds))
+                .finish()
+        })
+        .collect();
+    let rows: Vec<String> = t
+        .rows
+        .iter()
+        .map(|r| {
+            let accepts: Vec<String> = r.accepts.iter().map(|xs| arr(&xs.iter().map(|x| x.to_string()).collect::<Vec<_>>())).collect();
+            Obj::new()
+                .int("row", r.row as i128)
+                .str("label", &r.label)
+                .raw("cells", crate::json::strs(&r.cells))
+                .raw("accepts", arr(&accepts))
+                .finish()
+        })
+        .collect();
+    let disjoint: Vec<String> = t
+        .disjoint
+        .iter()
+        .map(|(a, b, ax)| Obj::new().int("a", *a as i128).int("b", *b as i128).int("axis", *ax as i128).finish())
+        .collect();
+    let undecided: Vec<String> =
+        t.undecided.iter().map(|(a, b)| Obj::new().int("a", *a as i128).int("b", *b as i128).finish()).collect();
+    let reach: Vec<String> = t
+        .reach
+        .iter()
+        .map(|(row, at, input)| {
+            let mut ins = Obj::new();
+            for (k, v) in input {
+                ins = ins.raw(k, v.json());
+            }
+            Obj::new()
+                .int("row", *row as i128)
+                .raw("at", arr(&at.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                .raw("values", ins.finish())
+                .finish()
+        })
+        .collect();
+    Obj::new()
+        .str("table", &t.name)
+        .str("policy", t.policy)
+        .raw("axes", arr(&axes))
+        .raw("rows", arr(&rows))
+        .raw("disjoint", arr(&disjoint))
+        .raw("undecided", arr(&undecided))
+        .raw("reach", arr(&reach))
+        .raw("unused", arr(&t.unused.iter().map(|r| r.to_string()).collect::<Vec<_>>()))
+        .raw(
+            "constraints",
+            arr(&t
+                .constraints
+                .iter()
+                .map(|(l, op, r)| Obj::new().str("left", l).str("op", op).str("right", r).finish())
+                .collect::<Vec<_>>()),
+        )
+        .raw("cover", t.cover.as_ref().map(cover_json).unwrap_or_else(|| "null".into()))
+        .finish()
+}
+
+/// The cover, as a tree. An internal node's children are in coordinate order, one per
+/// coordinate of the axis at that depth — which is how "the children tile the axis" is
+/// checked by shape rather than believed.
+fn cover_json(c: &Cover) -> String {
+    match c {
+        Cover::Split(kids) => Obj::new().raw("split", arr(&kids.iter().map(cover_json).collect::<Vec<_>>())).finish(),
+        Cover::Row(r) => Obj::new().int("row", *r as i128).finish(),
+        Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
+        Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
+        Cover::ByUpstream(what) => Obj::new().str("upstream", what).finish(),
+    }
+}

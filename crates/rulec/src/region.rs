@@ -1913,3 +1913,295 @@ impl TableRegion {
             .join(if crate::i18n::ja() { "、" } else { ", " })
     }
 }
+
+// --- The certificate (§15.96) -------------------------------------------------------
+
+/// One axis, as the certificate states it: the column it stands for and a label per
+/// coordinate. The labels are for a person reading beside the rule; the checker works on
+/// the indices.
+pub struct CertAxis {
+    pub name: String,
+    /// `input`, `derived`, `define`, or `upstream` — what the column is. A point on an axis
+    /// of inputs is an input a caller can send; on any other axis it is a point the sieve
+    /// could not rule out, which is weaker and says so.
+    pub kind: &'static str,
+    pub coords: Vec<String>,
+    /// Each coordinate as a closed interval of true values, where the axis is numeric.
+    /// `None` for an enum or a boolean; an unbounded end is `None` inside the pair.
+    pub bounds: Vec<Option<(Option<Rat>, Option<Rat>)>>,
+}
+
+/// One row as a box: the coordinates it accepts on each axis, and the cells it was written
+/// with, so the box can be held against the rule's own text.
+pub struct CertRow {
+    pub row: usize,
+    pub label: String,
+    pub cells: Vec<String>,
+    pub accepts: Vec<Vec<usize>>,
+}
+
+/// What the certificate says about one table.
+pub struct CertTable {
+    pub name: String,
+    pub policy: &'static str,
+    pub axes: Vec<CertAxis>,
+    pub rows: Vec<CertRow>,
+    /// `unique` only: for each pair of rows, an axis on which their coordinates do not meet.
+    /// Checking one entry is one set intersection; a pair that is missing from this list and
+    /// not in `undecided` is a certificate that does not hold.
+    pub disjoint: Vec<(usize, usize, usize)>,
+    /// The pairs the check could not settle either way (W114). They are stated, not proved.
+    pub undecided: Vec<(usize, usize)>,
+    /// For each row, a point that reaches it: the coordinate on every axis, and the input
+    /// that point stands for.
+    pub reach: Vec<(usize, Vec<usize>, Vec<(String, crate::diag::WVal)>)>,
+    /// Rows a `apply` brought in that this rule's own bindings leave unused (§15.69). They
+    /// are outside the reachability claim, and the certificate says which they are rather
+    /// than passing over them.
+    pub unused: Vec<usize>,
+    /// The completeness cover: the walk of §6.3, written down. `None` when it ran past the
+    /// budget — a certificate says what it does not have.
+    pub cover: Option<Cover>,
+    /// The `constraint` lines a cover leaf can point at.
+    pub constraints: Vec<(String, &'static str, String)>,
+}
+
+/// The certificate of one definition set (§15.96), or nothing when the set has no region to
+/// state — a table the checker could not analyze states nothing rather than stating less.
+pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) -> Option<CertTable> {
+    let t = &set.table;
+    let reg = TableRegion::build(t, c, f)?;
+    if reg.axes.is_empty() || t.rows.is_empty() || reg.unanalyzable.is_some() {
+        return None;
+    }
+    let w114 = check_set(set, c, f, "", DEFAULT_BUDGET).w114;
+    // A row an `apply` brought in and this rule does not use is not unreachable: it is the
+    // callee's row, and §15.69 keeps it out of the coverage demand. The certificate says so.
+    let applied: Vec<bool> = (0..t.rows.len()).map(|i| set.applied[set.member_of[i]].is_some()).collect();
+    let cover = reg.cover(t, c, f, DEFAULT_BUDGET);
+    Some(reg.certificate(t, &w114, &f.inputs, &applied, cover))
+}
+
+impl TableRegion {
+    /// The parts of the certificate this table can state (§15.96): that no two rows of a
+    /// `unique` table meet, and that every row is reached by some input.
+    ///
+    /// Both are **positive** claims with small evidence. Two rows that do not meet do not
+    /// meet on some one axis, and naming it turns the check into one set intersection; a row
+    /// that is reached is reached by some point, and naming the point turns the check into
+    /// one lookup. Neither asks the reader to search, which is the whole difference between
+    /// evidence and a second run of the same program.
+    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], applied: &[bool], cover: Option<Cover>) -> CertTable {
+        let unique = t.policy == crate::ast::Policy::Unique;
+        let axes: Vec<CertAxis> = (0..self.axes.len())
+            .map(|ai| CertAxis {
+                name: self.col_names[ai].clone(),
+                kind: if self.derived[ai].is_some() {
+                    "derived"
+                } else if self.is_define[ai] {
+                    "define"
+                } else if inputs.iter().any(|i| i.name.text == self.col_names[ai]) {
+                    "input"
+                } else {
+                    "upstream"
+                },
+                coords: (0..self.axes[ai].len()).map(|c| self.axes[ai].witness(c)).collect(),
+                bounds: self.coord_bounds(ai),
+            })
+            .collect();
+        let rows: Vec<CertRow> = t
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(ri, row)| CertRow {
+                row: ri + 1,
+                label: row.label.as_ref().map(|l| l.text.clone()).unwrap_or_default(),
+                cells: row.cells.iter().map(cell_text).collect(),
+                accepts: (0..self.axes.len())
+                    .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
+                    .collect(),
+            })
+            .collect();
+
+        let mut disjoint = Vec::new();
+        let mut undecided = Vec::new();
+        if unique {
+            for i in 0..t.rows.len() {
+                for j in i + 1..t.rows.len() {
+                    match (0..self.axes.len())
+                        .find(|&ai| !(0..self.axes[ai].len()).any(|c| self.masks[i][ai][c] && self.masks[j][ai][c]))
+                    {
+                        Some(ai) => disjoint.push((i + 1, j + 1, ai)),
+                        None => undecided.push((i + 1, j + 1)),
+                    }
+                }
+            }
+        }
+        // A pair W114 named is undecided by definition; a pair that overlaps in the axis
+        // space and was not named is one the sieve ruled out, and the certificate says so
+        // the same way — it is not proved disjoint here.
+        for (a, b) in w114 {
+            if !undecided.contains(&(a + 1, b + 1)) {
+                undecided.push((a + 1, b + 1));
+            }
+        }
+        undecided.sort_unstable();
+        undecided.dedup();
+
+        let (mut reach, mut unused) = (Vec::new(), Vec::new());
+        for ri in 0..t.rows.len() {
+            match self.reach_point(ri, unique) {
+                Some(p) => {
+                    let input = self.witness_pairs(&p);
+                    reach.push((ri + 1, p, input));
+                }
+                None if applied.get(ri).copied().unwrap_or(false) => unused.push(ri + 1),
+                None => {}
+            }
+        }
+        CertTable {
+            name: t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+            policy: if unique { "unique" } else { "first" },
+            axes,
+            rows,
+            disjoint,
+            undecided,
+            reach,
+            unused,
+            cover,
+            constraints: self.constraint_list(),
+        }
+    }
+
+    /// A coordinate point that reaches a row: inside its box, feasible, and — under
+    /// `policy first` — outside every row above it, since a point an earlier row also takes
+    /// is decided by that row and reaches nothing.
+    fn reach_point(&self, ri: usize, unique: bool) -> Option<Vec<usize>> {
+        let mut path = vec![0usize; self.axes.len()];
+        self.reach_rec(ri, unique, 0, &mut path)
+    }
+
+    fn reach_rec(&self, ri: usize, unique: bool, ai: usize, path: &mut Vec<usize>) -> Option<Vec<usize>> {
+        if ai == self.axes.len() {
+            if self.feasible(path) == Feasible::No {
+                return None;
+            }
+            if !unique && (0..ri).any(|k| (0..self.axes.len()).all(|a| self.masks[k][a][path[a]])) {
+                return None;
+            }
+            return Some(path.clone());
+        }
+        for c in 0..self.axes[ai].len() {
+            if !self.masks[ri][ai][c] {
+                continue;
+            }
+            path[ai] = c;
+            if let Some(p) = self.reach_rec(ri, unique, ai + 1, path) {
+                return Some(p);
+            }
+        }
+        None
+    }
+}
+
+/// A node of the cover (§15.96): the same walk `hole_rec` makes, written down. An internal
+/// node has one child per coordinate of the axis at its depth, which is what makes "the
+/// children tile the axis" true by shape rather than by a claim.
+pub enum Cover {
+    Split(Vec<Cover>),
+    /// This row takes every point below here.
+    Row(usize),
+    /// No input reaches here: the sieve ruled the box out (§6.2) — by a `constraint`, or by
+    /// a derived value whose coordinate lies outside what the derive can produce.
+    ByConstraint(usize),
+    ByDerived(usize),
+    /// The upstream table cannot produce this value. **Stated, not proved**: re-checking it
+    /// needs the upstream table's own region, which this certificate does not carry.
+    ByUpstream(String),
+}
+
+impl TableRegion {
+    /// The cover, or nothing when the walk runs past the budget. A rule that passes `check`
+    /// has no hole, so every leaf is a row or an impossibility.
+    pub fn cover(&self, t: &Table, c: &Checked, f: &RuleFile, budget: i64) -> Option<Cover> {
+        let ups = upstreams(t, c, f);
+        let all: Vec<usize> = (0..self.masks.len()).collect();
+        let mut path = Vec::new();
+        let mut left = budget;
+        self.cover_rec(&all, 0, &mut path, &ups, c, &mut left)
+    }
+
+    fn cover_rec(
+        &self,
+        rows: &[usize],
+        ai: usize,
+        path: &mut Vec<usize>,
+        ups: &[Upstream],
+        chk: &Checked,
+        budget: &mut i64,
+    ) -> Option<Cover> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        if rows.is_empty() {
+            let mut p = path.clone();
+            while p.len() < self.axes.len() {
+                p.push(0);
+            }
+            for (k, con) in self.constraints.iter().enumerate() {
+                if self.constraint_impossible(con, &p) {
+                    return Some(Cover::ByConstraint(k));
+                }
+            }
+            for ai2 in 0..self.axes.len() {
+                if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, &p) {
+                    return Some(Cover::ByDerived(ai2));
+                }
+            }
+            if self.upstream_dead_at(&p, ups, chk) {
+                return Some(Cover::ByUpstream(self.witness_text(&p)));
+            }
+            // A hole. `check` reports it as E101 and the rule does not pass, so there is no
+            // certificate to write.
+            return None;
+        }
+        if ai == self.axes.len() {
+            return Some(Cover::Row(rows[0] + 1));
+        }
+        if let Some(&r) = rows.iter().find(|&&r| self.masks[r][ai..].iter().all(|m| m.iter().all(|x| *x))) {
+            return Some(Cover::Row(r + 1));
+        }
+        let mut kids = Vec::with_capacity(self.axes[ai].len());
+        for c in 0..self.axes[ai].len() {
+            let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
+            path.push(c);
+            let k = self.cover_rec(&sub, ai + 1, path, ups, chk, budget);
+            path.pop();
+            kids.push(k?);
+        }
+        Some(Cover::Split(kids))
+    }
+
+    /// Whether the coordinate this path takes on a derived axis lies outside the interval
+    /// the derive can reach — the half of the sieve that looks at one derived value alone.
+    fn derived_out_of_reach(&self, ai: usize, path: &[usize]) -> bool {
+        let Some(((rl, rh), _)) = &self.derived[ai] else { return false };
+        let Some(&ci) = path.get(ai) else { return false };
+        let Some((cl, ch)) = self.coord_span(ai, ci) else { return false };
+        matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Less)
+            || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == std::cmp::Ordering::Greater)
+    }
+
+    /// The coordinates of an axis as closed intervals of true values, for the axes where
+    /// that means anything. `None` at an end is unbounded.
+    pub fn coord_bounds(&self, ai: usize) -> Vec<Option<(Option<Rat>, Option<Rat>)>> {
+        (0..self.axes[ai].len()).map(|ci| self.coord_span(ai, ci)).collect()
+    }
+
+    /// The rule's `constraint` lines, as the certificate names them.
+    pub fn constraint_list(&self) -> Vec<(String, &'static str, String)> {
+        self.constraints.iter().map(|k| (k.left.clone(), k.op.word(), k.right.clone())).collect()
+    }
+}
+

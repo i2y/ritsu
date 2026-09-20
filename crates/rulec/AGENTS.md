@@ -259,6 +259,14 @@ language, a spreadsheet formula — you do not need a backend and you do not hav
 generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
 with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to end.
 
+### `rulec certificate <file.rule>`
+
+The evidence behind four of the five proofs, as one JSON object something other than rulec
+can re-check: the tree that tiles the input space, the axis on which each pair of rows of a
+`unique` table parts, a point that reaches each row, and the interval of every computed
+value. `tools/recheck.py` is one such program, dependency-free. Not in it: the units
+([docs/formats.md](docs/formats.md)).
+
 ### `rulec test generated/ --format json`
 
 Runs every generated language over the vectors and compares them with the reference

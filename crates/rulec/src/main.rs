@@ -384,6 +384,28 @@ fn commands() -> Vec<Cmd> {
             codes: &[],
         },
         Cmd {
+            name: "certificate",
+            args: "<file.rule>",
+            purpose: tr!(
+                "検査の証拠を、別の道具が読める形で出す",
+                "the evidence behind the check, in a form another program can read"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）。既定も json", "machine-facing JSON (docs/formats.md); also the default")).choices(&["json"]),
+            ],
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec certificate rules/送料.rule".into(),
+                "rulec certificate rules/送料.rule | python3 tools/recheck.py".into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "schema",
             args: "<file.rule>",
             purpose: tr!(
@@ -982,6 +1004,7 @@ fn main() -> ExitCode {
         // `api` needs the source text (the generator stamps its hash), so it does not go
         // through `one`.
         "api" => api(&files),
+        "certificate" => certificate(&files),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
             // The extraction adapter is about a document, not about this rule, so it needs
@@ -1740,6 +1763,23 @@ fn api(files: &[&String]) -> ExitCode {
             return ExitCode::from(1);
         };
         println!("{}", rulec::codegen::Gen::new(&f, &c, &src).api());
+    }
+    ExitCode::from(0)
+}
+
+/// §15.96: the evidence behind the check, for a reader who does not want to trust this
+/// implementation. The source's digest goes in it, because a certificate is about one text.
+fn certificate(files: &[&String]) -> ExitCode {
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            return ExitCode::from(1);
+        };
+        println!("{}", rulec::cert::certificate(&f, &c, &src));
     }
     ExitCode::from(0)
 }
