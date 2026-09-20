@@ -1,0 +1,161 @@
+name: ci
+
+# `cargo test` on every push and pull request.
+#
+# It had never run here (DESIGN §15.94): `docs` builds the site and `release`
+# builds the binaries, and neither runs a test — so the suite that holds this
+# tool together was only ever green on one laptop, and `release.yml` shipped
+# binaries nothing had tested.
+#
+# The suite reaches outside for one thing: `rulec test` runs the generated code
+# in every language and compares it with the reference evaluator. A language
+# whose toolchain is missing is skipped and reported as skipped, which is the
+# right behaviour for someone trying the tool — and the wrong thing to accept
+# here, because a skipped language narrows what the run proved and says so in a
+# line that is easy to read past. So every toolchain is installed, and the step
+# below fails the job when anything was skipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # The suite asserts Japanese wording in places; `.cargo/config.toml` pins this
+  # for everything cargo launches, and it is set here too for the steps that
+  # call the binary directly.
+  RULEC_LANG: ja
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # `rulec test` runs the generated SQL against a real PostgreSQL, because the
+    # query and the function beside it are two doors on one rule and only a
+    # server can open the second.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # --- The twelve targets, in the order backend.rs declares them.
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasip1
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: NumPy, and the checkers the generated Python is held to
+        run: python3 -m pip install --upgrade numpy mypy ruff
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: RBS and Steep, for the generated Ruby's signatures
+        run: gem install rbs steep
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: wasmtime, for the WASI pass
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+
+      - name: uv, for the site's own tooling
+        uses: astral-sh/setup-uv@v10.0.1
+
+      # --- Say what is here before the suite runs, so a version that moved is
+      # readable in the log rather than only in a failure.
+      - name: The toolchains this run has
+        run: |
+          set -x
+          rustc --version && cargo --version
+          python3 --version && python3 -c 'import numpy; print("numpy", numpy.__version__)'
+          node --version && ruby --version && php --version
+          go version && javac -version && swiftc --version
+          wasmtime --version && psql --version
+          psql -c 'select version()'
+
+      - name: cargo test
+        run: cargo test --locked
+
+      # --- The suite skips a language whose toolchain is missing; here that is a
+      # failure, not a note. `--require-all` counts the twelve languages. The PostgreSQL *function* beside
+      # the query is a thirteenth door and is skipped when `psql` cannot reach a
+      # server, with a warning that `--require-all` does not see — so the warning is
+      # read here as well. Measured: with no psql at all, `--require-all` still exits
+      # 0 (DESIGN §15.94).
+      - name: The generated code runs in every language, none skipped
+        run: |
+          set -eu -o pipefail
+          out=$(mktemp -d)
+          cargo run --quiet --locked -- gen tests/corpus/ゆうパック運賃.rule --out "$out"
+          cargo run --quiet --locked -- test "$out" --require-all --lang en | tee /tmp/run.log
+          if grep -q "skipped" /tmp/run.log; then
+            echo "::error::a side was skipped; every toolchain is supposed to be here"
+            grep "skipped" /tmp/run.log
+            exit 1
+          fi
+
+      - name: fmt and the committed output are current
+        run: |
+          set -eu
+          cargo run --quiet --locked -- fmt --check tests/corpus/
+          cargo run --quiet --locked -- check tests/corpus/
