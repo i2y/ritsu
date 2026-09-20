@@ -35,7 +35,7 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sequence", "clause", "source", "apply")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "apply")
 HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step")
@@ -51,10 +51,13 @@ TYPES = ("money", "mass", "length", "area", "volume", "duration", "temperature",
 TAX = ("incl_tax", "excl_tax")
 POLICIES = ("unique", "first")
 ROUNDING = ("up", "down", "half_up", "half_down", "half_even")
-CONSTANTS = ("true", "false", "none")
-# What a `fold` and a `count` are made of: the connectors of their headings and the arms.
-ARMS = ("over", "where", "next", "stop", "with", "take_unique", "take_first", "keep_max",
-        "by", "empty", "exhausted", "held")
+# `starts_with` is the one test a `string` column takes (§15.101); it sits beside the
+# constants because it is written in a cell.
+CONSTANTS = ("true", "false", "none", "starts_with")
+# What a `fold`, a `count` and a `sum` are made of: the connectors of their headings and
+# the arms.
+ARMS = ("over", "where", "of", "next", "stop", "with", "take_unique", "take_first",
+        "keep_max", "by", "empty", "exhausted", "held")
 FUNCTIONS = ("min", "max")
 NAMESPACE = "std"
 

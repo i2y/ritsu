@@ -230,6 +230,19 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .str("kind", a.kind)
                 .raw("coords", crate::json::strs(&a.coords))
                 .raw("step", a.step.map(|v| crate::json::quote(&rat(&v))).unwrap_or_else(|| "null".into()))
+                .raw(
+                    "prefixes",
+                    match &a.prefixes {
+                        None => "null".into(),
+                        Some(ps) => arr(&ps
+                            .iter()
+                            .map(|p| match p {
+                                Some(t) => crate::json::quote(t),
+                                None => "null".into(),
+                            })
+                            .collect::<Vec<_>>()),
+                    },
+                )
                 .raw("bounds", arr(&bounds))
                 .finish()
         })
@@ -328,6 +341,7 @@ fn cell_json(c: &CertCell) -> String {
         CertCell::Nothing => Obj::new().str("cell", "none").finish(),
         CertCell::Is(ws) => Obj::new().str("cell", "is").raw("words", crate::json::strs(ws)).finish(),
         CertCell::Not(ws) => Obj::new().str("cell", "not").raw("words", crate::json::strs(ws)).finish(),
+        CertCell::Prefix(ps) => Obj::new().str("cell", "prefix").raw("words", crate::json::strs(ps)).finish(),
         CertCell::Cmp(cs) => Obj::new()
             .str("cell", "cmp")
             .raw(

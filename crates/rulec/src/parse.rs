@@ -202,9 +202,10 @@ impl P {
                         f.applies.push(a);
                     }
                 }
-                crate::kw::COUNT => {
-                    if let Some(d) = self.count(&line) {
-                        f.items.push(Item::Count(d));
+                crate::kw::COUNT | crate::kw::SUM => {
+                    let kind = if word == crate::kw::SUM { AggKind::Sum } else { AggKind::Count };
+                    if let Some(d) = self.agg(&line, kind) {
+                        f.items.push(Item::Agg(d));
                     }
                     self.i += 1;
                 }
@@ -698,22 +699,30 @@ impl P {
     /// `= <値>` is what a bool column does not need: without it the test is `= true`
     /// (§15.58). The range is read by `tail_range` like any other, and required later —
     /// here a missing one is not a syntax error, so that the reason can be explained.
-    fn count(&mut self, line: &[Token]) -> Option<CountDecl> {
+    fn agg(&mut self, line: &[Token], kind: AggKind) -> Option<AggDecl> {
         let span = span_of(line);
-        let shape = |p: &mut Self, what: String| -> Option<CountDecl> {
+        let word = if kind == AggKind::Sum { crate::kw::SUM } else { crate::kw::COUNT };
+        let shape = |p: &mut Self, what: String| -> Option<AggDecl> {
             p.err(
-                Diag::error("E028", tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"))
+                Diag::error("E028", tr!("`{}` の書き方が正しくありません", "The `{}` is not written correctly", word))
                     .at(p.at(span.line))
                     .mark(span.clone(), what)
-                    .note(tr!(
-                        "形は `count <名前>(<別名>) over <並びの名前> where <列> = <値>` です。`= <値>` は、真偽の列なら書かなくて構いません。",
-                        "The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`. A bool column needs no `= <value>`."
-                    )),
+                    .note(if kind == AggKind::Sum {
+                        tr!(
+                            "形は `sum <名前>(<別名>) over <並びの名前> of <列>  range >=… <=…` です。",
+                            "The shape is `sum <name>(<alias>) over <sequence> of <column>  range >=… <=…`."
+                        )
+                    } else {
+                        tr!(
+                            "形は `count <名前>(<別名>) over <並びの名前> where <列> = <値>` です。`= <値>` は、真偽の列なら書かなくて構いません。",
+                            "The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`. A bool column needs no `= <value>`."
+                        )
+                    }),
             );
             None
         };
         let Some((name, k)) = self.name_at(line, 1) else {
-            return shape(self, tr!("数えた結果の名前がありません", "the count has no name"));
+            return shape(self, tr!("まとめた結果の名前がありません", "the summary has no name"));
         };
         if line.get(k).and_then(|t| t.ident()) != Some(crate::kw::OVER) {
             return shape(self, tr!("`over` がありません", "`over` is missing"));
@@ -721,14 +730,15 @@ impl P {
         let Some(over) = line.get(k + 1).and_then(|t| t.ident()).map(str::to_string) else {
             return shape(self, tr!("たどる並びの名前がありません", "the sequence has no name"));
         };
-        if line.get(k + 2).and_then(|t| t.ident()) != Some(crate::kw::WHERE) {
-            return shape(self, tr!("`where` がありません", "`where` is missing"));
+        let joiner = if kind == AggKind::Sum { crate::kw::OF } else { crate::kw::WHERE };
+        if line.get(k + 2).and_then(|t| t.ident()) != Some(joiner) {
+            return shape(self, tr!("`{}` がありません", "`{}` is missing", joiner));
         }
         let Some((column, mut j)) = self.name_at(line, k + 3) else {
-            return shape(self, tr!("数える条件の列がありません", "the test names no column"));
+            return shape(self, tr!("読む列がありません", "no column is named"));
         };
         let mut value = None;
-        if line.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
+        if kind == AggKind::Count && line.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
             let Some((v, after)) = self.name_at(line, j + 1) else {
                 return shape(self, tr!("`=` の右に値がありません", "`=` has no value on its right"));
             };
@@ -737,7 +747,7 @@ impl P {
         }
         let (range, _) = self.tail_range(line, j);
         self.tail_junk(line, j);
-        Some(CountDecl { name, over, column, value, range, span })
+        Some(AggDecl { kind, name, over, column, value, range, span })
     }
 
     fn define(&mut self, line: &[Token]) -> Option<DefineDecl> {
@@ -1658,6 +1668,30 @@ impl P {
         }
         if ts[0].ident() == Some(crate::kw::NONE) {
             return Some(Cell::Nothing);
+        }
+        if ts[0].ident() == Some(crate::kw::STARTS_WITH) {
+            let rest = if ts.get(1).is_some_and(|t| t.is(&Kind::Colon)) { &ts[2..] } else { &ts[1..] };
+            let mut v = Vec::new();
+            for t in rest {
+                match &t.kind {
+                    Kind::Str(s) => v.push(s.clone()),
+                    Kind::Comma => {}
+                    _ => {
+                        let at = self.at(t.span.line);
+                        self.err(
+                            Diag::error("E010", tr!("`starts_with` の右は文字列です", "`starts_with` takes a string"))
+                                .at(at)
+                                .mark(t.span.clone(), tr!("文字列ではありません", "not a string"))
+                                .note(tr!(
+                                    "`starts_with \"ABC\"` の形で書いてください。前置きを二つ以上書くならコンマで区切ります。",
+                                    "Write it as `starts_with \"ABC\"`. Separate two or more prefixes with a comma."
+                                )),
+                        );
+                        return None;
+                    }
+                }
+            }
+            return Some(Cell::Prefix(v));
         }
         if ts[0].ident() == Some(crate::kw::NOT) {
             let rest = if ts.get(1).is_some_and(|t| t.is(&Kind::Colon)) { &ts[2..] } else { &ts[1..] };

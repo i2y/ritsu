@@ -131,6 +131,7 @@ impl<'a> Env<'a> {
             // no vector was built for it, and the generated code's handling of the absent
             // value was never run in any language (§15.87).
             Cell::Nothing => matches!(v, Val::Enum(w) if w == crate::kw::NONE),
+            Cell::Prefix(ps) => matches!(v, Val::Str(t) if ps.iter().any(|p| t.starts_with(p.as_str()))),
             Cell::Lit(l) => lit_hit(l),
             Cell::Set(ls) => ls.iter().any(lit_hit),
             Cell::Not(ls) => !ls.iter().any(lit_hit),
@@ -455,7 +456,7 @@ pub fn run_tables(
                 env.table(t);
             }
             // A count is what the walk leaves behind, not something one element does.
-            Item::Count(_) => {}
+            Item::Agg(_) => {}
         }
     }
     (env.fired.clone(), env.fired_rows.clone(), Vec::new(), env.vals)
@@ -518,10 +519,10 @@ fn run_counted(
     inputs: HashMap<String, Val>,
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
     let scoped = crate::types::element_scoped(f);
-    let counts: Vec<&crate::ast::CountDecl> = f
+    let counts: Vec<&crate::ast::AggDecl> = f
         .items
         .iter()
-        .filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None })
+        .filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
         .collect();
     let over = counts.first().map(|d| d.over.clone()).unwrap_or_default();
     let seq = match inputs.get(&over) {
@@ -545,7 +546,7 @@ fn run_counted(
     }
 
     let (mut fired, mut fired_rows) = (Vec::new(), Vec::new());
-    let mut tally: HashMap<String, i128> = counts.iter().map(|d| (d.name.text.clone(), 0)).collect();
+    let mut tally: HashMap<String, Rat> = counts.iter().map(|d| (d.name.text.clone(), Rat::zero())).collect();
     for e in &seq {
         let mut m = scalars.clone();
         for (k, v) in e {
@@ -555,15 +556,25 @@ fn run_counted(
         fired.extend(ef);
         fired_rows.extend(er);
         for d in &counts {
-            if counts_here(vals.get(&d.column.text), &d.value) {
-                *tally.entry(d.name.text.clone()).or_insert(0) += 1;
-            }
+            // A count adds one per element that passes its test; a sum adds the column
+            // itself (§15.100).
+            let add = match d.kind {
+                AggKind::Count => {
+                    if counts_here(vals.get(&d.column.text), &d.value) { Rat::int(1) } else { Rat::zero() }
+                }
+                AggKind::Sum => match vals.get(&d.column.text) {
+                    Some(Val::Num(v)) => *v,
+                    _ => Rat::zero(),
+                },
+            };
+            let e = tally.entry(d.name.text.clone()).or_insert(Rat::zero());
+            *e = e.add(add);
         }
     }
 
     let mut m = scalars;
     for (name, n) in &tally {
-        m.insert(name.clone(), Val::Num(Rat::int(*n)));
+        m.insert(name.clone(), Val::Num(*n));
     }
     let mut env = Env::new(c, m);
     env.fired = fired;
@@ -624,7 +635,7 @@ pub fn run_all_traced(
     if f.fold.is_some() {
         return run_fold(f, c, inputs);
     }
-    if f.items.iter().any(|it| matches!(it, Item::Count(_))) {
+    if f.items.iter().any(|it| matches!(it, Item::Agg(_))) {
         return run_counted(f, c, inputs);
     }
     let mut env = Env::new(c, inputs);
@@ -643,7 +654,7 @@ pub fn run_all_traced(
             Item::Table(t) => {
                 env.table(t);
             }
-            Item::Count(_) => {}
+            Item::Agg(_) => {}
         }
     }
     // The rounding declared on the output applies last — §7.2, "an unrounded value never
@@ -974,7 +985,7 @@ fn run_raw(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> (Option<V
                 env.table(t);
             }
             // E104 asks what the output looks like unrounded; a walk has no witness here.
-            Item::Count(_) => {}
+            Item::Agg(_) => {}
         }
     }
     let out_name = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();

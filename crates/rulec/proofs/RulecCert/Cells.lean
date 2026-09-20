@@ -161,6 +161,9 @@ inductive CellTest where
   | isIn : List String → CellTest
   | notIn : List String → CellTest
   | cmp : List (Cmp × Rat) → CellTest
+  /-- `starts_with "ABC"` on a column of strings (§15.101). A finite set of prefixes cuts
+      the strings into finitely many classes, which is all §6.2 asks of a column. -/
+  | prefixOf : List (List Char) → CellTest
   deriving Repr, Inhabited
 
 /-- The coordinates a cell takes. An axis arrives as its labels — what each coordinate is
@@ -176,8 +179,9 @@ def boxOf (labels : List String) (coords : List (Option Coord)) : CellTest → L
       match coords[c]? with
       | some (some x) => ts.all (fun t => admitsCmp x t.1 t.2)
       | _ => false)
+  | .prefixOf _ => []
 
-/-- Every value a cell compares against falls outside every coordinate of the axis, so no
+/-! Every value a cell compares against falls outside every coordinate of the axis, so no
     coordinate is split by it. This is §6.2's construction, checked rather than assumed. -/
 def axisSplits (coords : List (Option Coord)) : CellTest → Bool
   | .cmp ts => coords.all (fun oc =>
@@ -185,6 +189,51 @@ def axisSplits (coords : List (Option Coord)) : CellTest → Bool
       | some x => ts.all (fun t => splitsAt x t.2)
       | none => true)
   | _ => true
+
+/-- The coordinates a cell on a string column takes: the ones whose own prefix extends one
+    the cell names. -/
+def boxOfPrefix (prefixes : List (Option (List Char))) (ws : List (List Char)) : List Nat :=
+  (List.range prefixes.length).filter (fun c =>
+    match prefixes[c]? with
+    | some (some p) => ws.any (fun w => w.isPrefixOf p)
+    | _ => false)
+
+/-- Every prefix the cell names is itself a coordinate of the axis. That is how §6.2 builds
+    the axis — the coordinates *are* the prefixes the cells name — and it is what makes
+    "the coordinate is taken" and "every string in it satisfies the cell" the same
+    statement. Checked, not assumed. -/
+def axisCovers (prefixes : List (Option (List Char))) (ws : List (List Char)) : Bool :=
+  ws.all (fun w => prefixes.any (fun p => p == some w))
+
+/-- **A prefix cell's box says exactly what the cell says.** For a string that sits in
+    coordinate `c` — it starts with that coordinate's prefix, and no longer coordinate
+    covers it — being in the box and starting with one of the cell's prefixes are the same
+    thing. -/
+theorem mem_boxOf_prefix_iff {prefixes : List (Option (List Char))} {ws : List (List Char)}
+    {c : Nat} {p s : List Char}
+    (hc : prefixes[c]? = some (some p)) (hcov : axisCovers prefixes ws = true)
+    (hs : p <+: s)
+    (hlong : ∀ (i : Nat) (q : List Char), prefixes[i]? = some (some q) → q <+: s →
+      q.length ≤ p.length) :
+    c ∈ boxOfPrefix prefixes ws ↔ ws.any (fun w => w.isPrefixOf s) = true := by
+  have hlen : c < prefixes.length := lt_of_getElem? hc
+  simp only [boxOfPrefix, List.mem_filter, List.mem_range, hc, hlen, true_and,
+    List.any_eq_true]
+  constructor
+  · rintro ⟨w, hw, hwp⟩
+    exact ⟨w, hw, by simpa using (List.isPrefixOf_iff_prefix.1 (by simpa using hwp)).trans hs⟩
+  · rintro ⟨w, hw, hws⟩
+    have hws : w <+: s := List.isPrefixOf_iff_prefix.1 (by simpa using hws)
+    -- `w` is one of the axis's own coordinates, so it cannot be longer than the one `s`
+    -- actually sits in.
+    have hmem : some w ∈ prefixes := by
+      have := List.all_eq_true.1 hcov w hw
+      obtain ⟨q, hq, hqw⟩ := List.any_eq_true.1 this
+      have : q = some w := by simpa using hqw
+      exact this ▸ hq
+    obtain ⟨i, hi⟩ := List.getElem?_of_mem hmem
+    exact ⟨w, hw, by
+      simpa using List.isPrefixOf_iff_prefix.2 (List.prefix_of_prefix_length_le hws hs (hlong i w hi hws))⟩
 
 /-- **A comparison cell's box says exactly what the cell says.** For a coordinate whose
     values the axis knows, being in the box and satisfying every comparison in the cell are

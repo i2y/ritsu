@@ -323,6 +323,10 @@ pub enum Cell {
     Not(Vec<Lit>),
     /// `<=2000g` or `>=1000円 <20000円`
     Cmp(Vec<(CmpOp, Lit)>),
+    /// `starts_with "ABC"` or `starts_with "ABC", "XY"` — the one test a `string` column
+    /// takes (§15.101). A finite set of prefixes cuts the strings into finitely many
+    /// classes, which is what §6.2's compression needs.
+    Prefix(Vec<String>),
     /// `none`
     Nothing,
 }
@@ -400,26 +404,37 @@ pub enum Item {
     Derived(DerivedDecl),
     Define(DefineDecl),
     Table(Table),
-    Count(CountDecl),
+    Agg(AggDecl),
 }
 
-/// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` — how many elements of
-/// the sequence satisfy one test (§15.58).
+/// Which summary of the walk this is (§15.58, §15.100).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AggKind {
+    /// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements pass one test.
+    Count,
+    /// `sum 合計(total) over 明細 of 金額` — the total of one column over the elements.
+    Sum,
+}
+
+/// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100`, or
+/// `sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円` — one summary of the
+/// sequence the rule walks (§15.58, §15.100).
 ///
-/// A count is the walk's summary rather than its answer: it is an ordinary `number` from
-/// then on, so the table that turns it into a class is checked like any other table. The
-/// declared range is what the completeness proof quantifies over, and it is also the cap on
-/// the sequence: a longer one is refused at the door, the way a number outside its range is.
+/// A summary is the walk's account of itself rather than its answer: it is an ordinary
+/// value from then on, so the table that turns it into a class is checked like any other
+/// table. The declared range is what the completeness proof quantifies over, and it is
+/// also what the entry guard holds the walk to — a sequence that leaves it is refused at
+/// the door, the way a number outside its range is.
 #[derive(Debug, Clone)]
-pub struct CountDecl {
+pub struct AggDecl {
+    pub kind: AggKind,
     pub name: Name,
-    /// The sequence it counts over.
+    /// The sequence it runs over.
     pub over: String,
-    /// The column of one element the test reads: a field, or the output of a per-element
-    /// table.
+    /// The column of one element it reads: a field, or the output of a per-element table.
     pub column: Name,
-    /// The value that column must take. `None` is `true`, which is why a bool field needs
-    /// no `= <value>`.
+    /// `count` only: the value that column must take. `None` is `true`, which is why a
+    /// bool field needs no `= <value>`.
     pub value: Option<Name>,
     pub range: Option<Range>,
     pub span: Span,

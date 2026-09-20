@@ -1,0 +1,52 @@
+rule 買物かごの送料(cart_shipping) v1
+description "明細の金額を合計して送料を決める。並びを合計する例"
+
+enum 会員区分(tier) = 一般(regular) | 優待(premium)
+
+inputs
+  区分(tier) : 会員区分
+
+# 一件ぶんの明細。呼び出し側は何件でも渡す
+elements 明細(lines)
+  金額(amount) : money[円]  range >=0円 <=100000円
+
+# 歩いたあとに残るのは合計だけ。範囲は完全性の全体集合であり、走っている途中の合計が
+# ここを出た時点で入口が断る境目でもある
+sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円
+
+outputs
+  送料(fee) : money[円]  round up(1円)
+
+table 送料表(fee_table)
+policy unique
+| 合計             | 区分 | -> 送料(fee) : money[円] |
+| >=5000円         | -    | 0円                      |
+| >=3000円 <5000円 | 優待 | 0円                      |
+| >=3000円 <5000円 | 一般 | 250円                    |
+| <3000円          | -    | 500円                    |
+
+examples
+| 明細     | 区分 | -> 送料 |
+| 二点     | 一般 | 0円     |
+| 二点     | 優待 | 0円     |
+| 少額     | 一般 | 500円   |
+| 中くらい | 一般 | 250円   |
+| 中くらい | 優待 | 0円     |
+| 空       | 一般 | 500円   |
+
+sequence 二点(two)
+| 金額   |
+| 3000円 |
+| 2500円 |
+
+sequence 少額(small)
+| 金額   |
+| 1200円 |
+
+sequence 中くらい(middle)
+| 金額   |
+| 2000円 |
+| 1500円 |
+
+sequence 空(empty)
+| 金額 |

@@ -140,7 +140,17 @@ def checkBoxes (t : ReadTable) (r : Report) : Report := Id.run do
         let cell := row.tests[ai]!
         let labels := t.labels[ai]!
         let coords := t.spans[ai]!
-        if !axisSplits coords cell then
+        let pres := t.prefixes[ai]!
+        -- A string column: the box is read off the prefixes, and every prefix the cell
+        -- names has to be one of the axis's own (§15.101).
+        if let CellTest.prefixOf ws := cell then
+          if !axisCovers pres ws then
+            r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the cell names a prefix the axis has no coordinate for"
+          else if boxOfPrefix pres ws != row.accepts[ai]! then
+            r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the box it states is not the one its cell describes"
+          else
+            read := read + 1
+        else if !axisSplits coords cell then
           r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the cell compares against a value that falls inside a coordinate, so the axis does not stand for it"
         else if boxOf labels coords cell != row.accepts[ai]! then
           r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the box it states is not the one its cell describes"

@@ -1,0 +1,29 @@
+rule 品番の扱い(sku_handling) v1
+description "品番の前置きと箱数で、輸送の扱いを決める。文字列の前方一致の例"
+
+enum 扱い(handling) = 冷凍便(frozen) | 冷蔵便(chilled) | 常温便(ambient) | 常温混載(ambient_mixed)
+
+inputs
+  品番(sku)  : string
+  箱数(boxes) : number  range >=1 <=200
+
+outputs
+  扱い(handling) : 扱い
+
+# 文字列は数え上げられないので、切れるのは前置きだけ。前置きの集合は有限なので、
+# 完全性も重なりも、列挙の列とまったく同じように止まる
+table 扱い表(handling_of)
+policy first
+| 品番                     | 箱数 | -> 扱い(handling) : 扱い |
+| starts_with "FZ-"        | -    | 冷凍便                   |
+| starts_with "CH-", "CL-" | -    | 冷蔵便                   |
+| -                        | >=20 | 常温便                   |
+| -                        | <20  | 常温混載                 |
+
+examples
+| 品番      | 箱数 | -> 扱い  |
+| "FZ-1001" | 1    | 冷凍便   |
+| "CH-2002" | 5    | 冷蔵便   |
+| "CL-0003" | 5    | 冷蔵便   |
+| "AB-0004" | 30   | 常温便   |
+| "AB-0004" | 3    | 常温混載 |

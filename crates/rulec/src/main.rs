@@ -1332,6 +1332,27 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
                 }
                 continue;
             }
+            // The same rule for a table whose column is a `string` (§15.101).
+            let text_column = f.items.iter().any(|it| match it {
+                rulec::ast::Item::Table(t) => t
+                    .inputs
+                    .iter()
+                    .any(|(n, _)| matches!(c.ty_of(n), Some(rulec::types::Ty::Str))),
+                _ => false,
+            });
+            if !b.texts && text_column {
+                if !json {
+                    println!(
+                        "{}",
+                        tr!(
+                            "{}: この言語には文字列の列を持つ表を生成しません（DESIGN §15.101）",
+                            "{}: a table with a column of strings is not generated for this target (DESIGN §15.101)",
+                            b.name
+                        )
+                    );
+                }
+                continue;
+            }
             for (rel, body) in (b.files)(&g, &alias, &pkg) {
                 targets.push((format!("{out_dir}/{rel}"), body));
             }

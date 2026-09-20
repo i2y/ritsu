@@ -64,6 +64,26 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                 vs.push(Val::Bool(true));
                 vs.push(Val::Bool(false));
             }
+            // §9.1 on a `string` column: one representative per class the prefixes cut it
+            // into — the prefix itself for each one, and one string under none of them
+            // (§15.101).
+            Ty::Str => {
+                let mut ps: Vec<String> = Vec::new();
+                for cell in column_cells(f, name) {
+                    if let Cell::Prefix(xs) = cell {
+                        for x in xs {
+                            if !ps.contains(&x) {
+                                ps.push(x.clone());
+                            }
+                        }
+                    }
+                }
+                for p in &ps {
+                    vs.push(Val::Str(p.clone()));
+                    vs.push(Val::Str(format!("{p}0001")));
+                }
+                vs.push(Val::Str(outside_prefixes(&ps)));
+            }
             Ty::Date => {
                 let q = Rat::int(1);
                 for b in numeric_bounds(f, name, &inner, c) {
@@ -117,8 +137,35 @@ fn default_val(ty: &Ty, c: &Checked) -> Val {
         Ty::Enum(en) => Val::Enum(c.enums.get(en).and_then(|v| v.first()).cloned().unwrap_or_default()),
         Ty::Bool => Val::Bool(true),
         Ty::Date => Val::Date(2026, 1, 1),
+        Ty::Str => Val::Str(String::new()),
         _ => Val::Num(Rat::zero()),
     }
+}
+
+/// A string none of the prefixes is a prefix of.
+fn outside_prefixes(ps: &[String]) -> String {
+    for c in "zxqjk".chars() {
+        let s = c.to_string();
+        if !ps.iter().any(|p| s.starts_with(p.as_str()) || p.is_empty()) {
+            return s;
+        }
+    }
+    let n = ps.iter().map(|p| p.chars().count()).max().unwrap_or(0);
+    "z".repeat(n + 1)
+}
+
+/// Every cell that appears in one column of any table of the rule.
+fn column_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
+    let mut out = Vec::new();
+    for t in f.items.iter().filter_map(|it| if let Item::Table(t) = it { Some(t) } else { None }) {
+        let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
+        for row in &t.rows {
+            if let Some(cell) = row.cells.get(ci) {
+                out.push(cell.clone());
+            }
+        }
+    }
+    out
 }
 
 /// The enum values named by the cells of a column (groups are expanded).
@@ -150,7 +197,7 @@ fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
     for it in &f.items {
         match it {
             // A count declares no cells; what it counts is tested inside the walk.
-            Item::Count(_) => {}
+            Item::Agg(_) => {}
             Item::Table(t) => {
                 let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
                 for row in &t.rows {
@@ -214,7 +261,7 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
     };
     for it in &f.items {
         match it {
-            Item::Count(_) => {}
+            Item::Agg(_) => {}
             Item::Table(t) => {
                 if let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) {
                     for row in &t.rows {
@@ -425,6 +472,7 @@ fn fold_pool(
     let seq = |xs: Vec<&BTreeMap<String, Val>>| -> Val {
         Val::Seq(xs.into_iter().cloned().collect())
     };
+
     let case = |elements: Val, why: String| -> (BTreeMap<String, Val>, String) {
         let mut m = scalars.clone();
         m.insert(fold.over.clone(), elements);
@@ -478,7 +526,7 @@ fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(B
     if f.fold.is_some() {
         return fold_pool(f, c, cands);
     }
-    if f.items.iter().any(|it| matches!(it, Item::Count(_))) {
+    if f.items.iter().any(|it| matches!(it, Item::Agg(_))) {
         return count_pool(f, c, cands);
     }
     pool_inner(f, c, cands)
@@ -497,10 +545,10 @@ fn count_pool(
     c: &Checked,
     cands: &BTreeMap<String, Vec<Val>>,
 ) -> Vec<(BTreeMap<String, Val>, String)> {
-    let counts: Vec<&crate::ast::CountDecl> = f
+    let counts: Vec<&crate::ast::AggDecl> = f
         .items
         .iter()
-        .filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None })
+        .filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
         .collect();
     let el = f.elements.as_ref().expect("a count has elements");
     let over = el.name.text.clone();
@@ -535,13 +583,44 @@ fn count_pool(
         Val::Seq(xs.into_iter().cloned().collect())
     };
 
+    // A sum is reached by its **total**, not by a number of elements: one element carrying
+    // the whole amount where the field's range allows it, and as many as it takes where it
+    // does not (§15.100). `None` when the total cannot be built at all — the field has no
+    // range, or the amount is negative.
+    let total_seq = |d: &crate::ast::AggDecl, want: Rat| -> Option<Val> {
+        let base = combos.first()?.clone();
+        let (lo, hi) = c.ranges.get(&d.column.text).copied()?;
+        let (lo, hi) = (lo?, hi?);
+        if want.cmp_to(Rat::zero()) == std::cmp::Ordering::Less || hi.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater {
+            return None;
+        }
+        let mut left = want;
+        let mut xs: Vec<BTreeMap<String, Val>> = Vec::new();
+        while left.cmp_to(Rat::zero()) == std::cmp::Ordering::Greater && xs.len() < 64 {
+            let take = if left.cmp_to(hi) == std::cmp::Ordering::Greater { hi } else { left };
+            if take.cmp_to(lo) == std::cmp::Ordering::Less {
+                // The remainder is below what one element may carry; spread it instead.
+                return None;
+            }
+            let mut e = base.clone();
+            e.insert(d.column.text.clone(), Val::Num(take));
+            xs.push(e);
+            left = left.sub(take);
+        }
+        if left.cmp_to(Rat::zero()) != std::cmp::Ordering::Equal {
+            return None;
+        }
+        Some(Val::Seq(xs))
+    };
+
     let mut out = vec![case(Val::Seq(Vec::new()), tr!("要素ゼロ件", "no elements"))];
     for e in &combos {
         out.push(case(seq(vec![e]), tr!("要素の候補", "an element's candidates")));
     }
 
     // The counted element and the cap of each count, kept for the row-wise sweep below.
-    let mut counted: Vec<(&crate::ast::CountDecl, &BTreeMap<String, Val>)> = Vec::new();
+    let mut counted: Vec<(&crate::ast::AggDecl, &BTreeMap<String, Val>)> = Vec::new();
+    let mut summed: Vec<&crate::ast::AggDecl> = Vec::new();
 
     for d in &counts {
         // An element this count accepts, and one it does not.
@@ -566,6 +645,22 @@ fn count_pool(
             } else {
                 miss.get_or_insert(e);
             }
+        }
+        // A sum reads a number off every element, so there is no "an element it accepts";
+        // what it needs is a total, built above.
+        if d.kind == crate::ast::AggKind::Sum {
+            summed.push(d);
+            for b in numeric_bounds(f, &d.name.text, &c.ty_of(&d.name.text).unwrap_or(Ty::Number), c) {
+                for want in [b, b.sub(Rat::int(1)), b.add(Rat::int(1))] {
+                    if !crate::coverage::in_range(c, &d.name.text, want) {
+                        continue;
+                    }
+                    if let Some(xs) = total_seq(d, want) {
+                        out.push(case(xs, tr!("{} が {} の並び", "a sequence whose {} is {}", d.name.text, want.num / want.den)));
+                    }
+                }
+            }
+            continue;
         }
         let Some(hit) = hit else { continue };
         counted.push((d, hit));
@@ -602,16 +697,20 @@ fn count_pool(
             let tname = set.row_table(ri).to_string();
             let rn = row.index;
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
-                let Some(&(d, hit)) = counted.iter().find(|(d, _)| d.name.text == *col) else {
-                    continue;
-                };
+                let found = counted.iter().find(|(d, _)| d.name.text == *col).map(|&(d, h)| (d, Some(h)));
+                let found = found.or_else(|| summed.iter().find(|d| d.name.text == *col).map(|&d| (d, None)));
+                let Some((d, hit)) = found else { continue };
                 let Some(cell) = row.cells.get(ci) else { continue };
                 let ty = c.ty_of(col).unwrap_or(Ty::Number);
                 // The row's other columns, as the row-target seed builds them. A column another
                 // count decides is left alone: there is no one length that sets two counts.
                 let mut a = scalars.clone();
                 for (cj, (other, _)) in t.inputs.iter().enumerate() {
-                    if cj == ci || fields.contains(other) || counted.iter().any(|(e, _)| e.name.text == *other) {
+                    if cj == ci
+                        || fields.contains(other)
+                        || counted.iter().any(|(e, _)| e.name.text == *other)
+                        || summed.iter().any(|e| e.name.text == *other)
+                    {
                         continue;
                     }
                     let (Some(oc), Some(ovs)) = (row.cells.get(cj), cands.get(other)) else {
@@ -636,11 +735,26 @@ fn count_pool(
                     ] {
                         // A count is a whole number of elements, inside the range it declared —
                         // which is also the cap on how long a sequence may be.
-                        if n.den != 1 || n.num < 0 || !crate::coverage::in_range(c, &d.name.text, n) {
+                        if !crate::coverage::in_range(c, &d.name.text, n) {
                             continue;
                         }
                         let mut m = a.clone();
-                        m.insert(over.clone(), seq((0..n.num).map(|_| hit).collect()));
+                        match hit {
+                            // A count is a whole number of elements.
+                            Some(hit) => {
+                                if n.den != 1 || n.num < 0 {
+                                    continue;
+                                }
+                                m.insert(over.clone(), seq((0..n.num).map(|_| hit).collect()));
+                            }
+                            // A sum is a total, which one element can carry.
+                            None => match total_seq(d, n) {
+                                Some(xs) => {
+                                    m.insert(over.clone(), xs);
+                                }
+                                None => continue,
+                            },
+                        }
                         out.push((m, side));
                     }
                 }

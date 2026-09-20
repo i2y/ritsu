@@ -38,6 +38,8 @@ fn rulec(args: &[&str]) -> String {
 /// times too large in all four languages while the suite stayed green. `コーパスは全部載っている`
 /// keeps the list honest.
 const CORPUS: &[(&str, &str)] = &[
+    ("tests/corpus/品番の扱い.rule", "sku_handling"),
+    ("tests/corpus/買物かごの送料.rule", "cart_shipping"),
     ("tests/corpus/ゆうパック運賃.rule", "yupack_fee"),
     ("tests/corpus/クーポン割引.rule", "coupon_discount"),
     ("tests/corpus/クーポン併用.rule", "coupon_stack"),
@@ -134,12 +136,13 @@ fn 評価器と生成コードが全言語で一致する() {
         // A rule that walks a sequence — folding it or counting it — is not generated for a
         // backend that has no walk (SQL: one query has no place to carry a value from row to
         // row, §15.56, §15.58).
-        let walks = std::fs::read_to_string(root().join(file))
-            .unwrap_or_default()
-            .lines()
-            .any(|l| l.starts_with("elements "));
+        let src = std::fs::read_to_string(root().join(file)).unwrap_or_default();
+        let walks = src.lines().any(|l| l.starts_with("elements "));
+        // The same for a table whose column is a `string` (§15.101): the backends that
+        // decline one write no files for it.
+        let texts = src.lines().any(|l| l.contains("starts_with "));
 
-        for b in present.iter().filter(|b| b.folds || !walks) {
+        for b in present.iter().filter(|b| (b.folds || !walks) && (b.texts || !texts)) {
             let plan = (b.run)(alias, &pkg);
             let cwd = dir.join(&plan.cwd);
             if let Some((cmd, args)) = &plan.build {

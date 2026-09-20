@@ -312,6 +312,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} === null"),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("str_starts_with({var}, {})", php_str(p)))
+                .collect::<Vec<_>>()
+                .join(" || "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("in_array({var}, {}, true)", self.php_group(w))
             }
@@ -430,7 +435,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.php_table(t, local, trace));
@@ -559,7 +564,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "    {} = 0;  // {}\n",
                 php_var(&self.ident(&d.name.text)),
-                tr!("数え上げ", "count")
+                self.agg_word(d)
             ));
         }
         o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
@@ -567,6 +572,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.php_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("    {} += {v};  // {}\n", php_var(&self.ident(&d.name.text)), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => format!("{v} === {}", self.php_value(&w.text)),
                 None if self.count_negated(d) => format!("!{v}"),
@@ -580,6 +589,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
+        for (d, cap) in self.sum_caps() {
+            let n = php_var(&self.ident(&d.name.text));
+            o.push_str(&format!(
+                "    if ({n} > {cap}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
+                php_str(&tr!("{} が範囲の外です", "{} is out of range", d.name.text)),
+            ));
+        }
         o.push_str(&self.php_items(outer, trace, Phase::Main));
         o
     }

@@ -140,7 +140,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -158,7 +158,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -1857,7 +1857,7 @@ policy unique
 rule t(t) v1
 
 inputs
-  s(s) : string
+  s(s) : string?
 
 outputs
   r(r) : bool
@@ -1865,7 +1865,7 @@ outputs
 table j(j)
 policy unique
 | s | -> r(r) : bool |
-| "a" | true |
+| starts_with "a" | true |
 ```
 
 関係するコード: [E101](#e101), [E105](#e105)

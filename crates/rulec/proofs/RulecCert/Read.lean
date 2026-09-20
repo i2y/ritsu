@@ -220,6 +220,8 @@ structure ReadTable where
       declares for it. The tiling check needs all three. -/
   kinds : List String
   steps : List (Option Rat)
+  /-- Per axis: the prefix each coordinate stands for, on a string axis; empty elsewhere. -/
+  prefixes : List (List (Option (List Char)))
   declared : List (Option Span2)
   /-- Leaves the cover rests on an upstream table for. -/
   upstream : Bool
@@ -236,6 +238,7 @@ def cellOfJson (groups : String → List String) (j : Json) : Option CellTest :=
   | "none" => some CellTest.nothing
   | "is" => some (CellTest.isIn (cellWords groups j))
   | "not" => some (CellTest.notIn (cellWords groups j))
+  | "prefix" => some (CellTest.prefixOf ((fieldArr j "words").toList.filterMap str |>.map String.toList))
   | "cmp" => do
       let ts ← (fieldArr j "tests").toList.mapM (fun x => do
         let op ← cmpOfString (fieldStr x "op")
@@ -328,6 +331,10 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
           | cs => cs.all (·.isNone) || !(vs[ai]!).isNull))
     kinds := axes.toList.map (fun a => fieldStr a "kind")
     steps := axes.toList.map (fun a => field a "step" >>= optRat)
+    prefixes := axes.toList.map (fun a =>
+      match field a "prefixes" >>= arr with
+      | some ps => ps.toList.map (fun x => (str x).map String.toList)
+      | none => [])
     declared := columns.map declaredOf
     upstream := cover.leansOnUpstream
     cert := {

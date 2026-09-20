@@ -61,7 +61,7 @@ pub const FOLD: &str = "fold";
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
-    FOLD, COUNT, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
+    FOLD, COUNT, SUM, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
 ];
 
 // --- Declaration modifiers
@@ -103,6 +103,9 @@ pub const OVER: &str = "over";
 // --- Counting the walk (§15.58)
 /// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements satisfy a test.
 pub const COUNT: &str = "count";
+pub const SUM: &str = "sum";
+pub const STARTS_WITH: &str = "starts_with";
+pub const OF: &str = "of";
 /// The test of a `count`: a column of one element, and the value it must take.
 pub const WHERE: &str = "where";
 
@@ -170,7 +173,7 @@ pub const JSONSCHEMA: &str = "jsonschema";
 /// with the same name is silently misread by the line-oriented syntax.
 pub const RESERVED: &[&str] = &[
     RULE, DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT,
-    TABLE, FOLD, COUNT, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, APPLY,
+    TABLE, FOLD, COUNT, SUM, OF, STARTS_WITH, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, APPLY,
     EXCEPT, RESULT,
     EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
     HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,

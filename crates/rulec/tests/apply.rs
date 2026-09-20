@@ -152,7 +152,7 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
         match it {
             Item::Define(x) => idents.push(ident(&x.name)),
             Item::Derived(x) => idents.push(ident(&x.name)),
-            Item::Count(x) => idents.push(ident(&x.name)),
+            Item::Agg(x) => idents.push(ident(&x.name)),
             Item::Table(t) => idents.extend(t.outputs.iter().map(|o| ident(&o.name))),
         }
     }

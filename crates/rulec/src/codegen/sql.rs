@@ -257,6 +257,16 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{col} IS NULL"),
+            // `LIKE 'ABC%'` with the pattern's own `%` and `_` escaped, so a prefix that
+            // contains one is still a prefix and not a wildcard (§15.101).
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| {
+                    let q = p.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_").replace('\'', "''");
+                    format!("{col} LIKE '{q}%' ESCAPE '\\'")
+                })
+                .collect::<Vec<_>>()
+                .join(" OR "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => format!("{col} IN {}", members(&vec![Lit::Word(w.clone())])),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => col,
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("NOT {col}"),
@@ -477,7 +487,7 @@ impl<'a> Gen<'a> {
         for it in &self.f.items {
             match it {
                 // A rule that walks a sequence is not generated for SQL at all (§15.56).
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
                     let text = sql.translate(&e.text);

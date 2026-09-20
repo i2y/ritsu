@@ -377,8 +377,8 @@ const X_E109: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
                       | a | true |\n| b | false |\n| c | true |\n";
-const X_E110: &str = "rule t(t) v1\n\ninputs\n  s(s) : string\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| s | -> r(r) : bool |\n| \"a\" | true |\n";
+const X_E110: &str = "rule t(t) v1\n\ninputs\n  s(s) : string?\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| s | -> r(r) : bool |\n| starts_with \"a\" | true |\n";
 const X_E111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  ok(ok) : bool\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| x | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |\n\

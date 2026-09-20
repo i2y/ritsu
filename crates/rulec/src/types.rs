@@ -499,7 +499,7 @@ pub fn element_scoped(f: &RuleFile) -> HashSet<String> {
                     }
                 }
                 // A count is what the walk leaves behind, so it is not in the walk.
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
             }
         }
         if set.len() == before {
@@ -756,7 +756,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         match it {
             Item::Derived(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Define(d) => named.push((d.name.text.as_str(), &d.name.span)),
-            Item::Count(d) => named.push((d.name.text.as_str(), &d.name.span)),
+            Item::Agg(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Table(t) => {
                 if let Some(n) = &t.name {
                     named.push((n.text.as_str(), &n.span));
@@ -895,7 +895,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             Item::Table(t) => c.table(t, path),
-            Item::Count(d) => c.count_decl(d, f, path),
+            Item::Agg(d) => c.count_decl(d, f, path),
         }
     }
 
@@ -924,7 +924,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // produce, and the two answers that belong to no element at all.
     if let (Some(fold), Some(d)) = (
         &f.fold,
-        f.items.iter().find_map(|it| if let Item::Count(d) = it { Some(d) } else { None }),
+        f.items.iter().find_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }),
     ) {
         c.diags.push(
             Diag::error("E031", tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"))
@@ -1189,7 +1189,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         continue;
                     }
                     let sc = *c.scales.get(col).unwrap_or(&1);
-                    c.cell(cell, &sym.ty, sc, &sp, &at_seq);
+                    c.cell(cell, &sym.ty, sc, &sp, &at_seq, false);
                 }
             }
         }
@@ -1378,7 +1378,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
     for it in &f.items {
-        if let Item::Count(d) = it {
+        if let Item::Agg(d) = it {
             if !c.used.contains(&d.name.text) {
                 c.diags.push(
                     Diag::warning("W111", tr!("数え上げ {} はどこでも使われていません", "Count {} is never used", d.name.text))
@@ -1761,8 +1761,19 @@ impl Checked {
     /// closed set, and the range is declared. The range is not decoration — it is the
     /// universe the completeness check quantifies over when the count becomes a column, and
     /// it is the cap the generated code holds the sequence to.
-    fn count_decl(&mut self, d: &CountDecl, f: &RuleFile, path: &str) {
-        let at = tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line);
+    /// Whether a name's declared range starts at zero or above. A summed column needs
+    /// this so the running total only ever rises (§15.100).
+    fn non_negative(&self, name: &str) -> bool {
+        matches!(self.ranges.get(name), Some((Some(lo), _)) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less)
+    }
+
+    fn count_decl(&mut self, d: &AggDecl, f: &RuleFile, path: &str) {
+        let summing = d.kind == AggKind::Sum;
+        let at = if summing {
+            tr!("{path}:{} 合計", "{path}:{} sum", d.span.line)
+        } else {
+            tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line)
+        };
         let col = d.column.text.clone();
 
         if f.elements.as_ref().map(|e| e.name.text.as_str()) != Some(d.over.as_str()) {
@@ -1797,11 +1808,31 @@ impl Checked {
                 self,
                 tr!("{col} は要素ごとの値ではありません", "{col} is not a value of one element"),
                 tr!(
-                    "数えられるのは、要素の欄か、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値を数えても、答えは 0 か 1 にしかなりません。",
-                    "Only a field of an element, or a column a per-element table produces, can be counted. Counting a value there is one of per call could only ever answer 0 or 1."
+                    "まとめられるのは、要素の欄か、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値をまとめても、並びの話にはなりません。",
+                    "Only a field of an element, or a column a per-element table produces, can be summarised. A value there is one of per call says nothing about the sequence."
                 ),
             ),
-            Some(sym) if !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
+            // A sum reads a number; a count reads a value out of a closed set.
+            Some(sym) if summing && !matches!(sym.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate) => bad(
+                self,
+                tr!("{col} は {} です", "{col} is {}", sym.ty),
+                tr!(
+                    "合計できるのは数の列——金額・数量・`number`・`rate`——だけです。真偽や列挙を合計しても意味が決まりません。",
+                    "Only a column of numbers — an amount, a quantity, `number` or `rate` — can be summed. A bool or an enum has no total."
+                ),
+            ),
+            // The running total has to move one way, so the guard can refuse a sequence the
+            // moment it leaves the declared range and the accumulator stays inside int64
+            // (§15.100). A column that can go negative has no such guard.
+            Some(_) if summing && !self.non_negative(&col) => bad(
+                self,
+                tr!("{col} は負になりえます", "{col} can be negative"),
+                tr!(
+                    "合計する列には `range >=0…` が要ります。負の値が混じると走っている途中の合計が上下し、宣言した範囲を出た時点で断る、ができません。差を取りたいなら、正の列を二つ合計して引いてください。",
+                    "A summed column needs `range >=0…`. With negative values the running total moves both ways, and the guard cannot refuse the moment it leaves the declared range. To take a difference, sum two non-negative columns and subtract."
+                ),
+            ),
+            Some(sym) if !summing && !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
                 self,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
@@ -1809,6 +1840,7 @@ impl Checked {
                     "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum (§15.58)."
                 ),
             ),
+            Some(_) if summing => {}
             Some(sym) => {
                 // The value the column has to take. A bool needs none, which is what makes
                 // `where 会社名一致` read the way it is meant to.
@@ -1849,8 +1881,13 @@ impl Checked {
         }
         self.used.insert(col);
 
-        // The range, which is required and is what the sequence is held to.
-        let ty = Ty::Number;
+        // The range, which is required and is what the sequence is held to. A count is a
+        // plain number; a sum keeps the unit of the column it adds up.
+        let ty = if summing {
+            self.syms.get(&d.column.text).map(|s| s.ty.clone()).unwrap_or(Ty::Number)
+        } else {
+            Ty::Number
+        };
         let bounds = d.range.as_ref().map(|r| bounds_of(r, &ty).0);
         match bounds {
             Some((Some(lo), Some(hi))) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less => {
@@ -1864,7 +1901,7 @@ impl Checked {
                     Some(_) => tr!("下限が負です", "the lower bound is negative"),
                 };
                 self.diags.push(
-                    Diag::error("E030", tr!("`count` に範囲が要ります", "A `count` needs a range"))
+                    Diag::error("E030", tr!("`{}` に範囲が要ります", "A `{}` needs a range", if summing { crate::kw::SUM } else { crate::kw::COUNT }))
                         .at(at.clone())
                         .mark(d.span.clone(), what)
                         .note(tr!(
@@ -1875,7 +1912,7 @@ impl Checked {
                 self.ranges.insert(d.name.text.clone(), (Some(Rat::zero()), None));
             }
         }
-        self.scales.insert(d.name.text.clone(), 1);
+        self.scales.insert(d.name.text.clone(), self.scales.get(&d.column.text).copied().filter(|_| summing).unwrap_or(1));
         self.syms.insert(
             d.name.text.clone(),
             Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false },
@@ -2051,7 +2088,7 @@ impl Checked {
                     .get(ci)
                     .map(|(n, _)| *self.scales.get(n).unwrap_or(&1))
                     .unwrap_or(1);
-                self.cell(cell, want, sc, &sp, &at(row.span.line));
+                self.cell(cell, want, sc, &sp, &at(row.span.line), !t.name.is_none());
             }
             for (oi, oc) in row.outs.iter().enumerate() {
                 let Some(want) = out_ty.get(oi) else { continue };
@@ -2195,7 +2232,7 @@ impl Checked {
                     .get(ci)
                     .map(|(n, _)| *self.scales.get(n).unwrap_or(&1))
                     .unwrap_or(1);
-                self.cell(cell, &want, sc, &sp, &at(row.span.line));
+                self.cell(cell, &want, sc, &sp, &at(row.span.line), !t.name.is_none());
             }
             for (oi, oc) in row.outs.iter().enumerate() {
                 let Some(Some(want)) = out_ty.get(oi) else { continue };
@@ -2270,7 +2307,7 @@ impl Checked {
         );
     }
 
-    fn cell(&mut self, cell: &Cell, want: &Ty, scale: i128, span: &Span, at: &str) {
+    fn cell(&mut self, cell: &Cell, want: &Ty, scale: i128, span: &Span, at: &str, pattern: bool) {
         // Writing a present-side value in an optional column is correct. `none` arrives as
         // Cell::Nothing.
         let want = match want {
@@ -2372,8 +2409,36 @@ impl Checked {
                 }
             }
         };
+        // A `string` column takes a prefix and nothing else, and a prefix goes nowhere
+        // else (§15.101). Without this both mistakes came out as E102 "no input reaches
+        // here", which is a symptom and not the fault.
+        // Only in a table: a cell of `examples` is a value the caller sends, and a string
+        // there is a string.
+        let text = pattern && matches!(want, Ty::Str);
+        match (text || (pattern && matches!(cell, Cell::Prefix(_))), cell) {
+            (true, Cell::Prefix(_)) if !matches!(want, Ty::Str) => self.diags.push(
+                Diag::error("E103", tr!("この列は {want} ですが、前方一致が書かれています", "This column is {want}, and a prefix is written here"))
+                    .at(at.to_string())
+                    .mark(span.clone(), tr!("`starts_with` は文字列の列にだけ書けます", "`starts_with` belongs to a column of strings"))
+                    .note(tr!(
+                        "前方一致で切れるのは文字列です。数や列挙なら、比較や値の名前で書いてください。",
+                        "A prefix cuts strings. On a number or an enum, write a comparison or the value's name."
+                    )),
+            ),
+            (true, Cell::Lit(_) | Cell::Set(_) | Cell::Not(_) | Cell::Cmp(_)) if matches!(want, Ty::Str) => self.diags.push(
+                Diag::error("E110", tr!("文字列の列に書けるのは前方一致だけです", "A column of strings takes a prefix and nothing else"))
+                    .at(at.to_string())
+                    .mark(span.clone(), tr!("前方一致ではありません", "not a prefix"))
+                    .note(tr!(
+                        "`starts_with \"ABC\"` と書いてください。文字列を一つずつ数え上げることはできないので、等号や集合は書けません——値が数えられるものなら `enum` にしてください（§15.101）。",
+                        "Write `starts_with \"ABC\"`. Strings cannot be enumerated, so equality and sets are not available — make it an `enum` if the values can be listed (§15.101)."
+                    )),
+            ),
+            _ => {}
+        }
         match cell {
             Cell::DontCare | Cell::Nothing => {}
+            Cell::Prefix(_) => {}
             Cell::Lit(l) => check_lit(self, l),
             Cell::Set(ls) | Cell::Not(ls) => {
                 for l in ls {

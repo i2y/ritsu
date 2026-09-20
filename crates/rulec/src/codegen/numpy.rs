@@ -178,6 +178,13 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!(r#"{{"col":{c},"op":"eq","v":{}}}"#, quote(crate::kw::NONE)),
+            Cell::Prefix(ps) => format!(
+                r#"{{"any":[{}]}}"#,
+                ps.iter()
+                    .map(|p| format!(r#"{{"col":{c},"op":"prefix","v":{}}}"#, quote(p)))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 let (_, ms) = &self.c.groups[w];
                 format!(
@@ -351,7 +358,7 @@ impl<'a> Gen<'a> {
                     let (e, _) = self.np_expr(&d.expr);
                     steps.push(Obj::new().str("op", "define").str("name", &d.name.text).raw("expr", e).finish());
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
             }
         }
 

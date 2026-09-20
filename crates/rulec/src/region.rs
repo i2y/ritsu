@@ -62,6 +62,13 @@ enum Axis {
     /// keeps a witness on a value the type can actually hold.
     Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat },
     Bool,
+    /// A `string` column, cut by the prefixes its own cells name (§15.101).
+    ///
+    /// Coordinate `i` is "starts with `patterns[i]`, and with no longer pattern"; the last
+    /// coordinate is "starts with none of them". A finite set of prefixes cuts the strings
+    /// into finitely many classes, which is the only thing §6.2's compression asks of a
+    /// column — so completeness and overlap work here exactly as they do on an enum.
+    Prefix { patterns: Vec<String> },
 }
 
 /// A value strictly inside an open coordinate, on the axis's own grid. The midpoint is not
@@ -70,6 +77,24 @@ enum Axis {
 /// has to close the gap. One grid unit in from the closed side is always representable, and
 /// it is the value most likely to show an off-by-one (§11 principle 2). Dates always used
 /// this; it is the same rule.
+/// A string no pattern of the axis is a prefix of. Every pattern rules out one first
+/// character at most, so one of the first few printable letters is always free.
+fn outside_all(patterns: &[String]) -> String {
+    for c in "zxqjk".chars() {
+        let s = c.to_string();
+        if !patterns.iter().any(|p| s.starts_with(p.as_str()) || p.is_empty()) {
+            return s;
+        }
+    }
+    // Every short letter is taken, so go longer than the longest pattern.
+    let n = patterns.iter().map(|p| p.chars().count()).max().unwrap_or(0);
+    let mut s = String::new();
+    for _ in 0..=n {
+        s.push('z');
+    }
+    if patterns.iter().any(|p| s.starts_with(p.as_str())) { format!("{s}!") } else { s }
+}
+
 fn inside(a: Option<Rat>, b: Option<Rat>, step: Rat) -> Rat {
     match (a, b) {
         (Some(a), _) => a.add(step),
@@ -84,6 +109,8 @@ impl Axis {
             Axis::Enum { values } => values.len(),
             Axis::Num { coords, .. } => coords.len(),
             Axis::Bool => 2,
+            // One class per prefix, and one for the strings under none of them.
+            Axis::Prefix { patterns } => patterns.len() + 1,
         }
     }
     /// The value a coordinate stands for, or the one chosen for it.
@@ -97,7 +124,7 @@ impl Axis {
             return chosen;
         }
         match self {
-            Axis::Enum { .. } | Axis::Bool => None,
+            Axis::Enum { .. } | Axis::Bool | Axis::Prefix { .. } => None,
             Axis::Num { coords, step, .. } => match coords.get(i) {
                 Some(Coord::Point(v)) => Some(*v),
                 Some(Coord::Open(a, b)) => Some(inside(*a, *b, *step)),
@@ -112,6 +139,14 @@ impl Axis {
         match self {
             Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
             Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
+            // A witness for "starts with this prefix" is the prefix itself: no longer
+            // pattern has it as a prefix unless that pattern is itself listed, and then
+            // the string sits in that pattern's own class. For "starts with none of them"
+            // it is a character no pattern begins with (§15.101).
+            Axis::Prefix { patterns } => match patterns.get(i) {
+                Some(p) => format!("\"{p}\""),
+                None => format!("\"{}\"", outside_all(patterns)),
+            },
             // Dates are serial day numbers, so every value on the axis — the ends of a
             // coordinate included — is a real calendar day. Print that day.
             Axis::Num { date: true, .. } => match self.value_at(i, chosen) {
@@ -151,6 +186,10 @@ impl Axis {
         use crate::diag::WVal;
         match self {
             Axis::Enum { .. } => WVal::Str(self.witness_at(i, chosen)),
+            Axis::Prefix { patterns } => WVal::Str(match patterns.get(i) {
+                Some(p) => p.clone(),
+                None => outside_all(patterns),
+            }),
             Axis::Bool => WVal::Bool(i == 0),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
             Axis::Num { date: true, .. } => WVal::Str(self.witness_at(i, chosen)),
@@ -482,6 +521,19 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
                     v[0] = true;
                 }
             }
+            // `starts_with "ABC"` takes every class whose own prefix extends `ABC`. A
+            // string in such a class starts with that class's pattern, hence with `ABC`;
+            // and a string in any other class cannot, because `ABC` is itself a pattern
+            // and the string would sit in its class instead (§15.101).
+            Some(Cell::Prefix(ps)) => {
+                if let Axis::Prefix { patterns } = axis {
+                    for (i, pat) in patterns.iter().enumerate() {
+                        if ps.iter().any(|p| pat.starts_with(p.as_str())) {
+                            v[i] = true;
+                        }
+                    }
+                }
+            }
             Some(Cell::Lit(l)) => match (axis, l) {
                 (Axis::Enum { values }, Lit::Word(w)) => {
                     for (i, val) in values.iter().enumerate() {
@@ -583,6 +635,29 @@ impl TableRegion {
                     Axis::Enum { values: vs }
                 }
                 Ty::Bool => Axis::Bool,
+                // §6.2 on a `string` column: the prefixes its own cells name cut the
+                // strings into finitely many classes, and that is all the compression
+                // asks for (§15.101). A column no cell tests has one class, "anything",
+                // which is what a don't-care column is anyway.
+                // An optional string would need the absent value as one more class, and
+                // `none` beside a prefix has no reading yet — so it stays unanalyzable
+                // rather than being cut wrongly (§15.101).
+                Ty::Str if !opt => {
+                    let mut patterns: Vec<String> = Vec::new();
+                    for row in &t.rows {
+                        if let Some(Cell::Prefix(ps)) = row.cells.get(ci) {
+                            for p in ps {
+                                if !patterns.contains(p) {
+                                    patterns.push(p.clone());
+                                }
+                            }
+                        }
+                    }
+                    // Longest first, so that a class is "under this and under nothing
+                    // longer" by position as well as by construction.
+                    patterns.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+                    Axis::Prefix { patterns }
+                }
                 Ty::Date => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
                     let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
@@ -605,7 +680,7 @@ impl TableRegion {
                     // axis takes it, or the completeness check would ask for a row covering a
                     // count of −1.
                     let counted = f.items.iter().find_map(|it| match it {
-                        Item::Count(d) if d.name.text == *name => c.ranges.get(name).copied(),
+                        Item::Agg(d) if d.name.text == *name => c.ranges.get(name).copied(),
                         _ => None,
                     });
                     if let Some((clo, chi)) = counted {
@@ -1043,6 +1118,7 @@ fn cell_key(c: &Cell) -> String {
         Cell::Lit(l) => lit(l),
         Cell::Set(ls) => ls.iter().map(lit).collect::<Vec<_>>().join(","),
         Cell::Not(ls) => format!("{}:{}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join(",")),
+        Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(",")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -1076,6 +1152,7 @@ fn cell_text(c: &Cell) -> String {
         Cell::Lit(l) => format!("= {}", lit(l)),
         Cell::Set(ls) => format!("∈ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Not(ls) => format!("∉ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
+        Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -2129,6 +2206,10 @@ pub struct CertAxis {
     /// Each coordinate as a closed interval of true values, where the axis is numeric.
     /// `None` for an enum or a boolean; an unbounded end is `None` inside the pair.
     pub bounds: Vec<Option<(Option<Rat>, Option<Rat>)>>,
+    /// For a `string` axis: the prefix each coordinate stands for, and `None` for the one
+    /// coordinate that stands for "under none of them" (§15.101). `None` for the whole
+    /// list on any other axis.
+    pub prefixes: Option<Vec<Option<String>>>,
     /// The grid the axis's values sit on, where it is numeric. Two coordinates that touch
     /// share an end; two that are one step apart have nothing between them, and without
     /// the step a re-checker cannot tell that from a coordinate quietly removed (§15.99).
@@ -2171,6 +2252,8 @@ pub enum CertCell {
     Nothing,
     Is(Vec<String>),
     Not(Vec<String>),
+    /// `starts_with "ABC"` — the prefixes the cell names (§15.101).
+    Prefix(Vec<String>),
     Cmp(Vec<(&'static str, Option<Rat>)>),
 }
 
@@ -2223,7 +2306,12 @@ pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) ->
     // callee's row, and §15.69 keeps it out of the coverage demand. The certificate says so.
     let applied: Vec<bool> = (0..t.rows.len()).map(|i| set.applied[set.member_of[i]].is_some()).collect();
     let cover = reg.cover(t, c, f, DEFAULT_BUDGET);
-    Some(reg.certificate(t, &w114, &f.inputs, &applied, cover, c))
+    let walked: Vec<String> = f
+        .items
+        .iter()
+        .filter_map(|it| if let crate::ast::Item::Agg(d) = it { Some(d.name.text.clone()) } else { None })
+        .collect();
+    Some(reg.certificate(t, &w114, &f.inputs, &walked, &applied, cover, c))
 }
 
 /// One cell, resolved only as far as the units: the re-checker does the geometry.
@@ -2240,6 +2328,7 @@ fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
         Some(Cell::Lit(l)) => CertCell::Cmp(vec![("=", ty.as_ref().and_then(|t| lit_rat(l, t)))]),
         Some(Cell::Set(ls)) => CertCell::Is(ls.iter().map(word).collect()),
         Some(Cell::Not(ls)) => CertCell::Not(ls.iter().map(word).collect()),
+        Some(Cell::Prefix(ps)) => CertCell::Prefix(ps.clone()),
         Some(Cell::Cmp(cs)) => CertCell::Cmp(
             cs.iter()
                 .map(|(o, l)| {
@@ -2265,7 +2354,7 @@ impl TableRegion {
     /// that is reached is reached by some point, and naming the point turns the check into
     /// one lookup. Neither asks the reader to search, which is the whole difference between
     /// evidence and a second run of the same program.
-    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], applied: &[bool], cover: Option<Cover>, chk: &Checked) -> CertTable {
+    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], walked: &[String], applied: &[bool], cover: Option<Cover>, chk: &Checked) -> CertTable {
         let unique = t.policy == crate::ast::Policy::Unique;
         let axes: Vec<CertAxis> = (0..self.axes.len())
             .map(|ai| CertAxis {
@@ -2276,12 +2365,23 @@ impl TableRegion {
                     "define"
                 } else if inputs.iter().any(|i| i.name.text == self.col_names[ai]) {
                     "input"
+                } else if walked.contains(&self.col_names[ai]) {
+                    // What the walk left behind. It is neither an input a caller sends nor
+                    // a value a table above decided, and calling it upstream said the
+                    // wrong thing about where its points come from (§15.100).
+                    "walk"
                 } else {
                     "upstream"
                 },
                 coords: (0..self.axes[ai].len()).map(|c| self.axes[ai].witness(c)).collect(),
                 step: match &self.axes[ai] {
                     Axis::Num { step, .. } => Some(*step),
+                    _ => None,
+                },
+                prefixes: match &self.axes[ai] {
+                    Axis::Prefix { patterns } => {
+                        Some(patterns.iter().map(|p| Some(p.clone())).chain([None]).collect())
+                    }
                     _ => None,
                 },
                 bounds: self.coord_bounds(ai),

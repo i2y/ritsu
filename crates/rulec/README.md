@@ -56,7 +56,7 @@ What is **not** proved matters just as much.
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
    implementation, which has not itself been proved correct. The evidence is 80 deliberately
-   broken rules each producing the diagnostic it should, and 30 rules — 28 transcribed from real
+   broken rules each producing the diagnostic it should, and 32 rules — 28 transcribed from real
    published terms checked, generated and run on every commit. Evidence, not proof. What
    *is* proved is the step after it: the certificate below, and that the checks it has to
    pass imply the claims.
@@ -68,7 +68,7 @@ test cases: no table falls through, no runtime guard of (3) fires, nothing overf
 `i64`, and the rows of each `unique` table cover the domain exactly once. It shares no code
 with the checker that proved the table, so where the two agree, two unrelated tools say the
 same thing — and where they disagree, one of them is wrong and the input that shows it comes
-back. On the corpus, 73 harnesses verify in 155 seconds. What it does not reach: the table
+back. On the corpus, 74 harnesses verify in 144 seconds. What it does not reach: the table
 itself (1), and every target but this one. `rulec test --proofs` runs it where `kani` is
 installed.
 
@@ -404,7 +404,7 @@ src/              38 modules: kw, i18n, lex, parse, types, defset (the tables th
                   sources (a law on e-Gov, cited and pinned), apply (a rule applied to
                   another case), vfs (reading at a git revision), sha256,
                   wasm (the checker as the site's playground)
-tests/corpus/     30 rules: 28 transcribed from real published terms, 2 written to use the
+tests/corpus/     32 rules: 28 transcribed from real published terms, 4 written to use the
                   words a transcription never reaches; and the copies of the
                   statute text they cite
 tests/mutants/    33 files, each with one mistake planted in it
@@ -431,7 +431,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 ## Where it stands
 
-30 rules — 28 taken from real published terms, 2 written to reach the rest of the language — are checked, generated and run on every commit, and all 74 diagnostics are implemented. What is built:
+32 rules — 28 taken from real published terms, 4 written to reach the rest of the language — are checked, generated and run on every commit, and all 74 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

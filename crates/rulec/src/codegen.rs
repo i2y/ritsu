@@ -156,26 +156,48 @@ mod tool;
 
 impl<'a> Gen<'a> {
     /// The counts this rule declares, in source order (§15.58).
-    fn counts(&self) -> Vec<&crate::ast::CountDecl> {
-        self.f.items.iter().filter_map(|it| if let Item::Count(d) = it { Some(d) } else { None }).collect()
+    fn counts(&self) -> Vec<&crate::ast::AggDecl> {
+        self.f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect()
     }
 
-    /// The cap the sequence is held to: the smallest upper bound any count declares.
+    /// The cap the sequence is held to: the smallest upper bound any **count** declares.
     ///
     /// A count can be as large as the sequence, so a longer sequence could take a count
     /// outside the universe the completeness proof quantified over. The guard is the same
-    /// shape as the one a number outside its range gets (§15.43, §15.58).
+    /// shape as the one a number outside its range gets (§15.43, §15.58). A `sum` says
+    /// nothing about the length — what holds it is the running total itself (§15.100).
     fn count_cap(&self) -> Option<i128> {
         self.counts()
             .iter()
+            .filter(|d| d.kind == crate::ast::AggKind::Count)
             .filter_map(|d| self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
             .map(|hi| crate::types::wire_int(hi, 1))
             .min()
     }
 
+    /// The word a summary is called by, for the comment beside its accumulator.
+    fn agg_word(&self, d: &crate::ast::AggDecl) -> String {
+        if d.kind == crate::ast::AggKind::Sum { tr!("合計", "sum") } else { tr!("数え上げ", "count") }
+    }
+
+    /// The upper bound a `sum` is held to, on the wire (§15.100). The walk refuses the
+    /// moment the running total passes it, which is why the summed column has to be
+    /// non-negative: the total only ever rises, so one test at the end is one test
+    /// everywhere, and the accumulator never leaves `max + one element`.
+    fn sum_caps(&self) -> Vec<(&crate::ast::AggDecl, i128)> {
+        self.counts()
+            .into_iter()
+            .filter(|d| d.kind == crate::ast::AggKind::Sum)
+            .filter_map(|d| {
+                let hi = self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi)?;
+                Some((d, crate::types::wire_int(hi, self.c.scales.get(&d.name.text).copied().unwrap_or(1))))
+            })
+            .collect()
+    }
+
     /// What one element has to look like to be counted: the value its column must take, or
     /// `None` when the column is a bool the test reads as it is.
-    fn count_member<'d>(&self, d: &'d crate::ast::CountDecl) -> Option<&'d crate::ast::Name> {
+    fn count_member<'d>(&self, d: &'d crate::ast::AggDecl) -> Option<&'d crate::ast::Name> {
         match self.ty_of(&d.column.text) {
             Ty::Bool => None,
             _ => d.value.as_ref(),
@@ -183,7 +205,7 @@ impl<'a> Gen<'a> {
     }
 
     /// A bool column counted for `false` rather than for `true`.
-    fn count_negated(&self, d: &crate::ast::CountDecl) -> bool {
+    fn count_negated(&self, d: &crate::ast::AggDecl) -> bool {
         matches!(self.ty_of(&d.column.text), Ty::Bool)
             && d.value.as_ref().is_some_and(|v| v.text == crate::kw::FALSE)
     }
@@ -191,7 +213,7 @@ impl<'a> Gen<'a> {
     /// Whether an item is emitted in this phase. The split is the evaluator's: an item is
     /// element-scoped exactly when it reads something that is (§15.58).
     fn in_phase(&self, it: &Item, phase: Phase) -> bool {
-        if matches!(it, Item::Count(_)) {
+        if matches!(it, Item::Agg(_)) {
             return false;
         }
         if phase == Phase::All {
@@ -202,7 +224,7 @@ impl<'a> Gen<'a> {
             Item::Derived(d) => scoped.contains(&d.name.text),
             Item::Define(d) => scoped.contains(&d.name.text),
             Item::Table(t) => t.outputs.iter().any(|o| scoped.contains(&o.name.text)),
-            Item::Count(_) => false,
+            Item::Agg(_) => false,
         };
         walk == (phase == Phase::Walk)
     }
@@ -321,7 +343,7 @@ impl<'a> Gen<'a> {
                 match it {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
-                    Item::Count(d) => vec![&d.name],
+                    Item::Agg(d) => vec![&d.name],
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -385,7 +407,7 @@ impl<'a> Gen<'a> {
                 match it {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
-                    Item::Count(d) => vec![&d.name],
+                    Item::Agg(d) => vec![&d.name],
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -767,6 +789,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} is None"),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("{var}.startswith({})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" or "),
             // A cell that names one group uses the set the module already declares, rather
             // than writing the members out again — otherwise that set is dead code.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
@@ -1015,7 +1042,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.py_table(t, local, trace));
@@ -1148,7 +1175,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "    {} = 0  # {}\n",
                 self.ident(&d.name.text),
-                tr!("数え上げ", "count")
+                self.agg_word(d)
             ));
         }
         o.push_str(&format!("    for {e} in {seq}:\n"));
@@ -1156,6 +1183,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.py_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => {
                     let cls = self.py_ty(&self.ty_of(&d.column.text));
@@ -1173,6 +1204,13 @@ impl<'a> Gen<'a> {
             body.push_str(&format!("        {} += 1\n", self.ident(&d.name.text)));
         }
         o.push_str(&Self::indent_block(&body, "    "));
+        for (d, cap) in self.sum_caps() {
+            let n = self.ident(&d.name.text);
+            o.push_str(&format!(
+                "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", {n})\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         o.push_str(&self.py_items(outer, trace, Phase::Main));
         o
     }
@@ -1570,6 +1608,7 @@ fn cell_src(c: &Cell) -> String {
         Cell::Lit(l) => lit_src(l),
         Cell::Set(ls) => ls.iter().map(lit_src).collect::<Vec<_>>().join(", "),
         Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit_src).collect::<Vec<_>>().join(", ")),
+        Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ")),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -1729,6 +1768,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => return Some(format!("{raw} == nil")),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("strings.HasPrefix({var}, {})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" || "),
             // A cell that names one group calls the predicate the package already declares,
             // rather than writing the members out again — otherwise that function is dead.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
@@ -1839,8 +1883,14 @@ impl<'a> Gen<'a> {
         o.push('\n');
         o.push_str(&self.go_record());
         // The record function uses fmt whatever the rule looks like, so the import is
-        // unconditional now.
-        let o = o.replace(IMPORT_MARK, "import \"fmt\"\n\n");
+        // unconditional now. `strings` comes in only where a cell tests a prefix
+        // (§15.101) — an unused import does not compile in Go.
+        let imports = if o.contains("strings.HasPrefix(") {
+            "import (\n\t\"fmt\"\n\t\"strings\"\n)\n\n"
+        } else {
+            "import \"fmt\"\n\n"
+        };
+        let o = o.replace(IMPORT_MARK, imports);
         align(&o)
     }
 
@@ -1862,7 +1912,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_typed(&go_expr(&e.text)), tr!("定義", "definition")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.go_table(t, local, trace));
@@ -2022,13 +2072,17 @@ impl<'a> Gen<'a> {
             ));
         }
         for d in self.counts() {
-            o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+            o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
         let mut body = self.go_element_guards(&local, zero);
         body.push_str(&self.go_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("\t{} += {v} // {}\n", self.ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => format!("{v} == {}", self.go_value(&w.text)),
                 None if self.count_negated(d) => format!("!{v}"),
@@ -2038,6 +2092,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "\t"));
         o.push_str("\t}\n");
+        for (d, cap) in self.sum_caps() {
+            let n = self.ident(&d.name.text);
+            o.push_str(&format!(
+                "\tif {n} > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {n}, HasValue: true}}\n\t}}\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         for d in self.counts() {
             o.push_str(&self.go_unread(&d.name.text));
         }
@@ -2744,6 +2805,7 @@ impl<'a> Gen<'a> {
                 }
                 Ty::Bool => format!("{ind}{into}.{g} = {src}[{jp:?}] == true\n"),
                 Ty::Date => format!("{ind}{into}.{g} = ord(str({src}[{jp:?}]))\n"),
+                Ty::Str => format!("{ind}{into}.{g} = str({src}[{jp:?}])\n"),
                 // A number is a plain int64, not a type the package declares, so it must not
                 // be qualified with the package name.
                 Ty::Number => format!("{ind}{into}.{g} = int64(num({src}[{jp:?}]))\n"),
@@ -3084,6 +3146,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} === null"),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("{var}.startsWith({})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" || "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("_{}.has({var})", self.ident(w))
             }
@@ -3300,6 +3367,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.ts_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("  {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => {
                     let cls = self.ts_ty(&self.ty_of(&d.column.text));
@@ -3313,6 +3384,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "  "));
         o.push_str("  }\n");
+        for (d, cap) in self.sum_caps() {
+            let n = self.ident(&d.name.text);
+            o.push_str(&format!(
+                "  if ({n} > {cap}n) {{\n    throw new RuleInputError(`{}`, {n});\n  }}\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         o.push_str(&self.ts_items(outer, trace, Phase::Main));
         o
     }
@@ -3376,7 +3454,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.ts_table(t, local, trace));
@@ -3663,6 +3741,7 @@ impl<'a> Gen<'a> {
                 }
                 Ty::Bool => format!("{src} === true"),
                 Ty::Date => format!("_ord(String({src}))"),
+                Ty::Str => format!("String({src})"),
                 Ty::Number => format!("BigInt({src} as number)"),
                 // The absent value is `null` on the wire (§10.2). Its brand is a compound
                 // type (`Kind | null`), which was being pushed into an `import type {…}` as
@@ -3923,6 +4002,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => return Some(format!("{raw}.is_none()")),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("{var}.starts_with({})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" || "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 wrap(format!("is_{}({var})", self.ident(w)), false)
             }
@@ -4053,7 +4137,7 @@ impl<'a> Gen<'a> {
                     rs_expr(unparen(&self.expr(&d.expr, local).text)),
                     tr!("定義", "definition")
                 )),
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.rs_table(t, local, trace));
@@ -4191,6 +4275,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.rs_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("    {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => {
                     let cls = self.rs_ty(&self.ty_of(&d.column.text));
@@ -4204,6 +4292,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
+        for (d, cap) in self.sum_caps() {
+            let n = self.ident(&d.name.text);
+            o.push_str(&format!(
+                "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({n}) }});\n    }}\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         o.push_str(&self.rs_items(outer, trace, Phase::Main));
         o
     }
@@ -4753,7 +4848,7 @@ impl<'a> Gen<'a> {
                     self.ident(&d.name.text),
                     rs_expr(unparen(&self.expr(&d.expr, &local).text))
                 )),
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     let t = self.c.table_at(t)?;
                     body.push_str(&self.rs_table(t, &local, &trace));
@@ -6416,6 +6511,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var}.nil?"),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("{var}.start_with?({})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" || "),
             // A cell naming one group calls the constant the module already declares,
             // rather than writing the members out again.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
@@ -6551,7 +6651,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.rb_table(t, local, trace));
@@ -6673,6 +6773,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.rb_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => format!("{v} == {}", self.rb_value(&w.text)),
                 None if self.count_negated(d) => format!("!{v}"),
@@ -6682,6 +6786,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    end\n");
+        for (d, cap) in self.sum_caps() {
+            let n = self.ident(&d.name.text);
+            o.push_str(&format!(
+                "    raise RuleInputError.new(\"{}\", {n}) if {n} > {cap}\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         o.push_str(&self.rb_items(outer, trace, Phase::Main));
         o
     }
@@ -7472,6 +7583,11 @@ impl<'a> Gen<'a> {
         Some(match cell {
             Cell::DontCare => return None,
             Cell::Nothing => format!("{var} == nil"),
+            Cell::Prefix(ps) => ps
+                .iter()
+                .map(|p| format!("{var}.hasPrefix({})", format!("{p:?}")))
+                .collect::<Vec<_>>()
+                .join(" || "),
             // A cell naming one group uses the set the module already declares, rather than
             // writing the members out a second time.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
@@ -7607,7 +7723,7 @@ impl<'a> Gen<'a> {
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
-                Item::Count(_) => {}
+                Item::Agg(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.sw_table(t, local, trace));
@@ -7765,6 +7881,10 @@ impl<'a> Gen<'a> {
         body.push_str(&self.sw_items(&local, trace, Phase::Walk));
         for d in self.counts() {
             let v = local(&d.column.text);
+            if d.kind == crate::ast::AggKind::Sum {
+                body.push_str(&format!("    {} += {v}  // {}\n", self.sw_ident(&d.name.text), d.name.text));
+                continue;
+            }
             let test = match self.count_member(d) {
                 Some(w) => format!("{v} == {}", self.sw_value(&w.text)),
                 None if self.count_negated(d) => format!("!{v}"),
@@ -7774,6 +7894,13 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&Self::indent_block(&body, "    "));
         o.push_str("    }\n");
+        for (d, cap) in self.sum_caps() {
+            let n = self.sw_ident(&d.name.text);
+            o.push_str(&format!(
+                "    if {n} > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({n}))\n    }}\n",
+                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+            ));
+        }
         o.push_str(&self.sw_items(outer, trace, Phase::Main));
         o
     }

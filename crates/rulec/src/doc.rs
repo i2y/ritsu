@@ -147,7 +147,7 @@ fn producer(f: &RuleFile, col: &str) -> String {
     }
     for it in &f.items {
         match it {
-            Item::Count(d) if d.name.text == col => return tr!("数え上げ", "Count"),
+            Item::Agg(d) if d.name.text == col => return tr!("数え上げ", "Count"),
             Item::Derived(d) if d.name.text == col => return tr!("導出", "Derived value"),
             Item::Define(d) if d.name.text == col => return tr!("定義", "Definition"),
             Item::Table(t) if t.outputs.iter().any(|o| o.name.text == col) => {
@@ -431,8 +431,8 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     // --- What the walk counted. An approver reading the table below sees a column of
     // numbers; this is where those numbers come from, and how long a sequence the rule will
     // take at all (§15.58).
-    let counts: Vec<&crate::ast::CountDecl> =
-        f.items.iter().filter_map(|i| if let Item::Count(d) = i { Some(d) } else { None }).collect();
+    let counts: Vec<&crate::ast::AggDecl> =
+        f.items.iter().filter_map(|i| if let Item::Agg(d) = i { Some(d) } else { None }).collect();
     if !counts.is_empty() {
         o.push_str(&tr!("\n## 数え上げ\n\n", "\n## Counts\n\n"));
         o.push_str(&tr!(
@@ -1405,8 +1405,8 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         f.items.iter().filter_map(|i| if let Item::Derived(d) = i { Some(d) } else { None }).filter(|d| !inlined(f, &d.name.text)).collect();
     let defines: Vec<&DefineDecl> =
         f.items.iter().filter_map(|i| if let Item::Define(d) = i { Some(d) } else { None }).filter(|d| !inlined(f, &d.name.text)).collect();
-    let counts: Vec<&crate::ast::CountDecl> =
-        f.items.iter().filter_map(|i| if let Item::Count(d) = i { Some(d) } else { None }).collect();
+    let counts: Vec<&crate::ast::AggDecl> =
+        f.items.iter().filter_map(|i| if let Item::Agg(d) = i { Some(d) } else { None }).collect();
     if !derived.is_empty() || !defines.is_empty() || !counts.is_empty() {
         o.push_str(&tr!("\n## 計算の途中で使う値\n\n", "\n## Values used along the way\n\n"));
         for d in &counts {

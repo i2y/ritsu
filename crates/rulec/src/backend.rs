@@ -39,6 +39,10 @@ pub struct Backend {
     /// a sequence is generated only for the backends that say yes, and the others are
     /// refused by name — a generated file that cannot run is worse than a missing one.
     pub folds: bool,
+    /// Whether this backend can write a table whose column is a `string` (§15.101). The
+    /// test is a prefix, which every language but the columnar one does in one call; the
+    /// backends that say no are refused by name for the same reason as a walk.
+    pub texts: bool,
     /// How to run the same runner as a WASI module under wasmtime (§15.63), for the languages
     /// whose output compiles to `wasm32-wasip1` unchanged. `rulec test` runs it as a pass of its
     /// own when wasmtime and the target's standard library are installed.
@@ -177,6 +181,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("python", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("python", "python3", &["-B", "_round_test.py"]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
         pg: None,
@@ -205,6 +210,9 @@ pub const ALL: &[Backend] = &[
         round: |_| Plan::new("numpy", "python3", &["-B", "_round_test.py"]),
         // A walk carries state from element to element, which is not a column operation.
         folds: false,
+        // A prefix over a column of strings is not one either: the runtime here reads
+        // integer columns, and a text column would need a second representation.
+        texts: false,
         wasi: None,
         mcp: None,
         pg: None,
@@ -242,6 +250,7 @@ pub const ALL: &[Backend] = &[
         },
         round: |_| Plan::new("typescript", "node", &["--no-warnings", "_round_test.ts"]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
         pg: None,
@@ -268,6 +277,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("javascript", "node", &[&format!("{alias}_runner.mjs")]),
         round: |_| Plan::new("javascript", "node", &["_round_test.mjs"]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
         pg: None,
@@ -303,6 +313,7 @@ pub const ALL: &[Backend] = &[
             )
         },
         folds: true,
+        texts: true,
         // The same runner, compiled for WASI and run under wasmtime. Nothing in the generated
         // Rust is platform-specific, so the source is the one above, unchanged.
         wasi: Some(|alias, _| {
@@ -335,6 +346,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("ruby", "ruby", &[&format!("{alias}_runner.rb")]),
         round: |_| Plan::new("ruby", "ruby", &["_round_test.rb"]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,
@@ -360,6 +372,7 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("php", "php", &["-n", &format!("{alias}_runner.php")]),
         round: |_| Plan::new("php", "php", &["-n", "_round_test.php"]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,
@@ -387,6 +400,7 @@ pub const ALL: &[Backend] = &[
         run: |_, pkg| Plan::new(&format!("go/{pkg}runner"), "go", &["run", "."]),
         round: |pkg| Plan::new(&format!("go/{pkg}"), "go", &["test", "./..."]),
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,
@@ -421,6 +435,7 @@ pub const ALL: &[Backend] = &[
                 .built("swiftc", &["-Onone", "_round_test.swift", "-o", "_round_test"])
         },
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,
@@ -466,6 +481,7 @@ pub const ALL: &[Backend] = &[
             )
         },
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,
@@ -498,6 +514,8 @@ pub const ALL: &[Backend] = &[
         run: |alias, _| Plan::new("sql", "python3", &["-B", &format!("{alias}_runner.py")]),
         round: |_| Plan::new("sql", "python3", &["-B", "_round_test.py"]),
         folds: false,
+        // `LIKE 'ABC%'` is one call here too, so a text column is generated.
+        texts: true,
         wasi: None,
         mcp: None,
         proof: None,
@@ -534,6 +552,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("wasm", "node", &["_round_test.mjs"]).built("rustc", &refs)
         },
         folds: true,
+        texts: true,
         wasi: None,
         mcp: None,
         pg: None,

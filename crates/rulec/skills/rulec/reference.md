@@ -609,10 +609,10 @@ no answer and the generated code raises. Such an input is still part of the suit
 `vectors/<alias>.refused.jsonl`, and `rulec test` requires every generated language to refuse
 it. That is what makes the last fold transition covered rather than merely named.
 
-## 6.3 count
+## 6.3 count and sum
 
-`fold` ends a walk with one answer. `count` ends it with **a number**, and the rule goes on
-from there like any other.
+`fold` ends a walk with one answer. `count` and `sum` end it with **a number**, and the rule
+goes on from there like any other.
 
 ```rule
 count 一致数(hits) over 候補 where 照合 = 一致  range >=0 <=100
@@ -653,13 +653,35 @@ covering a count of −1 — and it is **the cap on the sequence**: the generate
 sequence longer than the smallest bound any count declares, the way it refuses a number
 outside its range. A count cannot leave the space the proof was made over.
 
-Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
-passes a test. There is no sum, no average and no arm that carries a number forward:
-computing one belongs before the call, where its result is an ordinary input.
+### sum
 
-A rule cannot have both a `fold` and a `count` (E031): they are two endings for the same
-walk, and a `fold` may stop partway, which leaves the meaning of a count on that walk
-undecided. Every target but SQL generates a count, for the reason SQL gets no walk at all.
+`sum` totals one column of the elements instead of counting them.
+
+```rule
+elements 明細(lines)
+  金額(amount) : money[円]  range >=0円 <=100000円
+
+sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円
+```
+
+The shape is `sum <name>(<alias>) over <sequence> of <column>`, with `range`. The column is
+one of **one element**, the same as a count's, and it has to be a number — an amount, a
+quantity, `number` or `rate` (E029). The total keeps that column's type, so `合計` above is
+`money[円]` and a table over it is written in yen.
+
+**The summed column has to be non-negative** (`range >=0…`, E029). That is what lets the
+running total move one way only: the walk refuses the moment it passes the declared maximum,
+so one test at the end is a test everywhere, and the accumulator never leaves `maximum plus
+one element` — which is what keeps E108's int64 claim true of a sequence whose length nothing
+caps. To take a difference, sum two non-negative columns and subtract.
+
+Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
+passes a test; a sum adds one column. There is no average and no arm that carries a number
+forward: an average is a sum and a count divided, and the divisor is not a constant (§2.3).
+
+A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
+the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
+walk undecided. Every target but SQL generates them, for the reason SQL gets no walk at all.
 
 ## 7. Tables
 
@@ -792,7 +814,7 @@ tables from its own file, under a heading that says what was applied and how. Ge
 name the callee and its digest in their header, `rulec api` lists them under `applies`, and
 `rulec diff old@rev new` reads the callee at the same revision as the rule.
 
-### The seven kinds of cell
+### The eight kinds of cell
 
 | written | means |
 |---|---|
@@ -802,7 +824,17 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 | `not: 遠隔地` | the complement of a set |
 | `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
 | `>=1000円 <20000円` | an interval — two comparisons side by side mean "and" |
+| `starts_with "CH-"` | a prefix, on a `string` column. Two or more are separated by a comma |
 | `none` | an optional that is absent |
+
+**A `string` column takes a prefix and nothing else** (E110). Strings cannot be enumerated,
+so equality and sets have no finite reading here — where the values *can* be listed, make it
+an `enum`. A prefix can: the prefixes a column's cells name cut the strings into one class per
+prefix, plus "under none of them", and that is all §6.2's compression asks of a column. So
+completeness and overlap work on a string column exactly as they do on an enum, and the
+witness for a gap is a string you can paste. The match is on the bytes: no case folding and no
+Unicode normalization, so all eleven targets answer the same. (NumPy declines a table with a
+string column, for the reason it declines a walk: the runtime there reads integer columns.)
 
 A cell tests **its own column only**. There is no expression, no reference to another column,
 and no function call inside a cell; that restriction is what makes a row a box and the
@@ -889,13 +921,13 @@ which is why it is caught at parse time.
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sum` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
-| cells | `not` `none` `true` `false` |
+| cells | `not` `none` `starts_with` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
 | functions | `min` `max` |
 | fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
-| count | `where` (and `over`, above) |
+| count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |
 | apply body | `except` (and `with`, above) |
 <!-- /RESERVED -->

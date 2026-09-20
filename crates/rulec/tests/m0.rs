@@ -6,6 +6,8 @@
 use std::path::Path;
 
 const CORPUS: &[&str] = &[
+    "tests/corpus/品番の扱い.rule",
+    "tests/corpus/買物かごの送料.rule",
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/クーポン割引.rule",
     "tests/corpus/クーポン併用.rule",
@@ -442,8 +444,8 @@ fn 解析できない型の列は黙って飛ばさない() {
     // When a type could not be analyzed, `TableRegion::build` gave up and ok was printed with
     // neither the completeness nor the duplication of that table checked. Having stepped on this
     // twice, with dates and with optional, we stop with E110 as a general breakwater (§6.3).
-    let src = "rule t(t) v1\n\ninputs\n  s(s) : string\n\noutputs\n  r(r) : bool\n\n\
-               table x(x)\npolicy unique\n| s | -> r(r) : bool |\n| \"a\" | true |\n";
+    let src = "rule t(t) v1\n\ninputs\n  s(s) : string?\n\noutputs\n  r(r) : bool\n\n\
+               table x(x)\npolicy unique\n| s | -> r(r) : bool |\n| starts_with \"a\" | true |\n";
     let ds = rulec::check_source(src, "s.rule");
     assert!(ds.iter().any(|d| d.code == "E110"), "解析できない列は E110: {:?}",
             ds.iter().map(|d| d.code).collect::<Vec<_>>());

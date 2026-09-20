@@ -140,7 +140,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -158,7 +158,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sequence / result / examples / policy / overrides / clause / source / apply`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -1857,7 +1857,7 @@ Related codes: [E101](#e101), [W114](#w114)
 rule t(t) v1
 
 inputs
-  s(s) : string
+  s(s) : string?
 
 outputs
   r(r) : bool
@@ -1865,7 +1865,7 @@ outputs
 table j(j)
 policy unique
 | s | -> r(r) : bool |
-| "a" | true |
+| starts_with "a" | true |
 ```
 
 Related codes: [E101](#e101), [E105](#e105)

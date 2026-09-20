@@ -112,7 +112,7 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
         // A box widened without touching the cell it was read from.
         ("箱を広げる", cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1)),
         // A coordinate removed from an axis: the gap under it is then covered by nothing.
-        ("軸から座標を抜く", cert.replacen(r#""step":"1","bounds":[["0","0"],["0","63000"],"#, r#""step":"1","bounds":[["0","0"],"#, 1)
+        ("軸から座標を抜く", cert.replacen(r#""step":"1","prefixes":null,"bounds":[["0","0"],["0","63000"],"#, r#""step":"1","prefixes":null,"bounds":[["0","0"],"#, 1)
             .replacen(r#""coords":["0円","1円","63000円"]"#, r#""coords":["0円","63000円"]"#, 1)),
     ] {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");

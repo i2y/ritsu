@@ -489,6 +489,16 @@ def box_from_cells(t, row, groups):
                 words.update(groups.get(w, []))
             hit = [i for i, c in enumerate(coords) if c in words]
             out.append(hit if kind == "is" else [i for i in range(len(coords)) if i not in set(hit)])
+        elif kind == "prefix":
+            # §6.2 on a string column: a coordinate is taken when its own prefix extends
+            # one the cell names. Every prefix a cell names is a coordinate of the axis
+            # (that is how the axis was built), which `axis_covers` holds it to.
+            ps = axis.get("prefixes")
+            if ps is None:
+                return None
+            if not all(any(p == w for p in ps if p is not None) for w in cell["words"]):
+                raise Bad(f"{t['table']}: {axis['column']} is tested on a prefix it has no coordinate for")
+            out.append([i for i, p in enumerate(ps) if p is not None and any(p.startswith(w) for w in cell["words"])])
         elif kind == "cmp":
             tests = [(x["op"], num(x["value"])) for x in cell["tests"]]
             if any(v is None for _, v in tests):
@@ -732,6 +742,17 @@ def parse_cell(text):
         return ("any",)
     if s == "none":
         return ("nothing",)
+    if s.startswith("starts_with"):
+        rest = s[len("starts_with"):].lstrip()
+        if rest.startswith(":"):
+            rest = rest[1:].lstrip()
+        ws = []
+        for part in rest.split(","):
+            part = part.strip()
+            if not (len(part) >= 2 and part[0] == '"' and part[-1] == '"'):
+                return None
+            ws.append(part[1:-1])
+        return ("prefix", ws) if ws else None
     if s.startswith("not:"):
         return ("not", split_words(s[4:]))
     if any(s.startswith(o) for o in OPS):
@@ -909,7 +930,7 @@ def cell_agrees(t, axis, row, shape, st):
         if kind != "none":
             raise Bad(f"{where}: the file says `none`, the certificate reads it as `{kind}`")
         return 0
-    if shape[0] in ("is", "not"):
+    if shape[0] in ("is", "not", "prefix"):
         if kind != shape[0] or list(st.get("words", [])) != shape[1]:
             raise Bad(f"{where}: the words in the file are not the ones the certificate states")
         return 0

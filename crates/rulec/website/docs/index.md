@@ -257,7 +257,7 @@ Every command has `--format json`, and the codes and the JSON shape **stay put w
 </div>
 </div>
 
-**Twelve targets** · **74 diagnostics** · **30 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **74 diagnostics** · **32 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 
@@ -620,7 +620,7 @@ Worth saying in the same breath.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
    correct. The evidence is 80 deliberately broken rules each producing
-   the diagnostic it should, and 30 rules — 28 transcribed from real
+   the diagnostic it should, and 32 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 
 **A model checker reads the generated Rust.** Beside the Rust module, `gen`
@@ -631,7 +631,7 @@ runtime guard of (3) never fires, nothing overflows an `i64`, and the rows of
 each `unique` table cover the domain exactly once. It shares no code with the
 checker that proved the table, so where the two agree, two unrelated tools say
 the same thing — and where they disagree, one of them is wrong and the input
-that shows it comes back. On the corpus, 73 harnesses verify in 155 seconds.
+that shows it comes back. On the corpus, 74 harnesses verify in 144 seconds.
 What it does not reach: the table itself (1), and every target but this one.
 
 **And the checks behind the evidence are proved.** `rulec certificate` writes

@@ -100,10 +100,10 @@ fn readmeが言う件数は実物と合っている() {
         .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
         .count();
     let codes = rulec::codes::ledger().len();
-    // Two of the rules are not transcriptions: they exist to reach the words a transcription
-    // never does (§15.93), so the sentence counts them apart rather than calling them
-    // something they are not.
-    const WRITTEN: usize = 2;
+    // Three of the rules are not transcriptions: they exist to reach the words a
+    // transcription never does (§15.93, §15.100), so the sentence counts them apart rather
+    // than calling them something they are not.
+    const WRITTEN: usize = 4;
     let want = format!(
         "{corpus} rules — {} taken from real published terms, {WRITTEN} written to reach the rest of the language — are checked, generated and run on every commit, and all {codes} diagnostics are implemented.",
         corpus - WRITTEN
