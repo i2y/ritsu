@@ -1174,7 +1174,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification."
             ),
             tr!(
-                "表が正しいなら期待値を直してください。期待値が業務の真実なら、当てはまった行のほうを直します。どちらを直すかは、出典（規約・Excel・旧実装）が決めます。",
+                "表が正しいなら期待値を直してください。期待値が業務の真実なら、当てはまった行のほうを直します。どちらを直すかは、出典（規約、Excel、いま動いている実装）が決めます。",
                 "If the table is right, fix the expected value. If the expected value is the business truth, fix the row that fired. Which one to fix is settled by the source: the written rule, the spreadsheet, or the legacy implementation."
             ),
             X_E107,

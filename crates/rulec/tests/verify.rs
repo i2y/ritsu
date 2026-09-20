@@ -110,7 +110,7 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
     // The amount is the cluster total, so it moves with the count. Check the sign, and the
     // difference of the witness's single record.
     assert!(out.contains("差 -"), "金額の差を出す: {out}");
-    assert!(out.contains("運賃=1450 / 旧 運賃=1460"), "証人を出す: {out}");
+    assert!(out.contains("運賃=1450 / 現行 運賃=1460"), "証人を出す: {out}");
     // A deviation of exactly one grid step is a value mismatch, not rounding. Do not tag it.
     assert!(!out.contains("丸め方の違い"), "刻みちょうどの差を丸めのせいにしている: {out}");
     let _ = std::fs::remove_dir_all(&dir);

@@ -400,7 +400,7 @@ fn commands() -> Vec<Cmd> {
             name: "adapter",
             args: "<file.rule>",
             purpose: tr!(
-                "旧実装を包む 20〜30 行のテンプレートを出す",
+                "いま動いている実装を包む 20〜30 行のテンプレートを出す",
                 "emit the 20-to-30-line template that wraps a legacy implementation"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
@@ -409,7 +409,7 @@ fn commands() -> Vec<Cmd> {
                     "--template",
                     Some("python|go|docling"),
                     tr!(
-                        "テンプレートの言語。`docling` は旧実装ではなく抽出器のテンプレートで、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
+                        "テンプレートの言語。`docling` は実装ではなく抽出器のテンプレートで、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
                         "the language of the template; `docling` is not a legacy implementation but an **extractor** — it takes a document and returns its tables (extract/1, the counterpart of `rulec source fetch --via`)"
                     ),
                 )
@@ -432,7 +432,7 @@ fn commands() -> Vec<Cmd> {
             name: "verify",
             args: "<file.rule>",
             purpose: tr!(
-                "旧実装をプロセスとして立て、同じ入力で同じ答えを出すか確かめる",
+                "いま動いている実装をプロセスとして立て、同じ入力で同じ答えを出すか確かめる",
                 "stand the legacy implementation up as a process and check it answers the same on the same inputs"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
@@ -442,7 +442,7 @@ fn commands() -> Vec<Cmd> {
                 "--adapter",
                 Some("<cmd> [args...]"),
                 tr!(
-                    "旧実装を立てるコマンド。これ以降は全部そのコマンドの引数",
+                    "いま動いている実装を立てるコマンド。rulec を知らないコードでも、rulec が前に生成したものでも構いません。これ以降は全部そのコマンドの引数",
                     "the command that starts the legacy implementation; everything after it is that command's own arguments"
                 ),
             )

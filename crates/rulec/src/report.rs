@@ -116,7 +116,8 @@ pub struct Report {
     /// Identity of the counterpart (`legacy/shipping.py@a1b2c3d`, `replay/2025-08.jsonl`,
     /// `送料@v3`).
     pub impl_id: String,
-    /// The word that names the counterpart in a witness: verify uses "旧" (legacy), replay
+    /// The word that names the counterpart in a witness: verify uses "現行" (the implementation
+    /// running today, whoever wrote it), replay
     /// "観測" (observed), diff "旧版" (old version).
     pub theirs: String,
     /// Filled records: the count per field, and the default values used (§10.3).

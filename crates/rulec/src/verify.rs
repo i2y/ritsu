@@ -97,7 +97,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let impl_id = field(&hello, "impl").map(scalar).unwrap_or_default();
 
     let mut rep =
-        Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "旧" } else { "legacy" }) };
+        Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
 
     for (id, v) in vs.iter().enumerate() {
         let body = vectors::to_json(f, c, v);
@@ -156,7 +156,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
     match lang {
         "go" => tr!(
             "// rulec のアダプタのテンプレート（規則 {}）。\n\
-             // 標準入出力で JSON Lines をやりとりするだけ。旧実装をこの中から呼ぶ。\n\
+             // 標準入出力で JSON Lines をやりとりするだけ。いま動いている実装をこの中から呼ぶ。\n\
              package main\n\n\
              import (\n\t\"bufio\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n)\n\n\
              func main() {{\n\t\
@@ -167,7 +167,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              for sc.Scan() {{\n\t\t\
              var req struct {{\n\t\t\tID  int            `json:\"id\"`\n\t\t\tIn  map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
-             // ここで旧実装を呼ぶ。入力は {}。\n\t\t\
+             // ここでいまの実装を呼ぶ。入力は {}。\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
              b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
@@ -193,7 +193,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
         ),
         _ => tr!(
             "# rulec のアダプタのテンプレート（規則 {}）。\n\
-             # 標準入出力で JSON Lines をやりとりするだけ。旧実装をこの中から呼ぶ。\n\
+             # 標準入出力で JSON Lines をやりとりするだけ。いま動いている実装をこの中から呼ぶ。\n\
              import json, sys\n\n\
              sys.stdin.readline()  # 握手\n\
              print(json.dumps({{\"ok\": True, \"impl\": \"legacy@REPLACE_ME\"}}), flush=True)\n\n\
@@ -203,7 +203,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              continue\n    \
              req = json.loads(line)\n    \
              d = req[\"in\"]  # 入力は {}\n\n    \
-             # ここで旧実装を呼ぶ。\n    \
+             # ここでいまの実装を呼ぶ。\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
              print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
             "# rulec adapter template (rule {}).\n\

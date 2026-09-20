@@ -34,7 +34,7 @@
 <text x="29" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">元の資料</text>
 <text x="29" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">規約の文書</text>
 <text x="29" y="75" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">Excel</text>
-<text x="29" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">旧実装</text>
+<text x="29" y="90" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">いまのコード</text>
 <path d="M410,45 H510 L522,57 V95 H410 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M510,45 V57 H522 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
 <text x="419" y="67" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">表</text>
