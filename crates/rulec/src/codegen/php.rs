@@ -367,11 +367,16 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(&format!(
-            "/** {} */\nfinal class RuleInputError extends \\InvalidArgumentException\n{{\n}}\n\n",
+            "/** {} */\nfinal class RuleInputError extends \\InvalidArgumentException\n{{\n    \
+             public function __construct(\n        public readonly string $what,\n        \
+             public readonly ?int $value = null,\n    ) {{\n        \
+             parent::__construct($value === null ? $what : \"{{$what}}: {{$value}}\");\n    }}\n}}\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
         ));
         o.push_str(&format!(
-            "/** {} */\nfinal class RuleContradictionError extends \\RuntimeException\n{{\n}}\n\n",
+            "/** {} */\nfinal class RuleContradictionError extends \\RuntimeException\n{{\n    \
+             public function __construct(public readonly string $what)\n    {{\n        \
+             parent::__construct($what);\n    }}\n}}\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
         o.push_str(&format!(
@@ -542,10 +547,10 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!("    if (count({seq}) > {cap}) {{\n"));
             o.push_str(&format!(
-                "        throw new RuleInputError({} . count({seq}));\n    }}\n",
+                "        throw new RuleInputError({}, count({seq}));\n    }}\n",
                 php_str(&tr!(
-                    "{} の要素が多すぎます（上限 {cap}）: ",
-                    "{} has too many elements (at most {cap}): ",
+                    "{} の要素が多すぎます（上限 {cap}）",
+                    "{} has too many elements (at most {cap})",
                     el.name.text
                 ))
             ));
@@ -590,10 +595,10 @@ impl<'a> Gen<'a> {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({} . {v});\n    }}\n",
+                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        php_str(&tr!("{} が範囲の外です: ", "{} is out of range: ", i.name.text)),
+                        php_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
                     ));
                 }
             }
@@ -711,10 +716,10 @@ impl<'a> Gen<'a> {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({} . {v});\n    }}\n",
+                        "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        php_str(&tr!("{} が範囲の外です: ", "{} is out of range: ", i.name.text)),
+                        php_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
                     ));
                 }
             }

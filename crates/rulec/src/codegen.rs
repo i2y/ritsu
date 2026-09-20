@@ -835,12 +835,23 @@ impl<'a> Gen<'a> {
             o.push('\n');
         }
 
+        // The sentence and the value travel apart (§15.95): nothing is formatted until the
+        // error is printed, and a caller that wants the value does not parse it back out.
         o.push_str(&format!(
-            "class RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n",
+            "_NOVALUE = object()\n\n\nclass RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n\
+             \x20   def __init__(self, what: str, value: object = _NOVALUE) -> None:\n\
+             \x20       super().__init__(what)\n\
+             \x20       self.what = what\n\
+             \x20       self.value = value\n\n\
+             \x20   def __str__(self) -> str:\n\
+             \x20       return self.what if self.value is _NOVALUE else f\"{{self.what}}: {{self.value!r}}\"\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
         ));
         o.push_str(&format!(
-            "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n",
+            "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n\
+             \x20   def __init__(self, what: str) -> None:\n\
+             \x20       super().__init__(what)\n\
+             \x20       self.what = what\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
         o.push_str(&format!(
@@ -1125,10 +1136,10 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "    if len({seq}) > {cap}:\n        raise RuleInputError(f\"{}\")\n",
+                "    if len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", len({seq}))\n",
                 tr!(
-                    "{} の要素が多すぎます（上限 {cap}）: {{len({seq})}}",
-                    "{} has too many elements (at most {cap}): {{len({seq})}}",
+                    "{} の要素が多すぎます（上限 {cap}）",
+                    "{} has too many elements (at most {cap})",
                     el.name.text
                 )
             ));
@@ -1175,22 +1186,22 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(f\"{}\")\n",
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
                     self.py_ty(&ty),
-                    tr!("{} が列挙 {} の値ではありません: {{{v}!r}}", "{} is not a value of enum {}: {{{v}!r}}", i.name.text, self.py_ty(&ty))
+                    tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", i.name.text, self.py_ty(&ty))
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     o.push_str(&format!(
-                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(f\"{}\")\n",
-                        tr!("{} が整数ではありません: {{{v}!r}}", "{} is not an integer: {{{v}!r}}", i.name.text)
+                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(f\"{}\")\n",
+                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です: {{{v}}}", "{} is out of range: {{{v}}}", i.name.text)
+                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                         ));
                     }
                 }
@@ -1265,11 +1276,11 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(f\"{}\")\n",
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
                     self.py_ty(&ty),
                     tr!(
-                        "{} が列挙 {} の値ではありません: {{{v}!r}}",
-                        "{} is not a value of enum {}: {{{v}!r}}",
+                        "{} が列挙 {} の値ではありません",
+                        "{} is not a value of enum {}",
                         i.name.text,
                         self.py_ty(&ty)
                     )
@@ -1284,8 +1295,8 @@ impl<'a> Gen<'a> {
                     // 0.1% would otherwise be taken as 1.83% and answered without a word.
                     // `bool` is an `int` in Python, and a bool here is a mistake too.
                     o.push_str(&format!(
-                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(f\"{}\")\n",
-                        tr!("{} が整数ではありません: {{{v}!r}}", "{} is not an integer: {{{v}!r}}", i.name.text)
+                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                     ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
@@ -1295,10 +1306,10 @@ impl<'a> Gen<'a> {
                             // value above one step.
                             let sc = self.c.wire_scale(&i.name.text);
                             o.push_str(&format!(
-                                "    if not {} <= {v} <= {}:\n        raise RuleInputError(f\"{}\")\n",
+                                "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
                                 crate::types::wire_int(*lo, sc),
                                 crate::types::wire_int(*hi, sc),
-                                tr!("{} が範囲の外です: {{{v}}}", "{} is out of range: {{{v}}}", i.name.text)
+                                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                             ));
                         }
                     }
@@ -1930,7 +1941,7 @@ impl<'a> Gen<'a> {
                     if *unique {
                         body.push_str(&format!("\t\tif {has_taken} {{\n"));
                         body.push_str(&format!(
-                            "\t\t\treturn {zero}, nil, fmt.Errorf(\"{}\")\n\t\t}}\n",
+                            "\t\t\treturn {zero}, nil, &RuleContradictionError{{What: \"{}\"}}\n\t\t}}\n",
                             tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
                                 "fold {}: two elements matched a take_unique",
@@ -2006,8 +2017,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", len({seq}))\n\t}}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）: %d", "{} has too many elements (at most {cap}): %d", el.name.text)
+                "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: int64(len({seq})), HasValue: true}}\n\t}}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
             ));
         }
         for d in self.counts() {
@@ -2040,20 +2051,21 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for i in self.element_fields() {
             let v = local(&i.name.text);
+            let val = go_i64(&v);
             let ty = self.ty_of(&i.name.text);
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
-                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
-                    tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
+                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                    tr!("{} が列挙の値ではありません", "{} is not a value of the enum", i.name.text)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です: %d", "{} is out of range: %d", i.name.text)
+                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                         ));
                     }
                 }
@@ -2159,20 +2171,21 @@ impl<'a> Gen<'a> {
 
         for i in &self.f.inputs {
             let v = local(&i.name.text);
+            let val = go_i64(&v);
             let ty = self.ty_of(&i.name.text);
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
-                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
-                    tr!("{} が列挙の値ではありません: %d", "{} is not a value of the enum: %d", i.name.text)
+                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                    tr!("{} が列挙の値ではありません", "{} is not a value of the enum", i.name.text)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, fmt.Errorf(\"{}\", {v})\n\t}}\n",
+                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::types::wire_int(*lo, sc),
                             crate::types::wire_int(*hi, sc),
-                            tr!("{} が範囲の外です: %d", "{} is out of range: %d", i.name.text)
+                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                         ));
                     }
                 }
@@ -2181,7 +2194,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(&self.constraint_guards(&local, Lang::Go, "\t", |m| {
-            format!("\t\treturn {zero}, nil, fmt.Errorf(\"{m}\")\n")
+            format!("\t\treturn {zero}, nil, &RuleInputError{{What: \"{m}\"}}\n")
         }));
 
         let trace = self.temp("trace");
@@ -2323,7 +2336,7 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&self.guards(t, local, Lang::Go, "\t", |name, i, j| {
             format!(
-                "\t\treturn {}, nil, fmt.Errorf(\"{}\")\n",
+                "\t\treturn {}, nil, &RuleContradictionError{{What: \"{}\"}}\n",
                 if self.f.outputs.len() == 1 {
                     self.go_zero(&self.ty_of(&self.f.outputs[0].name.text))
                 } else {
@@ -2394,6 +2407,12 @@ fn tighten_nested_products(s: &str) -> String {
     out
 }
 
+/// The value in a Go error is an `int64`; a wire value already is one, so the cast is
+/// written only when it is not (an enum, a length).
+fn go_i64(v: &str) -> String {
+    if v.starts_with("int64(") && v.ends_with(')') { v.to_string() } else { format!("int64({v})") }
+}
+
 fn round_go() -> String {
     tr!(
         "// §7.3 の五モード。負の向きと半分ちょうどまで仕様どおりに固定する。\n\
@@ -2404,6 +2423,30 @@ fn round_go() -> String {
 }
 
 const ROUND_GO_BODY: &str = r#"
+// RuleInputError is a contract violation by the caller: outside the declared input domain.
+// The sentence and the value travel apart (§15.95), so a caller can react to which input
+// was refused without parsing the text back.
+type RuleInputError struct {
+	What     string
+	Value    int64
+	HasValue bool
+}
+
+func (e *RuleInputError) Error() string {
+	if !e.HasValue {
+		return e.What
+	}
+	return fmt.Sprintf("%s: %d", e.What, e.Value)
+}
+
+// RuleContradictionError is a contradiction in the rule itself, not a mistake by the caller.
+type RuleContradictionError struct {
+	What string
+}
+
+func (e *RuleContradictionError) Error() string {
+	return e.What
+}
 func absMod(x, g int64) (int64, int64, bool) {
 	neg := x < 0
 	if neg {
@@ -2829,17 +2872,25 @@ fn bigint_literals(s: &str) -> String {
 fn round_ts() -> String {
     format!(
         r#"
+export const NO_VALUE = Symbol("no value");
+
 export class RuleInputError extends Error {{
-  constructor(message: string) {{
-    super(message);
+  readonly what: string;
+  readonly value: unknown;
+  constructor(what: string, value: unknown = NO_VALUE) {{
+    super(value === NO_VALUE ? what : `${{what}}: ${{String(value)}}`);
     this.name = "RuleInputError";
+    this.what = what;
+    this.value = value;
   }}
 }}
 
 export class RuleContradictionError extends Error {{
-  constructor(message: string) {{
-    super(message);
+  readonly what: string;
+  constructor(what: string) {{
+    super(what);
     this.name = "RuleContradictionError";
+    this.what = what;
   }}
 }}
 
@@ -3237,8 +3288,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）: ${{{seq}.length}}", "{} has too many elements (at most {cap}): ${{{seq}.length}}", el.name.text)
+                "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`, {seq}.length);\n  }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
             ));
         }
         for d in self.counts() {
@@ -3275,22 +3326,22 @@ impl<'a> Gen<'a> {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     o.push_str(&format!(
-                        "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
-                        tr!("{} が列挙 {cls} の値ではありません: ${{{v}}}", "{} is not a value of enum {cls}: ${{{v}}}", i.name.text)
+                        "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        tr!("{} が列挙 {cls} の値ではありません", "{} is not a value of enum {cls}", i.name.text)
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     o.push_str(&format!(
-                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`);\n  }}\n",
-                        tr!("{} が整数ではありません: ${{{v}}}", "{} is not an integer: ${{{v}}}", i.name.text)
+                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です: ${{{v}}}", "{} is out of range: ${{{v}}}", i.name.text)
+                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                         ));
                     }
                 }
@@ -3406,10 +3457,10 @@ impl<'a> Gen<'a> {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     o.push_str(&format!(
                         "  if (!Object.values({cls}).includes({v})) {{\n    \
-                         throw new RuleInputError(`{}`);\n  }}\n",
+                         throw new RuleInputError(`{}`, {v});\n  }}\n",
                         tr!(
-                            "{} が列挙 {cls} の値ではありません: ${{{v}}}",
-                            "{} is not a value of enum {cls}: ${{{v}}}",
+                            "{} が列挙 {cls} の値ではありません",
+                            "{} is not a value of enum {cls}",
                             i.name.text
                         )
                     ));
@@ -3419,16 +3470,16 @@ impl<'a> Gen<'a> {
                     // number would fail somewhere inside the arithmetic instead of here
                     // (§15.43).
                     o.push_str(&format!(
-                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`);\n  }}\n",
-                        tr!("{} が整数ではありません: ${{{v}}}", "{} is not an integer: ${{{v}}}", i.name.text)
+                        "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`);\n  }}\n",
+                            "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です: ${{{v}}}", "{} is out of range: ${{{v}}}", i.name.text)
+                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                         ));
                     }
                 }
@@ -3716,58 +3767,59 @@ fn round_rs() -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleError {{
     /// {input}
-    Input(String),
+    Input {{ what: &'static str, value: Option<i64> }},
     /// {contra}
-    Contradiction(String),
+    Contradiction {{ what: &'static str }},
 }}
 
 impl std::fmt::Display for RuleError {{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
         match self {{
-            RuleError::Input(m) | RuleError::Contradiction(m) => f.write_str(m),
+            RuleError::Input {{ what, value: Some(v) }} => write!(f, "{{what}}: {{v}}"),
+            RuleError::Input {{ what, .. }} | RuleError::Contradiction {{ what }} => f.write_str(what),
         }}
     }}
 }}
 
 impl std::error::Error for RuleError {{}}
 
-fn min_i64(a: i64, b: i64) -> i64 {{
+pub(crate) fn min_i64(a: i64, b: i64) -> i64 {{
     if a < b {{ a }} else {{ b }}
 }}
 
-fn max_i64(a: i64, b: i64) -> i64 {{
+pub(crate) fn max_i64(a: i64, b: i64) -> i64 {{
     if a > b {{ a }} else {{ b }}
 }}
 
 /// {down}
-fn round_down(x: i64, g: i64) -> i64 {{
+pub(crate) fn round_down(x: i64, g: i64) -> i64 {{
     let v = x.abs() / g * g;
     if x < 0 {{ -v }} else {{ v }}
 }}
 
 /// {up}
-fn round_up(x: i64, g: i64) -> i64 {{
+pub(crate) fn round_up(x: i64, g: i64) -> i64 {{
     let a = x.abs();
     let v = if a % g == 0 {{ a / g * g }} else {{ (a / g + 1) * g }};
     if x < 0 {{ -v }} else {{ v }}
 }}
 
 /// {half}
-fn round_half(x: i64, g: i64) -> i64 {{
+pub(crate) fn round_half(x: i64, g: i64) -> i64 {{
     let a = x.abs();
     let v = if 2 * (a % g) >= g {{ (a / g + 1) * g }} else {{ a / g * g }};
     if x < 0 {{ -v }} else {{ v }}
 }}
 
 /// {half_down}
-fn round_half_down(x: i64, g: i64) -> i64 {{
+pub(crate) fn round_half_down(x: i64, g: i64) -> i64 {{
     let a = x.abs();
     let v = if 2 * (a % g) > g {{ (a / g + 1) * g }} else {{ a / g * g }};
     if x < 0 {{ -v }} else {{ v }}
 }}
 
 /// {bankers}
-fn round_bankers(x: i64, g: i64) -> i64 {{
+pub(crate) fn round_bankers(x: i64, g: i64) -> i64 {{
     let a = x.abs();
     let (mut q, r) = (a / g, a % g);
     if 2 * r > g || (2 * r == g && q % 2 == 1) {{
@@ -3969,7 +4021,7 @@ impl<'a> Gen<'a> {
                 .unwrap_or_else(|| "i64".into());
             let ms: Vec<String> = g.members.iter().map(|m| self.rs_value(&m.text)).collect();
             o.push_str(&format!(
-                "fn is_{}(v: {ty}) -> bool {{\n    matches!(v, {})\n}}\n\n",
+                "pub(crate) fn is_{}(v: {ty}) -> bool {{\n    matches!(v, {})\n}}\n\n",
                 self.ident(&g.name.text),
                 ms.join(" | ")
             ));
@@ -4071,7 +4123,7 @@ impl<'a> Gen<'a> {
                     if *unique {
                         body.push_str(&format!("        if {taken}.is_some() {{\n"));
                         body.push_str(&format!(
-                            "            return Err(RuleError::Contradiction(\"{}\".to_string()));\n        }}\n",
+                            "            return Err(RuleError::Contradiction {{ what: \"{}\" }});\n        }}\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
                         body.push_str(&format!("        {taken} = Some({});\n", rs_expr(unparen(&self.expr(expr, &local).text))));
@@ -4127,8 +4179,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input(format!(\"{}\", {seq}.len())));\n    }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）: {{}}", "{} has too many elements (at most {cap}): {{}}", el.name.text)
+                "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({seq}.len() as i64) }});\n    }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
             ));
         }
         for d in self.counts() {
@@ -4165,10 +4217,10 @@ impl<'a> Gen<'a> {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input(format!(\"{}\", {v})));\n    }}\n",
+                        "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        tr!("{} が範囲の外です: {{}}", "{} is out of range: {{}}", i.name.text)
+                        tr!("{} が範囲の外です", "{} is out of range", i.name.text)
                     ));
                 }
             }
@@ -4277,15 +4329,15 @@ impl<'a> Gen<'a> {
             // Rust's inline format arguments take a name, not a field access, so the value
             // goes in as a positional argument.
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input(format!(\"{}\", {v})));\n    }}\n",
+                "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です: {{}}", "{} is out of range: {{}}", i.name.text)
+                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
             ));
         }
 
         o.push_str(&self.constraint_guards(&local, Lang::Rs, "    ", |m| {
-            format!("        return Err(RuleError::Input(\"{m}\".to_string()));\n")
+            format!("        return Err(RuleError::Input {{ what: \"{m}\", value: None }});\n")
         }));
 
         let trace = self.temp("trace");
@@ -4421,7 +4473,7 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&self.guards(t, local, Lang::Rs, "    ", |name, i, j| {
             format!(
-                "        return Err(RuleError::Contradiction(\"{}\".into()));\n",
+                "        return Err(RuleError::Contradiction {{ what: \"{}\" }});\n",
                 tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
@@ -4431,6 +4483,319 @@ impl<'a> Gen<'a> {
     /// The runner. Rust has no JSON in its standard library, and the generated code takes no
     /// dependencies, so the reader below is written out here: the wire format is one flat
     /// object of numbers, strings and booleans (§10.2), which is small enough to scan.
+    /// The proof harnesses, for the Kani Rust Verifier (§15.95). A file of its own: a person
+    /// reading the rule should not have to read the scaffolding, and `rustc` never compiles
+    /// it. `kani <alias>_proof.rs` — or `rulec test`, when kani is on PATH.
+    ///
+    /// Three of the five things `check` proves are already written into the generated Rust
+    /// as assertions, so the harness only has to reach them: the `unreachable!` that closes
+    /// every table is completeness, the guard that returns `Contradiction` is the W114 pair,
+    /// and every arithmetic operation is the int64 claim, which Kani checks by default. The
+    /// fourth, the overlap, is *not* in the artifact — the if/else chain has already settled
+    /// the priority — so the rows are counted here instead.
+    pub fn rs_proof(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let mut o = self.header("//");
+        o.push_str(&format!(
+            "//\n// {}\n//\n// {}\n//   * {}\n//   * {}\n//   * {}\n//   * {}\n//\n// {}\n\n",
+            tr!(
+                "Kani（https://model-checking.github.io/kani/）の証明ハーネス。`kani {alias}_proof.rs`、または `rulec test --proofs`。すべて `#[cfg(kani)]` の中なので rustc は読まない。",
+                "Proof harnesses for Kani (https://model-checking.github.io/kani/): `kani {alias}_proof.rs`, or `rulec test --proofs`. Everything is behind `#[cfg(kani)]`, so rustc never reads it."
+            ),
+            tr!("宣言した範囲のすべての入力について、次を検査する。", "Over every input in the declared domain, these are checked:"),
+            tr!(
+                "完全性（E101）— 表の末尾の `unreachable!`。Kani は到達可能な panic を既定で探す。",
+                "completeness (E101) — the `unreachable!` that closes every table; Kani looks for a reachable panic by default."
+            ),
+            tr!(
+                "W114 のガード — `RuleError::Contradiction` が返らないこと。静的に閉じなかった行対が、ここで閉じる（あるいは反例が出る）。",
+                "the W114 guards — that `RuleError::Contradiction` is never returned. A pair the checker could not close either closes here, or a counterexample comes back."
+            ),
+            tr!(
+                "int64（§7.4）— あふれ。Kani は算術のあふれを既定で検査する。",
+                "int64 (§7.4) — overflow. Kani checks arithmetic overflow by default."
+            ),
+            tr!(
+                "重なり（E105）と完全性を行の側から — `rows_*` が当たる行を数える。`unique` はちょうど一つ、`first` は一つ以上。",
+                "overlap (E105) and completeness from the rows' side — `rows_*` counts the rows that match: exactly one for `unique`, at least one for `first`."
+            ),
+            tr!(
+                "証明の対象はこの Rust であって、表でも検査器でもない（§15.47）。",
+                "What is proved is this Rust, not the table and not the checker (§15.47)."
+            ),
+        ));
+        o.push_str("#![allow(non_snake_case, uncommon_codepoints, unused_parens, unused_mut, unused_variables)]\n\n");
+        o.push_str(&format!("#[cfg(kani)]\n#[path = \"{alias}.rs\"]\nmod r;\n\n#[cfg(kani)]\nmod proof {{\n    use super::r::*;\n\n"));
+
+        // The inputs, made symbolic once: the same lines serve every harness in the file.
+        let mut decls = String::new();
+        let mut args: Vec<String> = Vec::new();
+        let mut params: Vec<String> = Vec::new();
+        let mut whole = true;
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            params.push(format!("{}: {}", pub_name(&i.name), self.rs_ty(&ty)));
+            match self.rs_any(&i.name.text, &pub_name(&i.name), &ty, "        ") {
+                Some((d, e)) => {
+                    decls.push_str(&d);
+                    args.push(e);
+                }
+                None => whole = false,
+            }
+        }
+        // A `constraint` (§15.55) says a combination the rule was never asked to answer, and
+        // the generated code refuses it at the door. It is part of the declared domain, so
+        // the harness assumes it too; without that, the harness hands the rule an input its
+        // own entry guard turns away. Both sides are inputs (E018), and an input here is the
+        // plain i64, before it is branded for the call.
+        for k in &self.f.constraints {
+            let name = |n: &String| self.f.inputs.iter().find(|i| &i.name.text == n).map(|i| pub_name(&i.name));
+            if let (Some(a), Some(b)) = (name(&k.left), name(&k.right)) {
+                decls.push_str(&format!("        kani::assume({a} {} {b});\n", k.op.word()));
+            }
+        }
+        let mut unwind = String::new();
+        if let Some(el) = &self.f.elements {
+            let cap = self.count_cap().unwrap_or(0);
+            let seq = pub_name(&el.name);
+            let mut lines = String::new();
+            let mut inits: Vec<String> = Vec::new();
+            for fd in &el.fields {
+                let ty = self.ty_of(&fd.name.text);
+                match self.rs_any(&fd.name.text, &format!("{}_v", pub_name(&fd.name)), &ty, "            ") {
+                    Some((d, e)) => {
+                        lines.push_str(&d);
+                        inits.push(format!("{}: {e}", pub_name(&fd.name)));
+                    }
+                    None => whole = false,
+                }
+            }
+            // The cap is the entry guard's, so the walk is covered whole rather than up to
+            // some length picked here: `unwind` one past it leaves nothing bounded away.
+            decls.push_str(&format!(
+                "        let n: usize = kani::any();\n        kani::assume(n <= {cap});\n        \
+                 let {seq}: [Element; {cap}] = core::array::from_fn(|_| {{\n{lines}            Element {{ {} }}\n        }});\n",
+                inits.join(", ")
+            ));
+            args.push(format!("&{seq}[..n]"));
+            unwind = format!("    #[kani::unwind({})]\n", cap + 2);
+        }
+
+        if !whole {
+            o.push_str(&format!(
+                "    // {}\n}}\n",
+                tr!(
+                    "この規則には記号にできない入力（string）があるので、ハーネスは出していない。",
+                    "This rule takes an input a harness cannot quantify over (a string), so none is written."
+                )
+            ));
+            return o;
+        }
+
+        // The rows of each table, where the rule is a straight line. A rule that walks a
+        // sequence has tables whose columns belong to one element and tables that read what
+        // the walk counted, and neither can be replayed outside the walk; the harness above
+        // still reaches the `unreachable!` of both.
+        let mut harnesses = String::new();
+        if self.f.elements.is_none() {
+            for (k, it) in self.f.items.iter().enumerate() {
+                let Item::Table(t0) = it else { continue };
+                let Some(t) = self.c.table_at(t0) else { continue };
+                let Some(rows) = self.rs_rows_fn(k, t, &params.join(", ")) else { continue };
+                let tn = t.name.as_ref().map(pub_name).unwrap_or_else(|| format!("t{k}"));
+                o.push_str(&rows);
+                let (want, doc) = if t.policy == crate::ast::Policy::Unique {
+                    (
+                        format!("        assert_eq!(rows_{tn}({}), Ok(1));\n", args.join(", ")),
+                        tr!("表 {} の行は、宣言した範囲を隙間なく重なりなく覆う。", "The rows of {} cover the declared domain with no gap and no overlap.", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                    )
+                } else {
+                    (
+                        format!("        assert!(matches!(rows_{tn}({}), Ok(n) if n >= 1));\n", args.join(", ")),
+                        tr!("表 {} の行は、宣言した範囲を覆う（`first` は重なりを順序で解く）。", "The rows of {} cover the declared domain (`first` settles an overlap by order).", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                    )
+                };
+                harnesses.push_str(&format!(
+                    "    /// {doc}\n    #[kani::proof]\n{unwind}    fn {tn}_rows() {{\n{decls}{want}    }}\n\n"
+                ));
+            }
+        }
+
+        o.push_str(&format!(
+            "    /// {}\n    #[kani::proof]\n{unwind}    fn {alias}_answers() {{\n{decls}        assert!({alias}({}).is_ok());\n    }}\n\n",
+            tr!(
+                "宣言した範囲のどの入力にも、この規則は答えを返す。返らない道は三つ——完全性の穴、W114 の対が実在した、入口のガード——で、三つ目が出ないことは、ここで仮定した範囲が宣言した範囲そのものだという確認でもある。",
+                "For every input in the declared domain the rule answers. There are three ways not to — a gap in the completeness, a W114 pair that was real, and the entry guard — and the third not happening is also the check that the domain assumed here is the declared one."
+            ),
+            args.join(", ")
+        ));
+        o.push_str(&harnesses);
+        o.push_str("}\n");
+        o
+    }
+
+    /// The names of the harnesses `rs_proof` writes, in the order they appear.
+    fn proof_harnesses(&self) -> Vec<String> {
+        let alias = pub_name(&self.f.name);
+        if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text), Ty::Str)) {
+            return Vec::new();
+        }
+        let mut v = vec![format!("{alias}_answers")];
+        if self.f.elements.is_none() {
+            for (k, it) in self.f.items.iter().enumerate() {
+                let Item::Table(t0) = it else { continue };
+                let Some(t) = self.c.table_at(t0) else { continue };
+                v.push(format!("{}_rows", t.name.as_ref().map(pub_name).unwrap_or_else(|| format!("t{k}"))));
+            }
+        }
+        v
+    }
+
+    /// The members of an enum, as the paths the generated Rust writes.
+    fn enum_members(&self, n: &str) -> Vec<String> {
+        if let Some(e) = self.f.enums.iter().find(|e| e.name.text == n) {
+            return e.values.iter().map(|v| self.rs_value(&v.text)).collect();
+        }
+        if n == "都道府県" {
+            return crate::prelude::PREFECTURES.iter().map(|(j, _)| self.rs_value(j)).collect();
+        }
+        Vec::new()
+    }
+
+    /// One value made symbolic for a harness: the lines that declare it, and the expression
+    /// that goes in as the argument. `None` for a type there is no useful way to quantify
+    /// over (a string), which drops the harness rather than pretending (§15.95).
+    fn rs_any(&self, name: &str, ident: &str, ty: &Ty, ind: &str) -> Option<(String, String)> {
+        match ty {
+            Ty::Bool => Some((format!("{ind}let {ident}: bool = kani::any();\n"), ident.into())),
+            Ty::Str => None,
+            Ty::Enum(n) => {
+                let vs = self.enum_members(n);
+                if vs.is_empty() {
+                    return None;
+                }
+                let arms: Vec<String> = vs
+                    .iter()
+                    .enumerate()
+                    .map(|(k, v)| if k + 1 == vs.len() { format!("_ => {v}") } else { format!("{k} => {v}") })
+                    .collect();
+                Some((
+                    format!("{ind}let {ident} = match kani::any::<u8>() {{ {} }};\n", arms.join(", ")),
+                    ident.into(),
+                ))
+            }
+            Ty::Opt(t) => {
+                let (d, e) = self.rs_any(name, &format!("{ident}_v"), t, ind)?;
+                Some((
+                    format!("{d}{ind}let {ident} = if kani::any::<bool>() {{ Some({e}) }} else {{ None }};\n"),
+                    ident.into(),
+                ))
+            }
+            // Money, quantities, rates, numbers and dates all travel as an i64 (§10.2), and
+            // the declared range is what the completeness proof quantified over, so it is
+            // exactly what the harness assumes.
+            _ => {
+                let mut d = format!("{ind}let {ident}: i64 = kani::any();\n");
+                if let Some((lo, hi)) = self.c.ranges.get(name) {
+                    let sc = self.c.wire_scale(name);
+                    let mut b: Vec<String> = Vec::new();
+                    if let Some(lo) = lo {
+                        b.push(format!("{} <= {ident}", crate::types::wire_int(*lo, sc)));
+                    }
+                    if let Some(hi) = hi {
+                        b.push(format!("{ident} <= {}", crate::types::wire_int(*hi, sc)));
+                    }
+                    if !b.is_empty() {
+                        d.push_str(&format!("{ind}kani::assume({});\n", b.join(" && ")));
+                    }
+                }
+                let brand = self.rs_ty(ty);
+                let e = if brand == "i64" { ident.to_string() } else { format!("{brand}({ident})") };
+                Some((d, e))
+            }
+        }
+    }
+
+    /// How many rows of one table match, as a function of the rule's inputs. Everything the
+    /// rule computes before the table is computed here the same way, so the dependencies
+    /// between derived values — the ones the axis space drops, and W114 with them — are
+    /// present as arithmetic (§15.95).
+    fn rs_rows_fn(&self, upto: usize, t: &Table, params: &str) -> Option<String> {
+        // The same reading of a name as the rule's own body: a branded input is an i64
+        // inside, unwrapped where it is read.
+        let local = |n: &str| -> String {
+            match self.f.inputs.iter().find(|i| i.name.text == n) {
+                Some(i) => {
+                    let v = pub_name(&i.name);
+                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                        format!("{v}.0")
+                    } else {
+                        v
+                    }
+                }
+                None => self.ident(n),
+            }
+        };
+        let trace = self.temp("trace");
+        let mut body = String::new();
+        for (k, it) in self.f.items.iter().enumerate() {
+            if k >= upto {
+                break;
+            }
+            match it {
+                Item::Derived(d) => body.push_str(&format!(
+                    "    let {} = {};\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, &local).text))
+                )),
+                Item::Define(d) => body.push_str(&format!(
+                    "    let {} = {};\n",
+                    self.ident(&d.name.text),
+                    rs_expr(unparen(&self.expr(&d.expr, &local).text))
+                )),
+                Item::Count(_) => {}
+                Item::Table(t) => {
+                    let t = self.c.table_at(t)?;
+                    body.push_str(&self.rs_table(t, &local, &trace));
+                }
+            }
+        }
+        let tname = t.name.as_ref().map(pub_name).unwrap_or_else(|| format!("t{upto}"));
+        let mut o = format!(
+            "    /// {}\n    fn rows_{tname}({params}) -> Result<u32, RuleError> {{\n",
+            tr!(
+                "表 {} の、当たる行の数。{}",
+                "How many rows of {} match. {}",
+                t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                if t.policy == crate::ast::Policy::Unique {
+                    tr!("policy unique は「ちょうど一行」を言う。", "`policy unique` says exactly one.")
+                } else {
+                    tr!("policy first は「一行以上」を言う。", "`policy first` says at least one.")
+                }
+            )
+        );
+        if !body.is_empty() {
+            o.push_str(&format!("        let mut {trace}: Vec<Fired> = Vec::new();\n"));
+            o.push_str(&Self::indent_block(&body, "    "));
+        }
+        o.push_str("        Ok(0\n");
+        for (ri, row) in t.rows.iter().enumerate() {
+            let conds: Vec<String> = t
+                .inputs
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, (col, _))| {
+                    let ty = self.ty_of(col);
+                    self.rs_cell(row.cells.get(ci)?, &local(col), &ty, self.scale(col))
+                })
+                .collect();
+            let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
+            let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
+            o.push_str(&format!("            + (({cond}) as u32) // {}\n", self.row_head(t, ri, &cells.join(" | "))));
+        }
+        o.push_str("        )\n    }\n\n");
+        Some(o)
+    }
     pub fn rs_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut args: Vec<String> = Vec::new();
@@ -5555,6 +5920,10 @@ impl Gen<'_> {
             // A Rust enum member is the alias in PascalCase on the enum's own type.
             .raw("enums", self.enums_json(|_, a| pascal(a)))
             .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
+            // The proof harnesses beside the module (§15.95): the file, and the name of
+            // every harness in it, so `kani --harness <name>` can be written from here.
+            .str("proof", &format!("{alias}_proof.rs"))
+            .raw("harnesses", crate::json::strs(&self.proof_harnesses().iter().map(|s| s.as_str()).collect::<Vec<_>>()))
             .raw("wasi", self.api_wasi())
             .finish();
 
@@ -6125,11 +6494,24 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(&format!(
-            "  # {}\n  class RuleInputError < ArgumentError; end\n\n",
-            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+            "  # {}\n  #\n  # {}\n  class RuleInputError < ArgumentError\n\
+             \x20   NO_VALUE = Object.new\n\n\
+             \x20   attr_reader :what, :value\n\n\
+             \x20   def initialize(what, value = NO_VALUE)\n\
+             \x20     @what = what\n\
+             \x20     @value = value\n\
+             \x20     super(value.equal?(NO_VALUE) ? what : \"#{{what}}: #{{value.inspect}}\")\n\
+             \x20   end\n  end\n\n",
+            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+            tr!("文と値は別々に運ぶ（§15.95）。", "The sentence and the value travel apart (§15.95).")
         ));
         o.push_str(&format!(
-            "  # {}\n  class RuleContradictionError < RuntimeError; end\n\n",
+            "  # {}\n  class RuleContradictionError < RuntimeError\n\
+             \x20   attr_reader :what\n\n\
+             \x20   def initialize(what)\n\
+             \x20     @what = what\n\
+             \x20     super\n\
+             \x20   end\n  end\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
         ));
         o.push_str(&format!("  # {}\n  Fired = Struct.new(:table, :row, :label)\n\n", fired_doc()));
@@ -6234,7 +6616,7 @@ impl<'a> Gen<'a> {
                 Arm::Take { expr, unique } => {
                     if *unique {
                         body.push_str(&format!(
-                            "      raise RuleContradictionError, \"{}\" unless {taken}.nil?\n",
+                            "      raise RuleContradictionError.new(\"{}\") unless {taken}.nil?\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
                         body.push_str(&format!("      {taken} = {}\n", rb_expr(unparen(&self.expr(expr, &local).text))));
@@ -6279,8 +6661,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "    raise RuleInputError, \"{}\" if {seq}.length > {cap}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）: #{{{seq}.length}}", "{} has too many elements (at most {cap}): #{{{seq}.length}}", el.name.text)
+                "    raise RuleInputError.new(\"{}\", {seq}.length) if {seq}.length > {cap}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
             ));
         }
         for d in self.counts() {
@@ -6311,14 +6693,14 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 o.push_str(&format!(
-                    "    raise RuleInputError, \"{}\" unless {v}.is_a?(Integer)\n",
-                    tr!("{} が整数ではありません: #{{{v}.inspect}}", "{} is not an integer: #{{{v}.inspect}}", i.name.text)
+                    "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
+                    tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                 ));
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "    raise RuleInputError, \"{}\" unless ({}..{}).cover?({v})\n",
-                        tr!("{} が範囲の外です: #{{{v}}}", "{} is out of range: #{{{v}}}", i.name.text),
+                        "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
+                        tr!("{} が範囲の外です", "{} is out of range", i.name.text),
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
                     ));
@@ -6388,23 +6770,23 @@ impl<'a> Gen<'a> {
                 Ty::Enum(n) => {
                     let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
                     o.push_str(&format!(
-                        "    raise RuleInputError, \"{}\" unless {cls}::ALL.include?({v})\n",
-                        tr!("{} が列挙 {} の値ではありません: #{{{v}.inspect}}", "{} is not a value of enum {}: #{{{v}.inspect}}", i.name.text, cls)
+                        "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
+                        tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", i.name.text, cls)
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // `cover?` is true of a Float inside the range, so the kind is checked
                     // first (§15.43).
                     o.push_str(&format!(
-                        "    raise RuleInputError, \"{}\" unless {v}.is_a?(Integer)\n",
-                        tr!("{} が整数ではありません: #{{{v}.inspect}}", "{} is not an integer: #{{{v}.inspect}}", i.name.text)
+                        "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
+                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
                     ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             let sc = self.c.wire_scale(&i.name.text);
                             o.push_str(&format!(
-                                "    raise RuleInputError, \"{}\" unless ({}..{}).cover?({v})\n",
-                                tr!("{} が範囲の外です: #{{{v}}}", "{} is out of range: #{{{v}}}", i.name.text),
+                                "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
+                                tr!("{} が範囲の外です", "{} is out of range", i.name.text),
                                 crate::types::wire_int(*lo, sc),
                                 crate::types::wire_int(*hi, sc),
                             ));
@@ -6416,7 +6798,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(&self.constraint_guards(&local, Lang::Rb, "    ", |m| {
-            format!("      raise RuleInputError, \"{m}\"\n")
+            format!("      raise RuleInputError.new(\"{m}\")\n")
         }));
 
         let trace = self.temp("trace");
@@ -6520,12 +6902,12 @@ impl<'a> Gen<'a> {
             }
         }
         o.push_str(&format!(
-            "    else\n      raise RuleContradictionError, \"{}\"\n    end\n",
+            "    else\n      raise RuleContradictionError.new(\"{}\")\n    end\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
         o.push_str(&self.guards(t, local, Lang::Rb, "    ", |name, i, j| {
             format!(
-                "      raise RuleContradictionError, \"{}\"\n",
+                "      raise RuleContradictionError.new(\"{}\")\n",
                 tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
@@ -6707,8 +7089,14 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("    ALL: Array[{}]\n  end\n\n", snake(ascii)));
         }
 
-        o.push_str("  class RuleInputError < ArgumentError\n  end\n\n");
-        o.push_str("  class RuleContradictionError < RuntimeError\n  end\n\n");
+        o.push_str(
+            "  class RuleInputError < ArgumentError\n    NO_VALUE: Object\n    attr_reader what: String\n    \
+             attr_reader value: untyped\n    def initialize: (String, ?untyped) -> void\n  end\n\n",
+        );
+        o.push_str(
+            "  class RuleContradictionError < RuntimeError\n    attr_reader what: String\n    \
+             def initialize: (String) -> void\n  end\n\n",
+        );
 
         for g in &self.f.groups {
             let el = self
@@ -6935,13 +7323,14 @@ fn round_sw() -> String {
 /// {err}
 public enum RuleError: Error, CustomStringConvertible {{
     /// {input}
-    case input(String)
+    case input(what: String, value: Int64?)
     /// {contra}
-    case contradiction(String)
+    case contradiction(what: String)
 
     public var description: String {{
         switch self {{
-        case .input(let m), .contradiction(let m): return m
+        case .input(let what, .some(let v)): return "\(what): \(v)"
+        case .input(let what, .none), .contradiction(let what): return what
         }}
     }}
 }}
@@ -7292,7 +7681,7 @@ impl<'a> Gen<'a> {
                     if *unique {
                         body.push_str(&format!("        if {taken} != nil {{\n"));
                         body.push_str(&format!(
-                            "            throw RuleError.contradiction(\"{}\")\n        }}\n",
+                            "            throw RuleError.contradiction(what: \"{}\")\n        }}\n",
                             tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
                                 "fold {}: two elements matched a take_unique",
@@ -7364,8 +7753,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "    if {seq}.count > {cap} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）: \\({seq}.count)", "{} has too many elements (at most {cap}): \\({seq}.count)", el.name.text)
+                "    if {seq}.count > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({seq}.count))\n    }}\n",
+                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
             ));
         }
         for d in self.counts() {
@@ -7402,10 +7791,10 @@ impl<'a> Gen<'a> {
             let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
+                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です: \\({v})", "{} is out of range: \\({v})", i.name.text)
+                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
             ));
         }
         o
@@ -7526,15 +7915,15 @@ impl<'a> Gen<'a> {
             let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
             o.push_str(&format!(
-                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(\"{}\")\n    }}\n",
+                "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です: \\({v})", "{} is out of range: \\({v})", i.name.text)
+                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
             ));
         }
 
         o.push_str(&self.constraint_guards(&local, Lang::Sw, "    ", |m| {
-            format!("        throw RuleError.input(\"{m}\")\n")
+            format!("        throw RuleError.input(what: \"{m}\", value: nil)\n")
         }));
 
         let trace = self.temp("trace");
@@ -7666,7 +8055,7 @@ impl<'a> Gen<'a> {
             }
         }
         o.push_str(&format!(
-            "    }} else {{\n        throw RuleError.contradiction(\"{}\")\n    }}\n",
+            "    }} else {{\n        throw RuleError.contradiction(what: \"{}\")\n    }}\n",
             tr!("到達不能: 完全性は rulec が静的に検査済み", "unreachable: completeness was statically checked by rulec")
         ));
         for oc in &t.outputs {
@@ -7674,7 +8063,7 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&self.guards(t, local, Lang::Sw, "    ", |name, i, j| {
             format!(
-                "        throw RuleError.contradiction(\"{}\")\n",
+                "        throw RuleError.contradiction(what: \"{}\")\n",
                 tr!("表 {name}: {i} と {j} が同時に当てはまりました", "table {name}: {i} and {j} matched at the same time")
             )
         }));
@@ -8407,6 +8796,9 @@ pub fn strip_types(ts: &str) -> String {
             in_interface = true;
             continue;
         }
+        if is_field_decl(t) {
+            continue;
+        }
         // Comment lines carry prose, and prose says "as" too. An import's `as` is a
         // binding, not a cast, and stays.
         if t.starts_with("//") || t.starts_with("/*") || t.starts_with("* ") || t == "*/" || t.starts_with("import ") {
@@ -8420,6 +8812,20 @@ pub fn strip_types(ts: &str) -> String {
         out.push(l);
     }
     out.join("\n") + "\n"
+}
+
+/// `readonly what: string;` — a class property declared and not assigned. TypeScript needs
+/// the line; JavaScript gets the property from the constructor, so the line is dropped
+/// rather than rewritten. An object literal's `k: v,` ends in a comma and is left alone.
+fn is_field_decl(t: &str) -> bool {
+    let Some(rest) = t.strip_suffix(';') else { return false };
+    let rest = rest.strip_prefix("readonly ").unwrap_or(rest);
+    let Some((name, ty)) = rest.split_once(": ") else { return false };
+    !name.is_empty()
+        && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+        && !ty.is_empty()
+        && !ty.contains('=')
+        && !ty.contains('(')
 }
 
 /// `function f(a: T, b: U): R {` → `function f(a, b) {`. Also a class constructor.
@@ -8437,7 +8843,12 @@ fn strip_signature(l: &str) -> String {
         .into_iter()
         .filter(|p| !p.is_empty())
         .map(|p| match p.find(": ") {
-            Some(i) => p[..i].to_string(),
+            // A default value outlives its annotation: `value: unknown = NO_VALUE` keeps
+            // the `= NO_VALUE`, or JavaScript would see a different sentinel (§15.95).
+            Some(i) => match p[i..].find(" = ") {
+                Some(j) => format!("{}{}", &p[..i], &p[i + j..]),
+                None => p[..i].to_string(),
+            },
             None => p.to_string(),
         })
         .collect();

@@ -114,6 +114,14 @@ fn first_diff(got: &str, want: &str) -> Failure {
 }
 
 pub fn run(dir: &Path) -> Result<Run, String> {
+    run_with(dir, false)
+}
+
+/// The same, with the proof harnesses (§15.95). They are behind a flag because they are the
+/// one pass whose cost a person would notice: two rules take 7 seconds over the vectors and
+/// 33 with the proofs, and a rule that walks fifty elements is 27 of those seconds on its
+/// own. The vectors are what `test` is for; the proofs are what `--proofs` asks for.
+pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     let vdir = dir.join("vectors");
     let rd = std::fs::read_dir(&vdir).map_err(|_| {
         tr!(
@@ -184,6 +192,22 @@ pub fn run(dir: &Path) -> Result<Run, String> {
                 "wasm32-wasip1 の標準ライブラリが無いので WASI 側を飛ばしました（rustup target add wasm32-wasip1）",
                 "the wasm32-wasip1 standard library is not installed; skipped the WASI side (rustup target add wasm32-wasip1)"
             ));
+            false
+        } else {
+            true
+        }
+    } else {
+        false
+    };
+    // The proof harnesses (§15.95), when `--proofs` asks for them. Not vectors: the model
+    // checker reads the generated harnesses and either verifies them over the whole declared
+    // domain or brings back the input that breaks one. Seconds where the vectors are
+    // milliseconds — 7s to 33s on two rules, +155s on the corpus — which is why it is asked
+    // for rather than assumed. Without kani on the PATH the pass is skipped
+    // and said so, like a missing toolchain, but not counted as a missing language.
+    let proof_host = if proofs && present.iter().any(|b| b.proof.is_some()) {
+        if !have("kani") {
+            out.skipped.push(tr!("kani が無いので証明を飛ばしました", "kani not found; skipped the proofs"));
             false
         } else {
             true
@@ -327,6 +351,13 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             if let (Some(f), true) = (b.pg, pg_host) {
                 let diff = held(&f(alias));
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), diff });
+            }
+            // The proofs of the same rule (§15.95): what every input in the declared domain
+            // does, rather than what the vectors do.
+            if let (Some(f), true) = (b.proof, proof_host) {
+                let plan = f(alias);
+                let (h, diff) = via_proof(&dir.join(&plan.cwd), &plan);
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "proof", vectors: h, refused: 0, diff });
             }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
@@ -651,7 +682,9 @@ pub fn render(r: &Run) -> String {
     for x in &r.results {
         match &x.diff {
             None => {
-                let mut n = if x.vectors > 0 {
+                let mut n = if x.via == "proof" {
+                    tr!("ハーネス {} 本", "{} harnesses", x.vectors)
+                } else if x.vectors > 0 {
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
                     tr!("単体ベクタ", "unit vectors")
@@ -664,7 +697,15 @@ pub fn render(r: &Run) -> String {
             Some(d) => {
                 bad += 1;
                 let text = d.text();
-                o.push_str(&if d.ran() {
+                o.push_str(&if x.via == "proof" {
+                    tr!(
+                        "FAIL  {} ({}{}) 証明が通りませんでした\n    {text}\n",
+                        "FAIL  {} ({}{}) a harness did not verify\n    {text}\n",
+                        shown(&x.rule),
+                        x.lang,
+                        via(x)
+                    )
+                } else if d.ran() {
                     tr!(
                         "FAIL  {} ({}{}) 参照評価器と食い違います\n    {text}\n",
                         "FAIL  {} ({}{}) disagrees with the reference evaluator\n    {text}\n",
@@ -705,6 +746,30 @@ pub fn render(r: &Run) -> String {
     o
 }
 
+/// Run one proof plan. The checker says how it went on stdout and exits non-zero when a
+/// harness fails, so the text is read either way: how many harnesses ran, for the report,
+/// and which ones did not verify, for the failure.
+fn via_proof(cwd: &Path, plan: &crate::backend::Plan) -> (usize, Option<Failure>) {
+    let out = match Command::new(&plan.cmd).current_dir(cwd).args(&plan.args).envs(closed()).output() {
+        Err(e) => return (0, Some(Failure::Broken(tr!("起動できません: {e}", "cannot start: {e}")))),
+        Ok(o) => o,
+    };
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    let n = text.matches("VERIFICATION:- ").count();
+    if out.status.success() && !text.contains("VERIFICATION:- FAILED") {
+        return (n, None);
+    }
+    let failed: Vec<String> =
+        text.lines().filter(|l| l.contains("Verification failed for")).map(|l| l.trim().to_string()).collect();
+    let why = if failed.is_empty() {
+        let e = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if e.is_empty() { text.lines().rev().take(3).collect::<Vec<_>>().join(" ") } else { e }
+    } else {
+        failed.join("\n    ")
+    };
+    (n, Some(Failure::Lines(why)))
+}
+
 /// The suffix that says a result came through the generated MCP server.
 fn via(x: &Outcome) -> &'static str {
     match x.via {
@@ -712,6 +777,7 @@ fn via(x: &Outcome) -> &'static str {
         "mcp-http" => ", MCP/HTTP",
         "wasi" => ", WASI",
         "function" => ", PostgreSQL",
+        "proof" => ", proof",
         _ => "",
     }
 }

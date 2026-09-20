@@ -203,11 +203,46 @@ the Wasm module, which is the Rust one behind a door that turns an unknown value
 `error` line before the module is reached.
 
 Errors come back as `Err(RuleError)`, whose two variants carry the same distinction as
-Python's two exception classes: `RuleError::Input` is a contract violation by the caller, and
-`RuleError::Contradiction` is the runtime guard described below.
+Python's two exception classes: `RuleError::Input { what, value }` is a contract violation by
+the caller, and `RuleError::Contradiction { what }` is the runtime guard described below.
+`what` is the sentence, `value` the number that was refused (`None` when the refusal is not
+about one), and `Display` puts them together — nothing is formatted on the refusing path,
+which is what lets a model checker walk it (below).
 
 It compiles with `rustc` alone — `rustc --edition 2021 -O coupon_step_runner.rs` builds both
 the rule and its runner through a `#[path] mod`, with no project file and nothing to fetch.
+
+#### The proofs
+
+Beside the module, `coupon_step_proof.rs` holds proof harnesses for the [Kani Rust
+Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
+so `rustc` never reads it; `kani coupon_step_proof.rs` does, and so does `rulec test
+--proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
+a flag because it is the one pass whose cost is noticeable: on the corpus of 30 rules it
+adds about 155 seconds to a run that otherwise takes seconds. `rulec api` names
+the file under `rust.proof` and every harness under `rust.harnesses`.
+
+What it holds, over **every** input in the declared domain rather than the vectors:
+
+| what | how it is checked |
+|---|---|
+| completeness (E101) | the `unreachable!` that closes every table — a reachable panic is a gap |
+| the W114 guards | that `RuleError::Contradiction` is never returned: the pair the checker could not decide either closes here or comes back as a counterexample |
+| int64 (§7.4) | Kani checks arithmetic overflow by default, on the code that ships |
+| overlap (E105) | `rows_<table>` counts the rows that match: `policy unique` demands exactly one, `policy first` at least one |
+
+The last one is separate because the overlap is *not* in the artifact: the if/else chain has
+already settled the priority, so the rows are counted beside it, from the same conditions.
+The harness assumes the declared domain — every `range`, and every `constraint` — and calls
+the generated function unchanged.
+
+A rule that walks a sequence gets the first three; its per-element tables and the ones that
+read a count cannot be replayed outside the walk, so no `rows_` is written for them. A rule
+with a `string` input gets no harness at all, and the file says so.
+
+What this is *not*: a proof about the table, or about the checker. It is a proof about this
+Rust over the declared domain, by a different tool than the one that
+proved the table — which is worth having precisely because the two are independent.
 
 ### Ruby
 
@@ -722,8 +757,15 @@ declared.
 
 ```python
 if not 0 <= subtotal <= 1000000:
-    raise RuleInputError(f"商品合計 is out of range: {subtotal}")
+    raise RuleInputError("商品合計 is out of range", subtotal)
 ```
+
+The sentence and the value travel apart. The error carries both — `what` is the sentence,
+`value` the number that was refused — and puts them together only when it is printed, so
+the message is what it always was and a caller can react to the value without parsing it
+back out of a string. The Rust error is a pair of struct variants for the same reason, and
+nothing on the refusing path formats anything, which is what lets a model checker walk it
+([the proofs](#the-proofs)).
 
 A number that is not an integer is refused before the range is looked at, in every language
 where a caller can pass one. A float sits inside any range: 18.3 for a rate declared in steps
@@ -734,7 +776,7 @@ sentence outside it ([below](#sql)).
 
 ```python
 if not _isinstance(rate, int) or _isinstance(rate, bool):
-    raise RuleInputError(f"料率 is not an integer: {rate!r}")
+    raise RuleInputError("料率 is not an integer", rate)
 ```
 
 `rulec api` states the same bounds, taken from the same place, so an integration built from

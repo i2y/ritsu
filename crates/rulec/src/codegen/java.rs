@@ -534,14 +534,22 @@ impl<'a> Gen<'a> {
         o.push_str(&format!(
             "    /** {} */\n    public static final class RuleInputError extends IllegalArgumentException {{\n        \
              private static final long serialVersionUID = 1L;\n\n        \
-             public RuleInputError(String message) {{\n            super(message);\n        }}\n    }}\n\n",
-            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+             /** {} */\n        public final String what;\n        /** {} */\n        public final Long value;\n\n        \
+             public RuleInputError(String what) {{\n            this(what, null);\n        }}\n\n        \
+             public RuleInputError(String what, Long value) {{\n            \
+             super(value == null ? what : what + \": \" + value);\n            \
+             this.what = what;\n            this.value = value;\n        }}\n    }}\n\n",
+            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
+            tr!("断られた理由の文。", "The sentence that says what was refused."),
+            tr!("断られた値。理由が値についてでなければ null。", "The value refused, or null when the refusal is not about one.")
         ));
         o.push_str(&format!(
             "    /** {} */\n    public static final class RuleContradictionError extends RuntimeException {{\n        \
              private static final long serialVersionUID = 1L;\n\n        \
-             public RuleContradictionError(String message) {{\n            super(message);\n        }}\n    }}\n\n",
-            tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller.")
+             /** {} */\n        public final String what;\n\n        \
+             public RuleContradictionError(String what) {{\n            super(what);\n            this.what = what;\n        }}\n    }}\n\n",
+            tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
+            tr!("矛盾を言う文。", "The sentence that says what contradicted.")
         ));
         o.push_str(&format!("    /** {} */\n    public record Fired(String table, int row, String label) {{\n    }}\n\n", fired_doc()));
 
@@ -732,10 +740,10 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!("        if ({seq}.size() > {cap}) {{\n"));
             o.push_str(&format!(
-                "            throw new RuleInputError({} + {seq}.size());\n        }}\n",
+                "            throw new RuleInputError({}, (long) {seq}.size());\n        }}\n",
                 java_str(&tr!(
-                    "{} の要素が多すぎます（上限 {cap}）: ",
-                    "{} has too many elements (at most {cap}): ",
+                    "{} の要素が多すぎます（上限 {cap}）",
+                    "{} has too many elements (at most {cap})",
                     el.name.text
                 ))
             ));
@@ -780,10 +788,10 @@ impl<'a> Gen<'a> {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({} + {v});\n        }}\n",
+                        "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({}, {v});\n        }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        java_str(&tr!("{} が範囲の外です: ", "{} is out of range: ", i.name.text)),
+                        java_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
                     ));
                 }
             }
@@ -883,10 +891,10 @@ impl<'a> Gen<'a> {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
-                        "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({} + {v});\n        }}\n",
+                        "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({}, {v});\n        }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        java_str(&tr!("{} が範囲の外です: ", "{} is out of range: ", i.name.text)),
+                        java_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
                     ));
                 }
             }

@@ -132,7 +132,8 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); or `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
+| `vectors` | how many vectors were put to it — or, when `via` is `proof`, how many harnesses the checker read |
 | `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
 | `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
@@ -241,7 +242,8 @@ meaning is in [generated-code.md](generated-code.md).
          "params":[…],"returns":"Output","outputs":[…],
          "enums":[{"name":"クーポン種別","alias":"CouponKind",
                    "values":[{"name":"率引き","alias":"Percent"}]}],
-         "errors":["RuleError::Input","RuleError::Contradiction"]},
+         "errors":["RuleError::Input","RuleError::Contradiction"],
+         "proof":"coupon_step_proof.rs","harnesses":["coupon_step_answers","applicable_rows","raw_discount_rows"]},
  "ruby":{"module":"CouponStep","function":"coupon_step",
          "signature":"CouponStep.coupon_step(subtotal, applied, …)",
          "rbs":"sig/coupon_step.rbs",

@@ -18,7 +18,7 @@ policy unique
 ```python
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
     ...
     if dest in _kinki and size == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
         fee = 990
@@ -185,11 +185,11 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
     if not _isinstance(girth, int) or _isinstance(girth, bool):
-        raise RuleInputError(f"三辺合計 is not an integer: {girth!r}")
+        raise RuleInputError("三辺合計 is not an integer", girth)
     if not 1 <= girth <= 100:
-        raise RuleInputError(f"三辺合計 is out of range: {girth}")
+        raise RuleInputError("三辺合計 is out of range", girth)
     trace: _Trace = []
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
@@ -215,7 +215,7 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 	if !in.Dest.Valid() {
-		return 0, nil, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
+		return 0, nil, &RuleInputError{What: "あて先 is not a value of the enum", Value: int64(in.Dest), HasValue: true}
 	}
 	var trace []Fired
 	// table サイズ判定 (policy first)

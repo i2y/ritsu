@@ -66,9 +66,9 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
     if not 1 <= girth <= 100:
-        raise RuleInputError(f"三辺合計 is out of range: {girth}")
+        raise RuleInputError("三辺合計 is out of range", girth)
     trace: _Trace = []
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
@@ -94,7 +94,7 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 	if !in.Dest.Valid() {
-		return 0, nil, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
+		return 0, nil, &RuleInputError{What: "あて先 is not a value of the enum", Value: int64(in.Dest), HasValue: true}
 	}
 	var trace []Fired
 	// table サイズ判定 (policy first)
@@ -152,6 +152,15 @@ def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rat
 if 残高A <= 1000 and 残高B >= 3980:
     raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
 ```
+
+
+### 生成した Rust に、もう一つの意見
+
+Rust のモジュールの隣に、`gen` は `<別名>_proof.rs` を書きます。[Kani](https://model-checking.github.io/kani/)（モデル検査器）の証明ハーネスで、`#[cfg(kani)]` の下にあるので `rustc` は読みません。`kani <別名>_proof.rs`、または `rulec test --proofs` が、ベクタではなく**宣言した範囲のすべての入力**について生成コードを検査します。どの表も素通りしない、矛盾のガードが当たらない、`i64` があふれない、そして `unique` の表の行が範囲をちょうど一度ずつ覆う。
+
+走らせる値打ちは、モデル検査器と、表を証明した検査器が、一行もコードを共有していないことにあります。一致すれば無関係な二つの道具が同じことを言ったということで、食い違えばどちらかが誤っていて、それを示す入力が出てきます。コーパス 30 本では、ハーネス 73 本が 155 秒で通ります。
+
+言っていないこと：表そのものについては何も。Rust 以外の生成物についても何も。
 
 ## 規則をエージェントのツールにする
 

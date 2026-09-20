@@ -240,6 +240,14 @@ fn commands() -> Vec<Cmd> {
                         "fail when any language was skipped for a missing toolchain, demanding the agreement across all of them"
                     ),
                 ),
+                flag(
+                    "--proofs",
+                    None,
+                    tr!(
+                        "生成した Rust の証明ハーネスも走らせる（kani が要る。ベクタではなく宣言した範囲の全体）",
+                        "also run the proof harnesses beside the generated Rust (needs kani; the whole declared domain, not the vectors)"
+                    ),
+                ),
             ],
             exits: vec![
                 (0, tr!("全部一致した、または toolchain が無くて飛ばした（--require-all を付けると飛ばした時点で 1）", "everything matched, or the toolchain is absent and it was skipped (with --require-all, skipping is 1)")),
@@ -249,6 +257,7 @@ fn commands() -> Vec<Cmd> {
             examples: vec![
                 "rulec test generated/".into(),
                 "rulec test generated/ --require-all".into(),
+                "rulec test generated/ --proofs".into(),
             ],
             codes: &[],
         },
@@ -1012,7 +1021,7 @@ fn main() -> ExitCode {
         "diff" => diff_cmd(&files, &a, markdown, json),
         "test" => {
             let Some(dir) = files.first() else { return need_args(cmd) };
-            match rulec::runtest::run(std::path::Path::new(dir.as_str())) {
+            match rulec::runtest::run_with(std::path::Path::new(dir.as_str()), a.has("--proofs")) {
                 Ok(r) => {
                     if json {
                         println!("{}", rulec::runtest::render_json(&r));

@@ -34,6 +34,10 @@ env:
   # for everything cargo launches, and it is set here too for the steps that
   # call the binary directly.
   RULEC_LANG: ja
+  # The model checker behind the proof harnesses (DESIGN §15.95). Pinned: a new
+  # version that decides differently should be a change in this file, read as
+  # such, and not something a rerun quietly brings in.
+  KANI_VERSION: "0.68.0"
 
 jobs:
   test:
@@ -118,6 +122,29 @@ jobs:
       - name: wasmtime, for the WASI pass
         uses: bytecodealliance/actions/wasmtime/setup@v1
 
+      # Kani reads the proof harnesses `gen` writes beside the Rust (DESIGN §15.95).
+      # It brings its own rustc and CBMC — about 2 GB — so it is cached on the
+      # pinned version, and `rulec test` skips the pass with a note when it is
+      # absent. A note the step below reads as a failure, which is the point.
+      - name: Cache Kani
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/kani
+            ~/.cargo/bin/cargo-kani
+            ~/.kani
+            ~/.rustup/toolchains/nightly-*
+          key: kani-${{ runner.os }}-${{ env.KANI_VERSION }}
+
+      - name: Kani, for the proofs beside the Rust
+        run: |
+          set -eu
+          if ! kani --version >/dev/null 2>&1; then
+            cargo install --locked --version "$KANI_VERSION" kani-verifier
+            cargo kani setup
+          fi
+          kani --version
+
       - name: uv, for the site's own tooling
         uses: astral-sh/setup-uv@v10.0.1
 
@@ -130,7 +157,7 @@ jobs:
           python3 --version && python3 -c 'import numpy; print("numpy", numpy.__version__)'
           node --version && ruby --version && php --version
           go version && javac -version && swiftc --version
-          wasmtime --version && psql --version
+          wasmtime --version && psql --version && kani --version
           psql -c 'select version()'
 
       # `website/docs-ja/` is half copied in by sync.sh and gitignored — the Japanese
@@ -144,6 +171,8 @@ jobs:
       - name: cargo test
         run: cargo test --locked
 
+      # `--proofs` adds the model checker's pass to the same run (DESIGN §15.95), so the
+      # pass itself — not only the harnesses it reads — is exercised here.
       # --- The suite skips a language whose toolchain is missing; here that is a
       # failure, not a note. `--require-all` counts the twelve languages. The PostgreSQL *function* beside
       # the query is a thirteenth door and is skipped when `psql` cannot reach a
@@ -155,12 +184,34 @@ jobs:
           set -eu -o pipefail
           out=$(mktemp -d)
           cargo run --quiet --locked -- gen tests/corpus/ゆうパック運賃.rule --out "$out"
-          cargo run --quiet --locked -- test "$out" --require-all --lang en | tee /tmp/run.log
+          cargo run --quiet --locked -- test "$out" --require-all --proofs --lang en | tee /tmp/run.log
           if grep -q "skipped" /tmp/run.log; then
             echo "::error::a side was skipped; every toolchain is supposed to be here"
             grep "skipped" /tmp/run.log
             exit 1
           fi
+
+      # Every rule in the corpus, proved as Rust over its whole declared domain
+      # rather than over the vectors: no table falls through, no W114 guard
+      # fires, nothing overflows an i64, and the rows of each `unique` table
+      # cover the domain exactly once (DESIGN §15.95). A second opinion on the
+      # first two of the five proofs, from a tool that shares no code with the
+      # checker — so a disagreement means one of them is wrong, which is the
+      # whole reason to run it.
+      - name: The proofs hold, for every rule in the corpus
+        run: |
+          set -eu -o pipefail
+          out=$(mktemp -d)
+          cargo run --quiet --locked -- gen tests/corpus/ --out "$out"
+          bad=0
+          for f in "$out"/rust/*_proof.rs; do
+            if ! kani "$f" > /tmp/kani.log 2>&1; then
+              echo "::error::$(basename "$f") did not verify"
+              tail -40 /tmp/kani.log
+              bad=1
+            fi
+          done
+          exit $bad
 
       - name: fmt and the committed output are current
         run: |

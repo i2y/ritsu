@@ -113,9 +113,9 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError(f"あて先 is not a value of enum Prefecture: {dest!r}")
+        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
     if not 1 <= girth <= 100:
-        raise RuleInputError(f"三辺合計 is out of range: {girth}")
+        raise RuleInputError("三辺合計 is out of range", girth)
     trace: _Trace = []
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
@@ -141,7 +141,7 @@ func FeeDemo(in Input) (YenInclTax, error) {
 
 func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 	if !in.Dest.Valid() {
-		return 0, nil, fmt.Errorf("あて先 is not a value of the enum: %d", in.Dest)
+		return 0, nil, &RuleInputError{What: "あて先 is not a value of the enum", Value: int64(in.Dest), HasValue: true}
 	}
 	var trace []Fired
 	// table サイズ判定 (policy first)
@@ -238,6 +238,27 @@ generated code stops rather than silently picking one:
 if 残高A <= 1000 and 残高B >= 3980:
     raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
 ```
+
+
+### A second opinion on the Rust
+
+Beside the Rust module, `gen` writes `<alias>_proof.rs`: proof harnesses
+for the [Kani Rust Verifier](https://model-checking.github.io/kani/),
+behind `#[cfg(kani)]` so `rustc` never reads them. `kani
+<alias>_proof.rs` — or `rulec test --proofs` — holds the
+generated code over **every** input in the declared domain rather than
+over the vectors: no table falls through, no contradiction guard fires,
+no `i64` overflows, and the rows of each `unique` table cover the domain
+exactly once.
+
+It is worth running because the model checker and the checker that
+proved the table share no code. Where they agree, two unrelated tools
+say the same thing; where they disagree, one of them is wrong and you
+get the input that shows it. On the corpus of 30 rules, 73 harnesses
+verify in 155 seconds.
+
+What it does not say: anything about the table itself, or about any
+target but this one.
 
 ## The rule as a tool for an agent
 

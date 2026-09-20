@@ -634,8 +634,10 @@ fn swiftは目録から組んだ呼び出しが動く() {
                 body.push_str(&format!("_ = {}.{}\n", s(e, "alias"), s(v, "alias")));
             }
         }
+        // A case with associated values is a function of them, so naming it is enough to
+        // check the spelling without writing out the labels (§15.94 gave them labels).
         for err in arr(sw_j, "errors") {
-            body.push_str(&format!("_ = {}(\"\")\n", err.as_str().unwrap()));
+            body.push_str(&format!("_ = {}\n", err.as_str().unwrap()));
         }
         // Top-level code is only allowed in a file called `main.swift`, so that is the name
         // — beside the module, not in place of the runner, which is left out of this build.

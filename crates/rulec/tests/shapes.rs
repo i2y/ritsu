@@ -276,7 +276,7 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     java_compiles(&dir, "BoolOnly");
     sw_typechecks(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
-    assert!(go.contains("return false, nil, fmt.Errorf"), "入口ガードが 0 を返している:\n{go}");
+    assert!(go.contains("return false, nil, &RuleInputError{"), "入口ガードが 0 を返している:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

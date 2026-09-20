@@ -30,8 +30,31 @@ import numpy as np
 _EPOCH = datetime.date(1970, 1, 1)
 
 
+_NOVALUE = object()
+
+
 class RuleInputError(ValueError):
-    """An input outside what the rule declares. The same refusal the generated code makes."""
+    """An input outside what the rule declares. The same refusal the generated code makes.
+
+    The sentence, the value and the row travel apart (§15.95), so a caller can react to
+    which row was refused without parsing the text back.
+    """
+
+    def __init__(self, what: str, value: object = _NOVALUE, row: int | None = None) -> None:
+        super().__init__(what)
+        self.what = what
+        self.value = value
+        self.row = row
+
+    def __str__(self) -> str:
+        if self.value is _NOVALUE:
+            m = self.what
+        else:
+            # A number prints as itself (a numpy scalar's repr says `np.int64(5)`);
+            # anything else prints as its repr, so a string keeps its quotes.
+            num = isinstance(self.value, (int, float, np.integer, np.floating)) and not isinstance(self.value, bool)
+            m = f"{self.what}: {self.value}" if num else f"{self.what}: {self.value!r}"
+        return m if self.row is None else f"{m} (行 {self.row})"
 
 
 def _ord(s: str) -> int:
@@ -208,7 +231,7 @@ class Rule:
                 bad = ~np.isin(v, spec["values"])
                 if bad.any():
                     i = int(np.argmax(bad))
-                    raise RuleInputError(f"{name}: 列挙 {spec['enum']} の値ではありません: {v[i]!r} (行 {i})")
+                    raise RuleInputError(f"{name}: 列挙 {spec['enum']} の値ではありません", v[i], i)
             lo, hi = spec.get("min"), spec.get("max")
             if lo is not None or hi is not None:
                 bad = np.zeros(n, dtype=bool)
@@ -218,7 +241,7 @@ class Rule:
                     bad |= v > hi
                 if bad.any():
                     i = int(np.argmax(bad))
-                    raise RuleInputError(f"{name}: 範囲の外です: {v[i]} (行 {i})")
+                    raise RuleInputError(f"{name}: 範囲の外です", v[i], i)
             env[name] = v
         return env, (0 if n is None else n)
 

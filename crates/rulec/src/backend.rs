@@ -60,6 +60,19 @@ pub struct Backend {
     /// its own whenever `psql` can reach a server. Without one it says so and skips, the way
     /// a missing toolchain does.
     pub pg: Option<fn(&str) -> Plan>,
+    /// How to run the generated proof harnesses (§15.95), for the backends that have them.
+    /// `rulec test --proofs` runs this as a pass of its own, and says it skipped when the
+    /// tool is not on PATH, the way a missing toolchain is said. It is behind a flag because
+    /// it is the one pass whose cost a person would notice — seconds where the vectors are
+    /// milliseconds, and half a minute for a rule that walks fifty elements (§15.95).
+    ///
+    /// **The column is closed at one**, like `wasi`. What it proves — the artifact answers
+    /// over the whole declared domain, no table falls through, no W114 guard fires, no i64
+    /// overflows — is a property of the rule as lowered to *this* language, and one language
+    /// carrying it is the whole claim. A second model checker here (JBMC for Java is the
+    /// obvious one) would add a toolchain and widen nothing until a rule is found where the
+    /// two disagree.
+    pub proof: Option<fn(&str) -> Plan>,
     /// What else has to be there beyond `tool`, checked before the language is run; the Err is
     /// the note `rulec test` prints when it skips the language for that reason.
     pub ready: Option<fn() -> Result<(), String>>,
@@ -167,6 +180,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
         pg: None,
+        proof: None,
         ready: None,
     },
     // The twelfth target is the one that is not a language: the rule travels as data and a
@@ -194,6 +208,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: Some(|| {
             let ok = std::process::Command::new("python3")
                 .args(["-c", "import numpy"])
@@ -230,6 +245,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -255,6 +271,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -266,6 +283,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("rust/{alias}.rs"), g.rust()),
                 (format!("rust/{alias}_runner.rs"), g.rs_runner()),
+                (format!("rust/{alias}_proof.rs"), g.rs_proof()),
                 ("rust/_round_test.rs".into(), crate::codegen::round_tests_rust()),
             ]
         },
@@ -294,6 +312,9 @@ pub const ALL: &[Backend] = &[
         }),
         mcp: None,
         pg: None,
+        // `kani <alias>_proof.rs`: the harnesses are a crate of their own whose only item is
+        // the rule, included by path, so nothing has to be built first.
+        proof: Some(|alias| Plan::new("rust", "kani", &[&format!("{alias}_proof.rs")])),
         ready: None,
     },
     Backend {
@@ -317,6 +338,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -341,6 +363,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -367,6 +390,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -400,6 +424,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: None,
     },
     Backend {
@@ -444,6 +469,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: Some(|| {
             if have("java") {
                 Ok(())
@@ -474,6 +500,7 @@ pub const ALL: &[Backend] = &[
         folds: false,
         wasi: None,
         mcp: None,
+        proof: None,
         pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
     },
@@ -510,6 +537,7 @@ pub const ALL: &[Backend] = &[
         wasi: None,
         mcp: None,
         pg: None,
+        proof: None,
         ready: Some(|| {
             if !have("node") {
                 return Err(tr!("node が無いので Wasm 側を飛ばしました", "node not found; skipped the Wasm side"));
