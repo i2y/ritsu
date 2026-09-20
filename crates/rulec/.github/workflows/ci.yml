@@ -202,15 +202,28 @@ jobs:
         run: |
           set -eu -o pipefail
           out=$(mktemp -d)
-          cargo run --quiet --locked -- gen tests/corpus/ --out "$out"
+          cargo run --quiet --locked -- gen tests/corpus/ --out "$out" > /dev/null
           bad=0
+          rules=0
+          harnesses=0
           for f in "$out"/rust/*_proof.rs; do
-            if ! kani "$f" > /tmp/kani.log 2>&1; then
-              echo "::error::$(basename "$f") did not verify"
-              tail -40 /tmp/kani.log
+            name=$(basename "$f" _proof.rs)
+            start=$SECONDS
+            if log=$(kani "$f" 2>&1); then
+              n=$(printf '%s\n' "$log" | grep -c '^VERIFICATION:- SUCCESSFUL' || true)
+              printf '%-24s %3ds  %s\n' "$name" "$((SECONDS - start))" \
+                "$(printf '%s\n' "$log" | grep -E '^Complete - ' | tail -1)"
+              rules=$((rules + 1))
+              harnesses=$((harnesses + n))
+            else
+              # Kani's own report is thousands of lines of checks that passed; what says
+              # what went wrong is the summary of each harness and the assertion it broke.
+              echo "::error::$name did not verify"
+              printf '%s\n' "$log" | grep -E '^ \*\* [0-9]+ of|^Failed Checks:|^ File:|^VERIFICATION:|^Verification failed for|^Complete - '
               bad=1
             fi
           done
+          echo "$rules rules, $harnesses harnesses verified"
           exit $bad
 
       - name: fmt and the committed output are current
