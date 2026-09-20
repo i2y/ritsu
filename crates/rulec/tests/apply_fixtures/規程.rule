@@ -1,0 +1,38 @@
+rule 規程(provision) v1
+description "呼ばれる側。derive・define・constraint・not のセル・日付と真偽の入力を持つ"
+
+enum 事由(reason) = 甲(a) default | 乙(b) default | 丙(c) default
+group 前二つ(first_two) = 甲, 乙
+
+inputs
+  下限(lo)   : mass[g]   range >=0g <=1000g
+  上限(hi)   : mass[g]   range >=0g <=1000g
+  区分(kind) : 事由
+  基準日(on) : date      range >=2020-01-01 <=2030-12-31
+  特例(sp)   : bool
+
+constraint 下限 <= 上限
+
+outputs
+  額(amount) : money[円]  round down(1円)
+
+derive 幅(width) : mass[g] = 上限 - 下限  range >=-1000g <=1000g
+
+table 判定(judge)
+policy unique
+| 区分       | 幅     | 特例  | 基準日       | -> 率(rate) : rate[step 10%] |
+| 前二つ     | <500g  | -     | -            | 50%                          |
+| 前二つ     | >=500g | -     | -            | 80%                          |
+| not 前二つ | -      | true  | >=2026-01-01 | 100%                         |
+| not 前二つ | -      | true  | <2026-01-01  | 20%                          |
+| not 前二つ | -      | false | -            | 20%                          |
+
+define 素(base) : money[円] = 1000円 × 率
+define 額(amount) : money[円] = 素
+
+examples
+| 下限 | 上限 | 区分 | 基準日     | 特例  | -> 額  |
+| 0g   | 100g | 甲   | 2026-04-01 | false | 500円  |
+| 0g   | 900g | 乙   | 2026-04-01 | false | 800円  |
+| 0g   | 100g | 丙   | 2026-04-01 | true  | 1000円 |
+| 0g   | 100g | 丙   | 2026-04-01 | false | 200円  |

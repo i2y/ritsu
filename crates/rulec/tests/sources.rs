@@ -336,3 +336,122 @@ fn 写した金額と写しを突き合わせる() {
     assert!(!cs.contains(&"W120".to_string()) && !cs.contains(&"E116".to_string()), "{cs:?}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// The four formats a document may be, through the one loop: `fetch` takes the cited table
+/// out, `pin` writes its digest, `check` holds the rows to it, and a change to the document
+/// breaks the digest.
+///
+/// Only markdown was ever driven this far (`.docx` has its own file; csv and xlsx had none),
+/// so `extract::tables` was reached for two of the four and `sources::check` saw one shape of
+/// fragment (§15.90). The point of the test is that **the answer does not depend on the
+/// format**: the same table in four containers pins to the same digest, because the copy is
+/// the table, not the file.
+#[test]
+fn 四つの形式が同じ写しと同じ固定になる() {
+    if !have("python3") {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    // The rule is the same every time; only the document's name changes.
+    let rule_for = |doc: &str| {
+        format!(
+            "rule t(t) v1\n\nsource 料金表 = file \"{doc}\"\n\n\
+             enum あて先(dest) = 近畿(kinki) | 関東(kanto)\n\n\
+             inputs\n  あて先(dest) : あて先\n\n\
+             outputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
+             table 運賃表(fee_table)  @料金表 表1\n\
+             | あて先 | -> 運賃 |\n| 近畿   | 990円   |\n| 関東   | 880円   |\n"
+        )
+    };
+    const WANT: &str = "あて先\t運賃\n近畿\t990円\n関東\t880円\n";
+
+    let mut digests: Vec<(String, String)> = Vec::new();
+    for (name, build) in [
+        ("料金表.md", 0),
+        ("料金表.csv", 1),
+        ("料金表.xlsx", 2),
+        ("料金表.docx", 3),
+    ] {
+        let d = scratch(&format!("fmt-{}", name.replace('.', "-")));
+        match build {
+            0 => std::fs::write(
+                d.join(name),
+                "# 料金表\n\n前書き。\n\n| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n",
+            )
+            .unwrap(),
+            1 => std::fs::write(d.join(name), "あて先,運賃\n近畿,990円\n関東,880円\n").unwrap(),
+            2 => {
+                build_with(
+                    "tests/xlsxbuild.py",
+                    &format!(
+                        r#"{{"out":"{}","sheets":[{{"name":"料金表","rows":[
+                         [["s","あて先"],["s","運賃"]],
+                         [["s","近畿"],["s","990円"]],
+                         [["s","関東"],["s","880円"]]]}}]}}"#,
+                        d.join(name).to_str().unwrap()
+                    ),
+                );
+            }
+            _ => {
+                build_with(
+                    "tests/docxbuild.py",
+                    &format!(
+                        r#"{{"out":"{}","blocks":[{{"kind":"table","rows":[["あて先","運賃"],["近畿","990円"],["関東","880円"]]}}]}}"#,
+                        d.join(name).to_str().unwrap()
+                    ),
+                );
+            }
+        }
+        let p = d.join("a.rule");
+        let rule = rule_for(name);
+        std::fs::write(&p, &rule).unwrap();
+
+        // Before the copy: the digest is not pinned and the table has not been taken out.
+        let cs = codes(&rule, &p);
+        assert!(cs.contains(&"E037".to_string()), "{name}: {cs:?}");
+        assert!(cs.contains(&"E039".to_string()), "{name}: {cs:?}");
+
+        let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
+        assert_eq!(c, 0, "{name}: {out}");
+        let tsv = std::fs::read_to_string(d.join(format!("{name}.fragments/表1.tsv")))
+            .unwrap_or_else(|e| panic!("{name}: 写しが無い: {e}"));
+        assert_eq!(tsv, WANT, "{name}: 写しが表そのものになっていない");
+
+        let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
+        assert_eq!(c, 0, "{name}: {out}");
+        let after = std::fs::read_to_string(&p).unwrap();
+        assert!(
+            rulec::check_source(&after, &p.to_string_lossy()).iter().all(|x| x.code.starts_with('W')),
+            "{name}: 固定したあとも落ちる:\n{after}"
+        );
+        digests.push((name.to_string(), rulec::sha256::short(tsv.as_bytes())));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // The copy is the table, so the four containers pin to one digest.
+    let first = digests[0].1.clone();
+    for (name, h) in &digests {
+        assert_eq!(*h, first, "{name}: 形式で固定が変わっている: {digests:?}");
+    }
+}
+
+/// Run one of the fixture builders on a spec.
+fn build_with(script: &str, spec: &str) {
+    let o = Command::new("python3")
+        .arg(root().join(script))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut c| {
+            use std::io::Write;
+            c.stdin.take().unwrap().write_all(spec.as_bytes())?;
+            c.wait_with_output()
+        })
+        .expect("python3 を起動できない");
+    assert!(o.status.success(), "{script}: {}", String::from_utf8_lossy(&o.stderr));
+}
+
+fn have(cmd: &str) -> bool {
+    Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+}

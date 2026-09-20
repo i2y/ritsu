@@ -169,3 +169,79 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     assert!(test.status.success() && !text.contains("FAIL"), "{text}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// A callee with the shapes the corpus's one applied rule does not have.
+///
+/// `apply.rs` sat at 71.9% of its lines with the corpus alone (§15.90), and the gap was one
+/// shape: the callee it applies has no `derive`, no `constraint`, no `not` cell, no date or
+/// boolean input, and every binding is a name. Each of those is a branch of the expansion
+/// that had never run — and binding a callee's input to a **literal** turned out not to work
+/// at all, though both the checker's type table and the expansion's partial evaluation had
+/// an arm for it.
+const PAIR: (&str, &str) = ("tests/apply_fixtures/適用.rule", "tests/apply_fixtures/規程.rule");
+
+#[test]
+fn リテラルで束縛した入力は列ごと畳まれる() {
+    let (f, _) = prepared(PAIR.0);
+    // 基準日 is bound to a date and 特例 to `false`, so neither is a column of the expanded
+    // table any more: the rows that could not match them are gone, and the rest lost the
+    // column. `not 前二つ | - | true` cannot hold with 特例 = false, so it is dropped.
+    let judge = f
+        .items
+        .iter()
+        .find_map(|it| match it {
+            Item::Table(t) if t.name.as_ref().is_some_and(|n| n.text == "規程:判定") => Some(t),
+            _ => None,
+        })
+        .expect("規程:判定 が展開されていない");
+    let cols: Vec<&str> = judge.inputs.iter().map(|(n, _)| n.as_str()).collect();
+    assert!(!cols.contains(&"基準日"), "日付で束縛した列が残っている: {cols:?}");
+    assert!(!cols.contains(&"特例"), "真偽で束縛した列が残っている: {cols:?}");
+    assert!(cols.contains(&"型"), "読み替えた列が名前で入っていない: {cols:?}");
+    // Four rows in the callee; the one that needs 特例 = true cannot happen here.
+    assert_eq!(judge.rows.len(), 3, "定数で消える行が消えていない");
+
+    // The callee's `derive` and its `constraint` come in under the apply's name.
+    assert!(
+        f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == "規程:幅")),
+        "呼び先の derive が展開されていない"
+    );
+    assert!(
+        f.constraints.iter().any(|k| k.left == "小" || k.right == "小"),
+        "呼び先の constraint が呼び出し側の名前で入っていない: {:?}",
+        f.constraints.iter().map(|k| (&k.left, &k.right)).collect::<Vec<_>>()
+    );
+}
+
+/// A word that names nothing and is no value of the callee's type is still E041: the reading
+/// as a literal must not swallow a misspelled name.
+#[test]
+fn 名前でもリテラルでもない語はE041のまま() {
+    let src = std::fs::read_to_string(root().join(PAIR.0)).unwrap();
+    let broken = src.replace("  特例 = false", "  特例 = 幽霊");
+    let ds = rulec::check_source(&broken, &root().join(PAIR.0).to_string_lossy());
+    let codes: Vec<&str> = ds.iter().map(|d| d.code).collect();
+    assert!(codes.contains(&"E041"), "打ち間違いが E041 で止まらない: {codes:?}");
+}
+
+#[test]
+fn 呼び先の形が揃った規則も生成物は評価器と全言語で一致する() {
+    let dir = std::env::temp_dir().join(format!("rulec-apply-run-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(root())
+        .args(["gen", PAIR.0, "--out", &dir.to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(root())
+        .args(["test", &dir.to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!text.lines().any(|l| l.starts_with("FAIL")), "一致しない言語がある:\n{text}");
+    assert!(out.status.success(), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

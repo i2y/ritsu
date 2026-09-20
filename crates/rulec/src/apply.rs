@@ -112,6 +112,22 @@ impl Renamer<'_> {
 /// Expand every `apply` of `f` in place. Errors are the callee not being usable (E044), its
 /// pin (E040) and the shape of the bindings (E041, E035); what needs this rule's types is
 /// left to [`check`].
+/// Does the applying rule declare this name? `expand` runs before the rule is typed, so the
+/// question is asked of the source. It decides whether a bare word in a binding is a name of
+/// this rule or a literal of the callee's (DESIGN §15.90); a name always wins, which is the
+/// order `check` uses too.
+fn declares(f: &RuleFile, n: &str) -> bool {
+    f.inputs.iter().any(|i| i.name.text == n)
+        || f.outputs.iter().any(|o| o.name.text == n)
+        || f.elements.as_ref().is_some_and(|e| e.fields.iter().any(|i| i.name.text == n))
+        || f.items.iter().any(|it| match it {
+            Item::Derived(d) => d.name.text == n,
+            Item::Define(d) => d.name.text == n,
+            Item::Count(d) => d.name.text == n,
+            Item::Table(t) => t.outputs.iter().any(|o| o.name.text == n),
+        })
+}
+
 pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     let mut out: Vec<Diag> = Vec::new();
     let dir = Path::new(path).parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -305,7 +321,25 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         let mut input_enum: HashMap<String, String> = HashMap::new();
         for cin in &cf.inputs {
             let b = a.bindings.iter().find(|b| b.input == cin.name.text).unwrap();
+            // The same reading `check` makes: a word that names nothing in the applying rule
+            // is a literal — `true`, `false`, or a value of the callee's enum. The partial
+            // evaluation below already knew what to do with one; nothing could produce it
+            // (DESIGN §15.90).
+            let cty = cc.ty_of(&cin.name.text).map(|t| match t {
+                Ty::Opt(i) => *i,
+                t => t,
+            });
+            let word_lit = |w: &str| match &cty {
+                Some(Ty::Bool) => w == crate::kw::TRUE || w == crate::kw::FALSE,
+                Some(Ty::Enum(ke)) => {
+                    cc.enums.iter().any(|(e, vs)| e == ke && vs.contains(&w.to_string()))
+                }
+                _ => false,
+            };
             subs.insert(cin.name.text.clone(), match &b.value {
+                BindValue::Name(n) if !declares(f, n) && word_lit(n) => {
+                    Sub::Lit(Lit::Word(n.clone()))
+                }
                 BindValue::Name(n) => Sub::Name(n.clone()),
                 BindValue::Lit(l) => Sub::Lit(l.clone()),
             });
@@ -815,8 +849,24 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
         for cin in &cal.inputs {
             let Some(b) = a.bindings.iter().find(|b| b.input == cin.name) else { continue };
             let cty = cin.ty.clone();
-            // Types.
-            match &b.value {
+            // Types. A word that names nothing in this rule is read as a literal — `true`,
+            // `false`, or a value of the callee's enum — because that is what a provision
+            // applied mutatis mutandis does: 「『A』とあるのは『B』と読み替える」. The parser
+            // has no types and cannot tell the two apart, so the choice is made here. The
+            // table below has always had an arm for `Lit::Word`, and nothing could reach it
+            // (DESIGN §15.90).
+            let as_lit = |w: &str| match &cty {
+                Ty::Bool => w == crate::kw::TRUE || w == crate::kw::FALSE,
+                Ty::Enum(ke) => cal.enums.iter().any(|(e, vs)| e == ke && vs.contains(&w.to_string())),
+                _ => false,
+            };
+            let value = match &b.value {
+                BindValue::Name(n) if c.ty_of(n).is_none() && as_lit(n) => {
+                    BindValue::Lit(Lit::Word(n.clone()))
+                }
+                other => other.clone(),
+            };
+            match &value {
                 BindValue::Name(n) => match c.ty_of(n) {
                     None => out.push(
                         Diag::error("E041", tr!("`{n}` という名前はこの規則にありません", "There is no name `{n}` in this rule"))

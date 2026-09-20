@@ -1,0 +1,28 @@
+rule 適用(applies) v1
+description "呼ぶ側。日付と真偽をリテラルで束縛し、列挙を読み替え、定義を一つ準用しない"
+
+enum 種別(kind) = 一(one) default | 二(two) default | 三(three) default
+
+inputs
+  小(small) : mass[g]  range >=0g <=1000g
+  大(large) : mass[g]  range >=0g <=1000g
+  型(k)     : 種別
+
+constraint 小 <= 大
+
+outputs
+  金額(fee) : money[円]  round down(1円)
+
+apply 規程(provision) = "規程.rule" sha256:dadf149d510d2d69
+  下限 = 小
+  上限 = 大
+  区分 = 型 with 一 -> 甲, 二 -> 乙, 三 -> 丙
+  基準日 = 2026-04-01
+  特例 = false
+  額 -> 金額
+
+examples
+| 小   | 大   | 型 | -> 金額 |
+| 0g   | 100g | 一 | 500円   |
+| 0g   | 900g | 二 | 800円   |
+| 0g   | 100g | 三 | 200円   |
