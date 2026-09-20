@@ -51,7 +51,11 @@ fn classify(raw: &str) -> Cell {
     }
     if digits > 0 && !body[..end].ends_with('.') {
         let unit = body[end..].trim().replace('％', "%");
-        if unit.chars().all(|c| c.is_alphanumeric() || c == '%' || c == '_') {
+        // Unicode files ℃, ㎡ and their kin as symbols rather than letters, so an
+        // alphanumeric test alone turned a whole column of `120㎡` into an enum of strings.
+        // They are folded to one spelling in `num_type`; this is what lets them reach it.
+        let compat = |c: char| matches!(c, '℃' | '℉' | '㎡' | '㎢' | '㎠' | '㎥' | '㎤' | '㎖' | '°');
+        if unit.chars().all(|c| c.is_alphanumeric() || compat(c) || c == '%' || c == '_') {
             return Cell::Num(body[..end].to_string(), unit);
         }
     }
@@ -139,7 +143,29 @@ fn column_kind(cells: &[Cell]) -> Column {
 
 /// The type a numeric column is declared with, from its unit, and the note that goes with
 /// it when the unit had to be guessed at.
+/// A workbook states a unit in its number format (`#,##0"㎡"`), and writes it the way a
+/// reader expects: the squared metre as one character, the litre as ℓ, the degree with a
+/// ring. The language keeps one spelling each, so they are folded here — at the boundary,
+/// where the workbook's own habits stop. Both the declared type and the values written into
+/// the draft go through this, or the draft names a type it then cannot parse a bound for.
+fn canonical_unit(u: &str) -> &str {
+    match u {
+        "㎡" | "m²" => "m2",
+        "㎢" | "km²" => "km2",
+        "㎠" | "cm²" => "cm2",
+        "㎥" | "m³" => "m3",
+        "㎤" | "cm³" => "cm3",
+        "ℓ" | "l" => "L",
+        "㎖" | "ml" => "mL",
+        "°C" => "℃",
+        "°F" => "℉",
+        "db" => "dB",
+        u => u,
+    }
+}
+
 fn num_type(unit: &str, decimal: bool) -> (String, Option<String>) {
+    let unit = canonical_unit(unit);
     match unit {
         "円" | "JPY" => ("money[円, incl_tax]".into(), Some(tr!("推定: 税込か税抜かは出典で確かめること", "guess: whether tax is included has to come from the source"))),
         "%" => (
@@ -148,6 +174,13 @@ fn num_type(unit: &str, decimal: bool) -> (String, Option<String>) {
         ),
         "g" | "kg" | "mg" | "t" | "lb" | "oz" => (format!("mass[{unit}]"), None),
         "cm" | "mm" | "m" | "km" | "in" | "ft" | "yd" | "mi" => (format!("length[{unit}]"), None),
+        "mm2" | "cm2" | "m2" | "a" | "ha" | "km2" | "坪" | "in2" | "ft2" | "yd2" | "mi2" | "ac" => {
+            (format!("area[{unit}]"), None)
+        }
+        "mm3" | "cm3" | "m3" | "mL" | "L" | "kL" => (format!("volume[{unit}]"), None),
+        "ms" | "s" | "min" | "h" | "d" | "w" => (format!("duration[{unit}]"), None),
+        "℃" | "℉" => (format!("temperature[{unit}]"), None),
+        "dB" => (format!("sound[{unit}]"), None),
         "" => ("number".into(), Some(tr!("推定: 単位が無いので number にした", "guess: no unit was written, so it is a number"))),
         u if u.len() == 3 && u.chars().all(|c| c.is_ascii_uppercase()) => (format!("money[{u}]"), None),
         u => ("number".into(), Some(tr!("推定: 単位 {u} は rulec に無いので number にした", "guess: the unit {u} is not one rulec knows, so it is a number"))),
@@ -171,8 +204,29 @@ fn ascii_ok(s: &str) -> bool {
 }
 
 /// A declared name with an alias where one is needed.
+///
+/// A name cannot be one of the language's own words (E009), and the file decides these
+/// names: the draft used to call its own table `table` in English, so `rulec import csv`
+/// produced a draft that would not parse — and a column headed `count` or `source` did the
+/// same. A reserved word keeps its spelling as the alias, which is what the generated code
+/// calls the column, and the name gains the `_` that makes it a name.
 fn named(text: &str, alias: &str) -> String {
-    if ascii_ok(text) { text.to_string() } else { format!("{text}({alias})") }
+    if !ascii_ok(text) {
+        return format!("{text}({alias})");
+    }
+    let n = name_only(text);
+    if n == text { n } else { format!("{n}({text})") }
+}
+
+/// The name alone, for the places that *refer* to a declaration rather than make one — a
+/// table's column header, and a cell that names an enum value. It has to agree with what
+/// `named` declared, or the draft refers to a column it never declared.
+fn name_only(text: &str) -> String {
+    if ascii_ok(text) && crate::kw::RESERVED.contains(&text) {
+        format!("{text}_")
+    } else {
+        text.to_string()
+    }
 }
 
 /// The draft, from a CSV. `outputs` is how many of the trailing columns are outputs.
@@ -251,7 +305,7 @@ pub fn draft_rows(
         match &cols[k] {
             Column::Num { unit, lo, hi, decimal } => {
                 let (ty, note) = num_type(unit, *decimal);
-                let u = if ty.starts_with("number") { String::new() } else if ty.starts_with("rate") { "%".into() } else { unit.clone() };
+                let u = if ty.starts_with("number") { String::new() } else if ty.starts_with("rate") { "%".into() } else { canonical_unit(unit).to_string() };
                 (ty, format!("{lo}{u}|{hi}{u}|{}", note.unwrap_or_default()))
             }
             Column::Date => ("date".into(), String::new()),
@@ -315,11 +369,11 @@ pub fn draft_rows(
     // The table: one row per line of the file, every cell an equality.
     o.push_str(&format!(
         "\ntable {}  # {}\n",
-        named(&tr!("表", "table"), "t"),
+        named(&tr!("表", "decision"), "t"),
         tr!("出典: {source}（{guess}: 出典の文書名と日付に書き換えること）", "source: {source} ({guess}: replace with the document's name and date)")
     ));
     o.push_str("policy unique\n");
-    let mut head: Vec<String> = (0..n_in).map(|k| header[k].trim().to_string()).collect();
+    let mut head: Vec<String> = (0..n_in).map(|k| name_only(header[k].trim())).collect();
     for k in n_in..ncol {
         let (ty, _) = decl(k);
         head.push(format!("{}{} : {ty}", if k == n_in { "-> " } else { "" }, named(header[k].trim(), &alias(k))));
@@ -335,11 +389,12 @@ pub fn draft_rows(
                 }
                 (Cell::Num(v, u), Column::Num { .. }) => {
                     let (ty, _) = num_type(u, v.contains('.'));
+                    let u = canonical_unit(u);
                     if ty.starts_with("number") { v.clone() } else if ty.starts_with("rate") { format!("{v}%") } else { format!("{v}{u}") }
                 }
                 (Cell::Num(v, u), _) => format!("{v}{u}"),
                 (Cell::Date(d), _) => d.clone(),
-                (Cell::Word(w), _) => w.clone(),
+                (Cell::Word(w), _) => name_only(w),
             };
             cells.push(text);
         }

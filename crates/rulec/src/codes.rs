@@ -252,6 +252,12 @@ table 甲(ko)\n   | a     | -> x  |\nr1 | true  | true  |\nr2 | false | false |\
 table 乙(otsu)\noverrides 甲:r1, 甲:r2\n| a    | -> x  |\n| true | false |\n";
 const X_E046: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 clause 例外(exception) -> x\n  then true\n";
+const X_E047: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax\n\n\
+outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E048: &str = "rule t(t) v1\n\ninputs\n  甲(a) : temperature[℃]  range >=0℃ <=40℃\n  \
+乙(b) : temperature[℃]  range >=0℃ <=40℃\n\noutputs\n  x(x) : bool\n\n\
+derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃\n\n\
+table 表(t1)\npolicy unique\n| 差 | -> x |\n| -  | true |\n";
 /// A copy of one fragment of a law, beside the examples that cite it. Its digest is what the
 /// examples pin (or fail to).
 const ARTICLE_1: &[(&str, &str)] = &[(
@@ -1081,6 +1087,34 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E046,
             &["E008", "E035", "E045"],
+        ),
+        err(
+            "E047",
+            tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
+            tr!(
+                "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。この道具は行から欲しい語を探して残りを踏み越える読み方をするので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性検査が量化する全体集合で、生成コードの入口ガードでもあるので、境界が一つ落ちたまま「完全」と答えることになります。",
+                "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0円 <=10000円 incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
+            ),
+            tr!(
+                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中（`money[円, incl_tax]`、`rate[step 0.1%]`）で、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<格子>)` です。",
+                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[円, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
+            ),
+            X_E047,
+            &["E011", "E103", "E104"],
+        ),
+        err(
+            "E048",
+            tr!("この型には足し算も掛け算もありません", "This type has no arithmetic"),
+            tr!(
+                "順序はあるが演算の無い型を、`+ - × ÷` のどれかに使ったとき。`date`、`temperature[℃]`・`temperature[℉]`、`sound[dB]` の三つがそれです。℃ は 0 が「無い」を意味しない目盛りなので `気温 × 2` に意味が無く、dB は対数なので二つ足しても音が二つ分にはならず、日付は暦日なので引き算の結果を入れる型がありません。どれも規則の中では閾値としてしか現れないので、比較と `range` だけを残して演算を落としています。",
+                "A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped."
+            ),
+            tr!(
+                "閾値として比べるか、`range` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。二つの日付のあいだの日数は、呼び出し側で数えて `number` か `duration` として渡します。",
+                "Compare it against a threshold, or write it in a `range`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table. The days between two dates are counted on the calling side and passed in as a `number` or a `duration`."
+            ),
+            X_E048,
+            &["E103", "E112", "E115"],
         ),
         err(
             "E101",

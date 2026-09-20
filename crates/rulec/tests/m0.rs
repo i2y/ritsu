@@ -83,6 +83,35 @@ fn 変異は決めたコードだけを出す() {
         ("m_w118.rule", &[("W118", 1)], "呼び先の表の全行に優先する節を足した"),
         ("m_e116.rule", &[("E116", 1), ("W120", 1)], "写しの 880円 を 890円 と写した（打ち間違いは二つ同時に出る）"),
         ("m_w120.rule", &[("W120", 1)], "写しの一行を写し忘れ、残った行がその入力を拾っている"),
+        // §15.86. Six positions where a value meets a declared type and nobody compared
+        // them. Each of these produced **nothing at all** until that entry: the corpus is
+        // made of correct rules, so a position no check visits looks exactly like a position
+        // that checks out. `tests/positions.rs` holds the whole table; these six are the ones
+        // seeded into a real rule, where the consequence is a real amount.
+        ("m_e103ex.rule", &[("E103", 1)], "例の期待値を違う単位で書いた（比較ごと飛ばされていた）"),
+        ("m_e103round.rule", &[("E103", 1)], "丸めの格子を違う単位で書いた（1円 に落ちていた）"),
+        ("m_e103fold.rule", &[("E103", 1)], "畳み込みの empty の答えを銭で書いた（円として読まれていた）"),
+        ("m_e103elem.rule", &[("E103", 1)], "要素の欄の範囲を違う単位で書いた（診断が捨てられていた）"),
+        ("m_e103step.rule", &[("E103", 1)], "型の刻みを違う単位で書いた（1 に落ちて範囲の目盛りが変わっていた）"),
+        ("m_e012group.rule", &[("E012", 1)], "群の一員を打ち間違えた（黙って群から外れていた）"),
+        // §15.88. The walk and the count had no mutant of any kind: their diagnostics were
+        // exercised only by their own minimal examples in the ledger, never by a rule a
+        // business would write.
+        ("m_e021.rule", &[("E021", 1)], "`over` が宣言されていない並びを指している"),
+        ("m_e022.rule", &[("E022", 1)], "空の並びのときの答えが無い"),
+        ("m_e023.rule", &[("E023", 1)], "最後まで見終えたときの答えが無い"),
+        ("m_e024.rule", &[("E024", 1)], "表が出す判定に行き先が無い"),
+        ("m_e027.rule", &[("E027", 1), ("W116", 1)], "例が、宣言されていない並びを名指している"),
+        ("m_e028.rule", &[("E028", 1)], "`count` に `over` が無い"),
+        ("m_e029.rule", &[("E029", 1), ("W111", 1)], "`where` が要素の持たない欄を名指している"),
+        ("m_e030.rule", &[("E030", 1)], "`count` に範囲が無い（完全性の全体集合と並びの上限を兼ねる）"),
+        ("m_e031.rule", &[("E031", 1)], "同じ並びを畳みも数えもしている"),
+        ("m_e014.rule", &[("E014", 1)], "出力のセルに式を書いた"),
+        ("m_e016.rule", &[("E016", 1)], "`result` の行が二つある"),
+        // This one used to **panic** `rulec check`: the interval of the derived value was
+        // computed before the diagnostic, and a divisor whose range contains zero asserted
+        // its way out of the process (§15.88).
+        ("m_e115.rule", &[("E115", 1)], "割る数が定数でない（かつては検査器ごと落ちていた）"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very

@@ -804,7 +804,7 @@ enum band = short | medium | long
 inputs
   distance : length[km]  range >=1km <=20000km
   intra_eu : bool
-  delay    : number      range >=0 <=48
+  delay    : duration[h]  range >=0h <=48h
 
 outputs
   compensation : money[EUR, incl_tax]  round down(1EUR)
@@ -814,11 +814,11 @@ outputs
 # 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
 table band_of
 policy unique
-| distance          | intra_eu | -> band : band |
-| <=1500km          | -        | short          |
-| >1500km           | true     | medium         |
-| >1500km <=3500km  | false    | medium         |
-| >3500km           | false    | long           |
+| distance         | intra_eu | -> band : band |
+| <=1500km         | -        | short          |
+| >1500km          | true     | medium         |
+| >1500km <=3500km | false    | medium         |
+| >3500km          | false    | long           |
 
 table amount
 policy unique
@@ -834,25 +834,25 @@ policy unique
 table reduction
 policy unique
 | distance         | intra_eu | delay | -> factor : rate[step 50%] |
-| <=1500km         | -        | <=2   | 50%                        |
-| <=1500km         | -        | >2    | 100%                       |
-| >1500km          | true     | <=3   | 50%                        |
-| >1500km          | true     | >3    | 100%                       |
-| >1500km <=3500km | false    | <=3   | 50%                        |
-| >1500km <=3500km | false    | >3    | 100%                       |
-| >3500km          | false    | <=4   | 50%                        |
-| >3500km          | false    | >4    | 100%                       |
+| <=1500km         | -        | <=2h  | 50%                        |
+| <=1500km         | -        | >2h   | 100%                       |
+| >1500km          | true     | <=3h  | 50%                        |
+| >1500km          | true     | >3h   | 100%                       |
+| >1500km <=3500km | false    | <=3h  | 50%                        |
+| >1500km <=3500km | false    | >3h   | 100%                       |
+| >3500km          | false    | <=4h  | 50%                        |
+| >3500km          | false    | >4h   | 100%                       |
 
 result compensation = base × factor
 
 examples
 | distance | intra_eu | delay | -> compensation |
-| 900km    | true     | 5     | 250EUR          |
-| 900km    | true     | 2     | 125EUR          |
-| 2000km   | true     | 5     | 400EUR          |
-| 3000km   | false    | 3     | 200EUR          |
-| 6000km   | false    | 5     | 600EUR          |
-| 6000km   | false    | 4     | 300EUR          |
+| 900km    | true     | 5h    | 250EUR          |
+| 900km    | true     | 2h    | 125EUR          |
+| 2000km   | true     | 5h    | 400EUR          |
+| 3000km   | false    | 3h    | 200EUR          |
+| 6000km   | false    | 5h    | 600EUR          |
+| 6000km   | false    | 4h    | 300EUR          |
 ```
 
 **この例が見せていること**

@@ -134,7 +134,7 @@ interval over dates exact.
 
 ## 3. Types
 
-Nine, and no others.
+Fourteen, and no others.
 
 | type | written | notes |
 |---|---|---|
@@ -142,10 +142,15 @@ Nine, and no others.
 | enum | the enum's name | a **closed** finite set, declared with `enum` or brought in with `import` |
 | mass | `mass[g]`, `mass[lb]`, … | the unit is part of the type. `mg` `g` `kg` `t` `oz` `lb` |
 | length | `length[cm]`, `length[in]`, … | `mm` `cm` `m` `km` `in` `ft` `yd` `mi` |
+| area | `area[m2]`, `area[坪]`, … | `mm2` `cm2` `m2` `a` `ha` `km2` `坪` `in2` `ft2` `yd2` `mi2` `ac`. A dimension of its own: `縦 × 横` is E103, because there is no dimensional analysis here (§2.1) |
+| volume | `volume[m3]`, `volume[L]`, … | `mm3` `cm3` `m3` `mL` `L` `kL`. `cm3` and `mL` are the same size, and so are `m3` and `kL`. **There is no gallon** — the US one is 3.785411784 L and the imperial one 4.54609 L |
+| duration | `duration[h]`, `duration[min]`, … | `ms` `s` `min` `h` `d` `w`. A minute is `min`, because `m` is the metre. This is a span of time; a calendar day is `date` |
+| temperature | `temperature[℃]`, `temperature[℉]` | `℃` `℉`. **Ordered, not arithmetic**: comparison and `range` only (E048). 41℉ is exactly 5℃, and a literal converts between them; a difference of two temperatures is not written at all |
+| sound | `sound[dB]` | `dB`, a sound pressure level. **Ordered, not arithmetic** (E048): a decibel is a logarithm, so adding two of them is not two sounds' worth |
 | money | `money[円, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate`, `rate[step 1%]`, `rate[step 0.1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
-| date | `date` | comparison and range only. **There is no date arithmetic** |
+| date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
 | optional | `会員区分?` | any of the above, plus the absent value. Consumed by the cell `none` |
 
@@ -154,6 +159,28 @@ anywhere in the tool or in the generated code.
 
 Money of different currencies or different tax flags cannot be added or compared, and neither
 can values of different units (E103). A conversion is written as a table, never as a formula.
+
+There are no compound dimensions. `重さ × 長さ` and `縦 × 横` are both E103, as `金額 × 金額`
+always was: this tool does no dimensional analysis, and a dimension invented to hold a product
+would be one nobody declared. Where the product itself is what a rule decides on — a floor
+area, a volume of water — take it as an input, or look it up in a table. For the same reason a
+divisor carrying a unit has to be written in the **left side's** unit: a divisor is read at the
+unit it is written in and never converted, so `重さ(mass[g]) ÷ 2kg` is E103 rather than a
+division by 2000.
+
+A value is read **through its unit**, wherever it is written. A range bound, a table cell, an
+expected value in `examples`, a rounding grid, a `step` inside a type's brackets, an answer a
+`fold` gives, a member of a `group`: each is a value of the thing it sits in, and one that is
+not is E103 (E012 for a name). `round up(10銭)` on a `money[円]` output is refused, and
+`round up(1000銭)` is accepted as the ten yen it is worth — the unit is read, not merely
+recognised.
+
+Three types are **ordered but not arithmetic**: `date`, `temperature` and `sound`. They are
+written in cells, compared, and given a `range`, and that is all — `+ - × ÷` over any of them
+is E048. A ℃ is a scale whose zero is displaced, so `気温 × 2` means nothing; a decibel is a
+logarithm, so adding two of them is not two sounds' worth; a date is a calendar day, and there
+is no type to hold the result of subtracting one. Where a difference is itself what the rule
+decides on, compute it on the calling side and pass it in — as a `duration`, or a `number`.
 
 ### Declaring an enum
 
@@ -822,6 +849,15 @@ reference evaluator, and a row that does not hold is E107, reported with the row
 **Every output must have a column** (E111). With two or more outputs, writing `->` before the
 later output columns is optional; `rulec fmt` folds it to the canonical form.
 
+Its cells are held to the types of the columns they sit under, exactly as a table's are: a
+heading that names nothing is E012, a value that is not one of the column's is E012, and a
+literal the column cannot hold — `1lb` under `mass[g]`, a bare number where a unit is
+required, an expected `800kg` under a `money[円]` output — is E103. An expected value that
+cannot be read would otherwise leave nothing to hold the rule to.
+
+An example naming an enum value is **not** a row for it: W111 still asks which values no table
+names.
+
 ## 10. What cannot be written
 
 - Nested objects (`注文.配送先.都道府県`). Flatten at the boundary and pass the scalar in.
@@ -865,7 +901,8 @@ which is why it is caught at parse time.
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`
-`rate` `number` `bool` `date` `string`), the money attributes (`incl_tax` `excl_tax`) and `std` are
+`area` `volume` `duration` `temperature` `sound` `rate` `number` `bool` `date` `string`), the
+money attributes (`incl_tax` `excl_tax`) and `std` are
 part of the vocabulary but are told apart by position, so they are not reserved as names.
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

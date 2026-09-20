@@ -1045,6 +1045,15 @@ fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     // element's fields are written the same way (§15.56) — the wire gains a shape, not a
     // second kind of number.
     let scalar = |name: &str, val: &Val| -> String {
+        // The absent value of an optional column is JSON `null` on the wire — which is what
+        // `rulec schema` declares and what the generated `_record` writes. The vectors wrote
+        // the word `none` instead, so even a runner that parsed it correctly would have
+        // disagreed with the record it produced (§15.88).
+        if matches!(val, Val::Enum(e) if e == crate::kw::NONE)
+            && matches!(c.ty_of(name), Some(Ty::Opt(_)))
+        {
+            return "null".into();
+        }
         match val {
             Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
             Val::Bool(b) => format!("{b}"),
@@ -1075,16 +1084,10 @@ fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     }
     for i in &f.inputs {
         let Some(val) = v.input.get(&i.name.text) else { continue };
-        let body = match val {
-            // A number goes out as the integer it travels as, which for a rate is the
-            // number of steps (§10.2). Asking `Checked` is the only way to know.
-            Val::Num(r) => {
-                format!("{}", crate::types::wire_int(*r, c.wire_scale(&i.name.text)))
-            }
-            Val::Bool(b) => format!("{b}"),
-            other => format!("\"{}\"", esc(&show(other))),
-        };
-        ins.push(format!("\"{}\":{body}", esc(&i.name.text)));
+        // The same `scalar` the element fields go through. It used to be written out a
+        // second time here, and the second copy is the one that ran — so a fix to the first
+        // (the absent value of an optional) changed nothing at all (§15.88).
+        ins.push(format!("\"{}\":{}", esc(&i.name.text), scalar(&i.name.text, val)));
     }
     format!("{{{}}}", ins.join(","))
 }
@@ -1094,6 +1097,11 @@ fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
 fn out_object(c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let one = |name: &str, o: &Option<Val>| match o {
+        Some(Val::Enum(e))
+            if e == crate::kw::NONE && matches!(c.ty_of(name), Some(Ty::Opt(_))) =>
+        {
+            "null".into()
+        }
         Some(Val::Num(r)) => {
             format!("{}", crate::types::wire_int(*r, c.wire_scale(name)))
         }

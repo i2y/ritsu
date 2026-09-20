@@ -257,7 +257,7 @@ Every command has `--format json`, and the codes and the JSON shape **stay put w
 </div>
 </div>
 
-**Twelve targets** · **72 diagnostics** · **28 rules transcribed from real published terms, checked, generated and run on every commit** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **74 diagnostics** · **28 rules transcribed from real published terms, checked, generated and run on every commit** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 

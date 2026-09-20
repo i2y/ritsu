@@ -124,7 +124,17 @@ fn is_unit_char(c: char) -> bool {
     // characters the metric units happened to need, `5USD` split into `5` and `USD` and
     // stopped at E014 — as a cell with two words in it, which says nothing about the cause.
     // An unknown run is a unit that is not known, and is reported as one.
-    c.is_ascii_alphabetic() || matches!(c, '円' | '銭' | '%' | '％')
+    c.is_ascii_alphabetic() || matches!(c, '円' | '銭' | '坪' | '℃' | '℉' | '%' | '％')
+}
+
+/// A digit inside a unit, for `m2` and `m3` (§15.83). It may not *start* one: the digits of
+/// the number itself are read first, so a unit that could begin with a digit would swallow
+/// whatever followed a `万` multiplier. Before this, `100m2` was cut into `100m` and `2`,
+/// and the leftover `2` was dropped by every reader that walks a line looking for a word —
+/// `range >=0m2 <=100m2` passed as `>=0m <=100m`. E047 now stops such a leftover, and this
+/// keeps the unit whole so that there is none.
+fn is_unit_tail(c: char) -> bool {
+    is_unit_char(c) || c.is_ascii_digit()
 }
 
 pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
@@ -247,7 +257,11 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
 
         // An identifier starts with a letter or `_`. Letting control characters or
         // symbols into identifiers would turn a typo into a name (a silent failure).
-        if !(c.is_alphabetic() || c == '_') {
+        //
+        // ℃ and ℉ are the exception: Unicode files them as symbols rather than letters, and
+        // a unit has to be writable where a type's brackets take a word (`temperature[℃]`)
+        // as well as after a number. 円 and 銭 are Han and never needed this.
+        if !(c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉')) {
             return Err(Diag::error(
                 "E002",
                 tr!("読めない文字 U+{:04X} があります", "Unreadable character U+{:04X}", c as u32),
@@ -349,8 +363,11 @@ fn lex_number(s: &str, neg: bool) -> Result<(Num, usize), Diag> {
     }
 
     let unit_start = i;
-    while s[i..].chars().next().is_some_and(is_unit_char) {
+    if s[i..].chars().next().is_some_and(is_unit_char) {
         i += s[i..].chars().next().unwrap().len_utf8();
+        while s[i..].chars().next().is_some_and(is_unit_tail) {
+            i += s[i..].chars().next().unwrap().len_utf8();
+        }
     }
     let unit = if i > unit_start {
         Some(s[unit_start..i].replace('％', "%"))

@@ -125,7 +125,12 @@ impl<'a> Env<'a> {
         };
         match cell {
             Cell::DontCare => true,
-            Cell::Nothing => false,
+            // The absent value of an optional column. The region machinery has always
+            // modelled it as one more value of the enum (`region.rs`), but the evaluator
+            // answered `false` to every value there is — so a `| none |` row could not fire,
+            // no vector was built for it, and the generated code's handling of the absent
+            // value was never run in any language (§15.87).
+            Cell::Nothing => matches!(v, Val::Enum(w) if w == crate::kw::NONE),
             Cell::Lit(l) => lit_hit(l),
             Cell::Set(ls) => ls.iter().any(lit_hit),
             Cell::Not(ls) => !ls.iter().any(lit_hit),
@@ -686,10 +691,19 @@ pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row)
             continue;
         }
         let Some(ty) = c.ty_of(col) else { continue };
-        if let Some(Cell::Lit(l)) = row.cells.get(ci) {
-            if let Some(v) = lit_to_val(l, &ty) {
-                env.insert(col.clone(), v);
+        match row.cells.get(ci) {
+            Some(Cell::Lit(l)) => {
+                if let Some(v) = lit_to_val(l, &ty) {
+                    env.insert(col.clone(), v);
+                }
             }
+            // `none` in an example is a case: the caller passed nothing for an optional
+            // input. It bound nothing at all, so no table fired and E107 said the output had
+            // no value — naming the output rather than the cell (§15.87).
+            Some(Cell::Nothing) if matches!(ty, Ty::Opt(_)) => {
+                env.insert(col.clone(), Val::Enum(crate::kw::NONE.into()));
+            }
+            _ => {}
         }
     }
     env

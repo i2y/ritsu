@@ -1,0 +1,32 @@
+rule ポイント付与(points) v1
+description "会計 1 件で貯まる点数。100 円につき 1 点で、区分とキャンペーンで倍になる。単位のない数を使う例"
+
+enum 会員区分(member_kind) = 一般(basic) | 上級(gold)
+
+inputs
+  税込金額(paid)         : money[円, incl_tax]  range >=0円 <=100万円
+  区分(kind)             : 会員区分
+  キャンペーン(campaign) : bool
+
+outputs
+  点数(pts) : number  round down(1)
+
+# 100 円につき 1 点。端数は最後に一度だけ落とす（§7.2）
+define 基本点(base)  : number = 税込金額 ÷ 税込金額
+define 倍付け(boost) : number = 基本点 × 2
+
+table 点数表(pts_table)
+policy unique
+| 区分 | キャンペーン | -> 点数(pts) : number |
+| 上級 | -            | 倍付け                |
+| 一般 | true         | 倍付け                |
+| 一般 | false        | 基本点                |
+
+result 点数 = 点数
+
+examples
+| 税込金額 | 区分 | キャンペーン | -> 点数 |
+| 1050円   | 一般 | false        | 10      |
+| 1050円   | 上級 | false        | 21      |
+| 1050円   | 一般 | true         | 21      |
+| 99円     | 一般 | false        | 0       |

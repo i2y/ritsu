@@ -503,6 +503,7 @@ impl P {
             let Some((name, k)) = self.name_at(&line, 0) else { continue };
             let Some((ty, k)) = self.type_ref(&line, k) else { continue };
             let (range, contract_only) = self.tail_range(&line, k);
+            self.tail_junk(&line, k);
             v.push(VarDecl { name, ty, range, contract_only, span: span_of(&line) });
         }
         v
@@ -514,6 +515,7 @@ impl P {
             let Some((name, k)) = self.name_at(&line, 0) else { continue };
             let Some((ty, k)) = self.type_ref(&line, k) else { continue };
             let rounding = self.tail_rounding(&line, k);
+            self.tail_junk(&line, k);
             v.push(OutDecl { name, ty, rounding, span: span_of(&line) });
         }
         v
@@ -556,6 +558,61 @@ impl P {
         let end = ts.get(k.saturating_sub(1)).map(|t| t.span.col + t.span.len).unwrap_or(start.col + start.len);
         let span = Span::new(start.line, start.col, end.saturating_sub(start.col).max(start.len));
         Some((TypeRef { base, args, optional, span }, k))
+    }
+
+    /// Everything a declaration's tail may hold: `range <bounds>`, `contract_only`, and
+    /// `round <mode>(<grid>)`. The readers above walk the line looking for the word they
+    /// want and step over everything else, so a token belonging to none of them used to
+    /// vanish — a tax flag written after the range (`range >=0円 <=10000円 incl_tax`), or
+    /// what is left of a bound whose unit did not lex as one. The range is the universe the
+    /// completeness proof quantifies over and the entry guard of the generated code, so a
+    /// bound lost this way was answered "complete" with one side missing. E047 stops at the
+    /// first such token. A citation ends the tail, so `@…` is where the scan gives up.
+    fn tail_junk(&mut self, ts: &[Token], mut k: usize) {
+        while k < ts.len() {
+            if ts[k].is(&Kind::At) {
+                return;
+            }
+            match ts[k].ident() {
+                Some(crate::kw::RANGE) => {
+                    k += 1;
+                    while k + 1 < ts.len()
+                        && matches!(ts[k].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt)
+                        && lit_of(&ts[k + 1]).is_some()
+                    {
+                        k += 2;
+                    }
+                }
+                Some(crate::kw::CONTRACT_ONLY) => k += 1,
+                // `round up(10円)` is five tokens. A shorter one is E104's business, not
+                // this check's, so the word alone is stepped over.
+                Some(crate::kw::ROUND) => {
+                    let full = ts.get(k + 2).is_some_and(|t| t.is(&Kind::LParen))
+                        && matches!(ts.get(k + 3).map(|t| &t.kind), Some(Kind::Num(_)))
+                        && ts.get(k + 4).is_some_and(|t| t.is(&Kind::RParen));
+                    k += if full { 5 } else { 1 };
+                }
+                _ => {
+                    let sp = ts[k].span.clone();
+                    self.err(
+                        Diag::error("E047", tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"))
+                            .at(self.at(sp.line))
+                            .mark(sp, tr!("この語は宣言の一部として読まれません", "this is not read as part of the declaration"))
+                            .note(tr!(
+                                "宣言の行に置けるのは `{}`、`{}`、`{}` だけです。ほかの語はいままで黙って捨てられていました。",
+                                "A declaration line holds `{}`, `{}` and `{}`, and nothing else. Anything else used to be dropped in silence.",
+                                crate::kw::RANGE, crate::kw::ROUND, crate::kw::CONTRACT_ONLY
+                            ))
+                            .note(tr!(
+                                "範囲は `{} >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。",
+                                "A range is `{} >=<value> <=<value>`: only pairs of a comparison and a value are read. A misspelled unit stops a pair from being read as one, and what is left over lands here.",
+                                crate::kw::RANGE
+                            )),
+                    );
+                    return;
+                }
+            }
+        }
     }
 
     /// `range >=1g <=40kg` and the `contract_only` marker (§11 W111).
@@ -620,6 +677,7 @@ impl P {
             .unwrap_or(line.len());
         let expr = self.expr(&line[eq + 1..stop])?;
         let (mut range, _) = self.tail_range(line, k.max(eq));
+        self.tail_junk(line, stop);
         self.i += 1;
         // §11's E112 example puts `range` on the next line; accept both.
         if range.is_none()
@@ -678,6 +736,7 @@ impl P {
             j = after;
         }
         let (range, _) = self.tail_range(line, j);
+        self.tail_junk(line, j);
         Some(CountDecl { name, over, column, value, range, span })
     }
 

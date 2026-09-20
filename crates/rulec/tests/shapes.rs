@@ -40,6 +40,22 @@ fn generate(tag: &str, rule: &str) -> PathBuf {
     dir
 }
 
+/// Run the generated code in every language a toolchain is present for, and hold it to the
+/// reference evaluator over the whole vector suite — what `rulec test` does for the corpus.
+///
+/// Compiling is not the same as agreeing, and the difference is not academic: §15.88 found a
+/// `string` output that compiled everywhere and answered **0** everywhere, and an `optional`
+/// input that did not compile at all in half the targets. The corpus is the only material
+/// that was ever run, so a shape the corpus does not have was a shape nobody ran.
+fn agrees_everywhere(tag: &str, dir: &Path) {
+    // The wording moves with `--lang` (the suite is pinned to Japanese by
+    // `.cargo/config.toml`), so what is asserted is the exit code and the absence of a
+    // failing line — neither of which is prose.
+    let (c, out) = run(&["test", &dir.to_string_lossy()]);
+    assert!(!out.lines().any(|l| l.starts_with("FAIL")), "{tag}: 一致しない言語がある:\n{out}");
+    assert_eq!(c, 0, "{tag}: rulec test が 0 で終わらない:\n{out}");
+}
+
 /// `go build` over the generated package, plus `gofmt -l`, which has to come out empty
 /// because the generator formats its own output (§8.5).
 fn go_builds(dir: &Path, pkg: &str) {
@@ -544,5 +560,140 @@ examples
     assert!(py.contains("made <= 20908"), "日付が通算日になっていない:\n{py}");
     let go = std::fs::read_to_string(dir.join("go").join("deadline").join("deadline.go")).unwrap();
     assert!(go.contains("<= 20908"), "{go}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The five dimensions added in §15.83 and §15.84, in one rule. None of them is in the
+/// corpus, so nothing else holds their brand names to what a compiler will accept: `坪` and
+/// `℉` are not identifiers in any target language, and the unit reaches the generated code
+/// as one (`Tsubo`, `Fahrenheit`). The literals exercise both kinds of conversion — the
+/// scaling every other unit uses, and the one offset in the table (41℉ is 5℃ exactly).
+const DIMENSIONS: &str = "\
+rule facility(facility) v1
+description \"面積・体積・時間・温度・音量を一本に入れた規則。生成物が全言語でコンパイルできることを押さえる\"
+
+enum verdict(verdict) = allowed(allowed) | barred(barred)
+
+inputs
+  floor(floor) : area[坪]         range >=0坪 <=1000坪
+  tank(tank)   : volume[kL]       range >=0kL <=100kL
+  shift(shift) : duration[min]    range >=0min <=600min
+  temp(temp)   : temperature[℉]   range >=0℉ <=200℉
+  noise(noise) : sound[dB]        range >=0dB <=130dB
+
+outputs
+  outcome(outcome) : verdict
+
+table judge(judge)
+policy first
+| floor  | tank   | shift    | temp    | noise   | -> outcome(outcome) : verdict |
+| <10坪  | -      | -        | -       | -       | barred                      |
+| -      | >50kL  | -        | -       | -       | barred                      |
+| -      | -      | >8h      | -       | -       | barred                      |
+| -      | -      | -        | >100℉   | -       | barred                      |
+| -      | -      | -        | -       | >=85dB  | barred                      |
+| -      | -      | -        | -       | -       | allowed                     |
+
+examples
+| floor | tank | shift   | temp | noise | -> outcome |
+| 100坪 | 10kL | 60min   | 41℉  | 60dB  | allowed   |
+| 5坪   | 10kL | 60min   | 41℉  | 60dB  | barred    |
+| 100坪 | 10kL | 540min  | 41℉  | 60dB  | barred    |
+";
+
+#[test]
+fn 新しい次元の規則も生成物はコンパイルできる() {
+    let dir = generate("dimensions", DIMENSIONS);
+    go_builds(&dir, "facility");
+    py_imports(&dir, "facility");
+    rb_loads(&dir, "facility");
+    php_loads(&dir, "facility");
+    java_compiles(&dir, "Facility");
+    sw_typechecks(&dir, "facility");
+    ts_runs(&dir, "facility");
+    // The unit's own spelling stays in the comment; the identifier is ASCII.
+    let py = std::fs::read_to_string(dir.join("python").join("facility.py")).unwrap();
+    for brand in ["Tsubo", "Kiloliter", "Minute", "Fahrenheit", "Decibel"] {
+        assert!(py.contains(brand), "{brand} が生成コードに無い:\n{py}");
+    }
+    assert!(py.contains("area[坪]") && py.contains("temperature[℉]"), "単位が注記に残っていない:\n{py}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The words the corpus never uses. Counted from the grammar against `tests/corpus/*.rule`
+/// (§15.88): the corpus is the only material `tests/threeway.rs` runs, so a word absent from
+/// it is a word whose generated code has never been executed, in any language. Two of them
+/// were broken — a `string` output answered 0 everywhere, and `optional` did not compile —
+/// and neither `check` nor a compiler had anything to say about it.
+///
+/// What is here, and nowhere in the corpus: `not` in a cell, `none` and `T?`, a `string`
+/// output, `round half_even`, and `constraint`.
+const SURFACE: &str = "\
+rule surface(surface) v1
+description \"コーパスが一度も走らせていない語だけを集めた規則\"
+
+enum 区分(kind) = 甲(a) | 乙(b) | 丙(c)
+group 前半(first_half) = 甲, 乙
+
+inputs
+  下限(lo)   : mass[g]  range >=0g <=1000g
+  上限(hi)   : mass[g]  range >=0g <=1000g
+  種別(k)    : 区分
+  備考(memo) : 区分?
+
+constraint 下限 <= 上限
+
+outputs
+  料金(fee)   : money[円, incl_tax]  round half_even(10円)
+  名札(label) : string
+
+derive 幅(width) : mass[g] = 上限 - 下限  range >=-1000g <=1000g
+
+table 判定(judge)
+policy unique
+| 種別     | 備考 | 幅     | -> 率(share) : rate[step 1%] | 名札(label) : string |
+| 前半     | none | -      | 25%                          | \"前半・記載なし\"       |
+| 前半     | 甲   | -      | 30%                          | \"前半・甲\"            |
+| 前半     | 乙   | -      | 35%                          | \"前半・乙\"            |
+| 前半     | 丙   | -      | 40%                          | \"前半・丙\"            |
+| not 前半 | -    | <500g  | 75%                          | \"後半・狭い\"          |
+| not 前半 | -    | >=500g | 100%                         | \"後半・広い\"          |
+
+define 素(base) : money[円, incl_tax] = 1000円 × 率
+
+result 料金 = 素
+
+examples
+| 下限 | 上限 | 種別 | 備考 | -> 料金 | 名札            |
+| 0g   | 100g | 甲   | none | 250円   | \"前半・記載なし\" |
+| 0g   | 100g | 乙   | 丙   | 400円   | \"前半・丙\"      |
+| 0g   | 100g | 丙   | 甲   | 750円   | \"後半・狭い\"    |
+| 0g   | 900g | 丙   | 甲   | 1000円  | \"後半・広い\"    |
+";
+
+#[test]
+fn コーパスに無い語も生成物はコンパイルできる() {
+    let dir = generate("surface", SURFACE);
+    go_builds(&dir, "surface");
+    py_imports(&dir, "surface");
+    rb_loads(&dir, "surface");
+    php_loads(&dir, "surface");
+    java_compiles(&dir, "Surface");
+    sw_typechecks(&dir, "surface");
+    ts_runs(&dir, "surface");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn コーパスに無い語も評価器と全言語で一致する() {
+    let dir = generate("surface-run", SURFACE);
+    agrees_everywhere("surface", &dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn 新しい次元の規則も評価器と全言語で一致する() {
+    let dir = generate("dimensions-run", DIMENSIONS);
+    agrees_everywhere("dimensions", &dir);
     let _ = std::fs::remove_dir_all(&dir);
 }

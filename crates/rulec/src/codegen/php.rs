@@ -799,6 +799,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.php_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => super::str_lit(x),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -992,6 +993,22 @@ impl<'a> Gen<'a> {
                 Ty::Str => format!("(string) {d}[{k}]"),
                 Ty::Bool => format!("(bool) {d}[{k}]"),
                 Ty::Date => format!("_ord({d}[{k}])"),
+                // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
+                // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
+                // call outright (DESIGN §15.88).
+                Ty::Opt(inner) => {
+                    let one = match inner.as_ref() {
+                        Ty::Enum(nm) => format!(
+                            "\\{ns}\\{}::from({d}[{k}])",
+                            php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
+                        ),
+                        Ty::Str => format!("(string) {d}[{k}]"),
+                        Ty::Bool => format!("(bool) {d}[{k}]"),
+                        Ty::Date => format!("_ord({d}[{k}])"),
+                        _ => format!("(int) {d}[{k}]"),
+                    };
+                    format!("({d}[{k}] === null ? null : {one})")
+                }
                 _ => format!("(int) {d}[{k}]"),
             });
         }
@@ -1013,6 +1030,22 @@ impl<'a> Gen<'a> {
                         Ty::Str => format!("(string) {e}[{k}]"),
                         Ty::Bool => format!("(bool) {e}[{k}]"),
                         Ty::Date => format!("_ord({e}[{k}])"),
+                        // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
+                        // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
+                        // call outright (DESIGN §15.88).
+                        Ty::Opt(inner) => {
+                            let one = match inner.as_ref() {
+                                Ty::Enum(nm) => format!(
+                                    "\\{ns}\\{}::from({e}[{k}])",
+                                    php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
+                                ),
+                                Ty::Str => format!("(string) {e}[{k}]"),
+                                Ty::Bool => format!("(bool) {e}[{k}]"),
+                                Ty::Date => format!("_ord({e}[{k}])"),
+                                _ => format!("(int) {e}[{k}]"),
+                            };
+                            format!("({e}[{k}] === null ? null : {one})")
+                        }
                         _ => format!("(int) {e}[{k}]"),
                     }
                 })

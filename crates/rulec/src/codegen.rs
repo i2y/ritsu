@@ -41,6 +41,33 @@ fn brand_of(ty: &Ty) -> String {
             "ft" => "Foot".into(),
             "yd" => "Yard".into(),
             "mi" => "Mile".into(),
+            "mm2" => "SquareMillimeter".into(),
+            "cm2" => "SquareCentimeter".into(),
+            "m2" => "SquareMeter".into(),
+            "a" => "Are".into(),
+            "ha" => "Hectare".into(),
+            "km2" => "SquareKilometer".into(),
+            "坪" => "Tsubo".into(),
+            "in2" => "SquareInch".into(),
+            "ft2" => "SquareFoot".into(),
+            "yd2" => "SquareYard".into(),
+            "mi2" => "SquareMile".into(),
+            "ac" => "Acre".into(),
+            "mm3" => "CubicMillimeter".into(),
+            "cm3" => "CubicCentimeter".into(),
+            "m3" => "CubicMeter".into(),
+            "mL" => "Milliliter".into(),
+            "L" => "Liter".into(),
+            "kL" => "Kiloliter".into(),
+            "ms" => "Millisecond".into(),
+            "s" => "Second".into(),
+            "min" => "Minute".into(),
+            "h" => "Hour".into(),
+            "d" => "Day".into(),
+            "w" => "Week".into(),
+            "℃" => "Celsius".into(),
+            "℉" => "Fahrenheit".into(),
+            "dB" => "Decibel".into(),
             other => other.into(),
         },
         Ty::Rate => "Rate".into(),
@@ -1394,6 +1421,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "False".into(),
                         Lit::Word(w) => self.py_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -1554,6 +1582,26 @@ fn out_src(o: &OutCell) -> String {
     }
 }
 
+/// A string literal for the generated code. Every target but SQL writes a string between
+/// double quotes and escapes `"` and `\\` the same way, and a `.rule` string cannot hold a
+/// newline (the lexer reads it on one line), so one helper serves all of them.
+///
+/// Until §15.88 there was none: the lowering of an output cell had no arm for `Lit::Str`, so
+/// every string fell through to `_ => "0"` and a `string` output answered **0** in every
+/// language, with the row's own comment beside it printing the value it should have had.
+pub(crate) fn str_lit(s: &str) -> String {
+    let mut o = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
+}
+
 fn lit_src(l: &Lit) -> String {
     match l {
         Lit::Num(n) => n.raw.clone(),
@@ -1621,6 +1669,24 @@ impl<'a> Gen<'a> {
             Ty::Opt(t) => t.as_ref(),
             other => other,
         };
+        // An optional column is a pointer in Go, so every test but `none` reads through it
+        // and needs the nil guard the type system asks for. Without it the package did not
+        // compile at all: `in.Memo == KindA` is `*Kind` against `Kind` (DESIGN §15.88). The
+        // guard flips for a negated cell, because `not 甲` holds of the absent value — `T?`
+        // is the enum with one more value, and that is how the checker reads it too.
+        let optional = matches!(ty, Ty::Opt(_));
+        let raw = var.to_string();
+        let deref = if optional { format!("(*{var})") } else { raw.clone() };
+        let var = deref.as_str();
+        let guarded = |c: String, neg: bool| -> String {
+            if !optional {
+                c
+            } else if neg {
+                format!("({raw} == nil || {c})")
+            } else {
+                format!("({raw} != nil && {c})")
+            }
+        };
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -1651,21 +1717,21 @@ impl<'a> Gen<'a> {
         };
         Some(match cell {
             Cell::DontCare => return None,
-            Cell::Nothing => format!("{var} == nil"),
+            Cell::Nothing => return Some(format!("{raw} == nil")),
             // A cell that names one group calls the predicate the package already declares,
             // rather than writing the members out again — otherwise that function is dead.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("is{}({var})", pascal(&self.ident(w)))
+                guarded(format!("is{}({var})", pascal(&self.ident(w))), false)
             }
-            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
-            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
-            Cell::Lit(l) => format!("{var} == {}", lit(l)),
-            Cell::Set(ls) => set(ls, false),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => guarded(var.to_string(), false),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => guarded(format!("!{var}"), false),
+            Cell::Lit(l) => guarded(format!("{var} == {}", lit(l)), false),
+            Cell::Set(ls) => guarded(set(ls, false), false),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("!is{}({var})", pascal(&self.ident(w)))
+                guarded(format!("!is{}({var})", pascal(&self.ident(w))), true)
             }
-            Cell::Not(ls) => set(ls, true),
+            Cell::Not(ls) => guarded(set(ls, true), true),
             Cell::Cmp(cs) => cs
                 .iter()
                 .map(|(o, l)| {
@@ -2227,6 +2293,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.go_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -2547,38 +2614,33 @@ impl<'a> Gen<'a> {
     pub fn python_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut args: Vec<String> = Vec::new();
-        let read = |ty: &Ty, expr: String| -> String {
+        // One reader, used for the rule's own inputs and for an element's fields. There used
+        // to be a second copy inline below, and it was the one that ran — which is how the
+        // optional input got no arm anywhere and came out as `int(d[…])` (§15.88).
+        fn read_arg(g: &Gen, ty: &Ty, expr: String) -> String {
             match ty {
                 Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    let cls = g.enum_names.get(n).cloned().unwrap_or_default();
                     format!("m.{cls}({expr})")
                 }
                 Ty::Bool => format!("bool({expr})"),
                 Ty::Date => format!("_ord({expr})"),
                 Ty::Str => format!("str({expr})"),
+                // A branded input has to be constructed, exactly as a caller must.
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
                     format!("m.{}(int({expr}))", brand_of(ty))
                 }
+                // The absent value is `null` on the wire (§10.2), and `None` in Python.
+                Ty::Opt(inner) => {
+                    format!("(None if {expr} is None else {})", read_arg(g, inner, expr.clone()))
+                }
                 _ => format!("int({expr})"),
             }
-        };
+        }
+        let read = |ty: &Ty, expr: String| -> String { read_arg(self, ty, expr) };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
-            args.push(match &ty {
-                Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("m.{cls}(d[{jp:?}])")
-                }
-                Ty::Bool => format!("bool(d[{jp:?}])"),
-                Ty::Date => format!("_ord(d[{jp:?}])"),
-                Ty::Str => format!("str(d[{jp:?}])"),
-                // A branded input has to be constructed, exactly as a caller must.
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
-                    format!("m.{}(int(d[{jp:?}]))", brand_of(&ty))
-                }
-                _ => format!("int(d[{jp:?}])"),
-            });
+            args.push(read(&ty, format!("d[{:?}]", i.name.text)));
         }
         // The sequence a walk reads is built the same way, one element at a time (§15.56).
         let mut prelude = String::new();
@@ -2642,6 +2704,25 @@ impl<'a> Gen<'a> {
                 // A number is a plain int64, not a type the package declares, so it must not
                 // be qualified with the package name.
                 Ty::Number => format!("{ind}{into}.{g} = int64(num({src}[{jp:?}]))\n"),
+                // `null` on the wire is a nil pointer. It used to fall through to the
+                // branded number, so the runner would not compile at all (§15.88).
+                Ty::Opt(inner) => {
+                    let inner_ty = inner.as_ref();
+                    let take = match inner_ty {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!("{ind}\tv{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n")
+                        }
+                        Ty::Bool => format!("{ind}\tv{g} := {src}[{jp:?}] == true\n"),
+                        Ty::Date => format!("{ind}\tv{g} := ord(str({src}[{jp:?}]))\n"),
+                        Ty::Str => format!("{ind}\tv{g} := str({src}[{jp:?}])\n"),
+                        Ty::Number => format!("{ind}\tv{g} := int64(num({src}[{jp:?}]))\n"),
+                        other => format!("{ind}\tv{g} := r.{}(num({src}[{jp:?}]))\n", self.go_ty(other)),
+                    };
+                    format!(
+                        "{ind}if {src}[{jp:?}] != nil {{\n{take}{ind}\t{into}.{g} = &v{g}\n{ind}}}\n"
+                    )
+                }
                 _ => format!("{ind}{into}.{g} = r.{}(num({src}[{jp:?}]))\n", self.go_ty(ty)),
             }
         };
@@ -3463,6 +3544,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.ts_value(w),
                         Lit::Date(y, m, d) => format!("{}n", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => str_lit(x),
                         _ => "0n".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -3513,10 +3595,16 @@ impl<'a> Gen<'a> {
         // A brand is a type, and node's type stripping can only erase a whole `import type`
         // statement — a type name mixed into a value import is a syntax error there.
         let mut type_imports: Vec<String> = Vec::new();
-        let read = |ty: &Ty, src: String, imports: &mut Vec<String>, type_imports: &mut Vec<String>| -> String {
+        fn ts_read(
+            g: &Gen,
+            ty: &Ty,
+            src: String,
+            imports: &mut Vec<String>,
+            type_imports: &mut Vec<String>,
+        ) -> String {
             match ty {
                 Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    let cls = g.enum_names.get(n).cloned().unwrap_or_default();
                     if !imports.contains(&format!("parse{cls}")) {
                         imports.push(format!("parse{cls}"));
                     }
@@ -3525,14 +3613,24 @@ impl<'a> Gen<'a> {
                 Ty::Bool => format!("{src} === true"),
                 Ty::Date => format!("_ord(String({src}))"),
                 Ty::Number => format!("BigInt({src} as number)"),
+                // The absent value is `null` on the wire (§10.2). Its brand is a compound
+                // type (`Kind | null`), which was being pushed into an `import type {…}` as
+                // if it were a name — a syntax error before anything ran (§15.88).
+                Ty::Opt(inner) => {
+                    let one = ts_read(g, inner, src.clone(), imports, type_imports);
+                    format!("({src} === null ? null : {one})")
+                }
                 _ => {
-                    let brand = self.ts_ty(ty);
+                    let brand = g.ts_ty(ty);
                     if !type_imports.contains(&brand) {
                         type_imports.push(brand.clone());
                     }
                     format!("BigInt({src} as number) as {brand}")
                 }
             }
+        }
+        let read = |ty: &Ty, src: String, imports: &mut Vec<String>, type_imports: &mut Vec<String>| -> String {
+            ts_read(self, ty, src, imports, type_imports)
         };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
@@ -3712,10 +3810,39 @@ impl<'a> Gen<'a> {
     }
 
     /// Render a cell as a Rust condition. A don't-care yields None (no condition).
+    /// `Copy` for a struct of these fields, or just `Clone`. A `String` is not `Copy`, so a
+    /// rule with two outputs one of which is a string did not compile at all — and no rule
+    /// with a string output was ever generated until §15.88.
+    fn rs_derive(&self, mut names: impl Iterator<Item = String>) -> &'static str {
+        let owned = names.any(|n| matches!(self.ty_of(&n), Ty::Str | Ty::Opt(_)));
+        if owned {
+            "#[derive(Clone, PartialEq, Eq, Debug)]"
+        } else {
+            "#[derive(Clone, Copy, PartialEq, Eq, Debug)]"
+        }
+    }
+
     fn rs_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
         let inner = match ty {
             Ty::Opt(t) => t.as_ref(),
             other => other,
+        };
+        // An optional column is an `Option<T>`, and every test but `none` is about the value
+        // inside it. `memo == Kind::A` does not compile against `Option<Kind>`, so the module
+        // itself would not build (DESIGN §15.88). The tests below are written against a bound
+        // `__v` and wrapped in `matches!`; a negated cell is the negation of the positive
+        // one, because `not 甲` holds of the absent value — `T?` is the enum with one more
+        // value, and that is how the checker reads it too.
+        let optional = matches!(ty, Ty::Opt(_));
+        let raw = var.to_string();
+        let bound = if optional { "__v".to_string() } else { raw.clone() };
+        let var = bound.as_str();
+        let wrap = |c: String, neg: bool| -> String {
+            if !optional {
+                return c;
+            }
+            let m = format!("matches!({raw}, Some(__v) if {c})");
+            if neg { format!("!{m}") } else { m }
         };
         let lit = |l: &Lit| -> String {
             match l {
@@ -3743,19 +3870,25 @@ impl<'a> Gen<'a> {
         };
         Some(match cell {
             Cell::DontCare => return None,
-            Cell::Nothing => format!("{var}.is_none()"),
+            Cell::Nothing => return Some(format!("{raw}.is_none()")),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("is_{}({var})", self.ident(w))
+                wrap(format!("is_{}({var})", self.ident(w)), false)
             }
-            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
-            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
-            Cell::Lit(l) => format!("{var} == {}", lit(l)),
-            Cell::Set(ls) => any_of(ls, false),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => wrap(var.to_string(), false),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => wrap(format!("!{var}"), false),
+            Cell::Lit(l) => wrap(format!("{var} == {}", lit(l)), false),
+            Cell::Set(ls) => wrap(any_of(ls, false), false),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("!is_{}({var})", self.ident(w))
+                if optional {
+                    wrap(format!("is_{}({var})", self.ident(w)), true)
+                } else {
+                    format!("!is_{}({var})", self.ident(w))
+                }
             }
-            Cell::Not(ls) => any_of(ls, true),
+            Cell::Not(ls) => {
+                if optional { wrap(any_of(ls, false), true) } else { any_of(ls, true) }
+            }
             Cell::Cmp(cs) => cs
                 .iter()
                 .map(|(o, l)| {
@@ -4051,7 +4184,10 @@ impl<'a> Gen<'a> {
         // One element is a row of inputs, so it is a struct like `Output`.
         if let Some(el) = &self.f.elements {
             o.push_str(&format!("/// {}\n", tr!("{} の一件", "one of {}", el.name.text)));
-            o.push_str("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Element {\n");
+            o.push_str(&format!(
+                "{}\npub struct Element {{\n",
+                self.rs_derive(el.fields.iter().map(|fd| fd.name.text.clone()))
+            ));
             for fd in &el.fields {
                 o.push_str(&format!(
                     "    pub {}: {},\n",
@@ -4063,7 +4199,10 @@ impl<'a> Gen<'a> {
         }
 
         if outs.len() > 1 {
-            o.push_str("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub struct Output {\n");
+            o.push_str(&format!(
+                "{}\npub struct Output {{\n",
+                self.rs_derive(outs.iter().map(|od| od.name.text.clone()))
+            ));
             for od in outs {
                 o.push_str(&format!(
                     "    pub {}: {},\n",
@@ -4253,6 +4392,9 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.rs_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        // Rust's string output is a `String`, so the literal is owned here
+                        // rather than at every use.
+                        Lit::Str(x) => format!("{}.to_string()", str_lit(x)),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -4304,6 +4446,25 @@ impl<'a> Gen<'a> {
                 Ty::Date => format!("ord(s(&d, {jp:?}))"),
                 Ty::Number => format!("n(&d, {jp:?})"),
                 Ty::Str => format!("s(&d, {jp:?}).to_string()"),
+                Ty::Opt(inner) => {
+                    // `null` on the wire is `None`. The brand of an optional is `Option<Kind>`,
+                    // which used to be pasted in as if it were a constructor (§15.88).
+                    let one = match inner.as_ref() {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
+                        }
+                        Ty::Bool => format!("b(&d, {jp:?})"),
+                        Ty::Date => format!("ord(s(&d, {jp:?}))"),
+                        Ty::Number => format!("n(&d, {jp:?})"),
+                        Ty::Str => format!("s(&d, {jp:?}).to_string()"),
+                        other => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(other)),
+                    };
+                    // The runner's own scanner keeps an unquoted token as its text, so a JSON
+    // null arrives as the four letters. An optional string input cannot occur
+    // (a string is not a table column, E110), so nothing else can look like it.
+    format!("if s(&d, {jp:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
+                }
                 _ => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(&ty)),
             });
         }
@@ -4325,6 +4486,22 @@ impl<'a> Gen<'a> {
                         Ty::Date => format!("ord(s(e, {k:?}))"),
                         Ty::Number => format!("n(e, {k:?})"),
                         Ty::Str => format!("s(e, {k:?}).to_string()"),
+                        Ty::Opt(inner) => {
+                            // `null` on the wire is `None`. The brand of an optional is `Option<Kind>`,
+                            // which used to be pasted in as if it were a constructor (§15.88).
+                            let one = match inner.as_ref() {
+                                Ty::Enum(n) => {
+                                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                                    format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
+                                }
+                                Ty::Bool => format!("b(e, {k:?})"),
+                                Ty::Date => format!("ord(s(e, {k:?}))"),
+                                Ty::Number => format!("n(e, {k:?})"),
+                                Ty::Str => format!("s(e, {k:?}).to_string()"),
+                                other => format!("r::{}(n(e, {k:?}))", self.rs_ty(other)),
+                            };
+                            format!("if s(e, {k:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
+                        }
                         _ => format!("r::{}(n(e, {k:?}))", self.rs_ty(&ty)),
                     };
                     format!("{}: {body}", pub_name(&fd.name))
@@ -4410,6 +4587,24 @@ use std::io::Read;
                 Ty::Date => format!("ord(s({src}, {name:?}))"),
                 Ty::Number => format!("n({src}, {name:?})"),
                 Ty::Str => format!("s({src}, {name:?}).to_string()"),
+                // `null` on the wire is `None`; the scanner keeps an unquoted token as its
+                // text, so the four letters are the test (DESIGN §15.88).
+                Ty::Opt(inner) => {
+                    let one = match inner.as_ref() {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!(
+                                "match r::{cls}::parse(s({src}, {name:?})) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}"
+                            )
+                        }
+                        Ty::Bool => format!("b({src}, {name:?})"),
+                        Ty::Date => format!("ord(s({src}, {name:?}))"),
+                        Ty::Number => format!("n({src}, {name:?})"),
+                        Ty::Str => format!("s({src}, {name:?}).to_string()"),
+                        other => format!("r::{}(n({src}, {name:?}))", self.rs_ty(other)),
+                    };
+                    format!("if s({src}, {name:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
+                }
                 _ => format!("r::{}(n({src}, {name:?}))", self.rs_ty(ty)),
             }
         };
@@ -6299,6 +6494,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.rb_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -6351,6 +6547,10 @@ impl<'a> Gen<'a> {
                 Ty::Enum(_) | Ty::Str => format!("d[{jp:?}]"),
                 Ty::Bool => format!("d[{jp:?}] ? true : false"),
                 Ty::Date => format!("_ord(d[{jp:?}])"),
+                // `null` on the wire is `nil` here. It used to fall to `.to_i`, which turns
+                // `nil` into 0 — a value no row of the table matches, so the module raised
+                // "unreachable" on a case it answers perfectly well (§15.88).
+                Ty::Opt(_) => format!("d[{jp:?}]"),
                 _ => format!("d[{jp:?}].to_i"),
             });
         }
@@ -6366,6 +6566,7 @@ impl<'a> Gen<'a> {
                         Ty::Enum(_) | Ty::Str => format!("e[{k:?}]"),
                         Ty::Bool => format!("e[{k:?}] ? true : false"),
                         Ty::Date => format!("_ord(e[{k:?}])"),
+                        Ty::Opt(_) => format!("e[{k:?}]"),
                         _ => format!("e[{k:?}].to_i"),
                     }
                 })
@@ -7439,6 +7640,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.sw_value(w),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
                     },
                     Some(OutCell::Name(w)) => {
@@ -7512,6 +7714,22 @@ impl<'a> Gen<'a> {
                 Ty::Bool => format!("_b({d}, {jp:?})"),
                 Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
                 Ty::Number => format!("_n({d}, {jp:?})"),
+                // `null` on the wire is `nil`. The brand of an optional is `Kind?`, which
+                // used to be pasted in as if it were an initialiser (DESIGN §15.88).
+                Ty::Opt(inner) => {
+                    let one = match inner.as_ref() {
+                        Ty::Enum(n) => {
+                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                            format!("{cls}(rawValue: _s({d}, {jp:?}))!")
+                        }
+                        Ty::Bool => format!("_b({d}, {jp:?})"),
+                        Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
+                        Ty::Number => format!("_n({d}, {jp:?})"),
+                        Ty::Str => format!("_s({d}, {jp:?})"),
+                        other => format!("{}(_n({d}, {jp:?}))", self.sw_ty(other)),
+                    };
+                    format!("({d}[{jp:?}] is NSNull || {d}[{jp:?}] == nil ? nil : {one})")
+                }
                 _ => format!("{}(_n({d}, {jp:?}))", self.sw_ty(&ty)),
             };
             let local = runner_local(&format!("a{}", args.len()), &fname);

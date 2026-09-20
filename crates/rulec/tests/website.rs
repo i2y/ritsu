@@ -427,7 +427,8 @@ fn 色づけの語彙はkwと同じ() {
 
     for (name, want) in [
         ("MODIFIERS", sorted(&[kw::RANGE, kw::ROUND, kw::CONTRACT_ONLY, kw::DEFAULT, kw::STEP])),
-        ("TYPES", sorted(&[kw::MONEY, kw::MASS, kw::LENGTH, kw::RATE, kw::NUMBER, kw::BOOL, kw::STRING, kw::DATE])),
+        ("TYPES", sorted(&[kw::MONEY, kw::MASS, kw::LENGTH, kw::AREA, kw::VOLUME, kw::DURATION,
+            kw::TEMPERATURE, kw::SOUND, kw::RATE, kw::NUMBER, kw::BOOL, kw::STRING, kw::DATE])),
         ("TAX", sorted(&[kw::INCL_TAX, kw::EXCL_TAX])),
         ("POLICIES", sorted(&[kw::UNIQUE, kw::FIRST])),
         ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_DOWN, kw::HALF_EVEN])),

@@ -15,6 +15,18 @@ fn run(args: &[&str]) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
+/// The same, with the language pinned. `.cargo/config.toml` forces `RULEC_LANG=ja` for
+/// everything cargo launches, so without this the English draft is never exercised.
+fn run_lang(lang: &str, args: &[&str]) -> (i32, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        .env("RULEC_LANG", lang)
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rulec-import-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -93,5 +105,32 @@ fn 表の形でないcsvは断る() {
     let (c, _, e) = run(&["import", "csv", ragged.to_str().unwrap()]);
     assert_eq!(c, 2);
     assert!(e.contains("3 行目"), "{e}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// The draft has to parse, and the language's own words are not names (E009). Two sources of
+/// them: the draft's English word for its own table, which was `table`, and a column the file
+/// headed with a keyword. The suite runs in Japanese (`.cargo/config.toml`), where the table
+/// is `表`, so the English draft was broken for as long as it existed.
+#[test]
+fn キーワードと同じ名前の下書きは作らない() {
+    let d = dir("keywords");
+    let csv = d.join("kw.csv");
+    std::fs::write(&csv, "count,source,fee\n1,near,100円\n2,far,200円\n").unwrap();
+    for lang in ["en", "ja"] {
+        let (c, out, e) = run_lang(lang, &["import", "csv", csv.to_str().unwrap()]);
+        assert_eq!(c, 0, "{e}");
+        // The keyword keeps its spelling as the alias, which is what the generated code says.
+        assert!(out.contains("count_(count) :"), "{lang}: {out}");
+        assert!(out.contains("source_(source) :"), "{lang}: {out}");
+        // And the table header refers to the column by the name that was declared.
+        assert!(out.contains("| count_ | source_ |"), "{lang}: 見出しが宣言と食い違う: {out}");
+        let rule = d.join(format!("kw-{lang}.rule"));
+        std::fs::write(&rule, &out).unwrap();
+        let (c, o, _) = run_lang(lang, &["check", rule.to_str().unwrap(), "--format", "json"]);
+        assert!(!o.contains("\"code\":\"E009\""), "{lang}: 下書きが E009 で落ちる:\n{o}");
+        // E101 is what is left: the gaps between the values, which is a person's to decide.
+        assert_eq!(c, 1, "{lang}: {o}");
+    }
     let _ = std::fs::remove_dir_all(&d);
 }

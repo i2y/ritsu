@@ -46,7 +46,8 @@ APPLY = ("except",)
 # exception, and `overrides`, which a clause carries as a table does.
 INDENTED = ("when", "then", "except", "overrides")
 SOURCE = ("law", "file", "asof")
-TYPES = ("money", "mass", "length", "rate", "number", "bool", "string", "date")
+TYPES = ("money", "mass", "length", "area", "volume", "duration", "temperature", "sound",
+         "rate", "number", "bool", "string", "date")
 TAX = ("incl_tax", "excl_tax")
 POLICIES = ("unique", "first")
 ROUNDING = ("up", "down", "half_up", "half_down", "half_even")

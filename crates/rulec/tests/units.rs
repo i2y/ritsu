@@ -75,6 +75,294 @@ fn ヤードポンド法が書ける() {
     assert!(check(&qty("mass", "g", "2kg")).is_empty());
 }
 
+/// Area, volume and time (§15.83). Each is a dimension of its own, converted at literal
+/// position only, exactly as mass and length always were.
+#[test]
+fn 面積と体積と時間が書ける() {
+    assert!(check(&qty("area", "m2", "1ha")).is_empty(), "1ha は 10000m2");
+    assert!(check(&qty("area", "cm2", "1m2")).is_empty(), "1m2 は 10000cm2");
+    assert!(check(&qty("area", "m2", "50a")).is_empty(), "50a は 5000m2");
+    assert!(check(&qty("volume", "L", "5m3")).is_empty(), "5m3 は 5000L");
+    assert!(check(&qty("volume", "m3", "5000L")).is_empty());
+    assert!(check(&qty("volume", "mL", "1cm3")).is_empty(), "cm3 と mL は同じ大きさ");
+    assert!(check(&qty("duration", "h", "120min")).is_empty(), "120min は 2h");
+    assert!(check(&qty("duration", "min", "2h")).is_empty());
+    assert!(check(&qty("duration", "s", "1d")).is_empty(), "1d は 86400s");
+    // A 坪 is 400/121 m² on the nose — 一間 squared, and a 尺 is 10/33 m — so it is not a
+    // whole number of square metres, exactly as a pound is not a whole number of grams.
+    assert!(check(&qty("area", "m2", "1坪")).contains(&"E103".to_string()));
+    assert!(check(&qty("area", "坪", "1坪")).is_empty());
+    // Ninety minutes is not a whole number of hours.
+    assert!(check(&qty("duration", "h", "90min")).contains(&"E103".to_string()));
+    // A minute is `min`, because `m` is the metre. An area is not a length.
+    assert!(check(&qty("area", "m", "10m")).contains(&"E103".to_string()));
+    assert!(check(&qty("duration", "m", "10m")).contains(&"E103".to_string()));
+}
+
+/// §2.1 says a compound dimension is a modeling error, and until §15.83 only money × money
+/// was stopped. `縦 × 横` came back as a length and was compared against a length threshold;
+/// `重さ × 長さ` came back as a mass. Division was worse: the divisor is read at **its own**
+/// unit, so `重さ(mass[g]) ÷ 2kg` divided by 2 rather than by 2000 and stayed a mass.
+#[test]
+fn 単位どうしの掛け算と割り算は止まる() {
+    // `{lo}`/`{hi}` are the derived range: it has to be written in the type the `derive`
+    // declares, so it cannot be fixed in the skeleton.
+    let rule = |ty: &str, expr: &str, lo: &str, hi: &str| {
+        format!(
+            r#"rule t(t) v1
+
+inputs
+  a(a) : mass[g]    range >=0g <=1000g
+  b(b) : length[m]  range >=0m <=1000m
+
+outputs
+  r(r) : bool
+
+derive x(x) : {ty} = {expr}  range >={lo} <={hi}
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+"#
+        )
+    };
+    let g = |ty: &str, expr: &str| rule(ty, expr, "0g", "1000000g");
+    let e103 = |src: &str| check(src).contains(&"E103".to_string());
+    // Two lengths, two masses, and one of each: a product of units, whichever way round.
+    assert!(e103(&g("mass[g]", "a × a")));
+    assert!(e103(&g("mass[g]", "a × b")));
+    assert!(e103(&g("mass[g]", "b × a")));
+    // A quotient of two different dimensions is the same error.
+    assert!(e103(&g("mass[g]", "a ÷ 2m")));
+    // The same dimension in another unit: a divisor is read at the unit it is written in and
+    // never converted, so it has to be written in the left side's unit.
+    assert!(e103(&g("mass[g]", "a ÷ 2kg")));
+    // What stays legal: a dimensionless factor, and a divisor of the same unit. (`b` goes
+    // unused here, so what is asserted is that no unit is being complained about.)
+    assert!(!e103(&g("mass[g]", "a × 2")));
+    assert!(!e103(&rule("number", "a ÷ 100g", "0", "10")));
+}
+
+/// Temperature and sound: ordered, not arithmetic (§15.84).
+///
+/// ℉ is the one unit in the table whose conversion is not a scaling — 41℉ is exactly 5℃ —
+/// and it is only safe because E048 makes sure no difference of two temperatures is ever
+/// formed. On a difference the offset would be wrong: a rise of 9℉ is a rise of 5℃, not of
+/// −27.2℃.
+#[test]
+fn 温度と音量は比べられるが計算できない() {
+    assert!(check(&qty("temperature", "℃", "40℃")).is_empty());
+    assert!(check(&qty("sound", "dB", "130dB")).is_empty());
+    // 41℉ is 5℃ on the nose, and −40 is the same number in both.
+    assert!(check(&qty("temperature", "℃", "41℉")).is_empty(), "41℉ は 5℃");
+    assert!(check(&qty("temperature", "℉", "5℃")).is_empty(), "5℃ は 41℉");
+    // 42℉ is 50/9 ℃, which is not a whole number of ℃.
+    assert!(check(&qty("temperature", "℃", "42℉")).contains(&"E103".to_string()));
+    // A temperature is not a sound level, and neither is a length.
+    assert!(check(&qty("temperature", "dB", "1dB")).contains(&"E103".to_string()));
+    assert!(check(&qty("sound", "℃", "1℃")).contains(&"E103".to_string()));
+}
+
+/// The four arithmetic operators, over the three types that are ordered and nothing more.
+/// `date` is the one that was always *described* this way — §2.1 says "comparison and range
+/// only, no arithmetic" — and was never checked: `甲 - 乙` between two dates typed clean and
+/// only E112 ever complained, about the range.
+#[test]
+fn 順序だけの型は演算に使えない() {
+    let rule = |ty: &str, lo: &str, hi: &str, expr: &str| {
+        format!(
+            r#"rule t(t) v1
+
+inputs
+  a(a) : {ty}  range >={lo} <={hi}
+  b(b) : {ty}  range >={lo} <={hi}
+
+outputs
+  r(r) : bool
+
+derive x(x) : {ty} = {expr}  range >={lo} <={hi}
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+"#
+        )
+    };
+    let cases = [
+        ("temperature[℃]", "0℃", "40℃"),
+        ("temperature[℉]", "0℉", "100℉"),
+        ("sound[dB]", "0dB", "130dB"),
+        ("date", "2020-01-01", "2030-12-31"),
+    ];
+    for (ty, lo, hi) in cases {
+        for expr in ["a - b", "a + b", "a × 2", "a ÷ 2"] {
+            let ds = check(&rule(ty, lo, hi, expr));
+            assert!(ds.contains(&"E048".to_string()), "{ty}: `{expr}` が止まらない: {ds:?}");
+        }
+        // Comparison is what these types are for, and stays.
+        let src = rule(ty, lo, hi, "a").replace("| x |", "| x |");
+        assert!(!check(&src).contains(&"E048".to_string()), "{ty}: 名前を置くだけで止まってはいけない");
+    }
+}
+
+/// `examples` is shaped like a table but is not an `Item`, so its cells went through no type
+/// check at all. §1.2 calls it an executable specification and AGENTS §1 calls it the one
+/// check that can catch what the evaluator and every generated language get wrong together —
+/// and an expected `800kg` under a `money[円]` output compared equal to 800円.
+#[test]
+fn 例のセルは列の型に照らされる() {
+    let rule = |cells: &str| {
+        format!(
+            r#"rule t(t) v1
+
+inputs
+  重さ(w) : mass[g]  range >=0g <=10000g
+  区分(k) : 会員
+
+outputs
+  料金(fee) : money[円, incl_tax]  round down(1円)
+
+enum 会員(member) = 一般(basic) default | 上級(gold) default
+
+table j(judge)
+policy first
+| 重さ    | 区分 | -> 料金(fee) : money[円, incl_tax] |
+| >=1000g | -    | 800円                              |
+| -       | -    | 500円                              |
+
+examples
+| 重さ | 区分 | -> 料金 |
+{cells}
+"#
+        )
+    };
+    let has = |cells: &str, code: &str| check(&rule(cells)).contains(&code.to_string());
+
+    // A literal that does not land on a whole number of the declared unit. It used to
+    // produce no value, and the only thing said was E107 "no value came out".
+    assert!(has("| 1lb | 一般 | 500円 |", "E103"));
+    // A bare number where a unit is required.
+    assert!(has("| 500 | 一般 | 500円 |", "E103"));
+    // A value the enum does not have. This one passed: it landed on the `-` row, and the
+    // example proved nothing while looking like it had.
+    assert!(has("| 500g | 幽霊 | 500円 |", "E012"));
+    // The expected value, in the wrong unit and with no unit at all. Both compared equal.
+    assert!(has("| 500g | 一般 | 800kg |", "E103"));
+    assert!(has("| 500g | 一般 | 500 |", "E103"));
+    // A column heading that names nothing was ignored outright.
+    let bad_col = rule("| 500g | 一般 | 500円 |").replace("| 重さ | 区分 | -> 料金 |", "| 幻列 | 区分 | -> 料金 |");
+    assert!(check(&bad_col).contains(&"E012".to_string()));
+    // What a correct example does: nothing. (Both values are marked `default`, because
+    // neither has a row of its own here — an example naming one is not a row, which is why
+    // this pass puts `used` back when it is done.)
+    assert!(check(&rule("| 500g | 一般 | 500円 |\n| 2kg  | 上級 | 800円 |")).is_empty());
+}
+
+/// The grid an output is rounded to is a value of that output's column — read through the
+/// unit, not taken as the bare number written.
+///
+/// It was read with `lit_value_in` and, when that said no, simply **not recorded**: the
+/// generator then fell back on a grid of one unit. So `round up(10)` — the most natural way
+/// to mistype `round up(10円)` — rounded to 1円, and `round up(10銭)` did too, which is ten
+/// times from either of the two readings a person could have meant (§15.86).
+#[test]
+fn 丸めの格子は単位ごと読まれる() {
+    let rule = |grid: &str| {
+        format!(
+            r#"rule t(t) v1
+
+inputs
+  w(w) : mass[g]  range >=0g <=1000g
+
+outputs
+  fee(fee) : money[円, incl_tax]  round up({grid})
+
+table j(j)
+policy unique
+| w | -> base(base) : money[円, incl_tax] |
+| - | 500円                               |
+
+define fee(fee) : money[円, incl_tax] = base × 3.3%
+"#
+        )
+    };
+    // A hundredth of the currency is a unit of the same column, so a grid written in 銭 is
+    // read as the yen it is worth. This is the half that matters: the fix is not "refuse
+    // what is unfamiliar" but "read the unit".
+    let by_sen = rule("1000銭");
+    let by_yen = rule("10円");
+    for src in [&by_sen, &by_yen] {
+        let (f, c) = rulec::prepare(src, "units.rule").expect("1000銭 は 10円 として通る");
+        let g = rulec::codegen::Gen::new(&f, &c, src);
+        assert!(
+            g.python().contains("_round_up(raw, 10000)"),
+            "10円 の格子で丸めていない:\n{}",
+            g.python()
+        );
+    }
+    // And a grid that is no value of the column at all stops, rather than becoming one unit.
+    for bad in ["10g", "10", "10%", "10USD"] {
+        assert!(
+            check(&rule(bad)).contains(&"E103".to_string()),
+            "round up({bad}) が money[円] の出力で止まらない"
+        );
+    }
+}
+
+/// What a `fold` answers is the rule's output, and is read in the output's unit.
+///
+/// `empty -> 999銭` under a `money[円]` output passed `check` and generated **99900円** —
+/// 9.99円 read as a count of 銭 and then scaled as if it were yen. The same literal in a
+/// table cell of that column has always been E103 (§15.86).
+#[test]
+fn 畳み込みの答えは出力の単位で読まれる() {
+    let rule = |empty: &str| {
+        format!(
+            r#"rule t(t) v1
+
+enum 採用(verdict) = 取る(take) | 送る(skip)
+
+elements 行(rows)
+  額(amount) : money[円, incl_tax]  range >=0円 <=10000円
+
+outputs
+  合計(total) : money[円, incl_tax]  round up(1円)
+
+table 行判定(row_of)
+policy unique
+| 額       | -> 採用(verdict) : 採用 |
+| >=1000円 | 取る                    |
+| <1000円  | 送る                    |
+
+fold 採用 over 行
+  送る      -> next
+  取る      -> keep_max 額 by 額
+  empty     -> {empty}
+  exhausted -> held
+
+sequence 空(none)
+| 額 |
+"#
+        )
+    };
+    // 1000銭 is ten yen exactly, so it is a value of the column and is read as ten.
+    let src = rule("1000銭");
+    let (f, c) = rulec::prepare(&src, "units.rule").expect("1000銭 は 10円 として通る");
+    let g = rulec::codegen::Gen::new(&f, &c, &src);
+    assert!(
+        g.python().contains("answer: int = 10"),
+        "空のときの答えが 10円 になっていない:\n{}",
+        g.python()
+    );
+    // 999銭 is 9.99円, which the column cannot hold — as in any of its cells.
+    assert!(check(&rule("999銭")).contains(&"E103".to_string()));
+    // Neither can a mass, nor a bare number.
+    assert!(check(&rule("0g")).contains(&"E103".to_string()));
+    assert!(check(&rule("0")).contains(&"E103".to_string()));
+}
+
 #[test]
 fn 知らない単位はその場で名指しされる() {
     let ds = rulec::check_source(&money("USD", "100zzz"), "units.rule");
@@ -142,6 +430,12 @@ fn 式の中のリテラルはどの単位でも評価される() {
         ("money[銭, incl_tax]", "0銭", "1000銭", "500銭"),
         ("money[EUR, incl_tax]", "0EUR", "1000EUR", "500EUR"),
         ("money[USD, incl_tax]", "0USD", "1000USD", "500USD"),
+        ("area[m2]", "0m2", "1000m2", "500m2"),
+        ("area[坪]", "0坪", "1000坪", "500坪"),
+        ("volume[L]", "0L", "1000L", "500L"),
+        ("volume[m3]", "0m3", "1000m3", "500m3"),
+        ("duration[min]", "0min", "1000min", "500min"),
+        ("duration[h]", "0h", "1000h", "500h"),
         ("number", "0", "1000", "500"),
         ("rate", "0%", "100%", "50%"),
     ];

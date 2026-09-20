@@ -984,6 +984,7 @@ impl<'a> Gen<'a> {
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
                         Lit::Word(w) => self.java_value(w),
                         Lit::Date(y, m, d) => format!("{}L", crate::types::date_ord(*y, *m, *d).num),
+                        Lit::Str(x) => super::str_lit(x),
                         _ => "0L".into(),
                     },
                     Some(OutCell::Name(w)) => {

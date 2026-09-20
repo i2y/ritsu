@@ -120,6 +120,20 @@ pub const FALSE: &str = "false";
 pub const MONEY: &str = "money";
 pub const MASS: &str = "mass";
 pub const LENGTH: &str = "length";
+/// §15.83. Area and volume are dimensions of their own, not products of `length`: §2.1 does
+/// no dimensional analysis, so `縦 × 横` is a modeling error (E103) and an area is either
+/// taken as an input or looked up in a table.
+pub const AREA: &str = "area";
+pub const VOLUME: &str = "volume";
+/// A span of time. `date` is a calendar day and has no arithmetic; this is the quantity a
+/// rule compares — 3 hours of delay, 45 hours of overtime in a month, 30 minutes of parking.
+pub const DURATION: &str = "duration";
+/// §15.84. Two dimensions that are **ordered but not arithmetic**. A ℃ has a displaced zero,
+/// so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them multiplies
+/// what they measure. Rules only ever compare them against thresholds, and that is all they
+/// are allowed to do here (E048).
+pub const TEMPERATURE: &str = "temperature";
+pub const SOUND: &str = "sound";
 pub const RATE: &str = "rate";
 /// A whole number with no unit: a count of things, a number of days, a score (§2.1).
 pub const NUMBER: &str = "number";

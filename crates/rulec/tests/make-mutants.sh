@@ -88,4 +88,56 @@ awk -v c="$callee" -v h="$h" '/^apply / { sub(c, "\"m_e101.rule\""); sub(/sha256
 # A clause of this rule that takes precedence over the whole applied table
 awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { print } /^  手当 -> 非常勤手当$/ { print ""; print "clause 特例(special) -> 退職手当:支給月数"; print "  when always"; print "  then 5"; print "  overrides 退職手当:支給表" }' "$a" > "$M/m_w118.rule"
 
+# --- A value that meets a declared type. Every one of these produced no diagnostic at all
+# until §15.86: the corpus is made of correct rules, so a position nothing checks and a
+# position that checks out look the same. One seed per position that was found unchecked.
+f="$C/全国運賃.rule"
+n="$C/納入先照合.rule"
+# The expected value of an example, in the wrong unit. It was compared by not comparing it.
+awk '/^\| 近い一件 / { sub(/800円/, "800g") } { print }'                 "$f" > "$M/m_e103ex.rule"
+# The grid an output is rounded to, in the wrong unit. It fell back on a grid of one yen.
+awk '/^  運賃\(fee\)/ { sub(/round up\(1円\)/, "round up(1g)") } { print }' "$f" > "$M/m_e103round.rule"
+# The answer a fold gives for an empty sequence, in the wrong unit. 銭 was read as 円.
+awk '/^  empty/ { sub(/0円/, "999銭") } { print }'                      "$f" > "$M/m_e103fold.rule"
+# The range of an element's field. Its diagnostics were dropped on the floor.
+awk '/^  閾値\(threshold\)/ { sub(/<=100万円/, "<=100万g") } { print }'   "$f" > "$M/m_e103elem.rule"
+# A group member that is a value of no enum. It was dropped in silence, leaving the group
+# one value smaller and the value it meant to hold falling through to the catch-all row.
+y="$C/ゆうパック運賃.rule"
+awk '/^group 近畿圏/ { sub(/大阪府/, "大阪") } { print }'                   "$y" > "$M/m_e012group.rule"
+# A step, in the wrong unit. It was taken as 1, so the runtime value counted whole units.
+awk '/^  料率\(rate\)/ { sub(/step 0.1%/, "step 0.1g") } { print }'      "$C/厚生年金保険料.rule" > "$M/m_e103step.rule"
+
+# --- The walk and the count. Neither shape was in the mutants at all, so the diagnostics
+# that hold a `fold` and a `count` together (§15.56, §15.58) were exercised only by their own
+# minimal examples in the ledger, never by a rule a business would write.
+# `over` names a sequence that is not declared
+awk '{ sub(/^fold 採用 over 運賃行/, "fold 採用 over 無い並び"); print }'  "$f" > "$M/m_e021.rule"
+# No answer for an empty sequence
+awk '!/^  empty/ { print }'                                            "$f" > "$M/m_e022.rule"
+# No answer for a walk that reached the end
+awk '!/^  exhausted/ { print }'                                        "$f" > "$M/m_e023.rule"
+# A verdict the table produces, with no arm
+awk '!/^  スキップ/ { print }'                                          "$f" > "$M/m_e024.rule"
+# An example that names a sequence nothing declares
+awk '{ sub(/^\| 近い一件 \|/, "| 無い並び |"); print }'                   "$f" > "$M/m_e027.rule"
+# A count with no `over`
+awk '{ sub(/^count 一致数\(hits\) over 候補 /, "count 一致数(hits) "); print }' "$n" > "$M/m_e028.rule"
+# A count whose `where` names a column an element does not have
+awk '{ sub(/where 照合結果 = 一致/, "where 会社名一致 = 一致"); print }'      "$n" > "$M/m_e029.rule"
+# A count with no range: the universe of the completeness check, and the cap on the sequence
+awk '{ sub(/  range >=0 <=50/, ""); print }'                            "$n" > "$M/m_e030.rule"
+# A rule that both folds and counts the same walk
+awk '{ print } /^count 一致数/ { print ""; print "fold 照合結果 over 候補"; print "  一致    -> next"; print "  不一致  -> next"; print "  empty     -> false"; print "  exhausted -> false" }' "$n" > "$M/m_e031.rule"
+
+# --- The expression and the result line.
+# An expression in an output cell
+awk '{ sub(/\| 1200円  \|$/, "| 600円 × 2 |"); print }'                 "$C/送料.rule" > "$M/m_e014.rule"
+# A second `result` line
+awk '{ print } /^result /{ print "result 送料 = 送料" }'                 "$C/送料.rule" > "$M/m_e016.rule"
+# A divisor that is not a constant. Until §15.88 this **panicked** `rulec check`: the
+# interval of the derived value was computed before the diagnostic, and a divisor whose
+# range contains zero asserted its way out of the process.
+awk '{ sub(/税込金額 ÷ 100円/, "税込金額 ÷ 税込金額"); print }'            "$C/ポイント付与.rule" > "$M/m_e115.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

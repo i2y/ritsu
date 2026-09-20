@@ -52,6 +52,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E044](#e044) | error | That rule cannot be applied |
 | [E045](#e045) | error | A table that shares an output has two or more output columns |
 | [E046](#e046) | error | A `clause` is not shaped like this |
+| [E047](#e047) | error | Extra token after the declaration |
+| [E048](#e048) | error | This type has no arithmetic |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -1514,6 +1516,63 @@ clause 例外(exception) -> x
 ```
 
 Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
+
+## E047
+
+`error` — **Extra token after the declaration**
+
+**When.** A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0円 <=10000円 incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
+
+**Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[円, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+Related codes: [E011](#e011), [E103](#e103), [E104](#e104)
+
+## E048
+
+`error` — **This type has no arithmetic**
+
+**When.** A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped.
+
+**Fix.** Compare it against a threshold, or write it in a `range`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table. The days between two dates are counted on the calling side and passed in as a `number` or a `duration`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  甲(a) : temperature[℃]  range >=0℃ <=40℃
+  乙(b) : temperature[℃]  range >=0℃ <=40℃
+
+outputs
+  x(x) : bool
+
+derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃
+
+table 表(t1)
+policy unique
+| 差 | -> x |
+| -  | true |
+```
+
+Related codes: [E103](#e103), [E112](#e112), [E115](#e115)
 
 ## E101
 

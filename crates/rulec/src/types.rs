@@ -61,6 +61,16 @@ impl Ty {
     }
 }
 
+/// The dimension a type belongs to, or `None` for one that carries no unit. A currency is a
+/// dimension of its own (§15.18), so two of them are as unrelated as grams and centimetres.
+fn dim_of(t: &Ty) -> Option<String> {
+    match t {
+        Ty::Money { cur, .. } => Some(format!("{}/{cur}", crate::kw::MONEY)),
+        Ty::Qty { dim, .. } => Some(dim.clone()),
+        _ => None,
+    }
+}
+
 /// The currencies a literal may be written in, as ISO 4217 codes. A closed set on purpose:
 /// with any identifier allowed, `100lbs` would pass as an amount in a currency called
 /// "lbs". Each also has a hundredth, spelled by appending `c` — `USD` and `USDc` — which is
@@ -115,10 +125,74 @@ fn unit_info(u: &str) -> Option<(String, Rat)> {
         "ft" => (crate::kw::LENGTH, Rat::new(3048, 100)),
         "yd" => (crate::kw::LENGTH, Rat::new(9144, 100)),
         "mi" => (crate::kw::LENGTH, Rat::new(1_609_344, 10)),
+        // Area, in square metres (§15.83). It is a dimension of its own: `縦 × 横` is E103,
+        // because §2.1 has no algebra to turn two lengths into one of these. 坪 is exact —
+        // 一間 is 六尺 and a 尺 is 10/33 m, so a 坪 is (20/11)² = 400/121 m².
+        "mm2" => (crate::kw::AREA, Rat::new(1, 1_000_000)),
+        "cm2" => (crate::kw::AREA, Rat::new(1, 10_000)),
+        "m2" => (crate::kw::AREA, Rat::int(1)),
+        "a" => (crate::kw::AREA, Rat::int(100)),
+        "ha" => (crate::kw::AREA, Rat::int(10_000)),
+        "km2" => (crate::kw::AREA, Rat::int(1_000_000)),
+        "坪" => (crate::kw::AREA, Rat::new(400, 121)),
+        "in2" => (crate::kw::AREA, Rat::new(64_516, 100_000_000)),
+        "ft2" => (crate::kw::AREA, Rat::new(9_290_304, 100_000_000)),
+        "yd2" => (crate::kw::AREA, Rat::new(83_612_736, 100_000_000)),
+        "mi2" => (crate::kw::AREA, Rat::new(2_589_988_110_336, 1_000_000)),
+        "ac" => (crate::kw::AREA, Rat::new(40_468_564_224, 10_000_000)),
+        // Volume, in litres. `cm3` and `mL` are the same size and so are `m3` and `kL`; both
+        // spellings are kept because a water tariff writes m³ and a fire code writes L.
+        // **No gallon.** The US one is 3.785411784 L and the imperial one 4.54609 L, and a
+        // unit that means two different sizes is the one thing this table must not hold.
+        "mm3" => (crate::kw::VOLUME, Rat::new(1, 1_000_000)),
+        "cm3" | "mL" => (crate::kw::VOLUME, Rat::new(1, 1000)),
+        "L" => (crate::kw::VOLUME, Rat::int(1)),
+        "m3" | "kL" => (crate::kw::VOLUME, Rat::int(1000)),
+        // Time, in seconds. A `date` is a calendar day and has no arithmetic; this is the
+        // span a rule compares — EC261's three hours, a month's 45 hours of overtime, the
+        // thirty minutes a car park charges by. A minute is `min` because `m` is the metre.
+        "ms" => (crate::kw::DURATION, Rat::new(1, 1000)),
+        "s" => (crate::kw::DURATION, Rat::int(1)),
+        "min" => (crate::kw::DURATION, Rat::int(60)),
+        "h" => (crate::kw::DURATION, Rat::int(3600)),
+        "d" => (crate::kw::DURATION, Rat::int(86_400)),
+        "w" => (crate::kw::DURATION, Rat::int(604_800)),
+        // Ordered, not arithmetic (§15.84). A ℃ is a scale with a displaced zero, so its
+        // conversion carries an offset as well as a factor — see `unit_offset`. A decibel is
+        // a logarithm and has one spelling, so there is nothing to convert it to.
+        "℃" => (crate::kw::TEMPERATURE, Rat::int(1)),
+        "℉" => (crate::kw::TEMPERATURE, Rat::new(5, 9)),
+        "dB" => (crate::kw::SOUND, Rat::int(1)),
         "%" => (crate::kw::RATE, Rat::new(1, 100)),
         _ => return None,
     };
     Some((dim.to_string(), f))
+}
+
+/// What a unit adds after its factor, to reach its dimension's base unit: `base = v × f + o`.
+/// Every unit but ℉ has a zero where its dimension has one, so this is 0 for all of them and
+/// the arithmetic below reduces to the scaling it always was.
+///
+/// ℉ is the one entry that is not a scaling: 41℉ is exactly 5℃, and −40 is the same in both.
+/// It is exact — 5/9 and −160/9 are rationals — and it is safe here **because a temperature
+/// has no arithmetic**: the offset would be wrong on a difference (a rise of 9℉ is a rise of
+/// 5℃, not of −27.2℃), and E048 is what guarantees no difference is ever formed.
+fn unit_offset(u: &str) -> Rat {
+    match u {
+        "℉" => Rat::new(-160, 9),
+        _ => Rat::zero(),
+    }
+}
+
+/// Dimensions that are ordered but not arithmetic (§15.84). `date` is the same shape and was
+/// always described this way in §2.1 — "comparison and range only, no arithmetic" — but
+/// nothing enforced it, so `甲 - 乙` between two dates typed clean.
+pub fn compares_only(t: &Ty) -> bool {
+    match t {
+        Ty::Date => true,
+        Ty::Qty { dim, .. } => dim == crate::kw::TEMPERATURE || dim == crate::kw::SOUND,
+        _ => false,
+    }
 }
 
 /// Every unit a literal may carry, for the message that names them when one is not known.
@@ -126,9 +200,13 @@ fn unit_info(u: &str) -> Option<(String, Rat)> {
 /// in a diagnostic is skipped, and the rule is what the reader has to know anyway.
 pub fn units() -> String {
     tr!(
-        "質量 mg g kg t oz lb · 長さ mm cm m km in ft yd mi · 率 % · 金額 円 銭、\
+        "質量 mg g kg t oz lb · 長さ mm cm m km in ft yd mi · \
+         面積 mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac · 体積 mm3 cm3 mL L m3 kL · \
+         時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 円 銭、\
          または ISO 4217 のコード（その 1/100 はコードに c を付ける。USD と USDc）",
-        "mass mg g kg t oz lb · length mm cm m km in ft yd mi · rate % · money 円 銭, \
+        "mass mg g kg t oz lb · length mm cm m km in ft yd mi · \
+         area mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac · volume mm3 cm3 mL L m3 kL · \
+         duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money 円 銭, \
          or an ISO 4217 code (its hundredth is the code plus c: USD and USDc)"
     )
 }
@@ -235,7 +313,7 @@ pub fn comparable(n: &crate::lex::Num) -> Option<(Option<String>, Rat)> {
         None => Some((None, v)),
         Some(u) => {
             let (dim, f) = unit_info(u)?;
-            Some((Some(dim), v.mul(f)))
+            Some((Some(dim), v.mul(f).add(unit_offset(u))))
         }
     }
 }
@@ -271,7 +349,10 @@ fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
         }
         Ty::Qty { dim: d, unit: du } if dim == *d => {
             let (_, fd) = unit_info(du)?;
-            whole(v.mul(f).div(fd))
+            // `base = v × f + o`, then back out of the declared unit the same way. For every
+            // dimension but temperature both offsets are 0 and this is the old scaling.
+            let base = v.mul(f).add(unit_offset(unit));
+            whole(base.sub(unit_offset(du)).div(fd))
         }
         Ty::Rate if dim == crate::kw::RATE => Some(v.mul(f)),
         _ => None,
@@ -469,6 +550,22 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         );
     }
     for g in &f.groups {
+        // A member has to be a value of some enum. One that is not used to be dropped in
+        // silence, so a group of 47 prefectures with one misspelling was a group of 46 and
+        // the value it meant to hold fell through to whatever row caught the rest (§15.86).
+        for m in &g.members {
+            if !c.enums.values().any(|vs| vs.iter().any(|v| v == &m.text)) {
+                c.diags.push(
+                    Diag::error("E012", tr!("`{}` はどの列挙の値でもありません", "`{}` is not a value of any enum", m.text))
+                        .at(at(m.span.line))
+                        .mark(m.span.clone(), tr!("群の一員として書かれています", "written as a member of this group"))
+                        .note(tr!(
+                            "群は列挙の値の部分集合です。綴りを直すか、その値を列挙に足してください。読めない一員は黙って外され、群は一つ小さくなります。",
+                            "A group is a subset of an enum's values. Correct the spelling, or add the value to the enum. A member that names nothing was dropped in silence, leaving the group one value smaller."
+                        )),
+                );
+            }
+        }
         // The group's enum is whichever enumeration holds its first member.
         let owner = g
             .members
@@ -510,6 +607,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             // 100% declares its range like any other number.
             c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
         }
+        if let Some(n) = unreadable_step(&i.ty, &ty) {
+            c.diags.push(
+                Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))
+                    .at(at(i.name.span.line))
+                    .mark(i.ty.span.clone(), tr!("この型が宣言している刻みです", "this is the step the type declares"))
+                    .maybe_note(unit_note(&n))
+                    .note(tr!(
+                        "刻みは型と同じ単位で書いてください（`{}` なら `rate[step 0.1%]`）。読めない刻みは 1 として扱われ、実行時の値が単位の整数になり、宣言した範囲も生成コードの入口ガードもその目盛りで読まれます。",
+                        "Write the step in the unit of the type (`{}` takes `rate[step 0.1%]`). A step that cannot be read was taken as 1, so the runtime value counted whole units and both the declared range and the generated guard were read on that scale.",
+                        ty
+                    )),
+            );
+        }
         c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
         c.syms.insert(
             i.name.text.clone(),
@@ -523,10 +633,39 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         for i in &el.fields {
             let ty = c.resolve(&i.ty);
             if let Some(r) = &i.range {
-                let (b, _) = bounds_of(r, &ty);
+                // The element's fields are declared like inputs, and the bound that cannot be
+                // read is the same error there — but the diagnostics were dropped on the
+                // floor here, so `額 : money[円] range >=0円 <=1000g` passed with no upper
+                // bound at all, over which completeness was then proved (§15.86).
+                let (b, bad) = bounds_of(r, &ty);
+                for n in bad {
+                    c.diags.push(
+                        Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
+                            .at(at(i.span.line))
+                            .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                            .maybe_note(unit_note(&n))
+                            .note(tr!(
+                                "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります（§2.2）。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                                "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code (§2.2). Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
+                            )),
+                    );
+                }
                 c.ranges.insert(i.name.text.clone(), b);
             } else if matches!(ty, Ty::Rate) {
                 c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
+            }
+            if let Some(n) = unreadable_step(&i.ty, &ty) {
+                c.diags.push(
+                    Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))
+                        .at(at(i.name.span.line))
+                        .mark(i.ty.span.clone(), tr!("この型が宣言している刻みです", "this is the step the type declares"))
+                        .maybe_note(unit_note(&n))
+                        .note(tr!(
+                            "刻みは型と同じ単位で書いてください（`{}` なら `rate[step 0.1%]`）。読めない刻みは 1 として扱われ、実行時の値が単位の整数になり、宣言した範囲も生成コードの入口ガードもその目盛りで読まれます。",
+                            "Write the step in the unit of the type (`{}` takes `rate[step 0.1%]`). A step that cannot be read was taken as 1, so the runtime value counted whole units and both the declared range and the generated guard were read on that scale.",
+                            ty
+                        )),
+                );
             }
             c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
             c.syms.insert(
@@ -560,8 +699,27 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
         if let Some(rd) = &o.rounding {
-            if let (Some(m), Some(g)) = (RoundMode::parse(&rd.mode), lit_value_in(&rd.grid, &ty)) {
-                c.roundings.insert(o.name.text.clone(), (m, g));
+            // The grid is a value of the column it rounds. It was read with `lit_value_in`
+            // and, when that said no, simply not recorded — so `round up(10銭)` and
+            // `round up(10)` on a `money[円]` output both fell back on a grid of one yen, ten
+            // times away from either of the two things the author could have meant, with
+            // nothing said (§15.86).
+            match (RoundMode::parse(&rd.mode), lit_value_in(&rd.grid, &ty)) {
+                (Some(m), Some(g)) => {
+                    c.roundings.insert(o.name.text.clone(), (m, g));
+                }
+                (Some(_), None) if ty != Ty::Unknown => c.diags.push(
+                    Diag::error("E103", tr!("丸めの刻み `{}` は {ty} の値ではありません", "The rounding grid `{}` is not a value of {ty}", rd.grid.raw))
+                        .at(at(rd.span.line))
+                        .mark(rd.span.clone(), tr!("この列を丸める刻みです", "this is the grid this column is rounded to"))
+                        .maybe_note(unit_note(&rd.grid))
+                        .note(tr!(
+                            "刻みは丸める列と同じ単位で書いてください（`{}` なら `round down(1円)`）。",
+                            "Write the grid in the unit of the column it rounds (`{}` takes `round down(1円)`).",
+                            ty
+                        )),
+                ),
+                _ => {}
             }
         }
         c.syms.insert(
@@ -741,6 +899,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
+    // After the items, so that a column naming a table's output or a `define` resolves.
+    if let Some(ex) = &f.examples {
+        c.example_cells(ex, f, path);
+    }
+
     // §5.3 E113: the atoms of a boolean definition are limited to unary tests on an input or
     // a derived value. Relaxing this lets half-spaces like `x − y >= c` into the columns, and
     // the box algebra of §6.2 falls apart.
@@ -830,6 +993,46 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
             for n in names {
                 c.used.insert(n);
+            }
+        }
+
+        // A literal answer is a value of the output the walk produces. It was never read
+        // against that type, so `empty -> 999銭` under a `money[円]` output passed `check`
+        // and generated 99900 — nine hundred and ninety-nine yen written as 9.99, kept as a
+        // count of 銭, and answered as 99900円 (§15.86). The same literal in a table cell of
+        // that column is E103, and has always been.
+        if let Some(out_ty) = f.outputs.first().and_then(|o| c.syms.get(&o.name.text)).map(|s| s.ty.clone()) {
+            let mut answers: Vec<(&Expr, &Span)> = Vec::new();
+            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
+                answers.push((e, &fold.span));
+            }
+            for (_, arm, sp) in &fold.arms {
+                match arm {
+                    crate::ast::Arm::Stop(Some(x)) => answers.push((x, sp)),
+                    crate::ast::Arm::Take { expr, .. } => answers.push((expr, sp)),
+                    crate::ast::Arm::KeepMax { expr, .. } => answers.push((expr, sp)),
+                    _ => {}
+                }
+            }
+            for (e, sp) in answers {
+                if let Expr::Lit(l, lsp) = e {
+                    let at_l = at_fold.clone();
+                    let where_ = if lsp.len > 0 { lsp.clone() } else { sp.clone() };
+                    c.out_lit(l, &out_ty, &where_, &at_l);
+                }
+                let Expr::Lit(Lit::Num(n), lsp) = e else { continue };
+                if lit_value_in(n, &out_ty).is_none() && out_ty != Ty::Unknown {
+                    c.diags.push(
+                        Diag::error("E103", tr!("この畳み込みの答えは {out_ty} ですが `{}` が書かれています", "This fold answers with {out_ty}, but `{}` is written here", n.raw))
+                            .at(at_fold.clone())
+                            .mark(if lsp.len > 0 { lsp.clone() } else { sp.clone() }, "")
+                            .maybe_note(unit_note(n))
+                            .note(tr!(
+                                "畳み込みの答えは、この規則の出力そのものです。表のセルと同じ単位で書いてください。",
+                                "What a fold answers is the rule's output itself, and is written in the same unit its table cells are."
+                            )),
+                    );
+                }
             }
         }
 
@@ -1272,7 +1475,13 @@ impl Checked {
                 });
                 Ty::Money { cur: it.next().unwrap_or_else(|| "円".into()), tax: it.next() }
             }
-            crate::kw::MASS | crate::kw::LENGTH => {
+            crate::kw::MASS
+            | crate::kw::LENGTH
+            | crate::kw::AREA
+            | crate::kw::VOLUME
+            | crate::kw::DURATION
+            | crate::kw::TEMPERATURE
+            | crate::kw::SOUND => {
                 let unit = t
                     .args
                     .iter()
@@ -1365,6 +1574,16 @@ impl Checked {
                 let lt = self.expr_ty(l, path);
                 let rt = self.expr_ty(r, path);
                 use BinOp::*;
+                // Ordered, not arithmetic (§15.84). The comparisons below are exactly what
+                // these dimensions are for, so the guard sits in front of the four that are
+                // not comparisons.
+                if matches!(op, Add | Sub | Mul | Div) {
+                    let bad = [&lt, &rt].into_iter().find(|t| compares_only(t));
+                    if let Some(t) = bad {
+                        self.no_arithmetic(t, sp, path);
+                        return Ty::Unknown;
+                    }
+                }
                 match op {
                     Le | Ge | Lt | Gt | Eq => {
                         if !lt.unifies(&rt) {
@@ -1391,13 +1610,14 @@ impl Checked {
                         }
                         // A rate of a count is a rate, and a count of counts is a count.
                         (Ty::Number, Ty::Rate) | (Ty::Rate, Ty::Number) => Ty::Rate,
-                        (Ty::Money { .. }, Ty::Money { .. }) => {
-                            self.diags.push(
-                                Diag::error("E103", tr!("金額どうしを掛けています", "Multiplying money by money"))
-                                    .at(format!("{path}:{}", sp.line))
-                                    .mark(sp.clone(), "")
-                                    .note(tr!("円×円のような単位は業務ルールに現れないので、書き方の誤りとして止めます（§2.1）。", "Compound dimensions do not occur in business rules, so this is stopped as a modeling error (§2.1).")),
-                            );
+                        // Two values that both carry a unit. Their product is a compound
+                        // dimension — 円×円, g×cm, cm×cm — and §2.1 stops it as a modeling
+                        // error rather than inventing a dimension to hold it.
+                        (
+                            Ty::Money { .. } | Ty::Qty { .. },
+                            Ty::Money { .. } | Ty::Qty { .. },
+                        ) => {
+                            self.compound(&lt, &rt, sp, path);
                             Ty::Unknown
                         }
                         (Ty::Rate, Ty::Rate) => Ty::Rate,
@@ -1428,18 +1648,88 @@ impl Checked {
                             );
                             return Ty::Unknown;
                         }
-                        // Dividing by a constant of the same dimension cancels it and
-                        // leaves a plain number — this is the "one point per 100 yen" case.
-                        // Anything else keeps the left side's type.
-                        let same_dim = matches!(
-                            (&lt, &rt),
-                            (Ty::Money { .. }, Ty::Money { .. }) | (Ty::Qty { .. }, Ty::Qty { .. })
-                        ) && lt.unifies(&rt);
-                        if same_dim { Ty::Number } else { lt.clone() }
+                        // Dividing by a constant of the same unit cancels it and leaves a
+                        // plain number — this is the "one point per 100 yen" case. A
+                        // dimensionless divisor leaves the left side as it was.
+                        let dimensioned = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. });
+                        if lt == Ty::Unknown || !dimensioned(&rt) {
+                            return lt.clone();
+                        }
+                        if dimensioned(&lt) && lt.unifies(&rt) {
+                            return Ty::Number;
+                        }
+                        // The divisor is read at its own unit, so `重さ(mass[g]) ÷ 2kg`
+                        // divided by 2 and stayed a mass, and `重さ ÷ 2m` did the same. Both
+                        // looked right and were not.
+                        if dim_of(&lt) == dim_of(&rt) {
+                            self.divisor_unit(&lt, &rt, sp, path);
+                        } else {
+                            self.compound(&lt, &rt, sp, path);
+                        }
+                        Ty::Unknown
                     }
                 }
             }
         }
+    }
+
+    /// Two values that both carry a unit, multiplied or divided into one another. §2.1 does
+    /// not do dimensional analysis: there is no dimension for 円×円 or for kg÷m, and
+    /// inventing one silently is worse than stopping. Until this was checked, `縦 × 横` in a
+    /// `length[m]` column came back as a length and compared against a length threshold.
+    fn compound(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
+        self.diags.push(
+            Diag::error("E103", tr!("単位どうしを掛け合わせています: {a} と {b}", "Compound dimension: {a} and {b}"))
+                .at(format!("{path}:{}", sp.line))
+                .mark(sp.clone(), "")
+                .note(tr!(
+                    "円×円 や g×cm のような合成単位は持っていません。次元解析はやらないので、書き方の誤りとして止めます（§2.1）。",
+                    "There is no compound dimension for 円×円 or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error (§2.1)."
+                ))
+                .note(tr!(
+                    "掛ける相手が業務のデータなら、それは率か個数（`rate`、`number`）のはずです。面積のように積そのものが答えなら、入力として受け取ってください。",
+                    "If the other operand is business data, it is a rate or a count (`rate`, `number`). Where the product itself is the answer, as an area is, take it as an input."
+                )),
+        );
+    }
+
+    /// A divisor of the right dimension but the wrong unit. The divisor is read at its own
+    /// unit and never converted, so this used to divide by the bare number written.
+    fn divisor_unit(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
+        self.diags.push(
+            Diag::error("E103", tr!("割る数の単位が合いません: {a} を {b} で割っています", "The divisor's unit does not match: {a} divided by {b}"))
+                .at(format!("{path}:{}", sp.line))
+                .mark(sp.clone(), "")
+                .note(tr!(
+                    "同じ次元でも、割る数は左辺と同じ単位で書いてください。割る数は書いてある単位のまま読まれるので、`mass[g]` の値を `2kg` で割ると 2000 ではなく 2 で割られます（§2.3）。",
+                    "Even within one dimension, write the divisor in the same unit as the left side. A divisor is read at the unit it is written in, so dividing a `mass[g]` by `2kg` divides by 2, not by 2000 (§2.3)."
+                )),
+        );
+    }
+
+    /// A dimension that is ordered but has no arithmetic, used in an arithmetic expression.
+    fn no_arithmetic(&mut self, t: &Ty, sp: &Span, path: &str) {
+        let why = match t {
+            Ty::Date => tr!(
+                "日付は暦日で、足し引きの結果を入れる型がありません。二つの日付のあいだの日数が要るなら、それは呼び出し側で数えて `number` か `duration` として渡してください（§2.1）。",
+                "A date is a calendar day, and there is no type to hold the result of adding or subtracting one. Where the days between two dates are needed, count them on the calling side and pass them in as a `number` or a `duration` (§2.1)."
+            ),
+            _ => tr!(
+                "温度と音量は、比べるためだけの目盛りです。℃ は 0 が「無い」を意味しないので `気温 × 2` に意味が無く、dB は対数なので、二つ足しても音が二つ分になるわけではありません（§15.84）。",
+                "A temperature and a sound level are scales to compare against, nothing more. A ℃ has a displaced zero, so `気温 × 2` means nothing, and a decibel is a logarithm, so adding two of them is not two sounds' worth (§15.84)."
+            ),
+        };
+        self.diags.push(
+            Diag::error("E048", tr!("{t} には足し算も掛け算もありません", "{t} has no arithmetic"))
+                .at(format!("{path}:{}", sp.line))
+                .mark(sp.clone(), tr!("この型が使えるのは比較と範囲だけです", "this type is for comparison and range only"))
+                .note(why)
+                .note(tr!(
+                    "閾値として比べるか、`{}` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。",
+                    "Compare it against a threshold, or write it in a `{}`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table.",
+                    crate::kw::RANGE
+                )),
+        );
     }
 
     fn mix(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
@@ -1767,6 +2057,9 @@ impl Checked {
                 let Some(want) = out_ty.get(oi) else { continue };
                 let osp = row.out_spans.get(oi).unwrap_or(&row.span).clone();
                 let ocol = t.outputs.get(oi).map(|o| o.name.text.clone()).unwrap_or_default();
+                if let OutCell::Lit(l) = oc {
+                    self.out_lit(l, want, &osp, &at(row.span.line));
+                }
                 match oc {
                     OutCell::Lit(Lit::Num(n)) => match lit_value_in(n, want) {
                         None => self.diags.push(
@@ -1819,6 +2112,162 @@ impl Checked {
                 }
             }
         }
+    }
+
+    /// The cells of `examples`, held to the types of the columns they sit under.
+    ///
+    /// `examples` is shaped like a table but is not an `Item`, so it never went through
+    /// `table` and **nothing ever looked at its cells**. What that let through:
+    ///
+    /// - `1lb` under a `mass[g]` column, or a bare `500` where a unit is required, produced
+    ///   no value at all. The only thing said was E107 "no value came out", which names the
+    ///   output — not the cell that could not be read.
+    /// - An enum value that is not one landed on a `-` row, and the example passed while
+    ///   proving nothing.
+    /// - An expected value in the wrong unit was worse still: `800kg` under a `money[円]`
+    ///   output compared equal to 800円. §1.2 calls `examples` an executable specification,
+    ///   and this is the one check meant to catch what the evaluator and every generated
+    ///   language get wrong together (AGENTS §1); it was answering yes to a unit it had
+    ///   never read.
+    /// - A column heading that names nothing at all was simply ignored.
+    ///
+    /// The sequence column of a walk (§15.56) names a `sequence` rather than an input, and
+    /// is checked as one by E025 and E027, so it is stepped over here.
+    fn example_cells(&mut self, t: &Table, f: &RuleFile, path: &str) {
+        let at = |line: usize| tr!("{path}:{line} 例", "{path}:{line} examples");
+        let seq = f.elements.as_ref().map(|el| el.name.text.clone());
+
+        // W111 asks whether a **table** uses a declaration, and an example is not a table:
+        // an enum value that only an example names still has no row of its own, which is
+        // exactly what the warning is for. `cell` marks what it reads as used, so the two
+        // sets are put back afterwards.
+        let used = self.used.clone();
+        let used_values = self.used_values.clone();
+
+        let mut col_ty: Vec<Option<Ty>> = Vec::new();
+        for (name, sp) in &t.inputs {
+            if seq.as_deref() == Some(name.as_str()) {
+                col_ty.push(None);
+                continue;
+            }
+            match self.syms.get(name) {
+                Some(s) => col_ty.push(Some(s.ty.clone())),
+                // A group or an enum used as a column is the table's own shorthand; its
+                // cells are values, and `table` treats it the same way.
+                None if self.groups.contains_key(name) || self.enums.contains_key(name) => {
+                    col_ty.push(None)
+                }
+                None => {
+                    self.diags.push(
+                        Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
+                            .at(at(sp.line))
+                            .mark(sp.clone(), "")
+                            .note(tr!("例の欄は、入力・導出・表の出力のどれかの名前です（§5.3）。", "A column of the examples names an input, a derived value, or a table's output (§5.3).")),
+                    );
+                    col_ty.push(None);
+                }
+            }
+        }
+
+        let mut out_ty: Vec<Option<Ty>> = Vec::new();
+        for oc in &t.outputs {
+            match self.syms.get(&oc.name.text) {
+                Some(s) => out_ty.push(Some(s.ty.clone())),
+                None => {
+                    self.diags.push(
+                        Diag::error("E012", tr!("列 `{}` という名前は宣言されていません", "Column `{}` is not a declared name", oc.name.text))
+                            .at(at(oc.name.span.line))
+                            .mark(oc.name.span.clone(), "")
+                            .note(tr!("`->` の右に書けるのは、この規則の出力の名前です。", "What stands to the right of `->` is the name of one of this rule's outputs.")),
+                    );
+                    out_ty.push(None);
+                }
+            }
+        }
+
+        for row in &t.rows {
+            for (ci, cell) in row.cells.iter().enumerate() {
+                let Some(Some(want)) = col_ty.get(ci) else { continue };
+                let want = want.clone();
+                let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
+                let sc = t
+                    .inputs
+                    .get(ci)
+                    .map(|(n, _)| *self.scales.get(n).unwrap_or(&1))
+                    .unwrap_or(1);
+                self.cell(cell, &want, sc, &sp, &at(row.span.line));
+            }
+            for (oi, oc) in row.outs.iter().enumerate() {
+                let Some(Some(want)) = out_ty.get(oi) else { continue };
+                let want = want.clone();
+                let osp = row.out_spans.get(oi).unwrap_or(&row.span).clone();
+                if let OutCell::Lit(l) = oc {
+                    self.out_lit(l, &want, &osp, &at(row.span.line));
+                }
+                match oc {
+                    OutCell::Lit(Lit::Num(n)) if lit_value_in(n, &want).is_none() => {
+                        self.diags.push(
+                            Diag::error("E103", tr!("この列は {want} ですが `{}` が書かれています", "This column is {want}, but `{}` is written here", n.raw))
+                                .at(at(row.span.line))
+                                .mark(osp, "")
+                                .maybe_note(unit_note(n))
+                                .note(tr!(
+                                    "期待する値が読めないと、例は規則と突き合わせられません。",
+                                    "An expected value that cannot be read leaves nothing to hold the rule to."
+                                )),
+                        );
+                    }
+                    OutCell::Name(w) => {
+                        if let Some(s) = self.syms.get(w).cloned() {
+                            if !s.ty.unifies(&want) {
+                                self.diags.push(
+                                    Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
+                                        .at(at(row.span.line))
+                                        .mark(osp, ""),
+                                );
+                            }
+                        } else if self.enum_of_value(w).is_none()
+                            && w != crate::kw::TRUE
+                            && w != crate::kw::FALSE
+                        {
+                            self.diags.push(
+                                Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
+                                    .at(at(row.span.line))
+                                    .mark(osp, ""),
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        self.used = used;
+        self.used_values = used_values;
+    }
+
+    /// A literal written as an output value, held to the type of the thing it is written
+    /// into. Only `Lit::Num` was ever read: a date in a `money[円]` column generated the day
+    /// number as an amount — `2026-04-01` came out as **20544円** — and a string came out as
+    /// 0, both with nothing said (§15.88).
+    fn out_lit(&mut self, l: &Lit, want: &Ty, sp: &Span, at: &str) {
+        let want = match want {
+            Ty::Opt(inner) => inner.as_ref(),
+            other => other,
+        };
+        if *want == Ty::Unknown {
+            return;
+        }
+        let what = match l {
+            Lit::Date(..) if *want != Ty::Date => tr!("日付", "a date"),
+            Lit::Str(_) if *want != Ty::Str => tr!("文字列", "a string"),
+            _ => return,
+        };
+        self.diags.push(
+            Diag::error("E103", tr!("この列は {want} ですが {what} が書かれています", "This column is {want}, but {what} is written here"))
+                .at(at.to_string())
+                .mark(sp.clone(), ""),
+        );
     }
 
     fn cell(&mut self, cell: &Cell, want: &Ty, scale: i128, span: &Span, at: &str) {
@@ -1876,6 +2325,18 @@ impl Checked {
                     );
                 }
             }
+            // A string in a column that is not one. It fell off the end of this match, and
+            // the row simply never matched anything — reported as E102, which sends the
+            // reader to look at the other rows (§15.88).
+            Lit::Str(_) => {
+                if *want != Ty::Str && *want != Ty::Unknown {
+                    s.diags.push(
+                        Diag::error("E103", tr!("この列は {want} ですが 文字列が書かれています", "This column is {want}, but a string is written here"))
+                            .at(at.to_string())
+                            .mark(span.clone(), ""),
+                    );
+                }
+            }
             Lit::Word(w) => {
                 if w == crate::kw::TRUE || w == crate::kw::FALSE {
                     if *want != Ty::Bool && *want != Ty::Unknown {
@@ -1910,7 +2371,6 @@ impl Checked {
                     ),
                 }
             }
-            _ => {}
         };
         match cell {
             Cell::DontCare | Cell::Nothing => {}
@@ -2145,6 +2605,17 @@ impl Checked {
                     BinOp::Add => Some((al.add(bl), ah.add(bh))),
                     BinOp::Sub => Some((al.sub(bh), ah.sub(bl))),
                     BinOp::Mul | BinOp::Div => {
+                        // A divisor that can be zero has no interval, and `Rat::div` asserts
+                        // rather than returning one — so `税込金額 ÷ 税込金額` **panicked**
+                        // the whole of `rulec check` before E115 could say that a divisor has
+                        // to be a constant (DESIGN §15.88). Nothing here may outrun a
+                        // diagnostic; the interval is simply not known.
+                        if *op == BinOp::Div
+                            && bl.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater
+                            && bh.cmp_to(Rat::zero()) != std::cmp::Ordering::Less
+                        {
+                            return None;
+                        }
                         // Minimum and maximum over the endpoint combinations. A rate is not
                         // necessarily non-negative, so all four are examined.
                         let f = |x: Rat, y: Rat| if *op == BinOp::Mul { x.mul(y) } else { x.div(y) };
@@ -2222,6 +2693,18 @@ fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
         }
     }
     1
+}
+
+/// The step, when it is written and cannot be read as a value of the type it steps. It fell
+/// back on a scale of 1 above, which for `rate[step 1g]` made the runtime value count whole
+/// units and turned the declared `0%..100%` into `0..1` in the generated guard (§15.86).
+fn unreadable_step(tr: &TypeRef, ty: &Ty) -> Option<crate::lex::Num> {
+    tr.args.iter().find_map(|a| match a {
+        TypeArg::Scaled(w, n) if w == crate::kw::STEP && lit_value_in(n, ty).is_none() => {
+            Some(n.clone())
+        }
+        _ => None,
+    })
 }
 
 impl Checked {
