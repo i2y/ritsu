@@ -546,3 +546,35 @@ legacy ← {"id":2,"err":"unsupported: 離島"}
 Names and values on the wire are the rule's own names and integers in the canonical unit.
 `rulec schema` prints the JSON Schema of `in` and `out`, and `rulec adapter --template
 python|go` prints a template to fill in.
+
+## The extraction protocol (`rulec source fetch --via`)
+
+A PDF or a scan needs an extractor that rulec is not: the formats it reads itself are csv, md,
+xlsx and docx. The extractor is a child process, as the legacy implementation is — one
+direction and one shot, because an extraction is one question.
+
+```
+rulec → ./extract.py 料金表.pdf
+extractor ← {"rulec":"extract/1","impl":"docling 2.4.0"}
+extractor ← {"block":"table","page":12,"grid":[["あて先","運賃"],["近畿","990円"]]}
+extractor ← {"done":true}
+```
+
+1. rulec runs the command with the document's path appended to it.
+2. The first line names the protocol and **the extractor itself**. `impl` is required and is
+   written to `<document>.fragments/extractor.txt`, where `rulec doc` reads it and tells the
+   approver who read the document — a table a model read out of a scan is evidence of a
+   different kind from one that was already a grid.
+3. Each `{"block":"table",…}` line carries a `grid` of rows of strings, in document order; the
+   `n`th of them is the fragment `表n`. `page` is optional and appears in the report. Blocks of
+   any other kind are read and let go, so an extractor that also reports headings needs no
+   flag.
+4. `{"done":true}` ends the stream. **It is required**: an extractor that died half way would
+   otherwise hand back the tables it managed, and `表3` would quietly be a different table.
+   A missing handshake, a missing `done` and a non-zero exit all fail the command (exit 2)
+   and leave the copies that were there untouched.
+
+`rulec adapter <file.rule> --template docling` prints a template to fill in, naming the
+documents of that rule that need one. The extractor is used **only** where rulec cannot read
+the document itself: the formats it does read are read the same way every time, and a `--via`
+that quietly rewrote those copies would make the pins depend on who ran it.

@@ -324,3 +324,169 @@ pub fn stated(grid: &[Vec<String>]) -> Vec<(String, (Option<String>, crate::num:
     }
     out
 }
+
+// --- An extractor that is not this program (§15.82) --------------------------------------
+
+/// Run an extractor over a document and read the tables it hands back.
+///
+/// ```text
+/// rulec → docling-rulec 料金表.pdf
+///       ← {"rulec":"extract/1","impl":"docling 2.4.0"}
+///       ← {"block":"table","page":12,"grid":[["あて先","運賃"],["近畿","990円"]]}
+///       ← {"done":true}
+/// ```
+///
+/// One direction and one shot, which is all an extraction is: the document's path is an
+/// argument, the blocks come back as JSON Lines on stdout, and the first line names the
+/// extractor. That name is written beside the copies, because **who read the document is part
+/// of what the copy is**: a table a model read out of a scan is evidence of a different kind
+/// from a table that was already a grid.
+///
+/// The stream has to end with `done`. An extractor that dies half way would otherwise hand
+/// back the tables it managed, and `表3` would quietly be a different table.
+pub fn via(cmd: &[String], doc: &Path) -> Result<(String, Vec<(Option<i64>, Vec<Vec<String>>)>), String> {
+    use std::io::BufRead;
+    let (bin, args) = cmd.split_first().ok_or_else(|| tr!("抽出器のコマンドがありません", "No extractor command was given"))?;
+    let mut child = std::process::Command::new(bin)
+        .args(args)
+        .arg(doc)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| tr!("抽出器を起動できません: {e}", "Cannot start the extractor: {e}"))?;
+    let so = child.stdout.take().ok_or_else(|| tr!("stdout を掴めません", "Cannot open the extractor's stdout"))?;
+
+    let mut impl_id = String::new();
+    let mut tables: Vec<(Option<i64>, Vec<Vec<String>>)> = Vec::new();
+    let mut done = false;
+    let mut bad: Option<String> = None;
+    for line in std::io::BufReader::new(so).lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let j = match crate::json::parse(&line) {
+            Ok(j) => j,
+            Err(e) => {
+                bad = Some(tr!("抽出器の出した行が JSON ではありません: {e}", "A line from the extractor is not JSON: {e}"));
+                break;
+            }
+        };
+        if impl_id.is_empty() {
+            match (j.get("rulec").and_then(|v| v.as_str()), j.get("impl").and_then(|v| v.as_str())) {
+                (Some("extract/1"), Some(i)) if !i.is_empty() => impl_id = i.to_string(),
+                _ => {
+                    bad = Some(tr!(
+                        "抽出器が最初の行で名乗っていません（`{{\"rulec\":\"extract/1\",\"impl\":\"…\"}}` が要ります）: {}",
+                        "The extractor did not name itself on its first line (`{{\"rulec\":\"extract/1\",\"impl\":\"…\"}}` is required): {}",
+                        line.trim()
+                    ));
+                    break;
+                }
+            }
+            continue;
+        }
+        if j.get("done").is_some() {
+            done = true;
+            break;
+        }
+        // Blocks other than tables are read and let go: a fragment is a table, and an
+        // extractor that also says where the headings are should not have to know that.
+        if j.get("block").and_then(|v| v.as_str()) != Some("table") {
+            continue;
+        }
+        let Some(crate::json::Json::Arr(rows)) = j.get("grid") else {
+            bad = Some(tr!("表の `grid` がありません: {}", "A table block has no `grid`: {}", line.trim()));
+            break;
+        };
+        let grid: Vec<Vec<String>> = rows
+            .iter()
+            .map(|r| match r {
+                crate::json::Json::Arr(cs) => cs.iter().map(|c| cell(c.as_str().unwrap_or(""))).collect(),
+                _ => Vec::new(),
+            })
+            .collect();
+        tables.push((j.get("page").and_then(|v| v.as_int()).map(|n| n as i64), grid));
+    }
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if let Some(why) = bad {
+        return Err(why);
+    }
+    if !status.success() {
+        return Err(tr!(
+            "抽出器が失敗しました（終了コード {}）",
+            "The extractor failed (exit code {})",
+            status.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
+        ));
+    }
+    if impl_id.is_empty() || !done {
+        return Err(tr!(
+            "抽出器が最後まで出していません（`{{\"done\":true}}` で終わります）。途中までの表を写しにすると、`表3` が別の表になります",
+            "The extractor did not finish (the stream ends with `{{\"done\":true}}`). Copying what arrived would make `表3` a different table"
+        ));
+    }
+    Ok((impl_id, tables))
+}
+
+/// The template `rulec adapter --template docling` prints: a document in, blocks out. The
+/// rule is read for the line that runs it — which documents of this rule need an extractor at
+/// all is a question only the rule can answer.
+pub fn template(f: &crate::ast::RuleFile, rule_path: &str) -> String {
+    let docs: Vec<String> = f
+        .sources
+        .iter()
+        .filter_map(|d| match &d.kind {
+            crate::ast::SourceKind::File { path, .. } if unreadable(Path::new(path)).is_some() => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+    let which = if docs.is_empty() {
+        tr!(
+            "# この規則には、自分で読めない形式の出典はいまのところ無い（読めるのは {FORMATS}）。\n",
+            "# No source of this rule is in a format this program cannot read (it reads {FORMATS}).\n"
+        )
+    } else {
+        tr!("# この規則が引いていて、抽出器が要る文書: {}\n", "# The documents of this rule that need an extractor: {}\n", docs.join(", "))
+    };
+    which + &body(rule_path)
+}
+
+fn body(rule_path: &str) -> String {
+    tr!(
+        "#!/usr/bin/env python3\n\
+         # rulec の抽出アダプタのテンプレート（extract/1）。\n\
+         # 文書のパスを引数で受け取り、表を JSON Lines で標準出力に書くだけ。\n\
+         # 使い方: rulec source fetch {rule_path} --via ./extract.py\n\
+         import json, sys\n\n\
+         path = sys.argv[1]\n\n\
+         # ここを好きな抽出器に差し替える（docling・marker・MinerU・クラウドの API など）。\n\
+         # 名乗りはそのまま写しの隣に残るので、版まで書く。\n\
+         from docling.document_converter import DocumentConverter  # type: ignore\n\
+         import docling  # type: ignore\n\n\
+         print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\
+         doc = DocumentConverter().convert(path).document\n\
+         for t in doc.tables:\n    \
+         df = t.export_to_dataframe()\n    \
+         grid = [[str(c) for c in df.columns]] + [[str(c) for c in row] for row in df.values.tolist()]\n    \
+         page = (t.prov[0].page_no if t.prov else None)\n    \
+         print(json.dumps({{\"block\": \"table\", \"page\": page, \"grid\": grid}}, ensure_ascii=False), flush=True)\n\n\
+         print(json.dumps({{\"done\": True}}), flush=True)\n",
+        "#!/usr/bin/env python3\n\
+         # A rulec extraction adapter (extract/1).\n\
+         # It takes the document's path as an argument and writes its tables to stdout as JSON Lines.\n\
+         # Use it with: rulec source fetch {rule_path} --via ./extract.py\n\
+         import json, sys\n\n\
+         path = sys.argv[1]\n\n\
+         # Swap in whichever extractor you use (docling, marker, MinerU, a cloud API).\n\
+         # The name stays beside the copies, so give the version too.\n\
+         from docling.document_converter import DocumentConverter  # type: ignore\n\
+         import docling  # type: ignore\n\n\
+         print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\
+         doc = DocumentConverter().convert(path).document\n\
+         for t in doc.tables:\n    \
+         df = t.export_to_dataframe()\n    \
+         grid = [[str(c) for c in df.columns]] + [[str(c) for c in row] for row in df.values.tolist()]\n    \
+         page = (t.prov[0].page_no if t.prov else None)\n    \
+         print(json.dumps({{\"block\": \"table\", \"page\": page, \"grid\": grid}}, ensure_ascii=False), flush=True)\n\n\
+         print(json.dumps({{\"done\": True}}), flush=True)\n"
+    )
+}

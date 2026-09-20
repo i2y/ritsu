@@ -294,7 +294,10 @@ are — so a revision of the document that moves a cited table fails the check, 
 not, does not. The formats read here are csv, md, xlsx and docx — a workbook's table is a sheet, a Word
 document's is a `w:tbl`, and a merged cell leaves the column it took empty rather than being
 filled in, because the copy is evidence. A PDF or a scan needs an extractor that is not this
-program, and until it can be plugged in such a document is cited whole.
+program: `rulec source fetch --via <cmd>` runs one as a child process and reads the tables it
+hands back ([formats.md](formats.md), the extraction protocol), and the name it gives itself is
+kept beside the copies and shown to the approver. A document with no extractor to hand is
+cited whole.
 
 **The rows are then held to that copy**, which is the one thing a completeness proof cannot do:
 it says the table is consistent with itself, not that it says what the document says. An amount

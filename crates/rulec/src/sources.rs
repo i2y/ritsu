@@ -1029,7 +1029,7 @@ pub fn text_diff(old: &str, new: &str, cap: usize) -> Vec<String> {
 
 /// `rulec source fetch`: put a copy of every cited fragment beside the rule, saying which
 /// ones changed against the copies already there. The one command that reads the network.
-pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
+pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, String> {
     let cites = citations(f);
     let mut lines = Vec::new();
     let mut changed = false;
@@ -1088,7 +1088,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
             ));
             // A document handed over by a person has no address, but it is here, and the
             // tables the rule cites still have to come out of it (§15.82).
-            changed |= fragments(d, &p, &cites, &mut lines)?;
+            changed |= fragments(d, &p, &cites, via, &mut lines)?;
             continue;
         };
         let body = curl(url)?;
@@ -1119,7 +1119,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 "  this URL names a branch; one that names a commit answers with the same copy next year"
             ));
         }
-        changed |= fragments(d, &p, &cites, &mut lines)?;
+        changed |= fragments(d, &p, &cites, via, &mut lines)?;
     }
     Ok(Outcome { lines, changed })
 }
@@ -1131,6 +1131,7 @@ fn fragments(
     d: &SourceDecl,
     doc: &Path,
     cites: &[(String, String, String, Span)],
+    via: &[String],
     lines: &mut Vec<String>,
 ) -> Result<bool, String> {
     let name = &d.name.text;
@@ -1139,13 +1140,25 @@ fn fragments(
     if frags.is_empty() {
         return Ok(false);
     }
-    // A document that cannot be read, or a format with no reader here, is one source's
-    // problem and is said as one line: the other sources of the rule still get their copies.
-    let tables = match std::fs::read(doc).map_err(|e| e.to_string()).and_then(|b| crate::extract::tables(doc, &b)) {
-        Ok(ts) => ts,
-        Err(why) => {
-            lines.push(format!("{name}: {why}"));
-            return Ok(false);
+    // An extractor of its own is used only where this program cannot read the document
+    // itself (§15.82): the formats it does read are read the same way every time, and a
+    // `--via` that quietly rewrote those copies would make the pins depend on who ran it.
+    let outside = crate::extract::unreadable(doc).is_some() && !via.is_empty();
+    let (by, tables) = if outside {
+        // An extractor that was asked to run and broke stops the command, the way a failing
+        // `curl` does. A format with no reader here is a different thing — a statement about
+        // the rule, not a failure of the run — so it is one line and the other sources of the
+        // rule still get their copies.
+        let (id, ts) = crate::extract::via(via, doc).map_err(|e| format!("{name}: {e}"))?;
+        (Some(id), ts)
+    } else {
+        let read = std::fs::read(doc).map_err(|e| e.to_string()).and_then(|b| crate::extract::tables(doc, &b));
+        match read {
+            Ok(ts) => (None, ts.into_iter().map(|g| (None, g)).collect()),
+            Err(why) => {
+                lines.push(format!("{name}: {why}"));
+                return Ok(false);
+            }
         }
     };
     let cdir = crate::extract::copy_dir(doc);
@@ -1158,7 +1171,7 @@ fn fragments(
             ));
             continue;
         };
-        let Some(g) = tables.get(n - 1).filter(|g| !g.is_empty()) else {
+        let Some((page, g)) = tables.get(n - 1).filter(|(_, g)| !g.is_empty()) else {
             lines.push(tr!(
                 "{name}: {frag} がありません。この文書にある表は {} 個です",
                 "{name}: there is no {frag}; the document has {} tables",
@@ -1175,10 +1188,11 @@ fn fragments(
         }
         let h = crate::sha256::short(text.as_bytes());
         let (rows, cols) = (g.len(), g.iter().map(|r| r.len()).max().unwrap_or(0));
+        let at = page.map(|p| tr!("{p} ページ、", "page {p}, ")).unwrap_or_default();
         lines.push(match before {
             None => tr!(
-                "{name}: {frag} を取り出しました（{rows} 行 × {cols} 列、sha256:{h}）",
-                "{name}: took out {frag} ({rows} rows by {cols} columns, sha256:{h})"
+                "{name}: {frag} を取り出しました（{at}{rows} 行 × {cols} 列、sha256:{h}）",
+                "{name}: took out {frag} ({at}{rows} rows by {cols} columns, sha256:{h})"
             ),
             Some(b) if b == text => tr!("{name}: {frag} は変わっていません（sha256:{h}）", "{name}: {frag} is unchanged (sha256:{h})"),
             Some(_) => {
@@ -1189,6 +1203,13 @@ fn fragments(
                 )
             }
         });
+    }
+    // Who read the document, beside the copies it produced — the same place a law's copies
+    // say which revision e-Gov served. A reader of the copy can then tell a grid that was
+    // already a grid from one a model read out of a scan.
+    if let Some(id) = by {
+        let _ = std::fs::write(cdir.join("extractor.txt"), format!("{id}\n"));
+        lines.push(tr!("{name}: {id} が読みました", "{name}: read by {id}"));
     }
     Ok(changed)
 }

@@ -302,7 +302,17 @@ fn commands() -> Vec<Cmd> {
                 ("fetch|pin|outdated", tr!("fetch と outdated は通信する（curl を呼ぶ）。引いている表を文書から取り出すのも fetch で、check は文書を読み解かない。pin は規則ファイルのハッシュの行だけを書き換える", "fetch and outdated read the network (through curl); fetch is also where a cited table is taken out of a document, since check never reads one; pin rewrites only the pin lines of the rule file")),
                 ("<file.rule>", tr!("`source` の宣言と `@` の引用を持つ規則", "a rule with `source` lines and `@` citations")),
             ],
-            flags: vec![],
+            flags: vec![
+                flag(
+                    "--via",
+                    Some("<cmd>"),
+                    tr!(
+                        "自分で読めない形式（PDF、スキャン）の表を取り出す抽出器。これ以降は全部そのコマンドの引数で、文書のパスが最後に足される。やりとりは extract/1（docs/formats.md）。雛形は `rulec adapter --template docling`",
+                        "the extractor that takes the tables out of a format this program cannot read itself (a PDF, a scan); everything after it is that command's own arguments, and the document's path is appended. The protocol is extract/1 (docs/formats.md), and `rulec adapter --template docling` prints a template"
+                    ),
+                )
+                .rest(),
+            ],
             exits: vec![
                 (0, tr!("済んだ。outdated では、引いている文書が変わっていない", "done; for outdated, nothing the rule cites has moved on")),
                 (1, tr!("outdated: 引いている文書が変わっている（後の改正、または `url` の先）。規則が読めないときも", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
@@ -312,6 +322,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec source fetch rules/印紙税.rule".into(),
                 "rulec source pin rules/印紙税.rule".into(),
                 "rulec source outdated rules/印紙税.rule".into(),
+                "rulec source fetch rules/運賃.rule --via ./extract.py".into(),
             ],
             codes: &[],
         },
@@ -394,9 +405,16 @@ fn commands() -> Vec<Cmd> {
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
             flags: vec![
-                flag("--template", Some("python|go"), tr!("テンプレートの言語", "language of the template"))
-                    .choices(&["python", "go"])
-                    .default("python"),
+                flag(
+                    "--template",
+                    Some("python|go|docling"),
+                    tr!(
+                        "テンプレートの言語。`docling` は旧実装ではなく**抽出器**の雛形で、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
+                        "the language of the template; `docling` is not a legacy implementation but an **extractor** — it takes a document and returns its tables (extract/1, the counterpart of `rulec source fetch --via`)"
+                    ),
+                )
+                .choices(&["python", "go", "docling"])
+                .default("python"),
             ],
             exits: vec![
                 (0, tr!("出した", "emitted")),
@@ -406,6 +424,7 @@ fn commands() -> Vec<Cmd> {
             examples: vec![
                 "rulec adapter rules/送料.rule --template python > adapter.py".into(),
                 "rulec adapter rules/送料.rule --template go > adapter.go".into(),
+                "rulec adapter rules/運賃.rule --template docling > extract.py".into(),
             ],
             codes: &[],
         },
@@ -775,7 +794,7 @@ fn refuse(msg: String) -> ExitCode {
 /// `rulec source fetch|pin|outdated <file.rule>` (§15.68). `fetch` and `outdated` are the
 /// only commands that read the network; `check` never does. `pin` rewrites the pin lines of
 /// the file and nothing else.
-fn source_cmd(files: &[&String]) -> ExitCode {
+fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
     let verb = files.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(verb, "fetch" | "pin" | "outdated") || files.len() != 2 {
         return refuse(tr!("`rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
@@ -791,7 +810,7 @@ fn source_cmd(files: &[&String]) -> ExitCode {
         return ExitCode::from(1);
     };
     let result = match verb {
-        "fetch" => rulec::sources::fetch(&f, path),
+        "fetch" => rulec::sources::fetch(&f, path, via),
         "outdated" => rulec::sources::outdated(&f, path),
         _ => rulec::sources::pin(&f, path, &src).and_then(|(text, o)| {
             if text != src {
@@ -956,7 +975,16 @@ fn main() -> ExitCode {
         "api" => api(&files),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
-            one(&files, move |f, _, _| Some(rulec::verify::template(&lang, f)))
+            // The extraction adapter is about a document, not about this rule, so it needs
+            // nothing from the file — but it is asked for the same way, beside its twin.
+            one(&files, move |f, _, path| {
+                Some(match lang.as_str() {
+                    // The extraction adapter is about the rule's documents rather than about
+                    // its inputs, but it is asked for the same way, beside its twin.
+                    "docling" => rulec::extract::template(f, path),
+                    _ => rulec::verify::template(&lang, f),
+                })
+            })
         }
         "verify" => {
             if a.rest.is_empty() {
@@ -969,7 +997,7 @@ fn main() -> ExitCode {
         }
         "coverage" => coverage(&files, json),
         "doc" => doc(&files, a.get("--out"), a.get("--format") == Some("html"), a.get("--audience") == Some("customer")),
-        "source" => source_cmd(&files),
+        "source" => source_cmd(&files, &a.rest),
         "fixtures" => {
             // `rulec fixtures lint <jsonl> <rule>`
             if files.first().map(|s| s.as_str()) != Some("lint") {

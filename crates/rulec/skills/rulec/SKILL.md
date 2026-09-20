@@ -143,8 +143,10 @@ A few shapes are worth knowing before the first draft:
   sheet, in a workbook), `fetch` takes it out and writes it beside the document as
   `<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and from there it is pinned, checked and quoted exactly as a
   law's article is. Cite the table the rows came from and a revision that moves it fails the
-  check, naming the rows to reread. The formats read are csv, md, xlsx and docx; a PDF is
-  cited whole until there is an extractor to plug in. **The rows are then held to that copy**: an
+  check, naming the rows to reread. The formats read are csv, md, xlsx and docx; for a PDF
+  or a scan, `fetch --via <cmd>` runs an extractor (docling and the like) as a child process
+  and pins what it produced, so the extraction happens once and is reviewed once —
+  `rulec adapter <file.rule> --template docling` prints the shape. **The rows are then held to that copy**: an
   amount the copy does not show is E116, and a number the copy states that no row uses is
   W120 — the two halves of a mistyped digit, and the one check that looks outside the rule
   at all.

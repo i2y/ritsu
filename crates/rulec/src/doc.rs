@@ -721,7 +721,16 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
             // The address the copy came from, so that a reader can go and look at the original.
             let u = url.as_ref().map(|u| format!("、{u}")).unwrap_or_default();
             let u = if crate::i18n::ja() { u } else { u.replace('、', ", ") };
-            tr!("出典: {}{frags}（{p}{u}{h}）", "Source: {}{frags} ({p}{u}{h})", c.source)
+            // Who read the document, when it was not this program (§15.82). A table a model
+            // read out of a scan is evidence of a different kind from one that was already a
+            // grid, and the person approving it should be told which they are looking at.
+            let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
+            let doc = std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(p);
+            let by = std::fs::read_to_string(crate::extract::copy_dir(&doc).join("extractor.txt"))
+                .ok()
+                .map(|x| tr!("、{} が読んだ", ", read by {}", x.trim()))
+                .unwrap_or_default();
+            tr!("出典: {}{frags}（{p}{u}{h}{by}）", "Source: {}{frags} ({p}{u}{h}{by})", c.source)
         }
         None => tr!("出典: {}{frags}", "Source: {}{frags}", c.source),
     };
