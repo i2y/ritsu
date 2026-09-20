@@ -300,9 +300,21 @@ impl<'a> Gen<'a> {
                 Ty::Opt(t) => t.as_ref(),
                 other => other,
             };
+            // An optional column carries one more value. The plan encodes a `none` cell as
+            // `eq "none"` (`np_cell`), but said nothing about the column — so the runtime
+            // turned the wire's `null` into the string "None" and refused it as not a value
+            // of the enum (DESIGN §15.89).
+            let optional = matches!(ty, Ty::Opt(_));
+            if optional {
+                o = o.bool("optional", true);
+            }
             if let Ty::Enum(en) = inner {
                 if let Some(vs) = self.c.enums.get(en) {
-                    o = o.str("enum", en).raw("values", crate::json::strs(vs));
+                    let mut vs = vs.clone();
+                    if optional {
+                        vs.insert(0, crate::kw::NONE.to_string());
+                    }
+                    o = o.str("enum", en).raw("values", crate::json::strs(&vs));
                 }
             }
             if kind == "int" || kind == "date" {

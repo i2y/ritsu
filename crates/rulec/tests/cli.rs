@@ -380,3 +380,90 @@ fn 知らないサブコマンドは2で止まる() {
     assert!(err.contains("chekc"), "{err}");
     assert!(err.contains("rulec --help"), "{err}");
 }
+
+/// The two flags no test ever passed. Counted by taking every `--flag` string in `main.rs`
+/// and looking for it under `tests/` (§15.89): a flag nothing exercises is a flag whose
+/// parsing, default and effect are all unverified.
+///
+/// `--budget` is the cap on the nodes the check visits, and E109 is what happens over it —
+/// the one diagnostic that says "this was not proven" rather than "this is wrong", so it has
+/// to be reachable on purpose and not only by accident on a large rule.
+#[test]
+fn budget_の上限を超えるとE109で止まる() {
+    let rule = "tests/corpus/ゆうパック運賃.rule";
+    // The default proves it.
+    let (c, out, err) = run(&["check", rule]);
+    assert_eq!(c, 0, "{out}{err}");
+    assert!(!out.contains("E109"), "既定の予算で E109 が出ている: {out}");
+    // A budget of ten nodes cannot.
+    let (c, out, _) = run(&["check", rule, "--budget", "10"]);
+    assert_eq!(c, 1, "{out}");
+    assert!(out.contains("E109"), "予算を切り詰めても E109 が出ない: {out}");
+    // And the cap is read as a number, not ignored: a budget large enough proves it again.
+    let (c, out, _) = run(&["check", rule, "--budget", "100000000"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(!out.contains("E109"), "{out}");
+}
+
+/// `--outputs <n>` says how many of the trailing columns of a spreadsheet are outputs. With
+/// the default of one, a two-output table comes back with the first of them read as an input.
+#[test]
+fn importのoutputsは末尾の列を出力にする() {
+    let d = std::env::temp_dir().join(format!("rulec-cli-outputs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let csv = d.join("t.csv");
+    std::fs::write(&csv, "区分,送料,手数料\n近,100円,10円\n遠,200円,20円\n").unwrap();
+    let p = csv.to_str().unwrap();
+
+    let (c, one, e) = run(&["import", "csv", p]);
+    assert_eq!(c, 0, "{e}");
+    assert!(one.contains("-> 手数料"), "既定では末尾の一列だけが出力: {one}");
+    assert!(one.contains("| 区分 | 送料 |"), "送料 は入力の側にいる: {one}");
+
+    let (c, two, e) = run(&["import", "csv", p, "--outputs", "2"]);
+    assert_eq!(c, 0, "{e}");
+    assert!(two.contains("-> 送料"), "二列を出力にしたら 送料 も出力: {two}");
+    assert!(two.contains("手数料"), "{two}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Every flag the CLI declares is passed by some test.
+///
+/// This is the same shape as the diagnostic ledger and the site's colouring vocabulary: a
+/// surface declared in one place, held to what exercises it. Two flags were found unexercised
+/// this way (§15.89) — `--budget`, which is the only way to reach E109 on purpose, and
+/// `--outputs`, which decides how a spreadsheet's columns are split. A flag nothing passes is
+/// a flag whose parsing, default and effect are all unverified.
+#[test]
+fn 宣言したフラグは全部どこかのテストが渡している() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let main = std::fs::read_to_string(root.join("src/main.rs")).unwrap();
+    // The CLI surface is what the `flag(...)` helper declares; a `--word` inside a call to
+    // some other program (git, say) is not one.
+    let mut declared: Vec<String> = Vec::new();
+    for part in main.split("flag(\"--").skip(1) {
+        if let Some(end) = part.find('"') {
+            let f = format!("--{}", &part[..end]);
+            if !declared.contains(&f) {
+                declared.push(f);
+            }
+        }
+    }
+    assert!(declared.len() > 15, "フラグの宣言が見つからない: {declared:?}");
+
+    let mut used = String::new();
+    for e in std::fs::read_dir(root.join("tests")).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "rs") {
+            used.push_str(&std::fs::read_to_string(&p).unwrap());
+        }
+    }
+    let missing: Vec<&String> =
+        declared.iter().filter(|f| !used.contains(&format!("\"{f}\""))).collect();
+    assert!(
+        missing.is_empty(),
+        "どのテストも渡していないフラグ: {missing:?}。\
+         フラグは宣言されただけでは動きません — 一つ渡すテストを書いてください"
+    );
+}

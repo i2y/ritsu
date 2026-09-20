@@ -187,6 +187,14 @@ class Rule:
             n = len(v) if n is None else n
             if len(v) != n:
                 raise RuleInputError(f"{name}: 列の長さが揃っていません ({len(v)} ≠ {n})")
+            # The absent value of an optional column. It arrives as JSON null (`None` here,
+            # or a NaN once numpy has widened the column), and the plan tests it as the word
+            # "none" — `astype(str)` alone turned it into "None" and the guard refused it.
+            if spec.get("optional"):
+                v = np.array(
+                    ["none" if x is None or (isinstance(x, float) and x != x) else x for x in v],
+                    dtype=object,
+                )
             kind = spec["kind"]
             if kind == "date":
                 v = np.array([_ord(str(x)) for x in v], dtype=np.int64)

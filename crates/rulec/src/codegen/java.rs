@@ -1170,6 +1170,22 @@ impl<'a> Gen<'a> {
                 Ty::Str => format!("s({d}, {jp})"),
                 Ty::Bool => format!("b({d}, {jp})"),
                 Ty::Date => format!("ord(s({d}, {jp}))"),
+                // `null` on the wire is a null reference; the module's parameter is the
+                // enum itself, which Java lets be null. It used to fall to `n(...)`, which
+                // hands a long to an enum and does not compile (DESIGN §15.89).
+                Ty::Opt(inner) => {
+                    let one = match inner.as_ref() {
+                        Ty::Enum(nm) => format!(
+                            "{cls}.{}.from(s({d}, {jp}))",
+                            java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
+                        ),
+                        Ty::Str => format!("s({d}, {jp})"),
+                        Ty::Bool => format!("b({d}, {jp})"),
+                        Ty::Date => format!("ord(s({d}, {jp}))"),
+                        _ => format!("n({d}, {jp})"),
+                    };
+                    format!("(\"null\".equals(s({d}, {jp})) ? null : {one})")
+                }
                 _ => format!("n({d}, {jp})"),
             });
         }
@@ -1191,6 +1207,22 @@ impl<'a> Gen<'a> {
                         Ty::Str => format!("s({e}, {k})"),
                         Ty::Bool => format!("b({e}, {k})"),
                         Ty::Date => format!("ord(s({e}, {k}))"),
+                        // `null` on the wire is a null reference; the module's parameter is the
+                        // enum itself, which Java lets be null. It used to fall to `n(...)`, which
+                        // hands a long to an enum and does not compile (DESIGN §15.89).
+                        Ty::Opt(inner) => {
+                            let one = match inner.as_ref() {
+                                Ty::Enum(nm) => format!(
+                                    "{cls}.{}.from(s({e}, {k}))",
+                                    java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
+                                ),
+                                Ty::Str => format!("s({e}, {k})"),
+                                Ty::Bool => format!("b({e}, {k})"),
+                                Ty::Date => format!("ord(s({e}, {k}))"),
+                                _ => format!("n({e}, {k})"),
+                            };
+                            format!("(\"null\".equals(s({e}, {k})) ? null : {one})")
+                        }
                         _ => format!("n({e}, {k})"),
                     }
                 })
