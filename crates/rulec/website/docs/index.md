@@ -49,6 +49,110 @@ three are set side by side further down.
 
 ---
 
+## This is all you write. The rest is machine work
+
+<div class="grid" markdown>
+
+```rule
+table 運賃表(fee_table)
+policy unique
+| あて先      | サイズ | -> 運賃 |
+| 近畿圏      | S60    | 990円   |
+| 近畿圏      | S80    | 1210円  |
+| not: 近畿圏 | S60    | 880円   |
+| not: 近畿圏 | S80    | 1100円  |
+```
+
+```python
+if dest in _近畿圏 and size == SizeClass.S60:    # row 1
+    fee = 990
+elif dest in _近畿圏 and size == SizeClass.S80:  # row 2
+    fee = 1210
+...
+else:
+    raise AssertionError("unreachable: completeness was statically checked")
+```
+
+</div>
+
+On the left what you write, on the right what comes out. **One row, one branch**, and the
+comment carries the row itself (`# row 1: 近畿圏 | S60 | 990円`, in full). That last `else` can
+say *unreachable* because **nothing can reach it, and that was proved before the code
+existed**.
+
+## What rulec takes off your hands
+
+<div class="grid cards" markdown>
+
+-   __One table, in the words of the business__
+
+    A judgement with interlocking conditions, written as a pipe table a business person reads.
+    A cell only ever tests its own column, so a row is one box of the input space and gaps and
+    overlaps are decided mechanically.
+
+    [Write a table (.rule)](tour.md)
+
+-   __The proof is finished before the code exists__
+
+    Completeness, overlap, unreachable rows, units, rounding, overflow, examples — seven of
+    them. What comes back is **the input that causes it**, and a rule that cannot be proved
+    generates nothing.
+
+    [What it proves](checks.md)
+
+-   __Twelve targets, no dependencies__
+
+    Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm, plus NumPy
+    for a host that decides whole columns at once. Cases built from the boundaries run through
+    the reference evaluator and every target, and **agreement is checked byte for byte**.
+
+    [Generate and call](generate.md)
+
+-   __Held to the document it was transcribed from__
+
+    A statute's article comes from e-Gov, Japan's statute database; a tariff sheet or a company
+    rule has its table taken out and kept as a copy. An amendment that moves the copy fails the
+    check — and so does **one mistyped digit in an amount**.
+
+    [What it proves](checks.md)
+
+-   __One page for the person who approves__
+
+    `rulec doc` renders the rule beside the article or the table it was transcribed from. The
+    HTML page an approver can try their own case on, and the article a help centre publishes,
+    come from the same rule.
+
+    [How to use it, by role](scenarios.md)
+
+-   __What a change does, before it ships__
+
+    `verify` says whether the legacy implementation answers the same; `replay` and `diff` say
+    **how many records move and by how much** over what actually happened. The Markdown for the
+    pull request included.
+
+    [Compare and replay](compare.md)
+
+-   __Built to be driven by an agent__
+
+    Diagnostics are JSON, `--help` is a contract, and every command is also an MCP tool. The
+    rule itself can be served as an MCP tool, or called over HTTP.
+
+    [For agents](agents.md)
+
+-   __It runs wherever you need it__
+
+    As an ordinary function, as Wasm in a browser or under WASI, as a PostgreSQL function, as a
+    NumPy plan over a whole DataFrame. `rulec api` prints how to call it, so the generated code
+    never has to be read.
+
+    [Generate and call](generate.md)
+
+</div>
+
+**Twelve targets** · **72 diagnostics** · **28 rules transcribed from real published terms, checked, generated and run on every commit** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+
+---
+
 ## Where to start, by what you have
 
 What you already have decides the first move. None of the three changes anything that

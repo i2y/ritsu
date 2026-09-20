@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/ja/"
-site_description = "表で書ける業務ルールを、エージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロのコードを八つの言語に出す。"
+site_description = "表で書ける業務ルールを、エージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロのコードを 12 の言語に出す。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 

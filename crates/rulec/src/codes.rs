@@ -555,7 +555,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently."
             ),
             tr!(
-                "名前を変えてください（`enum range(kind)` なら `enum 範囲区分(range_kind)`）。予約語は `src/kw.rs` の一枚の表で決まっています。",
+                "名前を変えてください（`enum range(kind)` なら `enum 範囲区分(range_kind)`）。予約語は `src/kw.rs` の表ひとつで決まっています。",
                 "Rename it (`enum range(kind)` becomes `enum 範囲区分(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`."
             ),
             X_E009,

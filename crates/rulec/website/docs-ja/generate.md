@@ -10,7 +10,7 @@ $ rulec gen rules/ --out generated/
 
 ## 対応する出力言語
 
-いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy の十二言語です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
+いま対応しているのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy の12 言語です。同じ表から、フロントエンドとバックエンドとモバイルと DB が同じ答えを返すことを、いまある一致検査の仕組みでそのまま証明できるようにするのが狙いです。
 
 | | 状態 | 要るもの |
 |---|---|---|
