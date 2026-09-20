@@ -942,7 +942,7 @@ pub fn ledger() -> Vec<Entry> {
             "E037",
             tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
-                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書の断片は表なので、`表3`（文書順に三つめの表）か `table3` 以外の書き方は読めません（§15.82）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。それ以外の書き方は読めません（§15.82）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
                 "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). Without a pin, a revised copy passes check in silence (§15.68)."
             ),
             tr!(
@@ -972,8 +972,8 @@ pub fn ledger() -> Vec<Entry> {
             "E039",
             tr!("出典の写しがありません", "There is no copy of a source"),
             tr!(
-                "引用した箇所の写し（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら `<文書>.fragments/表3.tsv`（`料金表.md.fragments/表3.tsv`））が規則の隣に無いとき、または `file` の出典そのものが読めないとき。check は通信もしなければ文書も読み解かないので、写しが無ければ照合できません。",
-                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `<document>.fragments/表3.tsv` (`料金表.md.fragments/表3.tsv`) for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
+                "引用した箇所の写しが規則の隣に無いとき（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら文書の隣の `料金表.md.fragments/表3.tsv`）、または `file` の出典そのものが読めないとき。check は通信もしませんし、文書の中身も見ません。写しが無ければ照合できません。",
+                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `料金表.md.fragments/表3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
             ),
             tr!(
                 "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
@@ -1297,7 +1297,7 @@ pub fn ledger() -> Vec<Entry> {
             "E116",
             tr!("行の金額が、引いた写しにありません", "A row's amount is not in the copy it cites"),
             tr!(
-                "表や行が `@出典 表1` で引いている写しの中に、その行の出力の値がどこにも出てこないとき（§15.82）。比べるのは金額だけです——閾値は写すときに書き換わる（`1,949,000円まで` は `<=1949000円` になる）のに対し、金額は書き換わらないからです。写しは `rulec source fetch` が文書から取り出したもので、check は文書そのものを読み解きません。",
+                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき（§15.82）。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
                 "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
             ),
             tr!(
@@ -1380,11 +1380,11 @@ pub fn ledger() -> Vec<Entry> {
             "W120",
             tr!("写しの値を、どの行も使っていません", "The copy states a value no row uses"),
             tr!(
-                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき（§15.82）。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の行が写しの `1kg`・`2kg`・`3kg` を引き取っているような、まとめて写した場合も出ません。",
+                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき（§15.82）。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の一行で写しの `1kg`・`2kg`・`3kg` をまとめて写した場合も出ません。",
                 "A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
             ),
             tr!(
-                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。表が写したのが断片の一部だけなら（発地ごとの運賃表のうち一つの発地だけ、など）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
+                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。引用した表のうち一部だけを写したのなら（発地ごとの運賃表から、一つの発地だけを写したときなど）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
                 "Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116)."
             ),
             X_W120,

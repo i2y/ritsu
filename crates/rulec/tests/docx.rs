@@ -87,7 +87,7 @@ fn ワードの表を読む() {
 }
 
 #[test]
-fn ワードの表を断片として引く() {
+fn ワードの表を引いて写しにする() {
     if !have("python3") {
         eprintln!("skip: python3 が無い");
         return;

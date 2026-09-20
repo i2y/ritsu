@@ -307,7 +307,7 @@ fn commands() -> Vec<Cmd> {
                     "--via",
                     Some("<cmd>"),
                     tr!(
-                        "自分で読めない形式（PDF、スキャン）の表を取り出す抽出器。これ以降は全部そのコマンドの引数で、文書のパスが最後に足される。やりとりは extract/1（docs/formats.md）。雛形は `rulec adapter --template docling`",
+                        "自分で読めない形式（PDF、スキャン）の表を取り出す抽出器。これ以降は全部そのコマンドの引数で、文書のパスが最後に足される。やりとりは extract/1（docs/formats.md）。テンプレートは `rulec adapter --template docling`",
                         "the extractor that takes the tables out of a format this program cannot read itself (a PDF, a scan); everything after it is that command's own arguments, and the document's path is appended. The protocol is extract/1 (docs/formats.md), and `rulec adapter --template docling` prints a template"
                     ),
                 )
@@ -409,7 +409,7 @@ fn commands() -> Vec<Cmd> {
                     "--template",
                     Some("python|go|docling"),
                     tr!(
-                        "テンプレートの言語。`docling` は旧実装ではなく**抽出器**の雛形で、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
+                        "テンプレートの言語。`docling` は旧実装ではなく抽出器のテンプレートで、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
                         "the language of the template; `docling` is not a legacy implementation but an **extractor** — it takes a document and returns its tables (extract/1, the counterpart of `rulec source fetch --via`)"
                     ),
                 )

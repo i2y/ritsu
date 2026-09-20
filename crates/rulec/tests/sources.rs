@@ -166,7 +166,7 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
 /// (§15.82): `fetch` takes them out of the document, `pin` writes their digests, `check`
 /// reads the copies and never the document, and `doc` quotes the table under the rows.
 #[test]
-fn 文書の表は断片として写され固定される() {
+fn 文書の表を引いて写しに固定する() {
     let d = scratch("fragments");
     let doc = "# 料金表\n\n前書き。\n\n| あて先 | S60 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();

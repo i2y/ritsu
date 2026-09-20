@@ -1211,7 +1211,7 @@ Related codes: [E037](#e037), [E039](#e039)
 
 `error` — **There is no copy of a source**
 
-**When.** The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `<document>.fragments/表3.tsv` (`料金表.md.fragments/表3.tsv`) for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare.
+**When.** The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `料金表.md.fragments/表3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare.
 
 **Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies.
 

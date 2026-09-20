@@ -291,7 +291,7 @@ wb.save(sys.argv[1])
 /// A workbook's fragments are its sheets, in the order the workbook lists them, so that
 /// `@料金表 表2` names the second sheet however much prose the first one holds (§15.82).
 #[test]
-fn 帳簿の断片はシートで_順番はシートの順番() {
+fn ブックの引用箇所はシートで_順番はシートの順番() {
     if !have("python3") {
         eprintln!("skip: python3 が無い");
         return;

@@ -320,7 +320,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("文書の断片は表で、`表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `表3` (the third table in document order) or `table3`. Naming a heading is not read yet."))
+                                .note(tr!("文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `表3` (the third table in document order) or `table3`. Naming a heading is not read yet."))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -336,7 +336,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 "{why}. Until an extractor can be plugged in, cite this document whole: `@{name}`."
                             ),
                             None => tr!(
-                                "`rulec source fetch {rule_path}` が文書から取り出して隣に置きます。check は文書を読み解きません。",
+                                "`rulec source fetch {rule_path}` が文書から取り出して隣に置きます。check は文書の中身までは見ません。",
                                 "`rulec source fetch {rule_path}` takes it out of the document and puts it beside it. check does not read the document itself."
                             ),
                         };
@@ -555,7 +555,7 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                     .mark(c.span.clone(), "")
                     .note(tr!("どの行にも出てこない値: {list}", "Stated in the copy, used by no row: {list}"))
                     .note(tr!(
-                        "行を落としていないか確かめてください。この表が写したのが {frag} の一部だけなら、引用を表からこの表の行へ移すと、残りは問われなくなります。",
+                        "行を落としていないか確かめてください。{frag} のうち一部だけを写したのなら、引用を `table` の行から、写した行それぞれの末尾へ移すと、残りは問われなくなります。",
                         "Check that no row was left out. If this table transcribes only part of {frag}, moving the citation from the table onto the rows that came from it leaves the rest unasked."
                     )),
             );
