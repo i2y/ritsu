@@ -280,7 +280,7 @@ to mean the agreement held across all of them.
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/rulec@v0.11.0                     # the release binary, verified against its checksum
+- uses: i2y/rulec@v0.12.0                     # the release binary, verified against its checksum
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
