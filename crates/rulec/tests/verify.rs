@@ -53,12 +53,18 @@ for line in sys.stdin:
     print(json.dumps({"id": req["id"], "out": {"運賃": got}}, ensure_ascii=False), flush=True)
 "#;
 
-fn setup() -> Option<PathBuf> {
+/// The generated module and the adapter beside it, in a directory of this test's own.
+///
+/// It used to be named after the process, and the four tests here share one — so they raced:
+/// `remove_dir_all` at the start of one ran while another was reading `adapter.py`, and
+/// `verify` exited 2 ("cannot read") instead of 1. It stayed green on a laptop for as long as
+/// the timing held, and failed the first time CI ran the suite (DESIGN §15.94).
+fn setup(tag: &str) -> Option<PathBuf> {
     if !have("python3") {
         eprintln!("注意: python3 が無いので等価検証を飛ばした");
         return None;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-verify-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("rulec-verify-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.to_string_lossy().to_string();
@@ -84,7 +90,7 @@ fn verify(dir: &PathBuf, bug: &str) -> (i32, String) {
 
 #[test]
 fn 忠実なアダプタとは完全に一致する() {
-    let Some(dir) = setup() else { return };
+    let Some(dir) = setup("忠実なアダプタとは完全に一致する") else { return };
     let (code, out) = verify(&dir, "0");
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("(100.000%)"), "{out}");
@@ -98,7 +104,7 @@ fn 忠実なアダプタとは完全に一致する() {
 
 #[test]
 fn 旧実装の欠陥は件数と証人つきで出る() {
-    let Some(dir) = setup() else { return };
+    let Some(dir) = setup("旧実装の欠陥は件数と証人つきで出る") else { return };
     let (code, out) = verify(&dir, "1");
     assert_eq!(code, 1, "不一致があれば 1 で終わる: {out}");
     let total = n_of(&out, "照合 ");
@@ -120,7 +126,7 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
 /// "suspected rounding difference".
 #[test]
 fn 刻み未満のずれは丸め方の違いとして括られる() {
-    let Some(dir) = setup() else { return };
+    let Some(dir) = setup("刻み未満のずれは丸め方の違いとして括られる") else { return };
     let (code, out) = verify(&dir, "2");
     assert_eq!(code, 1, "{out}");
     assert!(n_of(&out, "影響 ") > 0, "{out}");
