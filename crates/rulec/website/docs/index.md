@@ -9,7 +9,7 @@ hide:
 <img class="rc-hero__mark" src="images/mark.svg#only-dark" alt="">
 <img class="rc-hero__mark" src="images/mark-light.svg#only-light" alt="">
 
-# rulec
+# rule<span class="rc-hero__c">c</span>
 
 <p class="rc-hero__tag">Write the table. Ship the proof.</p>
 
