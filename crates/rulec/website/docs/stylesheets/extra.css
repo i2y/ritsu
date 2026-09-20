@@ -186,6 +186,39 @@
 .rc-overview { overflow-x: auto; }
 .md-typeset .rc-overview img { min-width: 44rem; }
 
+/* ---- a landing row: the thing on the left, the point on the right ---- */
+/* Each row of the opening section is one real artefact beside one sentence
+   about it. The artefact leads, because it is the argument; the prose is
+   there to be read after the eye has already seen what happens.
+
+   Below the theme's own breakpoint the two stack, artefact first, which is
+   the same order a phone reads them in. */
+
+.rc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.4rem;
+  align-items: center;
+  margin: 1.8rem 0;
+}
+.rc-row + .rc-row { border-top: .05rem solid var(--md-default-fg-color--lightest); padding-top: 1.8rem; }
+.md-typeset .rc-row h3 { margin: 0 0 .4rem; font-size: 1.05rem; line-height: 1.35; }
+.md-typeset .rc-row p { margin: .4rem 0 0; }
+.md-typeset .rc-row .highlight { margin: 0; }
+.md-typeset .rc-row pre > code { font-size: .62rem; line-height: 1.5; }
+
+/* Every other row turns around, so the eye is not tracking a single column all
+   the way down. The artefact keeps the wider half whichever side it is on, and
+   the flip only exists where there are two columns to flip: stacked, every row
+   reads artefact first, as the markup has it. */
+.rc-row--flip { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+.rc-row--flip > :first-child { order: 2; }
+
+@media screen and (max-width: 59.9375em) {
+  .rc-row, .rc-row--flip { grid-template-columns: 1fr; gap: .8rem; }
+  .rc-row--flip > :first-child { order: 0; }
+}
+
 /* ---- a diagnostic, shown as itself --------------------------------- */
 /* Terminal output on this site is quoted verbatim, frame and carets and
    all, so it gets a terminal's colours rather than the page's. */

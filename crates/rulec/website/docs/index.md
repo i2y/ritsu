@@ -49,19 +49,57 @@ three are set side by side further down.
 
 ---
 
-## This is all you write. The rest is machine work
+## What rulec does for you
 
-<div class="grid" markdown>
+<div class="rc-row" markdown>
+<div markdown>
 
-```rule
-table 運賃表(fee_table)
-policy unique
-| あて先      | サイズ | -> 運賃 |
-| 近畿圏      | S60    | 990円   |
-| 近畿圏      | S80    | 1210円  |
-| not: 近畿圏 | S60    | 880円   |
-| not: 近畿圏 | S80    | 1100円  |
+```console
+error[E101]: Completeness gap: some input matches no row
+  --> fee.rule:16 table 運賃表
+   |
+16 | table 運賃表(fee_table)
+   |       ^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: あて先 = 北海道, サイズ = S80
+ The shape of the row to add: `| 北海道 | S80 | 990円 |`
 ```
+
+</div>
+<div markdown>
+
+### Gaps and overlaps fail before anything runs
+
+Not sampled: the whole declared range is walked. What fails comes back with **the input that causes it**, so the fix is one row. What the amount *is*, only a person can say.
+
+</div>
+</div>
+
+<div class="rc-row rc-row--flip" markdown>
+<div markdown>
+
+```console
+error[E104]: An unrounded value reaches the output
+   |
+21 |   割引額(discount) : money[円,incl_tax]
+   |                      ^^^^^^^^^^^^^^^^^^ no rounding is declared
+   |
+ Example: some input computes to 0.12 yen. down(1円) gives 0 yen and
+ up(10円) gives 10 yen, so the rounding mode moves the result by up to 10 yen.
+```
+
+</div>
+<div markdown>
+
+### 円 and g will not add. Rounding has to be declared
+
+The unit is part of the type, and tax-inclusive is not tax-exclusive. A numeric output must say how fractions settle, and the question comes **with the money the choice moves**. Nothing is settled silently.
+
+</div>
+</div>
+
+<div class="rc-row" markdown>
+<div markdown>
 
 ```python
 if dest in _近畿圏 and size == SizeClass.S60:    # row 1
@@ -74,79 +112,149 @@ else:
 ```
 
 </div>
+<div markdown>
 
-On the left what you write, on the right what comes out. **One row, one branch**, and the
-comment carries the row itself (`# row 1: 近畿圏 | S60 | 990円`, in full). That last `else` can
-say *unreachable* because **nothing can reach it, and that was proved before the code
-existed**.
+### Twelve targets, not a dependency between them
 
-## What rulec takes off your hands
+Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and NumPy for whole columns at once. **One row, one branch** — no runtime, no configuration.
 
-<div class="grid cards" markdown>
+</div>
+</div>
 
--   __One table, in the words of the business__
+<div class="rc-row rc-row--flip" markdown>
+<div markdown>
 
-    A judgement with interlocking conditions, written as a pipe table a business person reads.
-    A cell only ever tests its own column, so a row is one box of the input space and gaps and
-    overlaps are decided mechanically.
+```pycon
+>>> fee_traced(Prefecture.HOKKAIDO, SizeClass.S80)
+(1100, [Fired(table='運賃表', row=4)])
 
-    [Write a table (.rule)](tour.md)
+>>> fee_record(...)
+{"in":{"あて先":"北海道","サイズ":"S80"},
+ "observed":{"運賃":1100},"trace":[{"table":"運賃表","row":4}]}
+```
 
--   __The proof is finished before the code exists__
+</div>
+<div markdown>
 
-    Completeness, overlap, unreachable rows, units, rounding, overflow, examples — seven of
-    them. What comes back is **the input that causes it**, and a rule that cannot be proved
-    generates nothing.
+### "Why this amount?" has an answer
 
-    [What it proves](checks.md)
+Beside every function is a `_traced` twin that returns, with the answer, **which row of which table matched** — which is what a log line or a reply to a customer needs. `_record` writes the same thing as one line of fixtures.
 
--   __Twelve targets, no dependencies__
+</div>
+</div>
 
-    Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm, plus NumPy
-    for a host that decides whole columns at once. Cases built from the boundaries run through
-    the reference evaluator and every target, and **agreement is checked byte for byte**.
+<div class="rc-row" markdown>
+<div markdown>
 
-    [Generate and call](generate.md)
+```console
+$ rulec coverage rules/health_insurance.rule
+1216 vectors
+  row coverage               52 / 52    satisfied
+  boundary-pair coverage     98 / 98    satisfied
+  rounding-tie coverage       2 / 2     satisfied
+```
 
--   __Held to the document it was transcribed from__
+</div>
+<div markdown>
 
-    A statute's article comes from e-Gov, Japan's statute database; a tariff sheet or a company
-    rule has its table taken out and kept as a copy. An amendment that moves the copy fails the
-    check — and so does **one mistyped digit in an amount**.
+### The test cases build themselves, from the boundaries
 
-    [What it proves](checks.md)
+Vectors come from the table's own edges, shadowed pairs and rounding ties, and run through the reference evaluator and all twelve languages **byte for byte**. Then a separate judge audits the suite itself.
 
--   __One page for the person who approves__
+</div>
+</div>
 
-    `rulec doc` renders the rule beside the article or the table it was transcribed from. The
-    HTML page an approver can try their own case on, and the article a help centre publishes,
-    come from the same rule.
+<div class="rc-row rc-row--flip" markdown>
+<div markdown>
 
-    [How to use it, by role](scenarios.md)
+```console
+error[E116]: The amount of row 4 is not in the copy it cites
+   |
+24 | | not: 遠隔地 | >2000g  | 1000円      |
+   |                           ^^^^^^ not in the copy: 1000円
+   |
+ The copy cited: 規約 表1
 
--   __What a change does, before it ships__
+warning[W120]: The copy of 表1 states values no row uses
+ Stated in the copy, used by no row: 1100円
+```
 
-    `verify` says whether the legacy implementation answers the same; `replay` and `diff` say
-    **how many records move and by how much** over what actually happened. The Markdown for the
-    pull request included.
+</div>
+<div markdown>
 
-    [Compare and replay](compare.md)
+### A mistyped amount fails
 
--   __Built to be driven by an agent__
+Cite the table a tariff sheet or a company rule came from (`@規約 表1`) and it is kept as a copy. From then on **one wrong digit fails**. A statute is pinned to e-Gov's own text, and an amendment names the rows to reread.
 
-    Diagnostics are JSON, `--help` is a contract, and every command is also an MCP tool. The
-    rule itself can be served as an MCP tool, or called over HTTP.
+</div>
+</div>
 
-    [For agents](agents.md)
+<div class="rc-row" markdown>
+<div markdown>
 
--   __It runs wherever you need it__
+```console
+$ rulec verify rules/送料.rule --adapter python3 adapter.py
+Compared 207 / matched 182 (87.923%)
 
-    As an ordinary function, as Wasm in a browser or under WASI, as a PostgreSQL function, as a
-    NumPy plan over a whole DataFrame. `rulec api` prints how to call it, so the generated code
-    never has to be read.
+Affected 25 (12.077%)  amount -250
+  table サイズ判定 row 1 / table 運賃表 row 36   7 records  difference -10 uniform
+    Example: あて先=沖縄県, 重量=1 → rule 1450 / legacy 1460
+```
 
-    [Generate and call](generate.md)
+</div>
+<div markdown>
 
+### How many records move, before it ships
+
+`verify` against the implementation that runs today; `replay` and `diff` over what actually happened. Mismatches come back clustered by **the rows that matched**, with counts, amounts and an example.
+
+</div>
+</div>
+
+<div class="rc-row rc-row--flip" markdown>
+<div markdown>
+
+```markdown
+Source: 規約 表1 (配送規約.md, sha256:d1156fa90a72194c)
+
+> | 届け先 | 2kg まで | 2kg 超 |
+> |---|---|---|
+> | 北海道・沖縄県 | 1200円 | 1800円 |
+
+**What `rulec check` verified**
+
+- Every combination of inputs matches some row (E101)
+- Every amount in this table is a value the copy shows (E116)
+```
+
+</div>
+<div markdown>
+
+### There is a page for the person who approves
+
+`rulec doc` sets the copy it was transcribed from beside the rule's own table. The HTML page an approver tries a case on, and the article a help centre publishes, come from the same rule.
+
+</div>
+</div>
+
+<div class="rc-row" markdown>
+<div markdown>
+
+```json
+{"code": "E101",
+ "where": {"line": 16, "table": "運賃表"},
+ "witness": {"inputs": {"あて先": "北海道", "サイズ": "S80"}},
+ "fix": {"text": "| 北海道 | S80 | 990円 |"}}
+```
+
+</div>
+<div markdown>
+
+### An agent never has to read prose
+
+Every command has `--format json`, and the codes and the JSON shape **stay put while the wording improves**. Where there is no shell, `rulec mcp` serves the same commands as tools.
+
+</div>
 </div>
 
 **Twelve targets** · **72 diagnostics** · **28 rules transcribed from real published terms, checked, generated and run on every commit** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
