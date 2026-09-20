@@ -1,9 +1,9 @@
 //! Tables out of a document, for the fragments a `file` source cites (§15.82).
 //!
 //! Only the formats rulec reads by itself are here: a CSV, the pipe tables of a Markdown
-//! document, and the sheets of a workbook. A PDF or a scan needs an extractor that is not
-//! this program — that is the adapter, and until it exists the message says which formats
-//! are read rather than guessing at the bytes.
+//! document, the sheets of a workbook and the tables of a Word document. A PDF or a scan needs
+//! an extractor that is not this program — that is the adapter, and until it exists the message
+//! says which formats are read rather than guessing at the bytes.
 //!
 //! What comes out is one grid of text per table, in document order. It is written beside the
 //! document as a TSV, and that copy is what `check` holds the rule to: the extraction happens
@@ -40,7 +40,7 @@ pub fn copy_dir(doc: &Path) -> std::path::PathBuf {
 }
 
 /// The formats read here, as the messages name them.
-pub const FORMATS: &str = "csv, md, xlsx";
+pub const FORMATS: &str = "csv, md, xlsx, docx";
 
 fn ext(path: &Path) -> String {
     path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default()
@@ -51,7 +51,7 @@ fn ext(path: &Path) -> String {
 /// it does not do.
 pub fn unreadable(path: &Path) -> Option<String> {
     match ext(path).as_str() {
-        "csv" | "md" | "markdown" | "xlsx" => None,
+        "csv" | "md" | "markdown" | "xlsx" | "docx" => None,
         "" => Some(tr!(
             "拡張子が無いので、どう読めばいいか分かりません（読めるのは {FORMATS}）",
             "the file has no extension, so there is no telling how to read it (the formats read here are {FORMATS})"
@@ -76,6 +76,7 @@ pub fn tables(path: &Path, bytes: &[u8]) -> Result<Vec<Vec<Vec<String>>>, String
         }
         "md" | "markdown" => Ok(markdown_tables(&text_of(bytes)?)),
         "xlsx" => Ok(crate::xlsx::grids(bytes)?.into_iter().map(|(_, g)| grid(g)).collect()),
+        "docx" => Ok(crate::docx::tables(bytes)?.into_iter().map(grid).collect()),
         // `unreadable` refused every other extension above.
         _ => Ok(Vec::new()),
     }

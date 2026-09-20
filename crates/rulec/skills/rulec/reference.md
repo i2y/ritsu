@@ -291,8 +291,10 @@ order and `table1` is the same name in English; for a workbook a table is a shee
 is taken out of the document by `rulec source fetch`, written beside it as
 `<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and pinned under the `source` line exactly as a law's articles
 are — so a revision of the document that moves a cited table fails the check, and one that does
-not, does not. The formats read here are csv, md and xlsx; a PDF or a scan needs an extractor
-that is not this program, and until it can be plugged in such a document is cited whole.
+not, does not. The formats read here are csv, md, xlsx and docx — a workbook's table is a sheet, a Word
+document's is a `w:tbl`, and a merged cell leaves the column it took empty rather than being
+filled in, because the copy is evidence. A PDF or a scan needs an extractor that is not this
+program, and until it can be plugged in such a document is cited whole.
 
 **The rows are then held to that copy**, which is the one thing a completeness proof cannot do:
 it says the table is consistent with itself, not that it says what the document says. An amount
