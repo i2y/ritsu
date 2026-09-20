@@ -442,7 +442,7 @@ Who: the agent
 $ rulec gen rules/shipping_fee.rule --out generated/
 ```
 
-Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs; Wasm gets one module; NumPy gets the rule as data and one fixed evaluator. No runtime, no dependency.
+Under `generated/`, one directory per language. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java get a function; SQL gets one query over a relation of inputs and the same query as a PostgreSQL function; Wasm gets one module; NumPy gets the rule as data and one fixed evaluator. No runtime, no dependency.
 
 ### 4-2. Read how to call it
 
@@ -486,7 +486,8 @@ Pick the shape the destination takes.
 | Destination | What to use | Where to read |
 |---|---|---|
 | your application's code | the generated function | [Generate and call](generate.md#what-the-output-looks-like) |
-| a recalculation in the database, a closing batch | the SQL query, one statement over the input relation | [SQL is a query, not a function](generate.md#sql-is-a-query-not-a-function) |
+| a recalculation in the database, a closing batch | the SQL query, one statement over the input relation | [SQL is a query, and the same query as a function](generate.md#sql-is-a-query-and-the-same-query-as-a-function) |
+| an HTTP endpoint with no server of your own | the same query as a PostgreSQL function, behind PostgREST or Supabase | [SQL is a query, and the same query as a function](generate.md#sql-is-a-query-and-the-same-query-as-a-function) |
 | a browser, or any host at all | the Wasm module | [Wasm](generate.md#wasm-one-module-for-any-host) |
 | a place where an agent has to decide | the generated MCP server, the rule as one tool | [The rule as a tool for an agent](generate.md#the-rule-as-a-tool-for-an-agent) |
 | a form or an API entry | the JSON Schema from `rulec schema` | [The input checked from the same table](generate.md#the-input-checked-from-the-same-table) |

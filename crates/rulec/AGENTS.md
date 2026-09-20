@@ -225,7 +225,11 @@ written beside it) as the tool's view, opened on the case that was just asked
 ([docs/generated-code.md](docs/generated-code.md)). The `wasm/` directory holds the rule as
 one module for any host, behind `call: func(input: string) -> string` in the canonical ABI,
 with a `.wit` that makes a component of it; `rulec api` says under `wasm` how to build it
-with `rustc` alone and what to call.
+with `rustc` alone and what to call. The `sql/` directory holds two doors on one query:
+`<alias>.sql`, the query over a relation of inputs, and `<alias>_function.sql`, the same query
+as a PostgreSQL function asked for one case at a time — which is an RPC endpoint the moment it
+sits in a schema PostgREST or Supabase exposes, and which raises where the query returns a
+column ([docs/generated-code.md](docs/generated-code.md)).
 
 For a target none of the eleven covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
@@ -237,7 +241,7 @@ with `rulec verify`. [docs/backends.md](docs/backends.md) runs that loop end to 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
-Wasm side and `numpy` under `python3` for the NumPy one, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
+Wasm side, `numpy` under `python3` for the NumPy one, and a `psql` that reaches a PostgreSQL for the function beside the query, and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 

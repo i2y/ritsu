@@ -1,7 +1,7 @@
 # The generated code
 
 `rulec gen` writes ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm — a module in each,
-a package in Go's case, and one query in SQL's. NumPy is the twelfth and the odd one out: it is
+a package in Go's case, and one query plus one function in SQL's. NumPy is the twelfth and the odd one out: it is
 not generated code at all but the rule as data, read by one fixed evaluator (see below). There is no runtime to install and nothing to
 configure: a function takes the declared inputs and returns the declared outputs, and the
 query takes a relation of them. This file says what shape that code has, what it guarantees,
@@ -33,8 +33,9 @@ generated Wasm module imports nothing, not even WASI.
 The `go.mod` lists nothing but the module itself. `rulec test` runs the Go side with `GOPROXY=off`, so "no dependencies"
 is a checked property rather than a claim. The server that offers the rule as an MCP tool
 ([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
-own modules alone in JavaScript, and the generated SQL defines no function: its rounding is
-arithmetic inside the query. **NumPy is the one exception, and a deliberate one**: the plan is
+own modules alone in JavaScript, and the generated SQL calls no function of its own: its
+rounding is arithmetic inside the query, in the file that declares a function as much as in
+the one that does not. **NumPy is the one exception, and a deliberate one**: the plan is
 data, and the evaluator that reads it imports `numpy`. That is the target — a host that wants
 whole columns decided at once already has numpy, and the dependency is its own.
 
@@ -377,6 +378,21 @@ what the wire format carries — so `.rawValue` and `init?(rawValue:)` are the w
 in both directions and no parser is generated. It is `CaseIterable`, so `.allCases` is the
 list. **There is no entry guard on an enum input**, for the reason given under Rust.
 
+With one output the function returns that value; with two or more it returns a struct named
+`Output`. Both it and the brands are `Hashable` and `Sendable`, and `Output` declares a public
+memberwise initializer, since the one Swift writes for a public struct is internal and a
+caller in another module could not reach it.
+
+Errors are thrown rather than returned: `RuleError.input` is a contract violation by the
+caller and `RuleError.contradiction` is the runtime guard described below — the same split as
+Python's two exception classes. `RuleError` is `CustomStringConvertible`, so printing one
+gives the message.
+
+It compiles with `swiftc` alone — `swiftc coupon_step.swift coupon_step_runner.swift -o
+coupon_step` builds the rule and its runner together, with no `Package.swift` and nothing to
+fetch. The runner carries `@main` rather than being called `main.swift`, because top-level
+code is only allowed in a file of that name and the rule has to be able to sit beside it.
+
 ### Java
 
 ```java
@@ -434,7 +450,7 @@ WITH "_c0" AS (SELECT "_id", "dest", CAST("weight" AS BIGINT) AS "weight", … F
 SELECT "_id", "dest", "weight", "total", "member", … AS "fee", "base_fee_row", "payer_row" FROM "_c5" ORDER BY "_id";
 ```
 
-SQL gets no function. `shipping_fee.sql` is **one query over a relation of inputs**: provide
+**Two doors on one query.** `shipping_fee.sql` is **one query over a relation of inputs**: provide
 `shipping_fee_input` with a column `_id` (anything that identifies the row; it comes back
 unchanged) and one column per input under its alias, and out come `_id`, the inputs, the
 outputs, and one column per table with the number of the row that matched (`base_fee_row`).
@@ -458,10 +474,15 @@ leans on — `/` between integers truncates toward zero — which is why proving
 says something about the first. A warehouse does not necessarily agree. BigQuery's `/` always
 returns `FLOAT64` (its integer division is `DIV`), and Snowflake's returns a scaled `NUMBER`
 rather than truncating, so a grid like `(ABS("_raw_fee") / 20 + 1) * 20` stops being the
-rounding it was written as, silently, in exactly the place the proof exists to watch. Neither
-has a local engine to hold a port to, so if the rule has to run in one, port it deliberately
-and hold the port to the rule with `rulec verify` against the real warehouse
-([backends.md](backends.md)) — nothing else will catch it.
+rounding it was written as, silently, in exactly the place the proof exists to watch.
+ClickHouse is the measured case: `/` is `Float64` there (`intDiv` is the integer one), and
+this file runs on it **without an error** — 26 of the rules in `tests/corpus/` were tried, 21
+answered correctly, and 5 returned fractions where the rule declares an integer amount
+(`0.00055` for `0`, `3809` for `3800`, `14.5` for `14`). The ones that pass do so because
+their products happen to be even, which is exactly how this class of mistake stays hidden.
+So if the rule has to run in a warehouse, port it deliberately and hold the port to the rule
+with `rulec verify` against the real engine ([backends.md](backends.md)) — nothing else will
+catch it.
 
 A query cannot stop, so what the other languages raise, this one returns as a column. The
 entry guard is `_input_error`: NULL for a row inside the declared domain, and otherwise the
@@ -471,20 +492,56 @@ refused, not truncated to 18). Where two rows of a `unique` table could not be p
 exclusive (W114), a `_contradiction` column names them when both match. The runner stops on
 either, as the other languages raise.
 
-With one output the function returns that value; with two or more it returns a struct named
-`Output`. Both it and the brands are `Hashable` and `Sendable`, and `Output` declares a public
-memberwise initializer, since the one Swift writes for a public struct is internal and a
-caller in another module could not reach it.
+**The other door — `shipping_fee_function.sql`.** The same query, asked for one case at a time:
 
-Errors are thrown rather than returned: `RuleError.input` is a contract violation by the
-caller and `RuleError.contradiction` is the runtime guard described below — the same split as
-Python's two exception classes. `RuleError` is `CustomStringConvertible`, so printing one
-gives the message.
+```sql
+CREATE FUNCTION "shipping_fee"("dest" text, "weight" bigint, "total" bigint, "member" text)
+RETURNS TABLE ("fee" bigint, "base_fee_row" int, "payer_row" int)
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+```
 
-It compiles with `swiftc` alone — `swiftc coupon_step.swift coupon_step_runner.swift -o
-coupon_step` builds the rule and its runner together, with no `Package.swift` and nothing to
-fetch. The runner carries `@main` rather than being called `main.swift`, because top-level
-code is only allowed in a file of that name and the rule has to be able to sit beside it.
+The arguments are the inputs in order and what comes back is the outputs followed by the row
+that matched in every table; `rulec api` gives the same line under `sql.function`. The body is
+the query above, **unchanged**, with one CTE in front of it binding the arguments into a
+one-row `shipping_fee_input` — a `WITH` name hides a table of the same name, so nothing below
+knows which door it was entered by and the two shapes cannot drift apart.
+
+Where the relation returns a column, the function **raises**: `RAISE EXCEPTION` with SQLSTATE
+`22023` for an input outside the declaration and `P0001` for a contradiction, carrying the same
+sentence the other eleven raise. The difference is the reason both exist. A relation is read by
+something that has the whole row in front of it; a function called over HTTP is read by a client
+that may look at one field, and handing that client a number that looks like an answer beside a
+column it ignored is the worse of the two failures.
+
+PostgreSQL only — SQLite has no `CREATE FUNCTION`, so this is the one file the query's own
+runner cannot stand in for. `rulec test` runs it on a real PostgreSQL through `psql`, taking the
+connection from libpq's own environment (`PGHOST`, `PGDATABASE`), and skips that pass with a
+note when there is no server to reach. The runner creates the function, calls it once per vector
+**by argument name**, holds the answers to the reference evaluator byte for byte like every other
+runner, and drops it again, so the run leaves nothing behind in the database.
+
+Call it by argument name yourself: `SELECT * FROM "shipping_fee"("dest" => '北海道', "weight" =>
+1200, "total" => 0, "member" => '一般');`. Positionally it is ambiguous whenever the rule's alias
+is also the name of a built-in (`rank`), and a named argument is the one form a variadic built-in
+cannot answer to. In PostgREST — which is what Supabase runs — a function in an exposed
+schema is an endpoint with no server code of its own. Installing this file and nothing else
+answers:
+
+```
+$ curl -X POST localhost:3000/rpc/shipping_fee -H 'Content-Type: application/json' \
+       -d '{"dest":"北海道","weight":1200,"total":0,"member":"一般"}'
+[{"fee":1200,"base_fee_row":1,"payer_row":3}]                                  200
+
+$ curl -X POST localhost:3000/rpc/shipping_fee -H 'Content-Type: application/json' \
+       -d '{"dest":"北海道","weight":0,"total":0,"member":"一般"}'
+{"code":"22023","details":null,"hint":null,"message":"重量 is out of range"}    400
+```
+
+The raising is what makes the second one a 400 rather than a 200 carrying a number no proof
+covers, and `GET /rpc/shipping_fee?dest=…` answers too, since the function is `IMMUTABLE`. Ask
+for one object instead of an array with `Accept: application/vnd.pgrst.object+json`. Hasura
+tracks a function only when it returns `SETOF` a table it already tracks, so there a table or
+view of that shape has to be tracked first.
 
 ### Wasm
 

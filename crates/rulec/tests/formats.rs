@@ -132,7 +132,7 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     for r in rs {
         keys(r, &["rule", "lang", "via", "vectors", "ok", "ran", "first_diff", "error"], "result");
         let via = r.get("via").unwrap().as_str().unwrap();
-        assert!(matches!(via, "runner" | "mcp" | "mcp-http" | "wasi"), "via が安定していない: {via}");
+        assert!(matches!(via, "runner" | "mcp" | "mcp-http" | "wasi" | "function"), "via が安定していない: {via}");
         let lang = r.get("lang").unwrap().as_str().unwrap();
         // The stable ids are src/backend.rs's; a language added there without a name here
         // used to fail for the wrong reason.

@@ -132,7 +132,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); or `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); or `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
 | `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
 | `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
@@ -278,7 +278,10 @@ meaning is in [generated-code.md](generated-code.md).
         "dialect":"postgresql","runs_on":["postgresql","sqlite"],
         "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
                     "range":{"min":0,"max":1000000},"optional":false}],
-        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}]},
+        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}],
+        "function":{"file":"coupon_step_function.sql","name":"coupon_step",
+                    "signature":"\"coupon_step\"(\"subtotal\" bigint, …, \"dup\" boolean) RETURNS TABLE (\"ok\" boolean, …, \"raw_discount_row\" int)",
+                    "language":"plpgsql","runs_on":["postgresql"],"raises":"22023"}},
  "wasm":{"source":"coupon_step_wasm.rs","module":"coupon_step.wasm",
          "build":"rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib coupon_step_wasm.rs -o coupon_step.wasm",
          "wit":"coupon_step.wit","package":"rulec:coupon-step@1.0.0","world":"coupon-step",
@@ -315,11 +318,15 @@ the fields one element carries under `elements`:
 
 Those fields get the same entry guards the inputs get, so their `range` means what a
 parameter's `range` means. SQL has no entry for such a rule — `rulec gen` does not write one
-(§15.56). The `sql` entry has no
-function to name: it gives the file, the relation the query reads (`input`) and its `id`
-column, the `guard` column that carries the entry guard's sentence, the `columns` of that
-relation as the query declares them, the `outputs`, and under `rows` the column that carries
-each table's matched row ([generated-code.md](generated-code.md#sql)). The `wasm` entry
+(§15.56). The `sql` entry describes the relation first: the file, the relation the query
+reads (`input`) and its `id` column, the `guard` column that carries the entry guard's
+sentence, the `columns` of that relation as the query declares them, the `outputs`, and under
+`rows` the column that carries each table's matched row. Under `function` is the other door —
+the file that declares it, the name to call, the `signature` as it is written, the language it
+is written in, and `raises`, the SQLSTATE it raises with when an input is outside the
+declaration. Its arguments are `columns` in order and what it returns is `outputs` followed by
+`rows`, so neither list is written out twice
+([generated-code.md](generated-code.md#sql)). The `wasm` entry
 names no function in a language either: it gives the source and the module it builds into
 (`build` is the whole command), the `.wit` with its `package` and `world`, the exports a host
 calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `rulec test`

@@ -134,3 +134,99 @@ print(json.dumps([r[-1] for r in db.execute(sql)], ensure_ascii=False))
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The function is the other door on the same query (§15.80). What matters most is that its
+/// body **is** the query: the file holds the text of `<alias>.sql` from the first CTE to the
+/// last `ORDER BY`, unchanged, so the two shapes cannot drift apart.
+#[test]
+fn 関数の本体は問い合わせそのものである() {
+    let dir = generate("function", "tests/corpus/送料.rule");
+    let query = std::fs::read_to_string(dir.join("sql/shipping_fee.sql")).unwrap();
+    let f = std::fs::read_to_string(dir.join("sql/shipping_fee_function.sql")).unwrap();
+    let body = {
+        let from = query.find("\"_c0\" AS (").expect("問い合わせに _c0 が無い");
+        let to = query.rfind("ORDER BY \"_id\";").expect("問い合わせに ORDER BY が無い");
+        &query[from..to + "ORDER BY \"_id\"".len()]
+    };
+    assert!(f.contains(body), "関数の本体が問い合わせと違う:\n{f}");
+    for want in [
+        // The arguments are the inputs, and what comes back is the outputs and the rows.
+        "CREATE FUNCTION \"shipping_fee\"(\"dest\" text, \"weight\" bigint, \"total\" bigint, \"member\" text)",
+        "RETURNS TABLE (\"fee\" bigint, \"base_fee_row\" int, \"payer_row\" int)",
+        "LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE",
+        // The argument reaches the query through this one CTE and nowhere else.
+        "\"shipping_fee_input\" AS (\n  SELECT 0 AS \"_id\", \"dest\" AS \"dest\"",
+        "#variable_conflict use_column",
+        // It raises where the query returns a column.
+        "RAISE EXCEPTION '%', \"_r\".\"_input_error\" USING ERRCODE = '22023';",
+        // Any older signature of the same name goes first: `CREATE OR REPLACE` would leave it.
+        "WHERE p.proname = 'shipping_fee' AND n.nspname = current_schema()",
+        // A record's column is whatever the expression made it, and RETURN QUERY is exact.
+        "RETURN QUERY SELECT \"_r\".\"fee\"::bigint,",
+    ] {
+        assert!(f.contains(want), "無い: {want}\n{f}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn apiはsqlの関数を言う() {
+    let (c, out, e) = run(&["api", "tests/corpus/送料.rule"]);
+    assert_eq!(c, 0, "{e}");
+    let j = rulec::json::parse(out.trim()).unwrap();
+    let f = j.get("sql").and_then(|s| s.get("function")).expect("sql.function が無い");
+    assert_eq!(f.get("file").and_then(|v| v.as_str()), Some("shipping_fee_function.sql"));
+    assert_eq!(f.get("name").and_then(|v| v.as_str()), Some("shipping_fee"));
+    assert_eq!(f.get("language").and_then(|v| v.as_str()), Some("plpgsql"));
+    assert_eq!(f.get("raises").and_then(|v| v.as_str()), Some("22023"));
+    let sig = f.get("signature").and_then(|v| v.as_str()).expect("signature が無い");
+    assert!(sig.starts_with("\"shipping_fee\"(\"dest\" text,"), "{sig}");
+    assert!(sig.contains("RETURNS TABLE (\"fee\" bigint,"), "{sig}");
+    // And it is the signature the file really declares, not a second spelling of it.
+    let dir = generate("apisig", "tests/corpus/送料.rule");
+    let decl = std::fs::read_to_string(dir.join("sql/shipping_fee_function.sql")).unwrap().replace('\n', " ");
+    assert!(decl.contains(sig), "api の signature が生成物と違う: {sig}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The function on a real PostgreSQL: the three examples by argument name, and an input
+/// outside the declaration raising rather than answering. `rulec test` runs the whole vector
+/// set the same way; this is the shape of one call, and it is skipped where there is no
+/// server, as everything that needs a toolchain is.
+#[test]
+fn 関数は宣言の外の入力に投げる() {
+    if !have("psql") || !rulec::backend::psql_ready() {
+        eprintln!("注意: psql が無いか繋がらないので飛ばした");
+        return;
+    }
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    let dir = generate("pg", "tests/corpus/送料.rule");
+    let script = r#"
+import json, subprocess
+PSQL = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+sql = open("sql/shipping_fee_function.sql", encoding="utf-8").read()
+call = 'SELECT row_to_json(t) FROM "shipping_fee"("dest" => %s, "weight" => %s, "total" => %s, "member" => %s) AS t;'
+ok = subprocess.run(PSQL, input=sql + "\n" + "\n".join([
+    call % ("'沖縄県'", 2500, 40000, "'一般'"),
+    call % ("'東京都'", 1999, 12000, "'プラチナ'"),
+    call % ("'北海道'", 500, 5000, "'一般'"),
+]), capture_output=True, text=True)
+bad = subprocess.run(PSQL, input=call % ("'東京都'", 50000, 100, "'一般'"), capture_output=True, text=True)
+subprocess.run(PSQL, input='DROP FUNCTION IF EXISTS "shipping_fee"(text, bigint, bigint, text);', capture_output=True, text=True)
+print(json.dumps({
+    "answers": [json.loads(l) for l in ok.stdout.splitlines() if l.startswith("{")],
+    "refused": bad.returncode != 0 and "重量 が範囲の外です" in bad.stderr,
+}, ensure_ascii=False))
+"#;
+    let o = Command::new("python3").current_dir(&dir).args(["-c", script]).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let got = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    assert_eq!(
+        got,
+        r#"{"answers": [{"fee": 0, "base_fee_row": 2, "payer_row": 1}, {"fee": 400, "base_fee_row": 3, "payer_row": 2}, {"fee": 1200, "base_fee_row": 1, "payer_row": 3}], "refused": true}"#
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

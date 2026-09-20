@@ -27,6 +27,12 @@ fn q(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// `"name" type, "name" type` — the arguments of the function and the columns it returns,
+/// written the one way, so the file and `rulec api` cannot state different signatures.
+fn sql_sig(v: &[(String, &'static str)]) -> String {
+    v.iter().map(|(n, t)| format!("{} {t}", q(n))).collect::<Vec<_>>().join(", ")
+}
+
 /// A string literal.
 fn lit(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
@@ -329,6 +335,15 @@ impl<'a> Gen<'a> {
 
     /// `sql/<alias>.sql`: the query.
     pub fn sql(&self) -> String {
+        let mut o = self.sql_head();
+        o.push_str(&self.sql_query(None));
+        o.push_str(";\n");
+        o
+    }
+
+    /// The comment block `sql/<alias>.sql` opens with: what the query is, what every column
+    /// of the input relation holds, and what comes back out.
+    fn sql_head(&self) -> String {
         let alias = pub_name(&self.f.name);
         let input_rel = format!("{alias}_input");
         let local = |n: &str| -> String { self.ident(n) };
@@ -357,7 +372,20 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("-- {} = {}\n", g.name.text, ms.join(", ")));
         }
 
-        o.push_str("WITH\n");
+        o
+    }
+
+    /// The query itself, from `WITH` down to the last `ORDER BY`, with no semicolon on the
+    /// end. `prelude` is one more CTE placed before the first: the function door (§15.80)
+    /// binds its arguments into a one-row input relation that way, so **the chain below is
+    /// the same text in both files** and a mistake cannot creep in between the two shapes.
+    fn sql_query(&self, prelude: Option<&str>) -> String {
+        let input_rel = format!("{}_input", pub_name(&self.f.name));
+        let local = |n: &str| -> String { self.ident(n) };
+        let mut o = String::from("WITH\n");
+        if let Some(p) = prelude {
+            o.push_str(&format!("{p},\n"));
+        }
         let mut cols: Vec<String> = vec![q("_id")];
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
@@ -657,8 +685,176 @@ impl<'a> Gen<'a> {
         if !contra.is_empty() {
             select.push(format!("CASE {} ELSE NULL END AS {}", contra.join(" "), q("_contradiction")));
         }
-        o.push_str(&format!("\nSELECT\n  {}\nFROM {prev}\nORDER BY {};\n", select.join(",\n  "), q("_id")));
+        o.push_str(&format!("\nSELECT\n  {}\nFROM {prev}\nORDER BY {}", select.join(",\n  "), q("_id")));
         o
+    }
+
+    /// `sql/<alias>_function.sql`: the same rule as a function, for the other door — one
+    /// case asked for by name (§15.80). A function in a schema PostgREST or Supabase
+    /// exposes **is** the endpoint, so this file is the whole server.
+    ///
+    /// The body is the query of `sql/<alias>.sql` unchanged, with the arguments bound into a
+    /// one-row input relation by a CTE placed in front of it: a `WITH` name hides a table of
+    /// the same name, so nothing below has to know which door it was entered by, and the two
+    /// shapes cannot drift apart.
+    ///
+    /// It **raises** on an input outside the declaration, the way the other eleven languages
+    /// do. A query cannot stop, so the relation hands `_input_error` back as a column beside
+    /// a number that looks like an answer — right for a relation, where the caller reads the
+    /// whole row, and a trap through HTTP, where a client that forgets the column is handed a
+    /// wrong number and a 200.
+    pub fn sql_function(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let input_rel = format!("{alias}_input");
+        let local = |n: &str| -> String { self.ident(n) };
+        // The arguments are the inputs; what comes back is the outputs and then the row that
+        // matched in every table — the query's final SELECT, minus `_id` and the inputs the
+        // caller already has.
+        let (args, rets) = self.sql_function_cols();
+        let any_w114 = self.sql_members().iter().any(|(_, _, t)| {
+            let key = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+            self.w114.get(&key).is_some_and(|p| !p.is_empty())
+        });
+
+        let mut o = self.header("--");
+        o.push_str("--\n");
+        for line in self.sql_function_doc().lines() {
+            o.push_str(&format!("-- {line}\n"));
+        }
+        o.push_str(&tr!("--\n-- 引数:\n", "--\n-- The arguments:\n"));
+        for i in &self.f.inputs {
+            let ty = self.ty_of(&i.name.text);
+            o.push_str(&format!("--   {}  {}: {}\n", q(&local(&i.name.text)), i.name.text, self.sql_col_doc(&i.name.text, &ty)));
+        }
+        o.push_str(&tr!("-- 返る列:\n", "-- The columns that come back:\n"));
+        for od in &self.f.outputs {
+            let ty = self.ty_of(&od.name.text);
+            o.push_str(&format!("--   {}  {}: {}\n", q(&local(&od.name.text)), od.name.text, self.sql_col_doc(&od.name.text, &ty)));
+        }
+        for (tname, col, _) in self.sql_members() {
+            o.push_str(&format!("--   {}  {}\n", q(&col), tr!("表 {tname} の行", "the row of table {tname}")));
+        }
+
+        // Every function of this name in this schema, whatever arguments it was made with.
+        // `CREATE OR REPLACE` replaces one signature; a rule that gained or lost an input
+        // would leave the old one behind as an overload, and a caller that asks for the rule
+        // by name — PostgREST does — cannot tell two functions of one name apart.
+        o.push_str(&format!(
+            "\nDO $rulec$\nDECLARE f regprocedure;\nBEGIN\n  \
+             FOR f IN SELECT p.oid::regprocedure FROM pg_proc p\n    \
+             JOIN pg_namespace n ON n.oid = p.pronamespace\n    \
+             WHERE p.proname = {} AND n.nspname = current_schema()\n  \
+             LOOP EXECUTE format('DROP FUNCTION %s', f);\n  END LOOP;\nEND $rulec$;\n\n",
+            lit(&alias)
+        ));
+        o.push_str(&format!(
+            "CREATE FUNCTION {}({})\nRETURNS TABLE ({})\nLANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $rulec$\n",
+            q(&alias),
+            sql_sig(&args),
+            sql_sig(&rets)
+        ));
+        // An argument and a column of the query have the same name by construction. The
+        // pragma says which one an unqualified name means, and it is the column: the argument
+        // reaches the query through the CTE below and nowhere else.
+        o.push_str(&format!("#variable_conflict use_column\nDECLARE\n  {} record;\nBEGIN\n  SELECT * INTO {} FROM (\n", q("_r"), q("_r")));
+        let binds: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let c = q(&local(&i.name.text));
+                format!("{c} AS {c}")
+            })
+            .collect();
+        let prelude = format!("{} AS (\n  SELECT 0 AS {}, {}\n)", q(&input_rel), q("_id"), binds.join(", "));
+        o.push_str(&self.sql_query(Some(&prelude)));
+        o.push_str(&format!("\n  ) AS {};\n", q("_one")));
+        let raise = |col: &str, code: &str| -> String {
+            format!(
+                "  IF {r}.{c} IS NOT NULL THEN\n    RAISE EXCEPTION '%', {r}.{c} USING ERRCODE = '{code}';\n  END IF;\n",
+                r = q("_r"),
+                c = q(col)
+            )
+        };
+        o.push_str(&raise("_input_error", "22023"));
+        if any_w114 {
+            o.push_str(&raise("_contradiction", "P0001"));
+        }
+        // The casts are not decoration. A column of a record is whatever the expression made
+        // it — an int4 where the declaration says bigint — and `RETURN QUERY` holds the row
+        // to the declared types exactly.
+        o.push_str(&format!(
+            "  RETURN QUERY SELECT {};\nEND\n$rulec$;\n",
+            rets.iter().map(|(n, t)| format!("{}.{}::{t}", q("_r"), q(n))).collect::<Vec<_>>().join(", ")
+        ));
+        o
+    }
+
+    /// The function's signature as one line, for `rulec api` and for anyone reading it
+    /// beside the other backends' signatures.
+    fn sql_function_signature(&self) -> String {
+        let (args, rets) = self.sql_function_cols();
+        format!("{}({}) RETURNS TABLE ({})", q(&pub_name(&self.f.name)), sql_sig(&args), sql_sig(&rets))
+    }
+
+    /// The arguments and the returned columns: the inputs, and the outputs followed by the
+    /// row of every table. The file and `rulec api` take both from here.
+    fn sql_function_cols(&self) -> (Vec<(String, &'static str)>, Vec<(String, &'static str)>) {
+        let local = |n: &str| -> String { self.ident(n) };
+        let args: Vec<(String, &'static str)> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                (local(&i.name.text), self.sql_ty(&ty))
+            })
+            .collect();
+        let mut rets: Vec<(String, &'static str)> = self
+            .f
+            .outputs
+            .iter()
+            .map(|od| {
+                let ty = self.ty_of(&od.name.text);
+                (local(&od.name.text), self.sql_ty(&ty))
+            })
+            .collect();
+        rets.extend(self.sql_members().into_iter().map(|(_, col, _)| (col, "int")));
+        (args, rets)
+    }
+
+    /// The prose at the head of `sql/<alias>_function.sql`.
+    fn sql_function_doc(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let local = |n: &str| -> String { self.ident(n) };
+        let named: Vec<String> = self.f.inputs.iter().map(|i| format!("{} => ...", q(&local(&i.name.text)))).collect();
+        let body: Vec<String> = self.f.inputs.iter().map(|i| format!("\"{}\": ...", local(&i.name.text))).collect();
+        tr!(
+            "規則 {} v{} を関数にしたもの。一件ずつ呼ぶときはこちらを使う。PostgreSQL 専用で、SQLite では動かない。\n\
+             中身は {}.sql の問い合わせそのままで、引数を一行だけの入力の関係にする CTE を頭に足してある。値の形は\n\
+             問い合わせと同じ。数は宣言した単位の整数、率は刻みの個数、日付は 1970-01-01 からの日数、列挙はその名前。\n\
+             宣言の外の入力には、ほかの言語と同じ文で例外を投げる（SQLSTATE 22023）。例外にせず列で受け取りたいときは、\n\
+             関係に対する問い合わせのほうを使う。\n\
+             呼び方: SELECT * FROM {}({});\n\
+             PostgREST や Supabase なら、公開しているスキーマに置くだけで RPC として呼べる: POST /rpc/{} に {{{}}}",
+            "Rule {} v{} as a function: the door where one case is asked for by name. PostgreSQL only — this one\n\
+             is not inside what SQLite runs. The body is the query of {}.sql unchanged, with a CTE in front of it\n\
+             that binds the arguments into a one-row input relation. Values are what the query takes: every number\n\
+             an integer in its declared unit, a rate a count of its steps, a date the number of days since\n\
+             1970-01-01, an enum its name. An input outside the declaration raises the sentence the other\n\
+             languages raise (SQLSTATE 22023); for the answer with `_input_error` beside it instead, use the\n\
+             query over the relation.\n\
+             Called as: SELECT * FROM {}({});\n\
+             In PostgREST or Supabase it is an RPC endpoint as soon as it is in an exposed schema:\n\
+             POST /rpc/{} with {{{}}}",
+            self.f.name.text,
+            self.f.version,
+            alias,
+            q(&alias),
+            named.join(", "),
+            alias,
+            body.join(", ")
+        )
     }
 
     /// What a column holds, for the header of the query.
@@ -731,6 +927,17 @@ impl<'a> Gen<'a> {
         for (tname, col, _) in self.sql_members() {
             rows.push(crate::json::Obj::new().str("table", &tname).str("column", &col).finish());
         }
+        // The other door (§15.80). Its arguments are `columns` in order and what it returns
+        // is `outputs` then `rows`, so the lists are not written out twice; what is here is
+        // what only the function has — where it is, what it is called, and that it raises.
+        let function = crate::json::Obj::new()
+            .str("file", &format!("{alias}_function.sql"))
+            .str("name", &alias)
+            .str("signature", &self.sql_function_signature())
+            .str("language", "plpgsql")
+            .raw("runs_on", crate::json::strs(&["postgresql"]))
+            .str("raises", "22023")
+            .finish();
         crate::json::Obj::new()
             .str("file", &format!("{alias}.sql"))
             .str("input", &format!("{alias}_input"))
@@ -741,6 +948,7 @@ impl<'a> Gen<'a> {
             .raw("columns", crate::json::arr(&columns))
             .raw("outputs", crate::json::arr(&outputs))
             .raw("rows", crate::json::arr(&rows))
+            .raw("function", &function)
             .finish()
     }
 
@@ -754,10 +962,10 @@ impl<'a> Gen<'a> {
         )
     }
 
-    /// `sql/<alias>_runner.py`: the vectors through the query on an in-memory SQLite, and
-    /// the same record per line the other runners print.
-    pub fn sql_runner(&self) -> String {
-        let alias = pub_name(&self.f.name);
+    /// What both SQL runners need written out as Python literals: the inputs, the outputs,
+    /// the row column of every table, the labels of the rows that have one, and whether any
+    /// table has a W114 pair to stop on. One list, so the two runners cannot part company.
+    fn sql_runner_lists(&self) -> (String, String, String, String, bool) {
         let local = |n: &str| -> String { self.ident(n) };
         let kind = |ty: &Ty| -> &'static str {
             match ty {
@@ -804,14 +1012,46 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        (ins.join(", "), outs.join(", "), tables.join(", "), labels.join(", "), any_w114)
+    }
+
+    /// `sql/<alias>_runner.py`: the vectors through the query on an in-memory SQLite, and
+    /// the same record per line the other runners print.
+    pub fn sql_runner(&self) -> String {
+        let (ins, outs, tables, labels, any_w114) = self.sql_runner_lists();
         SQL_RUNNER
             .replace("@HEADER@", self.header("#").trim_end())
-            .replace("@ALIAS@", &alias)
-            .replace("@INPUTS@", &ins.join(", "))
-            .replace("@OUTPUTS@", &outs.join(", "))
-            .replace("@TABLES@", &tables.join(", "))
-            .replace("@LABELS@", &labels.join(", "))
+            .replace("@ALIAS@", &pub_name(&self.f.name))
+            .replace("@INPUTS@", &ins)
+            .replace("@OUTPUTS@", &outs)
+            .replace("@TABLES@", &tables)
+            .replace("@LABELS@", &labels)
             .replace("@CONTRADICTION@", if any_w114 { "\"_contradiction\"" } else { "None" })
+    }
+
+    /// `sql/<alias>_function_runner.py`: the same vectors through the **function**, on a real
+    /// PostgreSQL reached with `psql` (§15.80). The query's runner cannot stand in for this
+    /// one: SQLite has no `CREATE FUNCTION`, and what is unchecked here is exactly what only
+    /// PostgreSQL has — the signature, the declared return types, and the raising.
+    pub fn sql_function_runner(&self) -> String {
+        let (ins, outs, tables, labels, _) = self.sql_runner_lists();
+        let types: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| {
+                let ty = self.ty_of(&i.name.text);
+                self.sql_ty(&ty).to_string()
+            })
+            .collect();
+        SQL_FUNCTION_RUNNER
+            .replace("@HEADER@", self.header("#").trim_end())
+            .replace("@ALIAS@", &pub_name(&self.f.name))
+            .replace("@ARGTYPES@", &types.join(", "))
+            .replace("@INPUTS@", &ins)
+            .replace("@OUTPUTS@", &outs)
+            .replace("@TABLES@", &tables)
+            .replace("@LABELS@", &labels)
     }
 }
 
@@ -894,6 +1134,112 @@ for r in db.execute(SQL):
         raise ValueError(r["_input_error"])
     if CONTRADICTION is not None and r[CONTRADICTION] is not None:
         raise AssertionError(r[CONTRADICTION])
+    ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
+    obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
+    rows = ",".join(
+        '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
+        + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
+        + "}"
+        for t, c in TABLES
+        if r[c] is not None
+    )
+    print('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}")
+"#;
+
+const SQL_FUNCTION_RUNNER: &str = r#"@HEADER@
+import json
+import datetime
+import subprocess
+import sys
+from pathlib import Path
+
+SQL = Path(__file__).with_name("@ALIAS@_function.sql").read_text(encoding="utf-8")
+FN = "@ALIAS@"
+ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
+INPUTS = [@INPUTS@]
+OUTPUTS = [@OUTPUTS@]
+TABLES = [@TABLES@]
+LABELS = {@LABELS@}
+# Which server and database is libpq's own business: PGHOST, PGPORT, PGDATABASE, PGUSER.
+# `-q` keeps the command tags out of the answers and ON_ERROR_STOP makes the first raise
+# the last thing that happens, which is what a refused input has to do here.
+PSQL = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+
+
+def _ord(s: str) -> int:
+    y, m, d = (int(x) for x in s.split("-"))
+    return (datetime.date(y, m, d) - datetime.date(1970, 1, 1)).days
+
+
+def _civil(days: int) -> str:
+    return (datetime.date(1970, 1, 1) + datetime.timedelta(days=days)).isoformat()
+
+
+def _lit(kind: str, v: object) -> str:
+    if v is None:
+        return "NULL"
+    if kind == "bool":
+        return "TRUE" if v else "FALSE"
+    if kind == "date":
+        return str(_ord(str(v)))
+    if kind == "int":
+        return str(v)
+    return "'" + str(v).replace("'", "''") + "'"
+
+
+def _echo(v: object) -> str:
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    return json.dumps(v, ensure_ascii=False)
+
+
+def _from_sql(kind: str, v: object) -> str:
+    if v is None:
+        return "null"
+    if kind == "bool":
+        return "true" if v else "false"
+    if kind == "date":
+        return json.dumps(_civil(int(str(v))))
+    if kind == "int":
+        return str(v)
+    return json.dumps(v, ensure_ascii=False)
+
+
+def _psql(script: str) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(PSQL, input=script, capture_output=True, text=True)
+
+
+cases = []
+script = [SQL]
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    d = json.loads(line)["in"]
+    cases.append(d)
+    # Called the way PostgREST calls it — by argument name — and with every argument cast to
+    # the type it was declared with. Both matter: a rule whose alias is also the name of a
+    # built-in function (`rank`) cannot be called positionally without ambiguity, and a named
+    # argument is the one form a variadic built-in cannot answer to.
+    args = ", ".join('"%s" => %s::%s' % (a, _lit(k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
+    script.append('SELECT row_to_json(t) FROM "%s"(%s) AS t;' % (FN, args))
+
+p = _psql("\n".join(script))
+# However it went, the function does not stay behind in somebody's database.
+_psql('DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES)))
+if p.returncode != 0:
+    sys.stderr.write(p.stderr)
+    sys.exit(1)
+answers = [l for l in p.stdout.splitlines() if l.startswith("{")]
+if len(answers) != len(cases):
+    sys.stderr.write("psql answered %d of %d cases\n%s" % (len(answers), len(cases), p.stderr))
+    sys.exit(1)
+for d, answer in zip(cases, answers):
+    r = json.loads(answer)
     ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
     obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
     rows = ",".join(

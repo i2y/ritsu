@@ -30,7 +30,7 @@ exists.
 | Go | supported | `go` |
 | Swift | supported | just `swiftc` — no SwiftPM, no `Package.swift`; units ride in the type as they do in Rust |
 | Java | supported | a JDK — `javac` and `java`, no Maven and no Gradle. Built at `--release 17`, so 17, 21 and 25 all take it; Kotlin and Scala call the class as it stands |
-| SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check; the query itself is written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
+| SQL | supported | `python3`, whose standard-library `sqlite3` runs the agreement check for the query, and a `psql` that reaches a PostgreSQL for the function beside it; both are written for PostgreSQL. **A rule that walks a sequence is the one thing it does not get** |
 | Wasm | supported | `rustc` with the `wasm32-unknown-unknown` target, and `node` for the agreement check. The module itself imports nothing |
 | NumPy | supported | `python3` and `numpy`. Not generated code but the rule as data beside one fixed evaluator, which builds a closure over whole columns when the plan is loaded. **A rule that walks a sequence is the one thing it does not get** |
 
@@ -58,9 +58,9 @@ hand, as it was done before SQL had a backend of its own: 88 cases, all
 agreeing — and then one threshold broken on purpose, to show the report
 naming the rows and the case that proves it.
 
-### SQL is a query, not a function
+### SQL is a query, and the same query as a function
 
-The seven others give you a function. SQL gives you **one query over a
+SQL gives you two doors on one rule. The first is **one query over a
 relation of inputs**: provide `shipping_fee_input` with a column `_id`
 and one column per input under its alias, and out come `_id`, the
 inputs, the outputs, and one column per table with the number of the row
@@ -78,6 +78,21 @@ and the header of the file says which for every column. A query cannot
 stop, so the entry guard is a column too: `_input_error` is NULL for a
 row inside the declared domain and carries the sentence for one outside
 it.
+
+The second door is `shipping_fee_function.sql`: the same query as a
+function, for one case asked for by name. Its body is the query above,
+unchanged, with one CTE in front binding the arguments into a one-row
+input relation — so the two cannot drift apart. Unlike the query it
+**raises** where the others raise, because a query cannot stop and an RPC
+client that reads one field should not be handed a number that looks like
+an answer beside an error column it ignored. Put it in a schema PostgREST
+or Supabase exposes and the rule is an endpoint with no server code of its
+own: `POST /rpc/shipping_fee` with `{"dest": "北海道", …}` answers
+`[{"fee":1200,…}]`, and an input outside the declaration comes back as a
+**400** carrying the rule's own sentence. This one is
+PostgreSQL only — SQLite has no `CREATE FUNCTION` — so `rulec test` runs
+it on a real PostgreSQL through `psql`, and says so when it skips it for
+want of a server.
 
 **A rule that walks a sequence is not generated for SQL.** One query has
 no place to carry a value from row to row and stop partway. That is a

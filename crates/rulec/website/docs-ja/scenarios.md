@@ -455,7 +455,7 @@ $ rulec diff 送料.rule 送料_新.rule --fixtures 記録.jsonl --lang ja --ter
 $ rulec gen rules/送料.rule --out generated/
 ```
 
-`generated/` の下に、言語ごとのディレクトリができます。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java は関数、NumPy は規則そのものと固定の評価器、SQL は入力の関係に対する一つの問い合わせ、Wasm は一つのモジュールです。ランタイムも依存もありません。
+`generated/` の下に、言語ごとのディレクトリができます。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java は関数、NumPy は規則そのものと固定の評価器、SQL は入力の関係に対する一つの問い合わせと、同じ中身の関数、Wasm は一つのモジュールです。ランタイムも依存もありません。
 
 ### 4-2. 呼び方を読む
 
@@ -499,7 +499,8 @@ ok    shipping_fee (Wasm) ベクタ 68 件
 | 組み込み先 | 使うもの | 読むところ |
 |---|---|---|
 | アプリのコード | 生成した関数 | [生成して呼ぶ](generate.md#出るものの形) |
-| DB の再計算、締めのバッチ | SQL の問い合わせ（入力の関係に対して一文） | [SQL は関数ではなく、問い合わせ](generate.md#sql-は関数ではなく問い合わせ) |
+| DB の再計算、締めのバッチ | SQL の問い合わせ（入力の関係に対して一文） | [SQL には問い合わせと関数の両方が出ます](generate.md#sql-には問い合わせと関数の両方が出ます) |
+| 自前のサーバを書かずに HTTP から呼びたい | 同じ問い合わせを関数にしたもの（PostgREST や Supabase の RPC） | [SQL には問い合わせと関数の両方が出ます](generate.md#sql-には問い合わせと関数の両方が出ます) |
 | ブラウザや、どの実行環境でも | Wasm のモジュール | [Wasm](generate.md#wasm-どの実行環境にも入る一つのモジュール) |
 | エージェントの中で使う場面 | 生成した MCP サーバ（規則が一つのツールになる） | [規則をエージェントのツールにする](generate.md#規則をエージェントのツールにする) |
 | フォームや API の入口 | `rulec schema` が出す JSON Schema | [入口の検査も同じ表から](generate.md#入口の検査も同じ表から) |

@@ -191,6 +191,30 @@ pub fn run(dir: &Path) -> Result<Run, String> {
     } else {
         false
     };
+    // The rule as a function inside a database (§15.80): the door PostgREST and Supabase
+    // turn into an endpoint. SQLite has no `CREATE FUNCTION`, so this is the one pass the
+    // query's own runner cannot stand in for, and it needs a PostgreSQL to run on — `psql`
+    // on the PATH and a server it can reach. Without one the pass is skipped and said so,
+    // like a missing toolchain, but not counted as a missing language: SQL itself ran.
+    let pg_host = if present.iter().any(|b| b.pg.is_some()) {
+        if !have("psql") {
+            out.skipped.push(tr!(
+                "psql が無いので PostgreSQL 側を飛ばしました",
+                "psql not found; skipped the PostgreSQL function side"
+            ));
+            false
+        } else if !crate::backend::psql_ready() {
+            out.skipped.push(tr!(
+                "psql がサーバに繋がらないので PostgreSQL 側を飛ばしました（PGHOST・PGDATABASE）",
+                "psql cannot reach a server; skipped the PostgreSQL function side (PGHOST, PGDATABASE)"
+            ));
+            false
+        } else {
+            true
+        }
+    } else {
+        false
+    };
     // A `.pyc` counts as fresh when the source has the same length and the same
     // whole-second mtime, so a same-length edit within a second of the last run would
     // otherwise execute the old module and report a stale result as ok.
@@ -295,6 +319,14 @@ pub fn run(dir: &Path) -> Result<Run, String> {
             if let (Some(w), true) = (b.wasi, wasi_host) {
                 let diff = held(&w(alias, &pkg));
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), diff });
+            }
+            // The same rule as a function on a real PostgreSQL, held to the same records
+            // (§15.80). What it proves that the query's runner cannot: the signature, the
+            // declared return types, and that an input outside the declaration raises
+            // instead of coming back with a number beside a column nobody read.
+            if let (Some(f), true) = (b.pg, pg_host) {
+                let diff = held(&f(alias));
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), diff });
             }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
@@ -679,6 +711,7 @@ fn via(x: &Outcome) -> &'static str {
         "mcp" => ", MCP",
         "mcp-http" => ", MCP/HTTP",
         "wasi" => ", WASI",
+        "function" => ", PostgreSQL",
         _ => "",
     }
 }

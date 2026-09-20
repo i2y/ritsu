@@ -248,7 +248,11 @@ the case that was just asked**, with the rows that decided it lit up.
 
 In SQL the same rule is one query over a relation of inputs — a row of the table is a `WHEN`,
 the rows that matched come back as columns — which is what a closing batch or an analyst's
-recalculation needs: many rows in one statement.
+recalculation needs: many rows in one statement. Beside it is the same query as a function,
+for the other way round: one case, asked for by name. A function in a schema PostgREST or
+Supabase exposes is an endpoint with no server code of its own, and unlike the query it
+**raises** what the others raise, so a client that reads one field is not handed a number
+that looks like an answer.
 
 Four rules keep it readable. **No cell is dropped** — a condition an earlier branch already
 settled is still written out (`elif True:`), because reading the output against the table is
@@ -348,7 +352,8 @@ src/              38 modules: kw, i18n, lex, parse, types, defset (the tables th
                   the number formats), proto and jsonschema (the enums whose values are
                   declared outside the rule), enums (holding the two together),
                   mcp (the command table as MCP tools),
-                  codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query),
+                  codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query,
+                  and the same query as a function),
                   sources (a law on e-Gov, cited and pinned), apply (a rule applied to
                   another case), vfs (reading at a git revision), sha256,
                   wasm (the checker as the site's playground)
@@ -414,7 +419,7 @@ against SQL, by hand, as it was done before SQL had a backend of its own.
 | Go | shipped | `go` |
 | Swift | shipped | `swiftc` alone — no SwiftPM and no `Package.swift`; units ride in the type as they do in Rust |
 | Java | shipped | a JDK — `javac` and `java`, no Maven and no Gradle. Compiled at `--release 17`, so it runs on 17, 21 and 25 alike; `long` is the int64 the overflow proof is about |
-| SQL | shipped | `python3`, whose standard-library `sqlite3` is where the agreement check runs the query. Written for PostgreSQL. Not a function but one query over a relation of inputs: a row of the table is a `WHEN`, the rows that matched are columns, and a million rows go through in one statement |
+| SQL | shipped | `python3`, whose standard-library `sqlite3` is where the agreement check runs the query, and a `psql` that reaches a PostgreSQL for the function beside it. Written for PostgreSQL. Two doors on one query: `<alias>.sql` over a relation of inputs — a row of the table is a `WHEN`, the rows that matched are columns, a million rows in one statement — and `<alias>_function.sql`, the same query as a function for one case at a time, which PostgREST or Supabase turns into an RPC endpoint. The function raises where the query returns a column |
 | Wasm | shipped | `rustc` with the `wasm32-unknown-unknown` target — one module that exports `call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component of it; `node` runs the agreement check |
 | NumPy | shipped | `python3` and `numpy` — not generated code but the rule as data (`<alias>.json`) beside one fixed evaluator (`rulec_np.py`), which builds a closure over whole columns when the plan is loaded. A table is one `np.select`; `unique` needs no runtime uniqueness test because E105 settled it, and int64 is safe to compute in because E108 did. A rule that walks a sequence is refused by name |
 

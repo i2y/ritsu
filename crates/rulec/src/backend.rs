@@ -54,6 +54,12 @@ pub struct Backend {
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
     pub mcp: Option<fn(&str) -> Plan>,
+    /// How to run the rule as a function **inside a database** (§15.80), for the backends
+    /// that get one. The relation and the function are two doors on one query, and a door
+    /// nobody drove would be a claim nobody checked, so `rulec test` runs this as a pass of
+    /// its own whenever `psql` can reach a server. Without one it says so and skips, the way
+    /// a missing toolchain does.
+    pub pg: Option<fn(&str) -> Plan>,
     /// What else has to be there beyond `tool`, checked before the language is run; the Err is
     /// the note `rulec test` prints when it skips the language for that reason.
     pub ready: Option<fn() -> Result<(), String>>,
@@ -64,6 +70,20 @@ pub fn have(cmd: &str) -> bool {
     ["--version", "version"]
         .iter()
         .any(|a| std::process::Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+}
+
+/// Whether `psql` is here and answers from a server. Both halves matter: the client alone
+/// cannot run a function, and libpq takes the connection from the environment (PGHOST,
+/// PGDATABASE, PGUSER), so "is there a database" is a question only a query can answer.
+pub fn psql_ready() -> bool {
+    std::process::Command::new("psql")
+        .args(["-X", "-q", "-A", "-t", "-c", "SELECT 1"])
+        // libpq waits forever by default, and a `PGHOST` left pointing at something that is
+        // not there would hang the whole run rather than skip one pass.
+        .env("PGCONNECT_TIMEOUT", "5")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Whether the Rust toolchain can build for `target`: its standard library sits under the
@@ -146,6 +166,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
+        pg: None,
         ready: None,
     },
     // The twelfth target is the one that is not a language: the rule travels as data and a
@@ -172,6 +193,7 @@ pub const ALL: &[Backend] = &[
         folds: false,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: Some(|| {
             let ok = std::process::Command::new("python3")
                 .args(["-c", "import numpy"])
@@ -207,6 +229,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
+        pg: None,
         ready: None,
     },
     Backend {
@@ -231,6 +254,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
+        pg: None,
         ready: None,
     },
     Backend {
@@ -269,6 +293,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("rust", "wasmtime", &[&format!("{alias}_runner.wasm")]).built("rustc", &refs)
         }),
         mcp: None,
+        pg: None,
         ready: None,
     },
     Backend {
@@ -291,6 +316,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: None,
     },
     Backend {
@@ -314,6 +340,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: None,
     },
     Backend {
@@ -339,6 +366,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: None,
     },
     Backend {
@@ -371,6 +399,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: None,
     },
     Backend {
@@ -414,6 +443,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: Some(|| {
             if have("java") {
                 Ok(())
@@ -432,7 +462,9 @@ pub const ALL: &[Backend] = &[
         files: |g, alias, _pkg| {
             vec![
                 (format!("sql/{alias}.sql"), g.sql()),
+                (format!("sql/{alias}_function.sql"), g.sql_function()),
                 (format!("sql/{alias}_runner.py"), g.sql_runner()),
+                (format!("sql/{alias}_function_runner.py"), g.sql_function_runner()),
                 ("sql/_round_test.py".into(), crate::codegen::round_tests_sql()),
             ]
         },
@@ -442,6 +474,7 @@ pub const ALL: &[Backend] = &[
         folds: false,
         wasi: None,
         mcp: None,
+        pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
     },
     Backend {
@@ -476,6 +509,7 @@ pub const ALL: &[Backend] = &[
         folds: true,
         wasi: None,
         mcp: None,
+        pg: None,
         ready: Some(|| {
             if !have("node") {
                 return Err(tr!("node が無いので Wasm 側を飛ばしました", "node not found; skipped the Wasm side"));
