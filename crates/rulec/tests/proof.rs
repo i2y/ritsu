@@ -45,7 +45,7 @@ fn rows(json: &str) -> Vec<rulec::json::Json> {
 
 /// The file is written, and what `rulec api` says is in it is what is in it.
 #[test]
-fn 証明のハーネスは生成され目録と一致する() {
+fn 証明のハーネスは生成され_apiの名前と一致する() {
     let out = dir("gen");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
@@ -63,7 +63,7 @@ fn 証明のハーネスは生成され目録と一致する() {
     assert!(!hs.is_empty(), "ハーネスが一つも名指しされていない: {api}");
     for h in hs {
         let name = h.as_str().unwrap();
-        assert!(body.contains(&format!("fn {name}(")), "目録の {name} がファイルに無い");
+        assert!(body.contains(&format!("fn {name}(")), "`api` が言う {name} がファイルに無い");
     }
     // Everything is behind the checker's own cfg, so an ordinary build never sees it.
     assert!(body.contains("#[cfg(kani)]"), "cfg(kani) の外に出ている");
@@ -95,22 +95,22 @@ fn 証明のファイルは普通のビルドでは空である() {
 /// The pass is asked for, not assumed: it is minutes where the vectors are milliseconds
 /// (§15.95). Without the flag the run says nothing about proofs at all.
 #[test]
-fn 旗が無ければ証明の段は走らない() {
+fn フラグが無ければ証明は走らない() {
     let out = dir("noflag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
     let (_, said) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
     assert!(
         rows(&said).iter().all(|r| r.get("via").and_then(|v| v.as_str()) != Some("proof")),
-        "旗が無いのに証明の段が走った: {said}"
+        "`--proofs` が無いのに証明が走った: {said}"
     );
-    assert!(!said.contains("kani"), "旗が無いのに kani の話をしている: {said}");
+    assert!(!said.contains("kani"), "`--proofs` が無いのに kani の話をしている: {said}");
     let _ = std::fs::remove_dir_all(&out);
 }
 
 /// With the flag and the checker, the pass runs and the generated Rust holds.
 #[test]
-fn 旗を付ければ証明の段が走る() {
+fn フラグを付ければ証明が走る() {
     if !have("kani") || !have("rustc") {
         eprintln!("skip: kani が無い");
         return;
@@ -122,7 +122,7 @@ fn 旗を付ければ証明の段が走る() {
     assert_eq!(code, 0, "{said}");
     let p: Vec<rulec::json::Json> =
         rows(&said).into_iter().filter(|r| r.get("via").and_then(|v| v.as_str()) == Some("proof")).collect();
-    assert_eq!(p.len(), 1, "証明の段が一つだけ走るはず: {said}");
+    assert_eq!(p.len(), 1, "証明は一つだけ走るはず: {said}");
     assert_eq!(p[0].get("lang").and_then(|v| v.as_str()), Some("rust"), "{said}");
     assert_eq!(p[0].get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
     // `vectors` carries the number of harnesses for this pass, and there is more than one.

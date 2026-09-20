@@ -474,8 +474,8 @@ A table holds **the branching and nothing else**. Arithmetic lives in three plac
 (E015); the rest are taken from a `define` of the same name as the output. A second `result`
 line stops at E016.
 
-**Most numbers you return carry a unit.** The numeric types are **quantity (mass, length),
-money and rate**, plus `number` for the ones that carry none — a count of things, a
+**Most numbers you return carry a unit.** The numeric types are **quantity (mass, length,
+area, volume, duration, and — comparison only — temperature and sound), money and rate**, plus `number` for the ones that carry none — a count of things, a
 number of days, a score. Numbers with a unit and numbers without do not mix, and the
 only way a unit disappears is dividing money by money: "one point per 100 yen" is a
 `number`.
@@ -619,9 +619,20 @@ Worth saying in the same breath.
    proof — instead of silently picking a row, the generated code raises.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
-   correct. The evidence is 35 deliberately broken rules each producing
+   correct. The evidence is 79 deliberately broken rules each producing
    the diagnostic it should, and 30 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
+
+**A model checker reads the generated Rust.** Beside the Rust module, `gen`
+writes proof harnesses for [Kani](https://model-checking.github.io/kani/),
+behind `#[cfg(kani)]` so `rustc` never sees them. Over **every** input in the
+declared domain rather than over the vectors: no table falls through, the
+runtime guard of (3) never fires, nothing overflows an `i64`, and the rows of
+each `unique` table cover the domain exactly once. It shares no code with the
+checker that proved the table, so where the two agree, two unrelated tools say
+the same thing — and where they disagree, one of them is wrong and the input
+that shows it comes back. On the corpus, 73 harnesses verify in 155 seconds.
+What it does not reach: the table itself (1), and every target but this one.
 
 [What it proves, in detail](checks.md){ .md-button }
 

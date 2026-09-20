@@ -285,6 +285,14 @@ as a PostgreSQL function asked for one case at a time — which is an RPC endpoi
 sits in a schema PostgREST or Supabase exposes, and which raises where the query returns a
 column ([generated-code.md](generated-code.md)).
 
+Beside the Rust module, `<alias>_proof.rs` holds proof harnesses for the
+[Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so
+`rustc` never reads them: over **every** input in the declared domain rather than over the
+vectors, no table falls through, no contradiction guard fires, nothing overflows an `i64`,
+and the rows of each `unique` table cover the domain exactly once. `rulec test --proofs`
+runs them where `kani` is installed, and `rulec api` names the file and every harness in it
+([generated-code.md](generated-code.md)).
+
 For a target none of the eleven covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
 generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule

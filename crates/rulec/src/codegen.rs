@@ -4516,7 +4516,7 @@ impl<'a> Gen<'a> {
                 "int64 (§7.4) — overflow. Kani checks arithmetic overflow by default."
             ),
             tr!(
-                "重なり（E105）と完全性を行の側から — `rows_*` が当たる行を数える。`unique` はちょうど一つ、`first` は一つ以上。",
+                "重なり（E105）— `rows_*` が、当たる行を数える。`unique` はちょうど一つ、`first` は一つ以上。",
                 "overlap (E105) and completeness from the rows' side — `rows_*` counts the rows that match: exactly one for `unique`, at least one for `first`."
             ),
             tr!(
@@ -4585,7 +4585,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "    // {}\n}}\n",
                 tr!(
-                    "この規則には記号にできない入力（string）があるので、ハーネスは出していない。",
+                    "この規則には string の入力があり、記号として置けないので、ハーネスは出していない。",
                     "This rule takes an input a harness cannot quantify over (a string), so none is written."
                 )
             ));
@@ -4612,7 +4612,7 @@ impl<'a> Gen<'a> {
                 } else {
                     (
                         format!("        assert!(matches!(rows_{tn}({}), Ok(n) if n >= 1));\n", args.join(", ")),
-                        tr!("表 {} の行は、宣言した範囲を覆う（`first` は重なりを順序で解く）。", "The rows of {} cover the declared domain (`first` settles an overlap by order).", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                        tr!("表 {} の行は、宣言した範囲を覆う（`first` は、重なったときは上の行が勝つ）。", "The rows of {} cover the declared domain (`first` settles an overlap by order).", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
                     )
                 };
                 harnesses.push_str(&format!(
@@ -4624,7 +4624,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!(
             "    /// {}\n    #[kani::proof]\n{unwind}    fn {alias}_answers() {{\n{decls}        assert!({alias}({}).is_ok());\n    }}\n\n",
             tr!(
-                "宣言した範囲のどの入力にも、この規則は答えを返す。返らない道は三つ——完全性の穴、W114 の対が実在した、入口のガード——で、三つ目が出ないことは、ここで仮定した範囲が宣言した範囲そのものだという確認でもある。",
+                "宣言した範囲のどの入力にも、この規則は答えを返す。返らないのは、完全性に穴があるとき、W114 の対が実在したとき、入口のガードに当たったときの三つ。三つめが起きないことは、ここで仮定した範囲が宣言した範囲そのものだ、という確認でもある。",
                 "For every input in the declared domain the rule answers. There are three ways not to — a gap in the completeness, a W114 pair that was real, and the entry guard — and the third not happening is also the check that the domain assumed here is the declared one."
             ),
             args.join(", ")
@@ -4768,9 +4768,9 @@ impl<'a> Gen<'a> {
                 "How many rows of {} match. {}",
                 t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
                 if t.policy == crate::ast::Policy::Unique {
-                    tr!("policy unique は「ちょうど一行」を言う。", "`policy unique` says exactly one.")
+                    tr!("`policy unique` なら、どの入力でもちょうど一行。", "`policy unique` says exactly one.")
                 } else {
-                    tr!("policy first は「一行以上」を言う。", "`policy first` says at least one.")
+                    tr!("`policy first` なら、どの入力でも一行以上。", "`policy first` says at least one.")
                 }
             )
         );
@@ -6503,7 +6503,7 @@ impl<'a> Gen<'a> {
              \x20     super(value.equal?(NO_VALUE) ? what : \"#{{what}}: #{{value.inspect}}\")\n\
              \x20   end\n  end\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("文と値は別々に運ぶ（§15.95）。", "The sentence and the value travel apart (§15.95).")
+            tr!("文と値は別々に持つ（§15.95）。", "The sentence and the value travel apart (§15.95).")
         ));
         o.push_str(&format!(
             "  # {}\n  class RuleContradictionError < RuntimeError\n\

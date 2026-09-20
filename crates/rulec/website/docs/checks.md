@@ -116,10 +116,18 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 35 deliberately broken
+   and that implementation has not been proved correct. The evidence is 79 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, 28 rules transcribed from
    real published terms passing on every commit, and the reference evaluator agreeing with
    twelve languages. **Evidence, not proof**
+
+For the Rust, a second tool reads what was generated: `gen` writes proof harnesses for
+[Kani](https://model-checking.github.io/kani/), and over every input in the declared domain
+they hold that no table falls through, that the guard of (3) never fires, that nothing
+overflows an `i64`, and that the rows of each `unique` table cover the domain exactly once.
+It shares no code with the checker above, so agreement is two unrelated tools saying the
+same thing, and disagreement comes back with the input that shows it
+([generate](generate.md#a-second-opinion-on-the-rust)).
 
 ## Reading a diagnostic
 

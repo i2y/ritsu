@@ -124,15 +124,17 @@ becoming a function of its own. It is kept for SQL generation.
 
 ## Types
 
-Eight, and no others.
+Ten, and no others.
 
 | type | written | the thing to know |
 |---|---|---|
 | boolean | `bool` | |
 | enum | `会員区分` | a **closed** finite set. Declared with `enum` or brought in with `import` |
-| quantity | `mass[g]` `length[cm]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi` |
+| quantity | `mass[g]` `length[cm]` `area[m2]` `volume[L]` `duration[h]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi`, area `mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac`, volume `mm3 cm3 m3 mL L kL`, duration `ms s min h d w`. **Dimensions do not multiply into one another** — an area is its own type, and `縦 × 横` is E103 |
+| ordered quantity | `temperature[℃]` `sound[dB]` | comparison and `range` only: **they do not add** (E048). 41℉ is exactly 5℃ and a literal converts between them, but the difference of two temperatures is not a temperature, and a decibel is a logarithm, so two of them added are not two sounds' worth |
 | money | `money[円, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]` `rate` | an integer throughout. With a step, the integer counts steps (`10%` is 10); without one, the step comes from the literals in the column |
+| number | `number` | a whole number with no unit — a count of things, a number of days, a score. Dividing money by money in the same currency drops the unit and lands here |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
 | optional | `会員区分?` | consumed only by the cell `none` |

@@ -55,9 +55,20 @@ What is **not** proved matters just as much.
    check into a runtime guard** — the one place with no static proof. It returns an error
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
-   implementation, which has not itself been proved correct. The evidence is 35 deliberately
+   implementation, which has not itself been proved correct. The evidence is 79 deliberately
    broken rules each producing the diagnostic it should, and 30 rules — 28 transcribed from real
    published terms checked, generated and run on every commit. Evidence, not proof.
+
+**A model checker reads the Rust.** Beside the generated module, `gen` writes proof
+harnesses for [Kani](https://model-checking.github.io/kani/), behind `#[cfg(kani)]` so
+`rustc` never sees them. Over **every** input in the declared domain rather than over the
+test cases: no table falls through, no runtime guard of (3) fires, nothing overflows an
+`i64`, and the rows of each `unique` table cover the domain exactly once. It shares no code
+with the checker that proved the table, so where the two agree, two unrelated tools say the
+same thing — and where they disagree, one of them is wrong and the input that shows it comes
+back. On the corpus, 73 harnesses verify in 155 seconds. What it does not reach: the table
+itself (1), and every target but this one. `rulec test --proofs` runs it where `kani` is
+installed.
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 

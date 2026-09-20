@@ -540,7 +540,7 @@ impl<'a> Gen<'a> {
              super(value == null ? what : what + \": \" + value);\n            \
              this.what = what;\n            this.value = value;\n        }}\n    }}\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("断られた理由の文。", "The sentence that says what was refused."),
+            tr!("何を断ったかを言う文。", "The sentence that says what was refused."),
             tr!("断られた値。理由が値についてでなければ null。", "The value refused, or null when the refusal is not about one.")
         ));
         o.push_str(&format!(
@@ -549,7 +549,7 @@ impl<'a> Gen<'a> {
              /** {} */\n        public final String what;\n\n        \
              public RuleContradictionError(String what) {{\n            super(what);\n            this.what = what;\n        }}\n    }}\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
-            tr!("矛盾を言う文。", "The sentence that says what contradicted.")
+            tr!("何が矛盾したかを言う文。", "The sentence that says what contradicted.")
         ));
         o.push_str(&format!("    /** {} */\n    public record Fired(String table, int row, String label) {{\n    }}\n\n", fired_doc()));
 
