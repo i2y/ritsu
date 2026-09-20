@@ -19,7 +19,7 @@ $ .lake/build/bin/rulec-recheck --rule rules/送料.rule cert.json
 | `RulecCert/Check.lean` | the checks, as functions: the pairs part, the cover tiles the space, every row has a point |
 | `RulecCert/Sound.lean` | the theorems. A `true` from each check settles the matching proposition |
 | `RulecCert/Sieve.lean` | which combinations the rule is **asked about**, from the `constraint` lines and the reach of each derived column — and the proof that a box the cover calls impossible really is one |
-| `RulecCert/Values.lean` | expressions, their evaluation, the units (E103) and int64 (E108) claims, and the proofs |
+| `RulecCert/Values.lean` | expressions, their evaluation, the units (E103) and int64 (E108) claims, and the proofs — and, for the share `allocate` works out, that a run of them hands out the amount exactly (`runTotal_exact`) |
 | `RulecCert/Cells.lean` | from the cells a rule writes to the boxes the claims are about: the compression of §6.2, shown faithful |
 | `RulecCert/Certified.lean` | one table's certificate, and the three theorems put together |
 | `RulecCert/Read.lean`, `RulecCert/Sha256.lean`, `Main.lean` | reading the JSON, the digest, and the program that runs the checks |

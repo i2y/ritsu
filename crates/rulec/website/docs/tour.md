@@ -403,8 +403,27 @@ result 送料 = 基本送料 × 負担率
 ```
 
 The operations are addition and subtraction, multiplication by a
-constant, multiplication by a rate, `min`, `max`, and the five rounding
-modes. **There is no loop and no recursion.**
+constant, multiplication by a rate, `min`, `max`, `allocate`, and the
+five rounding modes. **There is no loop and no recursion.**
+
+**`allocate` hands an amount out over a run of lines**, in the ratio of
+their prices. It is the one place a rule divides by something that is not
+a constant.
+
+```rule
+constraint ここまでの定価 <= 定価合計
+
+derive ここまでの配分(to_upto) : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+
+result 配分額 = ここまでの配分 - 直前までの配分
+```
+
+Each line gets the share up to it minus the share up to the line before,
+so the odd yen lands on the last line and **the parts add up to the
+amount exactly** — which `proofs/` states and proves rather than leaving
+to the examples. It asks for three names with declared ranges, none of
+them negative, a positive whole, and the `constraint` above; anything
+missing is E117.
 
 ## A main rule and its exceptions as two tables
 
@@ -709,10 +728,11 @@ check quantifies over, and **the cap on the sequence**. A longer sequence is
 refused at the door by the generated code, for the reason a number outside its
 range is — the proof was made over what was declared.
 
-**Nothing accumulates across elements.** A count counts; there is no sum and no
-average, and one belongs before the call, as a value. A rule cannot hold both a
-`fold` and a `count` (E031): two endings for one walk, and a fold may stop
-partway.
+**A count counts and a `sum` adds one column up** — `sum 合計(total) over 明細
+of 金額`. An average does not follow: dividing by a count is dividing by a
+variable, so it belongs before the call, as a value. A rule cannot hold both a
+`fold` and a `count` or `sum` (E031): two endings for one walk, and a fold may
+stop partway.
 
 A rule that runs is in [Examples](examples.md), under "Counting a sequence, and
 deciding from the count".
@@ -745,9 +765,9 @@ wrote.
 - Iteration anywhere you like, and recursion — a sequence is walked once,
   by `fold` (the section above); every other repetition, a stack of
   coupons applied in order among them, stays with the caller.
-- Adding up across elements — a sum or an average carries a value from one
-  element to the next. Compute it before the call and pass it in (**a count
-  is written with `count`**).
+- An average over the elements — it divides by how many there are, which is
+  dividing by a variable. Compute it before the call and pass it in (**the
+  count and the total are written with `count` and `sum`**).
 - Date arithmetic — comparison and range only.
 
 Allowing these would stop the completeness and overlap checks from

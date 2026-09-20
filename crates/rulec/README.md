@@ -55,8 +55,8 @@ What is **not** proved matters just as much.
    check into a runtime guard** — the one place with no static proof. It returns an error
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
-   implementation, which has not itself been proved correct. The evidence is 80 deliberately
-   broken rules each producing the diagnostic it should, and 32 rules — 28 transcribed from real
+   implementation, which has not itself been proved correct. The evidence is 82 deliberately
+   broken rules each producing the diagnostic it should, and 33 rules — 28 transcribed from real
    published terms checked, generated and run on every commit. Evidence, not proof. What
    *is* proved is the step after it: the certificate below, and that the checks it has to
    pass imply the claims.
@@ -90,7 +90,10 @@ functions over a real certificate. `lake build` checks the proofs; the program i
 re-checks the corpus in CI. Writing it, and reading it back adversarially, found a
 soundness bug in the completeness check — the sieve was asked about one corner of a box
 instead of the box (§15.98) — a witness that could break the rule's own `constraint`, and
-eleven ways a forged certificate got past one of the re-checkers (§15.99).
+eleven ways a forged certificate got past one of the re-checkers (§15.99). One theorem there
+is about the rule rather than the document: where a discount is handed out over a run of
+lines in the ratio of their prices, the parts add up to the amount exactly, odd yen
+included (§15.102).
 
 What a certificate is **not** is a proof that it describes your file. The digest ties it to
 one text and every cell is quoted from its own place in it; the declared ranges, the types,
@@ -431,7 +434,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 ## Where it stands
 
-32 rules — 28 taken from real published terms, 4 written to reach the rest of the language — are checked, generated and run on every commit, and all 74 diagnostics are implemented. What is built:
+33 rules — 28 taken from real published terms, 5 written to reach the rest of the language — are checked, generated and run on every commit, and all 76 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

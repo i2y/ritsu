@@ -408,6 +408,19 @@ const X_E115: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n
                       define r(r) : number = n \u{00f7} d\n\n\
                       table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true |\n";
 
+const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
+                      \u{3053}\u{3053}\u{307e}\u{3067}(upto) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
+                      \u{5408}\u{8a08}(base) : money[\u{5186}]  range >=1\u{5186} <=1000\u{5186}\n\n\
+                      outputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\n\
+                      derive \u{914d}\u{5206}(share) : money[\u{5186}] = allocate(\u{5024}\u{5f15}\u{304d}, \u{3053}\u{3053}\u{307e}\u{3067}, \u{5408}\u{8a08})  range >=0\u{5186} <=1000\u{5186}\n\n\
+                      result o = \u{914d}\u{5206}\n";
+
+const X_E118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
+                      d(d) : number  range >=1 <=100\n\n\
+                      outputs\n  o(o) : number  round down(1)\n\n\
+                      define r(r) : number = min(n, d, n)\n\n\
+                      result o = r\n";
+
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
@@ -1342,6 +1355,34 @@ pub fn ledger() -> Vec<Entry> {
             &["W120", "E038", "E107"],
         )
         .with_files(TARIFF_DOC),
+        err(
+            "E117",
+            tr!("配分の前提が揃っていません", "A share without what a share needs"),
+            tr!(
+                "`allocate(配る額, 累計, 全体)` の三つが配分の形になっていないとき。三つとも範囲を宣言した名前で、配る額と累計は負になれず、全体は正で、累計が全体を超えないと `constraint` が言っていなければなりません（§15.102）。",
+                "The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole (§15.102)."
+            ),
+            tr!(
+                "足りないものを書いてください。`constraint 累計 <= 全体` がないと、配る分が配る額を超えることがあり、明細の合計が総額に一致しません。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます（§7.1）。",
+                "Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round (§7.1)."
+            ),
+            X_E117,
+            &["E115", "E108"],
+        ),
+        err(
+            "E118",
+            tr!("呼び出しの形が違います", "The call is not written correctly"),
+            tr!(
+                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` と丸めの五つ（`down(x, 1円)` など）だけです（§2.3）。",
+                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1円)` and the rest) (§2.3)."
+            ),
+            tr!(
+                "綴りと引数の数を見てください。多い引数は黙って捨てられ、少なければ答えが決まりません——どちらも §15.102 までは素通りしていて、生成器のほうで初めて行き止まりになっていました。",
+                "Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both passed unnoticed until §15.102, and only the generator ran out of cases."
+            ),
+            X_E118,
+            &["E103", "E115"],
+        ),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

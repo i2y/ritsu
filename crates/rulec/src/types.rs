@@ -411,6 +411,9 @@ pub struct Checked {
     /// an input: when they do, a sieve of independent intervals per derived value cannot see
     /// the dependency (§6.2).
     pub derived_deps: HashMap<String, Vec<String>>,
+    /// `a <= b` pairs the caller guarantees, from `constraint` lines. `allocate` needs one
+    /// to know that a running total stays within the whole it is a share of (§15.102).
+    pub at_most: HashSet<(String, String)>,
     /// Name → reciprocal of the step: the value is a multiple of 1/k. Under §7.1's
     /// "a single int64 plus a static rational scale", the stored integer is value×k.
     pub scales: HashMap<String, i128>,
@@ -516,6 +519,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         derived_deps: HashMap::new(),
         define_deps: HashMap::new(),
         out_values: HashMap::new(),
+        at_most: HashSet::new(),
         scales: HashMap::new(),
         enums: HashMap::new(),
         groups: HashMap::new(),
@@ -525,6 +529,37 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         sets: Vec::new(),
         set_of: HashMap::new(),
     };
+    // Read the guarantees before anything is typed: `allocate` asks about them, and the
+    // order of declarations in the file should not change what is accepted. Whether both
+    // sides are really inputs is E018's business, below.
+    for k in &f.constraints {
+        let (l, r) = (k.left.clone(), k.right.clone());
+        match k.op {
+            CmpOp::Le | CmpOp::Lt => c.at_most.insert((l, r)),
+            CmpOp::Ge | CmpOp::Gt => c.at_most.insert((r, l)),
+        };
+    }
+
+    // Chains count: two lines saying a running total never passes the one after it, and
+    // that one never passes the whole, together say the first never passes the whole.
+    loop {
+        let before = c.at_most.len();
+        let step: Vec<(String, String)> = c
+            .at_most
+            .iter()
+            .flat_map(|(a, b)| {
+                c.at_most
+                    .iter()
+                    .filter(move |(x, _)| x == b)
+                    .map(move |(_, y)| (a.clone(), y.clone()))
+            })
+            .collect();
+        c.at_most.extend(step);
+        if c.at_most.len() == before {
+            break;
+        }
+    }
+
     let at = |line: usize| format!("{path}:{line}");
 
     // std/都道府県 is the only import the corpus needs; its 47 values come from the
@@ -1550,8 +1585,170 @@ impl Checked {
             },
             Expr::Call(name, args, sp) => {
                 let ats: Vec<Ty> = args.iter().map(|a| self.expr_ty(a, path)).collect();
+                // The set of calls is closed and each one takes a fixed number of
+                // arguments. Until §15.102 neither was checked: `foo(a, b)` and
+                // `min(a, b, c)` both passed, and the generator had no case for either —
+                // one silently generated 0 (§15.99's class of defect), the other dropped
+                // the third argument on the floor.
+                let arity = match name.as_str() {
+                    crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN
+                    | crate::kw::HALF_DOWN | crate::kw::MIN | crate::kw::MAX => Some(2),
+                    crate::kw::ALLOCATE => Some(3),
+                    _ => None,
+                };
+                match arity {
+                    None => {
+                        self.diags.push(
+                            Diag::error("E118", tr!("`{name}` という関数はありません", "There is no function called `{name}`"))
+                                .at(format!("{path}:{}", sp.line))
+                                .mark(sp.clone(), "")
+                                .note(tr!(
+                                    "書けるのは `min` `max` `allocate` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです（§2.3）。",
+                                    "The calls are `min`, `max`, `allocate` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`) (§2.3)."
+                                )),
+                        );
+                        return Ty::Unknown;
+                    }
+                    Some(n) if args.len() != n => {
+                        self.diags.push(
+                            Diag::error("E118", tr!("`{name}` の引数は {n} 個です", "`{name}` takes {n} arguments"))
+                                .at(format!("{path}:{}", sp.line))
+                                .mark(sp.clone(), tr!("ここでは {} 個です", "{} here", args.len()))
+                                .note(tr!(
+                                    "多い引数は黙って捨てられ、少なければ答えが決まりません。",
+                                    "A spare argument would be dropped on the floor, and a missing one leaves no answer."
+                                )),
+                        );
+                        return Ty::Unknown;
+                    }
+                    Some(_) => {}
+                }
                 match name.as_str() {
                     crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN | crate::kw::HALF_DOWN => {
+                        ats.first().cloned().unwrap_or(Ty::Unknown)
+                    }
+                    // `allocate(T, C, S)` is `floor(T × C ÷ S)` — one operation, so the
+                    // scale stays decidable where a bare `÷ S` would not (§2.3, E115).
+                    // It is the largest-remainder allocation written as one step: the
+                    // caller takes the difference of two of these and the parts add up to
+                    // the whole exactly (§15.102).
+                    crate::kw::ALLOCATE => {
+                        // The two that divide have to be the same kind of thing, or the
+                        // ratio is not a ratio; and the whole has to be positive, or the
+                        // division has no answer.
+                        if !ats[1].unifies(&ats[2]) {
+                            self.diags.push(
+                                Diag::error("E103", tr!("`allocate` の比の二つの型が違います: {} と {}", "The two sides of the ratio in `allocate` have different types: {} and {}", ats[1], ats[2]))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(sp.clone(), ""),
+                            );
+                        }
+                        // All three are names with declared ranges: the answer is read
+                        // through those ranges, so anything without one cannot be checked.
+                        let mut named = Vec::new();
+                        for (i, what) in [
+                            (0usize, tr!("配る額", "the amount")),
+                            (1, tr!("累計", "the running total")),
+                            (2, tr!("全体", "the whole")),
+                        ] {
+                            match &args[i] {
+                                Expr::Name(n, _) if self.ranges.contains_key(n) => named.push(Some(n.clone())),
+                                _ => {
+                                    named.push(None);
+                                    self.diags.push(
+                                        Diag::error("E117", tr!("`allocate` の{what}は範囲のある名前で書いてください", "In `allocate`, {what} has to be a name with a declared range"))
+                                            .at(format!("{path}:{}", sp.line))
+                                            .mark(sp.clone(), tr!("宣言した範囲がありません", "no declared range"))
+                                            .note(tr!(
+                                                "三つとも宣言した範囲を見て配るので、入力か導出の名前だけを書けます。",
+                                                "All three are read through their declared ranges, so each has to be the name of an input or a derived value."
+                                            )),
+                                    );
+                                }
+                            }
+                        }
+                        // Every part non-negative: the answer is then a truncation, which
+                        // every target does the same way — Python floors toward −∞ and Go
+                        // toward zero, and they only differ below zero (§7.1).
+                        for (i, what) in [(0usize, tr!("配る額", "the amount")), (1, tr!("累計", "the running total"))] {
+                            if let Some(n) = &named[i] {
+                                let ok = matches!(
+                                    self.ranges.get(n),
+                                    Some((Some(lo), _)) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less
+                                );
+                                if !ok {
+                                    self.diags.push(
+                                        Diag::error("E117", tr!("`allocate` の{what}は負になれません", "In `allocate`, {what} cannot be negative"))
+                                            .at(format!("{path}:{}", sp.line))
+                                            .mark(sp.clone(), tr!("{n} の範囲が負を含みます", "the range of {n} includes negative values"))
+                                            .note(tr!(
+                                                "`range >=0円 …` のように書いてください。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます（§7.1）。",
+                                                "Declare it with `range >=0円 …`. Below zero the targets disagree about which way to round (§7.1)."
+                                            )),
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(n) = &named[2] {
+                            let positive = matches!(
+                                self.ranges.get(n),
+                                Some((Some(lo), _)) if lo.cmp_to(Rat::zero()) == std::cmp::Ordering::Greater
+                            );
+                            if !positive {
+                                self.diags.push(
+                                    Diag::error("E117", tr!("`allocate` の全体は正でなければなりません", "The whole in `allocate` has to be positive"))
+                                        .at(format!("{path}:{}", sp.line))
+                                        .mark(sp.clone(), tr!("{n} の範囲が 0 を含みます", "the range of {n} includes 0"))
+                                        .note(tr!(
+                                            "`range >=1円 …` のように、下限を正にしてください。0 で割る答えは決まっていないので、実行時に落ちるより先に断ります。",
+                                            "Declare it with a positive lower bound, as in `range >=1円 …`. Dividing by zero has no answer, so it is refused here rather than at run time."
+                                        )),
+                                );
+                            }
+                        }
+                        // The running total never passes the whole. Without that the share
+                        // is not a share: it could exceed the amount being handed out, and
+                        // the reachable interval would be the product of two ranges rather
+                        // than the amount itself (§15.102).
+                        if let (Some(cn), Some(sn)) = (&named[1], &named[2]) {
+                            if !self.at_most.contains(&(cn.clone(), sn.clone())) && cn != sn {
+                                self.diags.push(
+                                    Diag::error("E117", tr!("`allocate` の累計が全体を超えないと書いてありません", "Nothing says the running total in `allocate` stays within the whole"))
+                                        .at(format!("{path}:{}", sp.line))
+                                        .mark(sp.clone(), tr!("{cn} <= {sn} の保証がありません", "nothing guarantees {cn} <= {sn}"))
+                                        .note(tr!(
+                                            "`constraint {cn} <= {sn}` と書いてください。これがないと配る分が配る額を超えることがあり、配分になりません。",
+                                            "Write `constraint {cn} <= {sn}`. Without it a share can exceed the amount being handed out, which is not a share."
+                                        )),
+                                );
+                            }
+                        }
+                        // The answer is at most the amount, but the product on the way
+                        // there is not: `T × C` is computed before the division in every
+                        // target, and int64 is what it is computed in (§7.1). E108 asks
+                        // about the value; this asks about the step on the way.
+                        let big = |e: &Expr, t: &Ty| -> Option<i128> {
+                            let (_, hi) = self.interval(e, t)?;
+                            let sc = self.scale(e)?;
+                            let stored = hi.mul(Rat::int(sc));
+                            Some(stored.num / stored.den)
+                        };
+                        if let (Some(t), Some(c)) = (big(&args[0], &ats[0]), big(&args[1], &ats[1])) {
+                            let sw = self.scale(&args[2]).unwrap_or(1);
+                            let product = t.checked_mul(c).and_then(|p| p.checked_mul(sw));
+                            if product.is_none_or(|p| p > i64::MAX as i128) {
+                                self.diags.push(
+                                    Diag::error("E108", tr!("`allocate` の途中の積が int64 に収まることを証明できません", "Cannot prove that the product inside `allocate` fits in int64"))
+                                        .at(format!("{path}:{}", sp.line))
+                                        .mark(sp.clone(), "")
+                                        .note(tr!(
+                                            "配る額は最大 {t}、累計は最大 {c} まで格納され、割る前にこの二つを掛けます。",
+                                            "The amount is stored up to {t} and the running total up to {c}, and the two are multiplied before the division."
+                                        ))
+                                        .note(tr!("ヒント: どちらかの範囲を狭めるか、先に丸めて刻みを粗くしてください。", "Hint: narrow one of the two ranges, or round first so the step is coarser.")),
+                                );
+                            }
+                        }
                         ats.first().cloned().unwrap_or(Ty::Unknown)
                     }
                     crate::kw::MIN | crate::kw::MAX => {
@@ -2708,6 +2905,30 @@ impl Checked {
                         let inn = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, grid);
                         Some((out(lo), inn(hi)))
                     }
+                    // `floor(T × C ÷ S)` with all three non-negative and S positive. The
+                    // smallest answer is the smallest amount over the largest whole. The
+                    // largest is the amount itself: the typing has already made sure a
+                    // `constraint` says C never passes S, so the ratio never passes 1
+                    // (§15.102). Reading the ranges alone would give T×C÷S, which is the
+                    // product of two ranges and says nothing useful.
+                    (crate::kw::ALLOCATE, [t, cc, ss]) => {
+                        let (tl, th) = self.interval(t, ty)?;
+                        let (cl, _) = self.interval(cc, ty)?;
+                        let (sl, sh) = self.interval(ss, ty)?;
+                        if sl.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater {
+                            return None;
+                        }
+                        // Without the guarantee there is no bound worth stating: E117 has
+                        // already refused the rule, and saying nothing here keeps this
+                        // arithmetic and the two re-checkers' the same.
+                        match (cc, ss) {
+                            (Expr::Name(a, _), Expr::Name(b, _))
+                                if a == b || self.at_most.contains(&(a.clone(), b.clone())) => {}
+                            _ => return None,
+                        }
+                        let down = |v: Rat| v.round_to(RoundMode::Down, Rat::int(1));
+                        Some((down(tl.mul(cl).div(sh)), down(th)))
+                    }
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
                         let (al, ah) = self.interval(x, ty)?;
                         let (bl, bh) = self.interval(y, ty)?;
@@ -2808,6 +3029,11 @@ impl Checked {
                 if crate::num::RoundMode::parse(name).is_some() {
                     // After rounding, the scale is back to the grid's step.
                     return args.get(1).and_then(|g| self.scale(g));
+                }
+                // A share is a whole number of the unit, so its step is 1 whatever the
+                // steps of the three it is computed from (§15.102).
+                if name == crate::kw::ALLOCATE {
+                    return Some(1);
                 }
                 args.first().and_then(|a| self.scale(a))
             }

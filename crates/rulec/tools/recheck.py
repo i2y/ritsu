@@ -81,10 +81,31 @@ def num(x):
     return None if x is None else Fraction(x)
 
 
-def interval(e, ranges):
-    """The interval an expression is forced into by the declared ranges. None where the
-    certificate's own arithmetic gives up too (an unbounded name, a divisor that spans
-    zero); the claim is then not re-checked here and the caller says so."""
+def guarantees(cert):
+    """The `a <= b` pairs the `constraint` lines promise, closed under chains: two lines
+    saying a running total never passes the next, and that one never passes the whole,
+    together say the first never passes the whole. rulec reads them that way, so a
+    re-checker that did not would refuse an honest certificate."""
+    le = set()
+    for k in cert.get("constraints", []) or []:
+        l, r, op = k.get("left"), k.get("right"), k.get("op")
+        if op in ("<=", "<"):
+            le.add((l, r))
+        elif op in (">=", ">"):
+            le.add((r, l))
+    while True:
+        more = {(a, d) for a, b in le for c, d in le if b == c}
+        if more <= le:
+            return le
+        le |= more
+
+
+def interval(e, ranges, le=frozenset()):
+    """The interval an expression is forced into by the declared ranges, and by `le` — the
+    `a <= b` pairs the caller guarantees, which is what bounds a share (§15.102). None where
+    the certificate's own arithmetic gives up too (an unbounded name, a divisor that spans
+    zero, a share with no guarantee behind it); the claim is then not re-checked here and
+    the caller says so."""
     if "name" in e:
         lo, hi = ranges.get(e["name"], (None, None))
         return None if lo is None or hi is None else (num(lo), num(hi))
@@ -92,7 +113,7 @@ def interval(e, ranges):
         v = num(e.get("value"))
         return None if v is None else (v, v)
     if "op" in e:
-        a, b = interval(e["l"], ranges), interval(e["r"], ranges)
+        a, b = interval(e["l"], ranges, le), interval(e["r"], ranges, le)
         if a is None or b is None:
             return None
         (al, ah), (bl, bh) = a, b
@@ -112,18 +133,33 @@ def interval(e, ranges):
         return None
     if "call" in e:
         args = e.get("args", [])
-        inner = interval(args[0], ranges) if args else None
+        inner = interval(args[0], ranges, le) if args else None
         if inner is None:
             return None
+        # A share: `floor(T x C / S)` (§15.102). The low end is the smallest amount over
+        # the largest whole; the high end is the amount itself, and that rests on a
+        # `constraint` saying the running total never passes the whole — the ranges alone
+        # would give the product of two of them.
+        if e["call"] == "allocate" and len(args) == 3:
+            run = interval(args[1], ranges, le)
+            whole = interval(args[2], ranges, le)
+            if run is None or whole is None or whole[0] <= 0:
+                return None
+            if inner[0] < 0 or run[0] < 0:
+                return None
+            if ("name" not in args[1] or "name" not in args[2]
+                    or (args[1]["name"], args[2]["name"]) not in le):
+                return None
+            return (math.floor(inner[0] * run[0] / whole[1]), math.floor(inner[1]))
         if e["call"] in ("min", "max") and len(args) == 2:
-            other = interval(args[1], ranges)
+            other = interval(args[1], ranges, le)
             if other is None:
                 return None
             f = min if e["call"] == "min" else max
             return (f(inner[0], other[0]), f(inner[1], other[1]))
         # A rounding lands on the grid: the low end toward zero, the high end away from it,
         # whichever way the mode itself rounds.
-        grid = interval(args[1], ranges) if len(args) > 1 else None
+        grid = interval(args[1], ranges, le) if len(args) > 1 else None
         if grid is None or grid[0] != grid[1] or grid[0] == 0:
             return None
         # Down to the grid on the low side and up on the high side — `floor` and `ceil`,
@@ -203,6 +239,13 @@ def type_of(e, types):
         if e["call"] in ("min", "max"):
             if len(args) > 1 and unify(args[0], args[1]) is None:
                 raise Bad(f"{e['call']}(`{args[0]}`, `{args[1]}`): the units do not meet")
+        # The two sides of the ratio have to meet; their common type cancels, and the share
+        # keeps the type of the amount being handed out.
+        if e["call"] == "allocate":
+            if len(args) != 3:
+                raise Bad("allocate: it takes an amount, a running total and a whole")
+            if unify(args[1], args[2]) is None:
+                raise Bad(f"allocate(`{args[1]}`, `{args[2]}`): the two sides of the ratio do not meet")
         return args[0]
     raise Bad("an expression this program cannot read")
 
@@ -236,6 +279,7 @@ def check_types(cert):
 
 def check_values(cert):
     """int64: recompute each value's interval and hold the integer it stores to i64."""
+    le = guarantees(cert)
     declared = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
     # What bounds a name: the interval this program computed for it where there is one,
     # and the declared range otherwise. Reading the declared range in preference would let
@@ -247,7 +291,7 @@ def check_values(cert):
         ranges = {**{k: (None if a is None else str(a), None if b is None else str(b))
                      for k, (a, b) in declared.items()},
                   **{k: (str(a), str(b)) for k, (a, b) in computed.items()}}
-        got = interval(v["expr"], ranges)
+        got = interval(v["expr"], ranges, le)
         said = v.get("interval")
         if got is None:
             if said is not None:

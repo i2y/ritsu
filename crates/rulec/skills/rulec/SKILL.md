@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E116, W105, W110, W111, W114-W120) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E118, W105, W110, W111, W114-W120) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -113,9 +113,16 @@ A few shapes are worth knowing before the first draft:
   <column> = <value>` ends the walk with a number rather than with the answer, and the rule
   goes on as usual — so what turns "how many matched" into a class is an ordinary table, and
   its boundaries are checked like any other (§6.3). The `range` is required: it is the
-  universe the completeness check quantifies over **and** the cap on the sequence. Nothing
-  accumulates across elements; a sum belongs before the call. A rule has a `fold` or a
-  `count`, never both (E031).
+  universe the completeness check quantifies over **and** the cap on the sequence. `sum
+  <name>(<alias>) over <sequence> of <column>` ends it with a total instead, over a column
+  that cannot go negative; an average does not, dividing by the count being division by a
+  variable. A rule has a `fold` or a `count`/`sum`, never both (E031).
+
+- **Handing one amount out over several lines.** `allocate(<amount>, <running total>,
+  <whole>)` is `<amount> × <running total> ÷ <whole>` rounded down. Write one line's share
+  as the share up to it minus the share up to the line before: the parts then add up to the
+  amount exactly, odd yen included. Three names with declared ranges, nothing negative, a
+  positive whole, and a `constraint` that the running total never passes it — else E117.
 
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
@@ -215,9 +222,9 @@ the exit code — not whether the output looks empty.
 Every code is in `rulec explain --all`. The ones you will
 meet while transcribing:
 
-- **E101 completeness gap** — some input matches no row. The witness names it. Add a row that
-  covers it; if the value should fall through to a catch-all, mark it `default` in the enum
-  instead. One row closes the gap the witness names; run again for the next one.
+- **E101 completeness gap** — some input matches no row, and the witness names it. Add a row
+  that covers it, or mark the value `default` in the enum to let it fall through to a
+  catch-all. One row per run; run again for the next gap.
 - **E105 overlap** / **W105 shadowing** — two rows match the same input. Under `policy
   unique` that is an error; under `policy first` the earlier row wins and you are being asked
   whether that is intended.
@@ -232,9 +239,9 @@ meet while transcribing:
 - **E014 expression in an output cell** — a cell to the right of `->` holds one value or one
   name. Give the calculation a name on a `define` line and put that name in the table.
 - **E116 an amount that is not in the copy** / **W120 a value of the copy that no row uses**
-  — the row and the table it cites disagree. Reread the copy: for a mistyped digit the two
-  come together and name both halves. An amount that really did come from somewhere else
-  loses its citation and gains a comment saying where it came from.
+  — the row and the table it cites disagree. Reread the copy: a mistyped digit raises both
+  and names both halves. An amount that came from elsewhere loses its citation and gains a
+  comment saying where it came from.
 - **E114 value off the column’s step** — `0.5%` in a `rate[step 1%]` column has no runtime
   representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`).
 - **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and
@@ -249,53 +256,48 @@ meet while transcribing:
 ### `examples`
 
 Add them as soon as the tables check clean. They are the only thing that can catch an error
-the reference evaluator and every generated language share — that really happened once, with
+the reference evaluator and every generated language share — which happened once, with
 rounding for multiple outputs missing in all of them. Take the cases from the source: a
 published tariff's own worked examples are ideal.
 
-**They ride in the vector suite.** `gen` writes each of them out as a case of its own, so
-`rulec test` runs them through every generated language and `rulec coverage` counts what they
-reach. A row only goes in when it names every input.
+**They ride in the vector suite.** `gen` writes each out as a case of its own, so `rulec test`
+runs them through every generated language and `rulec coverage` counts what they reach. A row
+goes in only when it names every input.
 
 ### `rulec gen <file> --out generated/ --format json`
 
 Writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, NumPy, and the vectors. It refuses to generate
 from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
-signatures, parameters with units and ranges, enum member spellings, errors — so you never
-have to read the generated code to integrate it
-([generated-code.md](generated-code.md)). Beside each function is a twin with
-`_traced` on its name that also returns the rows that matched, one per table in order — the
-row numbers `rulec doc` prints — which is what a log line or an answer to "why this amount"
-needs. `rulec test` holds those rows to the reference evaluator as well as the values. A
-third function, `_record`, turns one call into one line of the fixtures format, so the
-records that `replay` and `diff` need come out of the generated code itself. A fourth file
-beside the module, `<alias>_mcp.py` (`.mjs` in the JavaScript directory), serves the rule as
-one MCP tool for an agent that will *call* it: the arguments are the wire form, the answer is
-the record line, and `--record <file.jsonl>` keeps every call as a fixtures record. It speaks
-stdio for an agent on the same machine and, with `--http <port>`, MCP's Streamable HTTP for
-the places that only accept a URL — put TLS and authentication in front of that one. Where
-the host renders MCP Apps, the server also offers the approver's page (`<alias>_page.html`,
-written beside it) as the tool's view, opened on the case that was just asked
-([generated-code.md](generated-code.md)). The `wasm/` directory holds the rule as
-one module for any host, behind `call: func(input: string) -> string` in the canonical ABI,
-with a `.wit` that makes a component of it; `rulec api` says under `wasm` how to build it
-with `rustc` alone and what to call. The `sql/` directory holds two doors on one query:
-`<alias>.sql`, the query over a relation of inputs, and `<alias>_function.sql`, the same query
-as a PostgreSQL function asked for one case at a time — which is an RPC endpoint the moment it
-sits in a schema PostgREST or Supabase exposes, and which raises where the query returns a
-column ([generated-code.md](generated-code.md)).
+signatures, parameters with units and ranges, enum member spellings, errors — so you never have
+to read the generated code to integrate it ([generated-code.md](generated-code.md)).
+Beside each function is a twin with `_traced` on its name that also returns the rows that
+matched, one per table in order — the row numbers `rulec doc` prints, and what an answer to
+"why this amount" needs; `rulec test` holds those rows to the reference evaluator as well as
+the values. A third, `_record`, turns one call into one line of the fixtures format, so what
+`replay` and `diff` need comes out of the generated code itself. A fourth file beside the module,
+`<alias>_mcp.py` (`.mjs` in the JavaScript directory), serves the rule as one MCP tool for an
+agent that will *call* it: the arguments are the wire form, the answer is the record line, and
+`--record <file.jsonl>` keeps every call. It speaks stdio, and with `--http <port>` MCP's
+Streamable HTTP — put TLS and authentication in front of that one; where the host renders MCP
+Apps it also offers the approver's page (`<alias>_page.html`) as the tool's view. The `wasm/`
+directory holds the rule as one module for any host, behind `call: func(input: string) ->
+string` in the canonical ABI, with a `.wit` that makes a component of it. The `sql/` directory
+holds two doors on one query: `<alias>.sql` over a relation of inputs, and
+`<alias>_function.sql`, the same query as a PostgreSQL function asked one case at a time — an
+RPC endpoint the moment it sits in a schema PostgREST or Supabase exposes. How to build and
+call each is in [generated-code.md](generated-code.md), under its own heading.
 
 Beside the Rust module, `<alias>_proof.rs` holds proof harnesses for the
-[Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so
-`rustc` never reads them: over **every** input in the declared domain rather than over the
-vectors, no table falls through, no contradiction guard fires, nothing overflows an `i64`,
-and each `unique` table's rows cover the domain exactly once. `rulec test --proofs` runs
-them where `kani` is installed ([generated-code.md](generated-code.md)).
+[Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so `rustc`
+never reads them: over **every** input in the declared domain rather than over the vectors, no
+table falls through, no contradiction guard fires, nothing overflows an `i64`, and each
+`unique` table's rows cover the domain exactly once. `rulec test --proofs` runs them where
+`kani` is installed ([generated-code.md](generated-code.md)).
 
 For a target none of the eleven covers — another language, a workflow engine's expression
-language, a spreadsheet formula — you do not need a backend and you do not have to give up the comparison:
-generate from `rulec api`, wrap the result in the adapter protocol, and hold it to the rule
-with `rulec verify`. [backends.md](backends.md) runs that loop end to end.
+language, a spreadsheet formula — you need no backend and give up no comparison: generate from
+`rulec api`, wrap it in the adapter protocol, and hold it to the rule with `rulec verify`
+([backends.md](backends.md) runs that loop end to end).
 
 ### `rulec certificate <file.rule>`
 
@@ -345,18 +347,16 @@ The cluster and its witness are what tell them apart.
 
 ### If there are past records: `rulec fixtures lint`, `replay`, `diff`
 
-`fixtures lint` first, always — it reports records whose shape disagrees with the rule
-instead of quietly dropping them. Records written by the generated code's `_record` function
-are already in this shape; only a log of some other implementation has to be extracted. Then `replay` compares the rule against what actually
-happened — and, for records that carry the rows that matched, row by row as well: a record
-whose amount agrees but whose row differs is reported apart, as a moved row. `diff` compares
-two versions of the rule over the same records and reports **how many change and by how
-much**. That is the number a person needs before approving. A version is named by its file,
-by its git tag (`送料@v3` is the tag `rules/送料/v3`, or failing that the revision `v3`), or
-by a path at a revision: on a pull request the old version is `rules/送料.rule@origin/main`,
-the file as it is on the base branch. `--format markdown` is what gets posted, and `--terse`
-keeps every value of a record out of it — the comment is read by everyone with access to the
-repository.
+`fixtures lint` first, always — it reports records whose shape disagrees with the rule instead
+of quietly dropping them. The generated `_record` writes that shape already; only a log of some
+other implementation has to be extracted. Then `replay` compares the rule against what actually
+happened — and, for records carrying the rows that matched, row by row: an amount that agrees
+under a different row is reported apart, as a moved row. `diff` compares two versions over the
+same records and reports **how many change and by how much**, which is the number a person
+needs before approving. A version is named by its file, by its git tag (`送料@v3` is the tag
+`rules/送料/v3`, or failing that the revision `v3`), or by a path at a revision — on a pull
+request the old version is `rules/送料.rule@origin/main`. `--format markdown` is what gets
+posted, and `--terse` keeps every value of a record out of it.
 
 ### For the person who approves: `rulec doc`
 

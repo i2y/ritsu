@@ -58,7 +58,7 @@ CONSTANTS = ("true", "false", "none", "starts_with")
 # the arms.
 ARMS = ("over", "where", "of", "next", "stop", "with", "take_unique", "take_first",
         "keep_max", "by", "empty", "exhausted", "held")
-FUNCTIONS = ("min", "max")
+FUNCTIONS = ("min", "max", "allocate")
 NAMESPACE = "std"
 
 # The units a literal may carry (§2.1). Longest first, so `kg` is not read as `g` and `cm`

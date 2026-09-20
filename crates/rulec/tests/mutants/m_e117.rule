@@ -1,0 +1,37 @@
+rule 比例配分(pro_rata) v1
+description "一括値引きを明細に定価の比で割り付ける。1 明細 = 1 回の判定で、累計は呼び出し側が持つ。端数は最後の明細に寄り、配った合計はかならず値引き総額に一致する"
+
+inputs
+  値引き総額(total_off)  : money[円]  range >=0円 <=100万円
+  直前までの定価(before) : money[円]  range >=0円 <=1000万円
+  ここまでの定価(upto)   : money[円]  range >=0円 <=1000万円
+  定価合計(base)         : money[円]  range >=1円 <=1000万円
+  対象(eligible)         : bool
+
+constraint 直前までの定価 <= ここまでの定価
+
+outputs
+  配分額(share) : money[円]  round down(1円)
+
+derive 直前までの配分(to_before) : money[円] = allocate(値引き総額, 直前までの定価, 定価合計)  range >=0円 <=100万円
+derive ここまでの配分(to_upto)   : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+
+define 差分(gap) : money[円] = ここまでの配分 - 直前までの配分
+
+table 配分可否(applies)
+policy unique
+| 対象  | -> 配る(on) : money[円] |
+| true  | 差分                    |
+| false | 0円                     |
+
+result 配分額 = 配る
+
+examples
+| 値引き総額 | 直前までの定価 | ここまでの定価 | 定価合計 | 対象  | -> 配分額 |
+| 1000円     | 0円            | 3000円         | 10000円  | true  | 300円     |
+| 1000円     | 3000円         | 10000円        | 10000円  | true  | 700円     |
+| 100円      | 0円            | 333円          | 1000円   | true  | 33円      |
+| 100円      | 333円          | 666円          | 1000円   | true  | 33円      |
+| 100円      | 666円          | 1000円         | 1000円   | true  | 34円      |
+| 0円        | 0円            | 500円          | 1000円   | true  | 0円       |
+| 1000円     | 0円            | 3000円         | 10000円  | false | 0円       |

@@ -105,6 +105,7 @@ pub const OVER: &str = "over";
 pub const COUNT: &str = "count";
 pub const SUM: &str = "sum";
 pub const STARTS_WITH: &str = "starts_with";
+pub const ALLOCATE: &str = "allocate";
 pub const OF: &str = "of";
 /// The test of a `count`: a column of one element, and the value it must take.
 pub const WHERE: &str = "where";
@@ -176,7 +177,7 @@ pub const RESERVED: &[&str] = &[
     TABLE, FOLD, COUNT, SUM, OF, STARTS_WITH, WHERE, SEQUENCE, POLICY, OVERRIDES, CLAUSE, WHEN, THEN, ALWAYS, SOURCE, APPLY,
     EXCEPT, RESULT,
     EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
-    HALF_UP, HALF_EVEN, HALF_DOWN, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,
+    HALF_UP, HALF_EVEN, HALF_DOWN, ALLOCATE, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,
     EXHAUSTED, HELD, OVER,
 ];
 

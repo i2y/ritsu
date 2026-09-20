@@ -216,4 +216,12 @@ awk '{ sub(/^elements 運賃行\(freight_rows\)$/, "elements"); print }'       "
 # breakwater, and what is confirmed here is that it fires before anything is skipped.
 awk '{ sub(/^  キャビン\(cabin\)                : キャビン/, "  キャビン(cabin) : string"); gsub(/\| basic_economy/, "| \"basic_economy\""); gsub(/\| economy/, "| \"economy\""); gsub(/\| business/, "| \"business\""); print }' "$C/予約取消可否.rule" > "$M/m_e110.rule"
 
+# A share with nothing to bound it: the line saying the running total stays within the
+# whole is taken out, and `allocate` is no longer an allocation (§15.102).
+awk '!/^constraint ここまでの定価 <= 定価合計$/ { print }' "$C/比例配分.rule" > "$M/m_e117.rule"
+
+# A call with one argument too few. Until §15.102 the arity of a call was not checked at
+# all: this passed, and the generator was the first thing to run out of cases.
+awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1円)"); print }' "$C/クーポン割引.rule" > "$M/m_e118.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

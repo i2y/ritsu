@@ -90,6 +90,26 @@ impl<'a> Gen<'a> {
                             s,
                         )
                     }
+                    (crate::kw::ALLOCATE, [t, c, w]) => {
+                        // The same arithmetic as `Gen::expr`, nested rather than written
+                        // out: `floor(T × C ÷ S)`, a whole number of the unit (§15.102).
+                        // NumPy's `//` floors, and all three are non-negative, so the
+                        // column-at-a-time answer is the one the evaluator gives.
+                        let g = {
+                            let (a, b) = (w.1, t.1 * c.1);
+                            a * b / lcm(a, b)
+                        };
+                        let (num, den) = (w.1 / g, t.1 * c.1 / g);
+                        let mut top = bin_node("*", &t.0, &c.0);
+                        if num != 1 {
+                            top = bin_node("*", &top, &int_node(num));
+                        }
+                        let mut bot = w.0.clone();
+                        if den != 1 {
+                            bot = bin_node("*", &bot, &int_node(den));
+                        }
+                        (bin_node("//", &top, &bot), 1)
+                    }
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
                         let s = lcm(x.1, g.1);
                         let rounded = format!(
@@ -103,7 +123,10 @@ impl<'a> Gen<'a> {
                             (bin_node("//", &rounded, &int_node(s / g.1)), g.1)
                         }
                     }
-                    _ => (int_node(0), 1),
+                    // Not a fallback: `check` accepts a fixed set of calls, so anything
+                    // else here is a backend that was not taught a new one. Emitting 0
+                    // would be a wrong answer that runs (§15.99).
+                    (f, a) => panic!("numpy: no case for {f} with {} arguments", a.len()),
                 }
             }
             Expr::Bin(l, op, r, _) => {

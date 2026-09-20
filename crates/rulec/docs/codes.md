@@ -70,6 +70,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E114](#e114) | error | A cell value does not sit on the column's step |
 | [E115](#e115) | error | Cannot divide by a variable |
 | [E116](#e116) | error | A row's amount is not in the copy it cites |
+| [E117](#e117) | error | A share without what a share needs |
+| [E118](#e118) | error | The call is not written correctly |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -2072,6 +2074,61 @@ With `料金表.md.fragments/表1.tsv` beside it:
 ```
 
 Related codes: [W120](#w120), [E038](#e038), [E107](#e107)
+
+## E117
+
+`error` — **A share without what a share needs**
+
+**When.** The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole (§15.102).
+
+**Fix.** Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round (§7.1).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  値引き(off) : money[円]  range >=0円 <=1000円
+  ここまで(upto) : money[円]  range >=0円 <=1000円
+  合計(base) : money[円]  range >=1円 <=1000円
+
+outputs
+  o(o) : money[円]  round down(1円)
+
+derive 配分(share) : money[円] = allocate(値引き, ここまで, 合計)  range >=0円 <=1000円
+
+result o = 配分
+```
+
+Related codes: [E115](#e115), [E108](#e108)
+
+## E118
+
+`error` — **The call is not written correctly**
+
+**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1円)` and the rest) (§2.3).
+
+**Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both passed unnoticed until §15.102, and only the generator ran out of cases.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=100
+  d(d) : number  range >=1 <=100
+
+outputs
+  o(o) : number  round down(1)
+
+define r(r) : number = min(n, d, n)
+
+result o = r
+```
+
+Related codes: [E103](#e103), [E115](#e115)
 
 ## W105
 

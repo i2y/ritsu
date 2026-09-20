@@ -184,6 +184,14 @@ impl<'a> Env<'a> {
                     (crate::kw::MAX, [Val::Num(x), Val::Num(y)]) => {
                         Some(Val::Num(if x.cmp_to(*y) == std::cmp::Ordering::Greater { *x } else { *y }))
                     }
+                    // `floor(T × C ÷ S)` — one step, so the scale is decided once and the
+                    // answer is the same integer in every target (§15.102).
+                    (crate::kw::ALLOCATE, [Val::Num(t), Val::Num(c), Val::Num(s)]) => {
+                        if s.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater {
+                            return None;
+                        }
+                        Some(Val::Num(t.mul(*c).div(*s).round_to(RoundMode::Down, Rat::int(1))))
+                    }
                     (m, [Val::Num(x), Val::Num(g)]) if RoundMode::parse(m).is_some() => {
                         Some(Val::Num(x.round_to(RoundMode::parse(m).unwrap(), *g)))
                     }

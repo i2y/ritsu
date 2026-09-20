@@ -78,6 +78,13 @@ inductive Expr where
   | maxOf : Expr → Expr → Expr
   /-- Rounded to a literal grid. Which way the mode breaks a tie is not modelled. -/
   | roundTo : Expr → Rat → Expr
+  /-- **A share**: `floor(T × C ÷ S)`, the part of an amount `T` that falls to a line
+      whose prices run up to `C` out of a whole `S` (§15.102). All three are names with
+      declared ranges, none of them negative and the whole positive (E117), so the floor is the
+      truncation every target performs. That the running total never passes the whole is a
+      `constraint` the caller guarantees, not something the ranges say: it arrives as the
+      `within` relation below. -/
+  | alloc : Expr → Expr → Expr → Expr
   /-- A comparison. Its value is a truth value, and it has a unit claim of its own: the two
       sides have to meet, which is what makes `注文金額 >= 3万円` well typed and
       `注文金額 >= 3個` not. -/
@@ -103,6 +110,7 @@ def Expr.unreadable : Expr → Bool
   | .minOf a b => a.unreadable || b.unreadable
   | .maxOf a b => a.unreadable || b.unreadable
   | .roundTo a _ => a.unreadable
+  | .alloc a b c => a.unreadable || b.unreadable || c.unreadable
   | .compare _ a b => a.unreadable || b.unreadable
 
 /-! ## What each operation does to a type
@@ -127,6 +135,11 @@ def divTy (x kt : Ty) : Option Ty :=
 
 /-- `min` and `max` need their two sides to meet, and give back the first one's type. -/
 def pickTy (x y : Ty) : Option Ty := (unify x y).map (fun _ => x)
+
+/-- A share keeps the type of the amount being handed out. The two sides of the ratio have
+    to meet — a running total of prices over a whole made of prices — and their common type
+    cancels, which is why it does not appear in the answer. -/
+def shareTy (x y z : Ty) : Option Ty := (unify y z).map (fun _ => x)
 
 /-- **The type of an expression**, derived from the leaves up by the rules of §2.3. A
     certificate that states a different one for a value is refused; so is one whose units
@@ -153,6 +166,9 @@ def typeOf (types : String → Option Ty) : Expr → Option Ty
                   | some x, some y => pickTy x y
                   | _, _ => none
   | .roundTo a _ => typeOf types a
+  | .alloc a b c => match typeOf types a, typeOf types b, typeOf types c with
+                    | some x, some y, some z => shareTy x y z
+                    | _, _, _ => none
   | .compare _ a b => match typeOf types a, typeOf types b with
                       | some x, some y => (unify x y).map (fun _ => Ty.other "bool")
                       | _, _ => none
@@ -176,6 +192,11 @@ def umin (x y : UVal) : Option UVal :=
   (pickTy x.2 y.2).map (fun t => (if x.1 ≤ y.1 then x.1 else y.1, t))
 def umax (x y : UVal) : Option UVal :=
   (pickTy x.2 y.2).map (fun t => (if x.1 ≤ y.1 then y.1 else x.1, t))
+/-- The share itself. Lean's division by zero is zero, so this is total; that the whole is
+    really positive is what the interval below asks of the declared ranges, and what the
+    generated code's entry guard refuses at the door. -/
+def ushare (x y z : UVal) : Option UVal :=
+  (unify y.2 z.2).map (fun _ => (((x.1 * y.1 / z.1).floor : Int), x.2))
 
 /-- Evaluation. `rnd g v` is the rounding: only its bounds matter here, and they arrive as
     a hypothesis on the theorem that needs them. -/
@@ -203,6 +224,9 @@ def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → O
   | .roundTo a g => match eval rnd env a with
                     | some x => some (rnd g x.1, x.2)
                     | none => none
+  | .alloc a b c => match eval rnd env a, eval rnd env b, eval rnd env c with
+                    | some x, some y, some z => ushare x y z
+                    | _, _, _ => none
   | .compare op a b => match eval rnd env a, eval rnd env b with
                        | some x, some y =>
                          (unify x.2 y.2).map (fun _ =>
@@ -291,6 +315,16 @@ theorem eval_type_of_typeOf {types : String → Option Ty} {env : String → Opt
       simp only [eval, hva, hvb, Option.map_eq_some_iff] at h ⊢
       obtain ⟨u, hu, hτ⟩ := h
       exact ⟨u, hu, by simpa using hτ⟩
+    case _ => exact absurd h (by simp)
+  | alloc a b c iha ihb ihc =>
+    intro τ h
+    simp only [typeOf] at h
+    split at h
+    case _ x y z hx hy hz =>
+      obtain ⟨va, hva⟩ := iha x hx
+      obtain ⟨vb, hvb⟩ := ihb y hy
+      obtain ⟨vc, hvc⟩ := ihc z hz
+      exact ⟨((va * vb / vc).floor : Int), by simp [eval, hva, hvb, hvc, ushare, shareTy] at h ⊢; simp [h]⟩
     case _ => exact absurd h (by simp)
   | typed t => intro τ h; simp only [typeOf, Option.some.injEq] at h; exact ⟨0, by simp [eval, h]⟩
   | unread => intro τ h; exact absurd h (by simp [typeOf])
@@ -409,45 +443,92 @@ theorem ceilTo_monotone {g x y : Rat} (hg : 0 < g) (h : x ≤ y) : ceilTo g x �
 def RoundsWell (rnd : Rat → Rat → Rat) : Prop :=
   ∀ g v, 0 < g → floorTo g v ≤ rnd g v ∧ rnd g v ≤ ceilTo g v
 
+/-! ### Dividing, and a product of parts that are not negative
+
+The four facts the share needs. Core states enough about `Rat` for all of them; they are
+spelled out here rather than assumed. -/
+
+theorem mul_le_mul_both {a b c d : Rat} (ha : 0 ≤ a) (hc : 0 ≤ c) (hab : a ≤ b) (hcd : c ≤ d) :
+    a * c ≤ b * d :=
+  Rat.le_trans (Rat.mul_le_mul_of_nonneg_right hab hc)
+    (Rat.mul_le_mul_of_nonneg_left hcd (Rat.le_trans ha hab))
+
+theorem inv_le_inv_of_le {a b : Rat} (ha : 0 < a) (hab : a ≤ b) : b⁻¹ ≤ a⁻¹ := by
+  have hb : (0:Rat) < b := Std.lt_of_lt_of_le ha hab
+  have hia : (0:Rat) ≤ a⁻¹ := Rat.le_of_lt (Rat.inv_pos.2 ha)
+  have hib : (0:Rat) ≤ b⁻¹ := Rat.le_of_lt (Rat.inv_pos.2 hb)
+  have k1 : a * b⁻¹ ≤ b * b⁻¹ := Rat.mul_le_mul_of_nonneg_right hab hib
+  rw [Rat.mul_inv_cancel b (Ne.symm (Rat.ne_of_lt hb))] at k1
+  have k2 : a⁻¹ * (a * b⁻¹) ≤ a⁻¹ * 1 := Rat.mul_le_mul_of_nonneg_left k1 hia
+  rw [← Rat.mul_assoc, Rat.inv_mul_cancel a (Ne.symm (Rat.ne_of_lt ha)), Rat.one_mul, Rat.mul_one] at k2
+  exact k2
+
+/-- A value that is not negative, divided by more, is less. -/
+theorem div_le_div_left_of_le {x a b : Rat} (hx : 0 ≤ x) (ha : 0 < a) (hab : a ≤ b) :
+    x / b ≤ x / a := by
+  rw [Rat.div_def, Rat.div_def]
+  exact Rat.mul_le_mul_of_nonneg_left (inv_le_inv_of_le ha hab) hx
+
+theorem div_nonneg {x k : Rat} (hx : 0 ≤ x) (hk : 0 < k) : 0 ≤ x / k := by
+  rw [Rat.div_def]
+  have := Rat.mul_le_mul_of_nonneg_left (Rat.le_of_lt (Rat.inv_pos.2 hk)) hx
+  simpa using this
+
 /-! ### The interval a declared range forces -/
 
 abbrev Span2 := Rat × Rat
 
 def inSpan (I : Span2) (v : Rat) : Prop := I.1 ≤ v ∧ v ≤ I.2
 
-/-- **The interval an expression is forced into**, recomputed from the declared ranges. A
-    `none` says this program does not know — an unbounded name, a zero divisor, a grid that
-    is not positive — and the claim over that value is then reported as not re-checked
-    rather than passed. -/
-def interval (ranges : String → Option Span2) : Expr → Option Span2
+/-- **The interval an expression is forced into**, recomputed from the declared ranges and
+    the guarantees. A `none` says this program does not know — an unbounded name, a zero
+    divisor, a grid that is not positive, a share with nothing to say the running total
+    stays within the whole — and the claim over that value is then reported as not
+    re-checked rather than passed.
+
+    `within a b` is read off the certificate's `constraint` lines: it says the caller
+    guarantees `a ≤ b`, and the theorem below asks exactly that of the environment. -/
+def interval (ranges : String → Option Span2) (within : Expr → Expr → Bool) :
+    Expr → Option Span2
   | .name n => ranges n
   | .lit v _ => some (v, v)
-  | .add a b => match interval ranges a, interval ranges b with
+  | .add a b => match interval ranges within a, interval ranges within b with
                 | some x, some y => some (x.1 + y.1, x.2 + y.2)
                 | _, _ => none
-  | .sub a b => match interval ranges a, interval ranges b with
+  | .sub a b => match interval ranges within a, interval ranges within b with
                 | some x, some y => some (x.1 - y.2, x.2 - y.1)
                 | _, _ => none
-  | .mul a b => match interval ranges a, interval ranges b with
+  | .mul a b => match interval ranges within a, interval ranges within b with
                 | some x, some y =>
                   some (rmin4 (x.1 * y.1) (x.1 * y.2) (x.2 * y.1) (x.2 * y.2),
                         rmax4 (x.1 * y.1) (x.1 * y.2) (x.2 * y.1) (x.2 * y.2))
                 | _, _ => none
   | .divc a k _ => if k = 0 then none else
-      match interval ranges a with
+      match interval ranges within a with
       | some x => some (rmin (x.1 / k) (x.2 / k), rmax (x.1 / k) (x.2 / k))
       | none => none
-  | .minOf a b => match interval ranges a, interval ranges b with
+  | .minOf a b => match interval ranges within a, interval ranges within b with
                   | some x, some y => some (rmin x.1 y.1, rmin x.2 y.2)
                   | _, _ => none
-  | .maxOf a b => match interval ranges a, interval ranges b with
+  | .maxOf a b => match interval ranges within a, interval ranges within b with
                   | some x, some y => some (rmax x.1 y.1, rmax x.2 y.2)
                   | _, _ => none
   | .roundTo a g => if 0 < g then
-      match interval ranges a with
+      match interval ranges within a with
       | some x => some (floorTo g x.1, ceilTo g x.2)
       | none => none
     else none
+  -- A share. The lowest it goes is the smallest amount over the largest whole; the highest
+  -- is the amount itself, because the ratio never passes 1 — and that is the one thing the
+  -- declared ranges do not say, so `within` has to (§15.102). The three parts are not
+  -- negative and the whole is positive, which the ranges do say.
+  | .alloc a b c =>
+      match interval ranges within a, interval ranges within b, interval ranges within c with
+      | some x, some y, some z =>
+        if 0 ≤ x.1 && 0 ≤ y.1 && 0 < z.1 && within b c then
+          some (((x.1 * y.1 / z.2).floor : Int), ((x.2).floor : Int))
+        else none
+      | _, _, _ => none
   -- A truth value is not stored as an integer, so there is no interval to state and none
   -- is claimed. `Ty.numeric` is what refuses a certificate that leaves one out elsewhere.
   | .compare _ _ _ => none
@@ -457,10 +538,15 @@ def interval (ranges : String → Option Span2) : Expr → Option Span2
 /-- **E108 rests on this.** Where the checker states an interval, the value really is
     inside it, whatever the inputs and whichever way each rounding breaks its ties. -/
 theorem eval_mem_interval {ranges : String → Option Span2} {env : String → Option UVal}
-    {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
-    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w) :
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    -- The guarantee is about the call, not about the document: where the certificate says
+    -- the caller promises `a ≤ b`, the values really are in that order. The generated
+    -- code's entry guard is what makes it true of a real call (§15.55).
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb) :
     ∀ (e : Expr) (I : Span2) (v : Rat) (t : Ty),
-      interval ranges e = some I → eval rnd env e = some (v, t) → inSpan I v := by
+      interval ranges within e = some I → eval rnd env e = some (v, t) → inSpan I v := by
   intro e
   induction e with
   | name n => intro I v t hI hv; exact henv n I v t hI hv
@@ -587,6 +673,49 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
           exact ⟨rmax_le hp1 (Rat.le_trans hq1 hq), Rat.le_trans hp2 (left_le_rmax _ _)⟩
       case _ => exact absurd hv (by simp)
     case _ => exact absurd hI (by simp)
+  | alloc a b c iha ihb ihc =>
+    intro I v t hI hv
+    simp only [interval] at hI; simp only [eval] at hv
+    split at hI
+    case _ x y z hx hy hz =>
+      split at hI
+      case _ hc =>
+        split at hv
+        case _ p q r hp hq hr =>
+          obtain ⟨hp1, hp2⟩ := iha x p.1 p.2 hx (by rw [hp])
+          obtain ⟨hq1, _⟩ := ihb y q.1 q.2 hy (by rw [hq])
+          obtain ⟨hr1, hr2⟩ := ihc z r.1 r.2 hz (by rw [hr])
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+          obtain ⟨⟨⟨hx0, hy0⟩, hz0⟩, hw⟩ := hc
+          -- The whole is positive where the rule stands, and so is the top of its range.
+          have hrpos : (0:Rat) < r.1 := Std.lt_of_lt_of_le hz0 hr1
+          have hzpos : (0:Rat) < z.2 := Std.lt_of_lt_of_le hrpos hr2
+          -- The one fact the ranges do not give: the running total is within the whole.
+          have hqr : q.1 ≤ r.1 := hwithin b c q.1 r.1 q.2 r.2 hw (by rw [hq]) (by rw [hr])
+          simp only [ushare, Option.map_eq_some_iff] at hv
+          obtain ⟨u, _, hu⟩ := hv
+          simp only [Option.some.injEq, Prod.mk.injEq] at hI hu
+          subst hI
+          rw [← hu.1]
+          have hp0 : (0:Rat) ≤ p.1 := Rat.le_trans hx0 hp1
+          have hq0 : (0:Rat) ≤ q.1 := Rat.le_trans hy0 hq1
+          constructor
+          · -- the smallest amount over the largest whole
+            refine Rat.intCast_le_intCast.2 (Rat.floor_monotone ?_)
+            refine Rat.le_trans (div_le_div_right (mul_le_mul_both hx0 hy0 hp1 hq1) hzpos) ?_
+            exact div_le_div_left_of_le (Rat.mul_nonneg hp0 hq0) hrpos hr2
+          · -- and never more than the amount itself, because the ratio never passes 1
+            refine Rat.intCast_le_intCast.2 (Rat.floor_monotone (Rat.le_trans ?_ hp2))
+            have h1 : p.1 * q.1 / r.1 ≤ p.1 * r.1 / r.1 :=
+              div_le_div_right (Rat.mul_le_mul_of_nonneg_left hqr hp0) hrpos
+            have h2 : p.1 * r.1 / r.1 = p.1 := by
+              rw [Rat.div_def, Rat.mul_assoc, Rat.mul_inv_cancel r.1 (Ne.symm (Rat.ne_of_lt hrpos)),
+                Rat.mul_one]
+            rw [h2] at h1
+            exact h1
+        case _ => exact absurd hv (by simp)
+      case _ => exact absurd hI (by simp)
+    case _ => exact absurd hI (by simp)
   | compare op a b _ _ => intro I v t hI _; exact absurd hI (by simp [interval])
   | typed _ => intro I v t hI _; exact absurd hI (by simp [interval])
   | unread => intro I v t hI _; exact absurd hI (by simp [interval])
@@ -610,6 +739,85 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
         case _ => exact absurd hv (by simp)
       case _ => exact absurd hI (by simp)
     case _ => exact absurd hI (by simp)
+
+/-! ## A run of shares hands out the whole amount
+
+§15.102. One call decides one line: the caller holds the loop, and the rule is handed the
+running total of prices before the line and after it. What the rule cannot say on its own
+is what happens over the whole run, and this is it. The parts add up to the amount —
+exactly, with nothing left over and nothing conjured — provided the cut points start at
+zero and end at the whole, which is what walking the lines in order means. -/
+
+/-- One line's share: the rule's `ここまでの配分 - 直前までの配分`. -/
+def shareOf (T S prev upto : Rat) : Rat :=
+  (((T * upto / S).floor : Int) : Rat) - (((T * prev / S).floor : Int) : Rat)
+
+/-- Where a run of cut points ends. -/
+def runEnd (p : Rat) : List Rat → Rat
+  | [] => p
+  | u :: us => runEnd u us
+
+/-- What the whole run hands out, line by line. -/
+def runTotal (T S p : Rat) : List Rat → Rat
+  | [] => 0
+  | u :: us => shareOf T S p u + runTotal T S u us
+
+theorem sub_add_sub (a b c : Rat) : (b - a) + (c - b) = c - a := by
+  rw [Rat.sub_eq_add_neg, Rat.sub_eq_add_neg, Rat.sub_eq_add_neg,
+    Rat.add_comm b (-a), Rat.add_assoc, Rat.add_left_comm b c (-b),
+    Rat.add_neg_cancel, Rat.add_zero, Rat.add_comm (-a) c]
+
+/-- **The run telescopes.** Everything between the ends cancels. -/
+theorem runTotal_telescopes (T S : Rat) : ∀ (us : List Rat) (p : Rat),
+    runTotal T S p us
+      = (((T * runEnd p us / S).floor : Int) : Rat) - (((T * p / S).floor : Int) : Rat) := by
+  intro us
+  induction us with
+  | nil => intro p; simp [runTotal, runEnd, Rat.sub_self]
+  | cons u us ih =>
+    intro p
+    simp only [runTotal, runEnd, ih, shareOf]
+    exact sub_add_sub _ _ _
+
+/-- **Nothing is left over and nothing is conjured.** Over a run of lines whose prices
+    start at nothing and end at the whole, the shares add up to the amount itself. The
+    amount is a whole number of its unit, which is what the rule declares it as. -/
+theorem runTotal_exact (T : Int) {S : Rat} (hS : 0 < S) (us : List Rat)
+    (hend : runEnd 0 us = S) : runTotal (T : Rat) S 0 us = (T : Rat) := by
+  rw [runTotal_telescopes, hend]
+  have h1 : (T : Rat) * S / S = (T : Rat) := Rat.mul_div_cancel (Ne.symm (Rat.ne_of_lt hS))
+  have h2 : (T : Rat) * 0 / S = 0 := by rw [Rat.mul_zero, Rat.div_def, Rat.zero_mul]
+  have h3 : (((Rat.floor (0:Rat)) : Int) : Rat) = 0 := by decide
+  rw [h1, h2, h3, Rat.sub_eq_add_neg, Rat.neg_zero, Rat.add_zero]
+  exact Rat.intCast_inj.mpr rfl
+
+/-- **No line is handed a negative share.** The cut points only ever rise. -/
+theorem shareOf_nonneg {T S prev upto : Rat} (hT : 0 ≤ T) (hS : 0 < S) (h : prev ≤ upto) :
+    0 ≤ shareOf T S prev upto := by
+  have : ((T * prev / S).floor : Int) ≤ ((T * upto / S).floor : Int) :=
+    Rat.floor_monotone (div_le_div_right (Rat.mul_le_mul_of_nonneg_left h hT) hS)
+  have hc : (((T * prev / S).floor : Int) : Rat) ≤ (((T * upto / S).floor : Int) : Rat) :=
+    Rat.intCast_le_intCast.2 this
+  exact (Rat.le_iff_sub_nonneg _ _).mp hc
+
+/-- Two values of the same type meet, and give that type back. -/
+theorem unify_self (t : Ty) : unify t t = some t := by
+  cases t <;> simp [unify]
+  case money c tag => cases tag <;> simp
+
+/-- **The rule's own shape computes that share.** `ここまでの配分 - 直前までの配分`, with
+    the three prices read from the call, evaluates to exactly the `shareOf` above — so the
+    two theorems before this are about what the generated code returns, not about an
+    arithmetic that merely resembles it. -/
+theorem eval_share {rnd : Rat → Rat → Rat} {env : String → Option UVal}
+    {amount before upto whole : Expr} {ta tp : Ty} {vA vB vU vW : Rat}
+    (hA : eval rnd env amount = some (vA, ta))
+    (hB : eval rnd env before = some (vB, tp))
+    (hU : eval rnd env upto = some (vU, tp))
+    (hW : eval rnd env whole = some (vW, tp)) :
+    eval rnd env (.sub (.alloc amount upto whole) (.alloc amount before whole))
+      = some (shareOf vA vW vB vU, ta) := by
+  simp [eval, hA, hB, hU, hW, ushare, usub, unify_self, shareOf]
 
 /-! ## int64 -/
 

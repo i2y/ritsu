@@ -556,6 +556,27 @@ impl<'a> Gen<'a> {
                             scale: s,
                         }
                     }
+                    (crate::kw::ALLOCATE, [t, c, s]) => {
+                        // `floor(T × C ÷ S)`, a whole number of the unit, so the answer is
+                        // held at scale 1. The stored integers carry their own steps: the
+                        // product is T·sT × C·sC and the divisor S·sS, so sT·sC/sS is what
+                        // is left to undo. All three are non-negative (E117), so the
+                        // truncation every target performs is this floor (§15.102).
+                        let (num, den) = {
+                            let (a, b) = (s.scale, t.scale * c.scale);
+                            let g = a * b / lcm(a, b);
+                            (a / g, b / g)
+                        };
+                        let top = match num {
+                            1 => format!("({} * {})", t.text, c.text),
+                            k => format!("({} * {} * {k})", t.text, c.text),
+                        };
+                        let bot = match den {
+                            1 => s.text.clone(),
+                            k => format!("({} * {k})", s.text),
+                        };
+                        Expr2 { text: format!("({top} // {bot})"), scale: 1 }
+                    }
                     (m, [x, g]) if RoundMode::parse(m).is_some() => {
                         // Rounding snaps to a multiple of the grid, so the result is a whole
                         // number of grid steps and comes back at the grid's scale — which is
@@ -578,7 +599,10 @@ impl<'a> Gen<'a> {
                             Expr2 { text: format!("({rounded} // {})", s / g.scale), scale: g.scale }
                         }
                     }
-                    _ => Expr2 { text: "0".into(), scale: 1 },
+                    // Not a fallback: `check` accepts a fixed set of calls, so anything
+                    // else here is a backend that was not taught a new one. Emitting 0
+                    // would be a wrong answer that runs (§15.99).
+                    (f, a) => panic!("gen: no case for {f} with {} arguments", a.len()),
                 }
             }
             Expr::Bin(l, op, r, _) => {
@@ -4626,7 +4650,9 @@ impl<'a> Gen<'a> {
         let mut decls = String::new();
         let mut args: Vec<String> = Vec::new();
         let mut params: Vec<String> = Vec::new();
-        let mut whole = true;
+        // Whether a harness can be written at all, and why not when it cannot.
+        let blocked = self.no_harness();
+        let mut whole = blocked.is_none();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             params.push(format!("{}: {}", pub_name(&i.name), self.rs_ty(&ty)));
@@ -4677,13 +4703,13 @@ impl<'a> Gen<'a> {
         }
 
         if !whole {
-            o.push_str(&format!(
-                "    // {}\n}}\n",
+            let why = blocked.unwrap_or_else(|| {
                 tr!(
-                    "この規則には string の入力があり、記号として置けないので、ハーネスは出していない。",
-                    "This rule takes an input a harness cannot quantify over (a string), so none is written."
+                    "この規則には記号として置けない入力があるので、ハーネスは出していない。",
+                    "This rule takes an input a harness cannot quantify over, so none is written."
                 )
-            ));
+            });
+            o.push_str(&format!("    // {why}\n}}\n"));
             return o;
         }
 
@@ -4730,9 +4756,52 @@ impl<'a> Gen<'a> {
     }
 
     /// The names of the harnesses `rs_proof` writes, in the order they appear.
+    /// Why no proof harness can be written for this rule, where that is so. `rs_proof`
+    /// prints the reason in the file it writes and the list `rulec api` gives asks the same
+    /// question here, so the two cannot disagree — they did, and `api` would have named
+    /// harnesses the file does not contain.
+    fn no_harness(&self) -> Option<String> {
+        // A share divides by a value rather than by a constant, and two of them subtracted —
+        // which is how one line's share is written — puts two symbolic divisions under one
+        // assertion. CBMC bit-blasts both, and the shape does not come back: measured, the
+        // corpus rule does not finish in ten minutes even with every range cut to a
+        // thousand yen, where the same rule with one share verifies in one second (§15.102).
+        // A harness that hangs is worse than one that is not written, so this says why.
+        fn shares(e: &Expr) -> bool {
+            match e {
+                Expr::Call(n, args, _) => n == crate::kw::ALLOCATE || args.iter().any(shares),
+                Expr::Bin(l, _, r, _) => shares(l) || shares(r),
+                _ => false,
+            }
+        }
+        let in_items = self.f.items.iter().any(|it| match it {
+            Item::Derived(d) => shares(&d.expr),
+            Item::Define(d) => shares(&d.expr),
+            _ => false,
+        });
+        if in_items || self.f.result.as_ref().is_some_and(|r| shares(&r.expr)) {
+            return Some(tr!(
+                "この規則は `allocate` で配分を出している。変数で割る式が二つ入ると模型検査器が返ってこないので、ハーネスは出していない（§15.102）。",
+                "This rule works out a share with `allocate`. Two divisions by a value rather than by a constant do not come back from the model checker, so no harness is written (§15.102)."
+            ));
+        }
+        // Anything the harness cannot make symbolic — a string, in an input or in a field of
+        // one element — takes the whole file with it: a harness that fixes one input is not
+        // over the declared domain.
+        let opaque = |n: &str| self.rs_any(n, "x", &self.ty_of(n), "").is_none();
+        let fields = self.f.elements.iter().flat_map(|e| e.fields.iter());
+        if self.f.inputs.iter().any(|i| opaque(&i.name.text)) || fields.clone().any(|f| opaque(&f.name.text)) {
+            return Some(tr!(
+                "この規則には string の入力があり、記号として置けないので、ハーネスは出していない。",
+                "This rule takes an input a harness cannot quantify over (a string), so none is written."
+            ));
+        }
+        None
+    }
+
     fn proof_harnesses(&self) -> Vec<String> {
         let alias = pub_name(&self.f.name);
-        if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text), Ty::Str)) {
+        if self.no_harness().is_some() {
             return Vec::new();
         }
         let mut v = vec![format!("{alias}_answers")];

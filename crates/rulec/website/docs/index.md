@@ -257,7 +257,7 @@ Every command has `--format json`, and the codes and the JSON shape **stay put w
 </div>
 </div>
 
-**Twelve targets** · **74 diagnostics** · **32 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **76 diagnostics** · **33 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 
@@ -646,6 +646,9 @@ of the document itself is not, and the declared ranges, types and constraints
 in it are its own word. Writing it, and reading it back adversarially, found a
 soundness bug in the completeness check, a witness that could break the rule's
 own `constraint`, and eleven ways a forged certificate got past a re-checker.
+One theorem there is about the rule rather than the document: where an amount
+is handed out over a run of lines in the ratio of their prices, the parts add
+up to it exactly, odd yen included.
 
 [What it proves, in detail](checks.md){ .md-button }
 

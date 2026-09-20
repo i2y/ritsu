@@ -860,9 +860,42 @@ column called `送料` is what the output `送料` returns. Naming a later outpu
 E015; a second `result` line is E016.
 
 Operators, from loosest to tightest: comparison (`<= >= < > =`), then `+ -`, then `* /`.
-Parentheses group. The two functions are `min(a, b)` and `max(a, b)`, and the four rounding
-modes may also be called as functions: `down(x, 1円)`, `up(x, 10円)`, `half_up(x, 1円)`,
-`half_even(x, 1円)`.
+Parentheses group. The functions are `min(a, b)`, `max(a, b)` and `allocate(t, c, s)`, and the
+five rounding modes may also be called as functions: `down(x, 1円)`, `up(x, 10円)`,
+`half_up(x, 1円)`, `half_down(x, 1円)`, `half_even(x, 1円)`. There are no others, and each
+takes the number of arguments written here: anything else is E118.
+
+### allocate — one line's share of an amount
+
+```rule
+constraint 直前までの定価 <= ここまでの定価
+constraint ここまでの定価 <= 定価合計
+
+derive 直前までの配分(to_before) : money[円] = allocate(値引き総額, 直前までの定価, 定価合計)  range >=0円 <=100万円
+derive ここまでの配分(to_upto)   : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+
+result 配分額 = ここまでの配分 - 直前までの配分
+```
+
+`allocate(<amount>, <running total>, <whole>)` is `<amount> × <running total> ÷ <whole>`
+rounded **down** to a whole unit. It is the one place a rule may divide by something that is
+not a constant, and it is allowed because of what it is for: handing an amount out over a
+run of lines in the ratio of their prices.
+
+The subtraction above is the whole point. Each line is given the share up to it minus the
+share up to the line before, so the remainders telescope: **the parts add up to the amount
+exactly**, with nothing left over and nothing conjured, and the line that carries the odd yen
+is the last one. `proofs/` states and proves that (`runTotal_exact`), which is what makes it
+a property of the rule rather than a thing the examples happen to show.
+
+What it asks for, all of it E117: three **names with declared ranges**, an amount and a
+running total that cannot be negative, a **positive** whole, and a `constraint` saying the
+running total never passes the whole. The last one is not decoration — without it a share
+could exceed the amount being handed out, and the interval E108 is proved against would be
+the product of two ranges rather than the amount. Chains count: two `constraint` lines that
+meet in the middle say what a single one would.
+
+One call decides one line. The loop stays with the caller, as everything else here does.
 
 **There is no loop and no recursion.**
 
@@ -925,7 +958,7 @@ which is why it is caught at parse time.
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `starts_with` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
-| functions | `min` `max` |
+| functions | `min` `max` `allocate` |
 | fold arms | `over` `next` `stop` `with` `take_unique` `take_first` `keep_max` `by` `empty` `exhausted` `held` |
 | count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |

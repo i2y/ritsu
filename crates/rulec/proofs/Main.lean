@@ -32,6 +32,36 @@ def declaresAs (want got : Ty) : Bool :=
 
 def ratText (q : Rat) : String := toString q
 
+/-- Add a pair unless it is already there. -/
+def addLe (ps : List (String × String)) (p : String × String) : List (String × String) :=
+  if ps.any (fun q => q.1 == p.1 && q.2 == p.2) then ps else ps ++ [p]
+
+/-- Close a list of `a ≤ b` pairs under chains. Two lines saying a running total never
+    passes the next one, and that one never passes the whole, together say the first never
+    passes the whole — and `rulec` reads them that way, so a re-checker that did not would
+    refuse an honest certificate. Fuel is the length of the list: each round lengthens the
+    longest chain it can see by one, and no chain is longer than the list. -/
+def closeLe : Nat → List (String × String) → List (String × String)
+  | 0, ps => ps
+  | n + 1, ps =>
+    let more := ps.flatMap (fun p => (ps.filter (fun q => q.1 == p.2)).map (fun q => (p.1, q.2)))
+    let grown := more.foldl addLe ps
+    if grown.length == ps.length then ps else closeLe n grown
+
+/-- The `a ≤ b` pairs the certificate's `constraint` lines guarantee, as names. `<` and `>`
+    count too: they say more, not less. -/
+def guarantees (cert : Json) : List (String × String) :=
+  let raw : List (String × String) := (fieldArr cert "constraints").toList.filterMap (fun k =>
+    let l := fieldStr k "left"
+    let r := fieldStr k "right"
+    match fieldStr k "op" with
+    | "<=" => some (l, r)
+    | "<" => some (l, r)
+    | ">=" => some (r, l)
+    | ">" => some (r, l)
+    | _ => none)
+  closeLe raw.length raw
+
 /-- The units and int64 claims, over the `values` section. -/
 def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2) := Id.run do
   let typesJson := (field cert "types").getD Json.null
@@ -45,6 +75,13 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
         let hi ← a[1]? >>= optRat
         some (lo, hi)
     | none => none
+  -- `within a b` says the caller guarantees `a ≤ b`. Only names can be related this way:
+  -- a `constraint` line names two inputs (§15.55).
+  let le := guarantees cert
+  let within : RulecCert.Expr → RulecCert.Expr → Bool := fun a b =>
+    match a, b with
+    | .name x, .name y => le.any (fun p => p.1 == x && p.2 == y)
+    | _, _ => false
   let vals := fieldArr cert "values"
   let mut got : List (String × Span2) := []
   let mut r := r
@@ -83,7 +120,7 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
       let lo ← a[0]? >>= optRat
       let hi ← a[1]? >>= optRat
       some (lo, hi)
-    match interval ranges e with
+    match interval ranges within e with
     | none =>
       -- A value with no interval of its own. `check` makes an int64 claim about every
       -- value that is stored as an integer, so a numeric one that states none is refused;

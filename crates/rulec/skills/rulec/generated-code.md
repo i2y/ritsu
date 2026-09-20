@@ -237,8 +237,11 @@ The harness assumes the declared domain — every `range`, and every `constraint
 the generated function unchanged.
 
 A rule that walks a sequence gets the first three; its per-element tables and the ones that
-read a count cannot be replayed outside the walk, so no `rows_` is written for them. A rule
-with a `string` input gets no harness at all, and the file says so.
+read a count cannot be replayed outside the walk, so no `rows_` is written for them. Two
+kinds of rule get no harness at all, and the file says which: one with a `string` input,
+which the harness cannot quantify over, and one that works out a share with `allocate`,
+where two divisions by a value rather than by a constant do not come back from the model
+checker (§15.102) — a harness that hangs being worse than one that is not written.
 
 What this is *not*: a proof about the table, or about the checker. It is a proof about this
 Rust over the declared domain, by a different tool than the one that

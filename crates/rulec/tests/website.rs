@@ -434,7 +434,7 @@ fn 色づけの語彙はkwと同じ() {
         ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_DOWN, kw::HALF_EVEN])),
         ("CONSTANTS", sorted(&[kw::TRUE, kw::FALSE, kw::NONE, kw::STARTS_WITH])),
         ("ARMS", sorted(&[kw::OVER, kw::WHERE, kw::OF, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
-        ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX])),
+        ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX, kw::ALLOCATE])),
         ("CLAUSE", sorted(&[kw::WHEN, kw::THEN, kw::ALWAYS])),
         ("APPLY", sorted(&[kw::EXCEPT])),
     ] {

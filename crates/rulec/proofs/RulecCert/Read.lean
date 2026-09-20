@@ -127,6 +127,13 @@ partial def exprOfJson (j : Json) : Option Expr :=
             let a ← args[0]? >>= exprOfJson
             if c == "min" && args.size == 2 then some (.minOf a (← args[1]? >>= exprOfJson))
             else if c == "max" && args.size == 2 then some (.maxOf a (← args[1]? >>= exprOfJson))
+            -- A share (§15.102). Its three arguments are names — E117 accepts nothing
+            -- else — but nothing here depends on that: what the interval needs is the
+            -- guarantee, and that is looked up by name where the two are names.
+            else if c == "allocate" && args.size == 3 then do
+              let b ← args[1]? >>= exprOfJson
+              let w ← args[2]? >>= exprOfJson
+              some (.alloc a b w)
             else if args.size == 2 then do
               let g ← args[1]? >>= fun x => field x "value" >>= optRat
               some (.roundTo a g)

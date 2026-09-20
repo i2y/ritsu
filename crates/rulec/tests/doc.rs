@@ -28,6 +28,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
 const CORPUS: &[&str] = &[
     "tests/corpus/品番の扱い.rule",
     "tests/corpus/買物かごの送料.rule",
+    "tests/corpus/比例配分.rule",
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/Claude利用料.rule",
     "tests/corpus/預け荷物料金.rule",

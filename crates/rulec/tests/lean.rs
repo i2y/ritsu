@@ -130,6 +130,45 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
     );
 }
 
+/// A share (§15.102). Its interval rests on a `constraint`, not on the declared ranges:
+/// without one, `floor(T × C ÷ S)` is bounded by the product of two ranges and not by the
+/// amount. So the re-checker has to refuse a certificate that keeps the tight interval and
+/// drops the line that earns it — and it has to accept the honest one through a chain of
+/// two constraints, which is how the corpus rule states it.
+#[test]
+fn 配分の区間は制約に乗っている() {
+    let Some(bin) = checker() else {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    };
+    let rel = "tests/corpus/比例配分.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""call":"allocate""#), "配分の式が出ていない");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("values: 4 typed, 4 held to int64"), "配分の値が検査されていない:
+{said}");
+
+    for (what, forged) in [
+        // The guarantees dropped: the interval no longer follows from anything.
+        ("制約を消す", cert.replace(
+            r#""constraints":[{"left":"直前までの定価","op":"<=","right":"ここまでの定価"},{"left":"ここまでの定価","op":"<=","right":"定価合計"}]"#,
+            r#""constraints":[]"#)),
+        // The chain broken in the middle: 直前までの定価 <= 定価合計 no longer follows.
+        ("鎖を切る", cert.replace(
+            r#"{"left":"直前までの定価","op":"<=","right":"ここまでの定価"}"#,
+            r#"{"left":"直前までの定価","op":"<=","right":"直前までの定価"}"#)),
+        // A share claimed to reach less than it does.
+        ("配分の区間を狭く言う", cert.replacen(r#""interval":["0","1000000"]"#, r#""interval":["0","2"]"#, 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+}
+
 /// The leaves that say "no input reaches here" (§15.55, §15.98). The corpus has none, so
 /// without this the whole sieve — `boxRuledOut`, `pointRuledOut`, `completions` and the
 /// theorem over them — would never run in CI.

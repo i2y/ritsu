@@ -207,6 +207,20 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
             }
             g.finish()
         })
+        // The guarantees, once for the rule. Every table repeats them where the sieve
+        // uses them, but a value's interval can rest on one too — a share is bounded by
+        // the amount only because a constraint says the running total stays within the
+        // whole (§15.102) — and a rule with no table at all still has values.
+        .raw(
+            "constraints",
+            arr(&f
+                .constraints
+                .iter()
+                .map(|k| {
+                    Obj::new().str("left", &k.left).str("op", k.op.word()).str("right", &k.right).finish()
+                })
+                .collect::<Vec<_>>()),
+        )
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
         .finish()
