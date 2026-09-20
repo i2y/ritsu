@@ -225,6 +225,27 @@ fn magnitude(n: &crate::lex::Num) -> Option<Rat> {
     Some(if n.neg { Rat::zero().sub(v) } else { v })
 }
 
+/// A literal as a value that can be held against what a document says (§15.82): the magnitude
+/// in its dimension's base unit, and the dimension when it has one. A bare number has none and
+/// compares equal to any dimension's value of the same magnitude — a copy whose unit sits in
+/// the header says `990` where the rule writes `990円`, and they are the same amount.
+pub fn comparable(n: &crate::lex::Num) -> Option<(Option<String>, Rat)> {
+    let v = magnitude(n)?;
+    match n.unit.as_deref() {
+        None => Some((None, v)),
+        Some(u) => {
+            let (dim, f) = unit_info(u)?;
+            Some((Some(dim), v.mul(f)))
+        }
+    }
+}
+
+/// Whether two such values are the same amount. A value with no dimension is the same as one
+/// with a dimension when the magnitudes agree: the document left the unit in its header.
+pub fn same_value(a: &(Option<String>, Rat), b: &(Option<String>, Rat)) -> bool {
+    a.1 == b.1 && (a.0.is_none() || b.0.is_none() || a.0 == b.0)
+}
+
 /// Value of a numeric literal, expressed in `want`'s declared unit.
 /// `None` means the literal's unit does not belong to `want`'s dimension, or that a decimal
 /// was written where the declared unit only has whole values.

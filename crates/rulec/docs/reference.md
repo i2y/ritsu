@@ -294,6 +294,18 @@ are — so a revision of the document that moves a cited table fails the check, 
 not, does not. The formats read here are csv, md and xlsx; a PDF or a scan needs an extractor
 that is not this program, and until it can be plugged in such a document is cited whole.
 
+**The rows are then held to that copy**, which is the one thing a completeness proof cannot do:
+it says the table is consistent with itself, not that it says what the document says. An amount
+a row writes that the copy does not show anywhere is **E116**; a number the copy states as a
+whole cell that no row of the citing table uses is **W120**, and the two together are what a
+mistyped digit looks like (`890円` is nowhere in the copy, and the copy's `880円` is used by
+nobody). Only amounts are held: a threshold is rewritten as it is transcribed — `1,949,000円まで`
+becomes `<=1949000円` — and an amount is not. W120 asks only about cells that are nothing but a
+number, and a row that merges what the copy lists one by one (`<=3kg` over its `1kg`, `2kg` and
+`3kg`) accounts for all of them. A table that transcribes only part of a fragment moves its
+citation from the `table` line onto the rows that came from it: a row's citation says only where
+that row came from, so the rest goes unasked while the amounts are still checked.
+
 `@<source> <fragment>` at the end of a `table`, `clause`, `derive` or `define` line, or after
 the last bar of a row, says which fragment the definition transcribes: `第91条`, `第20条の2`,
 `第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's

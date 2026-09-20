@@ -436,7 +436,235 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             }
         }
     }
+    out.extend(transcription(f, rule_path));
     out
+}
+
+/// E116 and W120 (§15.82): the rows against the table they say they were transcribed from.
+///
+/// Two directions, read with different leniency on purpose. **An amount a row writes has to
+/// be somewhere in the copy** — looked for in every number the copy shows anywhere, so that a
+/// value the document does show is never called missing. **A number the copy states as a
+/// whole cell has to be accounted for by the table** — by a value some row writes, or by a
+/// comparison some cell makes (a table that merges `1kg`, `2kg` and `3kg` into `<=3kg` has
+/// transcribed all three) — and only cells that are nothing but a number are asked about, so
+/// that `2026年4月1日改定` is not read as an amount somebody forgot.
+///
+/// **Conditions are not held to the copy, only amounts are.** A threshold is rewritten as it
+/// is transcribed — `1,949,000円まで` becomes `<=1949000円` — and an amount is not.
+fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    let dir = Path::new(rule_path).parent().unwrap_or(Path::new(".")).to_path_buf();
+    let mut copies: BTreeMap<(String, String), Option<Vec<Vec<String>>>> = BTreeMap::new();
+    // The copy of one cited table, read once however many rows cite it.
+    let mut copy = |src: &str, frag: &str| -> Option<Vec<Vec<String>>> {
+        let key = (src.to_string(), frag.to_string());
+        if let Some(g) = copies.get(&key) {
+            return g.clone();
+        }
+        let g = (|| {
+            let d = f.sources.iter().find(|d| d.name.text == src)?;
+            // A source that came in with an applied rule was held to its copies there.
+            if d.base.is_some() {
+                return None;
+            }
+            let SourceKind::File { path, .. } = &d.kind else { return None };
+            crate::extract::fragment(frag)?;
+            let doc = dir.join(path);
+            let tsv =
+                std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
+            Some(crate::extract::from_tsv(&tsv))
+        })();
+        copies.insert(key, g.clone());
+        g
+    };
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        if t.applied.is_some() {
+            continue;
+        }
+        let name = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let word = if t.clause { tr!("節", "clause") } else { tr!("表", "table") };
+        for r in &t.rows {
+            let cite = r.cite.as_ref().or(t.cite.as_ref());
+            let Some(c) = cite else { continue };
+            let mut grids = Vec::new();
+            for frag in &c.fragments {
+                if let Some(g) = copy(&c.source, frag) {
+                    grids.push((frag.clone(), g));
+                }
+            }
+            if grids.is_empty() {
+                continue;
+            }
+            let shown: Vec<_> = grids.iter().flat_map(|(_, g)| crate::extract::shown(g)).collect();
+            let missing: Vec<(String, Span)> = amounts(r)
+                .into_iter()
+                .filter(|(_, v, _)| !shown.iter().any(|s| crate::types::same_value(s, v)))
+                .map(|(text, _, span)| (text, span))
+                .collect();
+            if missing.is_empty() {
+                continue;
+            }
+            let frags = grids.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(sep());
+            let values = missing.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>().join(sep());
+            let rn = match &r.label {
+                Some(l) => tr!("行{}（{}）", "row {} ({})", r.index, l.text),
+                None => tr!("行{}", "row {}", r.index),
+            };
+            out.push(
+                Diag::error("E116", tr!("{rn} の金額が、引いた写しにありません", "The amount of {rn} is not in the copy it cites"))
+                    .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
+                    .table(name.clone())
+                    .row(r.index)
+                    .mark(missing[0].1.clone(), tr!("写しに無い: {values}", "not in the copy: {values}"))
+                    .note(tr!("引いた写し: {} {frags}", "The copy cited: {} {frags}", c.source))
+                    .note(tr!(
+                        "金額は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                        "An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. If it came from somewhere else, take the citation off this row and say in a comment at the end of it where the value came from."
+                    )),
+            );
+        }
+        // The other direction, and only for a table that says the whole fragment is what it
+        // transcribes: a row that cites on its own says nothing about the rest of the table.
+        let Some(c) = t.cite.as_ref() else { continue };
+        for frag in &c.fragments {
+            let Some(g) = copy(&c.source, frag) else { continue };
+            let unused: Vec<String> = crate::extract::stated(&g)
+                .into_iter()
+                .filter(|(_, v)| !accounted(t, v))
+                .map(|(text, _)| text)
+                .collect();
+            if unused.is_empty() {
+                continue;
+            }
+            let mut names: Vec<String> = Vec::new();
+            for u in &unused {
+                if !names.contains(u) {
+                    names.push(u.clone());
+                }
+            }
+            let shown_n = names.len().min(8);
+            let more = names.len() - shown_n;
+            let list = names[..shown_n].join(sep())
+                + &if more > 0 { tr!("（あと {more} 個）", " ({more} more)") } else { String::new() };
+            out.push(
+                Diag::warning("W120", tr!("写しの {frag} の値を、どの行も使っていません", "The copy of {frag} states values no row uses"))
+                    .at(tr!("{rule_path}:{} {word} {name}", "{rule_path}:{} {word} {name}", t.span.line))
+                    .table(name.clone())
+                    .mark(c.span.clone(), "")
+                    .note(tr!("どの行にも出てこない値: {list}", "Stated in the copy, used by no row: {list}"))
+                    .note(tr!(
+                        "行を落としていないか確かめてください。この表が写したのが {frag} の一部だけなら、引用を表からこの表の行へ移すと、残りは問われなくなります。",
+                        "Check that no row was left out. If this table transcribes only part of {frag}, moving the citation from the table onto the rows that came from it leaves the rest unasked."
+                    )),
+            );
+        }
+    }
+    out
+}
+
+/// The amounts a row writes: the literals of its output cells, with the text as written and
+/// where it stands. A cell holding a name carries no value of its own.
+fn amounts(r: &crate::ast::Row) -> Vec<(String, (Option<String>, crate::num::Rat), Span)> {
+    let mut out = Vec::new();
+    for (k, o) in r.outs.iter().enumerate() {
+        let crate::ast::OutCell::Lit(crate::ast::Lit::Num(n)) = o else { continue };
+        if let Some(v) = crate::types::comparable(n) {
+            let span = r.out_spans.get(k).cloned().unwrap_or_else(|| r.span.clone());
+            out.push((n.raw.clone(), v, span));
+        }
+    }
+    out
+}
+
+/// Whether a table accounts for a value the copy states: some cell writes it, or some cell's
+/// comparison takes it in.
+fn accounted(t: &crate::ast::Table, v: &(Option<String>, crate::num::Rat)) -> bool {
+    use crate::ast::{Cell, Lit, OutCell};
+    let num = |l: &Lit| match l {
+        Lit::Num(n) => crate::types::comparable(n),
+        _ => None,
+    };
+    for r in &t.rows {
+        for o in &r.outs {
+            if let OutCell::Lit(l) = o {
+                if num(l).is_some_and(|w| crate::types::same_value(&w, v)) {
+                    return true;
+                }
+            }
+        }
+        for (k, c) in r.cells.iter().enumerate() {
+            // A cell that takes the whole column accounts for every value the column counts,
+            // and what it counts is what its own cells say — the only place the units of a
+            // column are visible without the types (§15.82).
+            let whole = || column_dim(t, k).is_some_and(|dim| v.0.is_none() || dim == v.0);
+            let inside = match c {
+                Cell::Lit(l) => num(l).is_some_and(|w| crate::types::same_value(&w, v)),
+                Cell::Set(ls) => ls.iter().any(|l| num(l).is_some_and(|w| crate::types::same_value(&w, v))),
+                // `-` covers the column; `not: 3kg` covers it but for what it names, and a
+                // value it names is one the table wrote down all the same.
+                Cell::DontCare | Cell::Not(_) => whole(),
+                Cell::Cmp(ops) => {
+                    let mut all = true;
+                    let mut any = false;
+                    for (op, l) in ops {
+                        let Some(w) = num(l) else { continue };
+                        // A bound in another dimension says nothing about this value.
+                        if !(w.0.is_none() || v.0.is_none() || w.0 == v.0) {
+                            all = false;
+                            break;
+                        }
+                        any = true;
+                        let c = v.1.cmp_to(w.1);
+                        let ok = match op {
+                            crate::ast::CmpOp::Le => c.is_le(),
+                            crate::ast::CmpOp::Lt => c.is_lt(),
+                            crate::ast::CmpOp::Ge => c.is_ge(),
+                            crate::ast::CmpOp::Gt => c.is_gt(),
+                        };
+                        if !ok {
+                            all = false;
+                            break;
+                        }
+                    }
+                    any && all
+                }
+                _ => false,
+            };
+            if inside {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The dimension a column of a table is written in, as its own cells show it: the first
+/// number any row writes there. A column whose cells hold no number has none, and a `-` in it
+/// accounts for no amount.
+fn column_dim(t: &crate::ast::Table, k: usize) -> Option<Option<String>> {
+    use crate::ast::{Cell, Lit};
+    for r in &t.rows {
+        let lits: Vec<&Lit> = match r.cells.get(k) {
+            Some(Cell::Lit(l)) => vec![l],
+            Some(Cell::Set(ls)) | Some(Cell::Not(ls)) => ls.iter().collect(),
+            Some(Cell::Cmp(ops)) => ops.iter().map(|(_, l)| l).collect(),
+            _ => continue,
+        };
+        for l in lits {
+            if let Lit::Num(n) = l {
+                if let Some((dim, _)) = crate::types::comparable(n) {
+                    return Some(dim);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn sep() -> &'static str {
+    if crate::i18n::ja() { "、" } else { ", " }
 }
 
 /// W119: a pin whose citation is gone. The same for a law's articles and a document's tables.

@@ -268,3 +268,58 @@ mod tests {
         assert_eq!(from_tsv(&tsv(&g)), g);
     }
 }
+
+// --- What a copy says, as values (§15.82) -----------------------------------------------
+
+/// Every number a copy shows, wherever it shows it — inside `990円（税込）` and `60cm以下` as
+/// well as alone in a cell. This is the side a rule's amount is looked for in, so it is read
+/// leniently: a value the copy does show must not be reported as missing.
+pub fn shown(grid: &[Vec<String>]) -> Vec<(Option<String>, crate::num::Rat)> {
+    let mut out = Vec::new();
+    for row in grid {
+        for c in row {
+            // A thousands separator is dropped first: a document writes `1,210円` where the
+            // rule writes `1210円`, and they are the same amount.
+            let plain = c.replace(',', "");
+            let mut i = 0;
+            while i < plain.len() {
+                // A continuation byte of a multi-byte character is never an ASCII digit, so
+                // walking bytes finds exactly the places a number can start.
+                if plain.as_bytes()[i].is_ascii_digit() {
+                    if let Some((n, len)) = crate::lex::number(&plain[i..]) {
+                        if let Some(v) = crate::types::comparable(&n) {
+                            out.push(v);
+                        }
+                        i += len.max(1);
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The numbers a copy states as whole cells: `990円` yes, `2026年4月1日改定` no. This is the
+/// side the rule has to account for, so it is read strictly: a cell that is not simply a
+/// number is not an amount somebody forgot to transcribe.
+pub fn stated(grid: &[Vec<String>]) -> Vec<(String, (Option<String>, crate::num::Rat))> {
+    let mut out = Vec::new();
+    for row in grid {
+        for c in row {
+            let plain = c.replace(',', "");
+            if !plain.starts_with(|ch: char| ch.is_ascii_digit()) {
+                continue;
+            }
+            let Some((n, len)) = crate::lex::number(&plain) else { continue };
+            if len != plain.len() {
+                continue;
+            }
+            if let Some(v) = crate::types::comparable(&n) {
+                out.push((c.clone(), v));
+            }
+        }
+    }
+    out
+}

@@ -258,6 +258,15 @@ const ARTICLE_1: &[(&str, &str)] = &[(
     "sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml",
     "<Article Num=\"1\"><ArticleTitle>第一条</ArticleTitle><Paragraph Num=\"1\"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>\n",
 )];
+/// The document of the E116 and W120 examples, and the copy of its table: two files, because
+/// the smallest reproduction of "the row and the copy disagree" needs a copy to disagree with
+/// (§15.82).
+const TARIFF_DOC: &[(&str, &str)] = &[
+    ("料金表.md", "# 料金表\n\n| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n"),
+    ("料金表.md.fragments/表1.tsv", "あて先\t運賃\n近畿\t990円\n関東\t880円\n"),
+];
+const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| true | 990円 |\n| false | 890円 |\n";
+const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| - | 990円 |\n";
 const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
@@ -1284,6 +1293,21 @@ pub fn ledger() -> Vec<Entry> {
             X_E115,
             &["E103", "E108"],
         ),
+        err(
+            "E116",
+            tr!("行の金額が、引いた写しにありません", "A row's amount is not in the copy it cites"),
+            tr!(
+                "表や行が `@出典 表1` で引いている写しの中に、その行の出力の値がどこにも出てこないとき（§15.82）。比べるのは金額だけです——閾値は写すときに書き換わる（`1,949,000円まで` は `<=1949000円` になる）のに対し、金額は書き換わらないからです。写しは `rulec source fetch` が文書から取り出したもので、check は文書そのものを読み解きません。",
+                "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
+            ),
+            tr!(
+                "写しを読み直して金額を直してください。一桁の打ち間違いなら、たいてい同時に W120 が出て、どの値が使われずに残っているかを言います。値が別のところ（後の通知、正誤表、人の回答）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。`rulec doc` がそのコメントを承認する人に見せます。",
+                "Reread the copy and correct the amount. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver."
+            ),
+            X_E116,
+            &["W120", "E038", "E107"],
+        )
+        .with_files(TARIFF_DOC),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
@@ -1353,12 +1377,28 @@ pub fn ledger() -> Vec<Entry> {
         )
         .with_files(ARTICLE_1),
         warn(
+            "W120",
+            tr!("写しの値を、どの行も使っていません", "The copy states a value no row uses"),
+            tr!(
+                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき（§15.82）。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の行が写しの `1kg`・`2kg`・`3kg` を引き取っているような、まとめて写した場合も出ません。",
+                "A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
+            ),
+            tr!(
+                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。表が写したのが断片の一部だけなら（発地ごとの運賃表のうち一つの発地だけ、など）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
+                "Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116)."
+            ),
+            X_W120,
+            &["E116", "W119"],
+        )
+        .with_files(TARIFF_DOC),
+        warn(
             "W118",
             tr!("準用した表の行が、この規則ではどれも当たりません", "No row of an applied table is reached in this apply"),
             tr!(
                 "準用した表か節の**全行**が、この規則では当たらないとき。読み替えた値がその表の条件に届かないか、この規則のほかの定義（`overrides 準用名:表` で優先する節など）が全部先に取っています。一部の行が当たらないだけなら何も言いません。元の規則の表はこの規則より広い範囲に書かれているのが普通で、そうした行は `doc` が「この準用では当たらない行」として挙げます（§15.69）。",
                 "**Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69)."
             ),
+
             tr!(
                 "その表がこの準用に要らないなら `except <表>` で外してください。要るはずなら、読み替えか `with` の値の対応を見直してください。",
                 "If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping."

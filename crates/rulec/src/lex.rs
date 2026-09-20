@@ -309,6 +309,16 @@ fn try_date(s: &str) -> Option<(i32, u32, u32, usize)> {
 
 /// `120円` `2_000g` `100万円` `10%` `0.5%` `-110万円`. Returns the token and its byte length
 /// including the leading sign when `neg` is set.
+/// One number at the start of `s`, and how many bytes it took: `990円`, `1.5%`, `100万`. What
+/// a document's cell says is read with this too, so that a copy and a table are read in one
+/// language (§15.82).
+pub fn number(s: &str) -> Option<(Num, usize)> {
+    if !s.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
+    lex_number(s, false).ok().filter(|(n, _)| !n.digits.is_empty())
+}
+
 fn lex_number(s: &str, neg: bool) -> Result<(Num, usize), Diag> {
     let mut i = if neg { s.chars().next().unwrap().len_utf8() } else { 0 };
     let start_digits = i;

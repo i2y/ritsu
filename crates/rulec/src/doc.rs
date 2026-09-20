@@ -1257,6 +1257,7 @@ fn table_section(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str], path: &st
         "- どの入力にも当てはまらない行はありません（E102）\n",
         "- There is no row that can never match (E102 unreachable row)\n"
     ));
+    o.push_str(&transcribed(f, t, path));
     let r = region::check_table(t, c, f, path, region::DEFAULT_BUDGET);
     match t.policy {
         Policy::Unique => {
@@ -2341,6 +2342,33 @@ fn html_esc(s: &str) -> String {
 }
 
 /// Inline markdown of the subset the rendering uses: `code` and **bold**, over escaped text.
+/// The fact the copy adds to the list (§15.82): this rendering only exists because `check`
+/// passed, and a table that cites a document's table passed E116 to get here — so every amount
+/// in it is a value the copy shows. It is the one line that ties the table above to the table
+/// quoted under its heading.
+fn transcribed(f: &RuleFile, t: &Table, path: &str) -> String {
+    let Some(cite) = t.cite.as_ref() else { return String::new() };
+    let Some(d) = f.sources.iter().find(|d| d.name.text == cite.source) else { return String::new() };
+    if !matches!(d.kind, SourceKind::File { .. }) {
+        return String::new();
+    }
+    let frags: Vec<&str> = cite
+        .fragments
+        .iter()
+        .filter(|fr| crate::sources::fragment_text(path, d, fr).is_some())
+        .map(|fr| fr.as_str())
+        .collect();
+    if frags.is_empty() {
+        return String::new();
+    }
+    tr!(
+        "- この表の金額は、引いた写し（{} {}）に出てくる値です（E116）\n",
+        "- Every amount in this table is a value the copy it cites ({} {}) shows (E116)\n",
+        cite.source,
+        frags.join(sep())
+    )
+}
+
 /// One pass, so that bold may hold a code span (`**`rulec check` が確かめたこと**` does).
 fn inline_html(s: &str) -> String {
     let mut o = String::new();

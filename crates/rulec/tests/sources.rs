@@ -275,3 +275,64 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
     assert!(rulec::check_source(&bad, &p.to_string_lossy()).iter().any(|x| x.code.starts_with('E')));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// The rows against the copy they say they were transcribed from (§15.82): an amount that the
+/// copy does not show is E116, a number the copy states that no row uses is W120, and the two
+/// together are what a mistyped digit looks like. What the table rewrote on the way in — a
+/// range over rows the copy lists one by one — is neither.
+#[test]
+fn 写した金額と写しを突き合わせる() {
+    let d = scratch("transcribe");
+    let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
+    std::fs::write(d.join("料金表.md"), doc).unwrap();
+    let rule = |fee: &str, cite_table: &str, cite_row: &str| {
+        format!(
+            "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\nenum あて先(dest) = 近畿(kinki) | 関東(kanto)\nenum 区分(size) = S60(s60) | S80(s80)\n\n\
+             inputs\n  あて先(dest) : あて先\n  サイズ(size) : 区分\n\noutputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
+             table 運賃表(fee_table){cite_table}\npolicy unique\n| あて先 | サイズ | -> 運賃 |\n\
+             | 近畿 | S60 | 990円 |{cite_row}\n| 近畿 | S80 | 1210円 |{cite_row}\n| 関東 | S60 | {fee} |{cite_row}\n| 関東 | S80 | 1100円 |{cite_row}\n"
+        )
+    };
+    let p = d.join("a.rule");
+    std::fs::write(&p, rule("880円", "  @料金表 表1", "")).unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let pinned = std::fs::read_to_string(&p).unwrap();
+    let pins: String = pinned.lines().take(5).filter(|l| l.contains("sha256")).collect::<Vec<_>>().join("\n");
+
+    // Transcribed as the copy has it: nothing to say.
+    assert!(codes(&pinned, &p).is_empty(), "{:?}", codes(&pinned, &p));
+
+    // One digit wrong. The amount is on the rounding grid, complete and unique — every other
+    // check is green, and these two are not.
+    let typo = pinned.replace("| 880円 |", "| 890円 |");
+    let ds = rulec::check_source(&typo, &p.to_string_lossy());
+    let e = ds.iter().find(|x| x.code == "E116").expect("E116");
+    assert!(e.title.contains("行3"), "{}", e.title);
+    assert!(e.marks.iter().any(|m| m.label.contains("890円")), "the value is on the mark: {:?}", e.marks);
+    let w = ds.iter().find(|x| x.code == "W120").expect("W120");
+    assert!(w.notes.iter().any(|n| n.contains("880円")), "the value left unused is named: {:?}", w.notes);
+
+    // The citation on the rows says only where each row came from, so the rest of the copy
+    // goes unasked — and the amounts are still held to it.
+    let by_row = rule("890円", "", "  @料金表 表1").replace("source 料金表 = file \"料金表.md\"", &pins);
+    let ds = rulec::check_source(&by_row, &p.to_string_lossy());
+    assert!(ds.iter().any(|x| x.code == "E116"), "{ds:?}");
+    assert!(!ds.iter().any(|x| x.code == "W120"), "{ds:?}");
+
+    // A table that merges what the copy lists one by one has transcribed all of it.
+    std::fs::write(d.join("重量.md"), "| 重量 | 追加 |\n|---|---|\n| 1kg | 100円 |\n| 2kg | 100円 |\n| 3kg | 100円 |\n| 4kg | 250円 |\n").unwrap();
+    let merged = "rule t(t) v1\n\nsource 表 = file \"重量.md\"\n\ninputs\n  重量(w) : mass[kg]  range >=1kg <=4kg\n\noutputs\n  追加(extra) : money[円]  round up(10円)\n\ntable 追加表(extra_table)  @表 表1\npolicy first\n| 重量 | -> 追加 |\n| <=3kg | 100円 |\n| - | 250円 |\n";
+    let q = d.join("b.rule");
+    std::fs::write(&q, merged).unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "b.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let (c, out) = rulec(&d, &["source", "pin", "b.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let merged = std::fs::read_to_string(&q).unwrap();
+    let cs = codes(&merged, &q);
+    assert!(!cs.contains(&"W120".to_string()) && !cs.contains(&"E116".to_string()), "{cs:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}

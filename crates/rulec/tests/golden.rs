@@ -85,6 +85,10 @@ golden!(e038_写しが変わった, "E038", "tests/mutants/m_e038.rule", "E038")
 golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");
 
+// The rows against the copy they were transcribed from (§15.82).
+golden!(e116_写しに無い金額, "E116", "tests/mutants/m_e116.rule", "E116");
+golden!(w120_写し忘れた行, "W120", "tests/mutants/m_w120.rule", "W120");
+
 // A rule applied by another (§15.69).
 golden!(e040_呼び先が変わった, "E040", "tests/mutants/m_e040.rule", "E040");
 golden!(e041_束縛が足りない, "E041", "tests/mutants/m_e041.rule", "E041");

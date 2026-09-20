@@ -1,0 +1,22 @@
+rule 文書運賃(doc_fee) v1
+description "文書から写した基本運賃。写しの一行を写し忘れ、残った行がその入力を拾っている（W120 の変異）"
+
+source 料金表 = file "sources/料金表.md" sha256:620345ff7729d6dd
+  表1 sha256:a583ec8586bbf596
+
+enum あて先(dest) = 近畿(kinki) | 関東(kanto)
+enum サイズ区分(size_class) = S60(s60) | S80(s80)
+
+inputs
+  あて先(dest) : あて先
+  サイズ(size) : サイズ区分
+
+outputs
+  運賃(fee) : money[円]  round up(10円)
+
+table 運賃表(fee_table)  @料金表 表1
+policy unique
+| あて先 | サイズ | -> 運賃 |
+| 近畿   | S60    | 990円   |
+| 近畿   | S80    | 1210円  |
+| 関東   | -      | 880円   |

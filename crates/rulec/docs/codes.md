@@ -67,11 +67,13 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
 | [E114](#e114) | error | A cell value does not sit on the column's step |
 | [E115](#e115) | error | Cannot divide by a variable |
+| [E116](#e116) | error | A row's amount is not in the copy it cites |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
 | [W116](#w116) | warning | No example uses this sequence |
 | [W119](#w119) | warning | A pinned fragment is not cited |
+| [W120](#w120) | warning | The copy states a value no row uses |
 | [W118](#w118) | warning | No row of an applied table is reached in this apply |
 | [W117](#w117) | warning | An exception with no effect |
 | [W115](#w115) | warning | No element can land on this verdict |
@@ -1962,6 +1964,56 @@ policy first
 
 Related codes: [E103](#e103), [E108](#e108)
 
+## E116
+
+`error` — **A row's amount is not in the copy it cites**
+
+**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
+
+**Fix.** Reread the copy and correct the amount. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 料金表 = file "料金表.md" sha256:75465b330d123ab8
+  表1 sha256:0a95cedbd7311274
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : money[円]  round down(1円)
+
+table 表(t1)  @料金表 表1
+policy unique
+| a | -> x |
+| true | 990円 |
+| false | 890円 |
+```
+
+With `料金表.md` beside it:
+
+```proto
+# 料金表
+
+| あて先 | 運賃 |
+|---|---|
+| 近畿 | 990円 |
+| 関東 | 880円 |
+```
+
+With `料金表.md.fragments/表1.tsv` beside it:
+
+```proto
+あて先	運賃
+近畿	990円
+関東	880円
+```
+
+Related codes: [W120](#w120), [E038](#e038), [E107](#e107)
+
 ## W105
 
 `warning` — **Shadowing that needs review: an earlier row hides part of a later one**
@@ -2128,6 +2180,55 @@ With `sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml` beside
 ```
 
 Related codes: [E037](#e037)
+
+## W120
+
+`warning` — **The copy states a value no row uses**
+
+**When.** A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them.
+
+**Fix.** Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 料金表 = file "料金表.md" sha256:75465b330d123ab8
+  表1 sha256:0a95cedbd7311274
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : money[円]  round down(1円)
+
+table 表(t1)  @料金表 表1
+policy unique
+| a | -> x |
+| - | 990円 |
+```
+
+With `料金表.md` beside it:
+
+```proto
+# 料金表
+
+| あて先 | 運賃 |
+|---|---|
+| 近畿 | 990円 |
+| 関東 | 880円 |
+```
+
+With `料金表.md.fragments/表1.tsv` beside it:
+
+```proto
+あて先	運賃
+近畿	990円
+関東	880円
+```
+
+Related codes: [E116](#e116), [W119](#w119)
 
 ## W118
 
