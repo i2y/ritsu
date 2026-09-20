@@ -47,7 +47,18 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
                 .str("type", &crate::types::lit_value_in_pub(n, ty).map(|_| ty.to_string()).unwrap_or_else(|| crate::types::lit_ty_pub(n).to_string()))
                 .finish()
         }
-        Expr::Lit(l, _) => Obj::new().str("lit", &format!("{l:?}")).finish(),
+        // A literal that is not a number: a date, a truth value, a string, or a word whose
+        // type only the context gives. The first three carry their own type so a re-checker
+        // can derive the units around them; a word does not, and the value it sits in is
+        // reported as one whose units were not re-checked rather than passed.
+        Expr::Lit(l, _) => {
+            let o = Obj::new().str("lit", &format!("{l:?}"));
+            match l {
+                Lit::Date(..) => o.str("type", "date").finish(),
+                Lit::Str(_) => o.str("type", "string").finish(),
+                _ => o.finish(),
+            }
+        }
         Expr::Bin(l, op, r, _) => Obj::new()
             .str(
                 "op",
@@ -56,7 +67,14 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
                     BinOp::Sub => "-",
                     BinOp::Mul => "*",
                     BinOp::Div => "/",
-                    _ => "?",
+                    // A comparison is a claim about units too — `注文金額 >= 3万円` is only
+                    // well typed because both sides are 円 — so the operator travels rather
+                    // than being flattened to "?" and left unre-checkable (§15.99).
+                    BinOp::Le => "<=",
+                    BinOp::Ge => ">=",
+                    BinOp::Lt => "<",
+                    BinOp::Gt => ">",
+                    BinOp::Eq => "==",
                 },
             )
             .raw("l", expr_json(l, ty))
@@ -74,28 +92,41 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
 /// Re-checking one is interval arithmetic over the same expression — which is why the
 /// ranges travel with it.
 fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
-    let mut out = Vec::new();
+    // Every value `check` holds to E103 and E108, which is `derive`, `define` **and**
+    // `result` — the last of these is neither `Item`, and leaving it out meant a rule whose
+    // whole arithmetic is one `result` line stated no values at all (§15.99).
+    let mut named: Vec<(&crate::ast::Name, &Expr)> = Vec::new();
     for it in &f.items {
-        let (name, e) = match it {
-            Item::Derived(d) => (&d.name, &d.expr),
-            Item::Define(d) => (&d.name, &d.expr),
-            _ => continue,
-        };
+        match it {
+            Item::Derived(d) => named.push((&d.name, &d.expr)),
+            Item::Define(d) => named.push((&d.name, &d.expr)),
+            _ => {}
+        }
+    }
+    let result_name;
+    if let Some(r) = &f.result {
+        result_name = crate::ast::Name { text: r.name.clone(), ascii: None, span: r.span.clone() };
+        named.push((&result_name, &r.expr));
+    }
+    let mut out = Vec::new();
+    for (name, e) in named {
         let Some(sym) = c.syms.get(&name.text) else { continue };
-        let (Some((lo, hi)), Some(sc)) = (c.interval(e, &sym.ty), c.scale(e)) else { continue };
-        let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-        let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
-        let stored = mag.mul(Rat::int(sc));
-        out.push(
-            Obj::new()
-                .str("name", &name.text)
-                .str("type", &sym.ty.to_string())
-                .raw("expr", expr_json(e, &sym.ty))
-                .raw("interval", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi))))
-                .int("scale", sc)
-                .str("stored_max", &(stored.num / stored.den).to_string())
-                .finish(),
-        );
+        let obj = Obj::new().str("name", &name.text).str("type", &sym.ty.to_string()).raw("expr", expr_json(e, &sym.ty));
+        // A value the tool could not bound is stated with no interval rather than left out.
+        // Omitting it hid the value itself: a reader could not tell it existed, and neither
+        // re-checker could say that the int64 claim had not been made for it.
+        let obj = match (c.interval(e, &sym.ty), c.scale(e)) {
+            (Some((lo, hi)), Some(sc)) => {
+                let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
+                let mag = if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) };
+                let stored = mag.mul(Rat::int(sc));
+                obj.raw("interval", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi))))
+                    .int("scale", sc)
+                    .str("stored_max", &(stored.num / stored.den).to_string())
+            }
+            _ => obj.raw("interval", "null").raw("scale", "null").raw("stored_max", "null"),
+        };
+        out.push(obj.finish());
     }
     out
 }
@@ -198,6 +229,7 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .str("column", &a.name)
                 .str("kind", a.kind)
                 .raw("coords", crate::json::strs(&a.coords))
+                .raw("step", a.step.map(|v| crate::json::quote(&rat(&v))).unwrap_or_else(|| "null".into()))
                 .raw("bounds", arr(&bounds))
                 .finish()
         })
@@ -213,6 +245,7 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .raw("cells", crate::json::strs(&r.cells))
                 .raw("tests", arr(&r.tests.iter().map(cell_json).collect::<Vec<_>>()))
                 .str("origin", &r.origin)
+                .int("line", r.line as i128)
                 .raw("source", source_json(src, &r.spans, &r.tests))
                 .raw("accepts", arr(&accepts))
                 .finish()
@@ -253,12 +286,14 @@ fn table_json(t: CertTable, src: &str) -> String {
     Obj::new()
         .str("table", &t.name)
         .str("policy", t.policy)
+        .int("outputs", t.outputs as i128)
         .raw("axes", arr(&axes))
         .raw("rows", arr(&rows))
         .raw("disjoint", arr(&disjoint))
         .raw("undecided", arr(&undecided))
         .raw("reach", arr(&reach))
         .raw("unused", arr(&t.unused.iter().map(|r| r.to_string()).collect::<Vec<_>>()))
+        .raw("unreachable", arr(&t.unreachable.iter().map(|r| r.to_string()).collect::<Vec<_>>()))
         .raw(
             "constraints",
             arr(&t

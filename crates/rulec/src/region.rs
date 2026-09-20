@@ -86,47 +86,16 @@ impl Axis {
             Axis::Bool => 2,
         }
     }
-    /// The concrete value used as a witness. §11 principle 2 prefers declaration order for
-    /// enums and boundary values for numbers.
-    fn witness(&self, i: usize) -> String {
-        match self {
-            Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
-            Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
-            Axis::Num { date: true, coords, step, .. } => match coords.get(i) {
-                // For dates, prefer a boundary (an actual calendar day). The midpoint of an
-                // interval need not be one.
-                Some(Coord::Point(v)) => {
-                    let (y, m, d) = crate::types::ord_to_date(*v);
-                    format!("{y:04}-{m:02}-{d:02}")
-                }
-                Some(Coord::Open(a, b)) => {
-                    // Dates are serial day numbers, so an open interval always contains a real
-                    // calendar day. Print that day instead of hedging with "around".
-                    let (y, m, d) = crate::types::ord_to_date(inside(*a, *b, *step));
-                    format!("{y:04}-{m:02}-{d:02}")
-                }
-                None => String::new(),
-            },
-            Axis::Num { unit, coords, shown, step, .. } => {
-                let w = |v: Rat| format!("{}{unit}", v.mul(Rat::int(*shown)));
-                match coords.get(i) {
-                    Some(Coord::Point(v)) => w(*v),
-                    Some(Coord::Open(a, b)) => w(inside(*a, *b, *step)),
-                    None => String::new(),
-                }
-            }
-        }
-    }
-
-    /// The witness value as a plain number on the axis's own scale: the coordinate a
-    /// point names stands for this value, and the bounds in the certificate are written on
-    /// the same scale. `None` where the coordinate stands for no number at all — an enum,
-    /// a flag — which is also every coordinate the sieve has nothing to say about.
+    /// The value a coordinate stands for, or the one chosen for it.
     ///
-    /// `witness_val` below is the reader's form: a rate comes out as its wire count and a
-    /// date as `YYYY-MM-DD`, neither of which can be compared with a bound. The re-checker
-    /// needs the number, so the certificate carries both (§15.97).
-    pub(crate) fn witness_num(&self, i: usize) -> Option<Rat> {
+    /// A coordinate confines its value to an interval, and a `constraint` can tie two
+    /// axes together, so the value cannot always be read off one axis alone. Where the
+    /// caller has solved for it, `chosen` carries it; where it has not, the coordinate's
+    /// own reading is used (§15.99).
+    fn value_at(&self, i: usize, chosen: Option<Rat>) -> Option<Rat> {
+        if chosen.is_some() {
+            return chosen;
+        }
         match self {
             Axis::Enum { .. } | Axis::Bool => None,
             Axis::Num { coords, step, .. } => match coords.get(i) {
@@ -137,23 +106,56 @@ impl Axis {
         }
     }
 
+    /// The concrete value used as a witness. §11 principle 2 prefers declaration order for
+    /// enums and boundary values for numbers.
+    fn witness_at(&self, i: usize, chosen: Option<Rat>) -> String {
+        match self {
+            Axis::Enum { values } => values.get(i).cloned().unwrap_or_default(),
+            Axis::Bool => if i == 0 { crate::kw::TRUE.into() } else { crate::kw::FALSE.into() },
+            // Dates are serial day numbers, so every value on the axis — the ends of a
+            // coordinate included — is a real calendar day. Print that day.
+            Axis::Num { date: true, .. } => match self.value_at(i, chosen) {
+                Some(v) => {
+                    let (y, m, d) = crate::types::ord_to_date(v);
+                    format!("{y:04}-{m:02}-{d:02}")
+                }
+                None => String::new(),
+            },
+            Axis::Num { unit, shown, .. } => match self.value_at(i, chosen) {
+                Some(v) => format!("{}{unit}", v.mul(Rat::int(*shown))),
+                None => String::new(),
+            },
+        }
+    }
+
+    fn witness(&self, i: usize) -> String {
+        self.witness_at(i, None)
+    }
+
+    /// The witness value as a plain number on the axis's own scale: the coordinate a
+    /// point names stands for this value, and the bounds in the certificate are written on
+    /// the same scale. `None` where the coordinate stands for no number at all — an enum,
+    /// a flag — which is also every coordinate the sieve has nothing to say about.
+    ///
+    /// `witness_val` below is the reader's form: a rate comes out as its wire count and a
+    /// date as `YYYY-MM-DD`, neither of which can be compared with a bound. The re-checker
+    /// needs the number, so the certificate carries both (§15.97).
+    pub(crate) fn witness_num(&self, i: usize, chosen: Option<Rat>) -> Option<Rat> {
+        self.value_at(i, chosen)
+    }
+
     /// The same witness value, typed, for the structured half of a diagnostic. Numbers come
     /// out as integers in the canonical unit and dates as `YYYY-MM-DD`, which is the wire
     /// shape of §10.2 — a caller can hand a witness straight to a vector or a fixture.
-    fn witness_val(&self, i: usize) -> crate::diag::WVal {
+    fn witness_val(&self, i: usize, chosen: Option<Rat>) -> crate::diag::WVal {
         use crate::diag::WVal;
         match self {
-            Axis::Enum { .. } => WVal::Str(self.witness(i)),
+            Axis::Enum { .. } => WVal::Str(self.witness_at(i, chosen)),
             Axis::Bool => WVal::Bool(i == 0),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
-            Axis::Num { date: true, .. } => WVal::Str(self.witness(i)),
-            Axis::Num { coords, wire, step, .. } => {
-                let v = match coords.get(i) {
-                    Some(Coord::Point(v)) => *v,
-                    Some(Coord::Open(a, b)) => inside(*a, *b, *step),
-                    None => Rat::zero(),
-                };
-                WVal::Int(crate::types::wire_int(v, *wire))
+            Axis::Num { date: true, .. } => WVal::Str(self.witness_at(i, chosen)),
+            Axis::Num { wire, .. } => {
+                WVal::Int(crate::types::wire_int(self.value_at(i, chosen).unwrap_or(Rat::zero()), *wire))
             }
         }
     }
@@ -892,11 +894,13 @@ impl TableRegion {
     /// Witnesses are written in the table's column order. The search's convenience (narrow
     /// axes first) is not shown to the reader.
     fn witness_text(&self, path: &[usize]) -> String {
+        let vals = self.witness_values(path);
         let mut items: Vec<(usize, String)> = (0..self.axes.len())
             .map(|ai| {
+                let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
                 (
                     self.display_of[ai],
-                    format!("{} = {}", self.col_names[ai], self.axes[ai].witness(path.get(ai).copied().unwrap_or(0))),
+                    format!("{} = {}", self.col_names[ai], self.axes[ai].witness_at(path.get(ai).copied().unwrap_or(0), v)),
                 )
             })
             .collect();
@@ -906,13 +910,15 @@ impl TableRegion {
 
     /// The same witness, as `(column, value)` pairs in the table's visible column order.
     fn witness_pairs(&self, path: &[usize]) -> Vec<(String, crate::diag::WVal)> {
+        let vals = self.witness_values(path);
         let mut items: Vec<(usize, (String, crate::diag::WVal))> = (0..self.axes.len())
             .map(|ai| {
+                let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
                 (
                     self.display_of[ai],
                     (
                         self.col_names[ai].clone(),
-                        self.axes[ai].witness_val(path.get(ai).copied().unwrap_or(0)),
+                        self.axes[ai].witness_val(path.get(ai).copied().unwrap_or(0), v),
                     ),
                 )
             })
@@ -925,9 +931,11 @@ impl TableRegion {
     /// output cells are copied from the table's first row: **the tool does not know the
     /// amount**, only the shape, and the notes say so. This is E101's `fix.text`.
     fn row_text(&self, path: &[usize], t: &Table) -> Option<String> {
+        let vals = self.witness_values(path);
         let mut cells: Vec<(usize, String)> = (0..self.axes.len())
             .map(|ai| {
-                (self.display_of[ai], self.axes[ai].witness(path.get(ai).copied().unwrap_or(0)))
+                let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
+                (self.display_of[ai], self.axes[ai].witness_at(path.get(ai).copied().unwrap_or(0), v))
             })
             .collect();
         cells.sort_by_key(|(d, _)| *d);
@@ -1908,6 +1916,128 @@ impl TableRegion {
         self.spans.get(name).copied()
     }
 
+    /// A coordinate as a closed interval on the grid, for a name this table has an axis
+    /// for; the declared range for one it does not. The witness needs the grid reading:
+    /// an open end is not a value anything can take.
+    fn closed_of_name(&self, name: &str, path: &[usize]) -> Option<Ival> {
+        if let Some(ai) = self.col_names.iter().position(|n| n == name) {
+            if let Some(&ci) = path.get(ai) {
+                if let Some(sp) = self.coord_closed(ai, ci) {
+                    return Some(sp);
+                }
+            }
+        }
+        self.spans.get(name).copied()
+    }
+
+    /// **The values behind a point, chosen so that every `constraint` holds.**
+    ///
+    /// Each coordinate confines its value to an interval, and a `constraint` ties two
+    /// names together. Taking the low end of each interval on its own can break one — and
+    /// a witness that breaks a constraint is a witness to nothing (§11 principle 2): the
+    /// input it names cannot arrive, and a reader who pastes it gets a row that is dead.
+    /// So the bounds are pushed along the constraints until they stop moving, the low end
+    /// of each is taken, and the result is **checked against every constraint** before it
+    /// is handed back. `None` means no assignment was found: the box may still be
+    /// reachable — the sieve reads each constraint on its own — but this program will not
+    /// name a point it cannot stand behind (§15.99).
+    fn witness_values(&self, path: &[usize]) -> Option<Vec<Option<Rat>>> {
+        use std::cmp::Ordering::*;
+        let step_of = |name: &str| -> Rat {
+            match self.col_names.iter().position(|n| n == name).map(|ai| &self.axes[ai]) {
+                Some(Axis::Num { step, .. }) => *step,
+                _ => Rat::int(1),
+            }
+        };
+        // A lower bound only ever rises and an upper bound only ever falls; `None` is the
+        // end that is not there, which is minus or plus infinity depending on which end
+        // it is, so it never wins.
+        let raise = |a: Option<Rat>, b: Option<Rat>| -> Option<Rat> {
+            match (a, b) {
+                (Some(x), Some(y)) => Some(if x.cmp_to(y) == Less { y } else { x }),
+                (x, None) => x,
+                (None, y) => y,
+            }
+        };
+        let drop_to = |a: Option<Rat>, b: Option<Rat>| -> Option<Rat> {
+            match (a, b) {
+                (Some(x), Some(y)) => Some(if x.cmp_to(y) == Greater { y } else { x }),
+                (x, None) => x,
+                (None, y) => y,
+            }
+        };
+        let mut b: BTreeMap<String, Ival> = BTreeMap::new();
+        let mut ks: Vec<&crate::ast::Constraint> = Vec::new();
+        for k in &self.constraints {
+            let (Some(l), Some(r)) = (self.closed_of_name(&k.left, path), self.closed_of_name(&k.right, path))
+            else {
+                continue;
+            };
+            b.entry(k.left.clone()).or_insert(l);
+            b.entry(k.right.clone()).or_insert(r);
+            ks.push(k);
+        }
+        // Bellman-Ford over the difference constraints: one pass per name is enough for
+        // the bounds to travel the longest chain, and a cycle settles on equality.
+        for _ in 0..=b.len() {
+            let mut moved = false;
+            for k in &ks {
+                let (Some(&(ll, lh)), Some(&(rl, rh))) = (b.get(&k.left), b.get(&k.right)) else { continue };
+                let gap = |n: &str, strict: bool| if strict { step_of(n) } else { Rat::zero() };
+                let (nlh, nrl, nll, nrh) = match k.op {
+                    // left <= right: the left cannot pass the right's top, and the right
+                    // cannot sit below the left's bottom.
+                    CmpOp::Le | CmpOp::Lt => {
+                        let d = gap(&k.left, k.op == CmpOp::Lt);
+                        (drop_to(lh, rh.map(|v| v.sub(d))), raise(rl, ll.map(|v| v.add(gap(&k.right, k.op == CmpOp::Lt)))), ll, rh)
+                    }
+                    CmpOp::Ge | CmpOp::Gt => {
+                        let d = gap(&k.right, k.op == CmpOp::Gt);
+                        (lh, rl, raise(ll, rl.map(|v| v.add(gap(&k.left, k.op == CmpOp::Gt)))), drop_to(rh, lh.map(|v| v.sub(d))))
+                    }
+                };
+                let changed = |a: Option<Rat>, c: Option<Rat>| !matches!((a, c), (None, None)) && a.map(|x| x.num) != c.map(|x| x.num);
+                if changed(lh, nlh) || changed(rl, nrl) || changed(ll, nll) || changed(rh, nrh) {
+                    moved = true;
+                }
+                b.insert(k.left.clone(), (nll, nlh));
+                b.insert(k.right.clone(), (nrl, nrh));
+            }
+            if !moved {
+                break;
+            }
+        }
+        let pick = |iv: &Ival| -> Option<Rat> { iv.0.or(iv.1) };
+        for (_, iv) in b.iter() {
+            if matches!((iv.0, iv.1), (Some(x), Some(y)) if x.cmp_to(y) == Greater) {
+                return None;
+            }
+        }
+        // Hand nothing back that does not satisfy what the rule declares.
+        for k in &ks {
+            let (Some(x), Some(y)) = (b.get(&k.left).and_then(pick), b.get(&k.right).and_then(pick)) else {
+                continue;
+            };
+            let ok = match k.op {
+                CmpOp::Le => x.cmp_to(y) != Greater,
+                CmpOp::Lt => x.cmp_to(y) == Less,
+                CmpOp::Ge => x.cmp_to(y) != Less,
+                CmpOp::Gt => x.cmp_to(y) == Greater,
+            };
+            if !ok {
+                return None;
+            }
+        }
+        Some(
+            (0..self.axes.len())
+                .map(|ai| {
+                    let by_constraint = b.get(&self.col_names[ai]).and_then(pick);
+                    self.axes[ai].witness_num(path.get(ai).copied().unwrap_or(0), by_constraint)
+                })
+                .collect(),
+        )
+    }
+
     /// Whether a `constraint` can hold anywhere in this box. Interval arithmetic, the same
     /// shape the derived sieve uses: only a relation that is impossible for **every** pair of
     /// values the box allows takes the box out (§15.55).
@@ -1999,6 +2129,10 @@ pub struct CertAxis {
     /// Each coordinate as a closed interval of true values, where the axis is numeric.
     /// `None` for an enum or a boolean; an unbounded end is `None` inside the pair.
     pub bounds: Vec<Option<(Option<Rat>, Option<Rat>)>>,
+    /// The grid the axis's values sit on, where it is numeric. Two coordinates that touch
+    /// share an end; two that are one step apart have nothing between them, and without
+    /// the step a re-checker cannot tell that from a coordinate quietly removed (§15.99).
+    pub step: Option<Rat>,
 }
 
 /// One row as a box: the coordinates it accepts on each axis, and the cells it was written
@@ -2025,6 +2159,10 @@ pub struct CertRow {
     /// The member table the row was written in. Rows that share one were written in one
     /// table, so they have a cell in the same columns and in no others.
     pub origin: String,
+    /// The line the row itself is written on, or 0 for a row an `apply` brought in. Every
+    /// cell of the row is on this line; a `clause` whose `when` names no column has no
+    /// cell at all, and this is the only thing that says where it is (§15.99).
+    pub line: usize,
 }
 
 /// One cell, as the re-checker reads it.
@@ -2040,6 +2178,10 @@ pub enum CertCell {
 pub struct CertTable {
     pub name: String,
     pub policy: &'static str,
+    /// How many columns the table writes to the right of `->`. A re-checker splits a row's
+    /// line on `|` and needs this to know where the cells stop and the answers begin: the
+    /// cells the certificate names have to be **every** field before them (§15.99).
+    pub outputs: usize,
     pub axes: Vec<CertAxis>,
     pub rows: Vec<CertRow>,
     /// `unique` only: for each pair of rows, an axis on which their coordinates do not meet.
@@ -2057,6 +2199,10 @@ pub struct CertTable {
     /// are outside the reachability claim, and the certificate says which they are rather
     /// than passing over them.
     pub unused: Vec<usize>,
+    /// Rows the sieve rules out entirely: every point of the row's box is one no input
+    /// reaches. E102 does not look at the sieve, so `check` passes them; the certificate
+    /// names them rather than leaving a row with no point and no reason.
+    pub unreachable: Vec<usize>,
     /// The completeness cover: the walk of §6.3, written down. `None` when it ran past the
     /// budget — a certificate says what it does not have.
     pub cover: Option<Cover>,
@@ -2134,6 +2280,10 @@ impl TableRegion {
                     "upstream"
                 },
                 coords: (0..self.axes[ai].len()).map(|c| self.axes[ai].witness(c)).collect(),
+                step: match &self.axes[ai] {
+                    Axis::Num { step, .. } => Some(*step),
+                    _ => None,
+                },
                 bounds: self.coord_bounds(ai),
             })
             .collect();
@@ -2152,6 +2302,7 @@ impl TableRegion {
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
                     .collect(),
                 origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                line: if applied.get(ri).copied().unwrap_or(false) { 0 } else { row.span.line },
                 spans: if applied.get(ri).copied().unwrap_or(false) {
                     Vec::new()
                 } else {
@@ -2189,29 +2340,38 @@ impl TableRegion {
         undecided.sort_unstable();
         undecided.dedup();
 
-        let (mut reach, mut unused) = (Vec::new(), Vec::new());
+        let (mut reach, mut unused, mut unreachable) = (Vec::new(), Vec::new(), Vec::new());
+        let mut left = crate::region::DEFAULT_BUDGET;
         for ri in 0..t.rows.len() {
-            match self.reach_point(ri, unique) {
+            match self.reach_point(ri, unique, &mut left) {
                 Some(p) => {
                     let input = self.witness_pairs(&p);
-                    let nums = (0..self.axes.len())
-                        .map(|ai| self.axes[ai].witness_num(p.get(ai).copied().unwrap_or(0)))
-                        .collect();
+                    // The values behind the point, solved against the constraints. Where no
+                    // assignment was found the certificate states none, and a re-checker
+                    // falls back to the weaker reading and says which one it used (§15.99).
+                    let nums = self
+                        .witness_values(&p)
+                        .unwrap_or_else(|| vec![None; self.axes.len()]);
                     reach.push((ri + 1, p, input, nums));
                 }
                 None if applied.get(ri).copied().unwrap_or(false) => unused.push(ri + 1),
-                None => {}
+                // The sieve rules out every point of the row. E102 does not sieve, so
+                // `check` is silent about it; dropping the row here made the certificate
+                // look as though it had simply forgotten one (§15.99).
+                None => unreachable.push(ri + 1),
             }
         }
         CertTable {
             name: t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
             policy: if unique { "unique" } else { "first" },
+            outputs: t.outputs.len(),
             axes,
             rows,
             disjoint,
             undecided,
             reach,
             unused,
+            unreachable,
             cover,
             constraints: self.constraint_list(),
         }
@@ -2220,28 +2380,42 @@ impl TableRegion {
     /// A coordinate point that reaches a row: inside its box, feasible, and — under
     /// `policy first` — outside every row above it, since a point an earlier row also takes
     /// is decided by that row and reaches nothing.
-    fn reach_point(&self, ri: usize, unique: bool) -> Option<Vec<usize>> {
-        let mut path = vec![0usize; self.axes.len()];
-        self.reach_rec(ri, unique, 0, &mut path)
+    /// A point that reaches a row, or nothing.
+    ///
+    /// The walk prunes on the prefix and is charged to a budget, both for the same reason
+    /// as §6.3: a wide table's full-depth points are a product, and asking the sieve only
+    /// at the bottom walks all of them. Twelve columns of eleven coordinates is 11¹¹
+    /// points, and the tool sat there (§15.99).
+    fn reach_point(&self, ri: usize, unique: bool, budget: &mut i64) -> Option<Vec<usize>> {
+        let mut p: Vec<usize> = Vec::new();
+        self.reach_rec(ri, unique, &mut p, budget)
     }
 
-    fn reach_rec(&self, ri: usize, unique: bool, ai: usize, path: &mut Vec<usize>) -> Option<Vec<usize>> {
-        if ai == self.axes.len() {
-            if self.feasible(path) == Feasible::No {
-                return None;
-            }
-            if !unique && (0..ri).any(|k| (0..self.axes.len()).all(|a| self.masks[k][a][path[a]])) {
-                return None;
-            }
-            return Some(path.clone());
+    fn reach_rec(&self, ri: usize, unique: bool, p: &mut Vec<usize>, budget: &mut i64) -> Option<Vec<usize>> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
         }
+        if p.len() == self.axes.len() {
+            if self.feasible(p) == Feasible::No {
+                return None;
+            }
+            if !unique && (0..ri).any(|k| (0..self.axes.len()).all(|a| self.masks[k][a][p[a]])) {
+                return None;
+            }
+            return Some(p.clone());
+        }
+        let ai = p.len();
         for c in 0..self.axes[ai].len() {
             if !self.masks[ri][ai][c] {
                 continue;
             }
-            path[ai] = c;
-            if let Some(p) = self.reach_rec(ri, unique, ai + 1, path) {
-                return Some(p);
+            p.push(c);
+            let keep = self.feasible(p) != Feasible::No;
+            let got = if keep { self.reach_rec(ri, unique, p, budget) } else { None };
+            p.pop();
+            if got.is_some() {
+                return got;
             }
         }
         None

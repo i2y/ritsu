@@ -352,17 +352,18 @@ document. The tests hold both to forged certificates as well as to the corpus.
  "values":[{"name":"残高A","expr":{"op":"-","l":{"name":"合計"},"r":{"name":"割引A"}},
             "interval":["-100000","1000000"],"scale":1,"stored_max":"1000000"}],
  "tables":[{"table":"適用判定","policy":"unique",
-   "axes":[{"column":"残高A","kind":"derived","coords":["999円","1000円","1001円"],
+   "axes":[{"column":"残高A","kind":"derived","coords":["999円","1000円","1001円"],"step":"1",
             "bounds":[[null,"1000"],["1000","1000"],["1000",null]]}],
+   "outputs":1,
    "rows":[{"row":1,"label":"","cells":["<= 1000円","-"],
             "tests":[{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]},{"cell":"any"}],
-            "origin":"適用判定",
+            "origin":"適用判定","line":21,
             "source":[{"line":21,"col":2,"len":9,"text":"<=1000円"},{"line":21,"col":15,"len":1,"text":"-"}],
             "accepts":[[0,1],[0,1,2]]}],
-   "disjoint":[{"a":1,"b":3,"axis":0}],
+   "disjoint":[{"a":1,"b":3,"axis":0},{"a":2,"b":3,"axis":0}],
    "undecided":[{"a":1,"b":2}],
    "reach":[{"row":1,"at":[0,0],"values":{"残高A":999,"残高B":3979},"at_values":["999","3979"]}],
-   "unused":[],
+   "unused":[],"unreachable":[],
    "constraints":[],
    "cover":{"split":[{"row":1},{"row":1},{"split":[{"row":3},{"row":2},{"row":2}]}]}}]}
 ```
@@ -371,15 +372,15 @@ document. The tests hold both to forged certificates as well as to the corpus.
 |---|---|
 | `types` | every name's declared type, and `groups` every group's members. A row's box and a value's type are **derived** from these by the re-checker, not taken from the certificate |
 | `ranges` | every name's declared range, as exact rationals (`"7/2"`, an open end `null`). The int64 claim is re-checked from these |
-| `values` | every value the rule computes: the type the rule declares for it, the expression as a tree, the interval the ranges force it into, the scale it is stored at, and the integer that interval reaches. Two things are re-checked from this: the units (§2.1, E103), by deriving each node's type from the leaves up — a name's from `types`, a literal's from the `type` it carries — and int64 (§7.4, E108), by interval arithmetic over the same expression. A literal also carries the value its unit resolves to, so the re-checker does arithmetic and not units |
-| `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2) and, for a numeric axis, each coordinate as a closed interval in `bounds`. `kind` is `input`, `derived`, `define` or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker |
+| `values` | every value the rule computes — `derive`, `define` and `result` alike: the type the rule declares for it, the expression as a tree, the interval the ranges force it into, the scale it is stored at, and the integer that interval reaches. A value with no interval to state (a truth value, an enum) says `null` for all three, and a re-checker refuses that for a type that is stored as an integer. Two things are re-checked from this: the units (§2.1, E103), by deriving each node's type from the leaves up — a name's from `types`, a literal's from the `type` it carries — and int64 (§7.4, E108), by interval arithmetic over the same expression. A literal also carries the value its unit resolves to, so the re-checker does arithmetic and not units |
+| `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2), for a numeric axis each coordinate as a closed interval in `bounds`, and the `step` its values sit on. `kind` is `input`, `derived`, `define` or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker. A re-checker holds a numeric axis to §6.2's construction: the coordinates run from the declared range's low end to its high end, each touching the next or one `step` past it, with nothing between — so a coordinate cannot be quietly removed and the gap under it left uncovered |
 | `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"any"}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
-| `origin` | the table the row was written in. Rows of one table have a cell in the same columns and in no others, and are written in a run of lines no other table's rows fall inside — both of which the re-checker holds them to |
-| `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` the re-checker reads the file and compares. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have |
+| `origin`, `line` | the table the row was written in, and the line it is written on. Rows of one table have a cell in the same columns and in no others, are all written in this file or all brought in by an `apply`, and take a run of lines in row order that no other table's rows fall inside — all of which a re-checker holds them to |
+| `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` a re-checker reads the file and compares, and the span has to be that cell's own place: every cell of a row is on the row's `line`, they are that line's `|`-separated fields, all of them (`outputs` says how many of the line's fields are answers rather than cells), and none of them is empty. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have, and then every row of that table has to agree |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
 | `undecided` | the pairs the check could not settle either way — the W114 warning, stated rather than proved. A pair in neither list is a certificate that does not hold |
 | `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns, and `at_values` those values as plain numbers on the axes' own scale — which is what lets the re-checker show the point is one the sieve admits, and not merely one inside the row's box. Under `policy first` the point is also outside every row above it |
-| `unused` | rows an `apply` brought in that this rule's bindings leave unused (§15.69). They are outside the reachability claim, and are named rather than passed over |
+| `unused`, `unreachable` | rows outside the reachability claim, named rather than passed over: ones an `apply` brought in that this rule's bindings leave unused (§15.69), and ones the sieve rules out entirely — E102 does not look at the sieve, so `check` passes those and the certificate says so. A row called unused has to be one written in another file, which the `source` of that row shows |
 | `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range, or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"upstream":…}` is **stated, not proved**: re-checking one needs the upstream table's own region, which this certificate does not carry. `null` when the walk ran past the budget |
 | `constraints` | the `constraint` lines a cover leaf points at |
 
@@ -396,14 +397,24 @@ every value in it satisfies the cell, **provided** no value a cell compares agai
 strictly inside a coordinate — §6.2's construction, which the checkers verify rather than
 assume.
 
-**Where it stops.** Four things are stated and cannot be re-checked from the document alone:
-what a literal's unit resolves to (`1万円` → `10000`) except where that literal is one of the
-axis's own boundaries, a cover leaf that rests on an upstream table, the pairs W114 could not
-settle, and the rows an `apply` brought in — those are written in the applied rule, and its
-own certificate is where they are read back. `tools/recheck.py` does parse the cell text it
-reads out of the file and holds the certificate's operators and numbers to it; the Lean
-program does not, because a checker that parses a rule the way rulec parses it is not
-independent of it — it reads each cell back byte for byte and recomputes the box from the
+**Where it stops.** The file is tied to the document by its digest and, cell by cell, by the
+byte spans above. Everything else the certificate says about the rule is **its own word**,
+and no re-checker can go behind it without parsing the `.rule` file — which neither does, on
+purpose: a checker that reads a rule the way rulec reads it is not independent of it. So
+these are stated, not derived: the declared `ranges` and `types`, the `groups`, the
+`constraints`, each value's `expr` and `scale`, and how many `outputs` a table has. A forged
+one of those is a forged rule, not a forged proof about the rule in front of you.
+
+Five more things are named in the run rather than proved, and both programs end with a line
+that lists them rather than printing a clean "ok": a cover leaf resting on an upstream table,
+the pairs W114 could not settle, rows an `apply` brought in, rows the sieve rules out, and a
+point handed over with no values behind it. One thing is counted: a cell literal written in a
+unit the axis does not write its own coordinates in (`2kg` against an axis of grams), where
+pinning the number would take the lexer's unit table. A literal in the axis's own unit has to
+be one of its boundaries or lie outside it altogether (§6.2).
+
+`tools/recheck.py` parses the cell text it reads out of the file and holds the certificate's
+operators and numbers to it; the Lean program does not, and recomputes the box from the
 parsed form instead. A rule that does not pass `check` produces no certificate at all.
 
 ```console
@@ -412,15 +423,16 @@ $ python3 tools/recheck.py --rule rules/健康保険料.rule cert.json
 健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.11.0
   units: 4 values keep the type the rule declares
   int64: 4 values fit
-  等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells
-  適用料率: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells
+  等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
+  適用料率: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells, 0 axes tiled
   the digest is rules/健康保険料.rule's
   the file says the same: 52 cells read back from it
+  every claim this program states was proved
 
 $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/健康保険料.rule cert.json
 健康保険料 (0.11.0), re-checked against the Lean proofs
   values: 4 typed, 4 held to int64, 0 not re-checked
-  等級: 50 rows — complete, 50 rows reached, no two rows meet
+  等級: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
     50 boxes read back from the cells they were written as
   適用料率: 2 rows — complete, 2 rows reached, no two rows meet
     2 boxes read back from the cells they were written as
@@ -428,8 +440,8 @@ $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules
 OK: every claim this program states was proved, by the theorems in RulecCert.Sound.
 ```
 
-Exit code 0 when every table holds, 1 when a claim does not, 2 for a certificate it cannot
-read.
+Exit code 0 when every table holds and 1 when a claim does not; `tools/recheck.py` answers 2
+for a certificate it cannot read at all.
 
 ## `schema` and `adapter`
 

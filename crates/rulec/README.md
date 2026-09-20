@@ -78,19 +78,26 @@ which each pair of rows of a `unique` table parts, a point that reaches every ro
 values behind it, and the interval and the type every computed value is forced into. It
 also says where every cell stands in your file, down to the byte, and quotes it.
 `tools/recheck.py` — one dependency-free file that shares no code with rulec — recomputes
-each box from the cell it was read from, reads every cell back out of the `.rule` text and
-holds the rest to those claims, in milliseconds. None of it asks the reader to search,
-which is the difference between evidence and running the same program twice.
+each box from the cell it was read from, reads every cell back out of the `.rule` text at
+its own line and column, and holds the rest to those claims, in milliseconds. None of it
+asks the reader to search, which is the difference between evidence and running the same
+program twice.
 
 **And the checks are proved to imply the claims.** `proofs/` is a Lean 4 development in
 four parts: what a table means, the checks a certificate has to pass written as functions,
 the theorems that each check settles its claim, and a program that runs those very
 functions over a real certificate. `lake build` checks the proofs; the program it produces
-re-checks the corpus in CI. Writing it found a soundness bug in the completeness check —
-the sieve was asked about one corner of a box instead of the box (§15.98) — and two in the
-re-checker. What stays stated: the pairs (3) could not settle, a leaf resting on a table
-above, rows an `apply` brought in from another file, and what a literal's unit resolves to
-where that literal is not one of the axis's own boundaries.
+re-checks the corpus in CI. Writing it, and reading it back adversarially, found a
+soundness bug in the completeness check — the sieve was asked about one corner of a box
+instead of the box (§15.98) — a witness that could break the rule's own `constraint`, and
+eleven ways a forged certificate got past one of the re-checkers (§15.99).
+
+What a certificate is **not** is a proof that it describes your file. The digest ties it to
+one text and every cell is quoted from its own place in it; the declared ranges, the types,
+the constraints and each value's expression are the document's own word. And five things
+are named in the run rather than proved — a leaf resting on a table above, the pairs (3)
+could not settle, rows an `apply` brought in, rows the sieve rules out, a point with no
+values behind it — so a run that has any of them says so instead of printing a clean "ok".
 
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 

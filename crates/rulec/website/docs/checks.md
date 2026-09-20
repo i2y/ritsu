@@ -138,9 +138,11 @@ programs re-check it: `tools/recheck.py`, one dependency-free file, and the prog
 `proofs/` builds, a Lean 4 development in which the meaning of a table, the checks, and the
 theorems that each check settles its claim are all written down and machine-checked. That
 moves what (4) asks you to take on trust from 42,000 lines of Rust to a few hundred lines
-of checking whose soundness is proved. It does not remove (4) — whether the tool *produces*
-a right certificate is still evidence — but a certificate that passes now means something
-exact. See [formats](formats.md) for the document and both re-checkers.
+of checking whose soundness is proved — plus the reading of the document itself, which is
+not. It does not remove (4): whether the tool *produces* a right certificate is still
+evidence, the declared ranges and types and constraints in it are its own word, and five
+things are named in a run rather than proved. Both programs end by saying which. See
+[formats](formats.md) for the document, its limits, and both re-checkers.
 
 ## Reading a diagnostic
 

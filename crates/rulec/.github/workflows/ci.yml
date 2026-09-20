@@ -238,6 +238,7 @@ jobs:
           for f in tests/corpus/*.rule; do
             cargo run --quiet --locked -- certificate "$f" > /tmp/cert.json
             python3 tools/recheck.py --rule "$f" /tmp/cert.json | grep "the file says the same"
+            python3 tools/recheck.py --rule "$f" /tmp/cert.json | tail -1 | grep -E 'was proved|stated rather than proved' > /dev/null
             n=$((n + 1))
           done
           echo "$n certificates re-checked, each against its own text"
@@ -304,7 +305,10 @@ jobs:
           cargo build --release --locked
           for f in tests/corpus/*.rule; do
             ./target/release/rulec certificate "$f" > /tmp/cert.json
-            ./proofs/.lake/build/bin/rulec-recheck --rule "$f" /tmp/cert.json | tail -2 | head -1
+            # The closing line says whether anything was stated rather than proved, so it
+            # is the one to log — and a run that printed neither form is a run that went
+            # wrong quietly.
+            ./proofs/.lake/build/bin/rulec-recheck --rule "$f" /tmp/cert.json | tail -1 | grep -E '^OK'
           done
           echo "every certificate in the corpus was held to the proved checks"
 

@@ -30,6 +30,10 @@ inductive Ty where
   /-- Any other dimension the rule writes as `kind[unit]`: `qty[個]`, `area[m2]`. Two of
       them meet only when they are written the same way. -/
   | dim : String → Ty
+  /-- Everything with no dimension and no arithmetic: `bool`, `date`, `string`, the name of
+      an enum. Two of them meet only when they are written the same way, and none of them
+      carries an interval — `check` makes no int64 claim about a truth value. -/
+  | other : String → Ty
   deriving DecidableEq, Repr, Inhabited
 
 /-- Whether the type carries a dimension. A rate and a count do not. -/
@@ -37,6 +41,12 @@ def Ty.dimensioned : Ty → Bool
   | .money _ _ => true
   | .dim _ => true
   | _ => false
+
+/-- Whether a value of this type is stored as an integer, and so has an int64 claim to
+    make. A certificate that states no interval for one of these is refused. -/
+def Ty.numeric : Ty → Bool
+  | .other _ => false
+  | _ => true
 
 /-- Two types meet when they are the same, or when one is an amount with no tag and the
     other the same currency with one (§2.1). -/
@@ -68,7 +78,32 @@ inductive Expr where
   | maxOf : Expr → Expr → Expr
   /-- Rounded to a literal grid. Which way the mode breaks a tie is not modelled. -/
   | roundTo : Expr → Rat → Expr
+  /-- A comparison. Its value is a truth value, and it has a unit claim of its own: the two
+      sides have to meet, which is what makes `注文金額 >= 3万円` well typed and
+      `注文金額 >= 3個` not. -/
+  | compare : Cmp → Expr → Expr → Expr
+  /-- A leaf with a type and no number: a date, a string. It carries a unit claim and no
+      interval claim, which is what `check` says about it too. -/
+  | typed : Ty → Expr
+  /-- A leaf this program cannot type — a word whose type only the context gives. A value
+      whose expression holds one is reported as not re-checked, never as passed. -/
+  | unread : Expr
   deriving Repr, Inhabited
+
+/-- Whether anything in the expression is a leaf this program cannot type. -/
+def Expr.unreadable : Expr → Bool
+  | .name _ => false
+  | .lit _ _ => false
+  | .typed _ => false
+  | .unread => true
+  | .add a b => a.unreadable || b.unreadable
+  | .sub a b => a.unreadable || b.unreadable
+  | .mul a b => a.unreadable || b.unreadable
+  | .divc a _ _ => a.unreadable
+  | .minOf a b => a.unreadable || b.unreadable
+  | .maxOf a b => a.unreadable || b.unreadable
+  | .roundTo a _ => a.unreadable
+  | .compare _ a b => a.unreadable || b.unreadable
 
 /-! ## What each operation does to a type
 
@@ -118,6 +153,11 @@ def typeOf (types : String → Option Ty) : Expr → Option Ty
                   | some x, some y => pickTy x y
                   | _, _ => none
   | .roundTo a _ => typeOf types a
+  | .compare _ a b => match typeOf types a, typeOf types b with
+                      | some x, some y => (unify x y).map (fun _ => Ty.other "bool")
+                      | _, _ => none
+  | .typed t => some t
+  | .unread => none
 
 /-! ## Evaluation
 
@@ -163,6 +203,13 @@ def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → O
   | .roundTo a g => match eval rnd env a with
                     | some x => some (rnd g x.1, x.2)
                     | none => none
+  | .compare op a b => match eval rnd env a, eval rnd env b with
+                       | some x, some y =>
+                         (unify x.2 y.2).map (fun _ =>
+                           ((if cmpHolds op x.1 y.1 then 1 else 0 : Rat), Ty.other "bool"))
+                       | _, _ => none
+  | .typed t => some (0, t)
+  | .unread => none
 
 /-! ## The units claim -/
 
@@ -233,6 +280,20 @@ theorem eval_type_of_typeOf {types : String → Option Ty} {env : String → Opt
     intro τ h
     obtain ⟨va, hva⟩ := iha τ (by simpa [typeOf] using h)
     exact ⟨rnd g va, by simp [eval, hva]⟩
+  | compare op a b iha ihb =>
+    intro τ h
+    simp only [typeOf] at h
+    split at h
+    case _ x y hx hy =>
+      obtain ⟨va, hva⟩ := iha x hx
+      obtain ⟨vb, hvb⟩ := ihb y hy
+      refine ⟨if cmpHolds op va vb then 1 else 0, ?_⟩
+      simp only [eval, hva, hvb, Option.map_eq_some_iff] at h ⊢
+      obtain ⟨u, hu, hτ⟩ := h
+      exact ⟨u, hu, by simpa using hτ⟩
+    case _ => exact absurd h (by simp)
+  | typed t => intro τ h; simp only [typeOf, Option.some.injEq] at h; exact ⟨0, by simp [eval, h]⟩
+  | unread => intro τ h; exact absurd h (by simp [typeOf])
 
 
 /-! ## How far a value can go
@@ -387,6 +448,11 @@ def interval (ranges : String → Option Span2) : Expr → Option Span2
       | some x => some (floorTo g x.1, ceilTo g x.2)
       | none => none
     else none
+  -- A truth value is not stored as an integer, so there is no interval to state and none
+  -- is claimed. `Ty.numeric` is what refuses a certificate that leaves one out elsewhere.
+  | .compare _ _ _ => none
+  | .typed _ => none
+  | .unread => none
 
 /-- **E108 rests on this.** Where the checker states an interval, the value really is
     inside it, whatever the inputs and whichever way each rounding breaks its ties. -/
@@ -521,6 +587,9 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
           exact ⟨rmax_le hp1 (Rat.le_trans hq1 hq), Rat.le_trans hp2 (left_le_rmax _ _)⟩
       case _ => exact absurd hv (by simp)
     case _ => exact absurd hI (by simp)
+  | compare op a b _ _ => intro I v t hI _; exact absurd hI (by simp [interval])
+  | typed _ => intro I v t hI _; exact absurd hI (by simp [interval])
+  | unread => intro I v t hI _; exact absurd hI (by simp [interval])
   | roundTo a g iha =>
     intro I v t hI hv
     simp only [interval] at hI

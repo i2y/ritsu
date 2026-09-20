@@ -111,13 +111,87 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
         ("型を偽る", cert.replace(r#""name":"合算率","type":"rate""#, r#""name":"合算率","type":"money[円]""#)),
         // A box widened without touching the cell it was read from.
         ("箱を広げる", cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1)),
+        // A coordinate removed from an axis: the gap under it is then covered by nothing.
+        ("軸から座標を抜く", cert.replacen(r#""step":"1","bounds":[["0","0"],["0","63000"],"#, r#""step":"1","bounds":[["0","0"],"#, 1)
+            .replacen(r#""coords":["0円","1円","63000円"]"#, r#""coords":["0円","63000円"]"#, 1)),
     ] {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
         let (code, said) = lean(&bin, &forged, None);
         assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
         assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
     }
+
+    // The box check has to be the one that catches a widened box, not a neighbour.
+    let forged = cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1);
+    let (_, said) = lean(&bin, &forged, None);
+    assert!(
+        said.contains("is not the one its cell describes"),
+        "箱を広げる: セルから組み直す検査が落としていない:\n{said}"
+    );
 }
+
+/// The leaves that say "no input reaches here" (§15.55, §15.98). The corpus has none, so
+/// without this the whole sieve — `boxRuledOut`, `pointRuledOut`, `completions` and the
+/// theorem over them — would never run in CI.
+#[test]
+fn 制約で閉じた葉も検査される() {
+    let Some(bin) = checker() else {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("rulec-lean-con-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let p = dir.join("con.rule");
+    std::fs::write(&p, BY_CONSTRAINT).unwrap();
+    let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#"{"constraint":0}"#), "制約で閉じた葉が出ていない:\n{cert}");
+    let (code, said) = lean(&bin, &cert, Some(p.to_str().unwrap()));
+    assert_eq!(code, 0, "{said}");
+
+    for (what, forged) in [
+        // The constraint turned round: the box it ruled out is then reachable.
+        ("制約の向きを変える", cert.replace(r#""op":"<=""#, r#""op":">=""#)),
+        // The point for row 3 moved into the open coordinate on both axes and given
+        // values the constraint forbids. Only the constraint can catch this.
+        ("制約を破る値を渡す", cert.replace(
+            r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"]}"#,
+            r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"]}"#)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(p.to_str().unwrap()));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A rule whose completeness rests on a `constraint` (§15.55), as `tests/cert.rs` has it.
+const BY_CONSTRAINT: &str = r#"rule 納入先判定(dest_of) v1
+description "絞った件数から、自動で確定してよいかを決める"
+
+enum 判定(verdict) = 自動確定(auto) | 候補複数(many) | 該当なし(none)
+
+inputs
+  会社名一致数(name_hits) : number  range >=0 <=999
+  全条件一致数(all_hits)  : number  range >=0 <=999
+
+constraint 全条件一致数 <= 会社名一致数
+
+outputs
+  結果(verdict) : 判定
+
+table 判定表(verdict_of)
+policy unique
+| 全条件一致数 | 会社名一致数 | -> 結果(verdict) : 判定 |
+| 0            | 0            | 該当なし                |
+| 0            | >=1          | 候補複数                |
+| >=1          | >=1          | 自動確定                |
+
+examples
+| 全条件一致数 | 会社名一致数 | -> 結果 |
+| 1            | 3            | 自動確定 |
+"#;
 
 /// The digest ties the certificate to one text, and the Lean program computes it itself.
 #[test]

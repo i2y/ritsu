@@ -102,8 +102,12 @@ fn 偽った証明書は落ちる() {
         ("対を落とす", cert.replace(r#",{"a":22,"b":23,"axis":2}"#, "")),
         // A pair said to part on an axis where both rows take every coordinate.
         ("交わる軸を名指す", cert.replace(r#"{"a":1,"b":2,"axis":0}"#, r#"{"a":1,"b":2,"axis":1}"#)),
-        // The last row's point given to the row above it, so row 23 is left with none.
-        ("行の証人を落とす", cert.replace(r#"{"row":23,"at":[0,1,23]"#, r#"{"row":22,"at":[0,1,23]"#)),
+        // The last row's point dropped, so row 23 is left with none.
+        ("行の証人を落とす", {
+            let at = cert.find(r#",{"row":23,"at":[0,1,23]"#).expect("行 23 の点が無い");
+            let end = cert[at..].find("}]").map(|i| at + i + 1).expect("点の終わりが無い");
+            format!("{}{}", &cert[..at], &cert[end..])
+        }),
         // A row whose point sits outside its own box.
         ("証人を箱の外へ", cert.replace(r#""row":3,"at":[0,0,2]"#, r#""row":3,"at":[0,0,0]"#)),
     ] {
@@ -308,13 +312,88 @@ fn 到達の点は篩を通る() {
     assert!(cert.contains(r#""at_values""#), "点の値が出ていない:\n{cert}");
     assert_eq!(recheck(&cert).0, 0, "そのままの証明書が通らない");
 
-    // The point for row 3 moved to one the constraint forbids: 全条件一致数 > 会社名一致数.
-    let forged = cert.replace(r#""at_values":["1","1"]"#, r#""at_values":["9","1"]"#);
+    // The point for row 3 moved into the open coordinate on both axes — where every value
+    // is one the axis really takes — and given values the `constraint` forbids. Only the
+    // constraint can catch this; the coordinates admit both numbers.
+    let forged = cert.replace(
+        r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"]}"#,
+        r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"]}"#,
+    );
     assert_ne!(forged, cert, "証明書の形が変わっていて、偽れていない");
     let (code, said) = recheck(&forged);
     assert_eq!(code, 1, "制約を破る点が通ってしまった:\n{said}");
-    assert!(said.contains("no input reaches"), "何が悪いか言っていない:\n{said}");
+    assert!(said.contains("does not hold at"), "制約ではなく別の検査が落としている:\n{said}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The span discipline (§15.99). A cell is read back from **its own place** in the file:
+/// a row is one line, its cells are that line's own cells, and a row that says it has
+/// none is one an `apply` brought in. Each of these was a way to pass a rule with a gap.
+#[test]
+fn 引用は行と桁に縛られる() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/送料.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let run = |text: &str| {
+        use std::io::Write;
+        let mut p = Command::new("python3")
+            .current_dir(root())
+            .args(["tools/recheck.py", "--rule", "tests/corpus/送料.rule"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("python3 を起動できない");
+        p.stdin.as_mut().unwrap().write_all(text.as_bytes()).unwrap();
+        let o = p.wait_with_output().unwrap();
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr))
+    };
+    assert_eq!(run(&cert).0, 0, "そのままの証明書が通らない");
+
+    for (what, forged) in [
+        // A span of no length reads back as the empty string, which parses as a don't-care.
+        ("長さ 0 の引用", cert.replacen(r#"{"line":25,"col":19,"len":6,"text":">2000g"}"#, r#"{"line":25,"col":19,"len":0,"text":""}"#, 1)),
+        // A row that says it is written nowhere is one an `apply` brought in.
+        ("行ごと無かったことにする", cert.replacen(r#""source":[{"line":25,"col":19,"len":6,"text":">2000g"},{"line":25,"col":2,"len":9,"text":"遠隔地"}]"#, r#""source":null"#, 1)),
+        // A span pointed at another row's identical text.
+        ("別の行の同じ字を指す", cert.replacen(r#"{"line":26,"col":19,"len":7,"text":"<=2000g"}"#, r#"{"line":24,"col":19,"len":7,"text":"<=2000g"}"#, 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = run(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+}
+
+/// The universe itself. A coordinate quietly removed leaves a gap under it that nothing
+/// covers, and a cell literal read as a number the axis has no boundary for is the
+/// certificate reading the file as something it does not say (§15.99).
+#[test]
+fn 軸は宣言範囲を敷き詰める() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    assert_eq!(recheck(&cert).0, 0, "そのままの証明書が通らない");
+
+    for (what, forged) in [
+        // A boundary the cell does not write.
+        ("境目でない数に読む", cert.replacen(r#"{"op":"<","value":"10000"}"#, r#"{"op":"<","value":"50000"}"#, 1)),
+        // The grid the coordinates sit on, without which a gap looks like two neighbours.
+        ("刻みを隠す", cert.replacen(r#""step":"1""#, r#""step":null"#, 1)),
+        // A cover that is not stated is not a cover.
+        ("覆いを述べない", cert.replacen(r#""cover":{"split""#, r#""cover":null,"x":{"split""#, 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
 }
 
 /// What the certificate does **not** cover is said out loud, because a certificate that

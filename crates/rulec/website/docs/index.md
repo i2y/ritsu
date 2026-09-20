@@ -641,9 +641,11 @@ the byte. `proofs/` is a Lean 4 development in which what a table means, the
 checks a certificate has to pass, and the theorems that each check settles its
 claim are all written down and machine-checked; the program it builds runs
 those very checks. That moves what (4) asks you to take on trust from 42,000
-lines of Rust to a few hundred lines whose soundness is proved. Writing it
-found a soundness bug in the completeness check, and two more in the
-dependency-free re-checker beside it.
+lines of Rust to a few hundred lines whose soundness is proved — the reading
+of the document itself is not, and the declared ranges, types and constraints
+in it are its own word. Writing it, and reading it back adversarially, found a
+soundness bug in the completeness check, a witness that could break the rule's
+own `constraint`, and eleven ways a forged certificate got past a re-checker.
 
 [What it proves, in detail](checks.md){ .md-button }
 

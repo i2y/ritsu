@@ -76,9 +76,18 @@ def tyOfString (s : String) : Option Ty :=
     | [c, t] => some (.money c (some t))
     | _ => none
   else if s.contains '[' && s.endsWith "]" then some (.dim s)
-  else none
+  -- `bool`, `date`, `string`, the name of an enum: no dimension, no interval, and it meets
+  -- only a type written the same way.
+  else if s.isEmpty then none
+  else some (.other s)
 
 /-! ## Expressions -/
+
+def cmpOfString (s : String) : Option Cmp :=
+  if s == "<=" then some .le else if s == "<" then some .lt
+  else if s == ">=" then some .ge else if s == ">" then some .gt
+  else if s == "=" then some .eq else none
+
 
 partial def exprOfJson (j : Json) : Option Expr :=
   match field j "name" >>= str with
@@ -89,6 +98,11 @@ partial def exprOfJson (j : Json) : Option Expr :=
         let v ← (field j "value" >>= optRat)
         let t := (field j "type" >>= str >>= tyOfString).getD Ty.number
         some (.lit v t)
+    | none =>
+    match field j "lit" with
+    | some _ => some (match field j "type" >>= str >>= tyOfString with
+                      | some t => Expr.typed t
+                      | none => Expr.unread)
     | none =>
       match field j "op" >>= str with
       | some op => do
@@ -102,7 +116,10 @@ partial def exprOfJson (j : Json) : Option Expr :=
             let k ← field r "value" >>= optRat
             let kt := (field r "type" >>= str >>= tyOfString).getD Ty.number
             some (.divc l k kt)
-          else none
+          else
+            match cmpOfString (if op == "==" then "=" else op) with
+            | some c => some (.compare c l (← exprOfJson r))
+            | none => none
       | none =>
         match field j "call" >>= str with
         | some c => do
@@ -132,11 +149,6 @@ def coordOfJson (j : Json) : Option Coord :=
       | _, _ => some (.between l h)
     | _, _ => none
   | none => none
-
-def cmpOfString (s : String) : Option Cmp :=
-  if s == "<=" then some .le else if s == "<" then some .lt
-  else if s == ">=" then some .ge else if s == ">" then some .gt
-  else if s == "=" then some .eq else none
 
 mutual
 
@@ -177,6 +189,8 @@ structure SrcSpan where
 structure ReadRow where
   index : Nat
   origin : String
+  /-- The line the row itself is written on; 0 for one an `apply` brought in. -/
+  line : Nat
   tests : List CellTest
   accepts : List (List Nat)
   /-- `none` for a row an `apply` brought in; `none` inside for a column the row has no
@@ -185,6 +199,8 @@ structure ReadRow where
 
 structure ReadTable where
   name : String
+  /-- How many columns the table writes to the right of `->`. -/
+  outputs : Nat
   cert : Certified
   /-- Column names, in axis order; the report and the cell check use them. -/
   columns : List String
@@ -195,6 +211,16 @@ structure ReadTable where
   rowsRaw : List ReadRow
   /-- Rows for which the certificate states no point because the tool called them unused. -/
   unused : List Nat
+  /-- Rows the sieve rules out entirely. Stated, not proved. -/
+  ruledOut : List Nat
+  /-- Whether every reach point comes with the values behind it. Without them the claim
+      falls back to the weaker reading, and the program says which one it made. -/
+  valuesStated : Bool
+  /-- Per axis: what the column is, the grid its values sit on, and the range the rule
+      declares for it. The tiling check needs all three. -/
+  kinds : List String
+  steps : List (Option Rat)
+  declared : List (Option Span2)
   /-- Leaves the cover rests on an upstream table for. -/
   upstream : Bool
 
@@ -231,7 +257,7 @@ def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
           some { line := line, col := col, len := len, text := fieldStr x "text" }))
 
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
-    (j : Json) : Option ReadTable := do
+    (declaredOf : String → Option Span2) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -279,15 +305,30 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     let tests ← (fieldArr r "tests").toList.mapM (cellOfJson groups)
     let accepts := (fieldArr r "accepts").toList.map (fun xs =>
       (arr xs).getD #[] |>.toList.filterMap nat)
-    some { index := i, origin := fieldStr r "origin", tests := tests, accepts := accepts
-           source := (field r "source").bind srcOfJson })
+    some { index := i, origin := fieldStr r "origin", line := (fieldNat r "line").getD 0
+           tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson })
   some {
     name := name
+    outputs := (fieldNat j "outputs").getD 0
     columns := columns
     labels := axes.toList.map (fun a => (fieldArr a "coords").toList.filterMap str)
     spans := coords
     rowsRaw := rowsRaw
     unused := (fieldArr j "unused").toList.filterMap nat
+    ruledOut := (fieldArr j "unreachable").toList.filterMap nat
+    -- The strong reading needs a value behind every coordinate that stands for one. A
+    -- `null` where the axis is numeric is the certificate declining to show it, and the
+    -- claim falls back to the weaker reading rather than failing.
+    valuesStated := (fieldArr j "reach").toList.all (fun w =>
+      let vs := fieldArr w "at_values"
+      vs.size == axes.size &&
+        (List.range axes.size).all (fun ai =>
+          match (coords[ai]?).getD [] with
+          | [] => true
+          | cs => cs.all (·.isNone) || !(vs[ai]!).isNull))
+    kinds := axes.toList.map (fun a => fieldStr a "kind")
+    steps := axes.toList.map (fun a => field a "step" >>= optRat)
+    declared := columns.map declaredOf
     upstream := cover.leansOnUpstream
     cert := {
       arities := arities, rows := rows, policy := policy
