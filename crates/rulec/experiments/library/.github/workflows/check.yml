@@ -16,9 +16,23 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # The rule as a PostgreSQL function is held to the vectors on a real server, and
+    # without one that pass is skipped while the run stays green — the same quiet
+    # narrowing the numpy step below prevents.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env: { POSTGRES_PASSWORD: rulec, POSTGRES_DB: rulec }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: rulec
+      PGDATABASE: rulec
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/rulec@v0.7.0
+      - uses: i2y/rulec@v0.8.0
       - run: rulec fmt --check rules/
       - run: rulec check rules/
       - run: rulec gen rules/ --out generated/ --check
@@ -26,8 +40,7 @@ jobs:
       - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       # The NumPy target is read by an evaluator that imports numpy, so without
-      # this the language is skipped and the run stays green — the one way this
-      # check narrows quietly.
+      # this the language is skipped and the run stays green.
       - run: python3 -m pip install --quiet numpy
       - uses: actions/setup-node@v5
         with: { node-version: "22" }

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/rulec@v0.7.0
+      - uses: i2y/rulec@v0.8.0
       - name: Ask e-Gov, one rule at a time
         id: ask
         env:

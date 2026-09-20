@@ -44,7 +44,7 @@ Release には言語ごとのアーカイブ（`rules-<tag>-<lang>.tar.gz`）と
 
 rulec 側に足すもの
 - ~~`source 名 = file "…" url "…"` と、`rulec source outdated` の file 対応。~~ §15.76 で入った。PDF や xlsx は「変わった」までしか言えないのは変わらない。協会けんぽの URL は年度ごとに変わるので、ブランチを指す URL と同じ扱い（バイトの比較）になる。
-- ~~rulec の次のリリース。~~ v0.6.0 として切った（附則の引用・ヘッダの `Cites:`・生成器の修正）。workflow は v0.7.0（file 出典の `url`）を指すように直してある。種の側の file 出典に `url` を足すのはこれから。
+- ~~rulec の次のリリース。~~ v0.6.0 として切った（附則の引用・ヘッダの `Cites:`・生成器の修正）。workflow は v0.8.0（PHP・Java・NumPy と、SQL の関数の扉）を指すように直してある。種の側の file 出典に `url` を足すのはこれから。
 
 種の側で決めること
 - リポジトリの名前とライセンス。種は `git mv` で外に出す。
