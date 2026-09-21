@@ -194,12 +194,12 @@ A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article)
 
 Who: the agent. rulec notices a replaced document
 
-It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@terms`, or — to say **which table of the document was transcribed** — as `@terms Table1`. A label carries no space.
+It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@terms`, or — to say **which table of the document was transcribed** — as `@terms table1`, the first table of the document in document order (`表1` is the same name in Japanese).
 
 ```rule
 source terms = file "shipping-terms.md"
 
-table base_rate  @terms Table1
+table base_rate  @terms table1
 policy unique
 | dest               | weight | -> base : money[USD, incl_tax] |
 | north_america      | <=10lb | 8USD                           |
@@ -212,7 +212,7 @@ Citing a table makes `rulec source fetch` take that table out of the document an
 
 ```console
 $ rulec source fetch rules/shipping_fee.rule
-terms: took out Table1 (3 rows by 3 columns, sha256:c846fef7727dd6e0)
+terms: took out table1 (3 rows by 3 columns, sha256:c846fef7727dd6e0)
 $ rulec source pin rules/shipping_fee.rule
 terms: pinned sha256:d1156fa90a72194c
 terms: pinned 1 fragments
@@ -245,16 +245,16 @@ error[E116]: The amount of row 4 is not in the copy it cites
 24 | | north_america | >10lb | 11USD |
    |                           ^^^^^ not in the copy: 11USD
    |
- The copy cited: terms Table1
+ The copy cited: terms table1
  An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. …
 
-warning[W120]: The copy of Table1 states values no row uses
+warning[W120]: The copy of table1 states values no row uses
  Stated in the copy, used by no row: 14USD
 ```
 
 The two name both halves of the same slip. W120 also catches **a row that was never transcribed** — the completeness check cannot, because the inputs of a dropped row fall into one of the rows that remain.
 
-The approver's page quotes the copy under the table's heading — "Source: terms Table1 (shipping-terms.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (terms Table1) shows (E116)*. The source table above, the rule's table below, and that line between them.
+The approver's page quotes the copy under the table's heading — "Source: terms table1 (shipping-terms.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (terms table1) shows (E116)*. The source table above, the rule's table below, and that line between them.
 
 ### 2-3. Hold it to the code that runs today
 
