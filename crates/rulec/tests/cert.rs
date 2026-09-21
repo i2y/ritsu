@@ -118,6 +118,68 @@ fn 偽った証明書は落ちる() {
     }
 }
 
+/// The one leaf the certificate states rather than proves — and the edge of it.
+///
+/// `Cover::ByUpstream` says "the tables above cannot produce this box". Re-checking it would
+/// take the upstream table's own region, which the certificate does not carry, so both
+/// re-checkers let it through and name it in the closing line instead (§15.96). That makes it
+/// the one place a forged certificate can hide a real completeness gap, and until this test
+/// there was nothing holding the hole to its declared size: no corpus rule reached a cover
+/// that leans on one, so nothing exercised it (§15.9).
+///
+/// What is pinned here is the boundary, from both sides. Inside it the forgery passes **and
+/// the closing line counts it**, so a reader who reads that line sees the claim grow. Outside
+/// it — a table no column of which comes from above — the forgery is refused. If the leaf is
+/// ever made checkable, this test is what will fail and say so.
+#[test]
+fn 上流由来の葉は_偽れるが黙っては通らない() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let rel = "tests/corpus/二つの区分.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "そのままの証明書が通らない:\n{said}");
+    assert!(
+        said.contains("手数料表: 1 leaves rest on a table above"),
+        "上流由来の葉が最後の一行に出ていない:\n{said}"
+    );
+
+    // Inside the hole: a box a row really takes, re-labelled as one the tables above rule
+    // out. Nothing refuses it — but the count in the closing line goes to two.
+    let hidden = cert.replace(
+        r#"{"split":[{"row":1},{"upstream":"#,
+        r#"{"split":[{"upstream":"forged"},{"upstream":"#,
+    );
+    assert_ne!(hidden, cert, "偽れていない");
+    let (code, said) = recheck(&hidden);
+    assert_eq!(code, 0, "この葉はまだ検査されていないので、通るのが正しい:\n{said}");
+    assert!(
+        said.contains("手数料表: 2 leaves rest on a table above"),
+        "隠した分だけ最後の一行の数が増えていない。増えないなら、この穴は黙って通る穴になる:\n{said}"
+    );
+
+    for (what, forged) in [
+        // Outside it: the same leaf on a table whose every column is an input of the rule.
+        ("上流の列が無い表に置く", cert.replacen(r#""cover":{"row":2}"#, r#""cover":{"upstream":"forged"}"#, 1)),
+        // The leaf removed rather than re-labelled: the children no longer tile the axis.
+        (
+            "葉ごと落とす",
+            cert.replace(
+                r#"{"split":[{"row":1},{"upstream":"送料区分 = 小口, 扱い区分 = 重量物"}]}"#,
+                r#"{"split":[{"row":1}]}"#,
+            ),
+        ),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
+    }
+}
+
 /// The digest ties a certificate to one text. Pointed at another file, it has to refuse.
 #[test]
 fn 証明書はどのファイルのものかを言う() {

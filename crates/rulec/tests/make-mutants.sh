@@ -55,7 +55,7 @@ awk '{ print } /^\| *小口 *\| *- *\|/ { print "| 小口 | 重量物 | 700円 |
 # The other side of the same sieve: a combination that **does** happen, left uncovered. If the
 # narrowing above ever prunes too hard, this stops reporting and the generated code walks into
 # its own `unreachable!`.
-awk '/^\| *大口 *\| *通常 *\|/ { next } { print }' "$C/二つの区分.rule" > "$M/m_e101e.rule"
+awk '/^\| *大口 *\| *通常 *\| *200円/ { next } { print }' "$C/二つの区分.rule" > "$M/m_e101e.rule"
 
 # Open a hole at a date boundary
 # Remove a single day from a closed-interval tiling. Without day-count representation this is a
