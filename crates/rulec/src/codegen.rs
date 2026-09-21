@@ -2779,10 +2779,9 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|fd| read(&self.ty_of(&fd.name.text), format!("e[{:?}]", fd.name.text)))
                 .collect();
-            prelude = format!(
-                "    rows = [m.Element({}) for e in d[{jp:?}]]\n",
-                if fields.len() == 1 { format!("{},", fields[0]) } else { fields.join(", ") }
-            );
+            // `m.Element(x)` is a call, not a tuple: the trailing comma a one-element
+            // tuple needs would only make the formatter explode the line (§15.105).
+            prelude = format!("    rows = [m.Element({}) for e in d[{jp:?}]]\n", fields.join(", "));
             args.push("rows".to_string());
         }
         // The runner prints the record the module itself writes, so the agreement test

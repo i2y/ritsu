@@ -126,10 +126,7 @@ impl<'a> Gen<'a> {
                     }
                 })
                 .collect();
-            convs.push(format!(
-                "[m.Element({}) for e in _seq({jp}, o[{jp}])]",
-                if fields.len() == 1 { format!("{},", fields[0]) } else { fields.join(", ") }
-            ));
+            convs.push(format!("[m.Element({}) for e in _seq({jp}, o[{jp}])]", fields.join(", ")));
             tys.push("list[m.Element]".to_string());
         }
         let doc = tr!(

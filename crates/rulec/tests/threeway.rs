@@ -285,7 +285,10 @@ fn 生成物は両言語の整形器に素で通る() {
     // should fix, so it fails.
     let o = Command::new(&ruff[0])
         .args(&ruff[1..])
-        .args(["format", "--check", "--diff", "--no-cache"])
+        // `--color never`: ruff colours the diff even into a pipe, and every line then
+        // begins with an escape rather than with `-`, so the filter below matched nothing
+        // and the test passed by looking at nothing. CI caught what this did not (§15.105).
+        .args(["format", "--check", "--diff", "--no-cache", "--color", "never"])
         .arg(&py_dir)
         .output()
         .expect("ruff を起動できない");
