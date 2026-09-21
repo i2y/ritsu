@@ -27,6 +27,13 @@ generates ordinary Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, J
 cannot be proved does not generate.
 </p>
 
+<p class="rc-hero__lede">
+Proved here means <strong>shown over every input in the declared domain</strong> — not
+sampled by tests, and not a mathematical argument written out by hand. Where the proof
+fails, the input that breaks it comes back with the finding. How it is done is in
+<a href="checks/">What it proves</a>.
+</p>
+
 <div class="rc-hero__cta" markdown>
 [Try it in the browser](playground.md){ .md-button .md-button--primary }
 [Install](install.md){ .md-button }

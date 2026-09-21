@@ -22,6 +22,10 @@ hide:
 <strong>証明が済むのは、コードができる前です。</strong>証明できない規則からは、何も出てきません。
 </p>
 
+<p class="rc-hero__lede">
+ここでいう証明は、<strong>宣言した範囲の入力を一つ残らず調べて示す</strong>という意味です。標本を取るテストでもなく、人が紙に書く数学の証明でもありません。抜けが見つかれば、それを起こす入力がそのまま返ってきます。調べ方は<a href="checks/">何を証明するか</a>にあります。
+</p>
+
 <div class="rc-hero__cta" markdown>
 [ブラウザで試す](playground.md){ .md-button .md-button--primary }
 [インストール](install.md){ .md-button }
