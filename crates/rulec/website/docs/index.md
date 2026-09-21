@@ -63,13 +63,13 @@ three are set side by side further down.
 
 ```console
 error[E101]: Completeness gap: some input matches no row
-  --> fee.rule:16 table 運賃表
+  --> parcel.rule:30 table base_rate
    |
-16 | table 運賃表(fee_table)
-   |       ^^^^^^ the input space is not fully covered
+30 | table base_rate
+   |       ^^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: あて先 = 北海道, サイズ = S80
- The shape of the row to add: `| 北海道 | S80 | 990円 |`
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
+ The shape of the row to add: `| overseas | small | 1lb | 6USD |`
 ```
 
 </div>
@@ -88,17 +88,18 @@ Not sampled: the whole declared range is walked. What fails comes back with **th
 ```console
 error[E104]: An unrounded value reaches the output
    |
-21 |   割引額(discount) : money[円,incl_tax]
-   |                      ^^^^^^^^^^^^^^^^^^ no rounding is declared
+19 |   fee : money[USD, incl_tax]
+   |         ^^^^^^^^^^^^^^^^^^^^ no rounding is declared
    |
- Example: some input computes to 0.12 yen. down(1円) gives 0 yen and
- up(10円) gives 10 yen, so the rounding mode moves the result by up to 10 yen.
+ Example: some input computes to 35.5USD. down(1USD) gives 35USD,
+ half_up(1USD) gives 36USD and up(10USD) gives 40USD, so the rounding
+ mode moves the result by up to 5USD.
 ```
 
 </div>
 <div markdown>
 
-### 円 and g will not add. Rounding has to be declared
+### Dollars and grams will not add. Rounding has to be declared
 
 The unit is part of the type, and tax-inclusive is not tax-exclusive. A numeric output must say how fractions settle, and the question comes **with the money the choice moves**. Nothing is settled silently.
 
@@ -109,10 +110,10 @@ The unit is part of the type, and tax-inclusive is not tax-exclusive. A numeric 
 <div markdown>
 
 ```python
-if dest in _近畿圏 and size == SizeClass.S60:    # row 1
-    fee = 990
-elif dest in _近畿圏 and size == SizeClass.S80:  # row 2
-    fee = 1210
+if dest in _north_america and size == SizeClass.ENVELOPE:  # row 1
+    base = 6
+elif dest in _north_america and size == SizeClass.SMALL and weight <= 10:  # row 2
+    base = 12
 ...
 else:
     raise AssertionError("unreachable: completeness was statically checked")
@@ -132,12 +133,12 @@ Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and
 <div markdown>
 
 ```pycon
->>> fee_traced(Prefecture.HOKKAIDO, SizeClass.S80)
-(1100, [Fired(table='運賃表', row=4)])
+>>> uk_minimum_wage_traced(age=20, apprentice=True, first_year=False)
+(1085, [Fired(table='by_age', row=2)])
 
->>> fee_record(...)
-{"in":{"あて先":"北海道","サイズ":"S80"},
- "observed":{"運賃":1100},"trace":[{"table":"運賃表","row":4}]}
+>>> uk_minimum_wage_record(...)
+{"in":{"age":20,"apprentice":true,"first_year":false},
+ "observed":{"hourly":1085},"trace":[{"table":"by_age","row":2}]}
 ```
 
 </div>
@@ -154,11 +155,11 @@ Beside every function is a `_traced` twin that returns, with the answer, **which
 <div markdown>
 
 ```console
-$ rulec coverage rules/health_insurance.rule
-1216 vectors
-  row coverage               52 / 52    satisfied
-  boundary-pair coverage     98 / 98    satisfied
-  rounding-tie coverage       2 / 2     satisfied
+$ rulec coverage rules/income_tax.rule
+17 vectors
+  row coverage                7 / 7     satisfied
+  boundary-pair coverage     12 / 12    satisfied
+  rounding-tie coverage       1 / 1     satisfied
 ```
 
 </div>
@@ -175,15 +176,12 @@ Vectors come from the table's own edges, shadowed pairs and rounding ties, and r
 <div markdown>
 
 ```console
-error[E116]: The amount of row 4 is not in the copy it cites
+error[E116]: The amount of row 3 is not in the copy it cites
    |
-24 | | not: 遠隔地 | >2000g  | 1000円      |
-   |                           ^^^^^^ not in the copy: 1000円
+27 | | >=21      | 1272GBPc                |
+   |               ^^^^^^^^ not in the copy: 1272GBPc
    |
- The copy cited: 規約 表1
-
-warning[W120]: The copy of 表1 states values no row uses
- Stated in the copy, used by no row: 1100円
+ The copy cited: gov table1
 ```
 
 </div>
@@ -191,7 +189,7 @@ warning[W120]: The copy of 表1 states values no row uses
 
 ### A mistyped amount fails
 
-Cite the table a tariff sheet or a company rule came from (`@規約 表1`) and it is kept as a copy. From then on **one wrong digit fails**. A statute is pinned to e-Gov's own text, and an amendment names the rows to reread.
+Cite the table a tariff sheet, a rate page or a company rule came from (`@gov table1`) and it is kept as a copy. From then on **one wrong digit fails**, and a figure the copy states that no row uses is W120 — the other half of the same slip. A statute is pinned to the government's own text, on e-Gov or the eCFR, and an amendment names the rows to reread.
 
 </div>
 </div>
@@ -200,12 +198,13 @@ Cite the table a tariff sheet or a company rule came from (`@規約 表1`) and i
 <div markdown>
 
 ```console
-$ rulec verify rules/送料.rule --adapter python3 adapter.py
-Compared 207 / matched 182 (87.923%)
+$ rulec verify rules/minimum_wage.rule --adapter python3 adapter.py
+Compared 29 / matched 0 (0.000%)
+Counterpart: payroll@2025-04
 
-Affected 25 (12.077%)  amount -250
-  table サイズ判定 row 1 / table 運賃表 row 36   7 records  difference -10 uniform
-    Example: あて先=沖縄県, 重量=1 → rule 1450 / legacy 1460
+Affected 29 (100.000%)  amount +1,515
+  table by_age row 2        4 records  difference +85 uniform  total +340
+    Example: age=18, apprentice=false → rule hourly=1085 / legacy hourly=1000
 ```
 
 </div>
@@ -222,16 +221,16 @@ Affected 25 (12.077%)  amount -250
 <div markdown>
 
 ```markdown
-Source: 規約 表1 (配送規約.md, sha256:d1156fa90a72194c)
+Source: gov table1 (sources/uk-nmw.md, sha256:bc45eedf7f908896)
 
-> | 届け先 | 2kg まで | 2kg 超 |
-> |---|---|---|
-> | 北海道・沖縄県 | 1200円 | 1800円 |
+> | Age group | Hourly rate |
+> |---|---|
+> | 21 and over | £12.71 |
+> | 18 to 20 | £10.85 |
 
-**What `rulec check` verified**
-
-- Every combination of inputs matches some row (E101)
-- Every amount in this table is a value the copy shows (E116)
+| # | age | → hourly (money[GBPc] / down(1GBPc)) |
+|---|---|---|
+| 3 | >=21 | 1271GBPc |
 ```
 
 </div>
@@ -249,9 +248,9 @@ Source: 規約 表1 (配送規約.md, sha256:d1156fa90a72194c)
 
 ```json
 {"code": "E101",
- "where": {"line": 16, "table": "運賃表"},
- "witness": {"inputs": {"あて先": "北海道", "サイズ": "S80"}},
- "fix": {"text": "| 北海道 | S80 | 990円 |"}}
+ "where": {"line": 30, "table": "base_rate"},
+ "witness": {"inputs": {"dest": "overseas", "size": "small", "weight": 1}},
+ "fix": {"kind": "add_row", "text": "| overseas | small | 1lb | 6USD |"}}
 ```
 
 </div>
@@ -276,7 +275,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 
 | you have | the first move | the command |
 |---|---|---|
-| **a spreadsheet, a published policy or a statute** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. From a statute, each table cites its article (`@法 第91条`) and is held to a copy of the text fetched from e-Gov, the Japanese government's statute database; from a tariff sheet or a company rule, it cites the table (`@規約 表1`) and **a transcribed amount that disagrees with the copy fails**. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
+| **a spreadsheet, a published policy or a statute** | Transcribe it into a `.rule` and check it. From a workbook, a first draft is read straight out of the file, with every guess marked. From a statute, each table cites its section (`@osha "§1910.157"`) and is held to a copy of the text fetched from the statute database it names — the eCFR for the US federal regulations, e-Gov for a Japanese law; from a tariff sheet, a rate page or a company rule, it cites the table (`@gov table1`) and **a transcribed amount that disagrees with the copy fails**. No data and no old implementation are needed: a gap or a contradiction comes back with the input that causes it | `rulec import xlsx`, then `rulec check` — [What it proves](checks.md) |
 | **an implementation that runs today** | Hand the existing function to the agent. It transcribes it into a `.rule` and wraps the old code in a 20-to-30-line adapter whose shape rulec prints; `verify` streams the cases built from the rule's own boundaries through both and returns where they disagree, clustered by the rows that matched, with counts and an example. The code that runs today is not touched | `rulec verify` — [Compare and replay](compare.md#against-a-legacy-implementation) |
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
 
@@ -339,7 +338,7 @@ appears in that loop at all.
 A person is pulled onto the amber path only. Most tools pass "could not
 tell" off as a pass, or fill it with a plausible default. rulec stops
 there and turns it into a question with a real case in it — *"what is the
-fee to 山梨県 at size S60?"* What the person answers is an amount and a
+fee for a small parcel going overseas?"* What the person answers is an amount and a
 rounding direction; they never see a line of code. The answer goes into
 the table, and the indigo loop picks up again.
 
@@ -408,10 +407,10 @@ to another case sits on top of it. Each of those has its own way of being writte
 
 | In the statute | In the rule |
 |---|---|
-| **A main rule and an exception that takes precedence** (the stamp duty table and the reduced rate in the Special Taxation Measures Act) | two tables, with one line on the exception: `overrides 本則` |
+| **A main rule and an exception that takes precedence** (a stamp duty table and the relief for first-time buyers) | two tables, with one line on the exception: `overrides standard` |
 | **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
 | **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
-| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@法 第91条` — or `@規約 表1` for a tariff sheet or a company rule — at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it; cite a table and **an amount that is not in that copy fails too** |
+| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@osha "§1910.157"` — or `@gov table1` for a tariff sheet or a company rule — at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it; cite a table and **an amount that is not in that copy fails too** |
 
 The checks judge completeness and overlaps over the main rule and its exceptions together,
 and for an applied rule they prove that what this rule passes stays inside the applied
@@ -422,7 +421,7 @@ are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-
 ### The one constraint: a cell sees only its own column
 
 A cell holds a condition on **the value in that column and nothing else**. `<=2000g` is
-about the weight; `遠隔地` is about the destination. **No cell can span two columns** —
+about the weight; `north_america` is about the destination. **No cell can span two columns** —
 there is no way to write `weight × 10 > order total`. If you need that, name it first
 with a `derive` or a `define` and make it a column of its own.
 
@@ -460,7 +459,7 @@ Four things matter when stacking.
 | | |
 |---|---|
 | **A table's output is a column of any later table** | There is no limit on the depth; only the check's budget stops it, at E109 |
-| **One table may produce several output columns** | `送料表` above produces `送料` and `倍率` at once |
+| **One table may produce several output columns** | one table above produces the fee and the rate that scales it at once |
 | **A `derive` can be a column** | "Judge on the amount after the discount" becomes one column instead of one bare line of arithmetic |
 | **Completeness is checked across the stack** | The second form of E102 is "the upstream table never emits that value" |
 
@@ -478,8 +477,8 @@ A table holds **the branching and nothing else**. Arithmetic lives in three plac
 | `result` | `+ - * /`, parentheses, `min` and `max`, and the five rounding modes as functions | — |
 
 - **Division is by a constant only.** Dividing by a variable stops at E115. Dividing money by
-  a money constant — `税込金額 ÷ 100円` — cancels the unit and leaves a `number`.
-- Multiplication by a rate is allowed: `基本送料 × 負担率`. The rate stays a rate to the end,
+  a money constant — `subtotal ÷ 100USD` — cancels the unit and leaves a `number`.
+- Multiplication by a rate is allowed: `base × fuel`. The rate stays a rate to the end,
   and rounding happens exactly once.
 - **There is no loop and no recursion** (bar a `fold`, which walks a sequence once), and no date arithmetic — comparison and range only.
 - Everything is an integer. No floating point appears anywhere.
@@ -499,7 +498,7 @@ only way a unit disappears is dividing money by money: "one point per 100 yen" i
 This tool started life on a shipping tariff, so the machinery around amounts is the
 thickest part of it.
 
-- Units (円 / g / cm) and the **tax flag (inclusive / exclusive) are part of the type**.
+- Units (USD / 円 / g / cm) and the **tax flag (inclusive / exclusive) are part of the type**.
   Mix them and it stops at compile time.
 - A numeric output must declare `round`. When one is missing, the message shows the gap
   **in yen** — "the rounding mode moves this by up to 9 yen" — before it asks.
@@ -558,16 +557,16 @@ agent as the first user, is the position.
 ## The gap shows up the moment you transcribe
 
 This is the first thing the tool is worth. Transcribe a published
-tariff, fold 47 prefectures into six groups, and leave one of them out:
+tariff by destination and size, and leave one of the pairs out:
 
 ```
 error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
+  --> rules/parcel.rule:30 table base_rate
    |
-34 | table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
-   |       ^^^^^^ the input space is not fully covered
+30 | table base_rate
+   |       ^^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
  hint: add a row that matches this input.
 ```
 
@@ -618,7 +617,7 @@ Worth saying in the same breath.
 
 1. **That the table matches reality.** What gets proved is what can be
    said about the table you wrote. Cite the document a table came from
-   (`@source 表1`) and a mistyped amount does fail (E116, W120) — but
+   (`@source table1`) and a mistyped amount does fail (E116, W120) — but
    even then what is shown is agreement with the copy, not with the
    world. With no citation, transcribe the tariff wrong and everything
    stays green.
@@ -675,12 +674,13 @@ Two commands turn "deploy and watch the numbers" into "look before
 deploying".
 
 ```console
-$ rulec verify rules/送料.rule --adapter python3 adapter.py
-Compared 207 / matched 182 (87.923%)
+$ rulec verify rules/minimum_wage.rule --adapter python3 adapter.py
+Compared 29 / matched 0 (0.000%)
+Counterpart: payroll@2025-04
 
-Affected 25 (12.077%)  amount -250
-  table サイズ判定 row 1 / table 運賃表 row 36    7 records  difference -10 uniform  total -70
-    Example: あて先=沖縄県, 三辺合計=1, 重量=1 → rule 運賃=1450 / legacy 運賃=1460
+Affected 29 (100.000%)  amount +1,515
+  table by_age row 2        4 records  difference +85 uniform  total +340
+    Example: age=18, apprentice=false, first_year=true → rule hourly=1085 / legacy hourly=1000
 ```
 
 `verify` compares the rule against a legacy implementation, and `diff`

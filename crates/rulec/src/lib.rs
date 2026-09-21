@@ -192,6 +192,12 @@ pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppresse
 fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) {
     use num::{Rat, RoundMode};
     let Some(raw) = eval::unrounded_output(f, t) else { return };
+    // The example is about this rule's own output, so it is written in that output's unit.
+    // It used to be yen whatever the rule counted, which told the writer of a rule in dollars
+    // that "some input computes to 35.5 yen" and to try `round up(10円)` — a message about a
+    // currency the rule does not have (§15.111).
+    let unit = unit_word(f, t);
+    let u = unit.as_str();
     for d in diags.iter_mut().filter(|d| d.code == "E104") {
         // Only form A (a fraction can occur) says "an unrounded value reaches the output".
         // Giving form B the same first line would claim a leak where nothing leaks.
@@ -204,12 +210,12 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
                 "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it)."
             ));
             d.notes.push(tr!(
-                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、1451円 のような桁の打ち間違いが E106 で止まります。",
-                "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451円 is stopped by E106."
+                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、1451{u} のような桁の打ち間違いが E106 で止まります。",
+                "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451{u} is stopped by E106."
             ));
             d.notes.push(tr!(
-                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10円)",
-                "Hint: add rounding to the output declaration, e.g. {} {}(10円)",
+                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10{u})",
+                "Hint: add rounding to the output declaration, e.g. {} {}(10{u})",
                 crate::kw::ROUND, crate::kw::UP
             ));
         } else {
@@ -224,16 +230,28 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
             let up10 = raw.round_to(RoundMode::Up, ten);
             let spread = up10.sub(down);
             d.notes.push(tr!(
-                "例: 計算値が {raw} 円になる入力があります。{}(1円) なら {down}円、{}(1円) なら {half}円、{}(10円) なら {up10}円 と、丸め方で最大 {spread}円 動きます。",
-                "Example: some input computes to {raw} yen. {}(1円) gives {down} yen, {}(1円) gives {half} yen and {}(10円) gives {up10} yen, so the rounding mode moves the result by up to {spread} yen.",
+                "例: 計算値が {raw}{u} になる入力があります。{}(1{u}) なら {down}{u}、{}(1{u}) なら {half}{u}、{}(10{u}) なら {up10}{u} と、丸め方で最大 {spread}{u} 動きます。",
+                "Example: some input computes to {raw}{u}. {}(1{u}) gives {down}{u}, {}(1{u}) gives {half}{u} and {}(10{u}) gives {up10}{u}, so the rounding mode moves the result by up to {spread}{u}.",
                 crate::kw::DOWN, crate::kw::HALF_UP, crate::kw::UP
             ));
             d.notes.push(tr!(
-                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10円)",
-                "Hint: add rounding to the output declaration, e.g. {} {}(10円)",
+                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10{u})",
+                "Hint: add rounding to the output declaration, e.g. {} {}(10{u})",
                 crate::kw::ROUND, crate::kw::UP
             ));
         }
+    }
+}
+
+/// The unit the first numeric output counts in, as a literal writes it: `円`, `USD`, `g`,
+/// `%`. A `number` counts nothing, so it is empty and the messages read as bare numbers.
+fn unit_word(f: &ast::RuleFile, t: &types::Checked) -> String {
+    let first = f.outputs.first().map(|o| o.name.text.as_str()).unwrap_or("");
+    match t.syms.get(first).map(|s| &s.ty) {
+        Some(types::Ty::Money { cur, .. }) => cur.clone(),
+        Some(types::Ty::Qty { unit, .. }) => unit.clone(),
+        Some(types::Ty::Rate) => "%".to_string(),
+        _ => String::new(),
     }
 }
 
