@@ -163,16 +163,16 @@ One binary, no runtime. Every release publishes a static binary for macOS (arm64
 Linux (x64, arm64), with the SHA-256 of each beside it:
 
 ```console
-$ v=v0.14.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+$ v=v0.14.1; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 $ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
 $ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
 $ rulec --version
-rulec 0.14.0
+rulec 0.14.1
 ```
 
 Or from source, with a recent stable Rust: `cargo install --path .` fetches nothing, because
-there are no dependencies. In CI, `uses: i2y/rulec@v0.14.0` does the download and the check
+there are no dependencies. In CI, `uses: i2y/rulec@v0.14.1` does the download and the check
 ([In CI](#in-ci)).
 
 ## Using it
@@ -218,7 +218,7 @@ exit 2 rather than ignored. Every diagnostic is defined once, in `src/codes.rs`,
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/rulec@v0.14.0                     # the release binary, verified against its checksum
+- uses: i2y/rulec@v0.14.1                     # the release binary, verified against its checksum
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
