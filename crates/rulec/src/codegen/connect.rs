@@ -351,15 +351,18 @@ impl<'a> Gen<'a> {
             .collect();
         for ty in self.wire_enums() {
             let cls = self.enum_names.get(&ty).cloned().unwrap_or_else(|| pascal(&ty));
-            let (qual, prefix): (String, String) = match self.foreign(&ty) {
-                // The values are the imported file's, so they are read from the module protoc
-                // wrote for **that** file, not from this rule's.
+            // How the enum is spelled in Python. The plugin strips the enum's own name from
+            // its values, which leaves exactly the alias the rule declared, so the two sides
+            // of the table below are the same word.
+            let qual: String = match self.foreign(&ty) {
+                // The values are the imported file's, so they are read from the module the
+                // plugin wrote for **that** file, not from this rule's.
                 Some((file, sel, _)) => {
                     let module = ext_module(&file);
                     let name = if module.contains('.') { module.replace('.', "_") } else { module };
-                    (format!("{name}.{sel}"), crate::proto::upper_snake(&sel))
+                    format!("{name}.{sel}")
                 }
-                None => (format!("pb.{cls}"), crate::proto::upper_snake(&cls)),
+                None => format!("pb.{cls}"),
             };
             let values = self.c.enums.get(&ty).cloned().unwrap_or_default();
             let pairs: Vec<String> = values
