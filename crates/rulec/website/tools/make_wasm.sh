@@ -12,7 +12,8 @@
 # opt-level=z because this file travels over the network to a reader who has not decided
 # yet whether to install anything, for a check that takes milliseconds either way on a table
 # a person typed. It grows with the generators: 900 KB when the playground went in with six
-# languages, 1.5 MB (467 KB gzipped) with eleven.
+# languages, 1.5 MB (467 KB gzipped) with eleven, 1.7 MB (549 KB gzipped) once the rule was
+# also a `.proto` and the service behind it.
 set -eu
 cd "$(dirname "$0")/.."
 target=wasm32-unknown-unknown

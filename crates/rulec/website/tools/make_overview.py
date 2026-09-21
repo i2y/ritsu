@@ -410,8 +410,9 @@ def verify(rulec):
             for line in t["code"][1]:
                 if line.strip() != "..." and line not in written.splitlines():
                     raise SystemExit(f"{name}: rulec gen does not write {line!r}")
-            # `gen` also writes the vectors, which are not a language.
-            wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors"}
+            # `gen` also writes the vectors and the `.proto` of the rule as a service, and
+            # neither of those is a language.
+            wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors", "proto"}
             if wrote != {d for _, d in LANGS}:
                 raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn "
                                  f"for {sorted(d for _, d in LANGS)}")

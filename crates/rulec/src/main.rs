@@ -438,13 +438,13 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag(
                     "--template",
-                    Some("python|go|docling"),
+                    Some("python|go|connect-python|docling"),
                     tr!(
-                        "テンプレートの言語。`docling` は実装ではなく抽出器のテンプレートで、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
-                        "the language of the template; `docling` is not a legacy implementation but an **extractor** — it takes a document and returns its tables (extract/1, the counterpart of `rulec source fetch --via`)"
+                        "テンプレートの言語。`connect-python` は、いま動いているのが Connect のサービスのとき（プロセスではなく呼び先を包む）。`docling` は実装ではなく抽出器のテンプレートで、文書を受け取って表を返す（extract/1、`rulec source fetch --via` の相手）",
+                        "the language of the template; `connect-python` is for a legacy implementation that is a **Connect service** rather than a process, and `docling` is not a legacy implementation at all but an **extractor** — it takes a document and returns its tables (extract/1, the counterpart of `rulec source fetch --via`)"
                     ),
                 )
-                .choices(&["python", "go", "docling"])
+                .choices(&["python", "go", "connect-python", "docling"])
                 .default("python"),
             ],
             exits: vec![
@@ -455,6 +455,7 @@ fn commands() -> Vec<Cmd> {
             examples: vec![
                 "rulec adapter rules/送料.rule --template python > adapter.py".into(),
                 "rulec adapter rules/送料.rule --template go > adapter.go".into(),
+                "rulec adapter rules/送料.rule --template connect-python > adapter.py".into(),
                 "rulec adapter rules/運賃.rule --template docling > extract.py".into(),
             ],
             codes: &[],
@@ -1357,6 +1358,15 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
                 targets.push((format!("{out_dir}/{rel}"), body));
             }
         }
+        // The wire of the rule as a service (§15.112). It is one file for every language,
+        // not one per backend, so it is pushed here rather than from the registry: the
+        // `.proto` is the contract, and a contract does not come in twelve copies.
+        targets.push((format!("{out_dir}/proto/{}", g.proto_path()), g.proto()));
+        // The directory those files land in is a buf module, configured the way
+        // connect-python's own documentation configures one: `buf lint` and `buf generate`
+        // work in it as it stands.
+        targets.push((format!("{out_dir}/proto/buf.yaml"), g.buf_yaml()));
+        targets.push((format!("{out_dir}/proto/buf.gen.yaml"), g.buf_gen_yaml()));
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
         targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
         // The cases the reference evaluator refuses, where there are any. They have no

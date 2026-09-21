@@ -393,10 +393,24 @@ fn 生成pythonはmypy_strictを通る() {
     args.push(dir.to_string_lossy().into_owned());
     rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
 
+    // Every generated Python but the two that speak Connect. Those import `connectrpc` and
+    // the modules protoc writes from the `.proto`, so mypy can only see them where that
+    // toolchain is installed — `tests/connect.rs` checks them there, to the same `--strict`.
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("python"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "py"))
+        .filter(|p| {
+            let n = p.file_name().unwrap().to_string_lossy().into_owned();
+            !n.ends_with("_service.py") && !n.ends_with("_connect_runner.py")
+        })
+        .collect();
+    files.sort();
     let o = Command::new(&my[0])
         .args(&my[1..])
         .args(["--strict", "--no-color-output"])
-        .arg(dir.join("python"))
+        .args(&files)
         .current_dir(root())
         .output()
         .expect("mypy を起動できない");

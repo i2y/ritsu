@@ -270,33 +270,33 @@ goes in only when it names every input.
 
 ### `rulec gen <file> --out generated/ --format json`
 
-Writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, NumPy, and the vectors. It refuses to generate
-from a rule that does not pass check. `rulec api <file>` tells you how to call the result —
-signatures, parameters with units and ranges, enum member spellings, errors — so you never have
-to read the generated code to integrate it ([generated-code.md](generated-code.md)).
-Beside each function is a twin with `_traced` on its name that also returns the rows that
-matched, one per table in order — the row numbers `rulec doc` prints, and what an answer to
-"why this amount" needs; `rulec test` holds those rows to the reference evaluator as well as
-the values. A third, `_record`, turns one call into one line of the fixtures format, so what
-`replay` and `diff` need comes out of the generated code itself. A fourth file beside the module,
-`<alias>_mcp.py` (`.mjs` in the JavaScript directory), serves the rule as one MCP tool for an
-agent that will *call* it: the arguments are the wire form, the answer is the record line, and
-`--record <file.jsonl>` keeps every call. It speaks stdio, and with `--http <port>` MCP's
-Streamable HTTP — put TLS and authentication in front of that one; where the host renders MCP
-Apps it also offers the approver's page (`<alias>_page.html`) as the tool's view. The `wasm/`
-directory holds the rule as one module for any host, behind `call: func(input: string) ->
-string` in the canonical ABI, with a `.wit` that makes a component of it. The `sql/` directory
-holds two doors on one query: `<alias>.sql` over a relation of inputs, and
-`<alias>_function.sql`, the same query as a PostgreSQL function asked one case at a time — an
-RPC endpoint the moment it sits in a schema PostgREST or Supabase exposes. How to build and
-call each is in [generated-code.md](generated-code.md), under its own heading.
+Writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, NumPy, and the
+vectors. It refuses to generate from a rule that does not pass check. `rulec api <file>` tells you
+how to call the result — signatures, parameters with units and ranges, enum member spellings,
+errors — so you never have to read the generated code to integrate it
+([generated-code.md](generated-code.md) carries a heading for each). Beside each
+function is a twin with `_traced` on its name that also returns the rows that matched, one per
+table in order — the row numbers `rulec doc` prints, and what an answer to "why this amount"
+needs; `rulec test` holds those rows to the reference evaluator as well as the values. A third,
+`_record`, turns one call into one line of the fixtures format, so what `replay` and `diff` need
+comes out of the generated code itself. A fourth file beside the module, `<alias>_mcp.py`, serves
+the rule as one MCP tool for an agent that will *call* it: the arguments are the wire form, the
+answer is the record line, and `--record <file.jsonl>` keeps every call. It speaks stdio, and with
+`--http <port>` MCP's Streamable HTTP — put TLS and authentication in front of that one; where the
+host renders MCP Apps it also offers the approver's page (`<alias>_page.html`) as the tool's view.
+`proto/` and `<alias>_service.py` are the same rule as a Connect service, for the caller that is
+another team's code. The `wasm/` directory holds the rule as one module for any host, behind
+`call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component
+of it. The `sql/` directory holds two doors on one query: `<alias>.sql` over a relation of inputs,
+and `<alias>_function.sql`, the same query as a PostgreSQL function asked one case at a time — an
+RPC endpoint the moment it sits in a schema PostgREST or Supabase exposes.
 
 Beside the Rust module, `<alias>_proof.rs` holds proof harnesses for the
 [Kani](https://model-checking.github.io/kani/) model checker, behind `#[cfg(kani)]` so `rustc`
 never reads them: over **every** input in the declared domain rather than over the vectors, no
-table falls through, no contradiction guard fires, nothing overflows an `i64`, and each
-`unique` table's rows cover the domain exactly once. `rulec test --proofs` runs them where
-`kani` is installed ([generated-code.md](generated-code.md)).
+table falls through, no contradiction guard fires, nothing overflows an `i64`, and each `unique`
+table's rows cover the domain exactly once. `rulec test --proofs` runs them where `kani` is
+installed ([generated-code.md](generated-code.md)).
 
 For a target none of the eleven covers — another language, a workflow engine's expression
 language, a spreadsheet formula — you need no backend and give up no comparison: generate from

@@ -97,7 +97,8 @@ to be read. The function you call is `fee_demo`, and its signature does not chan
 `fee_demo_traced` returns **the rows that matched** — one per table, as the table's name and
 its row number — which is what a log line or an answer to "why this fee" needs. Beside those
 come a record writer for the fixtures format, the rule as one MCP tool over stdio and
-Streamable HTTP, and a page an approver can try a case on.
+Streamable HTTP, the rule as a Connect service with the `.proto` it is called through, and a
+page an approver can try a case on.
 
 > **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**
 > All of this at length, in English and Japanese: the whole language, what is proved and how,
@@ -245,13 +246,15 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
                   built from those very functions
-src/              42 modules, and 5 more under codegen/: kw, i18n, lex, parse, types, defset
+src/              42 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
                   (the tables that define one output, as one set), region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
                   cert (the certificate), import and xlsx (a draft from a sheet: ZIP, deflate,
                   the number formats), proto and jsonschema (the enums whose values are
                   declared outside the rule), enums, mcp (the command table as MCP tools),
-                  codegen/tool (the rule as an MCP tool and its view), codegen/sql (one query,
+                  codegen/tool (the rule as an MCP tool and its view), codegen/connect (the
+                  rule as a Connect service: the .proto and what stands behind it),
+                  codegen/sql (one query,
                   and the same query as a function), sources (a law on e-Gov, cited and
                   pinned), apply (a rule applied to another case), vfs (reading at a git
                   revision), sha256, wasm (the checker as the site's playground)
@@ -263,7 +266,8 @@ tests/oracle/     two premium tables transcribed grade by grade from their publi
 tests/            and the properties: threeway (every language agrees), readme, docs,
                   website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
                   mcp, import, xlsx, proto and jsonschema (an enum held to the file it is
-                  declared in), tool (the rule as an MCP tool), sql, wasm (the site's
+                  declared in), tool (the rule as an MCP tool), connect (the rule as a
+                  Connect service), sql, wasm (the site's
                   playground answers what the binary answers)
 ```
 
@@ -279,7 +283,7 @@ data. The two premium tables are also held,
 grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc and a JDK are used where present
+$ cargo test          # 486 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
 ```
 
 ## Where to read next

@@ -239,6 +239,33 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     } else {
         false
     };
+    // The rule as a Connect service (§15.112): the shape a service another team calls gives a
+    // rule. It needs three things this repository does not carry — protoc, the plugin that
+    // writes the stubs, and the runtime the generated service imports — so without them the
+    // pass is skipped and said so, like a missing toolchain, but not counted as a missing
+    // language: Python itself ran.
+    let connect_host = if present.iter().any(|b| b.connect.is_some()) {
+        match crate::backend::connect_ready() {
+            Ok(()) => true,
+            Err(why) => {
+                out.skipped.push(why);
+                false
+            }
+        }
+    } else {
+        false
+    };
+    // The ASGI half of it needs one thing more, and it is the same kind of "not here" as the
+    // rest: without uvicorn the two WSGI passes still run and the note says which half was
+    // skipped.
+    let asgi_host = connect_host
+        && match crate::backend::asgi_ready() {
+            Ok(()) => true,
+            Err(why) => {
+                out.skipped.push(why);
+                false
+            }
+        };
     // A `.pyc` counts as fresh when the source has the same length and the same
     // whole-second mtime, so a same-length edit within a second of the last run would
     // otherwise execute the old module and report a stale result as ok.
@@ -378,6 +405,38 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                     });
                 }
             }
+            // The same vectors once more, through the generated Connect service: the stubs
+            // are built from the `.proto`, the runner stands the service up on a free port
+            // and calls it, and what is compared is the record that came back over the
+            // socket. Four times — the ASGI application and the WSGI one, each by POST and
+            // by GET — because both are generated and the method declares itself free of
+            // side effects (§15.112).
+            if let (Some(f), true) = (b.connect, connect_host) {
+                if let Some(proto) = proto_of(&dir, alias) {
+                    for (via, flags) in [
+                        ("connect-asgi", &[][..]),
+                        ("connect-asgi-get", &["--get"][..]),
+                        ("connect-wsgi", &["--wsgi"][..]),
+                        ("connect-wsgi-get", &["--wsgi", "--get"][..]),
+                    ] {
+                        // The ASGI half is skipped on its own when uvicorn is not here.
+                        if !flags.contains(&"--wsgi") && !asgi_host {
+                            continue;
+                        }
+                        let mut plan = f(alias, &proto);
+                        plan.args.extend(flags.iter().map(|s| (*s).to_string()));
+                        let diff = held(&plan);
+                        out.results.push(Outcome {
+                            rule: alias.clone(),
+                            lang: b.name,
+                            via,
+                            vectors: n,
+                            refused: refused.len(),
+                            diff,
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -510,6 +569,17 @@ fn via_mcp(
     let _ = child.kill();
     let _ = child.wait();
     Ok(got)
+}
+
+/// The `.proto` of one rule, as a path under `proto/`.
+///
+/// The directory carries the rule's version (§15.112), which the alias does not, so it is
+/// read off the tree rather than spelled.
+fn proto_of(dir: &Path, alias: &str) -> Option<String> {
+    let base = dir.join("proto").join("rulec").join(alias);
+    let ver = std::fs::read_dir(&base).ok()?.flatten().find(|e| e.path().is_dir())?;
+    let v = ver.file_name().to_string_lossy().into_owned();
+    base.join(&v).join(format!("{alias}.proto")).is_file().then(|| format!("rulec/{alias}/{v}/{alias}.proto"))
 }
 
 /// Whether this backend has anything for this rule under the output directory.
@@ -774,6 +844,10 @@ fn via_proof(cwd: &Path, plan: &crate::backend::Plan) -> (usize, Option<Failure>
 fn via(x: &Outcome) -> &'static str {
     match x.via {
         "mcp" => ", MCP",
+        "connect-asgi" => ", Connect/ASGI",
+        "connect-asgi-get" => ", Connect/ASGI+GET",
+        "connect-wsgi" => ", Connect/WSGI",
+        "connect-wsgi-get" => ", Connect/WSGI+GET",
         "mcp-http" => ", MCP/HTTP",
         "wasi" => ", WASI",
         "function" => ", PostgreSQL",

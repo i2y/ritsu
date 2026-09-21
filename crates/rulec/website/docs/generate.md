@@ -339,6 +339,70 @@ evaluator.
 
 [The generated code in detail](generated-code.md#the-rule-as-an-mcp-tool){ .md-button }
 
+## The rule as a service another team calls
+
+An agent is one caller. The other is ordinary code in another
+repository, often in another language, that already speaks a wire. For
+that one, `gen` writes the rule as a
+[Connect](https://connectrpc.com/) service: the contract as one
+`.proto`, and the conversion that stands between it and the module.
+
+```proto
+service ShippingFeeService {
+  // The rule is a pure function, so this method has no side effects and
+  // can be called with GET.
+  rpc Decide(DecideRequest) returns (DecideResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```
+
+Three things in that file are worth saying out loud.
+
+**The path spells the package**, which is what a buf module asks for, so
+the `.proto` can be dropped into one as it stands — `buf lint` finds
+nothing in it.
+
+**The method declares that it has no side effects.** That is not a hint
+here but something already proved: the same inputs give the same answer,
+forever, for one version of the table. Connect lets such a method be
+called with `GET`, which is what makes an answer cacheable.
+
+**The answer carries the rows that decided it**, so one call is one
+fixtures record, and every answer carries `rulec-source-sha256` — which
+version of the table said so.
+
+The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
+documentation generates them, with buf — `gen` writes the `buf.yaml`
+and the `buf.gen.yaml` that configure it, so the tree is a buf module
+as it stands:
+
+```console
+$ uv add connectrpc
+$ cd generated/proto && buf generate
+```
+
+The service is written as **both applications**, because a rule is a pure
+function with nothing to await and the two are two doors on one body:
+
+```console
+$ uvicorn shipping_fee_service:app --port 8080      # ASGI
+$ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
+```
+
+`connectrpc` is the one dependency anything `gen` writes has, and it is
+confined to the service file: the module it calls still imports nothing.
+`rulec test` puts every vector through the service four times — each
+application, asked by POST and by GET — and holds all four to the
+reference evaluator.
+
+And when the implementation that runs **today** is a Connect service,
+the arrow turns around: `rulec adapter --template connect-python` prints
+the twenty lines that put its answers in front of `rulec verify`, and
+you get the match rate and the rows you disagree on.
+
+[The generated code in detail](generated-code.md#the-rule-as-a-connect-service){ .md-button }
+
 ## The input checked from the same table
 
 The generated function guards its own entry, but a value usually

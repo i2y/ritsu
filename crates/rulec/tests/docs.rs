@@ -223,7 +223,10 @@ fn genが書く言語のディレクトリはレジストリと同じ() {
         .flatten()
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n != "vectors")
+        // Two directories are not languages: the vectors, and the `.proto` of the rule as a
+        // service, which is one contract for every language rather than one per language
+        // (§15.112).
+        .filter(|n| n != "vectors" && n != "proto")
         .collect();
     got.sort();
     let mut want: Vec<String> = rulec::backend::ids().iter().map(|s| s.to_string()).collect();

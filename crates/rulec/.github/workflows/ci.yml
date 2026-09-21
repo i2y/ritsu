@@ -38,6 +38,11 @@ env:
   # version that decides differently should be a change in this file, read as
   # such, and not something a rerun quietly brings in.
   KANI_VERSION: "0.68.0"
+  # The compiler that builds the Connect stubs (DESIGN §15.112). Pinned for the same reason
+  # Kani is, and because buf decides *how* the plugins are called: the local ones run once per
+  # directory unless the template says otherwise, which is the difference between a quiet
+  # generate and a warning per package.
+  BUF_VERSION: "1.54.0"
 
 jobs:
   test:
@@ -90,6 +95,17 @@ jobs:
 
       - name: NumPy, and the checkers the generated Python is held to
         run: python3 -m pip install --upgrade numpy mypy ruff
+
+      # The rule as a Connect service (DESIGN §15.112): buf builds the stubs, the two
+      # plugins write them, `connectrpc` is what the generated service imports, and uvicorn
+      # is the ASGI half's server — the WSGI half runs on the standard library's own.
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+          version: ${{ env.BUF_VERSION }}
+
+      - name: The Connect runtime and the plugins that write its stubs
+        run: python3 -m pip install --upgrade connectrpc protoc-gen-connectrpc protoc-gen-py uvicorn
 
       - uses: actions/setup-node@v7
         with:
@@ -158,6 +174,8 @@ jobs:
           node --version && ruby --version && php --version
           go version && javac -version && swiftc --version
           wasmtime --version && psql --version && kani --version
+          buf --version && protoc-gen-py --version && protoc-gen-connectrpc --version
+          python3 -c 'import connectrpc, uvicorn, importlib.metadata as m; print("connectrpc", m.version("connectrpc"), "uvicorn", m.version("uvicorn"))'
           psql -c 'select version()'
 
       # `website/docs-ja/` is half copied in by sync.sh and gitignored — the Japanese
@@ -175,8 +193,9 @@ jobs:
       # pass itself — not only the harnesses it reads — is exercised here.
       # --- The suite skips a language whose toolchain is missing; here that is a
       # failure, not a note. `--require-all` counts the twelve languages. The PostgreSQL *function* beside
-      # the query is a thirteenth door and is skipped when `psql` cannot reach a
-      # server, with a warning that `--require-all` does not see — so the warning is
+      # the query is a thirteenth door, and the rule as a Connect service (DESIGN
+      # §15.112) is a fourteenth; each is skipped with a warning of its own when what
+      # it needs is not here, and `--require-all` sees neither — so the warnings are
       # read here as well. Measured: with no psql at all, `--require-all` still exits
       # 0 (DESIGN §15.94).
       - name: The generated code runs in every language, none skipped

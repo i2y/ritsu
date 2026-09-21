@@ -947,6 +947,48 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
+    // The `.proto` of the rule as a Connect service takes four names of its own, and they are
+    // not in any language's keyword list (§15.112). An output aliased `trace` would be a
+    // second field of that name in the answer, and an enum aliased `fired` would be a second
+    // message called `Fired` in the package; protoc refuses either, which is late and about a
+    // file the writer of the rule never asked for.
+    {
+        let taken = |a: &str, names: &[&str]| names.iter().any(|w| w.eq_ignore_ascii_case(a));
+        let mut hit: Vec<(&Name, String)> = Vec::new();
+        for o in &f.outputs {
+            if o.name.ascii.as_deref().is_some_and(|a| taken(a, &["trace"])) {
+                hit.push((&o.name, tr!("答えは出力と並べて `trace` を運びます", "the answer carries `trace` beside the outputs")));
+            }
+        }
+        for e in &f.enums {
+            if e.name.ascii.as_deref().is_some_and(|a| taken(a, &["fired", "element", "decide_request", "decide_response"])) {
+                hit.push((&e.name, tr!("同じ名前のメッセージが既にあります", "a message of that name is already there")));
+            }
+        }
+        for (n, why) in hit {
+            c.diags.push(
+                Diag::warning(
+                    "W121",
+                    tr!(
+                        "別名 `{}` は生成先の言葉とぶつかります",
+                        "The alias `{}` collides with a word in a target language",
+                        n.ascii.as_deref().unwrap_or("")
+                    ),
+                )
+                .at(at(n.span.line))
+                .mark(n.span.clone(), tr!("別名", "the alias"))
+                .note(tr!(
+                    "Connect: {why}。`.proto` がその名前を二度書くので、protoc が断ります。",
+                    "Connect: {why}, so the `.proto` would write that name twice and protoc refuses it."
+                ))
+                .note(tr!(
+                    "使わない生成先なら、このままで構いません。使うなら別名を変えてください（公開名はそのままで構いません）。",
+                    "For a target you do not generate, leave it. For one you do, change the alias; the public name can stay as it is."
+                )),
+            );
+        }
+    }
+
     // A table's or a clause's name is what the trace, an `overrides` line and a later version
     // refer to, so two cannot share one (E034, the same rule as for row labels).
     {

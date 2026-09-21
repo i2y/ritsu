@@ -154,6 +154,9 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
     let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
     match lang {
+        // The legacy implementation is not always a process to start. When it is a Connect
+        // service, what goes in front of it is a client, and the template says so (§15.112).
+        "connect-python" => crate::codegen::connect_template(f),
         "go" => tr!(
             "// rulec のアダプタのテンプレート（規則 {}）。\n\
              // 標準入出力で JSON Lines をやりとりするだけ。いま動いている実装をこの中から呼ぶ。\n\
@@ -257,26 +260,7 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
             // The schema describes the wire, so the bounds are converted the same way a
             // value is: a rate's 100% is 100 steps, not 1 (§10.2).
             let sc = c.wire_scale(name);
-            let unit = match ty {
-                Ty::Money { cur, tax } => {
-                    let t = match tax.as_deref() {
-                        Some("incl_tax") => tr!("（税込）", " (tax included)"),
-                        Some("excl_tax") => tr!("（税抜）", " (tax excluded)"),
-                        _ => String::new(),
-                    };
-                    tr!("整数。単位は {cur}{t}", "an integer, in {cur}{t}")
-                }
-                Ty::Qty { unit, .. } => tr!("整数。単位は {unit}", "an integer, in {unit}"),
-                Ty::Rate => {
-                    let step = if 100 % sc == 0 { format!("{}%", 100 / sc) } else { format!("{}%", 100.0 / sc as f64) };
-                    tr!(
-                        "整数。率を {step} 刻みの個数で書く（100% なら {sc}）",
-                        "an integer: the rate as a count of {step} steps (100% is {sc})"
-                    )
-                }
-                Ty::Number => tr!("整数（個数や日数のような、単位の無い数）", "an integer (a plain count of things or days)"),
-                _ => String::new(),
-            };
+            let unit = wire_unit(name, ty, c);
             let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
             let mut s = format!("{{\"type\":\"integer\",\"description\":\"{unit}\"");
             if let Some(l) = lo {
@@ -296,6 +280,37 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
         body
     };
     format!("{}:{body}", crate::json::quote(&key))
+}
+
+/// What one number on the wire is, in words: which unit the integer is in, and for a rate
+/// what one step of it counts.
+///
+/// The JSON Schema puts it in `description` and the `.proto` puts it in the comment beside
+/// the field (§15.112). It is the same sentence either way, because it is the same fact:
+/// a caller who never reads the rule decides the value from it, so the trap has to be named
+/// where the value is written — 18.3% at a step of 0.1% is 183.
+pub fn wire_unit(name: &str, ty: &Ty, c: &Checked) -> String {
+    let sc = c.wire_scale(name);
+    match ty {
+        Ty::Money { cur, tax } => {
+            let t = match tax.as_deref() {
+                Some("incl_tax") => tr!("（税込）", " (tax included)"),
+                Some("excl_tax") => tr!("（税抜）", " (tax excluded)"),
+                _ => String::new(),
+            };
+            tr!("整数。単位は {cur}{t}", "an integer, in {cur}{t}")
+        }
+        Ty::Qty { unit, .. } => tr!("整数。単位は {unit}", "an integer, in {unit}"),
+        Ty::Rate => {
+            let step = if 100 % sc == 0 { format!("{}%", 100 / sc) } else { format!("{}%", 100.0 / sc as f64) };
+            tr!(
+                "整数。率を {step} 刻みの個数で書く（100% なら {sc}）",
+                "an integer: the rate as a count of {step} steps (100% is {sc})"
+            )
+        }
+        Ty::Number => tr!("整数（個数や日数のような、単位の無い数）", "an integer (a plain count of things or days)"),
+        _ => String::new(),
+    }
 }
 
 /// The `in` object of the wire: every input, all required, nothing else allowed. This is

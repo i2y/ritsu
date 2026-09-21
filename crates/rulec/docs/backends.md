@@ -79,6 +79,14 @@ canonical unit** — no decimals anywhere. Two consequences bite generators:
   infinity: `-4.8 EUR` rounds down to `-4 EUR`. [generated-code.md](generated-code.md) has the
   five modes.
 
+**There is a second spelling of the same wire.** `rulec gen` also writes the rule's contract
+as a `.proto` — the request, the answer with the rows that decided it, and one method
+(generated-code.md, [the rule as a Connect service](generated-code.md#the-rule-as-a-connect-service)).
+A target whose language has a protobuf plugin can take that file and let the plugin write the
+messages: the names, the types and the enum values are then the same on both sides by
+construction, and what you write is the call into your own code. Only Python gets a
+generated service, but the `.proto` is not Python's.
+
 ### 3. Emit whatever your target needs
 
 Nothing here is rulec's business — this is your generator. For SQL the shape is a chain of

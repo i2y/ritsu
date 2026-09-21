@@ -113,8 +113,8 @@ pub extern "C" fn rulec_check(src: *const u8, ja: u32) -> *mut u8 {
         .finish())
 }
 
-/// `rulec gen`, in memory: every file every backend writes, plus the vectors and their
-/// expected records, in the order `rulec api` lists them.
+/// `rulec gen`, in memory: every file every backend writes, the `.proto` beside them, and the
+/// vectors with their expected records, in the order `rulec api` lists them.
 ///
 /// Nothing is generated for a rule that does not pass (§1.6), and `ok` is false with the
 /// findings in `text`, as the command prints them.
@@ -132,6 +132,16 @@ pub extern "C" fn rulec_gen(src: *const u8, ja: u32) -> *mut u8 {
             files.push(Obj::new().str("path", &rel).str("body", &body).finish());
         }
     }
+    // The contract of the rule as a service, which is one file for every language and so is
+    // not in the registry (§15.112).
+    files.push(
+        Obj::new()
+            .str("path", format!("proto/{}", g.proto_path()))
+            .str("body", &g.proto())
+            .finish(),
+    );
+    files.push(Obj::new().str("path", "proto/buf.yaml").str("body", &g.buf_yaml()).finish());
+    files.push(Obj::new().str("path", "proto/buf.gen.yaml").str("body", &g.buf_gen_yaml()).finish());
     let vs = crate::vectors::generate(&f, &c);
     let join = |v: Vec<String>| v.join("\n") + "\n";
     files.push(

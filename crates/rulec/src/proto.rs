@@ -80,6 +80,24 @@ pub fn upper_snake(camel: &str) -> String {
     out
 }
 
+/// The `package` the file declares, when it declares one.
+///
+/// The value set is all a rule needs, but a `.proto` written **from** a rule needs one thing
+/// more: an imported enum is named by its package there (§15.112), and a file with no package
+/// names its enum bare.
+pub fn package(src: &str) -> Option<String> {
+    for line in strip_comments(src).lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("package ") {
+            let name = rest.trim().trim_end_matches(';').trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Every enum in the file, in the order they appear.
 pub fn enums(src: &str) -> Vec<Enum> {
     let b: Vec<char> = strip_comments(src).chars().collect();

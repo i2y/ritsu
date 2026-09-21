@@ -199,6 +199,47 @@ http://127.0.0.1:8000/mcp
 
 [生成物の詳しい説明](generated-code.md#the-rule-as-an-mcp-tool){ .md-button }
 
+## ほかのチームが呼ぶサービスにする
+
+エージェントは呼び手の一つです。もう一つは、別のリポジトリにある、たいていは別の言語で書かれた、すでに何かのやりとりの作法を持っているコードです。そちらのために `gen` は、規則を [Connect](https://connectrpc.com/) のサービスとして書きます。契約は `.proto` 一枚、その後ろに立つのは二十五行ほどの変換です。
+
+```proto
+service ShippingFeeService {
+  // 規則は純関数なので、この手続きには副作用が無く、GET でも呼べる。
+  rpc Decide(DecideRequest) returns (DecideResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```
+
+この中の三つは、書き写しではなく決めたことです。
+
+**置いた場所がそのまま package になっています。** buf のモジュールが求める形なので、この `.proto` はそのまま置けます。`buf lint` は何も言いません。
+
+**この手続きには副作用が無い、と宣言してあります。** ここではそれは願いではなく、すでに証明されていることです。同じ入力なら同じ答えが返る、表の一つの版についてはいつまでも。Connect はそういう手続きを GET でも呼ばせます。答えをキャッシュに載せられるのはそのためです。
+
+**答えには、決めた行が付いてきます。** だから呼び出し一件が fixtures の記録一件になります。返す見出しには `rulec-source-sha256` が入っていて、どの版の表が答えたのかが分かります。
+
+stub の作り方は [connect-py](https://github.com/connectrpc/connect-py) の文書がすすめるとおり、buf です。`buf.yaml` と `buf.gen.yaml` も `gen` が書くので、出てきたディレクトリはそのまま buf のモジュールになっています。
+
+```console
+$ uv add connectrpc
+$ cd generated/proto && buf generate
+```
+
+サービスは **ASGI と WSGI の両方**として書き出します。規則は純関数で待つものが無いので、二つは同じ本体に付いた二つの扉です。
+
+```console
+$ uvicorn shipping_fee_service:app --port 8080      # ASGI
+$ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
+```
+
+`connectrpc` は `gen` の出すものの中で唯一よその依存で、それもサービスの一枚に閉じています。呼ばれるモジュールのほうは相変わらず何も import しません。`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で、合わせて四回通して参照評価器と突き合わせます。
+
+そして、**いま動いている**ほうが Connect のサービスなら、矢印は逆を向きます。`rulec adapter --template connect-python` が二十行を出すので、その答えを `rulec verify` の前に置けば、一致率と、食い違っている行が出ます。
+
+[生成物の詳しい説明](generated-code.md#the-rule-as-a-connect-service){ .md-button }
+
 ## 入口の検査も同じ表から
 
 生成した関数は自分の入口を守りますが、値はたいていもっと手前で入ってきます。フォーム、HTTP の受け口、キュー。`rulec schema` は、そのやりとりの JSON Schema を出します。入力ごとに型・単位・範囲・列挙の値が入っているので、手前の検査も同じ表から組めて、ガードとずれません。

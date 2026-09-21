@@ -153,6 +153,8 @@ pub use php::round_tests_php;
 mod java;
 pub use java::{java_class, round_tests_java};
 mod tool;
+mod connect;
+pub use connect::template as connect_template;
 
 impl<'a> Gen<'a> {
     /// The counts this rule declares, in source order (§15.58).
@@ -2746,33 +2748,37 @@ impl<'a> Gen<'a> {
     /// A Python runner that reads JSONL from stdin and prints just the outputs, one record
     /// per line. It is also the worked example of the calling convention, so it constructs
     /// each branded argument the way a caller has to — `mypy --strict` checks both (§15.22).
+    /// One value off the wire, as the Python the module takes.
+    ///
+    /// One reader, used for the rule's own inputs, for an element's fields, and by the
+    /// Connect runner (§15.112). There used to be a second copy inline in `python_runner`,
+    /// and it was the one that ran — which is how the optional input got no arm anywhere and
+    /// came out as `int(d[…])` (§15.88).
+    pub fn py_read(&self, ty: &Ty, expr: String) -> String {
+        match ty {
+            Ty::Enum(n) => {
+                let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                format!("m.{cls}({expr})")
+            }
+            Ty::Bool => format!("bool({expr})"),
+            Ty::Date => format!("_ord({expr})"),
+            Ty::Str => format!("str({expr})"),
+            // A branded input has to be constructed, exactly as a caller must.
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                format!("m.{}(int({expr}))", brand_of(ty))
+            }
+            // The absent value is `null` on the wire (§10.2), and `None` in Python.
+            Ty::Opt(inner) => {
+                format!("(None if {expr} is None else {})", self.py_read(inner, expr.clone()))
+            }
+            _ => format!("int({expr})"),
+        }
+    }
+
     pub fn python_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut args: Vec<String> = Vec::new();
-        // One reader, used for the rule's own inputs and for an element's fields. There used
-        // to be a second copy inline below, and it was the one that ran — which is how the
-        // optional input got no arm anywhere and came out as `int(d[…])` (§15.88).
-        fn read_arg(g: &Gen, ty: &Ty, expr: String) -> String {
-            match ty {
-                Ty::Enum(n) => {
-                    let cls = g.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("m.{cls}({expr})")
-                }
-                Ty::Bool => format!("bool({expr})"),
-                Ty::Date => format!("_ord({expr})"),
-                Ty::Str => format!("str({expr})"),
-                // A branded input has to be constructed, exactly as a caller must.
-                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
-                    format!("m.{}(int({expr}))", brand_of(ty))
-                }
-                // The absent value is `null` on the wire (§10.2), and `None` in Python.
-                Ty::Opt(inner) => {
-                    format!("(None if {expr} is None else {})", read_arg(g, inner, expr.clone()))
-                }
-                _ => format!("int({expr})"),
-            }
-        }
-        let read = |ty: &Ty, expr: String| -> String { read_arg(self, ty, expr) };
+        let read = |ty: &Ty, expr: String| -> String { self.py_read(ty, expr) };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             args.push(read(&ty, format!("d[{:?}]", i.name.text)));
@@ -6456,6 +6462,7 @@ impl Gen<'_> {
             .raw("swift", swift)
             .raw("java", java)
             .raw("numpy", self.api_numpy())
+            .raw("connect", self.api_connect())
             .raw("sql", self.api_sql())
             .raw("wasm", self.api_wasm())
             .finish()

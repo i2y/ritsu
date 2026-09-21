@@ -889,6 +889,153 @@ answer that changed with the carrying would be a disagreement. Nothing beyond `p
 
 ---
 
+## The rule as a Connect service
+
+The MCP tool above is for an agent. This is the other caller — a service that another team's
+code calls over a wire it already speaks — and `gen` writes it as
+[Connect](https://connectrpc.com/):
+
+```
+generated/proto/rulec/shipping_fee/v4/shipping_fee.proto   the whole of the contract
+generated/proto/buf.yaml                                   the tree is a buf module
+generated/proto/buf.gen.yaml                               how the stubs are generated
+generated/python/shipping_fee_service.py                   what stands behind it
+generated/python/shipping_fee_connect_runner.py            the same vectors, over the wire
+```
+
+The `.proto` is one file for every language, so it sits beside the language directories
+rather than inside one, and **its path spells its package** — what buf's
+`PACKAGE_DIRECTORY_MATCH` asks for — so it can be dropped into a buf module as it stands.
+`buf lint` finds nothing in it.
+
+```proto
+package rulec.shipping_fee.v4;
+
+message DecideRequest {
+  // 届け先
+  Prefecture dest = 1;
+  // 重量: an integer, in g. 1 to 40000
+  int64 weight = 2;
+  // 注文金額: an integer, in 円 (tax included). 0 to 10000000
+  int64 total = 3;
+  // 会員
+  MemberKind member = 4;
+}
+
+message DecideResponse {
+  // 送料: an integer, in 円 (tax included)
+  int64 fee = 1;
+
+  // The rows that matched, one per table, in order.
+  repeated Fired trace = 100;
+}
+
+service ShippingFeeService {
+  // Decides 送料 from 届け先, 重量, 注文金額, 会員.
+  // The rule is a pure function, so this method has no side effects and can be
+  // called with GET.
+  rpc Decide(DecideRequest) returns (DecideResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```
+
+Four things there are decisions rather than transcription.
+
+**The package carries the rule's major version.** The package names the *wire*, and what a
+change to the wire does is exactly what `buf breaking` is there to say.
+
+**The method declares that it has no side effects**, which is not a hint but something
+already proved: the same inputs give the same answer, forever, for one version of the table.
+Connect lets such a method be called with `GET`, which is what makes an answer cacheable.
+
+**The answer carries the rows that decided it.** `trace` is the same list the record function
+writes, so one call is one fixtures record. Its field number is far from the outputs so that
+an output added to a table later takes the next small number and leaves the trace where it
+was.
+
+**Only the enums that cross the wire are declared**, and one whose values belong to a contract
+outside the rule (`import proto`, [reference.md](reference.md#an-enum-a-proto-owns)) is
+imported rather than copied — the rule cites that file and `rulec check` holds the two
+together, so the service speaks the contract's own type instead of a second one that means
+the same thing.
+
+The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
+documentation generates them — with [buf](https://buf.build/), configured by the two files
+beside the `.proto`:
+
+```console
+$ uv add connectrpc
+$ cd generated/proto && buf generate     # the messages, the client and the server base, into ../python/stubs
+```
+
+They land in a `stubs/` package of their own, because the plugin writes an `__init__.py` at
+the root of wherever it generates and the directory beside it is not a package.
+[`connectrpc`](https://pypi.org/project/connectrpc/) is the one dependency anything `gen`
+writes has, and it is confined to the service file: the module it calls imports nothing, and
+deleting the service leaves the rule where it was.
+
+**The service is written as both applications**, because the rule is a pure function with
+nothing to await and the two are two doors on one body:
+
+```console
+$ uvicorn shipping_fee_service:app --port 8080         # ASGI: uvicorn, hypercorn, daphne
+$ gunicorn 'shipping_fee_service:wsgi_app'             # WSGI: gunicorn, uWSGI
+$ python3 generated/python/shipping_fee_service.py --http 127.0.0.1:8080   # the standard library alone
+http://127.0.0.1:8080
+$ curl -sS -X POST -H 'Content-Type: application/json' \
+    -d '{"dest":"PREFECTURE_KAGOSHIMA","weight":800,"total":4200,"member":"MEMBER_KIND_BASIC"}' \
+    http://127.0.0.1:8080/rulec.shipping_fee.v4.ShippingFeeService/Decide
+{"fee":"800","trace":[{"table":"\u57fa\u672c\u9001\u6599","row":3},{"table":"\u8ca0\u62c5\u5224\u5b9a","row":3}]}
+```
+
+Three things about that answer are protobuf's JSON mapping rather than rulec's: the field
+names are lowerCamelCase, an `int64` is a **string** because a JSON number cannot hold one,
+and non-ASCII is escaped. A generated client hands you a Python `int` and the table's real
+name either way; it is only the bytes on the wire that look like that.
+
+The third line is the standard library's own server, there so that the service can be tried
+with nothing installed beyond `connectrpc`; it serves the WSGI side. As with the MCP server,
+**TLS and authentication go in front**: none of these carries either.
+
+An input the rule cannot take is refused rather than answered, with the code that says whose
+mistake it was:
+
+| what happened | code | HTTP |
+|---|---|---|
+| outside the declared domain — out of range, not an integer, not a member of the enum | `invalid_argument` | 400 |
+| the runtime guard of a W114 pair fired (§8.1) | `internal` | 500 |
+
+```console
+$ curl … -d '{"dest":"PREFECTURE_KAGOSHIMA","weight":0,…}'
+{"code": "invalid_argument", "message": "\u91cd\u91cf is out of range: 0"}
+```
+
+The message names the argument by the rule's own name for it (`重量`), as the module's own
+error does. The second row is the one place with no static proof, and it answers 500 on
+purpose: which of two rows wins is the table's to decide and no caller can fix it, so it
+belongs where a service's own failures are counted.
+
+Every answer carries `rulec-source-sha256`, the digest of the rule the service was generated
+from — which version of the table answered, for a caller that keeps the answer. And
+`--record calls.jsonl` appends one fixtures record per call, so a running service becomes the
+file `rulec replay` and `rulec diff` read when the table is revised.
+
+`rulec test` puts every vector through the service and holds what comes back to the same
+expected records as the runner — **four times: each application, asked by POST and by GET**
+(`via` is `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`). Both
+applications are generated, and a door nobody drove would be a claim nobody checked; both
+methods, for the same reason both MCP transports are driven — a method that declares itself
+free of side effects may be called either way, and a carrying that changed an answer is the
+thing worth catching. Without buf, the two plugins or the runtime the whole pass is skipped with a note saying
+which is missing, and without `uvicorn` the ASGI half alone is.
+
+There is a door in the other direction too. When the implementation that runs today **is** a
+Connect service, `rulec adapter --template connect-python` prints the twenty lines that put
+its answers in front of `rulec verify` ([formats.md](formats.md#the-adapter-protocol-rulec-verify)).
+
+---
+
 ## The Rust runner as a WASI module
 
 Apart from the `wasm/` target above, the Rust runner itself compiles unchanged for

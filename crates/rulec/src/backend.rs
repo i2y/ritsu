@@ -176,6 +176,18 @@ pub struct Backend {
     /// `rulec test` drives it over the vectors like the runner and holds its answers to the
     /// same expected records.
     pub mcp: Option<fn(&str) -> Plan>,
+    /// How to reach the rule as a **Connect service** (§15.112), for the backends that get
+    /// one: the stubs are built from the `.proto` and the vectors go through the generated
+    /// client, so what is held to the reference evaluator is the answer that came back over
+    /// a socket. `rulec test` runs it four times — the two applications the service is
+    /// written as, ASGI and WSGI, each asked by POST and by GET. Both applications are
+    /// generated, and a door nobody drove would be a claim nobody checked; both methods,
+    /// because the rule declares itself free of side effects and may be called either way,
+    /// and a carrying that changed an answer is the thing worth catching.
+    ///
+    /// The second argument is the `.proto`'s path under `proto/`, which carries the rule's
+    /// version and so cannot be spelled from the alias alone.
+    pub connect: Option<fn(&str, &str) -> Plan>,
     /// How to run the rule as a function **inside a database** (§15.80), for the backends
     /// that get one. The relation and the function are two doors on one query, and a door
     /// nobody drove would be a claim nobody checked, so `rulec test` runs this as a pass of
@@ -217,6 +229,55 @@ pub fn have(cmd: &str) -> bool {
     ["--version", "version"]
         .iter()
         .any(|a| std::process::Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+}
+
+/// What the Connect side needs beyond `python3`: the compiler, the plugin that writes the
+/// stubs, and the runtime the generated service imports. All three come from outside this
+/// repository, so a machine without them skips the pass and is told which piece is missing —
+/// the way a missing toolchain is said, not as a failure of the rule.
+pub fn connect_ready() -> Result<(), String> {
+    if !have("buf") {
+        return Err(tr!("buf が無いので Connect 側を飛ばしました", "buf not found; skipped the Connect side"));
+    }
+    for plugin in ["protoc-gen-py", "protoc-gen-connectrpc"] {
+        if !have(plugin) {
+            return Err(tr!(
+                "{plugin} が無いので Connect 側を飛ばしました（uv add --dev protoc-gen-py protoc-gen-connectrpc）",
+                "{plugin} not found; skipped the Connect side (uv add --dev protoc-gen-py protoc-gen-connectrpc)"
+            ));
+        }
+    }
+    let rt = std::process::Command::new("python3")
+        .args(["-c", "import connectrpc"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !rt {
+        return Err(tr!(
+            "connectrpc が入っていないので Connect 側を飛ばしました（uv add connectrpc）",
+            "connectrpc is not installed; skipped the Connect side (uv add connectrpc)"
+        ));
+    }
+    Ok(())
+}
+
+/// Whether an ASGI server is here to run the ASGI half on. connect-py's documentation names three;
+/// uvicorn is the one the generated runner starts, because it can be handed a socket that is
+/// already bound and so can say which port it took.
+pub fn asgi_ready() -> Result<(), String> {
+    let ok = std::process::Command::new("python3")
+        .args(["-c", "import uvicorn"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        Err(tr!(
+            "uvicorn が無いので Connect の ASGI 側を飛ばしました（pip install uvicorn）",
+            "uvicorn is not installed; skipped the ASGI half of the Connect side (pip install uvicorn)"
+        ))
+    }
 }
 
 /// Whether `psql` is here and answers from a server. Both halves matter: the client alone
@@ -270,6 +331,12 @@ impl Plan {
     }
 }
 
+/// How `rulec test` builds the Connect stubs: buf, with the plugins that `pip` put on the
+/// PATH rather than the ones on the network (§15.112). `out` is relative to the output base,
+/// which is the directory the command runs in — so `stubs` under `python/`, which is where
+/// the generated service imports them from.
+const LOCAL_STUBS: &str = r#"{"version":"v2","plugins":[{"local":"protoc-gen-py","out":"stubs","strategy":"all"},{"local":"protoc-gen-connectrpc","out":"stubs"}]}"#;
+
 /// The `go` line of the generated `go.mod`.
 ///
 /// Since Go 1.21 that line is not only a minimum version but a **toolchain switch**: with the
@@ -300,6 +367,11 @@ pub const ALL: &[Backend] = &[
                 (format!("python/{alias}.py"), g.python()),
                 (format!("python/{alias}_runner.py"), g.python_runner()),
                 (format!("python/{alias}_mcp.py"), g.py_mcp()),
+                // The rule behind a Connect endpoint, and the runner that holds it to the
+                // same records as everything else (§15.112). The `.proto` they speak is one
+                // file for every language and is written outside this registry.
+                (format!("python/{alias}_service.py"), g.py_connect()),
+                (format!("python/{alias}_connect_runner.py"), g.py_connect_runner()),
                 ("python/_round_test.py".into(), crate::codegen::round_tests_python()),
                 (format!("python/{alias}_page.html"), g.page()),
             ]
@@ -314,6 +386,17 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
+        connect: Some(|alias, _proto| {
+            // The stubs come from buf, which is the only way to reach protobuf-py's own
+            // plugin. The template is given inline and names the **local** plugins, so a
+            // machine with no network runs this pass like any other; the `buf.gen.yaml`
+            // `gen` writes beside the `.proto` is the other one, the remote plugins that
+            // connect-py's documentation recommends.
+            Plan::new("python", "python3", &["-B", &format!("{alias}_connect_runner.py")]).built(
+                "buf",
+                &["generate", "../proto", "--template", LOCAL_STUBS],
+            )
+        }),
         pg: None,
         proof: None,
         ready: None,
@@ -347,6 +430,7 @@ pub const ALL: &[Backend] = &[
         texts: false,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: Some(|| {
@@ -388,6 +472,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("typescript", "node", &["--no-warnings", &format!("{alias}_mcp.ts")])),
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -417,6 +502,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("javascript", "node", &[&format!("{alias}_mcp.mjs")])),
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -461,6 +547,7 @@ pub const ALL: &[Backend] = &[
             Plan::new("rust", "wasmtime", &[&format!("{alias}_runner.wasm")]).built("rustc", &refs)
         }),
         mcp: None,
+        connect: None,
         pg: None,
         // `kani <alias>_proof.rs`: the harnesses are a crate of their own whose only item is
         // the rule, included by path, so nothing has to be built first.
@@ -490,6 +577,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -518,6 +606,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -548,6 +637,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -585,6 +675,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: None,
@@ -633,6 +724,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: Some(|| {
@@ -669,6 +761,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         proof: None,
         pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
@@ -708,6 +801,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: None,
+        connect: None,
         pg: None,
         proof: None,
         ready: Some(|| {

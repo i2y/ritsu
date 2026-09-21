@@ -132,7 +132,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`, one call per vector through the generated Connect service — the ASGI application and the WSGI one, each by POST and by GET ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
 | `vectors` | how many vectors were put to it — or, when `via` is `proof`, how many harnesses the checker read |
 | `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
 | `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
@@ -276,6 +276,25 @@ meaning is in [generated-code.md](generated-code.md).
          "enums":[{"name":"クーポン種別","alias":"CouponKind",
                    "values":[{"name":"率引き","alias":"CouponKind.PERCENT"}]}],
          "errors":["RuleInputError","RuleContradictionError"]},
+ "connect":{"proto":"proto/rulec/coupon_step/v1/coupon_step.proto","package":"rulec.coupon_step.v1",
+            "service":"CouponStepService","method":"Decide",
+            "path":"/rulec.coupon_step.v1.CouponStepService/Decide",
+            "request":"DecideRequest","response":"DecideResponse",
+            "idempotency_level":"NO_SIDE_EFFECTS","trace":"trace",
+            "source_header":"rulec-source-sha256",
+            "stubs":"cd proto && buf generate",
+            "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml",
+            "json_names":"lowerCamelCase","json_int64":"string",
+            "request_fields":[{"name":"商品合計","field":"subtotal","type":"int64"}],
+            "response_fields":[{"name":"素割引","field":"raw","type":"int64"}],
+            "python":{"module":"coupon_step_service.py",
+                      "class":"CouponStep","sync_class":"CouponStepSync",
+                      "asgi":"app","wsgi":"wsgi_app",
+                      "serve_asgi":"uvicorn coupon_step_service:app --port 8080",
+                      "serve_wsgi":"gunicorn 'coupon_step_service:wsgi_app'",
+                      "client":"CouponStepServiceClientSync",
+                      "runner":"coupon_step_connect_runner.py",
+                      "needs":["connectrpc","buf"]}},
  "sql":{"file":"coupon_step.sql","input":"coupon_step_input","id":"_id","guard":"_input_error",
         "dialect":"postgresql","runs_on":["postgresql","sqlite"],
         "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
@@ -661,6 +680,19 @@ legacy ← {"id":2,"err":"unsupported: 離島"}
 Names and values on the wire are the rule's own names and integers in the canonical unit.
 `rulec schema` prints the JSON Schema of `in` and `out`, and `rulec adapter --template
 python|go` prints a template to fill in.
+
+**When the legacy implementation is a Connect service** it is not a process to start but an
+endpoint to call, and `--template connect-python` prints that shape instead: the same
+JSON Lines on stdin and stdout, with a client in the middle. Two places are left to fill in,
+and both are the other side's own messages. A `ConnectError` becomes `err`, so a record that
+service says it cannot answer leaves the denominator like any other.
+
+```console
+$ rulec adapter rules/送料.rule --template connect-python > adapter.py
+$ rulec verify rules/送料.rule --adapter python3 adapter.py https://pricing.internal
+Compared 96 / matched 96 (100.000%)
+Counterpart: connect@https://pricing.internal
+```
 
 ## The extraction protocol (`rulec source fetch --via`)
 

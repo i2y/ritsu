@@ -206,7 +206,8 @@ def verify(rulec):
         if r.returncode:
             raise SystemExit(r.stdout + r.stderr)
         # `gen` also writes the unit vectors, which are not a language.
-        wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors"}
+        # Neither the vectors nor the `.proto` of the rule as a service is a language.
+        wrote = {p.name for p in pathlib.Path(tmp).iterdir() if p.is_dir()} - {"vectors", "proto"}
     want = {d for _, d in LANGS}
     if wrote != want:
         raise SystemExit(f"rulec gen writes {sorted(wrote)}, the diagram is drawn for {sorted(want)}")
