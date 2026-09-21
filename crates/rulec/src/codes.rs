@@ -421,6 +421,11 @@ const X_E118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n
                       define r(r) : number = min(n, d, n)\n\n\
                       result o = r\n";
 
+const X_W121: &str = "rule t(t) v1\n\ninputs\n  \u{7a2e}\u{5225}(type) : number  range >=0 <=10\n\n\
+                      outputs\n  o(o) : number  round down(1)\n\n\
+                      table j(j)\npolicy first\n| \u{7a2e}\u{5225} | -> o(o) : number |\n\
+                      | >=5 | 1 |\n| - | 0 |\n";
+
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
@@ -1495,6 +1500,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W117,
             &["E035", "E105"],
+        ),
+        warn(
+            "W121",
+            tr!("別名が生成先の言葉とぶつかります", "An alias collides with a word in a target language"),
+            tr!(
+                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。",
+                "An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there."
+            ),
+            tr!(
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。引数や局所の名前は自分の外を隠さないので、そこは予約語のときだけ出ます。使わない生成先なら、このままで構いません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
+            ),
+            X_W121,
+            &["E009", "E011"],
         ),
         warn(
             "W115",

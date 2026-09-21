@@ -118,6 +118,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e115.rule", &[("E115", 1)], "割る数が定数でない（かつては検査器ごと落ちていた）"),
         ("m_e117.rule", &[("E117", 2)], "累計が全体を超えないと言う制約が無い配分（§15.102）"),
         ("m_e118.rule", &[("E118", 1), ("W111", 1)], "引数が一つ足りない呼び出し（§15.102）"),
+        ("m_w121.rule", &[("W121", 1)], "生成先の予約語と同じ別名（§15.103）"),
         // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
         // example in the ledger — a misplaced character has no amount attached — but these
         // change what a real table answers, or what it is allowed to claim.

@@ -849,6 +849,104 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         );
     }
 
+    // W121: an alias that the target language will not take, or will take only by hiding
+    // something of its own (§15.103). Every ASCII alias becomes an identifier somewhere —
+    // a function, a parameter, a local, a type, a member — so the words each backend
+    // refuses are the words an alias cannot be. Measured: a rule with an input aliased
+    // `type` generated Rust that does not compile, and one aliased `sum` generated Python
+    // whose module shadows the builtin without saying so.
+    {
+        // The comparison ignores case, because an alias reaches some targets in PascalCase
+        // and others in UPPER_CASE. `top` is true for the two aliases that become an
+        // identifier at the outermost level of the generated file: the rule's, which names
+        // the function, and an enum's, which names a type. Everything else lands as a
+        // parameter, a local or a member, where a name of its own shadows nothing outside
+        // the body it is in.
+        let mut aliases: Vec<(&str, &Span, String, bool)> = Vec::new();
+        fn take<'n>(
+            n: &'n Name,
+            what: String,
+            top: bool,
+            v: &mut Vec<(&'n str, &'n Span, String, bool)>,
+        ) {
+            if let Some(a) = n.ascii.as_deref() {
+                v.push((a, &n.span, what, top));
+            }
+        }
+        take(&f.name, tr!("規則", "rule"), true, &mut aliases);
+        for i in &f.inputs {
+            take(&i.name, tr!("入力", "input"), false, &mut aliases);
+        }
+        for o in &f.outputs {
+            take(&o.name, tr!("出力", "output"), false, &mut aliases);
+        }
+        for e in &f.enums {
+            take(&e.name, tr!("列挙", "enum"), true, &mut aliases);
+            for v in &e.values {
+                take(v, tr!("列挙の値", "enum value"), false, &mut aliases);
+            }
+        }
+        if let Some(el) = &f.elements {
+            take(&el.name, tr!("並び", "sequence"), false, &mut aliases);
+            for fd in &el.fields {
+                take(&fd.name, tr!("要素の欄", "element field"), false, &mut aliases);
+            }
+        }
+        for it in &f.items {
+            match it {
+                Item::Derived(d) => take(&d.name, tr!("導出", "derived value"), false, &mut aliases),
+                Item::Define(d) => take(&d.name, tr!("定義", "definition"), false, &mut aliases),
+                Item::Agg(d) => take(&d.name, tr!("まとめ", "summary"), false, &mut aliases),
+                Item::Table(t) => {
+                    if let Some(n) = &t.name {
+                        take(n, tr!("表", "table"), false, &mut aliases);
+                    }
+                    for oc in &t.outputs {
+                        take(&oc.name, tr!("表の出力", "table output"), false, &mut aliases);
+                    }
+                }
+            }
+        }
+        for (alias, sp, what, top) in aliases {
+            let mut kw: Vec<&str> = Vec::new();
+            let mut hides: Vec<&str> = Vec::new();
+            for b in crate::backend::ALL {
+                if b.reserved.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
+                    kw.push(b.name);
+                } else if top && b.globals.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
+                    hides.push(b.name);
+                }
+            }
+            if kw.is_empty() && hides.is_empty() {
+                continue;
+            }
+            let mut d = Diag::warning(
+                "W121",
+                tr!("別名 `{alias}` は生成先の言葉とぶつかります", "The alias `{alias}` collides with a word in a target language"),
+            )
+            .at(at(sp.line))
+            .mark(sp.clone(), tr!("{what}の別名", "the {what}'s alias"));
+            if !kw.is_empty() {
+                d = d.note(tr!(
+                    "{}: そこでは予約語なので、その名前をそのまま書いた生成コードはコンパイルが通りません。",
+                    "{}: it is a keyword there, so generated code that writes the name as it is does not compile.",
+                    kw.join(", ")
+                ));
+            }
+            if !hides.is_empty() {
+                d = d.note(tr!(
+                    "{}: その名前はすでに使われていて、ファイルの一番外側に出るこの別名がそれを隠します。",
+                    "{}: the name is already taken there, and this alias, which reaches the top level of the file, hides it.",
+                    hides.join(", ")
+                ));
+            }
+            c.diags.push(d.note(tr!(
+                "使わない生成先なら、このままで構いません。使うなら別名を変えてください（公開名はそのままで構いません）。",
+                "For a target you do not generate, leave it. For one you do, change the alias; the public name can stay as it is."
+            )));
+        }
+    }
+
     // A table's or a clause's name is what the trace, an `overrides` line and a later version
     // refer to, so two cannot share one (E034, the same rule as for row labels).
     {

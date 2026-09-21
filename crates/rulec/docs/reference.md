@@ -100,6 +100,13 @@ The alias on a **`table`** is the one exception: it is accepted and currently un
 a table is inlined into the one generated function rather than becoming a function of its
 own. It is kept for SQL generation, where a table will need a name of its own.
 
+An alias that is **a word one of the targets has taken** is W121. A keyword is the hard case
+— `type` as an input's alias generates Rust that does not compile — and a builtin is the
+quiet one: the rule's alias names the generated function and an enum's alias names a type,
+so `sum` or `list` there hides Python's. A parameter or a local hides nothing outside its own
+body, so the warning is raised for those only when the word is a keyword. It is a warning
+because a target you do not generate cannot hurt you.
+
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:
 

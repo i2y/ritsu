@@ -1,4 +1,4 @@
-rule 値引の充当(allocate) v1
+rule 値引の充当(discount_fill) v1
 description "一括値引きを明細に配分する。1 明細 = 1 回の判定で、反復と順序は呼び出し側が持つ"
 
 inputs

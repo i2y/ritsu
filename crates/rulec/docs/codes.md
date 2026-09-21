@@ -80,6 +80,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W120](#w120) | warning | The copy states a value no row uses |
 | [W118](#w118) | warning | No row of an applied table is reached in this apply |
 | [W117](#w117) | warning | An exception with no effect |
+| [W121](#w121) | warning | An alias collides with a word in a target language |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 
@@ -2426,6 +2427,34 @@ overrides 甲:r1, 甲:r2
 ```
 
 Related codes: [E035](#e035), [E105](#e105)
+
+## W121
+
+`warning` — **An alias collides with a word in a target language**
+
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there.
+
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  種別(type) : number  range >=0 <=10
+
+outputs
+  o(o) : number  round down(1)
+
+table j(j)
+policy first
+| 種別 | -> o(o) : number |
+| >=5 | 1 |
+| - | 0 |
+```
+
+Related codes: [E009](#e009), [E011](#e011)
 
 ## W115
 

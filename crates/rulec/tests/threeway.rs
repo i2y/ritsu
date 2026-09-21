@@ -51,7 +51,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/決済手数料.rule", "payment_fee"),
     ("tests/corpus/ポイント付与.rule", "points"),
     ("tests/corpus/評価ランク.rule", "rank"),
-    ("tests/corpus/値引の充当.rule", "allocate"),
+    ("tests/corpus/値引の充当.rule", "discount_fill"),
     ("tests/corpus/会員特典.rule", "member_perk"),
     ("tests/corpus/ec261.rule", "ec261"),
     ("tests/corpus/健康保険料.rule", "kenpo_premium"),

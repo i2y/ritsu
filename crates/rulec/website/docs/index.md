@@ -257,7 +257,7 @@ Every command has `--format json`, and the codes and the JSON shape **stay put w
 </div>
 </div>
 
-**Twelve targets** · **76 diagnostics** · **33 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **77 diagnostics** · **33 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 
@@ -619,7 +619,7 @@ Worth saying in the same breath.
    proof — instead of silently picking a row, the generated code raises.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
-   correct. The evidence is 82 deliberately broken rules each producing
+   correct. The evidence is 83 deliberately broken rules each producing
    the diagnostic it should, and 33 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 

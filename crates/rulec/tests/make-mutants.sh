@@ -224,4 +224,8 @@ awk '!/^constraint ここまでの定価 <= 定価合計$/ { print }' "$C/比例
 # all: this passed, and the generator was the first thing to run out of cases.
 awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1円)"); print }' "$C/クーポン割引.rule" > "$M/m_e118.rule"
 
+# An alias that the target language will not take. `type` is a Rust keyword, and the
+# generated Rust reads `pub fn … (type: i64, …)` — measured, it does not compile (§15.103).
+awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付与.rule" > "$M/m_w121.rule"
+
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

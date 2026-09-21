@@ -55,7 +55,7 @@ What is **not** proved matters just as much.
    check into a runtime guard** — the one place with no static proof. It returns an error
    rather than silently picking a side.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
-   implementation, which has not itself been proved correct. The evidence is 82 deliberately
+   implementation, which has not itself been proved correct. The evidence is 83 deliberately
    broken rules each producing the diagnostic it should, and 33 rules — 28 transcribed from real
    published terms checked, generated and run on every commit. Evidence, not proof. What
    *is* proved is the step after it: the certificate below, and that the checks it has to
@@ -434,7 +434,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 ## Where it stands
 
-33 rules — 28 taken from real published terms, 5 written to reach the rest of the language — are checked, generated and run on every commit, and all 76 diagnostics are implemented. What is built:
+33 rules — 28 taken from real published terms, 5 written to reach the rest of the language — are checked, generated and run on every commit, and all 77 diagnostics are implemented. What is built:
 
 | | |
 |---|---|

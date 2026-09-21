@@ -12,6 +12,124 @@
 
 use crate::codegen::{Gen, Lang};
 
+
+/// The words each target will not take as an identifier, or will take only by hiding
+/// something of its own (§15.103). Kept beside the registry that uses them.
+mod words {
+    // Two kinds of word, because the risk is not the same. A **keyword** cannot be an
+    // identifier at all, so an alias that is one stops the compiler wherever the generated
+    // code writes it. A **global** is a name the language already uses at the top of a
+    // file, so only the aliases that become top-level identifiers — the rule's function and
+    // an enum's type — can hide one.
+
+    pub const PY_KW: &[&str] = &[
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ];
+    pub const PY_GLOBAL: &[&str] = &[
+        "abs", "all", "any", "bin", "bool", "bytes", "callable", "chr", "compile", "complex",
+        "dict", "dir", "divmod", "enumerate", "eval", "exec", "filter", "float", "format",
+        "frozenset", "getattr", "hash", "help", "hex", "id", "input", "int", "isinstance", "iter",
+        "len", "list", "map", "max", "min", "next", "object", "oct", "open", "ord", "pow", "print",
+        "property", "range", "repr", "reversed", "round", "set", "slice", "sorted", "str", "sum",
+        "super", "tuple", "type", "vars", "zip",
+    ];
+
+    pub const JS_KW: &[&str] = &[
+        "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
+        "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function",
+        "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this",
+        "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static",
+    ];
+    pub const JS_GLOBAL: &[&str] = &[
+        "Array", "BigInt", "Boolean", "Date", "Error", "JSON", "Map", "Math", "NaN", "Number",
+        "Object", "Promise", "Set", "String", "Symbol", "console", "globalThis", "undefined",
+        "interface", "namespace", "declare", "any", "unknown", "never", "readonly",
+    ];
+
+    pub const RS_KW: &[&str] = &[
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+        "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+        "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true",
+        "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final",
+        "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+    ];
+    /// The prelude types the generated Rust names itself. A variant is written qualified
+    /// (`判定::Ok`), so the prelude's values are not here.
+    pub const RS_GLOBAL: &[&str] = &["Option", "Result", "String", "Vec"];
+
+    pub const RB_KW: &[&str] = &[
+        "alias", "and", "begin", "break", "case", "class", "def", "do", "else", "elsif", "end",
+        "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo",
+        "rescue", "retry", "return", "self", "super", "then", "true", "undef", "unless", "until",
+        "when", "while", "yield",
+    ];
+    pub const RB_GLOBAL: &[&str] = &[
+        "clone", "dup", "format", "freeze", "hash", "inspect", "lambda", "loop", "method",
+        "object_id", "print", "proc", "puts", "raise", "require", "send", "tap", "to_s",
+    ];
+
+    /// PHP writes a variable with a `$`, so a keyword is only a problem where a bare name
+    /// goes: the function this rule becomes.
+    pub const PHP_KW: &[&str] = &[];
+    pub const PHP_GLOBAL: &[&str] = &[
+        "abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
+        "const", "continue", "declare", "default", "die", "do", "echo", "else", "elseif", "empty",
+        "enum", "exit", "extends", "final", "finally", "fn", "for", "foreach", "function",
+        "global", "goto", "if", "implements", "include", "instanceof", "insteadof", "interface",
+        "isset", "list", "match", "namespace", "new", "or", "print", "private", "protected",
+        "public", "readonly", "require", "return", "static", "switch", "throw", "trait", "try",
+        "unset", "use", "var", "while", "xor", "yield", "true", "false", "null",
+        "count", "max", "min", "round", "sort",
+    ];
+
+    pub const GO_KW: &[&str] = &[
+        "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough",
+        "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
+        "return", "select", "struct", "switch", "type", "var",
+    ];
+    pub const GO_GLOBAL: &[&str] = &[
+        "any", "append", "bool", "byte", "cap", "clear", "close", "comparable", "complex", "copy",
+        "delete", "error", "false", "float32", "float64", "imag", "int", "int16", "int32", "int64",
+        "int8", "iota", "len", "make", "max", "min", "new", "nil", "panic", "print", "println",
+        "real", "recover", "rune", "string", "true", "uint", "uint16", "uint32", "uint64", "uint8",
+        "uintptr",
+    ];
+
+    pub const SWIFT_KW: &[&str] = &[
+        "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
+        "init", "inout", "internal", "let", "open", "operator", "private", "protocol", "public",
+        "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
+        "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if", "in",
+        "repeat", "return", "switch", "where", "while", "as", "catch", "false", "is", "nil",
+        "super", "self", "throw", "throws", "true", "try",
+    ];
+    pub const SWIFT_GLOBAL: &[&str] =
+        &["Array", "Bool", "Double", "Error", "Int", "Int64", "Result", "Set", "String"];
+
+    pub const JAVA_KW: &[&str] = &[
+        "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
+        "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
+        "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+        "interface", "long", "native", "new", "package", "private", "protected", "public",
+        "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+        "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "false",
+        "null",
+    ];
+    pub const JAVA_GLOBAL: &[&str] = &[
+        "Boolean", "Character", "Double", "Error", "Exception", "Integer", "Long", "Math",
+        "Number", "Object", "Record", "String", "System", "Thread",
+    ];
+
+    /// SQL is the one target with nothing to list. The query quotes every identifier it
+    /// writes — `"on"`, `"select"`, the function's own name and each argument it is called
+    /// by name with — so a reserved word costs a reader of the relation a pair of quotes
+    /// and costs the generated code nothing (§15.103).
+    pub const NONE: &[&str] = &[];
+}
+
 /// What a backend has to say about itself for the shared machinery to drive it.
 pub struct Backend {
     /// The stable identifier: the directory under the output, the key in `rulec api`, the
@@ -80,6 +198,18 @@ pub struct Backend {
     /// What else has to be there beyond `tool`, checked before the language is run; the Err is
     /// the note `rulec test` prints when it skips the language for that reason.
     pub ready: Option<fn() -> Result<(), String>>,
+    /// The words this language will not let **any** identifier be — its keywords
+    /// (§15.103). Every ASCII alias reaches at least one target verbatim: measured, a rule
+    /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
+    /// and does not compile. Matching ignores case, because an alias arrives as
+    /// `PascalCase` in some targets and `UPPER_CASE` in others.
+    pub reserved: &'static [&'static str],
+    /// The names that are already taken at the top of a file here — builtins, the standard
+    /// library, the globals in scope everywhere. Only the two aliases that become top-level
+    /// identifiers are held to this: the rule's, which is the function's name, and an
+    /// enum's, which is a type's. A parameter or a local of the same name shadows nothing
+    /// outside its own body, which is why `min` and `list` in the corpus are silent.
+    pub globals: &'static [&'static str],
 }
 
 /// Whether a command answers `--version` or `version`.
@@ -187,6 +317,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::PY_KW,
+        globals: words::PY_GLOBAL,
     },
     // The twelfth target is the one that is not a language: the rule travels as data and a
     // fixed evaluator reads it. It is here rather than in a package of its own because the
@@ -229,6 +361,9 @@ pub const ALL: &[Backend] = &[
                 Err(tr!("numpy が無いので NumPy 側を飛ばしました", "numpy not found; skipped the NumPy side"))
             }
         }),
+        // The plan is JSON: a name here is data the runtime reads, never an identifier.
+        reserved: words::NONE,
+        globals: words::NONE,
     },
     Backend {
         id: "typescript",
@@ -256,6 +391,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::JS_KW,
+        globals: words::JS_GLOBAL,
     },
     Backend {
         id: "javascript",
@@ -283,6 +420,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::JS_KW,
+        globals: words::JS_GLOBAL,
     },
     Backend {
         id: "rust",
@@ -327,6 +466,8 @@ pub const ALL: &[Backend] = &[
         // the rule, included by path, so nothing has to be built first.
         proof: Some(|alias| Plan::new("rust", "kani", &[&format!("{alias}_proof.rs")])),
         ready: None,
+        reserved: words::RS_KW,
+        globals: words::RS_GLOBAL,
     },
     Backend {
         id: "ruby",
@@ -352,6 +493,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::RB_KW,
+        globals: words::RB_GLOBAL,
     },
     Backend {
         id: "php",
@@ -378,6 +521,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::PHP_KW,
+        globals: words::PHP_GLOBAL,
     },
     Backend {
         id: "go",
@@ -406,6 +551,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::GO_KW,
+        globals: words::GO_GLOBAL,
     },
     Backend {
         id: "swift",
@@ -441,6 +588,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        reserved: words::SWIFT_KW,
+        globals: words::SWIFT_GLOBAL,
     },
     Backend {
         id: "java",
@@ -493,6 +642,8 @@ pub const ALL: &[Backend] = &[
                 Err(tr!("java が無いので Java 側を飛ばしました", "java not found; skipped the Java side"))
             }
         }),
+        reserved: words::JAVA_KW,
+        globals: words::JAVA_GLOBAL,
     },
     Backend {
         id: "sql",
@@ -521,6 +672,8 @@ pub const ALL: &[Backend] = &[
         proof: None,
         pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
+        reserved: words::NONE,
+        globals: words::NONE,
     },
     Backend {
         id: "wasm",
@@ -569,6 +722,8 @@ pub const ALL: &[Backend] = &[
             }
             Ok(())
         }),
+        reserved: words::RS_KW,
+        globals: words::RS_GLOBAL,
     },
 ];
 
