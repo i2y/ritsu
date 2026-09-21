@@ -619,8 +619,8 @@ Worth saying in the same breath.
    proof — instead of silently picking a row, the generated code raises.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
-   correct. The evidence is 80 deliberately broken rules each producing
-   the diagnostic it should, and 32 rules — 28 transcribed from real
+   correct. The evidence is 82 deliberately broken rules each producing
+   the diagnostic it should, and 33 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 
 **A model checker reads the generated Rust.** Beside the Rust module, `gen`

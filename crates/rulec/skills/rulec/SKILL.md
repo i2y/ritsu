@@ -109,6 +109,10 @@ A few shapes are worth knowing before the first draft:
   table that judges one element is checked exactly as any other table is, and an example
   names a `sequence` rather than holding one in a cell (§6.2). Every target but SQL
   generates it.
+- **A `string` column takes a prefix and nothing else.** `starts_with "CH-", "CL-"` is the
+  one test it accepts (E110 for any other): the prefixes a column's own cells name cut the
+  strings into finitely many classes, which is what keeps completeness decidable. Bytes, no
+  case folding. Where the values can be listed, an `enum` says more.
 - **Counting the walk instead of folding it.** `count <name>(<alias>) over <sequence> where
   <column> = <value>` ends the walk with a number rather than with the answer, and the rule
   goes on as usual — so what turns "how many matched" into a class is an ordinary table, and
@@ -335,11 +339,10 @@ code is stale — that is the gate that keeps the committed output honest.
 
 ### If there is a legacy implementation: `rulec verify`
 
-Write a 20-to-30-line adapter (`rulec adapter --template python|go` gives you the shape), and
+Write a 20-to-30-line adapter (`rulec adapter --template python|go` gives you the shape) and
 rulec streams the vectors through it. Mismatches come back clustered by the rows that fired,
-with counts, amount differences and a witness. A cluster whose differences are all smaller
-than the output's rounding grid is flagged as a suspected rounding difference rather than a
-real disagreement.
+with counts, amount differences and a witness; a cluster whose differences are all smaller
+than the output's rounding grid is flagged as a suspected rounding difference.
 
 **A mismatch is not automatically your bug.** It is one of four things: a defect in the legacy
 implementation, a transcription error in your table, dirty records, or a rounding convention.
@@ -372,13 +375,12 @@ CI per change, never committed.
 
 ### For the customer: `rulec doc --audience customer`
 
-`rulec doc <file> --lang ja --audience customer` renders the same rule as the article a help
-centre publishes, so that whatever answers customers — a person, a search, a model reading
-retrieved pages — reads a page that is complete, carries the version, and spells out the
-cases on either side of every threshold. The thresholds come from the boundary-pair vectors,
-so the article says "60cm → 1410円, 61cm → 1710円" where the table says `<=60cm`. Aliases,
-ranges and diagnostic codes are left out. Regenerate it whenever the rule changes; like the
-approver's rendering, it is a product of the file, never a source.
+`rulec doc <file> --lang ja --audience customer` renders the rule as the article a help centre
+publishes, so that whatever answers customers — a person, a search, a model reading retrieved
+pages — reads a page that is complete, carries the version, and spells out both sides of every
+threshold. Those come from the boundary-pair vectors: the article says "60cm → 1410円, 61cm →
+1710円" where the table says `<=60cm`, and aliases, ranges and codes are left out. Regenerate it
+on every change; like the approver's page, it is a product of the file, never a source.
 
 ---
 
@@ -475,13 +477,11 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | A rounding you assumed | 「この丸めは規約に根拠がありません。仮に切り捨てにしています。出典はありますか」 |
 
 Three things make such a question answerable: **a concrete case** (the witness), **what turns
-on the answer** (the amount that moves), and **what you assumed in the meantime** so that
-silence does not read as agreement.
-
-Keep the assumption in the file, as a `#` comment where the declaration is — and an amount
-you took from somewhere other than the table's own source, as a comment at the end of its
-row. `rulec doc` surfaces those comments to the approver, which is the only place an assumed
-rounding or an unsourced amount is seen by the person who can overrule it.
+on the answer** (the amount that moves), and **what you assumed in the meantime**, so that
+silence does not read as agreement. Keep that assumption in the file — a `#` comment where
+the declaration is, or, for an amount taken from outside the table's own source, at the end
+of its row. `rulec doc` shows those comments to the approver, the one place a person who can
+overrule them will see them.
 
 ---
 

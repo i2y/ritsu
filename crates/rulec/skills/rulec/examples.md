@@ -449,7 +449,7 @@ examples
 
 - The rule decides how to allocate; the caller does the walking.
 - `min` is available, so "up to this line's own value" fits on one line.
-- Splitting by ratio (`line ÷ total`) **cannot be written**: division is only allowed by a constant.
+- Splitting by ratio is the other shape, written with `allocate` — "Apportioning by ratio" below.
 
 ## A rate finer than one percent
 
@@ -787,8 +787,166 @@ examples
 - **A count is what the walk leaves behind.** `count 一致数(hits) over 候補 where 照合結果 = 一致` is how many elements the per-element table judged `一致`. From there it is a `number`, so it can be a column.
 - **What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.
 - **The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.
-- **Nothing accumulates across elements.** A count counts; there is no sum and no average. Compute one before the call and pass it in as a value.
+- **A count counts and a `sum` adds one column up** — "Adding the lines up" below. An average does not follow: dividing by the count is dividing by a variable, so compute one before the call.
 - **A `fold` and a `count` cannot share a rule** (E031): two endings for the same walk, and a fold may stop partway.
+
+## Adding the lines up
+
+"Free shipping over 5,000 yen." The rule walks however many lines it is given, adds the amounts, and decides the fee from the total. Where `count` leaves a number behind, `sum` leaves an amount.
+
+```rule
+rule 買物かごの送料(cart_shipping) v1
+description "明細の金額を合計して送料を決める。並びを合計する例"
+
+enum 会員区分(tier) = 一般(regular) | 優待(premium)
+
+inputs
+  区分(tier) : 会員区分
+
+# 一件ぶんの明細。呼び出し側は何件でも渡す
+elements 明細(lines)
+  金額(amount) : money[円]  range >=0円 <=100000円
+
+# 歩いたあとに残るのは合計だけ。範囲は完全性の全体集合であり、走っている途中の合計が
+# ここを出た時点で入口が断る境目でもある
+sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円
+
+outputs
+  送料(fee) : money[円]  round up(1円)
+
+table 送料表(fee_table)
+policy unique
+| 合計             | 区分 | -> 送料(fee) : money[円] |
+| >=5000円         | -    | 0円                      |
+| >=3000円 <5000円 | 優待 | 0円                      |
+| >=3000円 <5000円 | 一般 | 250円                    |
+| <3000円          | -    | 500円                    |
+
+examples
+| 明細     | 区分 | -> 送料 |
+| 二点     | 一般 | 0円     |
+| 二点     | 優待 | 0円     |
+| 少額     | 一般 | 500円   |
+| 中くらい | 一般 | 250円   |
+| 中くらい | 優待 | 0円     |
+| 空       | 一般 | 500円   |
+
+sequence 二点(two)
+| 金額   |
+| 3000円 |
+| 2500円 |
+
+sequence 少額(small)
+| 金額   |
+| 1200円 |
+
+sequence 中くらい(middle)
+| 金額   |
+| 2000円 |
+| 1500円 |
+
+sequence 空(empty)
+| 金額 |
+```
+
+**What this one shows**
+
+- **`sum 合計(total) over 明細 of 金額` leaves one amount behind.** From there it is an ordinary column, so `>=5000円` becomes a boundary and completeness and overlap are checked as they always are.
+- **The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.
+- **An average does not follow**: dividing by the count is dividing by a variable (E115). Work it out before the call and pass it in.
+
+## Sorting by the head of a part number
+
+The prefix of an SKU decides frozen, chilled or ambient. A `string` column takes a prefix test and nothing else.
+
+```rule
+rule 品番の扱い(sku_handling) v1
+description "品番の前置きと箱数で、輸送の扱いを決める。文字列の前方一致の例"
+
+enum 扱い(handling) = 冷凍便(frozen) | 冷蔵便(chilled) | 常温便(ambient) | 常温混載(ambient_mixed)
+
+inputs
+  品番(sku)  : string
+  箱数(boxes) : number  range >=1 <=200
+
+outputs
+  扱い(handling) : 扱い
+
+# 文字列は数え上げられないので、切れるのは前置きだけ。前置きの集合は有限なので、
+# 完全性も重なりも、列挙の列とまったく同じように止まる
+table 扱い表(handling_of)
+policy first
+| 品番                     | 箱数 | -> 扱い(handling) : 扱い |
+| starts_with "FZ-"        | -    | 冷凍便                   |
+| starts_with "CH-", "CL-" | -    | 冷蔵便                   |
+| -                        | >=20 | 常温便                   |
+| -                        | <20  | 常温混載                 |
+
+examples
+| 品番      | 箱数 | -> 扱い  |
+| "FZ-1001" | 1    | 冷凍便   |
+| "CH-2002" | 5    | 冷蔵便   |
+| "CL-0003" | 5    | 冷蔵便   |
+| "AB-0004" | 30   | 常温便   |
+| "AB-0004" | 3    | 常温混載 |
+```
+
+**What this one shows**
+
+- **A set of prefixes cuts the strings into finitely many classes.** The strings themselves are unbounded, but the partition the column's own cells name is finite, so §6.2's machinery works unchanged — and a witness for a hole comes back as a string you can paste.
+- **Comparison is by bytes.** No case folding and no Unicode normalisation: without that, twelve languages would not give one answer.
+- **Equality and sets are refused** (E110). Where the values can be enumerated an `enum` fits better. No substring match, no regular expressions.
+
+## Apportioning by ratio
+
+One discount spread over the lines of an order in the ratio of their list prices. Where "one line at a time" above fills each line in turn, this one **splits by ratio**: a line's share is the share up to it minus the share up to the line before.
+
+```rule
+rule 比例配分(pro_rata) v1
+description "一括値引きを明細に定価の比で割り付ける。1 明細 = 1 回の判定で、累計は呼び出し側が持つ。端数は最後の明細に寄り、配った合計はかならず値引き総額に一致する"
+
+inputs
+  値引き総額(total_off)  : money[円]  range >=0円 <=100万円
+  直前までの定価(before) : money[円]  range >=0円 <=1000万円
+  ここまでの定価(upto)   : money[円]  range >=0円 <=1000万円
+  定価合計(base)         : money[円]  range >=1円 <=1000万円
+  対象(eligible)         : bool
+
+constraint 直前までの定価 <= ここまでの定価
+constraint ここまでの定価 <= 定価合計
+
+outputs
+  配分額(share) : money[円]  round down(1円)
+
+derive 直前までの配分(to_before) : money[円] = allocate(値引き総額, 直前までの定価, 定価合計)  range >=0円 <=100万円
+derive ここまでの配分(to_upto)   : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+
+define 差分(gap) : money[円] = ここまでの配分 - 直前までの配分
+
+table 配分可否(applies)
+policy unique
+| 対象  | -> 配る(on) : money[円] |
+| true  | 差分                    |
+| false | 0円                     |
+
+result 配分額 = 配る
+
+examples
+| 値引き総額 | 直前までの定価 | ここまでの定価 | 定価合計 | 対象  | -> 配分額 |
+| 1000円     | 0円            | 3000円         | 10000円  | true  | 300円     |
+| 1000円     | 3000円         | 10000円        | 10000円  | true  | 700円     |
+| 100円      | 0円            | 333円          | 1000円   | true  | 33円      |
+| 100円      | 333円          | 666円          | 1000円   | true  | 33円      |
+| 100円      | 666円          | 1000円         | 1000円   | true  | 34円      |
+| 0円        | 0円            | 500円          | 1000円   | true  | 0円       |
+| 1000円     | 0円            | 3000円         | 10000円  | false | 0円       |
+```
+
+**What this one shows**
+
+- **`allocate(<amount>, <running total>, <whole>)` is the one place a rule divides by something that is not a constant.** The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.
+- **Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).
+- **A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.
 
 ## A rule written in English — EU air passenger rights
 

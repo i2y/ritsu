@@ -254,11 +254,15 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 31 rules, 74 harnesses
+get the input that shows it. On the corpus of 33 rules, 74 harnesses
 verify in 144 seconds.
 
 What it does not say: anything about the table itself, or about any
-target but this one.
+target but this one. And two kinds of rule get no harness at all, the
+file saying which: one with a `string` input, which a harness cannot
+quantify over, and one that works out a share with `allocate`, where
+two divisions by a value rather than by a constant do not come back
+from the model checker.
 
 ## The rule as a tool for an agent
 

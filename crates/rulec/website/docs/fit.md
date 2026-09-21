@@ -22,12 +22,12 @@ If all five are **yes**, it fits. Whether money is involved is not one of them.
 If any of 1–4 is no, it does not fit structurally. If only 5 is no, it will work, but
 the tool is more than you need.
 
-## Apportionment depends on how you apportion
+## Apportionment, either way you apportion
 
 Spreading a discount across the lines of an order can or cannot be written, depending on
 how the split is decided.
 
-**It can — when you fill each line in turn.** "Apply the discount to the lines in order,
+**Filling each line in turn.** "Apply the discount to the lines in order,
 up to each line's own value." Make the rule decide one line, and leave the loop to the
 caller.
 
@@ -55,24 +55,36 @@ The caller walks the lines and subtracts from `残り値引`. Done this way **th
 always comes out exact** — nothing is over- or under-allocated (checked over 2,000
 different sets of lines).
 
-**It cannot — when you split by ratio.** "Apportion by each line's share of the list
-price" needs `line ÷ total`, and **division is only allowed by a constant**:
-`注文金額 ÷ 100円` is fine, `明細 ÷ 合計` is not — dividing by a variable stops at E115. You can work around it by computing
-the ratio in the caller and passing it in as a rate — a rate step goes as fine as you
-declare it, `rate[step 0.1%]` and beyond — but then whether that ratio is right is no
-longer something this tool says anything about.
+**Splitting by ratio.** "Apportion by each line's share of the list price" is written with
+`allocate`. Division by a variable is still refused everywhere else (E115); a share is the
+one exception.
+
+```rule
+constraint ここまでの定価 <= 定価合計
+
+derive ここまでの配分(to_upto) : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+
+result 配分額 = ここまでの配分 - 直前までの配分
+```
+
+All the caller carries is the running total of list prices. A line gets the share up to it
+minus the share up to the line before, so the odd yen lands on the last line and **the parts
+add up to the amount exactly**. For the fill-in-turn form above that was measured over 2,000
+sets of lines; here it is a theorem in `proofs/`.
 
 ## What it is not for
 
 - **Workflows** — several steps, carrying state
-- **Adding up across a collection** — "the lines total more than 10,000 yen". A sum or an
-  average carries a value from element to element, which is not written here; compute it
-  before the call and pass it in. **Counting is writable** (`count`: "three or more
-  refrigerated items" becomes a row of a table), and so is picking **one element** out of a
+- **An average over a collection** — it divides by how many there are, which is dividing by
+  a variable; compute it before the call and pass it in. **The total and the count are
+  writable** (`sum`: "the lines total more than 10,000 yen" becomes a row of a table;
+  `count`: "three or more refrigerated items"), and so is picking **one element** out of a
   sequence (`fold`: "refuse if any line is refrigerated", "take the dearest row") 
-- **Branching on a string** — `string` cannot be a table column (E110). A value that
-  decides a branch belongs in an `enum`, where the closed set makes the completeness check
-  work. No prefix match and no regular expressions either
+- **Branching on a whole string** — a `string` column takes a prefix and nothing else
+  (`starts_with "CH-"`; anything else is E110), which is enough to sort SKUs or categories
+  by their heads. Where the values can be enumerated an `enum` is better: the closed set is
+  what lets the checker ask whether every value has a row. No substring match, no regular
+  expressions
 - **Deciding an input itself** — "is this ticket billing or technical", "is this damage
   minor". Turning a messy state into a value is a person's work, or a model's, not this
   tool's. Hand the value in **as an argument**: the rule stays a pure function, and replay
