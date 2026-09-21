@@ -12,9 +12,11 @@ The short version is the order they run in. A rule that fails a layer never reac
 
 Drawn out, the layers fall into place. **The spine is four things**, each a copy of the one
 above it, and most of the checking lives at a **joint**, holding two of them to each other.
-The exceptions are 1, 2 and 3, which look at the table on its own, and 7 and 8, which are
-aimed at the tool. **At the topmost joint there is no layer at all**: a person read the
-world and wrote the document down, and nothing here can check that reading.
+The table produces one more thing — **the certificate**, the JSON the five proofs rest on —
+and layer 7 is the two programs that read it back. Only two layers stand at no joint: 1, 2
+and 3, which look at the table on its own, and 8, which is aimed at the tool. **At the
+topmost joint there is no layer at all**: a person read the world and wrote the document
+down, and nothing here can check that reading.
 
 | | what it settles | run it with |
 |---|---|---|
