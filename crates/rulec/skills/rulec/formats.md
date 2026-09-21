@@ -474,8 +474,9 @@ as `<alias>.customer.md`, beside the approver's `<alias>.md`.
 
 ## `mcp`
 
-`rulec mcp` speaks the Model Context Protocol over stdio: one JSON-RPC 2.0 message per line
-in and out. It is the command table in another syntax, so nothing here is a second
+`rulec mcp` speaks the Model Context Protocol over stdio — and only over stdio, because what
+it hands out is the commands that read and write your files. One JSON-RPC 2.0 message per
+line in and out. It is the command table in another syntax, so nothing here is a second
 implementation of a command.
 
 - **Tools.** One per command, named `rulec_<command>` (`rulec_check`, `rulec_gen`, …). The
@@ -497,11 +498,13 @@ To register it, add a stdio server whose command is `rulec mcp` — for Claude C
 `claude mcp add rulec -- rulec mcp`; elsewhere, `{"mcpServers":{"rulec":{"command":"rulec","args":["mcp"]}}}`.
 
 **The rule as a tool** is the other direction, and it is generated code rather than this
-server: `gen` writes `<alias>_mcp.py` and `<alias>_mcp.mjs` beside the module, a stdio
-server with one tool named after the alias. Its `inputSchema` is the `in` object of `schema`
-above; its result is one fixtures record (below), as text and as `structuredContent`; a call
-the rule cannot take comes back with `isError` and the argument named; and `--record
-<file.jsonl>` appends every answered call to that file as a record.
+server: `gen` writes `<alias>_mcp.py` and `<alias>_mcp.mjs` beside the module, a server with
+one tool named after the alias. Its `inputSchema` is the `in` object of `schema` above; its
+result is one fixtures record (below), as text and as `structuredContent`; a call the rule
+cannot take comes back with `isError` and the argument named; and `--record <file.jsonl>`
+appends every answered call to that file as a record. **Unlike this one it is not stdio
+only**: `--http <port>` serves the same tool over MCP's Streamable HTTP, and where the host
+renders MCP Apps it offers the approver's page as the tool's view.
 [generated-code.md](generated-code.md#the-rule-as-an-mcp-tool) has it.
 
 ---

@@ -112,8 +112,15 @@ and the exit code at the end of every result. The procedure and the references a
 as resources, so an agent that cannot read this repository still reads `rulec://docs/agents.md`
 first. The shape is in [Formats](formats.md#mcp).
 
-That is the tool for the agent that writes a rule. For the agent that calls one, `gen`
-writes the rule itself as an MCP server beside the module:
+**This one speaks stdio and nothing else.** It hands an agent the commands that read and
+write your files, so it belongs on the same machine as the shell it stands in for; there is
+no `--http`, and that is a decision rather than a gap.
+
+**The other MCP server is a different thing.** That one is the tool for the agent that
+*writes* a rule; for the agent that *calls* one, `gen` writes the rule itself as a server
+beside the module, and that server speaks stdio **and MCP's Streamable HTTP**
+(`--http 8000`) for the hosts that only take a URL. Where the host renders **MCP Apps**, it
+also offers the approver's page as the tool's own view:
 [the rule as a tool for an agent](generate.md#the-rule-as-a-tool-for-an-agent).
 
 ## Language
