@@ -1,0 +1,8 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/mutants/m_e102c.rule:32 table 料金表
+   |
+32 | | 小口 | 重量物 | 700円 |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.

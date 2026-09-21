@@ -81,6 +81,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/osha_noise.rule", "osha_noise"),
     ("tests/corpus/osha_excavation.rule", "osha_excavation"),
     ("tests/corpus/paypal_fee.rule", "paypal_fee"),
+    ("tests/corpus/二つの区分.rule", "two_bands"),
 ];
 
 #[test]

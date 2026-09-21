@@ -1085,7 +1085,7 @@ def check(cert):
         t["_reach_of"] = reach
         t["_ranges"] = cert.get("ranges", {})
         t["_sieve"] = True
-        for what, n in (("pairs W114 could not settle", len(t.get("undecided", []))),
+        for what, n in (("pairs the axes do not part", len(t.get("undecided", []))),
                         ("rows an `apply` brought in and this rule leaves unused", len(t.get("unused", []))),
                         ("rows the sieve rules out", len(t.get("unreachable", [])))):
             if n:

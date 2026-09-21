@@ -48,6 +48,15 @@ awk '/<0円/ { sub(/false/, "true") } { print }'                             "$k
 # unreachable (a variant of E102)
 awk '/table 適用可否/,/^$/ { if (/\| *true *\|$/) sub(/true *\|$/, "false |") } { print }' "$k" > "$M/m_e102b.rule"
 
+# Two columns above, cut from the same input at different thresholds (§15.114). `小口` is 2kg
+# and under, `重量物` is over 10kg, so a row naming both is dead however live each half looks
+# on its own — and the row below it, which leaves that combination out, is right to.
+awk '{ print } /^\| *小口 *\| *- *\|/ { print "| 小口 | 重量物 | 700円 |" }' "$C/二つの区分.rule" > "$M/m_e102c.rule"
+# The other side of the same sieve: a combination that **does** happen, left uncovered. If the
+# narrowing above ever prunes too hard, this stops reporting and the generated code walks into
+# its own `unreachable!`.
+awk '/^\| *大口 *\| *通常 *\|/ { next } { print }' "$C/二つの区分.rule" > "$M/m_e101e.rule"
+
 # Open a hole at a date boundary
 # Remove a single day from a closed-interval tiling. Without day-count representation this is a
 # false positive.

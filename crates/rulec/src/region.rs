@@ -443,13 +443,17 @@ fn upstream_dead(row: &Row, ups: &[Upstream], c: &Checked, t: &Table) -> bool {
 ///
 /// `restrict` returns `None` for a column the caller leaves free, and otherwise the cell it
 /// pins the column to together with that same restriction read on the upstream table's axes.
+/// Before the rows are walked, that restriction is narrowed by what the caller pins the
+/// **other** columns above to, which is the only way a pair of them decided by one input can
+/// be seen to exclude each other (§15.114).
 fn upstream_blocked(
     ups: &[Upstream],
     c: &Checked,
     restrict: &dyn Fn(&Upstream) -> Option<(Option<Cell>, Vec<Vec<bool>>)>,
 ) -> bool {
     for up in ups {
-        let Some((kcell, allowed)) = restrict(up) else { continue };
+        let Some((kcell, mut allowed)) = restrict(up) else { continue };
+        narrow_by_siblings(&mut allowed, up, ups, c, restrict);
         let kcell = kcell.as_ref();
         let mut producible = false;
         for ri in 0..up.table.rows.len() {
@@ -503,6 +507,114 @@ fn upstream_blocked(
         }
     }
     false
+}
+
+/// The closed ends of a coordinate: a point is itself, an open interval is pulled in by one
+/// step on each side it has.
+fn coord_ends(cd: &Coord, step: Rat) -> Ival {
+    match cd {
+        Coord::Point(v) => (Some(*v), Some(*v)),
+        Coord::Open(a, b) => (a.map(|v| v.add(step)), b.map(|v| v.sub(step))),
+    }
+}
+
+/// Whether two closed intervals meet.
+fn ivals_meet(x: Ival, y: Ival) -> bool {
+    use std::cmp::Ordering::{Greater, Less};
+    !(matches!((x.1, y.0), (Some(p), Some(q)) if p.cmp_to(q) == Less)
+        || matches!((x.0, y.1), (Some(p), Some(q)) if p.cmp_to(q) == Greater))
+}
+
+/// Carry a restriction on one table's axis over to another table's axis for the same column.
+///
+/// Two tables cut the same column at their own boundaries, so a mask on one says nothing
+/// coordinate for coordinate about the other. The reading is `project`'s, widened from a
+/// point to a set: a coordinate of `to` is kept when it meets **any** kept coordinate of
+/// `from`. That over-approximates, which is the safe direction here — what the carry drops
+/// is only what the mask certainly excludes.
+fn carry(from: &Axis, mask: &[bool], to: &Axis) -> Vec<bool> {
+    let all = vec![true; to.len()];
+    match (from, to) {
+        (Axis::Enum { values }, Axis::Enum { values: tv }) => tv
+            .iter()
+            .map(|x| values.iter().zip(mask).any(|(v, &m)| m && v == x))
+            .collect(),
+        (Axis::Bool, Axis::Bool) => (0..to.len()).map(|i| mask.get(i).copied().unwrap_or(true)).collect(),
+        (Axis::Num { coords: fc, step: fs, .. }, Axis::Num { coords: tc, step: ts, .. }) => tc
+            .iter()
+            .map(|t| {
+                let te = coord_ends(t, *ts);
+                fc.iter().zip(mask).any(|(f, &m)| m && ivals_meet(coord_ends(f, *fs), te))
+            })
+            .collect(),
+        // Prefix classes are cut by the patterns each table happens to name, and two tables
+        // need not name the same ones. Nothing is carried rather than something wrong.
+        _ => all,
+    }
+}
+
+/// Where a table above can produce a value, read as a mask on each of its own axes.
+///
+/// The union of the boxes of every row that produces the value, taken axis by axis. Both
+/// widenings go the safe way: a row's box contains the region where the row actually fires
+/// (an earlier row may take part of it), and a per-axis union contains the union of the
+/// boxes. So the answer is a **superset** of the inputs on which the column really holds
+/// that value, and intersecting it into a sibling column's restriction can only drop inputs
+/// where this column certainly does not hold it.
+///
+/// `None` where a row's output cannot be read as a value: such a row might produce the value
+/// anywhere in its box, and leaving it out would narrow the answer past the truth.
+fn produces_where(up: &Upstream, c: &Checked, cell: &Cell) -> Option<Vec<Vec<bool>>> {
+    let mut acc: Vec<Vec<bool>> = up.reg.axes.iter().map(|a| vec![false; a.len()]).collect();
+    for ri in 0..up.table.rows.len() {
+        let v = match up.table.rows[ri].outs.get(up.oi) {
+            Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !c.syms.contains_key(w) => w.clone(),
+            _ => return None,
+        };
+        if !crate::eval::cell_matches(c, cell, &crate::eval::Val::Enum(v), &up.ty) {
+            continue;
+        }
+        for (a, m) in acc.iter_mut().enumerate() {
+            for (x, bit) in m.iter_mut().enumerate() {
+                *bit |= up.reg.masks[ri][a][x];
+            }
+        }
+    }
+    Some(acc)
+}
+
+/// Narrow one column's restriction by what the **other** columns above are pinned to.
+///
+/// Reading one column at a time cannot see that two of them are decided by the same input:
+/// each half looks possible on its own while the pair never arrives together. A row naming
+/// `small` and `heavy`, where one table calls anything over 10kg large and the other calls
+/// anything over 20kg heavy, is dead — and neither column alone says so (§15.114).
+fn narrow_by_siblings(
+    allowed: &mut [Vec<bool>],
+    up: &Upstream,
+    ups: &[Upstream],
+    c: &Checked,
+    restrict: &dyn Fn(&Upstream) -> Option<(Option<Cell>, Vec<Vec<bool>>)>,
+) {
+    for other in ups {
+        if other.name == up.name {
+            continue;
+        }
+        let Some((Some(ocell), oallowed)) = restrict(other) else { continue };
+        let Some(mut owhere) = produces_where(other, c, &ocell) else { continue };
+        for (a, m) in owhere.iter_mut().enumerate() {
+            for (x, bit) in m.iter_mut().enumerate() {
+                *bit &= oallowed[a][x];
+            }
+        }
+        for (ua, n) in up.reg.col_names.iter().enumerate() {
+            let Some(oa) = other.reg.col_names.iter().position(|m| m == n) else { continue };
+            let carried = carry(&other.reg.axes[oa], &owhere[oa], &up.reg.axes[ua]);
+            for (bit, keep) in allowed[ua].iter_mut().zip(carried) {
+                *bit &= keep;
+            }
+        }
+    }
 }
 
 /// Which coordinates of an axis a cell selects.
@@ -933,6 +1045,58 @@ impl TableRegion {
         None
     }
 
+    /// The first point of the box where two rows meet that neither the sieve nor the tables
+    /// above rule out, or nothing when every one of its points is ruled out.
+    ///
+    /// The same walk as `first_reachable`, restricted to the coordinates both rows select.
+    /// It is charged to the same budget, so an overrun is visible to the caller rather than
+    /// silently becoming "no overlap".
+    fn first_reachable_pair(
+        &self,
+        i: usize,
+        j: usize,
+        ups: &[Upstream],
+        chk: &Checked,
+        budget: &mut i64,
+    ) -> Option<Vec<usize>> {
+        self.pair_rec(i, j, &mut Vec::new(), ups, chk, budget)
+    }
+
+    fn pair_rec(
+        &self,
+        i: usize,
+        j: usize,
+        p: &mut Vec<usize>,
+        ups: &[Upstream],
+        chk: &Checked,
+        budget: &mut i64,
+    ) -> Option<Vec<usize>> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        if p.len() == self.axes.len() {
+            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) {
+                return None;
+            }
+            return Some(p.clone());
+        }
+        let ai = p.len();
+        for x in 0..self.axes[ai].len() {
+            if !(self.masks[i][ai][x] && self.masks[j][ai][x]) {
+                continue;
+            }
+            p.push(x);
+            let keep = self.feasible(p) != Feasible::No;
+            let got = if keep { self.pair_rec(i, j, p, ups, chk, budget) } else { None };
+            p.pop();
+            if got.is_some() {
+                return got;
+            }
+        }
+        None
+    }
+
     /// Describe the region where two rows overlap as a conjunction in business terms.
     ///
     /// W114 must not print a point. A single point on a derived axis is a coordinate that is
@@ -1252,6 +1416,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
             dead: Vec::new(),
         };
     }
+    let ups = upstreams(t, c, f);
     let merged = set.merged();
     // Where a diagnostic points: the file, the line, and the table (or clause) the row was
     // written in.
@@ -1285,13 +1450,29 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
             if !reg.intersects(i, j) {
                 continue;
             }
-            let mut wpath = Vec::new();
-            for ai in 0..reg.axes.len() {
-                let c0 = (0..reg.axes[ai].len())
-                    .find(|&c| reg.masks[i][ai][c] && reg.masks[j][ai][c])
-                    .unwrap_or(0);
-                wpath.push(c0);
-            }
+            // **A point of the intersection nothing rules out, not its first corner.** The
+            // corner is where the axes happen to start, and a corner the tables above cannot
+            // produce made E105 report an overlap at an input that does not exist — while
+            // E102, in the same run, called the very row that named it dead. §15.98 fixed
+            // this for the hole; this is the overlap (§15.114).
+            let mut left = budget;
+            let found = reg.first_reachable_pair(i, j, &ups, c, &mut left);
+            nodes += budget - left;
+            let wpath = match found {
+                Some(p) => p,
+                // Every point ruled out: no input matches both rows, so there is nothing to
+                // report. Unless the walk ran out of budget before it could say so, and then
+                // the corner is taken and the pair reported — over-reporting is the
+                // direction an exhausted proof falls in (§6.1).
+                None if left >= 0 => continue,
+                None => (0..reg.axes.len())
+                    .map(|ai| {
+                        (0..reg.axes[ai].len())
+                            .find(|&x| reg.masks[i][ai][x] && reg.masks[j][ai][x])
+                            .unwrap_or(0)
+                    })
+                    .collect(),
+            };
             let w = reg.witness_text(&wpath);
             let feas = reg.feasible(&wpath);
             // An overlap proven infeasible is not reported (§6.2). The point-wise sieve is
@@ -1573,7 +1754,6 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
 
     // --- Unreachable rows
-    let ups = upstreams(t, c, f);
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
         let winners = &set.beats[i];
@@ -2271,7 +2451,9 @@ pub struct CertTable {
     /// Checking one entry is one set intersection; a pair that is missing from this list and
     /// not in `undecided` is a certificate that does not hold.
     pub disjoint: Vec<(usize, usize, usize)>,
-    /// The pairs the check could not settle either way (W114). They are stated, not proved.
+    /// The pairs the axes do not part. Stated, not proved — a W114 the check could not
+    /// settle lands here, and so does a pair a declared precedence orders and a pair the
+    /// sieve ruled out, none of which the certificate has a way to claim (§15.114).
     pub undecided: Vec<(usize, usize)>,
     /// For each row, a point that reaches it: the coordinate on every axis, the input that
     /// point stands for, and the same input as plain numbers on the axes' own scale. The

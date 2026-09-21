@@ -404,7 +404,7 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
         if C.undecided a.index b.index then some (a.index, b.index) else none)))
       if undec.isEmpty then notes := notes.push "no two rows meet"
       else
-        r := r.state s!"{undec.length} pairs of {t.name} W114 could not settle"
+        r := r.state s!"{undec.length} pairs of {t.name} the axes do not part"
         notes := notes.push s!"{undec.length} pairs undecided (not re-checked)"
     else
       r := r.fail s!"{t.name}: two rows are neither proved apart nor named as undecided"

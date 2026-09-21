@@ -22,7 +22,8 @@ structure Certified where
   told : Nat → Nat → Option Nat
   /-- The point and the values behind it, by row number. -/
   witness : Nat → Option (Point × List Rat)
-  /-- The pairs W114 could not settle. A certificate that names one is not claiming the
+  /-- The pairs the axes do not part — a W114 the tool could not settle, a pair a
+  declared precedence orders, a pair the sieve ruled out. A certificate that names one is not claiming the
       two rows are apart, and `Certified.disjoint` does not apply to it. -/
   undecided : Nat → Nat → Bool
 

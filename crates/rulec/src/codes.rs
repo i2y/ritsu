@@ -1194,8 +1194,8 @@ pub fn ledger() -> Vec<Entry> {
             "E105",
             tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
             tr!(
-                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。",
-                "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead."
+                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。上の表が同時には出さない値の組でしか重ならない対は、重なりとして報告しません（E102 がそういう行を死んだ行と呼ぶのと同じ読みです）。",
+                "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together is not reported, which is the reading that also lets E102 call such a row dead."
             ),
             tr!(
                 "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言します。出力まで同じなら、片方を削ります。",

@@ -42,7 +42,7 @@ def partsOn (a b : Box) (axis : Nat) : Bool :=
   | _, _ => false
 
 /-- **The overlap check.** For each pair of rows, the certificate names an axis; the pair
-    parts there, or the pair is one the tool could not settle (W114) and is listed as such.
+    parts there, or the pair is one the certificate does not claim apart and is listed as such.
     A pair that is listed as undecided is not proved apart — `Sound` carries that as a
     hypothesis, and `Main` prints the count rather than hiding it. -/
 def pairsPart (rows : List Row) (told : Nat → Nat → Option Nat)

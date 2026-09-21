@@ -36,7 +36,7 @@ exact, and that meaning is written down in `Semantics.lean` rather than in prose
 
 Five things the document states and this program cannot re-check. It names them in a line
 of its own rather than printing a clean "ok": a cover leaf that rests on a table above, the
-row pairs W114 could not settle, rows an `apply` brought in from another file, rows the
+row pairs the axes do not part, rows an `apply` brought in from another file, rows the
 sieve rules out entirely, and a reach point handed over with no values behind it.
 
 Beyond those, the document's own account of the rule — the declared ranges, the types, the

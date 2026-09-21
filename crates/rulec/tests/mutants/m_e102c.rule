@@ -1,0 +1,43 @@
+rule 二つの区分(two_bands) v1
+description "同じ入力から二つの区分を出し、下流がその組で決まる。上流どうしの相関の題材（§6.2、§15.114）"
+
+enum 送料区分(ship_band) = 小口(small) default | 大口(large)
+enum 扱い区分(handling)  = 通常(normal) default | 重量物(heavy)
+
+inputs
+  重量(kg) : mass[kg]  range >=0kg <=30kg
+
+outputs
+  料金(fee) : money[円, incl_tax]  round up(1円)
+
+table 送料の区分(band)
+policy first
+| 重量  | -> 送料区分 : 送料区分 |
+| <=2kg | 小口                   |
+| -     | 大口                   |
+
+table 扱いの区分(handle)
+policy first
+| 重量   | -> 扱い区分 : 扱い区分 |
+| <=10kg | 通常                   |
+| -      | 重量物                 |
+
+# 小口 は 2kg 以下、重量物 は 10kg 超。両方になる重量は無いので、その行は書かない。
+# 行1 と 行2 が升目の上で重なるのはその組のときだけで、検査は上の二つの表を読んでそれが
+# 起こらないことを示す。書けば E102 が死んだ行として名指しする。
+table 料金表(fee_table)
+policy unique
+| 送料区分 | 扱い区分 | -> 料金 : money[円, incl_tax] |
+| 小口     | -        | 500円                         |
+| 小口 | 重量物 | 700円 |
+| -        | 重量物   | 1800円                        |
+| 大口     | 通常     | 900円                         |
+
+examples
+| 重量 | -> 料金 |
+| 0kg  | 500円   |
+| 2kg  | 500円   |
+| 3kg  | 900円   |
+| 10kg | 900円   |
+| 11kg | 1800円  |
+| 30kg | 1800円  |

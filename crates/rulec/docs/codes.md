@@ -1697,7 +1697,7 @@ Related codes: [E106](#e106), [E103](#e103)
 
 `error` — **Overlapping rows: the same input matches two or more rows**
 
-**When.** In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead.
+**When.** In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together is not reported, which is the reading that also lets E102 call such a row dead.
 
 **Fix.** If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows.
 

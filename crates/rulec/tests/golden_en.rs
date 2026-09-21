@@ -106,6 +106,7 @@ golden!(e101_completeness, "E101", "tests/mutants/m_e101.rule", "E101");
 golden!(e101_date_gap, "E101-date", "tests/mutants/m_e101d.rule", "E101");
 golden!(e102_unreachable, "E102", "tests/mutants/m_e102.rule", "E102");
 golden!(e102_upstream_value, "E102-b", "tests/mutants/m_e102b.rule", "E102");
+golden!(e102_upstream_pair, "E102-c", "tests/mutants/m_e102c.rule", "E102");
 golden!(e103_unit, "E103", "tests/mutants/m_e103.rule", "E103");
 golden!(e104_rounding_lookup, "E104-b", "tests/mutants/m_e104.rule", "E104");
 golden!(e104_rounding_fraction, "E104-a", "tests/mutants/m_e104b.rule", "E104");
