@@ -95,9 +95,9 @@ fn readmeの生成コード抜粋は実物と一致する() {
 fn readmeの診断抜粋は既定の言語で出る() {
     rulec::i18n::set(rulec::i18n::Lang::En);
     let md = readme();
-    let src = std::fs::read_to_string(root("tests/mutants/m_e101.rule")).unwrap();
+    let src = std::fs::read_to_string(root("tests/mutants/m_e101en.rule")).unwrap();
     let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
-    let ds = rulec::check_source(&src, "rules/ゆうパック運賃.rule");
+    let ds = rulec::check_source(&src, "rules/parcel.rule");
     let d = ds.iter().find(|d| d.code == "E101").expect("E101 が出ない");
     let got = rulec::diag::render(d, &lines);
     // The README quotes it with a `rules/…` path, so compare line by line and skip the

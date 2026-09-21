@@ -116,7 +116,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 83 deliberately broken
+   and that implementation has not been proved correct. The evidence is 84 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, 28 rules transcribed from
    real published terms passing on every commit, and the reference evaluator agreeing with
    twelve languages. **Evidence, not proof**

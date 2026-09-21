@@ -633,7 +633,7 @@ Worth saying in the same breath.
    proof — instead of silently picking a row, the generated code raises.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
-   correct. The evidence is 83 deliberately broken rules each producing
+   correct. The evidence is 84 deliberately broken rules each producing
    the diagnostic it should, and 43 rules — 36 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 

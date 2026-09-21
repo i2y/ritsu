@@ -8,47 +8,49 @@ dependencies. **The proof is finished before the code exists**: a rule that cann
 does not generate.
 
 ```rule
-rule 送料例(fee_demo) v1
+rule fee_demo v1
 description "The README's example. Passes rulec check as written"
 
-import std/都道府県
+enum size_class = envelope | small | large
+enum zone = domestic | canada | overseas
 
-enum サイズ区分(size_class) = S60(s60) | S80(s80) | S100(s100)
-group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+group north_america = domestic, canada
 
 inputs
-  あて先(dest)    : 都道府県
-  三辺合計(girth) : length[cm]  range >=1cm <=100cm
-  重量(weight)    : mass[g]   range >=1g <=25kg  contract_only
+  dest      : zone
+  girth     : length[in]  range >=1in <=130in
+  weight    : mass[lb]    range >=1lb <=70lb   contract_only
 
 outputs
-  運賃(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[USD, incl_tax]  round up(1USD)
 
-table サイズ判定(size_of)
+table size_of
 policy first
-| 三辺合計 | -> サイズ(size) : サイズ区分 |
-| <=60cm   | S60                          |
-| <=80cm   | S80                          |
-| -        | S100                         |
+| girth  | -> size : size_class |
+| <=22in | envelope             |
+| <=60in | small                |
+| -      | large                |
 
-table 運賃表(fee_table)
+table fee_table
 policy unique
-| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
-| 近畿圏      | S60    | 990円                              |
-| 近畿圏      | S80    | 1310円                             |
-| 近畿圏      | S100   | 1620円                             |
-| not: 近畿圏 | S60    | 880円                              |
-| not: 近畿圏 | S80    | 1200円                             |
-| not: 近畿圏 | S100   | 1500円                             |
+| dest          | size     | -> fee : money[USD, incl_tax] |
+| north_america | envelope | 6USD                          |
+| north_america | small    | 12USD                         |
+| north_america | large    | 22USD                         |
+| overseas      | envelope | 16USD                         |
+| overseas      | small    | 38USD                         |
+| overseas      | large    | 60USD                         |
 
 examples
-| あて先 | 三辺合計 | 重量 | -> 運賃 |
-| 大阪府 | 55cm     | 1kg  | 990円   |
-| 東京都 | 90cm     | 3kg  | 1500円  |
+| dest     | girth | weight | -> fee |
+| domestic | 10in  | 5lb    | 6USD   |
+| overseas | 40in  | 12lb   | 38USD  |
 ```
 
 **The keywords are English; the names and the cell values stay in the language of the
-business.** This example passes `rulec check` as it stands — the repository's tests run it on
+business** — English here, and Japanese in the rules transcribed from Japanese terms and
+statutes, which are on the [examples page](https://i2y.github.io/rulec/examples/) with the
+rest. This example passes `rulec check` as it stands — the repository's tests run it on
 every commit. `examples` is an executable specification, and a row that does not hold is
 reported with the rows that fired. A cell tests **its own column and nothing else**, which is
 what makes a row a box and the completeness and overlap checks exact; complicated rules are
@@ -58,34 +60,34 @@ next.
 Out of `rulec gen`, in Python:
 
 ```python
-def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
-    """Rule 送料例 v1: the same decision as fee_demo_traced, without the rows that matched."""
+def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
+    """Rule fee_demo v1: the same decision as fee_demo_traced, without the rows that matched."""
     out, _ = fee_demo_traced(dest, girth, weight)
     return out
 
 
-def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
-    if not _isinstance(dest, Prefecture):
-        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
-    if not 1 <= girth <= 100:
-        raise RuleInputError("三辺合計 is out of range", girth)
+def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
+    if not _isinstance(dest, Zone):
+        raise RuleInputError("dest is not a value of enum Zone", dest)
+    if not 1 <= girth <= 130:
+        raise RuleInputError("girth is out of range", girth)
     trace: _Trace = []
-    # table サイズ判定 (policy first)
-    if girth <= 60:  # row 1: <=60cm | S60
-        size = SizeClass.S60
-        trace.append(Fired("サイズ判定", 1))
-    elif girth <= 80:  # row 2: <=80cm | S80
-        size = SizeClass.S80
-        trace.append(Fired("サイズ判定", 2))
+    # table size_of (policy first)
+    if girth <= 22:  # row 1: <=22in | envelope
+        size = SizeClass.ENVELOPE
+        trace.append(Fired("size_of", 1))
+    elif girth <= 60:  # row 2: <=60in | small
+        size = SizeClass.SMALL
+        trace.append(Fired("size_of", 2))
     ...
-    # table 運賃表 (policy unique)
-    if dest in _kinki and size == SizeClass.S60:  # row 1: 近畿圏 | S60 | 990円
-        fee = 990
-        trace.append(Fired("運賃表", 1))
+    # table fee_table (policy unique)
+    if dest in _north_america and size == SizeClass.ENVELOPE:  # row 1: north_america | envelope | 6USD
+        fee = 6
+        trace.append(Fired("fee_table", 1))
     ...
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
-    return YenInclTax(_round_up(fee, 10)), trace
+    return USDInclTax(_round_up(fee, 1)), trace
 ```
 
 One row of the table becomes one branch, with the cells it came from beside it as a comment,
@@ -125,7 +127,7 @@ space rather than sampled.
 What is **not** proved matters just as much.
 
 1. **That the table matches reality.** What is proved is only what can be said about the table
-   as written. Cite the document a table was transcribed from (`@source 表1`) and an amount
+   as written. Cite the document a table was transcribed from (`@source table1`) and an amount
    that disagrees with the copy does fail (E116, W120) — but even then what is shown is
    agreement with the copy, not with the world. With no citation, transcribe the tariff wrong
    and everything stays green.
@@ -182,28 +184,28 @@ $ rulec gen rules/*.rule --out generated [--check]
 $ rulec vectors | coverage | test                  # the test cases, their coverage, the run
 $ rulec adapter | schema | verify                  # against a legacy implementation
 $ rulec fixtures lint | replay | diff              # against past records
-$ rulec doc rules/送料.rule --lang ja               # for whoever approves the table; --format html
-$ rulec certificate rules/送料.rule                 # the evidence, for another program to re-check
+$ rulec doc rules/parcel.rule --lang ja            # for whoever approves the table; --format html
+$ rulec certificate rules/parcel.rule              # the evidence, for another program to re-check
 $ rulec source fetch | pin | outdated              # the copies of the documents a rule cites
-$ rulec api rules/送料.rule                         # how to call the generated code, without reading it
+$ rulec api rules/parcel.rule                      # how to call the generated code, without reading it
 $ rulec explain E101                               # when it appears, how to fix it, a repro
-$ rulec import xlsx 運賃表.xlsx --sheet 本則       # a first draft from the workbook; every guess is marked
+$ rulec import xlsx tariff.xlsx --sheet standard   # a first draft from the workbook; every guess is marked
 $ rulec mcp                                        # the same commands as MCP tools, for an agent with no shell
 ```
 
-Transcribe a tariff, drop one prefecture out of forty-seven, and the gap comes back with the
-input that falls through it:
+Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
+falls through it:
 
 ```
 error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
+  --> rules/parcel.rule:30 table base_rate
    |
-34 | table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
-   |       ^^^^^^ the input space is not fully covered
+30 | table base_rate
+   |       ^^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
  hint: add a row that matches this input.
- The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+ The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
 **No legacy implementation and no past data are needed for that.** Every command carries
@@ -254,7 +256,7 @@ src/              42 modules, and 5 more under codegen/: kw, i18n, lex, parse, t
                   pinned), apply (a rule applied to another case), vfs (reading at a git
                   revision), sha256, wasm (the checker as the site's playground)
 tests/corpus/     43 rules, and the copies of the documents they cite
-tests/mutants/    83 files, each with one mistake planted in it
+tests/mutants/    84 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 37 in Japanese, 35 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
                   which tests/library.rs replays the rules over
