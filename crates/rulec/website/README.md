@@ -136,6 +136,21 @@ the binary's, byte for byte, in both languages — and holds `rulec_version` to 
 crate's version. A stale `rulec.wasm` is a failing test, not a page that quietly
 answers an old way.
 
+## The social preview
+
+`docs/images/social.png` is what GitHub, Slack and the rest show when a link
+to the repository is posted — 1280×640, the size GitHub asks for. It is the
+site's own hero, drawn as one HTML document and photographed by the same
+headless Chrome as the screenshots below, so the ink, the mark and the ruling
+behind them cannot drift from the page:
+
+```console
+$ website/tools/social.sh            # needs Google Chrome
+```
+
+**GitHub has no API for it.** The file is uploaded by hand, once, under
+Settings → General → Social preview.
+
 ## The screenshots
 
 `docs/images/try-ja.png` and `try-en.png` are the page `rulec doc --format html` renders,
