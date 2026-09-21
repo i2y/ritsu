@@ -31,6 +31,12 @@ pub fn parse(src: &str, path: &str) -> Parsed {
     let mut diags: Vec<Diag> = Vec::new();
     for (n, text) in src.lines().enumerate() {
         match lex_line(n + 1, text) {
+            // A line that is nothing but a comment is not a blank line, and a blank line is
+            // what ends a block. After lexing the two look alike — both come back with no
+            // tokens — so a comment written between two inputs cut the block in half and the
+            // declaration under it was reported as a word that cannot appear there. Dropping
+            // it here is what makes a note in the middle of a block mean what it looks like.
+            Ok(t) if t.is_empty() && text.trim_start().starts_with('#') => {}
             Ok(t) => lines.push(t),
             Err(d) => {
                 diags.push(d);

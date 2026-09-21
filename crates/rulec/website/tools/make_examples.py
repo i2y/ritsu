@@ -439,6 +439,74 @@ EXAMPLES = [
         ],
     ),
     (
+        "uk_stamp_duty.rule",
+        "英国の印紙税、本則と軽減",
+        "住宅の売買にかかる SDLT が、どの税率帯に入るか。GOV.UK からの転記で、**本則の表と、初めて家を買う人の軽減の表**という形が `印紙税の本則と軽減.rule` とそのまま重なります。",
+        [
+            "**軽減は途中で切れます。** 「£500,000 を超えると使えない」と書いてあるので、軽減の表は £500,000 までしか行を持ちません。その上では本則がそのまま顔を出します。`overrides` が「一部だけを覆う表」であるというのは、こういうことです。",
+            "**最初の行にだけ出典が付いていません。** ページはその帯を「Zero」と書くだけで率を書いていないので、`0%` は規則側の書き方です。",
+            "**第二の住宅の 5% は文章です。** 表ではないので、その行は文書を丸ごと引用しています（`@gov`）。帯の率と足し合わせていないのは、税額そのものが帯ごとの積み上げで、ページがその合計を表にしていないからです。",
+        ],
+        "A stamp duty, and the relief that overrides it",
+        "Which SDLT band a residential purchase falls in, transcribed from GOV.UK. A main table and a relief for first-time buyers — the same shape as Japan's own stamp duty rule, in another country's words.",
+        [
+            "**The relief runs out.** The page says it cannot be claimed over £500,000, so the relief table has no rows above that and the main rule shows through on its own. That is what `overrides` on a table covering part of the input space means.",
+            "**Only the first row carries no citation.** The page writes that band as \"Zero\" rather than as a percentage, so `0%` is this rule's way of writing it.",
+            "**The 5% on a second home is a sentence, not a table**, so that table cites the document whole. It is not added to the band here: the tax itself is worked out slice by slice, and the page tabulates no such total.",
+        ],
+    ),
+    (
+        "osha_noise.rule",
+        "騒音にどれだけさらしてよいか",
+        "29 CFR 1910.95 の Table G-16。dBA の水準ごとに一日の許容時間が決まります。条文は eCFR から日付を指定して取ってきた写しに留めてあります。",
+        [
+            "**表に無い水準をどう読むかは、こちらで決めています。** 91 dBA は 92 dBA の行として読む — つまり短いほうの時間を採ります。附録は許容時間が式で計算されると書いていますが、その式は文書の中では画像で、写しの文字には出てきません。逆に丸めると式より長くさらしてよいことになるので、そちらには倒しません。",
+            "**音は比較と範囲だけの型です。** `sound[dB]` は足し算ができません。デシベルは対数なので、二つ足しても二つぶんの音にならないからです。",
+            "**時間は分で持っています。** 表に 1½ 時間と ¼ 時間があるので、時間単位では整数になりません。`duration[min]` なら 90 分・15 分とそのまま書けます。",
+        ],
+        "How long anyone may be exposed to noise",
+        "Table G-16 of 29 CFR 1910.95: a permitted duration for each sound level. The section is pinned to a copy the eCFR served for a date.",
+        [
+            "**How to read a level the table does not list is decided here.** 91 dBA is given the 92 dBA row — the shorter of the two durations. The appendix says the reference duration is computed by a formula, but the formula is a picture in the document and no text of it comes out of the copy; rounding the other way would permit longer exposure than the formula does.",
+            "**Sound is a type with comparison and range and nothing else.** Decibels do not add: two of them summed are not two sounds\' worth.",
+            "**The duration is held in minutes**, because the table has 1½ hours and ¼ hour in it. `duration[min]` writes those as 90 and 15 with nothing left over.",
+        ],
+    ),
+    (
+        "osha_excavation.rule",
+        "掘削に防護が要るかどうか",
+        "29 CFR 1926.652(a)(1)。同じ title の別の part なので、出典も別に宣言しています。答えは金額ではなく「要る／要らない」です。",
+        [
+            "**例外は二つで、片方は条件が二つあります。** 岩盤だけを掘るとき、または「5 フィート未満で、資格のある者が見て崩落の兆候が無いとき」。後者が二列になっているのは、条文がそう書いているからです。",
+            "**「調べていない」は「調べて何も無かった」ではありません。** だから入力は調査の結果であって、調査をしたかどうかではありません。調べていない現場は、兆候ありの行に落ちます。",
+            "**フィートで書いてあります。** 条文が「5 feet (1.52m)」と書くので、そのまま `length[ft]` です。",
+        ],
+        "Whether an excavation needs protection from cave-ins",
+        "29 CFR 1926.652(a)(1). Another part of the same title, and so a source of its own. The answer is not an amount but a word: required, or not.",
+        [
+            "**There are two exceptions, and one of them is two conditions.** Stable rock throughout; or less than five feet deep **and** an examination by a competent person giving no indication of a potential cave-in. The second takes two columns because the section takes two clauses.",
+            "**\"Not examined\" is not \"examined and found nothing\".** So the input is the examination\'s answer rather than whether one was made, and a site nobody looked at falls into the row that requires the system.",
+            "**It is written in feet**, because the section is: \"5 feet (1.52m)\".",
+        ],
+    ),
+    (
+        "paypal_fee.rule",
+        "PayPal の決済手数料",
+        "米国の PayPal Checkout の手数料です。公開されている料金表からの転記で、法令ではなく事業者の規約を写した例。`決済手数料.rule` の英語圏版にあたります。",
+        [
+            "**率と定額の両方が出典から来ています。** 3.49% と 0.49 ドル。合計の率（4.99%）はページに無いので、こちらでも作りません。国際取引の 1.5% は別の行です。",
+            "**丸めの向きは仮置きです。** セント未満が出るのにページが何も言っていないので、`half_up` と書いたうえで「これは決め事の置き場所だ」と注に書いてあります。決めるのは人です。",
+            "**セントで数えています。** `money[USDc]` はセントの整数で、$0.49 は 49USDc。ドルとセントが取り違えられることはありません。",
+        ],
+        "What PayPal takes from one payment",
+        "The PayPal Checkout fee on a payment in the United States, transcribed from the published merchant fees. Not a statute but a company\'s own terms — the English counterpart of the Japanese payment-fee rule.",
+        [
+            "**Both the rate and the fixed fee come from the source**: 3.49% and 0.49 USD. The combined rate for an international payment (4.99%) is not printed there, so it is not written here either; the 1.5% is a row of its own.",
+            "**The rounding direction is a placeholder.** The fee has fractions of a cent in it and the page says nothing about them, so the rule declares `half_up` and says in a comment that this is where a decision has to go. A person makes it.",
+            "**It counts in cents.** `money[USDc]` is an integer number of cents, and $0.49 is `49USDc`, so dollars and cents cannot be taken for one another.",
+        ],
+    ),
+    (
         "領収書の印紙税.rule",
         "領収書の印紙税",
         "国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。",
@@ -646,17 +714,17 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Seven are written in English throughout** — [whether a return is
+**Eleven are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
 inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
 261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
 wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
-allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
-income tax](#the-us-federal-income-tax-bracket-by-bracket) and [one section of the
-CFR](#one-section-of-the-us-code-of-federal-regulations). The rest are transcriptions of
-Japanese published terms and statutes, left in the language they were published in: the
-keywords are English in every one of them, and what a transcription is here to show is the
-shape of the rule rather than the words in its cells.
+allowance](#a-personal-allowance-that-tapers-and-the-band-above-it), [the US federal income
+tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
+CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest are
+transcriptions of Japanese published terms and statutes, left in the language they were
+published in: the keywords are English in every one of them, and what a transcription is here
+to show is the shape of the rule rather than the words in its cells.
 
 """
 

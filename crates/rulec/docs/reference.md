@@ -63,9 +63,11 @@ examples
 - `examples` comes last.
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
-comments may appear anywhere, including at the end of a table row. A comment at the end of a
-declaration, of a `table` line or of a row is shown to the approver by `rulec doc`, which is
-where the source a table or a row was transcribed from belongs.
+comments may appear anywhere, including at the end of a table row and on a line of their own
+in the middle of a block — **a line that holds nothing but a comment does not end the
+section**, where a blank one does. A comment at the end of a declaration, of a `table` line or
+of a row is shown to the approver by `rulec doc`, which is where the source a table or a row
+was transcribed from belongs.
 
 ## 2. Lexical structure
 

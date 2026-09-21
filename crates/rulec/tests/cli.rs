@@ -469,3 +469,19 @@ fn 宣言したフラグは全部どこかのテストが渡している() {
          フラグは宣言されただけでは動きません — 一つ渡すテストを書いてください"
     );
 }
+
+/// A line holding nothing but a comment is not a blank line, and a blank line is what ends a
+/// section. The two look alike after lexing, so a note written between two inputs used to cut
+/// the block in half and the declaration under it came back as E005 — a message about the
+/// wrong thing entirely. Both languages' corpora write their notes above a block, which is
+/// why nothing caught it until a rule was written with one inside.
+#[test]
+fn ブロックの途中のコメント行はブロックを切らない() {
+    let src = "rule t v1\n\ninputs\n  a : bool\n  # a note in the middle of a block\n  b : bool\n\noutputs\n  x : bool\n\ntable d\npolicy unique\n| a | b | -> x : bool |\n| - | - | true        |\n";
+    let ds = rulec::check_source(src, "t.rule");
+    assert!(!rulec::has_error(&ds), "{:?}", ds.iter().map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>());
+    // And a blank line still does end one: the same file with the comment left out of the
+    // block, and `b` after a blank line, is the error it always was.
+    let split = "rule t v1\n\ninputs\n  a : bool\n\n  b : bool\n\noutputs\n  x : bool\n";
+    assert!(rulec::has_error(&rulec::check_source(split, "t.rule")), "空行でブロックが切れなくなっています");
+}

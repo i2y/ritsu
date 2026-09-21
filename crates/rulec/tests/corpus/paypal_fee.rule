@@ -1,0 +1,30 @@
+rule paypal_fee v1
+description "The PayPal Checkout fee on one payment in the United States. Transcribed from PayPal's published merchant fees"
+
+source paypal = file "sources/paypal-us-fees.md" sha256:0318950a982c3c7d  # PayPal's own published figures
+  table1 sha256:5e481ef40e570eeb
+
+inputs
+  amount        : money[USDc]  range >=1USDc <=100000000USDc
+  international : bool
+
+# The fee has fractions of a cent in it, and the page does not say which way they settle, so
+# the direction here is a placeholder — the thing a person has to decide before this ships.
+outputs
+  fee : money[USDc]  round half_up(1USDc)
+
+# The page prints the domestic rate and, separately, what an international transaction adds.
+# It does not print the sum, so neither does this: the row for a domestic payment adds
+# nothing, and that row carries no citation because `0%` is not a figure the copy shows.
+table surcharge
+policy unique
+| international | -> extra : rate[step 0.01%] |
+| false         | 0%                          |
+| true          | 1.5%                        |  @paypal table1
+
+define fee : money[USDc] = amount × 3.49% + amount × extra + 49USDc  @paypal table1
+
+examples
+| amount    | international | -> fee  |
+| 10000USDc | false         | 398USDc |
+| 10000USDc | true          | 548USDc |

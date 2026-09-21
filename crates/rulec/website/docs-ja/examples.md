@@ -1381,6 +1381,224 @@ examples
 - **`rulec source outdated` が改正を教えます。** eCFR はその section の改正日を返し、体裁だけの直しかどうかも言うので、本文が動いたときだけ読み直しになります。
 - **単位はフィートです。** 条文が「75 feet (22.9 m)」と書くので `length[ft]` で写しました。換算はしません。
 
+## 英国の印紙税、本則と軽減
+
+住宅の売買にかかる SDLT が、どの税率帯に入るか。GOV.UK からの転記で、**本則の表と、初めて家を買う人の軽減の表**という形が `印紙税の本則と軽減.rule` とそのまま重なります。
+
+```rule
+rule uk_stamp_duty v1
+description "The SDLT rate band a residential purchase falls in, and the surcharge on a second home. Transcribed from GOV.UK. The English counterpart of 印紙税の本則と軽減.rule"
+
+source gov = file "sources/uk-sdlt.md" sha256:799106ea8a821a00  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:360409a5675d3552
+  table2 sha256:15d4ed0baca64189
+
+inputs
+  price      : money[GBP]  range >=0GBP <=20000000GBP
+  first_time : bool
+  additional : bool
+
+outputs
+  band      : rate[step 1%]  round down(1%)
+  surcharge : rate[step 1%]  round down(1%)
+
+# The main rule. The first row carries no citation: the page writes that band as "Zero"
+# rather than as a percentage, so `0%` is this rule's way of writing it.
+table standard
+policy unique
+| price                   | -> band : rate[step 1%] |
+| <=125000GBP             | 0%                      |
+| >125000GBP <=250000GBP  | 2%                      |  @gov table1
+| >250000GBP <=925000GBP  | 5%                      |  @gov table1
+| >925000GBP <=1500000GBP | 10%                     |  @gov table1
+| >1500000GBP             | 12%                     |  @gov table1
+
+# The relief, which stops at £500,000: "If the price is over £500,000, you cannot claim".
+# Above that the main rule shows through on its own, which is what `overrides` on a table
+# that covers only part of the input space means. A first-time buyer who already owns a
+# property is not one, so the rows say so rather than leaving it to the reader.
+table first_time_relief  @gov table2
+policy unique
+overrides standard
+| first_time | additional | price                  | -> band : rate[step 1%] |
+| true       | false      | <=300000GBP            | 0%                      |
+| true       | false      | >300000GBP <=500000GBP | 5%                      |
+
+# "You'll usually have to pay 5% on top of SDLT rates if buying a new residential property
+# means you'll own more than one" is a sentence, not a table, so this cites the document
+# whole. What it is on top of is the band above; the two are not added here, because the tax
+# itself is worked out slice by slice and the page tabulates no such total.
+table second_home  @gov
+policy unique
+| additional | -> surcharge : rate[step 1%] |
+| true       | 5%                           |
+| false      | 0%                           |
+
+examples
+| price      | first_time | additional | -> band | surcharge |
+| 100000GBP  | false      | false      | 0%      | 0%        |
+| 200000GBP  | false      | false      | 2%      | 0%        |
+| 200000GBP  | true       | false      | 0%      | 0%        |
+| 400000GBP  | true       | false      | 5%      | 0%        |
+| 600000GBP  | true       | false      | 5%      | 0%        |
+| 200000GBP  | false      | true       | 2%      | 5%        |
+| 2000000GBP | false      | false      | 12%     | 0%        |
+```
+
+**この例が見せていること**
+
+- **軽減は途中で切れます。** 「£500,000 を超えると使えない」と書いてあるので、軽減の表は £500,000 までしか行を持ちません。その上では本則がそのまま顔を出します。`overrides` が「一部だけを覆う表」であるというのは、こういうことです。
+- **最初の行にだけ出典が付いていません。** ページはその帯を「Zero」と書くだけで率を書いていないので、`0%` は規則側の書き方です。
+- **第二の住宅の 5% は文章です。** 表ではないので、その行は文書を丸ごと引用しています（`@gov`）。帯の率と足し合わせていないのは、税額そのものが帯ごとの積み上げで、ページがその合計を表にしていないからです。
+
+## 騒音にどれだけさらしてよいか
+
+29 CFR 1910.95 の Table G-16。dBA の水準ごとに一日の許容時間が決まります。条文は eCFR から日付を指定して取ってきた写しに留めてあります。
+
+```rule
+rule osha_noise v1
+description "The daily exposure to continuous noise a workplace may permit, from Table G-16 of 29 CFR 1910.95"
+
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.95" sha256:f83a1303a004b5ae
+
+inputs
+  level : sound[dB]  range >=90dB <=130dB
+
+outputs
+  permitted : duration[min]  round down(1min)
+
+# Table G-16 lists nine levels and the time permitted at each: 8 hours at 90 dBA, 6 at 92,
+# and so on down to a quarter of an hour at 115. A level between two of the listed ones is
+# read here as **the shorter of the two** — 91 dBA is given the 92 dBA row — and that is a
+# decision made here, not in the text. The appendix says the reference duration "is computed
+# by" a formula, but the formula is a picture in the document and no text of it comes out of
+# the copy; rounding the other way would permit longer exposure than the formula does, which
+# is the wrong direction to be wrong in.
+table exposure  @osha "§1910.95"
+policy first
+| level          | -> permitted : duration[min] |
+| <=90dB         | 480min                       |
+| >90dB <=92dB   | 360min                       |
+| >92dB <=95dB   | 240min                       |
+| >95dB <=97dB   | 180min                       |
+| >97dB <=100dB  | 120min                       |
+| >100dB <=102dB | 90min                        |
+| >102dB <=105dB | 60min                        |
+| >105dB <=110dB | 30min                        |
+| -              | 15min                        |
+
+examples
+| level | -> permitted |
+| 90dB  | 480min       |
+| 92dB  | 360min       |
+| 95dB  | 240min       |
+| 100dB | 120min       |
+| 105dB | 60min        |
+| 110dB | 30min        |
+| 115dB | 15min        |
+| 91dB  | 360min       |
+```
+
+**この例が見せていること**
+
+- **表に無い水準をどう読むかは、こちらで決めています。** 91 dBA は 92 dBA の行として読む — つまり短いほうの時間を採ります。附録は許容時間が式で計算されると書いていますが、その式は文書の中では画像で、写しの文字には出てきません。逆に丸めると式より長くさらしてよいことになるので、そちらには倒しません。
+- **音は比較と範囲だけの型です。** `sound[dB]` は足し算ができません。デシベルは対数なので、二つ足しても二つぶんの音にならないからです。
+- **時間は分で持っています。** 表に 1½ 時間と ¼ 時間があるので、時間単位では整数になりません。`duration[min]` なら 90 分・15 分とそのまま書けます。
+
+## 掘削に防護が要るかどうか
+
+29 CFR 1926.652(a)(1)。同じ title の別の part なので、出典も別に宣言しています。答えは金額ではなく「要る／要らない」です。
+
+```rule
+rule osha_excavation v1
+description "Whether an excavation needs a protective system against cave-ins, from 29 CFR 1926.652(a)(1)"
+
+# A second part of the same title, and so a source of its own: the id names the part, and
+# `rulec source fetch` brings the section from the eCFR as of the date on the line.
+source osha = law ecfr "29 CFR 1926" asof 2026-01-01
+  "§1926.652" sha256:088a630a1ae9a4d7
+
+enum verdict = required | not_required
+
+# The section gives two exceptions. One is that the excavation "are made entirely in stable
+# rock". The other is two conditions at once: less than five feet deep, **and** an
+# examination by a competent person giving "no indication of a potential cave-in". What the
+# rule asks for is the examination's answer, not whether one was made — no examination is not
+# the same as one that found nothing, and the row for it is the one that requires the system.
+inputs
+  depth              : length[ft]  range >=1ft <=30ft
+  stable_rock        : bool
+  cave_in_indication : bool
+
+outputs
+  protection : verdict
+
+table needed  @osha "§1926.652"
+policy unique
+| stable_rock | depth | cave_in_indication | -> protection : verdict |
+| true        | -     | -                  | not_required            |
+| false       | <5ft  | false              | not_required            |
+| false       | <5ft  | true               | required                |
+| false       | >=5ft | -                  | required                |
+
+examples
+| depth | stable_rock | cave_in_indication | -> protection |
+| 4ft   | false       | false              | not_required  |
+| 4ft   | false       | true               | required      |
+| 5ft   | false       | false              | required      |
+| 12ft  | true        | true               | not_required  |
+```
+
+**この例が見せていること**
+
+- **例外は二つで、片方は条件が二つあります。** 岩盤だけを掘るとき、または「5 フィート未満で、資格のある者が見て崩落の兆候が無いとき」。後者が二列になっているのは、条文がそう書いているからです。
+- **「調べていない」は「調べて何も無かった」ではありません。** だから入力は調査の結果であって、調査をしたかどうかではありません。調べていない現場は、兆候ありの行に落ちます。
+- **フィートで書いてあります。** 条文が「5 feet (1.52m)」と書くので、そのまま `length[ft]` です。
+
+## PayPal の決済手数料
+
+米国の PayPal Checkout の手数料です。公開されている料金表からの転記で、法令ではなく事業者の規約を写した例。`決済手数料.rule` の英語圏版にあたります。
+
+```rule
+rule paypal_fee v1
+description "The PayPal Checkout fee on one payment in the United States. Transcribed from PayPal's published merchant fees"
+
+source paypal = file "sources/paypal-us-fees.md" sha256:0318950a982c3c7d  # PayPal's own published figures
+  table1 sha256:5e481ef40e570eeb
+
+inputs
+  amount        : money[USDc]  range >=1USDc <=100000000USDc
+  international : bool
+
+# The fee has fractions of a cent in it, and the page does not say which way they settle, so
+# the direction here is a placeholder — the thing a person has to decide before this ships.
+outputs
+  fee : money[USDc]  round half_up(1USDc)
+
+# The page prints the domestic rate and, separately, what an international transaction adds.
+# It does not print the sum, so neither does this: the row for a domestic payment adds
+# nothing, and that row carries no citation because `0%` is not a figure the copy shows.
+table surcharge
+policy unique
+| international | -> extra : rate[step 0.01%] |
+| false         | 0%                          |
+| true          | 1.5%                        |  @paypal table1
+
+define fee : money[USDc] = amount × 3.49% + amount × extra + 49USDc  @paypal table1
+
+examples
+| amount    | international | -> fee  |
+| 10000USDc | false         | 398USDc |
+| 10000USDc | true          | 548USDc |
+```
+
+**この例が見せていること**
+
+- **率と定額の両方が出典から来ています。** 3.49% と 0.49 ドル。合計の率（4.99%）はページに無いので、こちらでも作りません。国際取引の 1.5% は別の行です。
+- **丸めの向きは仮置きです。** セント未満が出るのにページが何も言っていないので、`half_up` と書いたうえで「これは決め事の置き場所だ」と注に書いてあります。決めるのは人です。
+- **セントで数えています。** `money[USDc]` はセントの整数で、$0.49 は 49USDc。ドルとセントが取り違えられることはありません。
+
 ## 領収書の印紙税
 
 国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。

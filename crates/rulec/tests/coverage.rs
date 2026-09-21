@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 39] = [
+const CORPUS: [&str; 43] = [
     "tests/corpus/比例配分.rule",
     "tests/corpus/品番の扱い.rule",
     "tests/corpus/買物かごの送料.rule",
@@ -46,6 +46,10 @@ const CORPUS: [&str; 39] = [
     "tests/corpus/uk_income_tax.rule",
     "tests/corpus/us_income_tax.rule",
     "tests/corpus/osha_extinguisher.rule",
+    "tests/corpus/uk_stamp_duty.rule",
+    "tests/corpus/osha_noise.rule",
+    "tests/corpus/osha_excavation.rule",
+    "tests/corpus/paypal_fee.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -250,6 +254,10 @@ fn 義務の件数を固定する() {
         ("tests/corpus/uk_income_tax.rule", 7, 10, 0),
         ("tests/corpus/us_income_tax.rule", 7, 12, 0),
         ("tests/corpus/osha_extinguisher.rule", 5, 0, 0),
+        ("tests/corpus/uk_stamp_duty.rule", 9, 11, 4),
+        ("tests/corpus/osha_noise.rule", 9, 15, 8),
+        ("tests/corpus/osha_excavation.rule", 4, 3, 0),
+        ("tests/corpus/paypal_fee.rule", 2, 0, 0),
         ("tests/corpus/値引の充当.rule", 2, 0, 0),
         ("tests/corpus/決済手数料.rule", 3, 3, 0),
         ("tests/corpus/補償証明書.rule", 8, 0, 9),

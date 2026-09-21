@@ -1,0 +1,57 @@
+rule uk_stamp_duty v1
+description "The SDLT rate band a residential purchase falls in, and the surcharge on a second home. Transcribed from GOV.UK. The English counterpart of 印紙税の本則と軽減.rule"
+
+source gov = file "sources/uk-sdlt.md" sha256:799106ea8a821a00  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:360409a5675d3552
+  table2 sha256:15d4ed0baca64189
+
+inputs
+  price      : money[GBP]  range >=0GBP <=20000000GBP
+  first_time : bool
+  additional : bool
+
+outputs
+  band      : rate[step 1%]  round down(1%)
+  surcharge : rate[step 1%]  round down(1%)
+
+# The main rule. The first row carries no citation: the page writes that band as "Zero"
+# rather than as a percentage, so `0%` is this rule's way of writing it.
+table standard
+policy unique
+| price                   | -> band : rate[step 1%] |
+| <=125000GBP             | 0%                      |
+| >125000GBP <=250000GBP  | 2%                      |  @gov table1
+| >250000GBP <=925000GBP  | 5%                      |  @gov table1
+| >925000GBP <=1500000GBP | 10%                     |  @gov table1
+| >1500000GBP             | 12%                     |  @gov table1
+
+# The relief, which stops at £500,000: "If the price is over £500,000, you cannot claim".
+# Above that the main rule shows through on its own, which is what `overrides` on a table
+# that covers only part of the input space means. A first-time buyer who already owns a
+# property is not one, so the rows say so rather than leaving it to the reader.
+table first_time_relief  @gov table2
+policy unique
+overrides standard
+| first_time | additional | price                  | -> band : rate[step 1%] |
+| true       | false      | <=300000GBP            | 0%                      |
+| true       | false      | >300000GBP <=500000GBP | 5%                      |
+
+# "You'll usually have to pay 5% on top of SDLT rates if buying a new residential property
+# means you'll own more than one" is a sentence, not a table, so this cites the document
+# whole. What it is on top of is the band above; the two are not added here, because the tax
+# itself is worked out slice by slice and the page tabulates no such total.
+table second_home  @gov
+policy unique
+| additional | -> surcharge : rate[step 1%] |
+| true       | 5%                           |
+| false      | 0%                           |
+
+examples
+| price      | first_time | additional | -> band | surcharge |
+| 100000GBP  | false      | false      | 0%      | 0%        |
+| 200000GBP  | false      | false      | 2%      | 0%        |
+| 200000GBP  | true       | false      | 0%      | 0%        |
+| 400000GBP  | true       | false      | 5%      | 0%        |
+| 600000GBP  | true       | false      | 5%      | 0%        |
+| 200000GBP  | false      | true       | 2%      | 5%        |
+| 2000000GBP | false      | false      | 12%     | 0%        |

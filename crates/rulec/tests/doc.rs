@@ -65,6 +65,10 @@ const CORPUS: &[&str] = &[
 "tests/corpus/uk_income_tax.rule",
 "tests/corpus/us_income_tax.rule",
 "tests/corpus/osha_extinguisher.rule",
+"tests/corpus/uk_stamp_duty.rule",
+"tests/corpus/osha_noise.rule",
+"tests/corpus/osha_excavation.rule",
+"tests/corpus/paypal_fee.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row

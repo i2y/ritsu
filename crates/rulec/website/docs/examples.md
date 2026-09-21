@@ -6,17 +6,17 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Seven are written in English throughout** — [whether a return is
+**Eleven are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
 inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
 261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
 wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
-allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
-income tax](#the-us-federal-income-tax-bracket-by-bracket) and [one section of the
-CFR](#one-section-of-the-us-code-of-federal-regulations). The rest are transcriptions of
-Japanese published terms and statutes, left in the language they were published in: the
-keywords are English in every one of them, and what a transcription is here to show is the
-shape of the rule rather than the words in its cells.
+allowance](#a-personal-allowance-that-tapers-and-the-band-above-it), [the US federal income
+tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
+CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest are
+transcriptions of Japanese published terms and statutes, left in the language they were
+published in: the keywords are English in every one of them, and what a transcription is here
+to show is the shape of the rule rather than the words in its cells.
 
 ## A date decides which period it is
 
@@ -1394,6 +1394,224 @@ examples
 - **A fragment the language cannot read as one word is quoted.** `@osha "§1910.157"`, in the citation and on the pin line alike. The copy lands in `sources/law/29-CFR-1910@2026-01-01/1910.157.xml`, and `rulec source pin` writes its digest.
 - **`rulec source outdated` asks the eCFR about that very section.** It answers with the amendment dates and whether each was substantive, so a re-issue that only moved the markup does not send anyone back to the text.
 - **The unit is feet**, because the section is: "75 feet (22.9 m)". A length is one integer in its declared unit, and there is no conversion to decide.
+
+## A stamp duty, and the relief that overrides it
+
+Which SDLT band a residential purchase falls in, transcribed from GOV.UK. A main table and a relief for first-time buyers — the same shape as Japan's own stamp duty rule, in another country's words.
+
+```rule
+rule uk_stamp_duty v1
+description "The SDLT rate band a residential purchase falls in, and the surcharge on a second home. Transcribed from GOV.UK. The English counterpart of 印紙税の本則と軽減.rule"
+
+source gov = file "sources/uk-sdlt.md" sha256:799106ea8a821a00  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:360409a5675d3552
+  table2 sha256:15d4ed0baca64189
+
+inputs
+  price      : money[GBP]  range >=0GBP <=20000000GBP
+  first_time : bool
+  additional : bool
+
+outputs
+  band      : rate[step 1%]  round down(1%)
+  surcharge : rate[step 1%]  round down(1%)
+
+# The main rule. The first row carries no citation: the page writes that band as "Zero"
+# rather than as a percentage, so `0%` is this rule's way of writing it.
+table standard
+policy unique
+| price                   | -> band : rate[step 1%] |
+| <=125000GBP             | 0%                      |
+| >125000GBP <=250000GBP  | 2%                      |  @gov table1
+| >250000GBP <=925000GBP  | 5%                      |  @gov table1
+| >925000GBP <=1500000GBP | 10%                     |  @gov table1
+| >1500000GBP             | 12%                     |  @gov table1
+
+# The relief, which stops at £500,000: "If the price is over £500,000, you cannot claim".
+# Above that the main rule shows through on its own, which is what `overrides` on a table
+# that covers only part of the input space means. A first-time buyer who already owns a
+# property is not one, so the rows say so rather than leaving it to the reader.
+table first_time_relief  @gov table2
+policy unique
+overrides standard
+| first_time | additional | price                  | -> band : rate[step 1%] |
+| true       | false      | <=300000GBP            | 0%                      |
+| true       | false      | >300000GBP <=500000GBP | 5%                      |
+
+# "You'll usually have to pay 5% on top of SDLT rates if buying a new residential property
+# means you'll own more than one" is a sentence, not a table, so this cites the document
+# whole. What it is on top of is the band above; the two are not added here, because the tax
+# itself is worked out slice by slice and the page tabulates no such total.
+table second_home  @gov
+policy unique
+| additional | -> surcharge : rate[step 1%] |
+| true       | 5%                           |
+| false      | 0%                           |
+
+examples
+| price      | first_time | additional | -> band | surcharge |
+| 100000GBP  | false      | false      | 0%      | 0%        |
+| 200000GBP  | false      | false      | 2%      | 0%        |
+| 200000GBP  | true       | false      | 0%      | 0%        |
+| 400000GBP  | true       | false      | 5%      | 0%        |
+| 600000GBP  | true       | false      | 5%      | 0%        |
+| 200000GBP  | false      | true       | 2%      | 5%        |
+| 2000000GBP | false      | false      | 12%     | 0%        |
+```
+
+**What this one shows**
+
+- **The relief runs out.** The page says it cannot be claimed over £500,000, so the relief table has no rows above that and the main rule shows through on its own. That is what `overrides` on a table covering part of the input space means.
+- **Only the first row carries no citation.** The page writes that band as "Zero" rather than as a percentage, so `0%` is this rule's way of writing it.
+- **The 5% on a second home is a sentence, not a table**, so that table cites the document whole. It is not added to the band here: the tax itself is worked out slice by slice, and the page tabulates no such total.
+
+## How long anyone may be exposed to noise
+
+Table G-16 of 29 CFR 1910.95: a permitted duration for each sound level. The section is pinned to a copy the eCFR served for a date.
+
+```rule
+rule osha_noise v1
+description "The daily exposure to continuous noise a workplace may permit, from Table G-16 of 29 CFR 1910.95"
+
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.95" sha256:f83a1303a004b5ae
+
+inputs
+  level : sound[dB]  range >=90dB <=130dB
+
+outputs
+  permitted : duration[min]  round down(1min)
+
+# Table G-16 lists nine levels and the time permitted at each: 8 hours at 90 dBA, 6 at 92,
+# and so on down to a quarter of an hour at 115. A level between two of the listed ones is
+# read here as **the shorter of the two** — 91 dBA is given the 92 dBA row — and that is a
+# decision made here, not in the text. The appendix says the reference duration "is computed
+# by" a formula, but the formula is a picture in the document and no text of it comes out of
+# the copy; rounding the other way would permit longer exposure than the formula does, which
+# is the wrong direction to be wrong in.
+table exposure  @osha "§1910.95"
+policy first
+| level          | -> permitted : duration[min] |
+| <=90dB         | 480min                       |
+| >90dB <=92dB   | 360min                       |
+| >92dB <=95dB   | 240min                       |
+| >95dB <=97dB   | 180min                       |
+| >97dB <=100dB  | 120min                       |
+| >100dB <=102dB | 90min                        |
+| >102dB <=105dB | 60min                        |
+| >105dB <=110dB | 30min                        |
+| -              | 15min                        |
+
+examples
+| level | -> permitted |
+| 90dB  | 480min       |
+| 92dB  | 360min       |
+| 95dB  | 240min       |
+| 100dB | 120min       |
+| 105dB | 60min        |
+| 110dB | 30min        |
+| 115dB | 15min        |
+| 91dB  | 360min       |
+```
+
+**What this one shows**
+
+- **How to read a level the table does not list is decided here.** 91 dBA is given the 92 dBA row — the shorter of the two durations. The appendix says the reference duration is computed by a formula, but the formula is a picture in the document and no text of it comes out of the copy; rounding the other way would permit longer exposure than the formula does.
+- **Sound is a type with comparison and range and nothing else.** Decibels do not add: two of them summed are not two sounds' worth.
+- **The duration is held in minutes**, because the table has 1½ hours and ¼ hour in it. `duration[min]` writes those as 90 and 15 with nothing left over.
+
+## Whether an excavation needs protection from cave-ins
+
+29 CFR 1926.652(a)(1). Another part of the same title, and so a source of its own. The answer is not an amount but a word: required, or not.
+
+```rule
+rule osha_excavation v1
+description "Whether an excavation needs a protective system against cave-ins, from 29 CFR 1926.652(a)(1)"
+
+# A second part of the same title, and so a source of its own: the id names the part, and
+# `rulec source fetch` brings the section from the eCFR as of the date on the line.
+source osha = law ecfr "29 CFR 1926" asof 2026-01-01
+  "§1926.652" sha256:088a630a1ae9a4d7
+
+enum verdict = required | not_required
+
+# The section gives two exceptions. One is that the excavation "are made entirely in stable
+# rock". The other is two conditions at once: less than five feet deep, **and** an
+# examination by a competent person giving "no indication of a potential cave-in". What the
+# rule asks for is the examination's answer, not whether one was made — no examination is not
+# the same as one that found nothing, and the row for it is the one that requires the system.
+inputs
+  depth              : length[ft]  range >=1ft <=30ft
+  stable_rock        : bool
+  cave_in_indication : bool
+
+outputs
+  protection : verdict
+
+table needed  @osha "§1926.652"
+policy unique
+| stable_rock | depth | cave_in_indication | -> protection : verdict |
+| true        | -     | -                  | not_required            |
+| false       | <5ft  | false              | not_required            |
+| false       | <5ft  | true               | required                |
+| false       | >=5ft | -                  | required                |
+
+examples
+| depth | stable_rock | cave_in_indication | -> protection |
+| 4ft   | false       | false              | not_required  |
+| 4ft   | false       | true               | required      |
+| 5ft   | false       | false              | required      |
+| 12ft  | true        | true               | not_required  |
+```
+
+**What this one shows**
+
+- **There are two exceptions, and one of them is two conditions.** Stable rock throughout; or less than five feet deep **and** an examination by a competent person giving no indication of a potential cave-in. The second takes two columns because the section takes two clauses.
+- **"Not examined" is not "examined and found nothing".** So the input is the examination's answer rather than whether one was made, and a site nobody looked at falls into the row that requires the system.
+- **It is written in feet**, because the section is: "5 feet (1.52m)".
+
+## What PayPal takes from one payment
+
+The PayPal Checkout fee on a payment in the United States, transcribed from the published merchant fees. Not a statute but a company's own terms — the English counterpart of the Japanese payment-fee rule.
+
+```rule
+rule paypal_fee v1
+description "The PayPal Checkout fee on one payment in the United States. Transcribed from PayPal's published merchant fees"
+
+source paypal = file "sources/paypal-us-fees.md" sha256:0318950a982c3c7d  # PayPal's own published figures
+  table1 sha256:5e481ef40e570eeb
+
+inputs
+  amount        : money[USDc]  range >=1USDc <=100000000USDc
+  international : bool
+
+# The fee has fractions of a cent in it, and the page does not say which way they settle, so
+# the direction here is a placeholder — the thing a person has to decide before this ships.
+outputs
+  fee : money[USDc]  round half_up(1USDc)
+
+# The page prints the domestic rate and, separately, what an international transaction adds.
+# It does not print the sum, so neither does this: the row for a domestic payment adds
+# nothing, and that row carries no citation because `0%` is not a figure the copy shows.
+table surcharge
+policy unique
+| international | -> extra : rate[step 0.01%] |
+| false         | 0%                          |
+| true          | 1.5%                        |  @paypal table1
+
+define fee : money[USDc] = amount × 3.49% + amount × extra + 49USDc  @paypal table1
+
+examples
+| amount    | international | -> fee  |
+| 10000USDc | false         | 398USDc |
+| 10000USDc | true          | 548USDc |
+```
+
+**What this one shows**
+
+- **Both the rate and the fixed fee come from the source**: 3.49% and 0.49 USD. The combined rate for an international payment (4.99%) is not printed there, so it is not written here either; the 1.5% is a row of its own.
+- **The rounding direction is a placeholder.** The fee has fractions of a cent in it and the page says nothing about them, so the rule declares `half_up` and says in a comment that this is where a decision has to go. A person makes it.
+- **It counts in cents.** `money[USDc]` is an integer number of cents, and $0.49 is `49USDc`, so dollars and cents cannot be taken for one another.
 
 ## Stamp duty on a receipt
 
