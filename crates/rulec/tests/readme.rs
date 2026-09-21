@@ -139,7 +139,7 @@ fn readmeのツリーが言う件数は実物と合っている() {
             count("src", "rs"),
             count("src/codegen", "rs")
         ),
-        format!("{} rules, and the copies of the statute text they cite", count("tests/corpus", "rule")),
+        format!("{} rules, and the copies of the documents they cite", count("tests/corpus", "rule")),
         format!("{} files, each with one mistake planted in it", count("tests/mutants", "rule")),
         format!(
             "{} in Japanese, {} in English",

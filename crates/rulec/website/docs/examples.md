@@ -6,10 +6,13 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Three are written in English throughout** — [whether a return is
+**Six are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
-inches](#a-parcel-tariff-in-pounds-and-inches) and [Article 7 of Regulation (EC) No
-261/2004](#a-rule-written-in-english--eu-air-passenger-rights). The rest are transcriptions of
+inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
+261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
+wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
+allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
+income tax](#the-us-federal-income-tax-bracket-by-bracket). The rest are transcriptions of
 Japanese published terms and statutes, left in the language they were published in: the
 keywords are English in every one of them, and what a transcription is here to show is the
 shape of the rule rather than the words in its cells.
@@ -1163,6 +1166,179 @@ examples
 - **Two currencies never convert.** `100円` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).
 - **What the text leaves open, the table makes you decide.** Article 7(1)(b) says "between 1500 and 3500 kilometres" and does not say whether either end is included. Since (a) is "1500 kilometres or less", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.
 - **Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.
+
+## A minimum wage, and the exception that overrides it
+
+The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. The page states a rate for each age band and then states the apprentice rate as an exception to it, so this is two tables, the second overriding the first.
+
+```rule
+rule uk_minimum_wage v1
+description "The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. An English transcription with a main rule and its exception"
+
+# GOV.UK states a rate for each age band, and then states the apprentice rate as an
+# exception to it: an apprentice takes the apprentice rate while under 19, or while in the
+# first year of the apprenticeship, and the rate for their age afterwards. Two tables, the
+# second overriding the first, is that sentence. One table with an apprentice column would
+# give the same answers with the shape of the source lost.
+source gov = file "sources/uk-nmw.md" sha256:bc45eedf7f908896  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:3c2fa10da7e3bf65
+
+inputs
+  age        : number  range >=16 <=70
+  apprentice : bool
+  first_year : bool
+
+# A wage is not a price, so there is no tax flag on it. The rates are whole pence, and the
+# rounding is declared because every numeric output must declare one.
+outputs
+  hourly : money[GBPc]  round down(1GBPc)
+
+table by_age  @gov table1
+policy unique
+| age       | -> hourly : money[GBPc] |
+| <18       | 800GBPc                 |
+| >=18 <=20 | 1085GBPc                |
+| >=21      | 1271GBPc                |
+
+table apprentice_rate  @gov table1
+policy unique
+overrides by_age
+| apprentice | first_year | age  | -> hourly : money[GBPc] |
+| true       | -          | <19  | 800GBPc                 |
+| true       | true       | >=19 | 800GBPc                 |
+
+examples
+| age | apprentice | first_year | -> hourly |
+| 25  | false      | false      | 1271GBPc  |
+| 19  | false      | false      | 1085GBPc  |
+| 17  | false      | false      | 800GBPc   |
+| 25  | true       | true       | 800GBPc   |
+| 25  | true       | false      | 1271GBPc  |
+| 18  | true       | false      | 800GBPc   |
+```
+
+**What this one shows**
+
+- **A main rule and its exception are two tables, not one wider one.** `overrides by_age` says the apprentice rows take precedence, and the checker puts both through completeness and overlap **as one set** — so the exception cannot leave a hole in the rule it overrides.
+- **The document sits beside the rule, pinned.** `source gov = file "…" sha256:…`, and `@gov table1` on each table. From then on an hourly rate that the copy does not show fails (E116).
+- **The apprentice sentence is two rows because it is two conditions.** "aged under 19" and "aged 19 or over and in the first year of their apprenticeship" — written as the page writes them rather than folded into one.
+
+## A personal allowance that tapers, and the band above it
+
+The UK Personal Allowance and the Income Tax band an income falls in, transcribed from GOV.UK for 2026-27. The allowance goes down by £1 for every £2 above £100,000 — arithmetic rather than a row, so it is a `derive` that a row names.
+
+```rule
+rule uk_income_tax v1
+description "The UK Personal Allowance and the Income Tax band an income falls in, for England, Wales and Northern Ireland. Transcribed from GOV.UK"
+
+source gov = file "sources/uk-income-tax.md" sha256:8aa392743f75ce6f  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:7d9ba57e7bb838a7
+
+enum band = personal_allowance | basic | higher | additional
+
+inputs
+  income : money[GBP]  range >=0GBP <=10000000GBP
+
+outputs
+  allowance : money[GBP]        round down(1GBP)
+  in_band   : band
+  rate      : rate[step 1%]  round down(1%)
+
+# "Your personal allowance goes down by £1 for every £2 that your adjusted net income is
+# above £100,000." Half of the excess, taken off the standard allowance — and because it is
+# £1 per £2, an odd pound is dropped, which is what the rounding on the output settles.
+derive above_100k : money[GBP] = income − 100000GBP           range >=-100000GBP <=9900000GBP
+derive tapered    : money[GBP] = 12570GBP − above_100k × 50%  range >=-4937430GBP <=62570GBP
+
+# The third row could be left to the taper, which reaches zero at £125,140 on its own. It is
+# written out because the page writes it out: "your allowance is zero if your income is
+# £125,140 or above".
+table allowance_of
+policy unique
+| income                | -> allowance : money[GBP] |
+| <=100000GBP           | 12570GBP                  |
+| >100000GBP <125140GBP | tapered                   |
+| >=125140GBP           | 0GBP                      |
+
+# The page writes each band from the first pound that falls in it (£12,571 to £50,270). A
+# pound is the unit here, so "from £12,571" and "above £12,570" are the same set, and the
+# second form is the one the checker reads as adjacent to the row above.
+table band_of  @gov table1
+policy unique
+| income                | -> in_band : band  | rate : rate[step 1%] |
+| <=12570GBP            | personal_allowance | 0%                   |
+| >12570GBP <=50270GBP  | basic              | 20%                  |
+| >50270GBP <=125140GBP | higher             | 40%                  |
+| >125140GBP            | additional         | 45%                  |
+
+examples
+| income    | -> allowance | in_band            | rate |
+| 10000GBP  | 12570GBP     | personal_allowance | 0%   |
+| 30000GBP  | 12570GBP     | basic              | 20%  |
+| 100000GBP | 12570GBP     | higher             | 40%  |
+| 110000GBP | 7570GBP      | higher             | 40%  |
+| 125140GBP | 0GBP         | higher             | 40%  |
+| 200000GBP | 0GBP         | additional         | 45%  |
+```
+
+**What this one shows**
+
+- **A row may hold the name of a computed value.** The middle row of `allowance_of` holds `tapered`, a `derive`; the rows on either side hold the two amounts the page states outright.
+- **£1 for every £2 is a multiplication by a rate, and the odd pound is the rounding.** `round down(1GBP)` on the output settles it, and the declaration cannot be left out.
+- **A band the page writes as "£12,571 to £50,270" is written here as "above £12,570".** A pound is the unit, so the two are the same set — and the second is the one the checker reads as adjacent to the row above it, with nothing in between.
+
+## The US federal income tax, bracket by bracket
+
+The 2025 tax of an unmarried individual, transcribed from the IRS rate tables (Rev. Proc. 2024-40). Japan's own quick table and this one are the same shape in different clothes: a bracket, a rate, and an amount to start from.
+
+```rule
+rule us_income_tax v1
+description "The 2025 federal income tax of an unmarried individual, transcribed from the IRS rate table. The English counterpart of 所得税.rule"
+
+source irs = file "sources/us-tax-rate-tables.md" sha256:0abe29cfe35eeb22  # Rev. Proc. 2024-40, a US government work
+  table1 sha256:94648a4eb1ff7b80
+
+inputs
+  taxable : money[USDc]  range >=0USDc <=100000000000USDc  # up to a billion dollars, in cents
+
+outputs
+  tax : money[USDc]  round down(1USDc)
+
+# The table states each bracket as "$X plus Y% of the excess over $Z", so all three of X, Y
+# and Z are transcribed and the arithmetic is written out below. Folding them into one
+# deduction — the form Japan's own quick table uses — would be a number the source does not
+# print, and E116 would be right to stop it.
+#
+# The citation sits on the rows rather than on the table: the first bracket is stated as
+# "10% of the taxable income", with no amount in it, so its two zeros are this rule's way of
+# writing that and not something the copy shows.
+table brackets
+policy unique
+| taxable                      | -> base : money[USDc] | rate : rate[step 1%] | floor : money[USDc] |
+| <=1192500USDc                | 0USDc                 | 10%                  | 0USDc               |
+| >1192500USDc <=4847500USDc   | 119250USDc            | 12%                  | 1192500USDc         |  @irs table1
+| >4847500USDc <=10335000USDc  | 557850USDc            | 22%                  | 4847500USDc         |  @irs table1
+| >10335000USDc <=19730000USDc | 1765100USDc           | 24%                  | 10335000USDc        |  @irs table1
+| >19730000USDc <=25052500USDc | 4019900USDc           | 32%                  | 19730000USDc        |  @irs table1
+| >25052500USDc <=62635000USDc | 5723100USDc           | 35%                  | 25052500USDc        |  @irs table1
+| >62635000USDc                | 18876975USDc          | 37%                  | 62635000USDc        |  @irs table1
+
+define excess : money[USDc] = taxable − floor
+define tax    : money[USDc] = base + excess × rate
+
+examples
+| taxable       | -> tax       |
+| 1000000USDc   | 100000USDc   |  # $10,000, all of it in the first bracket
+| 1192500USDc   | 119250USDc   |  # the top of the first bracket, which is the second one's base
+| 5000000USDc   | 591400USDc   |  # $50,000: $5,578.50 + 22% of $1,525
+| 100000000USDc | 32702025USDc |  # $1,000,000: $188,769.75 + 37% of $373,650
+```
+
+**What this one shows**
+
+- **"$X plus Y% of the excess over $Z" is three columns and two lines of arithmetic.** base, rate and floor are transcribed as they stand; `excess` and `tax` are `define`s. Folding them into one deduction — the form Japan's quick table uses — would put a number in the rule that the source does not print.
+- **The first bracket carries no citation, deliberately.** The page states it as "10% of the taxable income", with no amount in it, so that row's two zeros are this rule's way of writing that. The citation sits on the rows rather than on the table, and a row's citation says only where that row came from.
+- **Cents, not dollars.** `money[USDc]` counts cents, because $1,192.50 is not a whole dollar. The unit is part of the type, so dollars and cents cannot be taken for one another.
 
 ## Stamp duty on a receipt
 

@@ -2298,6 +2298,16 @@ impl Checked {
                     // Another table may define this output too (a definition set); the
                     // column's scale is the coarsest grid every one of them sits on.
                     let sc = lcm_i128(sc, *self.scales.get(&oc.name.text).unwrap_or(&1));
+                    // And the declared rounding decides it too, because the grid has to be a
+                    // whole number of storage units. `rate[step 1%] round down(1%)` held
+                    // 0%, 20%, 40% and 45%, whose reduced denominators are twentieths, so
+                    // one percent came out as a grid of **zero** and the generated code
+                    // divided by it — the first rule with a rate output found it (§15.9
+                    // again: what nothing exercises is not checked).
+                    let sc = match self.roundings.get(&oc.name.text) {
+                        Some((_, g)) => lcm_i128(sc, g.den),
+                        None => sc,
+                    };
                     self.scales.insert(oc.name.text.clone(), sc);
 
                     // The column's range, likewise fixed by its cells: the smallest and the

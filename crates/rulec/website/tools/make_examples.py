@@ -369,6 +369,57 @@ EXAMPLES = [
         ],
     ),
     (
+        "uk_minimum_wage.rule",
+        "最低賃金と、それを上書きする例外",
+        "2026 年 4 月からの英国の最低賃金です。GOV.UK は年齢帯ごとの時給を並べ、そのあとに「見習いはこの額」という例外を書いています。だから表も二つで、二つめが一つめを上書きします。",
+        [
+            "**本則と例外は、一枚の広い表ではなく二枚の表です。** `overrides by_age` が「見習いの行が優先する」と宣言し、検査は二つをひとつの集合として完全性と重なりに掛けます。例外が本則に穴を空けることはできません。",
+            "**文書は規則の隣に置いて、digest で留めてあります。** `source gov = file \"…\" sha256:…` と、表に付けた `@gov table1` です。ここから先は、写しに無い時給を書くと E116 で止まります。",
+            "**見習いの一文が二行になっているのは、条件が二つだからです。** 「19 歳未満」と「19 歳以上で見習い一年目」を、ページが書いているとおりに二行で書いています。",
+        ],
+        "A minimum wage, and the exception that overrides it",
+        "The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. The page states a rate for each age band and then states the apprentice rate as an exception to it, so this is two tables, the second overriding the first.",
+        [
+            "**A main rule and its exception are two tables, not one wider one.** `overrides by_age` says the apprentice rows take precedence, and the checker puts both through completeness and overlap **as one set** — so the exception cannot leave a hole in the rule it overrides.",
+            "**The document sits beside the rule, pinned.** `source gov = file \"…\" sha256:…`, and `@gov table1` on each table. From then on an hourly rate that the copy does not show fails (E116).",
+            "**The apprentice sentence is two rows because it is two conditions.** \"aged under 19\" and \"aged 19 or over and in the first year of their apprenticeship\" — written as the page writes them rather than folded into one.",
+        ],
+    ),
+    (
+        "uk_income_tax.rule",
+        "逓減する控除と、その上の税率帯",
+        "英国の個人控除（Personal Allowance）と、所得がどの税率帯に入るかです。控除は 10 万ポンドを超えた分 2 ポンドにつき 1 ポンドずつ減ります。これは行ではなく計算なので、`derive` に書いて、それを行が名前で呼びます。",
+        [
+            "**行には計算した値の名前を書けます。** `allowance_of` の真ん中の行が `tapered` という `derive` を指しています。上下の行は、ページが書いている二つの金額そのものです。",
+            "**「2 ポンドにつき 1 ポンド」は率の掛け算で、端数は丸めの宣言が決めます。** 出力に書いた `round down(1GBP)` がそれで、宣言は省けません。",
+            "**ページの「£12,571 から」は、ここでは「£12,570 を超える」と書いてあります。** 単位がポンドなので同じ集合ですが、後者のほうが上の行と隣り合っていることを検査が読み取れます。",
+        ],
+        "A personal allowance that tapers, and the band above it",
+        "The UK Personal Allowance and the Income Tax band an income falls in, transcribed from GOV.UK for 2026-27. The allowance goes down by £1 for every £2 above £100,000 — arithmetic rather than a row, so it is a `derive` that a row names.",
+        [
+            "**A row may hold the name of a computed value.** The middle row of `allowance_of` holds `tapered`, a `derive`; the rows on either side hold the two amounts the page states outright.",
+            "**£1 for every £2 is a multiplication by a rate, and the odd pound is the rounding.** `round down(1GBP)` on the output settles it, and the declaration cannot be left out.",
+            "**A band the page writes as \"£12,571 to £50,270\" is written here as \"above £12,570\".** A pound is the unit, so the two are the same set — and the second is the one the checker reads as adjacent to the row above it, with nothing in between.",
+        ],
+    ),
+    (
+        "us_income_tax.rule",
+        "米国の連邦所得税を、段ごとに",
+        "2025 年分、単身者の連邦所得税です。IRS の税率表（Rev. Proc. 2024-40）からの転記で、日本の速算表と形は同じ — 段と、税率と、そこから足し始める金額。",
+        [
+            "**「$X plus Y% of the excess over $Z」は、三つの列と二行の計算になります。** base・rate・floor をそのまま写し、`excess` と `tax` を `define` で書いています。控除額ひとつに畳むと、出典が印刷していない数が出てくるので、そうしていません。",
+            "**最初の段にだけ出典が付いていません。** ページは「10% of the taxable income」と書くだけで金額を書いていないので、その行の二つのゼロは規則側の書き方です。出典は表ではなく行に付けてあり、行の出典は「その行がどこから来たか」だけを言います。",
+            "**ドルではなくセントです。** $1,192.50 は整数のドルではないので `money[USDc]` で数えます。単位は型の一部なので、ドルとセントが取り違えられることもありません。",
+        ],
+        "The US federal income tax, bracket by bracket",
+        "The 2025 tax of an unmarried individual, transcribed from the IRS rate tables (Rev. Proc. 2024-40). Japan's own quick table and this one are the same shape in different clothes: a bracket, a rate, and an amount to start from.",
+        [
+            "**\"$X plus Y% of the excess over $Z\" is three columns and two lines of arithmetic.** base, rate and floor are transcribed as they stand; `excess` and `tax` are `define`s. Folding them into one deduction — the form Japan's quick table uses — would put a number in the rule that the source does not print.",
+            "**The first bracket carries no citation, deliberately.** The page states it as \"10% of the taxable income\", with no amount in it, so that row's two zeros are this rule's way of writing that. The citation sits on the rows rather than on the table, and a row's citation says only where that row came from.",
+            "**Cents, not dollars.** `money[USDc]` counts cents, because $1,192.50 is not a whole dollar. The unit is part of the type, so dollars and cents cannot be taken for one another.",
+        ],
+    ),
+    (
         "領収書の印紙税.rule",
         "領収書の印紙税",
         "国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。",
@@ -576,10 +627,13 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Three are written in English throughout** — [whether a return is
+**Six are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
-inches](#a-parcel-tariff-in-pounds-and-inches) and [Article 7 of Regulation (EC) No
-261/2004](#a-rule-written-in-english--eu-air-passenger-rights). The rest are transcriptions of
+inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
+261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
+wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
+allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
+income tax](#the-us-federal-income-tax-bracket-by-bracket). The rest are transcriptions of
 Japanese published terms and statutes, left in the language they were published in: the
 keywords are English in every one of them, and what a transcription is here to show is the
 shape of the rule rather than the words in its cells.

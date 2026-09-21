@@ -73,6 +73,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/補償証明書.rule", "compensation"),
     ("tests/corpus/parcel_rate.rule", "parcel_rate"),
     ("tests/corpus/return_eligibility.rule", "return_eligibility"),
+    ("tests/corpus/uk_minimum_wage.rule", "uk_minimum_wage"),
+    ("tests/corpus/uk_income_tax.rule", "uk_income_tax"),
+    ("tests/corpus/us_income_tax.rule", "us_income_tax"),
 ];
 
 #[test]

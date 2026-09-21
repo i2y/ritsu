@@ -61,6 +61,9 @@ const CORPUS: &[&str] = &[
 "tests/corpus/事務所の衛生基準.rule",
 "tests/corpus/parcel_rate.rule",
 "tests/corpus/return_eligibility.rule",
+"tests/corpus/uk_minimum_wage.rule",
+"tests/corpus/uk_income_tax.rule",
+"tests/corpus/us_income_tax.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
@@ -147,6 +150,18 @@ fn 表のセルはもとの規則までたどれる() {
                     continue;
                 }
                 let raw = cell.replace("\\|", "|");
+                // A row that cites a source of its own gets a column for it, and what is in
+                // that column is a rendering of the `@source fragment` at the end of the row
+                // rather than a value taken out of a document. So it is checked against the
+                // citation, not against the table's own text.
+                if let Some(cite) = raw.strip_prefix("出典: ").or_else(|| raw.strip_prefix("Source: ")) {
+                    assert!(
+                        src.contains(&format!("@{cite}")),
+                        "{rel}: もとの規則に無い出典が表に出ている: `{raw}`\n行: {l}"
+                    );
+                    checked += 1;
+                    continue;
+                }
                 assert!(
                     src.contains(&raw),
                     "{rel}: もとの規則に無い字が表に出ている: `{raw}`\n行: {l}"

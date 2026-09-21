@@ -6,7 +6,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 35] = [
+const CORPUS: [&str; 38] = [
     "tests/corpus/比例配分.rule",
     "tests/corpus/品番の扱い.rule",
     "tests/corpus/買物かごの送料.rule",
@@ -42,6 +42,9 @@ const CORPUS: [&str; 35] = [
     "tests/corpus/事務所の衛生基準.rule",
     "tests/corpus/parcel_rate.rule",
     "tests/corpus/return_eligibility.rule",
+    "tests/corpus/uk_minimum_wage.rule",
+    "tests/corpus/uk_income_tax.rule",
+    "tests/corpus/us_income_tax.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -242,6 +245,9 @@ fn 義務の件数を固定する() {
         ("tests/corpus/会員特典.rule", 12, 4, 3),
         ("tests/corpus/parcel_rate.rule", 15, 6, 3),
         ("tests/corpus/return_eligibility.rule", 7, 5, 0),
+        ("tests/corpus/uk_minimum_wage.rule", 5, 6, 4),
+        ("tests/corpus/uk_income_tax.rule", 7, 10, 0),
+        ("tests/corpus/us_income_tax.rule", 7, 12, 0),
         ("tests/corpus/値引の充当.rule", 2, 0, 0),
         ("tests/corpus/決済手数料.rule", 3, 3, 0),
         ("tests/corpus/補償証明書.rule", 8, 0, 9),

@@ -1154,6 +1154,179 @@ examples
 - **条文が決めていないことを、表が決めさせます。** 第 7 条 1 項の (b) は「between 1500 and 3500 kilometres」で、両端を含むかが読めません。(a) が「1500km 以下」なので下端は開く、とここで決めています。決めなければ抜けか重なりで止まるので、**あいまいなまま先へは進めません**。
 - **同じ条件を二度書くほうが正しいこともあります。** 5 割引きの閾値（2 / 3 / 4 時間）は帯で引けば二列で済みますが、条文の 2 項は距離の条件を丸ごと書き直しています。ここでも距離で引いたのは、そのほうが原文と行が一対一で並ぶからです。
 
+## 最低賃金と、それを上書きする例外
+
+2026 年 4 月からの英国の最低賃金です。GOV.UK は年齢帯ごとの時給を並べ、そのあとに「見習いはこの額」という例外を書いています。だから表も二つで、二つめが一つめを上書きします。
+
+```rule
+rule uk_minimum_wage v1
+description "The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. An English transcription with a main rule and its exception"
+
+# GOV.UK states a rate for each age band, and then states the apprentice rate as an
+# exception to it: an apprentice takes the apprentice rate while under 19, or while in the
+# first year of the apprenticeship, and the rate for their age afterwards. Two tables, the
+# second overriding the first, is that sentence. One table with an apprentice column would
+# give the same answers with the shape of the source lost.
+source gov = file "sources/uk-nmw.md" sha256:bc45eedf7f908896  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:3c2fa10da7e3bf65
+
+inputs
+  age        : number  range >=16 <=70
+  apprentice : bool
+  first_year : bool
+
+# A wage is not a price, so there is no tax flag on it. The rates are whole pence, and the
+# rounding is declared because every numeric output must declare one.
+outputs
+  hourly : money[GBPc]  round down(1GBPc)
+
+table by_age  @gov table1
+policy unique
+| age       | -> hourly : money[GBPc] |
+| <18       | 800GBPc                 |
+| >=18 <=20 | 1085GBPc                |
+| >=21      | 1271GBPc                |
+
+table apprentice_rate  @gov table1
+policy unique
+overrides by_age
+| apprentice | first_year | age  | -> hourly : money[GBPc] |
+| true       | -          | <19  | 800GBPc                 |
+| true       | true       | >=19 | 800GBPc                 |
+
+examples
+| age | apprentice | first_year | -> hourly |
+| 25  | false      | false      | 1271GBPc  |
+| 19  | false      | false      | 1085GBPc  |
+| 17  | false      | false      | 800GBPc   |
+| 25  | true       | true       | 800GBPc   |
+| 25  | true       | false      | 1271GBPc  |
+| 18  | true       | false      | 800GBPc   |
+```
+
+**この例が見せていること**
+
+- **本則と例外は、一枚の広い表ではなく二枚の表です。** `overrides by_age` が「見習いの行が優先する」と宣言し、検査は二つをひとつの集合として完全性と重なりに掛けます。例外が本則に穴を空けることはできません。
+- **文書は規則の隣に置いて、digest で留めてあります。** `source gov = file "…" sha256:…` と、表に付けた `@gov table1` です。ここから先は、写しに無い時給を書くと E116 で止まります。
+- **見習いの一文が二行になっているのは、条件が二つだからです。** 「19 歳未満」と「19 歳以上で見習い一年目」を、ページが書いているとおりに二行で書いています。
+
+## 逓減する控除と、その上の税率帯
+
+英国の個人控除（Personal Allowance）と、所得がどの税率帯に入るかです。控除は 10 万ポンドを超えた分 2 ポンドにつき 1 ポンドずつ減ります。これは行ではなく計算なので、`derive` に書いて、それを行が名前で呼びます。
+
+```rule
+rule uk_income_tax v1
+description "The UK Personal Allowance and the Income Tax band an income falls in, for England, Wales and Northern Ireland. Transcribed from GOV.UK"
+
+source gov = file "sources/uk-income-tax.md" sha256:8aa392743f75ce6f  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:7d9ba57e7bb838a7
+
+enum band = personal_allowance | basic | higher | additional
+
+inputs
+  income : money[GBP]  range >=0GBP <=10000000GBP
+
+outputs
+  allowance : money[GBP]        round down(1GBP)
+  in_band   : band
+  rate      : rate[step 1%]  round down(1%)
+
+# "Your personal allowance goes down by £1 for every £2 that your adjusted net income is
+# above £100,000." Half of the excess, taken off the standard allowance — and because it is
+# £1 per £2, an odd pound is dropped, which is what the rounding on the output settles.
+derive above_100k : money[GBP] = income − 100000GBP           range >=-100000GBP <=9900000GBP
+derive tapered    : money[GBP] = 12570GBP − above_100k × 50%  range >=-4937430GBP <=62570GBP
+
+# The third row could be left to the taper, which reaches zero at £125,140 on its own. It is
+# written out because the page writes it out: "your allowance is zero if your income is
+# £125,140 or above".
+table allowance_of
+policy unique
+| income                | -> allowance : money[GBP] |
+| <=100000GBP           | 12570GBP                  |
+| >100000GBP <125140GBP | tapered                   |
+| >=125140GBP           | 0GBP                      |
+
+# The page writes each band from the first pound that falls in it (£12,571 to £50,270). A
+# pound is the unit here, so "from £12,571" and "above £12,570" are the same set, and the
+# second form is the one the checker reads as adjacent to the row above.
+table band_of  @gov table1
+policy unique
+| income                | -> in_band : band  | rate : rate[step 1%] |
+| <=12570GBP            | personal_allowance | 0%                   |
+| >12570GBP <=50270GBP  | basic              | 20%                  |
+| >50270GBP <=125140GBP | higher             | 40%                  |
+| >125140GBP            | additional         | 45%                  |
+
+examples
+| income    | -> allowance | in_band            | rate |
+| 10000GBP  | 12570GBP     | personal_allowance | 0%   |
+| 30000GBP  | 12570GBP     | basic              | 20%  |
+| 100000GBP | 12570GBP     | higher             | 40%  |
+| 110000GBP | 7570GBP      | higher             | 40%  |
+| 125140GBP | 0GBP         | higher             | 40%  |
+| 200000GBP | 0GBP         | additional         | 45%  |
+```
+
+**この例が見せていること**
+
+- **行には計算した値の名前を書けます。** `allowance_of` の真ん中の行が `tapered` という `derive` を指しています。上下の行は、ページが書いている二つの金額そのものです。
+- **「2 ポンドにつき 1 ポンド」は率の掛け算で、端数は丸めの宣言が決めます。** 出力に書いた `round down(1GBP)` がそれで、宣言は省けません。
+- **ページの「£12,571 から」は、ここでは「£12,570 を超える」と書いてあります。** 単位がポンドなので同じ集合ですが、後者のほうが上の行と隣り合っていることを検査が読み取れます。
+
+## 米国の連邦所得税を、段ごとに
+
+2025 年分、単身者の連邦所得税です。IRS の税率表（Rev. Proc. 2024-40）からの転記で、日本の速算表と形は同じ — 段と、税率と、そこから足し始める金額。
+
+```rule
+rule us_income_tax v1
+description "The 2025 federal income tax of an unmarried individual, transcribed from the IRS rate table. The English counterpart of 所得税.rule"
+
+source irs = file "sources/us-tax-rate-tables.md" sha256:0abe29cfe35eeb22  # Rev. Proc. 2024-40, a US government work
+  table1 sha256:94648a4eb1ff7b80
+
+inputs
+  taxable : money[USDc]  range >=0USDc <=100000000000USDc  # up to a billion dollars, in cents
+
+outputs
+  tax : money[USDc]  round down(1USDc)
+
+# The table states each bracket as "$X plus Y% of the excess over $Z", so all three of X, Y
+# and Z are transcribed and the arithmetic is written out below. Folding them into one
+# deduction — the form Japan's own quick table uses — would be a number the source does not
+# print, and E116 would be right to stop it.
+#
+# The citation sits on the rows rather than on the table: the first bracket is stated as
+# "10% of the taxable income", with no amount in it, so its two zeros are this rule's way of
+# writing that and not something the copy shows.
+table brackets
+policy unique
+| taxable                      | -> base : money[USDc] | rate : rate[step 1%] | floor : money[USDc] |
+| <=1192500USDc                | 0USDc                 | 10%                  | 0USDc               |
+| >1192500USDc <=4847500USDc   | 119250USDc            | 12%                  | 1192500USDc         |  @irs table1
+| >4847500USDc <=10335000USDc  | 557850USDc            | 22%                  | 4847500USDc         |  @irs table1
+| >10335000USDc <=19730000USDc | 1765100USDc           | 24%                  | 10335000USDc        |  @irs table1
+| >19730000USDc <=25052500USDc | 4019900USDc           | 32%                  | 19730000USDc        |  @irs table1
+| >25052500USDc <=62635000USDc | 5723100USDc           | 35%                  | 25052500USDc        |  @irs table1
+| >62635000USDc                | 18876975USDc          | 37%                  | 62635000USDc        |  @irs table1
+
+define excess : money[USDc] = taxable − floor
+define tax    : money[USDc] = base + excess × rate
+
+examples
+| taxable       | -> tax       |
+| 1000000USDc   | 100000USDc   |  # $10,000, all of it in the first bracket
+| 1192500USDc   | 119250USDc   |  # the top of the first bracket, which is the second one's base
+| 5000000USDc   | 591400USDc   |  # $50,000: $5,578.50 + 22% of $1,525
+| 100000000USDc | 32702025USDc |  # $1,000,000: $188,769.75 + 37% of $373,650
+```
+
+**この例が見せていること**
+
+- **「$X plus Y% of the excess over $Z」は、三つの列と二行の計算になります。** base・rate・floor をそのまま写し、`excess` と `tax` を `define` で書いています。控除額ひとつに畳むと、出典が印刷していない数が出てくるので、そうしていません。
+- **最初の段にだけ出典が付いていません。** ページは「10% of the taxable income」と書くだけで金額を書いていないので、その行の二つのゼロは規則側の書き方です。出典は表ではなく行に付けてあり、行の出典は「その行がどこから来たか」だけを言います。
+- **ドルではなくセントです。** $1,192.50 は整数のドルではないので `money[USDc]` で数えます。単位は型の一部なので、ドルとセントが取り違えられることもありません。
+
 ## 領収書の印紙税
 
 国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。
