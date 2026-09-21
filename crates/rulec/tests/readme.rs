@@ -1,5 +1,6 @@
-//! The README must not rot: its rule example has to pass check, and the excerpts of
-//! generated code pasted under it have to be lines the generator really writes.
+//! The README must not rot: its rule example has to pass check, the excerpts of generated
+//! code pasted under it have to be lines the generator really writes, and the counts it
+//! states have to be what is on disk.
 //!
 //! Its own binary because the excerpts are of the **default** output, which is English
 //! (§11 principle 7), while `.cargo/config.toml` pins `RULEC_LANG=ja` for the suite. The
@@ -11,14 +12,35 @@ fn readme() -> String {
     std::fs::read_to_string(&p).expect("README.md が読めない")
 }
 
-/// The `.rule` block under "## Write a table (.rule)".
+fn root(rel: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+}
+
+/// How many files with that extension the directory holds.
+fn count(dir: &str, ext: &str) -> usize {
+    std::fs::read_dir(root(dir))
+        .unwrap_or_else(|_| panic!("読めない: {dir}"))
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == ext))
+        .count()
+}
+
+/// The README's worked example: the first ```rule block that holds a whole rule.
+///
+/// Found by the fence rather than by the heading above it. Keyed to a heading, reorganising
+/// the README turns this suite into a test that passes while checking nothing — which is the
+/// failure mode the rest of the file exists to prevent.
 fn example(md: &str) -> &str {
-    let head = md.find("## Write a table (.rule)").expect("## Write a table (.rule) の節が無い");
-    let fence = md[head..].find("```").expect("コードブロックが無い") + head;
-    // Step over the fence and the tag on it (```rule), to the first line of the source.
-    let open = fence + md[fence..].find('\n').expect("コードブロックが閉じていない") + 1;
-    let close = md[open..].find("```").expect("コードブロックが閉じていない") + open;
-    &md[open..close]
+    let mut rest = md;
+    while let Some(k) = rest.find("```rule\n") {
+        let open = k + "```rule\n".len();
+        let close = rest[open..].find("```").expect("コードブロックが閉じていない") + open;
+        if rest[open..close].starts_with("rule ") {
+            return &rest[open..close];
+        }
+        rest = &rest[close..];
+    }
+    panic!("README に規則ひとつぶんの ```rule の塊が無い");
 }
 
 #[test]
@@ -42,27 +64,30 @@ fn readmeの生成コード抜粋は実物と一致する() {
     rulec::i18n::set(rulec::i18n::Lang::En);
     let md = readme();
     let src = example(&md);
-    // The excerpts pasted under "generated code" must not diverge from the actual output.
-    // The excerpts are abridged with `...`, so the whole cannot be compared, but it can be verified
-    // that every line shown is in the output. The generated code in the README was copied by hand,
-    // and hand-copied text rots.
     let (f, c) = rulec::prepare(src, "README.md").expect("README の例は検査を通る");
     let g = rulec::codegen::Gen::new(&f, &c, src);
-    let py = g.python();
-    let go = g.go();
-    let sec = md.find("## The generated code").expect("## The generated code の節が無い");
-    let end = md[sec..].find("## Using it").expect("節の終わりが無い") + sec;
-    for (lang, body) in [("python", &py), ("go", &go)] {
+    // Whichever languages the README happens to show, held to what the generator writes for
+    // that same example. The excerpts are abridged with `...`, so the whole cannot be
+    // compared, but every line shown must be a line the generator really writes: they were
+    // copied by hand, and hand-copied text rots.
+    let mut shown = 0usize;
+    for (lang, body) in [("python", g.python()), ("go", g.go())] {
         let fence = format!("```{lang}\n");
-        let open = md[sec..end].find(&fence).unwrap_or_else(|| panic!("{lang} の抜粋が無い")) + sec + fence.len();
-        let close = md[open..end].find("```").expect("抜粋が閉じていない") + open;
-        for line in md[open..close].lines() {
-            if line.trim() == "..." || line.trim().is_empty() {
-                continue;
+        let mut rest = md.as_str();
+        while let Some(k) = rest.find(&fence) {
+            let open = k + fence.len();
+            let close = rest[open..].find("```").expect("抜粋が閉じていない") + open;
+            for line in rest[open..close].lines() {
+                if line.trim() == "..." || line.trim().is_empty() {
+                    continue;
+                }
+                assert!(body.contains(line), "README の {lang} 抜粋が生成物に無い:\n{line}");
             }
-            assert!(body.contains(line), "README の {lang} 抜粋が生成物に無い:\n{line}");
+            shown += 1;
+            rest = &rest[close..];
         }
     }
+    assert!(shown > 0, "README に生成コードの抜粋が無い");
 }
 
 /// The first diagnostic the README shows is the one a reader gets with no flags at all.
@@ -70,10 +95,7 @@ fn readmeの生成コード抜粋は実物と一致する() {
 fn readmeの診断抜粋は既定の言語で出る() {
     rulec::i18n::set(rulec::i18n::Lang::En);
     let md = readme();
-    let src = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants/m_e101.rule"),
-    )
-    .unwrap();
+    let src = std::fs::read_to_string(root("tests/mutants/m_e101.rule")).unwrap();
     let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
     let ds = rulec::check_source(&src, "rules/ゆうパック運賃.rule");
     let d = ds.iter().find(|d| d.code == "E101").expect("E101 が出ない");
@@ -90,15 +112,8 @@ fn readmeの診断抜粋は既定の言語で出る() {
 /// the kind of quietly-false documentation the rest of this suite exists to prevent.
 #[test]
 fn readmeが言う件数は実物と合っている() {
-    let md = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"),
-    )
-    .unwrap();
-    let corpus = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"))
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
-        .count();
+    let md = readme();
+    let corpus = count("tests/corpus", "rule");
     let codes = rulec::codes::ledger().len();
     // Five of the rules are not transcriptions: they exist to reach the words a
     // transcription never does (§15.93, §15.100, §15.102), so the sentence counts them
@@ -109,4 +124,29 @@ fn readmeが言う件数は実物と合っている() {
         corpus - WRITTEN
     );
     assert!(md.contains(&want), "README の件数が実物と違う。正しくは: {want}");
+}
+
+/// The tree under "What is in this repository" counts files, and every one of those counts
+/// rots the moment a file is added — by the time this test went in, four of the five were
+/// wrong, one of them by a factor of two and a half. Held to the directories themselves, the
+/// way `tests/website.rs` holds the assurance page's counts.
+#[test]
+fn readmeのツリーが言う件数は実物と合っている() {
+    let md = readme();
+    for want in [
+        format!(
+            "{} modules, and {} more under codegen/",
+            count("src", "rs"),
+            count("src/codegen", "rs")
+        ),
+        format!("{} rules, and the copies of the statute text they cite", count("tests/corpus", "rule")),
+        format!("{} files, each with one mistake planted in it", count("tests/mutants", "rule")),
+        format!(
+            "{} in Japanese, {} in English",
+            count("tests/golden", "txt"),
+            count("tests/golden/en", "txt")
+        ),
+    ] {
+        assert!(md.contains(&want), "README のツリーの件数が実物と違う。「{want}」が要る");
+    }
 }
