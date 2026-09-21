@@ -524,34 +524,19 @@ fn 規則のコード片には札が付いている() {
     );
 }
 
-/// An English rule shown on the site is a real one.
+/// A rule the site shows whole is one that runs.
 ///
-/// Every example on the authored pages is Japanese but for the English corpus rule, and the
-/// point of showing that one is that it is not a mock-up: it is checked, generated and run
-/// on every commit like the rest. So every ```rule block with no Japanese in it has to
-/// appear, verbatim, inside a file in `tests/corpus/` — excerpt or whole. A hand-copied
-/// example drifts from the file it was copied from, which is the failure `examples.md` is
-/// held to one test up.
+/// A block that opens with `rule` is showing a rule a reader can copy, and the pages say as
+/// much — "it passes the checks as written", "copy any of them and it works". So every one
+/// of them is put through the checker here, in both languages. The English pages are where
+/// an invention would go unnoticed, because an English reader cannot tell a transcription
+/// from a mock-up by looking at the words; but a rule that does not check is a broken
+/// promise on either page, so neither is exempt. A fragment shown to explain one keyword is
+/// not a rule and is not checked, and neither is one a line of `…` marks as abridged — an
+/// abridged rule is not something to copy, and the mark is what says so.
 #[test]
-fn サイトの英語の例はコーパスの抜粋である() {
-    let corpus: Vec<(String, String)> = std::fs::read_dir(root().join("tests/corpus"))
-        .unwrap()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "rule"))
-        .map(|p| {
-            (
-                p.file_name().unwrap().to_string_lossy().into_owned(),
-                std::fs::read_to_string(&p).unwrap(),
-            )
-        })
-        .collect();
-    assert!(!corpus.is_empty(), "コーパスが読めません");
-    let japanese = |s: &str| {
-        s.chars().any(|c| {
-            matches!(c, '\u{3040}'..='\u{30ff}' | '\u{4e00}'..='\u{9fff}' | '\u{ff00}'..='\u{ff9f}')
-        })
-    };
+fn サイトが丸ごと見せる規則は検査を通る() {
+    let mut seen = 0usize;
     for lang in ["docs", "docs-ja"] {
         for page in AUTHORED {
             let rel = format!("website/{lang}/{page}");
@@ -563,10 +548,17 @@ fn サイトの英語の例はコーパスの抜粋である() {
                 let open = k + "```rule\n".len();
                 let close = rest[open..].find("```").expect("コードブロックが閉じていない") + open;
                 let body = &rest[open..close];
-                if !japanese(body) {
+                let abridged = body.lines().any(|l| matches!(l.trim(), "…" | "..."));
+                if body.starts_with("rule ") && !abridged {
+                    seen += 1;
+                    // A rule that cites a file source reads it from beside itself, so the
+                    // checker is pointed at the corpus directory: on the page the path is
+                    // written as the corpus rule writes it.
+                    let ds = rulec::check_source(body, "tests/corpus/from-the-site.rule");
                     assert!(
-                        corpus.iter().any(|(_, text)| text.contains(body)),
-                        "{rel}:{at}: 英語の例がコーパスのどの規則にもありません。\n{body}"
+                        !rulec::has_error(&ds),
+                        "{rel}:{at}: 丸ごと見せている規則が検査を通りません: {:?}",
+                        ds.iter().filter(|d| d.code.starts_with('E')).map(|d| format!("{}: {}", d.code, d.title)).collect::<Vec<_>>()
                     );
                 }
                 at += rest[k..close].matches('\n').count();
@@ -574,6 +566,7 @@ fn サイトの英語の例はコーパスの抜粋である() {
             }
         }
     }
+    assert!(seen >= 4, "丸ごとの規則が {seen} 本しか見つかりません。走査が壊れています");
 }
 
 /// The assurance page says how many rules, mutants and codes there are. Those numbers are

@@ -33,25 +33,25 @@ caller.
 
 ```rule
 inputs
-  明細定価(list)      : money[円, incl_tax]  range >=0円 <=100万円
-  残り値引(remaining) : money[円, incl_tax]  range >=0円 <=100万円
-  対象(eligible)      : bool
+  list_price : money[USD, incl_tax]  range >=0USD <=10000USD
+  remaining  : money[USD, incl_tax]  range >=0USD <=10000USD
+  eligible   : bool
 
 outputs
-  充当額(applied) : money[円, incl_tax]  round down(1円)
+  applied : money[USD, incl_tax]  round down(1USDc)
 
-define 充てられる額(cap) : money[円, incl_tax] = min(明細定価, 残り値引)
+define cap : money[USD, incl_tax] = min(list_price, remaining)
 
-table 充当可否(applies)
+table applies
 policy unique
-| 対象  | -> 充当(on) : money[円, incl_tax] |
-| true  | 充てられる額                      |
-| false | 0円                               |
+| eligible | -> on : money[USD, incl_tax] |
+| true     | cap                          |
+| false    | 0USD                         |
 
-result 充当額 = 充当
+result applied = on
 ```
 
-The caller walks the lines and subtracts from `残り値引`. Done this way **the total
+The caller walks the lines and subtracts from `remaining`. Done this way **the total
 always comes out exact** — nothing is over- or under-allocated (checked over 2,000
 different sets of lines).
 
@@ -60,11 +60,11 @@ different sets of lines).
 one exception.
 
 ```rule
-constraint ここまでの定価 <= 定価合計
+constraint price_upto <= price_total
 
-derive ここまでの配分(to_upto) : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+derive share_upto : money[USD] = allocate(discount_total, price_upto, price_total)  range >=0USD <=10000USD
 
-result 配分額 = ここまでの配分 - 直前までの配分
+result share = share_upto - share_before
 ```
 
 All the caller carries is the running total of list prices. A line gets the share up to it

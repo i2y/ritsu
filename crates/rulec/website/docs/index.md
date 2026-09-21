@@ -367,27 +367,34 @@ class, an order**.
 
 ### Money does not have to be involved
 
-Here is a rule with no money in it anywhere. One date goes in, one class comes out, and
-it passes the checks as written.
+Here is a rule with no money in it anywhere. Four flat facts go in, one of four words
+comes out, and it passes the checks as written.
 
 ```rule
-rule 期間区分(period) v1
+rule return_eligibility v1
 
-enum 期間(kind) = 改定前(before) | 春季(spring) | 通常(normal) | 年末(year_end)
+enum category = electronics | clothing | perishable
+enum verdict = accepted | outside_window | condition_failed | not_returnable
 
 inputs
-  注文日(order_date) : date  range >=2026-01-01 <=2026-12-31
+  item    : category
+  days    : number  range >=0 <=365
+  opened  : bool
+  receipt : bool
 
 outputs
-  区分(kind) : 期間
+  answer : verdict
 
-table 期間判定(pick)
+table decide
 policy unique
-| 注文日                    | -> 区分(kind) : 期間 |
-| <=2026-03-31              | 改定前               |
-| >=2026-04-01 <=2026-06-30 | 春季                 |
-| >=2026-07-01 <=2026-11-30 | 通常                 |
-| >=2026-12-01              | 年末                 |
+| item            | receipt | days | opened | -> answer : verdict |
+| perishable      | -       | -    | -      | not_returnable      |
+| not: perishable | false   | -    | -      | condition_failed    |
+| electronics     | true    | >14  | -      | outside_window      |
+| electronics     | true    | <=14 | true   | condition_failed    |
+| electronics     | true    | <=14 | false  | accepted            |
+| clothing        | true    | >30  | -      | outside_window      |
+| clothing        | true    | <=30 | -      | accepted            |
 ```
 
 What decides it is the **shape of the decision**, not what the values happen to be. So

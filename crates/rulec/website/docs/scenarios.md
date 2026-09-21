@@ -194,28 +194,28 @@ A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article)
 
 Who: the agent. rulec notices a replaced document
 
-It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@規約`, or — to say **which table of the document was transcribed** — as `@規約 表1`.
+It cannot be fetched again, so the document itself sits beside the rule and its digest, whole, goes into the rule. It is cited as `@terms`, or — to say **which table of the document was transcribed** — as `@terms Table1`. A label carries no space.
 
 ```rule
-source 規約 = file "配送規約.md"
+source terms = file "shipping-terms.md"
 
-table 基本送料(base_fee)  @規約 表1
+table base_rate  @terms Table1
 policy unique
-| 届け先      | 重量    | -> 基本送料 : money[円, incl_tax] |
-| 遠隔地      | <=2000g | 1200円                            |
-| 遠隔地      | >2000g  | 1800円                            |
-| not: 遠隔地 | <=2000g | 800円                             |
-| not: 遠隔地 | >2000g  | 1100円                            |
+| dest               | weight | -> base : money[USD, incl_tax] |
+| north_america      | <=10lb | 8USD                           |
+| north_america      | >10lb  | 14USD                          |
+| not: north_america | <=10lb | 26USD                          |
+| not: north_america | >10lb  | 42USD                          |
 ```
 
-Citing a table makes `rulec source fetch` take that table out of the document and write it beside it. A sheet is a table in a workbook (`.xlsx`), a `w:tbl` in a Word file (`.docx`), and what it looks like in Markdown and CSV. A PDF or a scan cannot be read here: hand an extractor (docling and the like) to `--via`, or cite the document whole as `@規約`.
+Citing a table makes `rulec source fetch` take that table out of the document and write it beside it. A sheet is a table in a workbook (`.xlsx`), a `w:tbl` in a Word file (`.docx`), and what it looks like in Markdown and CSV. A PDF or a scan cannot be read here: hand an extractor (docling and the like) to `--via`, or cite the document whole as `@terms`.
 
 ```console
 $ rulec source fetch rules/shipping_fee.rule
-規約: took out 表1 (3 rows by 3 columns, sha256:c846fef7727dd6e0)
+terms: took out Table1 (3 rows by 3 columns, sha256:c846fef7727dd6e0)
 $ rulec source pin rules/shipping_fee.rule
-規約: pinned sha256:d1156fa90a72194c
-規約: pinned 1 fragments
+terms: pinned sha256:d1156fa90a72194c
+terms: pinned 1 fragments
 ```
 
 From here on, **an amount in the table has to be a value the copy shows**, which is what catches a mistyped digit.
@@ -224,37 +224,37 @@ When the document is replaced, `check` stops with E038 and names the tables that
 
 ```console
 $ rulec check rules/shipping_fee.rule
-error[E038]: The copy of source `規約` has changed
-  --> rules/shipping_fee.rule:6 source 規約
+error[E038]: The copy of source `terms` has changed
+  --> rules/shipping_fee.rule:6 source terms
   |
-6 | source 規約 = file "配送規約.txt" sha256:a4b42e3e6c346e56
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:a4b42e3e6c346e56
+6 | source terms = file "shipping-terms.md" sha256:a4b42e3e6c346e56
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:a4b42e3e6c346e56
   |
  The copy now: sha256:a4b1a4052a111009
- Definitions to reread: table 基本送料, table 負担判定
+ Definitions to reread: table base_rate, table surcharge
  Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy.
 ```
 
-A mistyped digit looks like this. `1100円` written as `1000円` sits on the rounding grid, leaves no gap and overlaps nothing: every other check stays green and these two are what fail.
+A mistyped digit looks like this. `14USD` written as `11USD` sits on the rounding grid, leaves no gap and overlaps nothing: every other check stays green and these two are what fail.
 
 ```console
 $ rulec check rules/shipping_fee.rule
 error[E116]: The amount of row 4 is not in the copy it cites
-  --> rules/shipping_fee.rule:24 table 基本送料 row 4
+  --> rules/shipping_fee.rule:24 table base_rate row 2
    |
-24 | | not: 遠隔地 | >2000g  | 1000円      |
-   |                           ^^^^^^ not in the copy: 1000円
+24 | | north_america | >10lb | 11USD |
+   |                           ^^^^^ not in the copy: 11USD
    |
- The copy cited: 規約 表1
+ The copy cited: terms Table1
  An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. …
 
-warning[W120]: The copy of 表1 states values no row uses
- Stated in the copy, used by no row: 1100円
+warning[W120]: The copy of Table1 states values no row uses
+ Stated in the copy, used by no row: 14USD
 ```
 
 The two name both halves of the same slip. W120 also catches **a row that was never transcribed** — the completeness check cannot, because the inputs of a dropped row fall into one of the rows that remain.
 
-The approver's page quotes the copy under the table's heading — "Source: 規約 表1 (配送規約.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (規約 表1) shows (E116)*. The source table above, the rule's table below, and that line between them.
+The approver's page quotes the copy under the table's heading — "Source: terms Table1 (shipping-terms.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (terms Table1) shows (E116)*. The source table above, the rule's table below, and that line between them.
 
 ### 2-3. Hold it to the code that runs today
 
@@ -341,29 +341,29 @@ Shipping fees, coupon conditions, whether a return is accepted, an internal crit
 
 Who: a person decides the conditions. The agent or the person writes the table
 
-Conditions as columns, the answer as the last column. "Hokkaido and Okinawa, 1,200 yen up to 2 kg" becomes one row.
+Conditions as columns, the answer as the last column. "Canada and the US, eight dollars up to ten pounds" becomes one row.
 
 ```rule
-rule 送料(shipping_fee) v1
+rule shipping_fee v1
 description "Standard delivery fee"
 
-import std/都道府県
-group 遠隔地 = 北海道, 沖縄県
+enum zone = domestic | canada | overseas
+group north_america = domestic, canada
 
 inputs
-  届け先(dest) : 都道府県
-  重量(weight) : mass[g]  range >=1g <=40kg
+  dest   : zone
+  weight : mass[lb]  range >=1lb <=70lb
 
 outputs
-  送料(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[USD, incl_tax]  round up(1USD)
 
-table 基本送料(base)
+table base
 policy unique
-| 届け先      | 重量    | -> 送料(fee) : money[円, incl_tax] |
-| 遠隔地      | <=2000g | 1200円                             |
-| 遠隔地      | >2000g  | 1800円                             |
-| not: 遠隔地 | <=2000g | 800円                              |
-| not: 遠隔地 | >2000g  | 1100円                             |
+| dest               | weight | -> fee : money[USD, incl_tax] |
+| north_america      | <=10lb | 8USD                          |
+| north_america      | >10lb  | 14USD                         |
+| not: north_america | <=10lb | 26USD                         |
+| not: north_america | >10lb  | 42USD                         |
 ```
 
 If the rule already lives in a spreadsheet, a first draft can be made from it. Every guess is marked, so only the marked places need a look.
@@ -414,9 +414,9 @@ The answers you decided go into `examples`, and every `check` runs them. The "fo
 
 ```rule
 examples
-| 届け先 | 重量  | -> 送料 |
-| 沖縄県 | 2500g | 1800円  |
-| 東京都 | 1999g | 800円   |
+| dest     | weight | -> fee |
+| overseas | 12lb   | 42USD  |
+| domestic | 9lb    | 8USD   |
 ```
 
 ### 3-4. Render the pages for approval and publication

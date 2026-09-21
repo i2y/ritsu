@@ -3,7 +3,9 @@
 A `.rule` file **has one fixed shape, read from the top**. There is no
 forward reference, so reading downwards is reading the dependencies in
 order. **The keywords are English; the names and the cell values stay in
-the language of the business** — Japanese, in every example here.
+the language of the business** — English in the worked example this page runs on, and
+Japanese in the sections that quote a rule transcribed from a Japanese statute, which is the
+language it was published in.
 
 !!! note "Usually an agent writes this"
 
@@ -53,47 +55,74 @@ These are all the words that may start a line.
 
 ## A complete rule
 
-This one checks clean as it stands; the repository's test suite runs it
-on every commit.
+This one is `tests/corpus/parcel_rate.rule`: it checks clean as it stands, and the
+repository's test suite generates it and runs it in every target language on every commit.
+The amounts are made up, but nothing else about it is.
 
 ```rule
-rule 送料例(fee_demo) v1
-description "The README's example. Passes rulec check as written"
+rule parcel_rate v1
+description "A parcel tariff in pounds and inches, written in English. A sketch, not a transcription: the amounts are made up"
 
-import std/都道府県
+# Nothing else in the corpus is priced in USD by weight, and nothing at all reached oz, lb
+# or in — an unexercised unit is an unchecked unit (§15.9).
 
-enum サイズ区分(size_class) = S60(s60) | S80(s80) | S100(s100)
-group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+enum size_class = envelope | small | large
+enum zone = domestic | canada | overseas
+
+group north_america = domestic, canada
 
 inputs
-  あて先(dest)    : 都道府県
-  三辺合計(girth) : length[cm]  range >=1cm <=100cm
-  重量(weight)    : mass[g]   range >=1g <=25kg  contract_only
+  weight    : mass[lb]    range >=1lb <=70lb
+  girth     : length[in]  range >=1in <=130in
+  dest      : zone
+  signature : bool
 
 outputs
-  運賃(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[USD, incl_tax]  round up(1USD)
 
-table サイズ判定(size_of)
+# One table decides the class and the next one prices it: what the first produces is a
+# column of the second.
+table size_of
 policy first
-| 三辺合計 | -> サイズ(size) : サイズ区分 |
-| <=60cm   | S60                          |
-| <=80cm   | S80                          |
-| -        | S100                         |
+| girth  | -> size : size_class |
+| <=22in | envelope             |
+| <=60in | small                |
+| -      | large                |
 
-table 運賃表(fee_table)
+table base_rate
 policy unique
-| あて先      | サイズ | -> 運賃(fee) : money[円, incl_tax] |
-| 近畿圏      | S60    | 990円                              |
-| 近畿圏      | S80    | 1310円                             |
-| 近畿圏      | S100   | 1620円                             |
-| not: 近畿圏 | S60    | 880円                              |
-| not: 近畿圏 | S80    | 1200円                             |
-| not: 近畿圏 | S100   | 1500円                             |
+| dest          | size     | weight  | -> base : money[USD, incl_tax] |
+| north_america | envelope | -       | 6USD                           |
+| north_america | small    | <=160oz | 12USD                          |
+| north_america | small    | >160oz  | 18USD                          |
+| north_america | large    | <=160oz | 22USD                          |
+| north_america | large    | >160oz  | 30USD                          |
+| overseas      | envelope | -       | 16USD                          |
+| overseas      | small    | -       | 38USD                          |
+| overseas      | large    | -       | 60USD                          |
+
+# A fuel surcharge is a percentage of the base, which is what the rounding on the output is
+# there to settle: 12USD at 5% is 12.60USD, and up(1USD) makes that 13USD.
+table fuel_rate
+policy unique
+| dest          | -> fuel : rate[step 1%] |
+| north_america | 5%                      |
+| overseas      | 12%                     |
+
+table signature_fee
+policy unique
+| signature | -> extra : money[USD, incl_tax] |
+| true      | 4USD                            |
+| false     | 0USD                            |
+
+result fee = base + base × fuel + extra
 
 examples
-| あて先 | 三辺合計 | 重量 | -> 運賃 |
-| 大阪府 | 55cm     | 1kg  | 990円   |
-| 東京都 | 90cm     | 3kg  | 1500円  |
+| weight | girth | dest     | signature | -> fee |
+| 5lb    | 10in  | domestic | false     | 7USD   |
+| 5lb    | 40in  | canada   | false     | 13USD  |
+| 20lb   | 40in  | domestic | true      | 23USD  |
+| 5lb    | 10in  | overseas | false     | 18USD  |
 ```
 
 ## Names and ASCII aliases
@@ -110,22 +139,10 @@ An alias is required only where a **non-ASCII** name reaches the public
 surface — the rule name, the inputs, the outputs — because a kanji has
 no uppercase and cannot begin an exported Go identifier. **A name that
 is already ASCII needs none**: write the whole rule in English and there
-are no parentheses anywhere.
-
-```rule
-table band_of
-policy unique
-| distance         | intra_eu | -> band : band |
-| <=1500km         | -        | short          |
-| >1500km          | true     | medium         |
-| >1500km <=3500km | false    | medium         |
-| >3500km          | false    | long           |
-```
-
-That is the corpus rule for Article 7 of Regulation (EC) No 261/2004, which the
-repository checks, generates and runs on every commit like any other. The whole of it —
-English throughout, in EUR and km — is on the
-[examples page](examples.md#a-rule-written-in-english--eu-air-passenger-rights).
+are no parentheses anywhere — as in the rule above, and in
+[Article 7 of Regulation (EC) No
+261/2004](examples.md#a-rule-written-in-english--eu-air-passenger-rights), which is
+transcribed into the corpus in English, in EUR and km.
 
 Elsewhere the alias is optional, and writing one decides what the
 generated code calls the value: `derive 残余(margin)` becomes `margin`,
@@ -145,7 +162,7 @@ Ten, and no others.
 | type | written | the thing to know |
 |---|---|---|
 | boolean | `bool` | |
-| enum | `会員区分` | a **closed** finite set. Declared with `enum` or brought in with `import` |
+| enum | `size_class` | a **closed** finite set. Declared with `enum` or brought in with `import` |
 | quantity | `mass[g]` `length[cm]` `area[m2]` `volume[L]` `duration[h]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi`, area `mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac`, volume `mm3 cm3 m3 mL L kL`, duration `ms s min h d w`. **Dimensions do not multiply into one another** — an area is its own type, and `縦 × 横` is E103 |
 | ordered quantity | `temperature[℃]` `sound[dB]` | comparison and `range` only: **they do not add** (E048). 41℉ is exactly 5℃ and a literal converts between them, but the difference of two temperatures is not a temperature, and a decibel is a logarithm, so two of them added are not two sounds' worth |
 | money | `money[円, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
@@ -153,7 +170,7 @@ Ten, and no others.
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score. Dividing money by money in the same currency drops the unit and lands here |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
-| optional | `会員区分?` | consumed only by the cell `none` |
+| optional | `size_class?` | consumed only by the cell `none` |
 
 Quantities, money, rates and dates are **all integers** — a date is a day
 ordinal, a rate a count of steps. No floating point appears anywhere:
@@ -165,7 +182,7 @@ a value is added, every table that has not accounted for it breaks the
 completeness check.
 
 ```rule
-enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
+enum member_tier = basic default | gold default | platinum
 ```
 
 `default` declares "this value needs no row of its own; being caught by
@@ -176,7 +193,7 @@ wherever a value may. Groups are always expanded before checking, so a
 hole in a table written with groups is still found.
 
 ```rule
-group 遠隔地(remote) = 北海道, 沖縄県
+group north_america = domestic, canada
 ```
 
 ## Imports
@@ -210,8 +227,8 @@ An enum like a member tier or a status is usually declared in a
 where the set comes from, and the two are held together.
 
 ```rule
-import proto "api/v1/order.proto" MemberTier -> 会員区分
-enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+import proto "api/v1/order.proto" MemberTier -> member_tier
+enum member_tier = basic | gold | platinum default
 ```
 
 The `.proto` owns **which values exist**; the `.rule` owns **what they
@@ -236,8 +253,8 @@ The same binding, written with a JSON Pointer, because one document holds
 hundreds of enums:
 
 ```rule
-import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> 会員区分
-enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> member_tier
+enum member_tier = basic | gold | platinum default
 ```
 
 The pointer may land on the schema or on its `enum` array, and an enum
@@ -253,13 +270,13 @@ the document; most toolchains can write one.
 
 ```rule
 inputs
-  届け先(dest)    : 都道府県
-  重量(weight)    : mass[g]              range >=1g <=40kg
-  注文金額(total) : money[円, incl_tax]   range >=0円 <=1000万円
-  会員(member)    : 会員区分
+  weight    : mass[lb]    range >=1lb <=70lb
+  girth     : length[in]  range >=1in <=130in
+  dest      : zone
+  signature : bool
 
 outputs
-  送料(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[USD, incl_tax]  round up(1USD)
 ```
 
 There may be several outputs. They become a `NamedTuple` in Python, an
@@ -272,12 +289,12 @@ output**.
 
 ```rule
 outputs
-  可否(ok)    : bool
-  素割引(raw) : money[円, incl_tax]  round down(1円)
+  accepted : bool
+  raw_fee  : money[USD, excl_tax]  round down(1USDc)
 ```
 
 An output returns **the binding of its own name** — a `define` or a table
-output column called `素割引` is what the output `素割引` returns. `result`
+output column called `raw_fee` is what the output `raw_fee` returns. `result`
 is sugar for that, and it reaches **the first output only**: naming a later
 one is E015, and a second `result` line is E016.
 
@@ -318,8 +335,8 @@ modes, each **pinned down for negative values too**.
 | `half_down` | an exact half goes toward zero — the payroll deduction rule of the social insurance tables (50銭以下切り捨て) | 4.5 → 4, 4.6 → 5 |
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
-What is in the parentheses is the **grid**: `up(10円)` rounds to a
-multiple of 10 yen, so −4.2 yen becomes −10 yen.
+What is in the parentheses is the **grid**: `up(10USDc)` rounds to a
+multiple of ten cents, so −4.2 cents becomes −10 cents.
 
 The negative direction is pinned because **integer division in Python and
 Ruby rounds toward −∞ while in Rust, Swift, Go, Java, TypeScript, JavaScript, NumPy,
@@ -330,13 +347,17 @@ that they all agree is checked by unit vectors on every run.
 ## Tables
 
 ```rule
-table 基本送料(base_fee)
+table base_rate
 policy unique
-| 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
-| 遠隔地      | <=2000g | 1200円                                  |
-| 遠隔地      | >2000g  | 1800円                                  |
-| not: 遠隔地 | <=2000g | 800円                                   |
-| not: 遠隔地 | >2000g  | 1100円                                  |
+| dest          | size     | weight  | -> base : money[USD, incl_tax] |
+| north_america | envelope | -       | 6USD                           |
+| north_america | small    | <=160oz | 12USD                          |
+| north_america | small    | >160oz  | 18USD                          |
+| north_america | large    | <=160oz | 22USD                          |
+| north_america | large    | >160oz  | 30USD                          |
+| overseas      | envelope | -       | 16USD                          |
+| overseas      | small    | -       | 38USD                          |
+| overseas      | large    | -       | 60USD                          |
 ```
 
 Left of `->` are input columns, right of it output columns. A column may
@@ -344,9 +365,9 @@ name an input, a `derive`, a boolean or enum intermediate, **or an output
 of an earlier table**.
 
 That last one is how tables stack, and stacking is how a complicated rule
-gets written: `table 重さ判定` produces `区分`, which is a column of
-`table 帯判定`, whose `帯` is a column of the next table again. There is no
-limit on the depth, and one table may produce several output columns.
+gets written: in the rule above, `table size_of` produces `size`, which is
+a column of `table base_rate`. There is no limit on the depth, and one
+table may produce several output columns.
 
 **There are exactly two policies.**
 
@@ -367,11 +388,11 @@ Seven kinds, and no others.
 | written | means |
 |---|---|
 | `-` | any value. **A blank is a syntax error**: a blank cannot be told from a forgotten entry |
-| `1200円` `2000g` `true` `2026-04-01` | equality with a literal. A quantity or an amount **must carry its unit** (a bare `2000` is an error) |
-| `北海道, 沖縄県` | a set. Each element is a literal or a group name |
-| `not: 遠隔地` | the complement |
-| `<=2000g` | comparison — `<=`, `>=`, `<`, `>` |
-| `>=1000円 <20000円` | an interval (two comparisons side by side mean "and") |
+| `12USD` `160oz` `true` `2026-04-01` | equality with a literal. A quantity or an amount **must carry its unit** (a bare `160` is an error) |
+| `domestic, canada` | a set. Each element is a literal or a group name |
+| `not: north_america` | the complement |
+| `<=160oz` | comparison — `<=`, `>=`, `<`, `>` |
+| `>=10USD <200USD` | an interval (two comparisons side by side mean "and") |
 | `none` | an optional that is absent |
 
 The symbols are ASCII. `→`, `・` and `、` are still read, and `rulec fmt`
@@ -389,7 +410,7 @@ a witness.
 table column while still being a quantity**.
 
 ```rule
-derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
+derive net : money[USD, incl_tax] = subtotal - discount  range >=0USD <=10000USD
 ```
 
 Policies that judge on the amount *after* a discount are real ("if the
@@ -401,8 +422,8 @@ one bare line on the calling side.
 sit in a column.
 
 ```rule
-define 大口(bulk) : bool = 注文金額 >= 3万円
-define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
+define bulk : bool = subtotal >= 300USD
+define a_earlier : bool = a_due <= b_due
 ```
 
 Its condition holds either one value compared with a constant, or a
@@ -414,7 +435,7 @@ analysis is exact.
 **A result** assembles an output.
 
 ```rule
-result 送料 = 基本送料 × 負担率
+result fee = base + base × fuel + extra
 ```
 
 The operations are addition and subtraction, multiplication by a
@@ -426,11 +447,11 @@ their prices. It is the one place a rule divides by something that is not
 a constant.
 
 ```rule
-constraint ここまでの定価 <= 定価合計
+constraint price_upto <= price_total
 
-derive ここまでの配分(to_upto) : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+derive share_upto : money[USD] = allocate(discount_total, price_upto, price_total)  range >=0USD <=10000USD
 
-result 配分額 = ここまでの配分 - 直前までの配分
+result share = share_upto - share_before
 ```
 
 Each line gets the share up to it minus the share up to the line before,
@@ -613,7 +634,7 @@ that walks a sequence cannot be applied (E044).
 A relation between two inputs, guaranteed by the caller.
 
 ```rule
-constraint 適用開始日 <= 適用終了日
+constraint valid_from <= valid_to
 ```
 
 It computes nothing. It says **which combinations of inputs can happen**,
@@ -775,7 +796,7 @@ wrote.
 
 ## What cannot be written
 
-- Nested objects (`注文.配送先.都道府県`) — flatten at the boundary and
+- Nested objects (`order.destination.state`) — flatten at the boundary and
   pass the scalar in.
 - Iteration anywhere you like, and recursion — a sequence is walked once,
   by `fold` (the section above); every other repetition, a stack of
