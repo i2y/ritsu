@@ -117,6 +117,19 @@ fn is_delim(c: char) -> bool {
         )
 }
 
+/// Whether a word can stand unquoted where the language expects a name — every character an
+/// identifier character, and the first one a letter.
+///
+/// `rulec source pin` asks: a fragment the lexer would not read as one word is written in
+/// quotes, and the quotes are what a reader sees in the citation too.
+pub fn is_bare_word(s: &str) -> bool {
+    let mut cs = s.chars();
+    match cs.next() {
+        Some(c) if c.is_alphabetic() || c == '_' || matches!(c, '℃' | '℉') => !s.chars().any(is_delim),
+        _ => false,
+    }
+}
+
 /// Unit suffixes a numeric literal may carry (§2.1). `万`/`億` are multipliers and
 /// are consumed before this.
 fn is_unit_char(c: char) -> bool {

@@ -254,8 +254,8 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 38 rules, 87 harnesses
-verify in 162 seconds.
+get the input that shows it. On the corpus of 39 rules, 89 harnesses
+verify in 160 seconds.
 
 What it does not say: anything about the table itself, or about any
 target but this one. And two kinds of rule get no harness at all, the

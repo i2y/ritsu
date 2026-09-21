@@ -705,16 +705,25 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
     let decl = f.sources.iter().find(|d| d.name.text == c.source);
     let frags = if c.fragments.is_empty() { String::new() } else { format!(" {}", c.fragments.join(sep())) };
     let line = match decl.map(|d| &d.kind) {
-        Some(SourceKind::Law { id, asof }) => {
+        Some(SourceKind::Law { db, id, asof }) => {
             // Which text that date reached: the copy's `revision.txt` says which revision
-            // e-Gov served — the date it came into force and the amending law (§15.71).
+            // e-Gov served — the date it came into force and the amending law (§15.71). The
+            // eCFR has no such id: what a copy is, is the text of that date, and the date is
+            // already in the line.
             let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
             let rev = std::fs::read_to_string(crate::sources::copy_dir(base, id, asof).join("revision.txt"))
                 .ok()
                 .and_then(|r| crate::sources::revision_words(r.trim()))
                 .map(|w| tr!("。{w}", "; {w}"))
                 .unwrap_or_default();
-            tr!("出典: {}{frags}（法令 {id}、{asof} 時点{rev}）", "Source: {}{frags} (law {id}, as of {asof}{rev})", c.source)
+            match db {
+                crate::ast::LawDb::Egov => {
+                    tr!("出典: {}{frags}（法令 {id}、{asof} 時点{rev}）", "Source: {}{frags} (law {id}, as of {asof}{rev})", c.source)
+                }
+                crate::ast::LawDb::Ecfr => {
+                    tr!("出典: {}{frags}（{id}、{asof} 時点の eCFR）", "Source: {}{frags} ({id}, the eCFR as of {asof})", c.source)
+                }
+            }
         }
         Some(SourceKind::File { path: p, url, hash }) => {
             let h = hash.as_ref().map(|h| tr!("、sha256:{h}", ", sha256:{h}")).unwrap_or_default();

@@ -30,7 +30,7 @@ You have a statute or a published policy and want code that does exactly what it
 
 Who: the agent
 
-An agent or a person transcribes; what matters is that every table or row ends with **`@source article`**, so that where it came from stays with it. For a statute, `source` names the law's id on e-Gov (the Japanese government's statute database) and the date the text is read as of.
+An agent or a person transcribes; what matters is that every table or row ends with **`@source article`**, so that where it came from stays with it. For a statute, `source` names the law's id and the date the text is read as of. The word after `law` says which database: none for e-Gov, the Japanese government's statute database, and `ecfr` for the US federal regulations — `source osha = law ecfr "29 CFR 1910" asof 2026-01-01`, cited as `@osha "§1910.157"`.
 
 ```rule
 source 法 = law "342AC0000000023" asof 2026-04-01

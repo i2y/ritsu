@@ -567,3 +567,50 @@ fn pinは変わった写しの固定を書き換える() {
     );
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// A second statute database is a row of a registry, not a second way of doing things: the
+/// word after `law` picks it, and everything downstream — the copy's path, the pin line, the
+/// citation, the approver's page — is the same machinery. What differs is the shape of an id
+/// and of a fragment, which is what this holds.
+#[test]
+fn ecfrの出典は引用からピンまで通る() {
+    let d = std::env::temp_dir().join(format!("rulec-ecfr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    copy_dir(&root().join("tests/corpus/sources"), &d.join("sources"));
+    std::fs::copy(root().join("tests/corpus/osha_extinguisher.rule"), d.join("a.rule")).unwrap();
+    let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
+
+    // The copy is where the id says, with the spaces of a citation made into a path.
+    assert!(
+        d.join("sources/law/29-CFR-1910@2026-01-01/1910.157.xml").exists(),
+        "写しの置き場所が違います"
+    );
+    // And with it there, the rule checks clean: the citation, the pin and the copy agree.
+    assert!(codes(&src, &d.join("a.rule")).iter().all(|c| !c.starts_with('E')), "{:?}", codes(&src, &d.join("a.rule")));
+
+    // A pin whose digest is not the copy's is E038, as it is for a law on e-Gov.
+    let wrong = src.replace("sha256:c2a9ce966c7e2269", "sha256:0000000000000000");
+    assert!(codes(&wrong, &d.join("a.rule")).contains(&"E038".to_string()), "写しと違うピンが通ってしまいます");
+
+    // A fragment that is not a section of that part cannot be read.
+    let bad = src.replace("\"§1910.157\"", "\"§(d)(2)\"");
+    assert!(codes(&bad, &d.join("a.rule")).contains(&"E037".to_string()), "読めない箇所が通ってしまいます");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A fragment is quoted on the pin line when, and only when, the language cannot read it as
+/// one word. Quoting `第91条` would rewrite every pin in the corpus the first time anyone ran
+/// `rulec source pin`; leaving `§1910.157` bare writes a file that does not parse.
+#[test]
+fn ピンの行は必要なときだけ引用符で囲む() {
+    assert_eq!(rulec::sources::pin_line("第91条", "aa"), "  第91条 sha256:aa");
+    assert_eq!(rulec::sources::pin_line("別表第一", "aa"), "  別表第一 sha256:aa");
+    assert_eq!(rulec::sources::pin_line("表1", "aa"), "  表1 sha256:aa");
+    assert_eq!(rulec::sources::pin_line("table1", "aa"), "  table1 sha256:aa");
+    assert_eq!(
+        rulec::sources::pin_line("附則（令和七年三月三一日法律第一三号）第3条", "aa"),
+        "  附則（令和七年三月三一日法律第一三号）第3条 sha256:aa"
+    );
+    assert_eq!(rulec::sources::pin_line("§1910.157", "aa"), "  \"§1910.157\" sha256:aa");
+}

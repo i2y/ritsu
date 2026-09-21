@@ -10,7 +10,7 @@
 //! Reading happens here and nowhere deeper, the layering `enums.rs` set: the checker stays a
 //! function from text to diagnostics, and the playground says a copy cannot be read.
 
-use crate::ast::{Cite, Item, RuleFile, SourceDecl, SourceKind};
+use crate::ast::{Cite, Item, LawDb, RuleFile, SourceDecl, SourceKind};
 use crate::diag::{Diag, Span};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -77,12 +77,39 @@ fn number(s: &str) -> Option<u32> {
     if n == 0 { None } else { Some(n) }
 }
 
-/// The fragment a citation names. Articles, paragraphs and items of the main provisions;
+/// The fragment a citation names, read the way the database it comes from writes one.
+pub fn fragment(db: LawDb, name: &str) -> Option<Fragment> {
+    match db {
+        LawDb::Egov => egov_fragment(name),
+        LawDb::Ecfr => ecfr_fragment(name),
+    }
+}
+
+/// A section of the Code of Federal Regulations: `§1910.157`, or the same without the sign.
+///
+/// The part is in the source's own id (`29 CFR 1910`), as a law id is, so what a citation
+/// adds is the section — the unit the eCFR API serves and the unit an amendment is recorded
+/// against. A paragraph of one (`(d)(2)`) is not addressed yet: the API has no way to ask for
+/// one, so it would mean cutting the copy up here, and a copy that this program cut is worth
+/// less as evidence than one the government served.
+fn ecfr_fragment(name: &str) -> Option<Fragment> {
+    let s = name.strip_prefix('§').unwrap_or(name).trim();
+    let (part, sec) = s.split_once('.')?;
+    if part.is_empty() || sec.is_empty() {
+        return None;
+    }
+    if !part.chars().all(|c| c.is_ascii_digit()) || !sec.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return None;
+    }
+    Some(Fragment { name: name.to_string(), elm: s.to_string(), amend: None })
+}
+
+/// A fragment of a law on e-Gov. Articles, paragraphs and items of the main provisions;
 /// appendix tables by their ordinal; and the supplementary provisions (§15.71): the law's
 /// own as `附則第3条`, an amending law's as `附則（令和七年三月三一日法律第一三号）第3条` with
 /// the number spelled as the law's own heading spells it, either also whole without the
 /// article. Sub-items still wait for a rule that needs them.
-pub fn fragment(name: &str) -> Option<Fragment> {
+fn egov_fragment(name: &str) -> Option<Fragment> {
     if let Some(rest) = name.strip_prefix("別表第") {
         let n = number(rest)?;
         return Some(Fragment { name: name.to_string(), elm: format!("AppdxTable[{n}]"), amend: None });
@@ -135,8 +162,47 @@ fn article_suffix(s: &str) -> Option<String> {
     Some(elm)
 }
 
+/// What a citation of this database names, for the diagnostics that have to say so.
+fn cite_shape(db: LawDb, name: &str) -> String {
+    match db {
+        LawDb::Egov => tr!(
+            "法令は条や別表の単位で写すので、`@{name} 第20条` のように、どこを引いたかを書いてください。",
+            "A law is copied an article at a time, so say which one: `@{name} 第20条`."
+        ),
+        LawDb::Ecfr => tr!(
+            "CFR は section の単位で写すので、`@{name} §1910.157` のように、どこを引いたかを書いてください。",
+            "The CFR is copied a section at a time, so say which one: `@{name} §1910.157`."
+        ),
+    }
+}
+
+/// The forms a fragment of this database may be written in.
+fn fragment_shapes(db: LawDb) -> String {
+    match db {
+        LawDb::Egov => tr!(
+            "書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です。号の細分はまだ受けません。",
+            "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条`. Sub-items are not read yet."
+        ),
+        LawDb::Ecfr => tr!(
+            "書けるのは `§1910.157` か `1910.157` の形です。項（`(d)(2)`）はまだ受けません — eCFR が section の単位でしか渡さないので、写しをこちらで切ることになるからです。",
+            "The forms are `§1910.157` and `1910.157`. A paragraph of one (`(d)(2)`) is not read yet: the eCFR API serves a section at a time, so it would mean cutting the copy up here."
+        ),
+    }
+}
+
+/// The name of the database, as a message calls it.
+fn db_name(db: LawDb) -> &'static str {
+    match db {
+        LawDb::Egov => "e-Gov",
+        LawDb::Ecfr => "eCFR",
+    }
+}
+
 /// The directory the copies of a law as of a date are kept in, beside the rule.
 pub fn copy_dir(rule_path: &str, id: &str, asof: &str) -> PathBuf {
+    // A CFR id is a citation with spaces in it (`29 CFR 1910`); an e-Gov id has none, so
+    // this leaves those where they have always been.
+    let id = id.replace([' ', '/'], "-");
     Path::new(rule_path)
         .parent()
         .unwrap_or(Path::new("."))
@@ -222,7 +288,13 @@ fn set_hash(line: &str, hash: &str) -> String {
 }
 
 pub fn pin_line(fragment: &str, hash: &str) -> String {
-    format!("  {fragment} sha256:{hash}")
+    // A fragment a name cannot hold is quoted, as it is in the citation that names it. The
+    // question is the lexer's, so it is asked there: `附則（…）第3条` is one word to it and
+    // `§1910.157` is not.
+    match crate::lex::is_bare_word(fragment) {
+        true => format!("  {fragment} sha256:{hash}"),
+        false => format!("  \"{fragment}\" sha256:{hash}"),
+    }
 }
 
 /// The `source` line of a file source with its digest.
@@ -374,7 +446,8 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 }
                 unused_pins(d, &cited, name, rule_path, &mut out);
             }
-            SourceKind::Law { id, asof } => {
+            SourceKind::Law { db, id, asof } => {
+                let db = *db;
                 let cdir = copy_dir(rule_path, id, asof);
                 let cited = cited_from(&cites, name);
                 for (frag, whos) in &cited {
@@ -383,17 +456,17 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E037", tr!("法令 `{name}` の引用に箇所がありません", "A citation of the law `{name}` names no article"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("法令は条や別表の単位で写すので、`@{name} 第20条` のように、どこを引いたかを書いてください。", "A law is copied an article at a time, so say which one: `@{name} 第20条`."))
+                                .note(cite_shape(db, name))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
                     }
-                    let Some(fr) = fragment(frag) else {
+                    let Some(fr) = fragment(db, frag) else {
                         out.push(
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です。号の細分はまだ受けません。", "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条`. Sub-items are not read yet."))
+                                .note(fragment_shapes(db))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -405,7 +478,11 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("探した先: {}", "Looked for: {}", p.display()))
-                                .note(tr!("`rulec source fetch {rule_path}` が e-Gov から取ってきて写しに置きます。check は通信しません。", "`rulec source fetch {rule_path}` fetches it from e-Gov into the copies. check never reads the network."))
+                                .note(tr!(
+                                    "`rulec source fetch {rule_path}` が {d} から取ってきて写しに置きます。check は通信しません。",
+                                    "`rulec source fetch {rule_path}` fetches it from {d} into the copies. check never reads the network.",
+                                    d = db_name(db)
+                                ))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -689,8 +766,8 @@ pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Stri
     // A source inherited through an `apply` keeps its copies beside the rule it came from.
     let base = d.base.as_deref().unwrap_or(rule_path);
     match &d.kind {
-        SourceKind::Law { id, asof } => {
-            let fr = fragment(frag)?;
+        SourceKind::Law { db, id, asof } => {
+            let fr = fragment(*db, frag)?;
             let xml = std::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
             Some(xml_text(&xml))
         }
@@ -754,7 +831,9 @@ pub struct Outcome {
 /// One request, once.
 fn curl_once(url: &str) -> Result<Vec<u8>, String> {
     let out = std::process::Command::new("curl")
-        .args(["-fsSL", "--max-time", "120", url])
+        // `--compressed` is not an optimisation here: the eCFR answers 406 to a request that
+        // does not say it can take a compressed reply.
+        .args(["-fsSL", "--compressed", "--max-time", "120", url])
         .output()
         .map_err(|e| tr!("curl を起動できません: {e}", "cannot run curl: {e}"))?;
     if out.status.success() {
@@ -953,12 +1032,24 @@ fn suppl_index_near(id: &str, date: &str, amend: &str, k0: usize, cache: &mut BT
 /// an amending law's supplementary provisions is looked up as of `index_asof`, the date the
 /// rule reads the law at, and moved to `asof` from there when the two differ.
 fn fetch_fragment(
+    db: LawDb,
     id: &str,
     asof: &str,
     index_asof: &str,
     fr: &Fragment,
     cache: &mut BTreeMap<String, Vec<Option<String>>>,
 ) -> Result<(Vec<u8>, String), String> {
+    if db == LawDb::Ecfr {
+        // The eCFR serves one section as XML, already the fragment: there is no envelope to
+        // open and no revision id to record — which version it is, is the date it was asked
+        // for, and `outdated` asks the versions endpoint about amendments since.
+        let (title, part) = cfr_id(id)?;
+        let url = format!(
+            "https://www.ecfr.gov/api/versioner/v1/full/{asof}/title-{title}.xml?part={part}&section={}",
+            fr.elm
+        );
+        return Ok((curl(&url)?, String::new()));
+    }
     let elm = match &fr.amend {
         Some(a) => {
             let k0 = suppl_index(id, index_asof, a, cache)?;
@@ -968,6 +1059,64 @@ fn fetch_fragment(
         None => fr.elm.clone(),
     };
     law_xml(&fetch_json(&law_url(id, asof, &elm))?)
+}
+
+/// The title and the part of a CFR id: `29 CFR 1910` is title 29, part 1910.
+fn cfr_id(id: &str) -> Result<(String, String), String> {
+    let mut it = id.split_whitespace();
+    let bad = || {
+        tr!(
+            "CFR の id は `29 CFR 1910` の形（title と part）で書いてください: `{id}`",
+            "a CFR id is written `29 CFR 1910` — a title and a part: `{id}`"
+        )
+    };
+    let title = it.next().ok_or_else(bad)?;
+    let cfr = it.next().ok_or_else(bad)?;
+    let part = it.next().ok_or_else(bad)?;
+    if !cfr.eq_ignore_ascii_case("cfr") || it.next().is_some() {
+        return Err(bad());
+    }
+    if !title.chars().all(|c| c.is_ascii_digit()) || !part.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(bad());
+    }
+    Ok((title.to_string(), part.to_string()))
+}
+
+/// The dates after `asof` on which a cited section of the CFR was amended, each with what
+/// the eCFR calls the amendment.
+///
+/// The endpoint answers per section, and it says whether a version was **substantive**: a
+/// re-issue that only moved the markup is not an amendment of the text, the same distinction
+/// e-Gov's revisions get (§15.71).
+fn ecfr_revisions(id: &str, asof: &str, frags: &[Fragment]) -> Result<Vec<(String, String)>, String> {
+    let (title, part) = cfr_id(id)?;
+    let mut out: Vec<(String, String)> = Vec::new();
+    for fr in frags {
+        let url = format!(
+            "https://www.ecfr.gov/api/versioner/v1/versions/title-{title}.json?part={part}&section={}",
+            fr.elm
+        );
+        let j = fetch_json_plain(&url)?;
+        let Some(crate::json::Json::Arr(vs)) = j.get("content_versions") else { continue };
+        for v in vs {
+            let date = v.get("amendment_date").and_then(|x| x.as_str()).unwrap_or("");
+            let substantive = matches!(v.get("substantive"), Some(crate::json::Json::Bool(true)));
+            if substantive && !date.is_empty() && date > asof {
+                out.push((date.to_string(), fr.name.clone()));
+            }
+        }
+    }
+    out.sort();
+    out.dedup_by(|a, b| a.0 == b.0);
+    Ok(out)
+}
+
+/// One request to an API that answers JSON and nothing else. e-Gov's own replies go through
+/// `fetch_json`, which tries again when a busy hour answers with a page.
+fn fetch_json_plain(url: &str) -> Result<crate::json::Json, String> {
+    let body = curl(url)?;
+    crate::json::parse(&String::from_utf8_lossy(&body))
+        .map_err(|e| tr!("{url} の答えが JSON として読めません: {e}", "the reply from {url} is not JSON: {e}"))
 }
 
 /// A law's number as a person names it, from its e-Gov id: `508AC0000000012` is
@@ -1035,17 +1184,17 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
     let mut changed = false;
     let mut cache = BTreeMap::new();
     for d in &f.sources {
-        let SourceKind::Law { id, asof } = &d.kind else { continue };
+        let SourceKind::Law { db, id, asof } = &d.kind else { continue };
         let cdir = copy_dir(rule_path, id, asof);
         for (frag, _) in cited_from(&cites, &d.name.text) {
             if frag.is_empty() {
                 continue;
             }
-            let Some(fr) = fragment(&frag) else {
+            let Some(fr) = fragment(*db, &frag) else {
                 lines.push(tr!("{}: 引用箇所 `{frag}` の書き方が読めません", "{}: the fragment `{frag}` cannot be read", d.name.text));
                 continue;
             };
-            let (xml, rev) = fetch_fragment(id, asof, asof, &fr, &mut cache)?;
+            let (xml, rev) = fetch_fragment(*db, id, asof, asof, &fr, &mut cache)?;
             std::fs::create_dir_all(&cdir).map_err(|e| format!("{}: {e}", cdir.display()))?;
             let p = cdir.join(fr.file());
             let before = std::fs::read(&p).ok();
@@ -1273,11 +1422,11 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                     report.push(tr!("{}: {} 箇所のハッシュを固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
                 }
             }
-            SourceKind::Law { id, asof } => {
+            SourceKind::Law { db, id, asof } => {
                 let cdir = copy_dir(rule_path, id, asof);
                 let mut new_pins: Vec<String> = Vec::new();
                 for (frag, _) in cited_from(&cites, &d.name.text) {
-                    let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
+                    let Some(fr) = fragment(*db, &frag).filter(|_| !frag.is_empty()) else { continue };
                     match std::fs::read(cdir.join(fr.file())) {
                         Ok(bytes) => new_pins.push(pin_line(&frag, &crate::sha256::short(&bytes))),
                         Err(_) => {
@@ -1321,7 +1470,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
     // amendment is measured against the latest reading; an earlier one is old by design.
     let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
     for d in &f.sources {
-        if let SourceKind::Law { id, asof } = &d.kind {
+        if let SourceKind::Law { id, asof, .. } = &d.kind {
             let e = latest.entry(id.as_str()).or_insert(asof.as_str());
             if asof.as_str() > *e {
                 *e = asof.as_str();
@@ -1331,7 +1480,8 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
     // The one date input, when there is exactly one: what the rows for the new text are keyed on.
     let date_inputs: Vec<&str> = f.inputs.iter().filter(|i| i.ty.base == crate::kw::DATE).map(|i| i.name.text.as_str()).collect();
     for d in &f.sources {
-        let SourceKind::Law { id, asof } = &d.kind else { continue };
+        let SourceKind::Law { db, id, asof } = &d.kind else { continue };
+        let db = *db;
         if latest.get(id.as_str()).is_some_and(|l| *l != asof.as_str()) {
             lines.push(tr!(
                 "{}: 同じ法令をもっと後の時点で引用している出典があるので、改正はそちらで確かめます",
@@ -1340,17 +1490,32 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
             ));
             continue;
         }
-        let j = fetch_json(&format!("https://laws.e-gov.go.jp/api/2/law_revisions/{id}"))?;
-        let mut later: Vec<(String, String)> = Vec::new();
-        if let Some(crate::json::Json::Arr(revs)) = j.get("revisions") {
-            for r in revs {
-                let date = r.get("amendment_enforcement_date").and_then(|x| x.as_str()).unwrap_or("");
-                let rid = r.get("law_revision_id").and_then(|x| x.as_str()).unwrap_or("");
-                if !date.is_empty() && date > asof.as_str() {
-                    later.push((date.to_string(), rid.to_string()));
+        let mut later: Vec<(String, String)> = match db {
+            LawDb::Egov => {
+                let j = fetch_json(&format!("https://laws.e-gov.go.jp/api/2/law_revisions/{id}"))?;
+                let mut v = Vec::new();
+                if let Some(crate::json::Json::Arr(revs)) = j.get("revisions") {
+                    for r in revs {
+                        let date = r.get("amendment_enforcement_date").and_then(|x| x.as_str()).unwrap_or("");
+                        let rid = r.get("law_revision_id").and_then(|x| x.as_str()).unwrap_or("");
+                        if !date.is_empty() && date > asof.as_str() {
+                            v.push((date.to_string(), rid.to_string()));
+                        }
+                    }
                 }
+                v
             }
-        }
+            // The eCFR records an amendment against the section, so the question is asked of
+            // the sections this rule cites rather than of the part as a whole.
+            LawDb::Ecfr => {
+                let frags: Vec<Fragment> = cited_from(&cites, &d.name.text)
+                    .into_iter()
+                    .filter(|(f, _)| !f.is_empty())
+                    .filter_map(|(f, _)| fragment(db, &f))
+                    .collect();
+                ecfr_revisions(id, asof, &frags)?
+            }
+        };
         later.sort();
         // Several revisions can be enforced on one day; the text as of that day is one.
         later.dedup_by(|a, b| a.0 == b.0);
@@ -1364,10 +1529,10 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         // reported once, on the day it comes into force, and not again on every later day.
         let mut differs: BTreeMap<String, Vec<(String, Vec<String>)>> = BTreeMap::new();
         for (frag, _) in cited_from(&cites, &d.name.text) {
-            let Some(fr) = fragment(&frag).filter(|_| !frag.is_empty()) else { continue };
+            let Some(fr) = fragment(db, &frag).filter(|_| !frag.is_empty()) else { continue };
             let mut prev = std::fs::read(cdir.join(fr.file())).ok();
             for (date, _) in &later {
-                let (xml, _) = fetch_fragment(id, date, asof, &fr, &mut cache)?;
+                let (xml, _) = fetch_fragment(db, id, date, asof, &fr, &mut cache)?;
                 // The text, not the bytes: a revision that only re-marked the article is
                 // not an amendment of it.
                 if !prev.as_deref().is_some_and(|n| same_text(n, &xml)) {
@@ -1398,9 +1563,15 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                         [one] => tr!("{one} >={date} の行", "the rows for {one} >={date}"),
                         _ => tr!("その日以後に効く行", "the rows in force from that day"),
                     };
+                    // The line to add names the database when the rule's own line does, so
+                    // that what is offered can be pasted as it stands.
+                    let which = match db {
+                        LawDb::Egov => String::new(),
+                        x => format!(" {}", x.word()),
+                    };
                     lines.push(tr!(
-                        "  `{} {name} = {} \"{id}\" {} {date}` を足し、{rows}をそこから写してください",
-                        "  add `{} {name} = {} \"{id}\" {} {date}` and transcribe {rows} from it",
+                        "  `{} {name} = {}{which} \"{id}\" {} {date}` を足し、{rows}をそこから写してください",
+                        "  add `{} {name} = {}{which} \"{id}\" {} {date}` and transcribe {rows} from it",
                         crate::kw::SOURCE,
                         crate::kw::LAW,
                         crate::kw::ASOF
@@ -1641,33 +1812,33 @@ mod tests {
 
     #[test]
     fn fragments_are_named_as_the_law_names_them() {
-        assert_eq!(fragment("第91条").unwrap().elm, "MainProvision-Article_91");
-        assert_eq!(fragment("第20条の2").unwrap().elm, "MainProvision-Article_20_2");
-        assert_eq!(fragment("第20条第2項").unwrap().elm, "MainProvision-Article_20-Paragraph_2");
-        assert_eq!(fragment("第20条第2項第3号").unwrap().elm, "MainProvision-Article_20-Paragraph_2-Item_3");
-        assert_eq!(fragment("第二十条第二項").unwrap().elm, "MainProvision-Article_20-Paragraph_2");
-        assert_eq!(fragment("別表第一").unwrap().elm, "AppdxTable[1]");
-        assert_eq!(fragment("別表第一").unwrap().file(), "AppdxTable_1.xml");
-        assert_eq!(fragment("別表第十二").unwrap().elm, "AppdxTable[12]");
-        assert!(fragment("第3条ただし書").is_none());
+        assert_eq!(fragment(LawDb::Egov, "第91条").unwrap().elm, "MainProvision-Article_91");
+        assert_eq!(fragment(LawDb::Egov, "第20条の2").unwrap().elm, "MainProvision-Article_20_2");
+        assert_eq!(fragment(LawDb::Egov, "第20条第2項").unwrap().elm, "MainProvision-Article_20-Paragraph_2");
+        assert_eq!(fragment(LawDb::Egov, "第20条第2項第3号").unwrap().elm, "MainProvision-Article_20-Paragraph_2-Item_3");
+        assert_eq!(fragment(LawDb::Egov, "第二十条第二項").unwrap().elm, "MainProvision-Article_20-Paragraph_2");
+        assert_eq!(fragment(LawDb::Egov, "別表第一").unwrap().elm, "AppdxTable[1]");
+        assert_eq!(fragment(LawDb::Egov, "別表第一").unwrap().file(), "AppdxTable_1.xml");
+        assert_eq!(fragment(LawDb::Egov, "別表第十二").unwrap().elm, "AppdxTable[12]");
+        assert!(fragment(LawDb::Egov, "第3条ただし書").is_none());
     }
 
     #[test]
     fn supplementary_provisions_are_named_by_their_amending_law() {
-        let own = fragment("附則第3条").unwrap();
+        let own = fragment(LawDb::Egov, "附則第3条").unwrap();
         assert_eq!(own.elm, "SupplProvision-Article_3");
         assert_eq!(own.file(), "SupplProvision-Article_3.xml");
-        assert_eq!(fragment("附則").unwrap().elm, "SupplProvision");
-        let a = fragment("附則（令和七年三月三一日法律第一三号）第3条第2項").unwrap();
+        assert_eq!(fragment(LawDb::Egov, "附則").unwrap().elm, "SupplProvision");
+        let a = fragment(LawDb::Egov, "附則（令和七年三月三一日法律第一三号）第3条第2項").unwrap();
         assert_eq!(a.elm, "SupplProvision[?]-Article_3-Paragraph_2");
         assert_eq!(a.amend.as_deref(), Some("令和七年三月三一日法律第一三号"));
         assert_eq!(a.file(), "SupplProvision_令和七年三月三一日法律第一三号-Article_3-Paragraph_2.xml");
         assert_eq!(a.elm_at(244), "SupplProvision[244]-Article_3-Paragraph_2");
-        let whole = fragment("附則(令和六年三月三〇日法律第八号)").unwrap();
+        let whole = fragment(LawDb::Egov, "附則(令和六年三月三〇日法律第八号)").unwrap();
         assert_eq!(whole.elm, "SupplProvision[?]");
         assert_eq!(whole.file(), "SupplProvision_令和六年三月三〇日法律第八号.xml");
-        assert!(fragment("附則（）第3条").is_none());
-        assert!(fragment("附則の3").is_none());
+        assert!(fragment(LawDb::Egov, "附則（）第3条").is_none());
+        assert!(fragment(LawDb::Egov, "附則の3").is_none());
     }
 
     #[test]

@@ -1147,7 +1147,7 @@ Related codes: [E035](#e035), [E045](#e045)
 
 `error` — **A cited fragment is not pinned**
 
-**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). Without a pin, a revised copy passes check in silence (§15.68).
+**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). A fragment the language cannot read as one word is quoted (`@osha "§1910.157"`). Without a pin, a revised copy passes check in silence (§15.68).
 
 **Fix.** Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest.
 

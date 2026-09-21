@@ -140,9 +140,9 @@ A few shapes are worth knowing before the first draft:
   (§7 of the grammar).
 
 - **A source is declared, cited and pinned.** `source 法 = law "342AC0000000023" asof
-  2026-04-01` names a law on e-Gov, the Japanese government's statute database; `@法 別表第一`
-  at the end of a table, clause, row, derive
-  or define line says what it transcribes; `rulec source fetch` puts a copy of each cited
+  2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word
+  after `law` picks the database, e-Gov when left out. `@法 別表第一` at the end of a table,
+  clause, row, derive or define line says what it transcribes, quoted if not one word; `rulec source fetch` puts a copy of each cited
   fragment beside the rule and `rulec source pin` writes its digest under the `source` line.
   `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
   and `doc` quotes the fragment under the definition. Any other document is

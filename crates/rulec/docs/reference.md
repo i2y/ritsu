@@ -26,7 +26,7 @@ description "<one line>"
 import std/<name>
 import proto "<file>" <Enum> -> <enum of this rule>
 import jsonschema "<file>" "<pointer>" -> <enum of this rule>
-source <name> = law "<law id>" asof <date>
+source <name> = law [<database>] "<law id>" asof <date>
   <fragment> sha256:<digest>
 source <name> = file "<file>" [url "<url>"] sha256:<digest>
 enum   …
@@ -300,6 +300,8 @@ source 法 = law "342AC0000000023" asof 2026-04-01
   別表第一 sha256:0ba69792e960021e
 source 措置法 = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:c2a9ce966c7e2269
 source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
 source 規約 = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
   表1 sha256:a583ec8586bbf596
@@ -310,11 +312,26 @@ policy unique
 | false          | -        | 200円       |  @法 別表第一  # 記載のないもの
 ```
 
-A `source` names a document, after `import`. A `law` is a law on e-Gov (the Japanese
-government's statute database), by its law id, read
-as of a date: the API returns one fragment at a time, so each fragment the rule cites is
-kept as a copy beside the rule (`sources/law/<law id>@<date>/<element>.xml`) and pinned by
-its digest on the line under the `source`. A `file` is a document beside the rule — a tariff
+A `source` names a document, after `import`. A `law` is a law in a statute database, by the
+id that database gives it, read as of a date: the API returns one fragment at a time, so each
+fragment the rule cites is kept as a copy beside the rule
+(`sources/law/<law id>@<date>/<element>.xml`) and pinned by its digest on the line under the
+`source`.
+
+**Which database** is the word after `law`, and there are two.
+
+| word | the database | the id | a fragment |
+|---|---|---|---|
+| (none), or `egov` | e-Gov, the Japanese government's statute database | the law id, `342AC0000000023` | `第91条`, `第20条の2第3項`, `別表第一`, `附則第3条` |
+| `ecfr` | the Electronic Code of Federal Regulations: US federal regulations as in force on a date | a title and a part, `29 CFR 1910` | a section, `§1910.157` (or `1910.157`) |
+
+The word is left out for e-Gov, so a rule written before there was a choice reads the same.
+What differs between the two is the shape of the id, the shape of a fragment, and where a
+copy comes from — not what a copy is, nor what it is held to. A fragment the language cannot
+read as one word is **quoted**, in the citation and on the pin line alike: `@osha "§1910.157"`.
+A paragraph of a CFR section (`(d)(2)`) is not addressed yet, because the eCFR serves a
+section at a time and cutting the copy up here would make it worse evidence than the one the
+government served. A `file` is a document beside the rule — a tariff
 sheet, a workbook, a policy in Markdown — pinned whole on its own line. A `url` on
 it says where that copy came from, so `rulec source fetch` can bring it again and `rulec source
 outdated` can ask whether the original has moved on; a document that arrived from a person has

@@ -941,8 +941,8 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。出典は `{}` で宣言した名前です。",
-                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`, or by one of its tables, `@郵便 表1`. The source is a name a `{}` line declares.",
+                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。語にならない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。出典は `{}` で宣言した名前です。",
+                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`, or by one of its tables, `@郵便 表1`. A fragment that is not a word goes in quotes (`@osha \"§1910.157\"`). The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
             );
@@ -956,9 +956,17 @@ impl P {
         let mut fragments: Vec<String> = Vec::new();
         let mut k = 1;
         while k < rest.len() {
-            match rest.get(k).and_then(|t| t.ident()) {
+            // A fragment is a word — `第91条`, `表1` — or, where the database writes one with
+            // characters a name cannot hold, a quoted string: `@osha "§1910.157"`.
+            let frag = rest
+                .get(k)
+                .and_then(|t| t.ident().map(|s| s.to_string()).or_else(|| match &t.kind {
+                    Kind::Str(f) => Some(f.clone()),
+                    _ => None,
+                }));
+            match frag {
                 Some(f) => {
-                    fragments.push(f.to_string());
+                    fragments.push(f);
                     k += 1;
                 }
                 None => {
@@ -987,9 +995,18 @@ impl P {
         // without moving on reads the same line for ever.
         let mut pins: Vec<Pin> = Vec::new();
         while let Some(l) = self.cur().cloned() {
-            match (l.first().and_then(|t| t.ident()), l.get(1).map(|t| t.kind.clone())) {
+            // The fragment is written on a pin line the way it is written in the citation:
+            // a word, or a quoted string where the database writes one with characters a
+            // name cannot hold (`"§1910.157"`).
+            let frag = l.first().and_then(|t| {
+                t.ident().map(|s| s.to_string()).or_else(|| match &t.kind {
+                    Kind::Str(f) => Some(f.clone()),
+                    _ => None,
+                })
+            });
+            match (frag, l.get(1).map(|t| t.kind.clone())) {
                 (Some(frag), Some(Kind::Hash(h))) if l.len() == 2 => {
-                    pins.push(Pin { fragment: frag.to_string(), hash: h, span: span_of(&l) });
+                    pins.push(Pin { fragment: frag, hash: h, span: span_of(&l) });
                     self.i += 1;
                 }
                 _ => break,
@@ -1021,23 +1038,38 @@ impl P {
         }
         let kind = match line.get(k + 1).and_then(|t| t.ident()) {
             Some(crate::kw::LAW) => {
-                let Some(Kind::Str(id)) = line.get(k + 2).map(|t| t.kind.clone()) else {
-                    bad(self, tr!("法令 ID を `\"…\"` で書いてください", "write the law id in quotes"));
+                // `law <database> "<id>"`. The database word is a plain word rather than a
+                // reserved one — it can only stand where a quoted id is expected, so nothing
+                // else in the language has to give the name up. Left out, it is e-Gov.
+                let mut i = k + 2;
+                let db = match line.get(i).and_then(|t| t.ident()).and_then(crate::ast::LawDb::parse) {
+                    Some(d) => {
+                        i += 1;
+                        d
+                    }
+                    None => crate::ast::LawDb::Egov,
+                };
+                let Some(Kind::Str(id)) = line.get(i).map(|t| t.kind.clone()) else {
+                    bad(self, tr!(
+                        "法令 ID を `\"…\"` で書いてください（データベースを書くなら `{l} egov` か `{l} ecfr` を先に）",
+                        "write the law id in quotes (a database goes first: `{l} egov` or `{l} ecfr`)",
+                        l = crate::kw::LAW
+                    ));
                     return None;
                 };
-                if line.get(k + 3).and_then(|t| t.ident()) != Some(crate::kw::ASOF) {
+                if line.get(i + 1).and_then(|t| t.ident()) != Some(crate::kw::ASOF) {
                     bad(self, tr!("`{} <日付>` が要ります", "`{} <date>` is required", crate::kw::ASOF));
                     return None;
                 }
-                let Some(Kind::Date(y, m, d)) = line.get(k + 4).map(|t| t.kind.clone()) else {
+                let Some(Kind::Date(y, m, d)) = line.get(i + 2).map(|t| t.kind.clone()) else {
                     bad(self, tr!("日付は `YYYY-MM-DD` です", "the date is `YYYY-MM-DD`"));
                     return None;
                 };
-                if line.len() > k + 5 {
+                if line.len() > i + 3 {
                     bad(self, tr!("日付の後に余分な語があります", "extra words after the date"));
                     return None;
                 }
-                SourceKind::Law { id, asof: format!("{y:04}-{m:02}-{d:02}") }
+                SourceKind::Law { db, id, asof: format!("{y:04}-{m:02}-{d:02}") }
             }
             Some(crate::kw::FILE) => {
                 let Some(Kind::Str(path)) = line.get(k + 2).map(|t| t.kind.clone()) else {

@@ -420,6 +420,25 @@ EXAMPLES = [
         ],
     ),
     (
+        "osha_extinguisher.rule",
+        "米国の連邦規則から、条ひとつ",
+        "消火器まで何フィート歩くことになるか。29 CFR 1910.157(d) の転記で、条文は eCFR から日付を指定して取ってきた写しに留めてあります。日本の法令を e-Gov に留めるのと同じ仕組みが、そのまま英語圏の法令で動きます。",
+        [
+            "**法令データベースは `law` の後の語で選びます。** `law ecfr \"29 CFR 1910\"` の `ecfr` がそれで、省略すると e-Gov です。id は title と part、引くのは section ひとつです。",
+            "**語として読めない箇所は引用符で囲みます。** `@osha \"§1910.157\"` のように。写しは `sources/law/29-CFR-1910@2026-01-01/1910.157.xml` に置かれ、`rulec source pin` がそのハッシュを書きます。",
+            "**`rulec source outdated` が改正を教えます。** eCFR はその section の改正日を返し、体裁だけの直しかどうかも言うので、本文が動いたときだけ読み直しになります。",
+            "**単位はフィートです。** 条文が「75 feet (22.9 m)」と書くので `length[ft]` で写しました。換算はしません。",
+        ],
+        "One section of the US Code of Federal Regulations",
+        "How far an employee may have to walk to a fire extinguisher, transcribed from 29 CFR 1910.157(d). The section is pinned to a copy the eCFR served for a date — the machinery that holds the Japanese rules to e-Gov, working for a statute written in English.",
+        [
+            "**The database is the word after `law`.** `law ecfr \"29 CFR 1910\"` reads the eCFR; left out, it is e-Gov. The id is a title and a part, and what a citation adds is one section.",
+            "**A fragment the language cannot read as one word is quoted.** `@osha \"§1910.157\"`, in the citation and on the pin line alike. The copy lands in `sources/law/29-CFR-1910@2026-01-01/1910.157.xml`, and `rulec source pin` writes its digest.",
+            "**`rulec source outdated` asks the eCFR about that very section.** It answers with the amendment dates and whether each was substantive, so a re-issue that only moved the markup does not send anyone back to the text.",
+            "**The unit is feet**, because the section is: \"75 feet (22.9 m)\". A length is one integer in its declared unit, and there is no conversion to decide.",
+        ],
+    ),
+    (
         "領収書の印紙税.rule",
         "領収書の印紙税",
         "国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。",
@@ -627,13 +646,14 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Six are written in English throughout** — [whether a return is
+**Seven are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
 inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
 261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
 wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
 allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
-income tax](#the-us-federal-income-tax-bracket-by-bracket). The rest are transcriptions of
+income tax](#the-us-federal-income-tax-bracket-by-bracket) and [one section of the
+CFR](#one-section-of-the-us-code-of-federal-regulations). The rest are transcriptions of
 Japanese published terms and statutes, left in the language they were published in: the
 keywords are English in every one of them, and what a transcription is here to show is the
 shape of the rule rather than the words in its cells.

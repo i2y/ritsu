@@ -48,7 +48,7 @@ These are all the words that may start a line.
 | `policy` | that table's hit policy (`unique` or `first`) |
 | `overrides` | when a table above defines the same output, says that this table's rows take precedence over it. The line after `policy`; `table:label` names one row |
 | `clause` | a one-line rule that does not fit a table, written as a sentence: `when <column> <cell> and …` (`when always` when there is no condition), `then <value>`, and `overrides` when needed |
-| `source` | a document the rule transcribes: a law on e-Gov, the Japanese government's statute database (`law "<law id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
+| `source` | a document the rule transcribes: a law in a statute database (`law [<database>] "<id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
 | `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
 | `examples` | an executable specification |
@@ -535,10 +535,13 @@ line cites it.
 source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
 source 措置法 = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:c2a9ce966c7e2269
 
 define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
 
 table 運賃表(fee_table)  @郵便
+table distance          @osha "§1910.157"
 ```
 
 There are two kinds of document, cited and copied a little differently.
@@ -546,16 +549,28 @@ There are two kinds of document, cited and copied a little differently.
 | Document | Declared as | Cited as | Its copy |
 |---|---|---|---|
 | **A file beside the rule** (a policy PDF, a tariff sheet, a company rule in Word) | `source 郵便 = file "<file>" sha256:<digest>` | `@郵便`, or **`@郵便 表1` to say which table of it was transcribed** | the file itself; `rulec source pin` writes its digest on the `source` line, and a cited table is taken out of the document and kept beside it |
-| **A statute** | `source 法 = law "<law id>" asof <date>`, the id being the law's id on e-Gov (the Japanese government's statute database) and the date saying which text is meant | `@法 第91条`, always with the article, named the way the statute does: `第20条`, `第20条の2`, `第20条第2項第3号`, `別表第一`; supplementary provisions as `附則第3条`, an amending law's as `附則（令和七年三月三一日法律第一三号）第3条` | `rulec source fetch` brings each cited article from e-Gov into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
+| **A statute** | `source 法 = law [<database>] "<id>" asof <date>`, the date saying which text is meant | always with the fragment, named the way that database names one | `rulec source fetch` brings each cited fragment into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
+
+**Two statute databases**, and the word after `law` says which.
+
+| word | the database | the id | a fragment |
+|---|---|---|---|
+| (none), or `egov` | e-Gov, the Japanese government's statute database | `342AC0000000023` | `第91条`, `第20条の2第3項`, `別表第一`, `附則第3条`, an amending law's as `附則（令和七年三月三一日法律第一三号）第3条` |
+| `ecfr` | the Electronic Code of Federal Regulations — US federal regulations as in force on a date | a title and a part, `29 CFR 1910` | a section, `§1910.157` |
+
+A fragment the language cannot read as one word is quoted, in the citation and on the pin line
+alike: `@osha "§1910.157"`. A paragraph of a CFR section (`(d)(2)`) is not addressed yet, because
+the eCFR serves a section at a time.
 
 From then on every `rulec check` confirms that the copies are there and that their digests
 are what the rule says. When a copy differs — the file was replaced, or the article was
 fetched again after an amendment — the check stops and names the tables, clauses and rows
 that cite it (E038), which is all there is to reread. `check` itself never reads the network.
 
-`rulec source outdated` asks whether the original moved on. For a statute it asks e-Gov whether
-an amendment enforced after `asof` changes the text of a cited article (its markup alone does
-not count); for a file with a `url "…"`, it looks where the file came from and says **whether a
+`rulec source outdated` asks whether the original moved on. For a statute it asks the database
+whether an amendment after `asof` changes the text of a cited fragment — e-Gov by the revision's
+enforcement date, the eCFR by the amendment date of that very section, and in both a re-issue
+that only moved the markup does not count; for a file with a `url "…"`, it looks where the file came from and says **whether a
 cited table changed, or only something this rule does not transcribe**. `check` cannot know of
 an amendment until the copy is fetched again, so this belongs in a scheduled CI job.
 

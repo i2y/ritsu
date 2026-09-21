@@ -478,10 +478,17 @@ impl<'a> Gen<'a> {
         // was made from — two dates when the rule folds two periods (§15.71).
         for s in &self.f.sources {
             let what = match &s.kind {
-                SourceKind::Law { id, asof } => {
+                SourceKind::Law { db, id, asof } => {
                     let pins: Vec<String> = s.pins.iter().map(|p| format!("{} sha256:{}", p.fragment, p.hash)).collect();
                     let pinned = if pins.is_empty() { String::new() } else { format!(" ({})", pins.join(", ")) };
-                    format!("{} {id} {} {asof}{pinned}", crate::kw::LAW, crate::kw::ASOF)
+                    // The database is named where it is not the one the rule would have read
+                    // without saying, so a header written before there was a choice reads the
+                    // same as it did.
+                    let which = match db {
+                        crate::ast::LawDb::Egov => String::new(),
+                        d => format!(" {}", d.word()),
+                    };
+                    format!("{}{which} {id} {} {asof}{pinned}", crate::kw::LAW, crate::kw::ASOF)
                 }
                 SourceKind::File { path, url, hash } => {
                     let u = url.as_ref().map(|u| format!(" {} {u}", crate::kw::URL)).unwrap_or_default();
@@ -6419,8 +6426,9 @@ impl Gen<'_> {
             .raw("sources", crate::json::arr(&self.f.sources.iter().map(|s| {
                 let o = crate::json::Obj::new().str("name", &s.name.text);
                 match &s.kind {
-                    SourceKind::Law { id, asof } => o
+                    SourceKind::Law { db, id, asof } => o
                         .str("kind", crate::kw::LAW)
+                        .str("db", db.word())
                         .str("id", id)
                         .str("asof", asof)
                         .raw("pins", crate::json::arr(&s.pins.iter().map(|p| {

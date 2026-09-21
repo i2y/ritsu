@@ -76,6 +76,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/uk_minimum_wage.rule", "uk_minimum_wage"),
     ("tests/corpus/uk_income_tax.rule", "uk_income_tax"),
     ("tests/corpus/us_income_tax.rule", "us_income_tax"),
+    ("tests/corpus/osha_extinguisher.rule", "osha_extinguisher"),
 ];
 
 #[test]

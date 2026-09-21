@@ -203,14 +203,49 @@ pub struct Cite {
 /// What kind of document a `source` is.
 #[derive(Debug, Clone)]
 pub enum SourceKind {
-    /// A law on e-Gov, by its law id, read as of a date. Its fragments can be fetched one by
-    /// one, so each cited one is pinned on its own.
-    Law { id: String, asof: String },
+    /// A law in a statute database, by the id that database gives it, read as of a date. Its
+    /// fragments can be fetched one by one, so each cited one is pinned on its own.
+    Law { db: LawDb, id: String, asof: String },
     /// A file beside the rule that has no addressable fragments; pinned whole. `url` is where
     /// the copy came from, when there is such a place: it lets `source fetch` bring it again
     /// and `source outdated` ask whether it has moved on (§15.76). A document handed over by a
     /// person has none, so it stays optional.
     File { path: String, url: Option<String>, hash: Option<String> },
+}
+
+/// Which statute database a `law` source reads from.
+///
+/// The word is written after `law` (`law ecfr "29 CFR 1910" asof 2026-01-01`) and left out
+/// for e-Gov, which is where every rule written before there was a choice reads its laws.
+/// What differs between them is the shape of the id, the shape of a fragment, where a copy
+/// is fetched from and how `outdated` asks whether the text has moved on — not what a copy
+/// is or what it is held to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LawDb {
+    /// e-Gov, the Japanese government's statute database.
+    Egov,
+    /// The Electronic Code of Federal Regulations: the US federal regulations as in force on
+    /// a date, a section at a time.
+    Ecfr,
+}
+
+impl LawDb {
+    /// The word as it is written after `law`, or `None` for anything else — which is how the
+    /// parser tells a database word from the id that may stand in its place.
+    pub fn parse(w: &str) -> Option<Self> {
+        match w {
+            "egov" => Some(Self::Egov),
+            "ecfr" => Some(Self::Ecfr),
+            _ => None,
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Egov => "egov",
+            Self::Ecfr => "ecfr",
+        }
+    }
 }
 
 /// One pinned fragment under a `source … = law` line: `  第91条 sha256:77aa00bb11cc22dd`.

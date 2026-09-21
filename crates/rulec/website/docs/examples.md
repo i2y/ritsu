@@ -6,13 +6,14 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Six are written in English throughout** — [whether a return is
+**Seven are written in English throughout** — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
 inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
 261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
 wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
 allowance](#a-personal-allowance-that-tapers-and-the-band-above-it) and [the US federal
-income tax](#the-us-federal-income-tax-bracket-by-bracket). The rest are transcriptions of
+income tax](#the-us-federal-income-tax-bracket-by-bracket) and [one section of the
+CFR](#one-section-of-the-us-code-of-federal-regulations). The rest are transcriptions of
 Japanese published terms and statutes, left in the language they were published in: the
 keywords are English in every one of them, and what a transcription is here to show is the
 shape of the rule rather than the words in its cells.
@@ -1339,6 +1340,60 @@ examples
 - **"$X plus Y% of the excess over $Z" is three columns and two lines of arithmetic.** base, rate and floor are transcribed as they stand; `excess` and `tax` are `define`s. Folding them into one deduction — the form Japan's quick table uses — would put a number in the rule that the source does not print.
 - **The first bracket carries no citation, deliberately.** The page states it as "10% of the taxable income", with no amount in it, so that row's two zeros are this rule's way of writing that. The citation sits on the rows rather than on the table, and a row's citation says only where that row came from.
 - **Cents, not dollars.** `money[USDc]` counts cents, because $1,192.50 is not a whole dollar. The unit is part of the type, so dollars and cents cannot be taken for one another.
+
+## One section of the US Code of Federal Regulations
+
+How far an employee may have to walk to a fire extinguisher, transcribed from 29 CFR 1910.157(d). The section is pinned to a copy the eCFR served for a date — the machinery that holds the Japanese rules to e-Gov, working for a statute written in English.
+
+```rule
+rule osha_extinguisher v1
+description "How far an employee may have to walk to a portable fire extinguisher. Transcribed from 29 CFR 1910.157(d), read out of the eCFR"
+
+# The rule an English-speaking reader gets from a statute database, as the Japanese rules get
+# theirs from e-Gov: the section is fetched as of a date, kept as a copy beside the rule and
+# pinned, and `rulec source outdated` asks the eCFR whether a later amendment touched it.
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:c2a9ce966c7e2269
+
+enum fire_class = a | b | c | d
+enum pattern = class_a | class_b
+
+# (d)(5) sends a Class C hazard to "the appropriate pattern for the existing Class A or Class
+# B hazards", so which of the two is present has to be an input. For the other three classes
+# it is not read, and the `-` cells below say so.
+inputs
+  hazard : fire_class
+  nearby : pattern
+
+outputs
+  travel : length[ft]  round down(1ft)
+
+# The section states the distances in feet with the metre in brackets — "75 feet (22.9 m)" —
+# so feet is the unit the rule is written in. A length is one integer in its declared unit,
+# and there is no conversion to decide.
+table distance  @osha "§1910.157"
+policy unique
+| hazard | nearby  | -> travel : length[ft] |
+| a      | -       | 75ft                   |
+| b      | -       | 50ft                   |
+| c      | class_a | 75ft                   |
+| c      | class_b | 50ft                   |
+| d      | -       | 75ft                   |
+
+examples
+| hazard | nearby  | -> travel |
+| a      | class_a | 75ft      |
+| b      | class_a | 50ft      |
+| c      | class_b | 50ft      |
+| d      | class_a | 75ft      |
+```
+
+**What this one shows**
+
+- **The database is the word after `law`.** `law ecfr "29 CFR 1910"` reads the eCFR; left out, it is e-Gov. The id is a title and a part, and what a citation adds is one section.
+- **A fragment the language cannot read as one word is quoted.** `@osha "§1910.157"`, in the citation and on the pin line alike. The copy lands in `sources/law/29-CFR-1910@2026-01-01/1910.157.xml`, and `rulec source pin` writes its digest.
+- **`rulec source outdated` asks the eCFR about that very section.** It answers with the amendment dates and whether each was substantive, so a re-issue that only moved the markup does not send anyone back to the text.
+- **The unit is feet**, because the section is: "75 feet (22.9 m)". A length is one integer in its declared unit, and there is no conversion to decide.
 
 ## Stamp duty on a receipt
 

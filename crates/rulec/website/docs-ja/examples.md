@@ -1327,6 +1327,60 @@ examples
 - **最初の段にだけ出典が付いていません。** ページは「10% of the taxable income」と書くだけで金額を書いていないので、その行の二つのゼロは規則側の書き方です。出典は表ではなく行に付けてあり、行の出典は「その行がどこから来たか」だけを言います。
 - **ドルではなくセントです。** $1,192.50 は整数のドルではないので `money[USDc]` で数えます。単位は型の一部なので、ドルとセントが取り違えられることもありません。
 
+## 米国の連邦規則から、条ひとつ
+
+消火器まで何フィート歩くことになるか。29 CFR 1910.157(d) の転記で、条文は eCFR から日付を指定して取ってきた写しに留めてあります。日本の法令を e-Gov に留めるのと同じ仕組みが、そのまま英語圏の法令で動きます。
+
+```rule
+rule osha_extinguisher v1
+description "How far an employee may have to walk to a portable fire extinguisher. Transcribed from 29 CFR 1910.157(d), read out of the eCFR"
+
+# The rule an English-speaking reader gets from a statute database, as the Japanese rules get
+# theirs from e-Gov: the section is fetched as of a date, kept as a copy beside the rule and
+# pinned, and `rulec source outdated` asks the eCFR whether a later amendment touched it.
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:c2a9ce966c7e2269
+
+enum fire_class = a | b | c | d
+enum pattern = class_a | class_b
+
+# (d)(5) sends a Class C hazard to "the appropriate pattern for the existing Class A or Class
+# B hazards", so which of the two is present has to be an input. For the other three classes
+# it is not read, and the `-` cells below say so.
+inputs
+  hazard : fire_class
+  nearby : pattern
+
+outputs
+  travel : length[ft]  round down(1ft)
+
+# The section states the distances in feet with the metre in brackets — "75 feet (22.9 m)" —
+# so feet is the unit the rule is written in. A length is one integer in its declared unit,
+# and there is no conversion to decide.
+table distance  @osha "§1910.157"
+policy unique
+| hazard | nearby  | -> travel : length[ft] |
+| a      | -       | 75ft                   |
+| b      | -       | 50ft                   |
+| c      | class_a | 75ft                   |
+| c      | class_b | 50ft                   |
+| d      | -       | 75ft                   |
+
+examples
+| hazard | nearby  | -> travel |
+| a      | class_a | 75ft      |
+| b      | class_a | 50ft      |
+| c      | class_b | 50ft      |
+| d      | class_a | 75ft      |
+```
+
+**この例が見せていること**
+
+- **法令データベースは `law` の後の語で選びます。** `law ecfr "29 CFR 1910"` の `ecfr` がそれで、省略すると e-Gov です。id は title と part、引くのは section ひとつです。
+- **語として読めない箇所は引用符で囲みます。** `@osha "§1910.157"` のように。写しは `sources/law/29-CFR-1910@2026-01-01/1910.157.xml` に置かれ、`rulec source pin` がそのハッシュを書きます。
+- **`rulec source outdated` が改正を教えます。** eCFR はその section の改正日を返し、体裁だけの直しかどうかも言うので、本文が動いたときだけ読み直しになります。
+- **単位はフィートです。** 条文が「75 feet (22.9 m)」と書くので `length[ft]` で写しました。換算はしません。
+
 ## 領収書の印紙税
 
 国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。

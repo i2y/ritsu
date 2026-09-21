@@ -218,8 +218,8 @@ Beside the module, `coupon_step_proof.rs` holds proof harnesses for the [Kani Ru
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani coupon_step_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 38 rules it
-adds about 162 seconds to a run that otherwise takes seconds. `rulec api` names
+a flag because it is the one pass whose cost is noticeable: on the corpus of 39 rules it
+adds about 160 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
 What it holds, over **every** input in the declared domain rather than the vectors:
@@ -678,7 +678,9 @@ generated from what. A rule transcribed from a document names it too — `Cites:
 from. A file source carries its `url` there too when it has one, and the tables taken out of it
 (`Cites: 規約 = file tariff.md url https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md
 sha256:… (表1 sha256:…)`), which is what lets a reader of the generated code go and look at the
-document, and at the table, the rows were transcribed from.
+document, and at the table, the rows were transcribed from. A law from a database other than
+e-Gov names it in both places — `Cites: osha = law ecfr 29 CFR 1910 asof 2026-01-01
+("§1910.157" sha256:…)`, and `"db": "ecfr"` beside the id under `sources`.
 
 ## The rows that matched
 
