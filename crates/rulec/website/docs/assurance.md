@@ -7,6 +7,15 @@ of them share no code with the checker at all.
 
 The short version is the order they run in. A rule that fails a layer never reaches the next.
 
+![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance.svg#only-dark)
+![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance-light.svg#only-light)
+
+Drawn out, the layers fall into place. **The spine is four things**, each a copy of the one
+above it, and most of the checking lives at a **joint**, holding two of them to each other.
+The exceptions are 1, 2 and 3, which look at the table on its own, and 7 and 8, which are
+aimed at the tool. **At the topmost joint there is no layer at all**: a person read the
+world and wrote the document down, and nothing here can check that reading.
+
 | | what it settles | run it with |
 |---|---|---|
 | **1. The five proofs** | over **every** input the declarations allow: no gap, no overlap, no dead row, no unit confusion, no overflow | `rulec check` |

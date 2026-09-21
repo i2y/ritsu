@@ -334,13 +334,18 @@ fn 例のページは作り直しても変わらない() {
     );
 }
 
-/// The two generated diagrams: the script that draws one, and the stem its four files share.
-const DIAGRAMS: [(&str, &str); 4] = [
+/// The generated diagrams: the script that draws one, and the stem its four files share.
+const DIAGRAMS: [(&str, &str); 5] = [
     ("tools/make_overview.py", "overview"),
     ("tools/make_checks.py", "checks"),
     ("tools/make_stack.py", "stack"),
     ("tools/make_flow.py", "flow"),
+    ("tools/make_assurance.py", "assurance"),
 ];
+
+/// The four the front page carries. The stamp below is theirs, because they are the ones a
+/// returning reader has cached; a diagram further in is fetched the first time either way.
+const FRONT: [&str; 4] = ["overview", "checks", "stack", "flow"];
 
 /// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader
 /// who has been to the site before keeps seeing the previous picture — the filename never
@@ -351,9 +356,9 @@ fn 図のurlは中身のハッシュを持っている() {
     let want = diagram_version();
     for lang in ["docs", "docs-ja"] {
         let page = read(&format!("website/{lang}/index.md"));
-        let refs: Vec<&str> = DIAGRAMS
+        let refs: Vec<&str> = FRONT
             .iter()
-            .flat_map(|(_, stem)| {
+            .flat_map(|stem| {
                 let mark = format!("images/{stem}");
                 page.match_indices(&mark)
                     .map(|(i, _)| {
@@ -364,7 +369,7 @@ fn 図のurlは中身のハッシュを持っている() {
             })
             .collect();
         // Two per diagram: one for the dark scheme and one for the light.
-        let want_refs = DIAGRAMS.len() * 2;
+        let want_refs = FRONT.len() * 2;
         assert_eq!(refs.len(), want_refs, "{lang}: 図の参照が {want_refs} つでない: {refs:?}");
         for r in refs {
             assert!(
@@ -380,7 +385,7 @@ fn 図のurlは中身のハッシュを持っている() {
 /// costs the other a single refetch — cheaper than two stamps to keep straight.
 fn diagram_version() -> String {
     let mut bytes = Vec::new();
-    for (_, stem) in DIAGRAMS {
+    for stem in FRONT {
         for lang in ["-ja", ""] {
             bytes.extend(read(&format!("website/docs/images/{stem}{lang}.svg")).into_bytes());
         }
