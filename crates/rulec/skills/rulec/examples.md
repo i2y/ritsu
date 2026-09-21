@@ -6,6 +6,14 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
+**Three are written in English throughout** — [whether a return is
+accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
+inches](#a-parcel-tariff-in-pounds-and-inches) and [Article 7 of Regulation (EC) No
+261/2004](#a-rule-written-in-english--eu-air-passenger-rights). The rest are transcriptions of
+Japanese published terms and statutes, left in the language they were published in: the
+keywords are English in every one of them, and what a transcription is here to show is the
+shape of the rule rather than the words in its cells.
+
 ## A date decides which period it is
 
 The smallest example there is: one input, one output. The rows are adjacent date ranges laid end to end with nothing between them.
@@ -948,16 +956,147 @@ examples
 - **Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).
 - **A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.
 
+## Whether a return is accepted, in English
+
+A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.
+
+```rule
+rule return_eligibility v1
+description "Whether a return is accepted. Written in English, and with no money in it anywhere: the answer is a class"
+
+# A sketch of a shop's own terms, not a transcription. The shape is the point: the answer is
+# one of four words, and every combination of the four inputs reaches exactly one row.
+
+enum category = electronics | clothing | perishable
+enum verdict = accepted | outside_window | condition_failed | not_returnable
+
+inputs
+  item    : category
+  days    : number  range >=0 <=365
+  opened  : bool
+  receipt : bool
+
+outputs
+  answer : verdict
+
+# Written as `policy unique`, so the rows are disjoint and the checker proves that every
+# input reaches exactly one of them. `policy first` would take three rows fewer by letting
+# the refusals at the top swallow the rest — and then which row answers a given case would
+# be a question about the order of the rows rather than about the row itself.
+table decide
+policy unique
+| item            | receipt | days | opened | -> answer : verdict |
+| perishable      | -       | -    | -      | not_returnable      |
+| not: perishable | false   | -    | -      | condition_failed    |
+| electronics     | true    | >14  | -      | outside_window      |
+| electronics     | true    | <=14 | true   | condition_failed    |
+| electronics     | true    | <=14 | false  | accepted            |
+| clothing        | true    | >30  | -      | outside_window      |
+| clothing        | true    | <=30 | -      | accepted            |
+
+examples
+| item        | days | opened | receipt | -> answer        |
+| clothing    | 10   | true   | true    | accepted         |
+| clothing    | 31   | false  | true    | outside_window   |
+| electronics | 3    | true   | true    | condition_failed |
+| electronics | 14   | false  | true    | accepted         |
+| perishable  | 0    | false  | true    | not_returnable   |
+| clothing    | 10   | false  | false   | condition_failed |
+```
+
+**What this one shows**
+
+- **A rule whose answer is not an amount has the same shape as one whose answer is.** The output is a value of an enum, so no rounding is declared.
+- **It is written as `policy unique`.** Keep the rows disjoint and the checker proves that every input reaches exactly one of them. `policy first` would take three rows fewer by letting the refusals at the top swallow the rest — and then which row answered a case would be a question about the order of the rows rather than about the row.
+- **`not:` works on a value of an enum, not only on a group.** `not: perishable` says what it says without a `group` being declared for it.
+
+## A parcel tariff in pounds and inches
+
+A tariff written in English: pounds for the weight, inches for the size, USD for the money. A sketch as well — the amounts are made up. It is the one rule in the corpus that reaches the imperial units.
+
+```rule
+rule parcel_rate v1
+description "A parcel tariff in pounds and inches, written in English. A sketch, not a transcription: the amounts are made up"
+
+# Nothing else in the corpus is priced in USD by weight, and nothing at all reached oz, lb
+# or in — an unexercised unit is an unchecked unit (§15.9).
+
+enum size_class = envelope | small | large
+enum zone = domestic | canada | overseas
+
+group north_america = domestic, canada
+
+inputs
+  weight    : mass[lb]    range >=1lb <=70lb
+  girth     : length[in]  range >=1in <=130in
+  dest      : zone
+  signature : bool
+
+outputs
+  fee : money[USD, incl_tax]  round up(1USD)
+
+# One table decides the class and the next one prices it: what the first produces is a
+# column of the second.
+table size_of
+policy first
+| girth  | -> size : size_class |
+| <=22in | envelope             |
+| <=60in | small                |
+| -      | large                |
+
+table base_rate
+policy unique
+| dest          | size     | weight  | -> base : money[USD, incl_tax] |
+| north_america | envelope | -       | 6USD                           |
+| north_america | small    | <=160oz | 12USD                          |
+| north_america | small    | >160oz  | 18USD                          |
+| north_america | large    | <=160oz | 22USD                          |
+| north_america | large    | >160oz  | 30USD                          |
+| overseas      | envelope | -       | 16USD                          |
+| overseas      | small    | -       | 38USD                          |
+| overseas      | large    | -       | 60USD                          |
+
+# A fuel surcharge is a percentage of the base, which is what the rounding on the output is
+# there to settle: 12USD at 5% is 12.60USD, and up(1USD) makes that 13USD.
+table fuel_rate
+policy unique
+| dest          | -> fuel : rate[step 1%] |
+| north_america | 5%                      |
+| overseas      | 12%                     |
+
+table signature_fee
+policy unique
+| signature | -> extra : money[USD, incl_tax] |
+| true      | 4USD                            |
+| false     | 0USD                            |
+
+result fee = base + base × fuel + extra
+
+examples
+| weight | girth | dest     | signature | -> fee |
+| 5lb    | 10in  | domestic | false     | 7USD   |
+| 5lb    | 40in  | canada   | false     | 13USD  |
+| 20lb   | 40in  | domestic | true      | 23USD  |
+| 5lb    | 10in  | overseas | false     | 18USD  |
+```
+
+**What this one shows**
+
+- **Imperial units are units like any other.** The input is `mass[lb]` and the rows draw on it in `160oz` (16oz to the pound). The unit is part of the type, so `cm` in a column of `in` stops at E103.
+- **The tables are stacked.** What the first table produces — `size` — is a column of the second, which is what lets "size from the dimensions" and "price from the size" be two tables rather than one wide one.
+- **This is where the rounding declaration earns its keep.** Five percent of a 12USD base is 12.60USD. `up(1USD)` makes that 13USD — and which way it should go is a business decision, which is why the tool will not make it for you.
+
 ## A rule written in English — EU air passenger rights
 
 Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.
 
 ```rule
 rule ec261 v1
-description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km の例"
+description "Article 7 of EU air passenger rights Regulation (EC) No 261/2004. The example in English, in EUR and km"
 
-# 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
-# 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。
+# Published law, transcribed as it stands: the amounts are paragraph 1, the halving is
+# paragraph 2. Distance and whether the flight is intra-EU decide the band, and that one
+# band decides both the amount and the time threshold.
 
 enum band = short | medium | long
 
@@ -969,9 +1108,11 @@ inputs
 outputs
   compensation : money[EUR, incl_tax]  round down(1EUR)
 
-# 7 条 1 項。(a) 1500km 以下、(b) 域内の 1500km 超と、域外の 1500〜3500km、(c) それ以外。
-# 「between 1500 and 3500」が両端を含むかは条文から読めない。(a) が「1500km 以下」なので
-# 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
+# Article 7(1). (a) 1500km or less, (b) intra-EU over 1500km and other flights of 1500 to
+# 3500km, (c) everything else. Whether "between 1500 and 3500 kilometres" takes in either
+# end cannot be read out of the text. Since (a) is "1500 kilometres or less", the lower end
+# is open here — and having to decide it is the point of the tool: undecided, there is no
+# table to write.
 table band_of
 policy unique
 | distance         | intra_eu | -> band : band |
@@ -987,10 +1128,11 @@ policy unique
 | medium | 400EUR                         |
 | long   | 600EUR                         |
 
-# 7 条 2 項。代替便の到着が (a) 2 時間 (b) 3 時間 (c) 4 時間 を超えなければ 5 割にできる。
-# 条文の (a)(b)(c) は 1 項の距離の条件をそのまま書き直しているので、ここでも帯ではなく
-# 距離で引く。帯で引くと二行の表で済むが、そのぶん「どの距離なら 4 時間か」が条文から
-# 一段遠くなる。
+# Article 7(2). The amount may be halved where the re-routing arrives no later than
+# (a) two hours, (b) three hours, (c) four hours after the scheduled time. The article's
+# (a)(b)(c) restate the distance conditions of paragraph 1 in full, so this table keys on
+# distance too, not on the band. The band would fit in two rows, and would put "which
+# distance gets four hours" one step further from the text.
 table reduction
 policy unique
 | distance         | intra_eu | delay | -> factor : rate[step 50%] |

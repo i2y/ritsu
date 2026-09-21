@@ -316,6 +316,40 @@ EXAMPLES = [
         ],
     ),
     (
+        "return_eligibility.rule",
+        "返品できるかどうかを英語で書く",
+        "金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。",
+        [
+            "**答えが金額でない規則も、形は同じです。** 出力は列挙の値で、丸めの宣言は要りません。",
+            "**`policy unique` で書いてあります。** 行が重ならないように書くと、どの入力もちょうど一行に当たることを検査が証明します。`policy first` なら三行減らせますが、そのぶん「どの行が答えたのか」が行の並び順の話になります。",
+            "**`not:` は列挙の値そのものにも使えます。** `not: perishable` は「生鮮以外」で、グループを作らなくても書けます。",
+        ],
+        "Whether a return is accepted, in English",
+        "A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.",
+        [
+            "**A rule whose answer is not an amount has the same shape as one whose answer is.** The output is a value of an enum, so no rounding is declared.",
+            "**It is written as `policy unique`.** Keep the rows disjoint and the checker proves that every input reaches exactly one of them. `policy first` would take three rows fewer by letting the refusals at the top swallow the rest — and then which row answered a case would be a question about the order of the rows rather than about the row.",
+            "**`not:` works on a value of an enum, not only on a group.** `not: perishable` says what it says without a `group` being declared for it.",
+        ],
+    ),
+    (
+        "parcel_rate.rule",
+        "ポンドとインチの運賃表",
+        "英語で書いた運賃表です。重さはポンド、寸法はインチ、金額は USD。これも作り物で、金額は架空のものです。コーパスでヤード・ポンド法の単位を使っているのはこの規則だけです。",
+        [
+            "**ヤード・ポンド法の単位も、ほかの単位と同じに扱えます。** `mass[lb]` の入力を、行では `160oz` と書いて引いています（16oz = 1lb）。単位は型の一部なので、`in` の列に `cm` と書けば E103 で止まります。",
+            "**表を積んでいます。** 上の表が出す `size` が、下の表の列になります。寸法から区分を決める表と、区分から値段を決める表を分けて書けるということです。",
+            "**丸めの宣言が効くのはこういうところです。** 基本料に 5% を掛けると 12.60USD のような端数が出ます。`up(1USD)` と書いてあるので 13USD になりますが、どちらに寄せるかは商売の決めごとで、道具の側では決めません。",
+        ],
+        "A parcel tariff in pounds and inches",
+        "A tariff written in English: pounds for the weight, inches for the size, USD for the money. A sketch as well — the amounts are made up. It is the one rule in the corpus that reaches the imperial units.",
+        [
+            "**Imperial units are units like any other.** The input is `mass[lb]` and the rows draw on it in `160oz` (16oz to the pound). The unit is part of the type, so `cm` in a column of `in` stops at E103.",
+            "**The tables are stacked.** What the first table produces — `size` — is a column of the second, which is what lets \"size from the dimensions\" and \"price from the size\" be two tables rather than one wide one.",
+            "**This is where the rounding declaration earns its keep.** Five percent of a 12USD base is 12.60USD. `up(1USD)` makes that 13USD — and which way it should go is a business decision, which is why the tool will not make it for you.",
+        ],
+    ),
+    (
         "ec261.rule",
         "EU 旅客権利規則を英語で書く",
         "名前もセルも英語なので、ASCII 別名が一つも出てきません。金額は EUR、距離は km です。公開されている法令（(EC) No 261/2004 第 7 条）をそのまま写したもので、条文そのものが決定表の形をしています。",
@@ -541,6 +575,14 @@ Every rule on this page is **one the repository's tests run on every commit**: i
 language are held to the same answers byte for byte. Copy any of them and it works.
 
 They are ordered smallest first.
+
+**Three are written in English throughout** — [whether a return is
+accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
+inches](#a-parcel-tariff-in-pounds-and-inches) and [Article 7 of Regulation (EC) No
+261/2004](#a-rule-written-in-english--eu-air-passenger-rights). The rest are transcriptions of
+Japanese published terms and statutes, left in the language they were published in: the
+keywords are English in every one of them, and what a transcription is here to show is the
+shape of the rule rather than the words in its cells.
 
 """
 

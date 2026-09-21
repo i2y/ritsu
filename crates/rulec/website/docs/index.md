@@ -264,7 +264,7 @@ Every command has `--format json`, and the codes and the JSON shape **stay put w
 </div>
 </div>
 
-**Twelve targets** · **77 diagnostics** · **33 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **77 diagnostics** · **35 rules checked, generated and run on every commit — 28 transcribed from real published terms** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 
@@ -557,7 +557,7 @@ tariff, fold 47 prefectures into six groups, and leave one of them out:
 error[E101]: Completeness gap: some input matches no row
   --> rules/ゆうパック運賃.rule:34 table 運賃表
    |
-34 | table 運賃表(fee_table)
+34 | table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
    |       ^^^^^^ the input space is not fully covered
    |
  An input that matches no row: あて先 = 山梨県, サイズ = S60
@@ -627,7 +627,7 @@ Worth saying in the same breath.
 4. **That the checker itself is right.** The proofs above come out of
    rulec's own implementation, which has not itself been proved
    correct. The evidence is 83 deliberately broken rules each producing
-   the diagnostic it should, and 33 rules — 28 transcribed from real
+   the diagnostic it should, and 35 rules — 28 transcribed from real
    published terms passing on every commit. **Evidence, not proof.**
 
 **A model checker reads the generated Rust.** Beside the Rust module, `gen`
@@ -638,7 +638,7 @@ runtime guard of (3) never fires, nothing overflows an `i64`, and the rows of
 each `unique` table cover the domain exactly once. It shares no code with the
 checker that proved the table, so where the two agree, two unrelated tools say
 the same thing — and where they disagree, one of them is wrong and the input
-that shows it comes back. On the corpus, 74 harnesses verify in 144 seconds.
+that shows it comes back. On the corpus, 81 harnesses verify in 155 seconds.
 What it does not reach: the table itself (1), and every target but this one.
 
 **And the checks behind the evidence are proved.** `rulec certificate` writes

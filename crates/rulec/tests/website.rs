@@ -524,6 +524,58 @@ fn 規則のコード片には札が付いている() {
     );
 }
 
+/// An English rule shown on the site is a real one.
+///
+/// Every example on the authored pages is Japanese but for the English corpus rule, and the
+/// point of showing that one is that it is not a mock-up: it is checked, generated and run
+/// on every commit like the rest. So every ```rule block with no Japanese in it has to
+/// appear, verbatim, inside a file in `tests/corpus/` — excerpt or whole. A hand-copied
+/// example drifts from the file it was copied from, which is the failure `examples.md` is
+/// held to one test up.
+#[test]
+fn サイトの英語の例はコーパスの抜粋である() {
+    let corpus: Vec<(String, String)> = std::fs::read_dir(root().join("tests/corpus"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "rule"))
+        .map(|p| {
+            (
+                p.file_name().unwrap().to_string_lossy().into_owned(),
+                std::fs::read_to_string(&p).unwrap(),
+            )
+        })
+        .collect();
+    assert!(!corpus.is_empty(), "コーパスが読めません");
+    let japanese = |s: &str| {
+        s.chars().any(|c| {
+            matches!(c, '\u{3040}'..='\u{30ff}' | '\u{4e00}'..='\u{9fff}' | '\u{ff00}'..='\u{ff9f}')
+        })
+    };
+    for lang in ["docs", "docs-ja"] {
+        for page in AUTHORED {
+            let rel = format!("website/{lang}/{page}");
+            let src = read(&rel);
+            let mut rest = src.as_str();
+            let mut at = 1usize;
+            while let Some(k) = rest.find("```rule\n") {
+                at += rest[..k].matches('\n').count();
+                let open = k + "```rule\n".len();
+                let close = rest[open..].find("```").expect("コードブロックが閉じていない") + open;
+                let body = &rest[open..close];
+                if !japanese(body) {
+                    assert!(
+                        corpus.iter().any(|(_, text)| text.contains(body)),
+                        "{rel}:{at}: 英語の例がコーパスのどの規則にもありません。\n{body}"
+                    );
+                }
+                at += rest[k..close].matches('\n').count();
+                rest = &rest[close..];
+            }
+        }
+    }
+}
+
 /// The assurance page says how many rules, mutants and codes there are. Those numbers are
 /// the page's whole point — a map of the evidence with a stale count on it is worse than no
 /// map — so they are held to what is actually in the repository, in both languages.

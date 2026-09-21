@@ -112,6 +112,21 @@ no uppercase and cannot begin an exported Go identifier. **A name that
 is already ASCII needs none**: write the whole rule in English and there
 are no parentheses anywhere.
 
+```rule
+table band_of
+policy unique
+| distance         | intra_eu | -> band : band |
+| <=1500km         | -        | short          |
+| >1500km          | true     | medium         |
+| >1500km <=3500km | false    | medium         |
+| >3500km          | false    | long           |
+```
+
+That is the corpus rule for Article 7 of Regulation (EC) No 261/2004, which the
+repository checks, generates and runs on every commit like any other. The whole of it —
+English throughout, in EUR and km — is on the
+[examples page](examples.md#a-rule-written-in-english--eu-air-passenger-rights).
+
 Elsewhere the alias is optional, and writing one decides what the
 generated code calls the value: `derive 残余(margin)` becomes `margin`,
 `group 遠隔地(remote)` becomes `_remote` / `isRemote`, a table output

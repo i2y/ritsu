@@ -71,6 +71,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/預け荷物料金.rule", "baggage_fee"),
     ("tests/corpus/予約取消可否.rule", "cancel_verdict"),
     ("tests/corpus/補償証明書.rule", "compensation"),
+    ("tests/corpus/parcel_rate.rule", "parcel_rate"),
+    ("tests/corpus/return_eligibility.rule", "return_eligibility"),
 ];
 
 #[test]

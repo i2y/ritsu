@@ -1,8 +1,9 @@
 rule ec261 v1
-description "EU 旅客権利規則 (EC) No 261/2004 第7条。英語圏の規約と EUR・km の例"
+description "Article 7 of EU air passenger rights Regulation (EC) No 261/2004. The example in English, in EUR and km"
 
-# 公開されている法令の第7条をそのまま写したもの。金額は 1 項、5 割引きの条件は 2 項。
-# 距離と「域内かどうか」の二つで帯が決まり、同じ帯が金額と時間の閾値の両方を決める。
+# Published law, transcribed as it stands: the amounts are paragraph 1, the halving is
+# paragraph 2. Distance and whether the flight is intra-EU decide the band, and that one
+# band decides both the amount and the time threshold.
 
 enum band = short | medium | long
 
@@ -14,9 +15,11 @@ inputs
 outputs
   compensation : money[EUR, incl_tax]  round down(1EUR)
 
-# 7 条 1 項。(a) 1500km 以下、(b) 域内の 1500km 超と、域外の 1500〜3500km、(c) それ以外。
-# 「between 1500 and 3500」が両端を含むかは条文から読めない。(a) が「1500km 以下」なので
-# 下端は開き、ここでそう決める — 決めなければ表が書けない、というのがこの道具の要点である。
+# Article 7(1). (a) 1500km or less, (b) intra-EU over 1500km and other flights of 1500 to
+# 3500km, (c) everything else. Whether "between 1500 and 3500 kilometres" takes in either
+# end cannot be read out of the text. Since (a) is "1500 kilometres or less", the lower end
+# is open here — and having to decide it is the point of the tool: undecided, there is no
+# table to write.
 table band_of
 policy unique
 | distance         | intra_eu | -> band : band |
@@ -32,10 +35,11 @@ policy unique
 | medium | 400EUR                         |
 | long   | 600EUR                         |
 
-# 7 条 2 項。代替便の到着が (a) 2 時間 (b) 3 時間 (c) 4 時間 を超えなければ 5 割にできる。
-# 条文の (a)(b)(c) は 1 項の距離の条件をそのまま書き直しているので、ここでも帯ではなく
-# 距離で引く。帯で引くと二行の表で済むが、そのぶん「どの距離なら 4 時間か」が条文から
-# 一段遠くなる。
+# Article 7(2). The amount may be halved where the re-routing arrives no later than
+# (a) two hours, (b) three hours, (c) four hours after the scheduled time. The article's
+# (a)(b)(c) restate the distance conditions of paragraph 1 in full, so this table keys on
+# distance too, not on the band. The band would fit in two rows, and would put "which
+# distance gets four hours" one step further from the text.
 table reduction
 policy unique
 | distance         | intra_eu | delay | -> factor : rate[step 50%] |

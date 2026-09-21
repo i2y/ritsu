@@ -68,7 +68,7 @@ test cases: no table falls through, no runtime guard of (3) fires, nothing overf
 `i64`, and the rows of each `unique` table cover the domain exactly once. It shares no code
 with the checker that proved the table, so where the two agree, two unrelated tools say the
 same thing — and where they disagree, one of them is wrong and the input that shows it comes
-back. On the corpus, 74 harnesses verify in 144 seconds. What it does not reach: the table
+back. On the corpus, 81 harnesses verify in 155 seconds. What it does not reach: the table
 itself (1), and every target but this one. `rulec test --proofs` runs it where `kani` is
 installed.
 
@@ -440,7 +440,7 @@ $ cargo test          # 400 tests; python3, node, rustc, ruby, php, go, swiftc a
 
 ## Where it stands
 
-33 rules — 28 taken from real published terms, 5 written to reach the rest of the language — are checked, generated and run on every commit, and all 77 diagnostics are implemented. What is built:
+35 rules — 28 taken from real published terms, 7 written to reach the rest of the language — are checked, generated and run on every commit, and all 77 diagnostics are implemented. What is built:
 
 | | |
 |---|---|
