@@ -14,8 +14,8 @@ hide:
 <p class="rc-hero__tag">Write the table. Ship the proof.</p>
 
 <p class="rc-hero__lede">
-<strong>A harness for an agent turning table-shaped business rules into
-code</strong>.
+<strong>A small language for table-shaped business rules, and a harness for the
+agent that turns them into code</strong>.
 </p>
 
 <p class="rc-hero__lede">
@@ -280,7 +280,7 @@ is deployed, and what comes back is a match rate and the disagreements, clustere
 | **past records** | Validate the records, then replay the rule over them. For a change, how many records move and by how much comes out before it ships | `rulec fixtures lint`, then `rulec replay` / `rulec diff` — [Compare and replay](compare.md#against-what-actually-happened) |
 
 
-## What this is — a harness for an agent turning table-shaped rules into code
+## What this is — a language for table-shaped rules, and a harness for an agent
 
 A great many business rules **can be written as a table**. Some already are — a shipping
 tariff, a fee schedule, a price list. Others live in prose, or in what people just know, and

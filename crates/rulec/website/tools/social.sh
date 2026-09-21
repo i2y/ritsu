@@ -70,7 +70,8 @@ cat > "$tmp/social.html" <<'ENDHTML'
   </div>
   <div class="tag">Write the table. Ship the proof.</div>
   <div class="lede">
-    A harness for an agent turning table-shaped business rules into code.
+    A small language for table-shaped business rules, and a harness for the agent that
+    turns them into code.
     <b>The proof is finished before the code exists</b>: a rule with a gap, a contradiction
     or an undeclared rounding does not generate.
   </div>

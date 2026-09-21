@@ -1,6 +1,7 @@
 # rulec
 
-**A harness for an agent turning table-shaped business rules into code.**
+**A small language for table-shaped business rules, and a harness for the agent that turns
+them into code.**
 
 Write the table, and out come Python, NumPy, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
 Swift, Java, SQL and Wasm — ordinary functions with no runtime, no configuration and no

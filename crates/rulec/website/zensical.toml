@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/"
-site_description = "A harness for an agent turning table-shaped business rules into code. Gaps and contradictions are proved away first; out comes dependency-free code in twelve languages."
+site_description = "A small language for table-shaped business rules, and a harness for the agent that turns them into code. Gaps and contradictions are proved away first; out comes dependency-free code in twelve languages."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
