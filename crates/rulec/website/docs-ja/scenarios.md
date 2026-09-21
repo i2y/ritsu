@@ -402,7 +402,7 @@ $ rulec import csv 運賃.csv --name 運賃 --lang ja > rules/運賃.rule
 
 ### 3-2. 検査にかける
 
-担当: rulec。返ってきた証人にどう答えるかは人
+担当: rulec。返ってきた入力にどう答えるかは人
 
 ```console
 $ rulec check rules/送料.rule --lang ja

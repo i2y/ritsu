@@ -4705,7 +4705,7 @@ impl<'a> Gen<'a> {
         if !whole {
             let why = blocked.unwrap_or_else(|| {
                 tr!(
-                    "この規則には記号として置けない入力があるので、ハーネスは出していない。",
+                    "この規則には、あらゆる値を一度に置けない入力があるので、ハーネスは出していない。",
                     "This rule takes an input a harness cannot quantify over, so none is written."
                 )
             });
@@ -4792,7 +4792,7 @@ impl<'a> Gen<'a> {
         let fields = self.f.elements.iter().flat_map(|e| e.fields.iter());
         if self.f.inputs.iter().any(|i| opaque(&i.name.text)) || fields.clone().any(|f| opaque(&f.name.text)) {
             return Some(tr!(
-                "この規則には string の入力があり、記号として置けないので、ハーネスは出していない。",
+                "この規則には string の入力があり、あらゆる文字列を一度には置けないので、ハーネスは出していない。",
                 "This rule takes an input a harness cannot quantify over (a string), so none is written."
             ));
         }
