@@ -102,6 +102,12 @@ are named in the run rather than proved — a leaf resting on a table above, the
 could not settle, rows an `apply` brought in, rows the sieve rules out, a point with no
 values behind it — so a run that has any of them says so instead of printing a clean "ok".
 
+**All of it in one place.** Every layer above — the five proofs, the declarations, the
+examples, the vectors across twelve languages, the coverage criteria, the model checker, the
+certificate and its two re-checkers, the mutants, the source citations — is laid out with
+what it reaches and where it stops in [How it is
+checked](https://i2y.github.io/rulec/assurance/).
+
 No runtime and no configuration: what comes out is ordinary dependency-free functions.
 
 > **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**

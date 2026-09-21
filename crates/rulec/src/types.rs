@@ -928,14 +928,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             .mark(sp.clone(), tr!("{what}の別名", "the {what}'s alias"));
             if !kw.is_empty() {
                 d = d.note(tr!(
-                    "{}: そこでは予約語なので、その名前をそのまま書いた生成コードはコンパイルが通りません。",
+                    "{}: そこでは予約語です。生成コードはその名前をそのまま書くので、コンパイルできません。",
                     "{}: it is a keyword there, so generated code that writes the name as it is does not compile.",
                     kw.join(", ")
                 ));
             }
             if !hides.is_empty() {
                 d = d.note(tr!(
-                    "{}: その名前はすでに使われていて、ファイルの一番外側に出るこの別名がそれを隠します。",
+                    "{}: その名前はすでに使われています。この別名はファイルの一番外側に出るので、それを隠してしまいます。",
                     "{}: the name is already taken there, and this alias, which reaches the top level of the file, hides it.",
                     hides.join(", ")
                 ));

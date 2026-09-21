@@ -4781,7 +4781,7 @@ impl<'a> Gen<'a> {
         });
         if in_items || self.f.result.as_ref().is_some_and(|r| shares(&r.expr)) {
             return Some(tr!(
-                "この規則は `allocate` で配分を出している。変数で割る式が二つ入ると模型検査器が返ってこないので、ハーネスは出していない（§15.102）。",
+                "この規則は `allocate` で配分を出している。変数で割る式が二つ入るとモデル検査器が返ってこないので、ハーネスは出していない（§15.102）。",
                 "This rule works out a share with `allocate`. Two divisions by a value rather than by a constant do not come back from the model checker, so no harness is written (§15.102)."
             ));
         }

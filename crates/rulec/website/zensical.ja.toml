@@ -25,6 +25,7 @@ nav = [
   { "立場ごとの使い方" = "scenarios.md" },
   { "表(.rule)を書く" = "tour.md" },
   { "何を証明するか" = "checks.md" },
+  { "どうやって確かめているか" = "assurance.md" },
   { "生成して呼ぶ" = "generate.md" },
   { "突き合わせと再生" = "compare.md" },
   { "例で見る" = "examples.md" },

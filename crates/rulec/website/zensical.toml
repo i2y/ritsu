@@ -25,6 +25,7 @@ nav = [
   { "How to use it, by role" = "scenarios.md" },
   { "Write a table (.rule)" = "tour.md" },
   { "What it proves" = "checks.md" },
+  { "How it is checked" = "assurance.md" },
   { "Generate and call" = "generate.md" },
   { "Compare and replay" = "compare.md" },
   { Examples = "examples.md" },

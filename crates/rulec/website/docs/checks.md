@@ -355,3 +355,8 @@ decide what `<=60cm` means for 61cm.
 - 三辺合計 が 80cm なら 運賃 1710円、81cm なら 運賃 2020円（あて先 北海道、重量 1g）
 …
 ```
+
+---
+
+This page is one layer. [How it is checked](assurance.md) is the map of all of
+them — what each one reaches, and where each one stops.

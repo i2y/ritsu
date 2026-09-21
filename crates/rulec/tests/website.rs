@@ -29,6 +29,7 @@ const AUTHORED: &[&str] = &[
     "scenarios.md",
     "tour.md",
     "checks.md",
+    "assurance.md",
     "generate.md",
     "compare.md",
     "examples.md",
@@ -516,6 +517,32 @@ fn 規則のコード片には札が付いている() {
         bare.is_empty(),
         "規則のコード片に ```rule の札がありません（付けると色が付きます）: {bare:?}"
     );
+}
+
+/// The assurance page says how many rules, mutants and codes there are. Those numbers are
+/// the page's whole point — a map of the evidence with a stale count on it is worse than no
+/// map — so they are held to what is actually in the repository, in both languages.
+#[test]
+fn 確かめ方のページの件数は実物と合っている() {
+    let count = |dir: &str| {
+        std::fs::read_dir(root().join(dir))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
+            .count()
+    };
+    let rules = count("tests/corpus");
+    let mutants = count("tests/mutants");
+    let codes = rulec::codes::ledger().len();
+    for (lang, want) in [
+        ("docs", vec![format!("**{mutants} deliberately broken rules**"), format!("**{rules} rules**"), format!("{codes} codes")]),
+        ("docs-ja", vec![format!("わざと壊した規則 {mutants} 本**"), format!("規則 {rules} 本**"), format!("{codes} 件")]),
+    ] {
+        let page = read(&format!("website/{lang}/assurance.md"));
+        for w in want {
+            assert!(page.contains(&w), "website/{lang}/assurance.md に「{w}」がありません");
+        }
+    }
 }
 
 /// The playground opens on the table the front page's first picture is about

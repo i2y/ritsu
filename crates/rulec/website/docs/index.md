@@ -658,6 +658,7 @@ is handed out over a run of lines in the ratio of their prices, the parts add
 up to it exactly, odd yen included.
 
 [What it proves, in detail](checks.md){ .md-button }
+[How it is checked](assurance.md){ .md-button }
 
 ---
 
