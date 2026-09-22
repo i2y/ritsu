@@ -16,6 +16,12 @@ for f in *_proof.rs; do
   log=$(kani "$f" 2>&1) || true
   e=$(date +%s)
   line=$(printf '%s\n' "$log" | grep -E '^Complete - ' | tail -1)
+  # A rule the generator deliberately writes no harness for says so in the file itself
+  # (a division by a value, §15.102); kani then reports that it found nothing to verify.
+  # That is not a missing verdict, and reading it as one made the report look alarming.
+  if [ -z "$line" ] && printf '%s\n' "$log" | grep -q 'No proof harnesses'; then
+    line="no harness written — see the head of $f"
+  fi
   printf '%-24s %3ds  %s\n' "${f%_proof.rs}" "$((e - s))" "${line:-NO VERDICT}"
   total=$((total + e - s))
 done

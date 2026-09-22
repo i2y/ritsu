@@ -146,7 +146,7 @@ What is **not** proved matters just as much.
 Three things are built against (4), and none of them shares code with the checker. `gen`
 writes proof harnesses for [Kani](https://model-checking.github.io/kani/) beside the Rust,
 behind `#[cfg(kani)]`, which decide over **every** input in the declared domain rather than
-over the test cases; on the corpus, 96 of them verify in 163 seconds. `rulec certificate`
+over the test cases; on the corpus, 102 of them verify in 164 seconds. `rulec certificate`
 prints what all five proofs rest on — the boxes that tile the input space, the axis each pair
 of rows parts on, the interval every computed value is forced into, and where each cell stands
 in your file, down to the byte — and `tools/recheck.py`, one dependency-free file, holds it to
@@ -288,7 +288,7 @@ data. The two premium tables are also held,
 grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 517 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
+$ cargo test          # 519 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
 ```
 
 ## Where to read next

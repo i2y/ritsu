@@ -746,3 +746,83 @@ fn サイトが並べる対象言語はレジストリと同じ() {
         }
     }
 }
+
+/// The numbers about Kani on the pages, held to the harnesses `gen` actually writes and to
+/// the run recorded in `experiments/kani/report.txt`.
+///
+/// Three copies of one count drifted apart before this test existed: the pages said 96, the
+/// recorded run said 73, and the corpus had grown to 102. None of them was wrong when it
+/// was written — the corpus grew and nothing pointed at them. A count that is not held to
+/// the thing it counts is a count that rots, which is why `tests/readme.rs` holds the
+/// README's the same way.
+#[test]
+fn kaniの件数はページと記録と実物で揃っている() {
+    // `gen` の書いたハーネスを数える。kani そのものは要らない。
+    let out = std::env::temp_dir().join("rulec-kani-count");
+    let _ = std::fs::remove_dir_all(&out);
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(root())
+        .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success(), "gen が失敗した");
+    let mut real = 0usize;
+    for e in std::fs::read_dir(out.join("rust")).unwrap().flatten() {
+        if e.path().extension().is_some_and(|x| x == "rs") {
+            real += std::fs::read_to_string(e.path()).unwrap().matches("#[kani::proof]").count();
+        }
+    }
+    let _ = std::fs::remove_dir_all(&out);
+    assert!(real > 0, "ハーネスが一本も出ていない");
+
+    // 記録した実測と同じ本数か。ずれていたら、どちらかが古い。
+    let report = read("experiments/kani/report.txt");
+    let recorded: usize = report
+        .lines()
+        .filter_map(|l| l.split("Complete - ").nth(1))
+        .filter_map(|r| r.split(' ').next())
+        .filter_map(|n| n.parse::<usize>().ok())
+        .sum();
+    assert_eq!(
+        recorded, real,
+        "experiments/kani/report.txt は {recorded} 本ぶんだが、いま gen が書くのは {real} 本。\
+         `sh experiments/kani/run.sh > experiments/kani/report.txt` で取り直してください"
+    );
+
+    // ページが言う本数も同じか。
+    for (page, want) in [
+        ("README.md", format!("{real} of them verify")),
+        ("website/docs/index.md", format!("{real} harnesses")),
+        ("website/docs/generate.md", format!("{real} harnesses")),
+        ("website/docs-ja/index.md", format!("{real} 本が")),
+        ("website/docs-ja/generate.md", format!("{real} 本が")),
+        ("docs/generated-code.md", format!("corpus of {} rules", corpus_rules())),
+    ] {
+        assert!(read(page).contains(&want), "{page} に「{want}」がありません");
+    }
+}
+
+/// The corpus's own size, for the pages that quote it.
+fn corpus_rules() -> usize {
+    std::fs::read_dir(root().join("tests/corpus"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
+        .count()
+}
+
+/// The front page and the walkthrough quote the corpus's size too, and they are written by
+/// hand in two languages — which is exactly where one copy gets updated and the other does
+/// not. It happened: the Japanese pages said 45 while the English ones still said 43.
+#[test]
+fn トップと道案内が言う規則の本数は実物と合っている() {
+    let n = corpus_rules();
+    for (page, want) in [
+        ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
+        ("website/docs/index.md", format!("and {n} rules — 36 transcribed from real")),
+        ("website/docs-ja/index.md", format!("規則 **{n} 本**")),
+        ("website/docs/generate.md", format!("On the corpus of {n} rules")),
+    ] {
+        assert!(read(page).contains(&want), "{page} に「{want}」がありません");
+    }
+}
