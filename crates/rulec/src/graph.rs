@@ -505,8 +505,7 @@ pub fn data_json(f: &RuleFile, c: &Checked) -> String {
                         "Which value is decided from what, left to right. It does not happen in that order: all of it is decided in one call."
                     ),
                 )
-                .str("hint", tr!("箱を押すと、その表について確かめたことがここに出ます。", "Press a card to see what was verified about its table."))
-                .str("close", tr!("閉じる", "close"))
+                        .str("close", tr!("閉じる", "close"))
                 .str("row", tr!("行", "row "))
                 .finish(),
         )

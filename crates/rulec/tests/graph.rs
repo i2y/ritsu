@@ -256,15 +256,15 @@ fn グラフは検査より手前で出る() {
 /// something else. The page carries the graph as data and builds the board from the document
 /// it already is — which is why a reader with no script still has that document.
 #[test]
-fn ページの盤面は_グラフそのものから組み立てられる() {
+fn ページのカードは_グラフそのものから組み立てられる() {
     for rule in ["tests/corpus/二つの区分.rule", "tests/corpus/全国運賃.rule", "tests/corpus/非常勤退職手当.rule"] {
         let g = graph(rule);
         let (c, html) = run(&["doc", rule, "--format", "html"]);
         assert_eq!(c, 0, "{rule}");
-        let i = html.find("const GRAPH = ").expect("盤面のデータがページに無い");
+        let i = html.find("const GRAPH = ").expect("カードのデータがページに無い");
         let tail = &html[i + "const GRAPH = ".len()..];
         let data = rulec::json::parse(tail[..tail.find(";\n").unwrap()].trim())
-            .unwrap_or_else(|e| panic!("{rule}: 盤面のデータが JSON として読めない: {e}"));
+            .unwrap_or_else(|e| panic!("{rule}: カードのデータが JSON として読めない: {e}"));
 
         // Every decider is a card, in exactly one column, and nothing else is.
         let want: Vec<String> = arr(&g, "nodes")
@@ -312,7 +312,7 @@ fn ページの盤面は_グラフそのものから組み立てられる() {
         }) {
             assert!(
                 html.contains(&format!("data-t=\"{t}\"")),
-                "{rule}: 表 {t} の行に印が無いので、盤面が取り出せない"
+                "{rule}: 表 {t} の行に印が無いので、カードに表を入れられない"
             );
         }
     }
@@ -322,7 +322,7 @@ fn ページの盤面は_グラフそのものから組み立てられる() {
 /// card that decides it. The page already knew which rows matched; what the board adds is
 /// *where* they are, and that has to come from the same list or it is a second opinion.
 #[test]
-fn 盤面は当てはまった行と同じ色で光る() {
+fn カードは当てはまった行と同じ色で光る() {
     let (c, html) = run(&["doc", "tests/corpus/二つの区分.rule", "--format", "html"]);
     assert_eq!(c, 0);
     for want in [
