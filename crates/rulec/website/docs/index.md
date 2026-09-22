@@ -364,59 +364,12 @@ class, an order**.
 - **Routing** — which warehouse ships it, which desk handles it
 - **Statutory provisions** — a tax table, the reduced rate that takes precedence over it, a proviso, a provision applied to another case
 
-### Money does not have to be involved
+### Money is not required, and a statute has this shape too
 
-Here is a rule with no money in it anywhere. Four flat facts go in, one of four words
-comes out, and it passes the checks as written.
+A rule where no amount ever appears, and a tax table like Schedule 1 of the Stamp Tax Act
+with its reduced rates, provisos and cross-references stacked on top, are both written the
+same way. Whether yours is one of them is on [Does your rule fit](fit.md).
 
-```rule
-rule return_eligibility v1
-
-enum category = electronics | clothing | perishable
-enum verdict = accepted | outside_window | condition_failed | not_returnable
-
-inputs
-  item    : category
-  days    : number  range >=0 <=365
-  opened  : bool
-  receipt : bool
-
-outputs
-  answer : verdict
-
-table decide
-policy unique
-| item            | receipt | days | opened | -> answer : verdict |
-| perishable      | -       | -    | -      | not_returnable      |
-| not: perishable | false   | -    | -      | condition_failed    |
-| electronics     | true    | >14  | -      | outside_window      |
-| electronics     | true    | <=14 | true   | condition_failed    |
-| electronics     | true    | <=14 | false  | accepted            |
-| clothing        | true    | >30  | -      | outside_window      |
-| clothing        | true    | <=30 | -      | accepted            |
-```
-
-What decides it is the **shape of the decision**, not what the values happen to be. So
-this is not "a tool for shipping fees" and not "a tool for e-commerce".
-
-### A statute is written the same way
-
-Statutes are full of table-shaped provisions. A tax table such as Appendix Table 1 of the
-Stamp Tax Act is a table as it stands, and a reduced rate, a proviso or a provision applied
-to another case sits on top of it. Each of those has its own way of being written.
-
-| In the statute | In the rule |
-|---|---|
-| **A main rule and an exception that takes precedence** (a stamp duty table and the relief for first-time buyers) | two tables, with one line on the exception: `overrides standard` |
-| **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
-| **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
-| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@osha "§1910.157"` — or `@gov table1` for a tariff sheet or a company rule — at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it; cite a table and **an amount that is not in that copy fails too** |
-
-The checks judge completeness and overlaps over the main rule and its exceptions together,
-and for an applied rule they prove that what this rule passes stays inside the applied
-rule's ranges. The approver's page quotes the cited text. How to write them is in
-[Write a table](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working examples
-are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
 
 ### The one constraint: a cell sees only its own column
 
@@ -433,65 +386,15 @@ point "is there a gap?" has no general answer.
 
 That is where the boundary of this tool is drawn.
 
-### So how is something complicated written — tables stack
+### Something complicated is written by stacking tables
 
-Because a cell can only see its own column, **tables stack as deep as you like**. What one
-table produces is written as a column of the next.
+Because a cell sees only its own column, **tables stack as deep as you like**: what one
+table decides becomes a column of the next, and the rows that fired come back one per
+table however deep the stack goes.
 
-<div class="rc-overview" markdown>
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=9abfb225#only-dark)
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=9abfb225#only-light)
-</div>
+A table holds the branching and nothing else; the arithmetic lives in `derive`, `define`
+and `result`. Both are on [Write a table (.rule)](tour.md#something-complicated-is-written-by-stacking-tables).
 
-What to look at is **the word that appears twice**. `band` leaves the first table and arrives
-as a column of the second. Not every table is in the chain: `reduction` reads the rule's
-inputs directly, because Article 7(2) restates the distance conditions rather than referring
-back to them.
-
-Depth costs no visibility. When a check fails it names the row that fired in each table.
-
-```
-Fired rows: table band_of row 4 / table amount row 3 / table reduction row 8
-```
-
-Four things matter when stacking.
-
-| | |
-|---|---|
-| **A table's output is a column of any later table** | There is no limit on the depth; only the check's budget stops it, at E109 |
-| **One table may produce several output columns** | one table above produces the fee and the rate that scales it at once |
-| **A `derive` can be a column** | "Judge on the amount after the discount" becomes one column instead of one bare line of arithmetic |
-| **Completeness is checked across the stack** | The second form of E102 is "the upstream table never emits that value" |
-
-A rule that does this, and runs, is [Examples](examples.md) → "Three tables stacked, two
-outputs returned".
-
-### Where the arithmetic goes
-
-A table holds **the branching and nothing else**. Arithmetic lives in three places outside it.
-
-| | what it may hold | can it be a column? |
-|---|---|---|
-| `derive` | a linear combination of inputs — `+`, `-`, multiplication by a constant | **yes**, and it stays a quantity |
-| `define` | a boolean (two shapes), or a computed intermediate value | a boolean or an enum one can |
-| `result` | `+ - * /`, parentheses, `min` and `max`, and the five rounding modes as functions | — |
-
-- **Division is by a constant only.** Dividing by a variable stops at E115. Dividing money by
-  a money constant — `subtotal ÷ 100USD` — cancels the unit and leaves a `number`.
-- Multiplication by a rate is allowed: `base × fuel`. The rate stays a rate to the end,
-  and rounding happens exactly once.
-- **There is no loop and no recursion** (bar a `fold`, which walks a sequence once), and no date arithmetic — comparison and range only.
-- Everything is an integer. No floating point appears anywhere.
-
-**When a rule has more than one output**, `result` assembles the first one and nothing else
-(E015); the rest are taken from a `define` of the same name as the output. A second `result`
-line stops at E016.
-
-**Most numbers you return carry a unit.** The numeric types are **quantity (mass, length,
-area, volume, duration, and — comparison only — temperature and sound), money and rate**, plus `number` for the ones that carry none — a count of things, a
-number of days, a score. Numbers with a unit and numbers without do not mix, and the
-only way a unit disappears is dividing money by money: "one point per 100 yen" is a
-`number`.
 
 ### What money buys you on top
 
@@ -579,120 +482,29 @@ out — each with a concrete input that exhibits it.
 
 ## What gets proved
 
-The first three are **one computation**. Lay the rectangle each row covers over the input
-space, and ask whether anything is left uncovered, whether two rows cover the same stretch,
-and whether an earlier row takes a later row's stretch first. Same table in all three; one
-thing changed.
-
 <div class="rc-overview" markdown>
 ![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=9abfb225#only-dark)
 ![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=9abfb225#only-light)
 </div>
 
-The other four — units, rounding, overflow, examples — are not rectangle arithmetic. They
-are held by the types and the declarations.
+Seven things are settled before anything is generated. **Five are proved statically** —
+every input matches some row, no input matches two, no row matches nothing, units are never
+confused, every intermediate fits in int64. **One is a declaration that has to be there** —
+how fractions are settled. **One is run** — every worked example holds. If any of the seven
+cannot be shown, nothing is generated.
 
-| | |
-|---|---|
-| **Completeness** | every input matches some row, or you get the input that does not |
-| **Overlap** | under `policy unique`, two rows never match the same input. Under `policy first`, structural shadowing is told apart from the pairs that need a human decision |
-| **Dead rows** | a row nothing can reach, whether because earlier rows cover it or because the upstream table never emits the value it names |
-| **Units** | yen and grams do not add. Tax-inclusive and tax-exclusive are different types |
-| **Rounding** | a numeric output must declare how fractions are settled — and the message shows, in yen, how much the choice moves |
-| **Overflow** | every intermediate value is proved to fit in int64, from the declared ranges |
-| **Examples** | every example runs, and a failure names the rows that fired |
-
-Nothing is approximated. When a check cannot prove something, it says
-so rather than passing.
-
-When several tables define one output — a main rule and its exceptions — they go through
-these checks **as one table**, and an overlap with no precedence written stops. A rule that
-cites a statute or a tariff sheet is also held to the digests of its copies — and, where it
-cites a table, to **the amounts that table shows** (E116, W120) — and a rule applied to another
-case to the applied rule's ranges.
-
-### What is *not* proved
-
-Worth saying in the same breath.
-
-1. **That the table matches reality.** What gets proved is what can be
-   said about the table you wrote. Cite the document a table came from
-   (`@source table1`) and a mistyped amount does fail (E116, W120) — but
-   even then what is shown is agreement with the copy, not with the
-   world. With no citation, transcribe the tariff wrong and everything
-   stays green.
-2. **That the generated code answers like the table.** That is a
-   **test**, not a proof: vectors built from the boundaries are fed to
-   the reference evaluator and to every generated language and compared
-   byte for byte. Strong evidence, not a proof of equivalence.
-3. **Row pairs the overlap proof could not reach.** When a `unique`
-   table has two rows and neither an input that hits both nor a proof
-   that none exists can be constructed, **W114 names the pair and the
-   obligation moves to a runtime guard**. That one spot has no static
-   proof — instead of silently picking a row, the generated code raises.
-4. **That the checker itself is right.** The proofs above come out of
-   rulec's own implementation, which has not itself been proved
-   correct. The evidence is 84 deliberately broken rules each producing
-   the diagnostic it should, and 45 rules — 36 transcribed from real
-   published terms passing on every commit. **Evidence, not proof.**
-
-**A model checker reads the generated Rust.** Beside the Rust module, `gen`
-writes proof harnesses for [Kani](https://model-checking.github.io/kani/),
-behind `#[cfg(kani)]` so `rustc` never sees them. Over **every** input in the
-declared domain rather than over the vectors: no table falls through, the
-runtime guard of (3) never fires, nothing overflows an `i64`, and the rows of
-each `unique` table cover the domain exactly once. It shares no code with the
-checker that proved the table, so where the two agree, two unrelated tools say
-the same thing — and where they disagree, one of them is wrong and the input
-that shows it comes back. On the corpus, 102 harnesses verify in 163 seconds.
-What it does not reach: the table itself (1), and every target but this one.
-
-**And the checks behind the evidence are proved.** `rulec certificate` writes
-out what the five proofs rest on, small enough to hand over and to re-check in
-milliseconds — including where every cell of the table stands in your file, to
-the byte. `proofs/` is a Lean 4 development in which what a table means, the
-checks a certificate has to pass, and the theorems that each check settles its
-claim are all written down and machine-checked; the program it builds runs
-those very checks. That moves what (4) asks you to take on trust from 42,000
-lines of Rust to a few hundred lines whose soundness is proved — the reading
-of the document itself is not, and the declared ranges, types and constraints
-in it are its own word. Writing it, and reading it back adversarially, found a
-soundness bug in the completeness check, a witness that could break the rule's
-own `constraint`, and eleven ways a forged certificate got past a re-checker.
-One theorem there is about the rule rather than the document: where an amount
-is handed out over a run of lines in the ratio of their prices, the parts add
-up to it exactly, odd yen included.
-
-[What it proves, in detail](checks.md){ .md-button }
-[How it is checked](assurance.md){ .md-button }
-
----
+**What is *not* proved matters just as much**: that the table matches reality, that the
+generated code answers like the table, the row pairs the overlap proof could not reach, and
+that the checker itself is right. All four, with where each layer stops, are on
+[What it proves](checks.md) and [How it is checked](assurance.md).
 
 ## Then: is it the same as what we run today?
 
-Two commands turn "deploy and watch the numbers" into "look before
-deploying".
+Where an implementation already runs, a 20-to-30-line adapter streams the generated vectors
+through it and a match rate comes back with the disagreements, clustered. For a revision,
+`rulec diff` answers **which inputs get a different answer** with no records at all, and
+**how many of yours move** when you have them. [Compare and replay](compare.md).
 
-```console
-$ rulec verify rules/minimum_wage.rule --adapter python3 adapter.py
-Compared 29 / matched 0 (0.000%)
-Counterpart: payroll@2025-04
-
-Affected 29 (100.000%)  amount +1,515
-  table by_age row 2        4 records  difference +85 uniform  total +340
-    Example: age=18, apprentice=false, first_year=true → rule hourly=1085 / legacy hourly=1000
-```
-
-`verify` compares the rule against a legacy implementation, and `diff`
-compares two versions of the rule over real past records and reports
-**how many change and by how much**. Mismatches are clustered by the
-rows that fired, with counts, amount differences and a witness; a
-cluster whose differences are all smaller than the output's rounding
-grid is flagged as a rounding convention rather than a disagreement.
-
-[Compare and replay](compare.md){ .md-button }
-
----
 
 ## Who it is for
 

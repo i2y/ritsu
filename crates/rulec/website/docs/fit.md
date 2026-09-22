@@ -22,6 +22,61 @@ If all five are **yes**, it fits. Whether money is involved is not one of them.
 If any of 1–4 is no, it does not fit structurally. If only 5 is no, it will work, but
 the tool is more than you need.
 
+## Money does not have to be involved
+
+Here is a rule with no money in it anywhere. Four flat facts go in, one of four words
+comes out, and it passes the checks as written.
+
+```rule
+rule return_eligibility v1
+
+enum category = electronics | clothing | perishable
+enum verdict = accepted | outside_window | condition_failed | not_returnable
+
+inputs
+  item    : category
+  days    : number  range >=0 <=365
+  opened  : bool
+  receipt : bool
+
+outputs
+  answer : verdict
+
+table decide
+policy unique
+| item            | receipt | days | opened | -> answer : verdict |
+| perishable      | -       | -    | -      | not_returnable      |
+| not: perishable | false   | -    | -      | condition_failed    |
+| electronics     | true    | >14  | -      | outside_window      |
+| electronics     | true    | <=14 | true   | condition_failed    |
+| electronics     | true    | <=14 | false  | accepted            |
+| clothing        | true    | >30  | -      | outside_window      |
+| clothing        | true    | <=30 | -      | accepted            |
+```
+
+What decides it is the **shape of the decision**, not what the values happen to be. So
+this is not "a tool for shipping fees" and not "a tool for e-commerce".
+
+## A statute is written the same way
+
+Statutes are full of table-shaped provisions. A tax table such as Appendix Table 1 of the
+Stamp Tax Act is a table as it stands, and a reduced rate, a proviso or a provision applied
+to another case sits on top of it. Each of those has its own way of being written.
+
+| In the statute | In the rule |
+|---|---|
+| **A main rule and an exception that takes precedence** (a stamp duty table and the relief for first-time buyers) | two tables, with one line on the exception: `overrides standard` |
+| **A proviso**, one line whose conditions do not line up as columns | not a table but a sentence: `clause` |
+| **A provision applied to another case** ("Article 20 applies, reading 'years of service' as 'period in office'") | `apply`, with the substitution written as it stands |
+| **Which document, and where in it, it was transcribed from** | a `source` line declares the document and `@osha "§1910.157"` — or `@gov table1` for a tariff sheet or a company rule — at the end of a line cites it. The document is a copy of the statute text fetched from e-Gov, the Japanese government's statute database, or, for a policy or a tariff, a file beside the rule. The rule is held to the copy's digest, so a copy that changed stops the check and names the tables citing it; cite a table and **an amount that is not in that copy fails too** |
+
+The checks judge completeness and overlaps over the main rule and its exceptions together,
+and for an applied rule they prove that what this rule passes stays inside the applied
+rule's ranges. The approver's page quotes the cited text. How to write them is in
+[Write a table](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working examples
+are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
+
+
 ## Apportionment, either way you apportion
 
 Spreading a discount across the lines of an order can or cannot be written, depending on

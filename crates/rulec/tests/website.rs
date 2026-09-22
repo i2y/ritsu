@@ -345,7 +345,17 @@ const DIAGRAMS: [(&str, &str); 5] = [
 
 /// The four the front page carries. The stamp below is theirs, because they are the ones a
 /// returning reader has cached; a diagram further in is fetched the first time either way.
-const FRONT: [&str; 4] = ["overview", "checks", "stack", "flow"];
+/// Every diagram whose URL carries the hash, in a fixed order. The hash is over their
+/// bytes, so **the order and the membership must not change when a diagram merely moves to
+/// another page** — otherwise every URL would have to be re-stamped for no reason.
+const STAMPED: [&str; 4] = ["overview", "checks", "stack", "flow"];
+
+/// Of those, the ones on the front page.
+const FRONT: [&str; 3] = ["overview", "checks", "flow"];
+
+/// Diagrams that live on a page other than the front one, and the page they live on. The
+/// stacking picture followed its explanation to the walkthrough; the hash has to follow it.
+const ELSEWHERE: [(&str, &str); 1] = [("stack", "tour.md")];
 
 /// The opening diagram's URL carries a hash of the diagram's own bytes. Without it a reader
 /// who has been to the site before keeps seeing the previous picture — the filename never
@@ -354,6 +364,12 @@ const FRONT: [&str; 4] = ["overview", "checks", "stack", "flow"];
 #[test]
 fn 図のurlは中身のハッシュを持っている() {
     let want = diagram_version();
+    // 刻印する図は、トップにあるものとそれ以外で過不足なく分かれている。
+    let mut named: Vec<&str> = FRONT.iter().chain(ELSEWHERE.iter().map(|(s, _)| s)).copied().collect();
+    named.sort();
+    let mut all: Vec<&str> = STAMPED.to_vec();
+    all.sort();
+    assert_eq!(named, all, "STAMPED と FRONT/ELSEWHERE が食い違っている");
     for lang in ["docs", "docs-ja"] {
         let page = read(&format!("website/{lang}/index.md"));
         let refs: Vec<&str> = FRONT
@@ -377,6 +393,24 @@ fn 図のurlは中身のハッシュを持っている() {
                 "{lang}: 図の URL のハッシュが中身と違う。`?v={want}` にしてください: {r}"
             );
         }
+        for (stem, page_name) in ELSEWHERE {
+            let other = read(&format!("website/{lang}/{page_name}"));
+            let mark = format!("images/{stem}");
+            let refs: Vec<&str> = other
+                .match_indices(&mark)
+                .map(|(i, _)| {
+                    let rest = &other[i..];
+                    &rest[..rest.find(')').unwrap_or(rest.len())]
+                })
+                .collect();
+            assert_eq!(refs.len(), 2, "{lang}/{page_name}: {stem} の参照が 2 つでない: {refs:?}");
+            for r in refs {
+                assert!(
+                    r.contains(&format!("?v={want}")),
+                    "{lang}/{page_name}: 図の URL のハッシュが中身と違う: {r}"
+                );
+            }
+        }
     }
 }
 
@@ -385,7 +419,7 @@ fn 図のurlは中身のハッシュを持っている() {
 /// costs the other a single refetch — cheaper than two stamps to keep straight.
 fn diagram_version() -> String {
     let mut bytes = Vec::new();
-    for stem in FRONT {
+    for stem in STAMPED {
         for lang in ["-ja", ""] {
             bytes.extend(read(&format!("website/docs/images/{stem}{lang}.svg")).into_bytes());
         }
@@ -792,9 +826,7 @@ fn kaniの件数はページと記録と実物で揃っている() {
     // ページが言う本数も同じか。
     for (page, want) in [
         ("README.md", format!("{real} of them verify")),
-        ("website/docs/index.md", format!("{real} harnesses")),
         ("website/docs/generate.md", format!("{real} harnesses")),
-        ("website/docs-ja/index.md", format!("{real} 本が")),
         ("website/docs-ja/generate.md", format!("{real} 本が")),
         ("docs/generated-code.md", format!("corpus of {} rules", corpus_rules())),
     ] {
@@ -819,7 +851,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     for (page, want) in [
         ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
-        ("website/docs/index.md", format!("and {n} rules — 36 transcribed from real")),
+        ("website/docs/assurance.md", format!("**{n} rules** — 36 transcribed from real")),
         ("website/docs-ja/index.md", format!("規則 **{n} 本**")),
         ("website/docs/generate.md", format!("On the corpus of {n} rules")),
     ] {

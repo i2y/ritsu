@@ -406,6 +406,18 @@ a witness.
 
 ## derive, define, result
 
+A table holds the branching and nothing else. The arithmetic lives in three places
+outside it.
+
+| | what it may hold | can it be a column? |
+|---|---|---|
+| `derive` | a linear combination of inputs — `+`, `-`, multiplication by a constant | **yes**, and it stays a quantity |
+| `define` | a boolean (two shapes), or a computed intermediate value | a boolean or an enum one can |
+| `result` | `+ - * /`, parentheses, `min` and `max`, and the five rounding modes as functions | — |
+
+A rate can be multiplied in (`base_fee × pay_rate`); it stays a rate to the end and the
+rounding happens once. **Everything is an integer — no floating point anywhere.**
+
 **A derive** is a linear combination of inputs only, and **can sit in a
 table column while still being a quantity**.
 
@@ -460,6 +472,40 @@ amount exactly** — which `proofs/` states and proves rather than leaving
 to the examples. It asks for three names with declared ranges, none of
 them negative, a positive whole, and the `constraint` above; anything
 missing is E117.
+
+## Something complicated is written by stacking tables
+
+Because a cell can only see its own column, **tables stack as deep as you like**. What one
+table produces is written as a column of the next.
+
+<div class="rc-overview" markdown>
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=9abfb225#only-dark)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=9abfb225#only-light)
+</div>
+
+What to look at is **the word that appears twice**. `band` leaves the first table and arrives
+as a column of the second. Not every table is in the chain: `reduction` reads the rule's
+inputs directly, because Article 7(2) restates the distance conditions rather than referring
+back to them.
+
+Depth costs no visibility. When a check fails it names the row that fired in each table.
+
+```
+Fired rows: table band_of row 4 / table amount row 3 / table reduction row 8
+```
+
+Four things matter when stacking.
+
+| | |
+|---|---|
+| **A table's output is a column of any later table** | There is no limit on the depth; only the check's budget stops it, at E109 |
+| **One table may produce several output columns** | one table above produces the fee and the rate that scales it at once |
+| **A `derive` can be a column** | "Judge on the amount after the discount" becomes one column instead of one bare line of arithmetic |
+| **Completeness is checked across the stack** | The second form of E102 is "the upstream table never emits that value" |
+
+A rule that does this, and runs, is [Examples](examples.md) → "Three tables stacked, two
+outputs returned".
+
 
 ## A main rule and its exceptions as two tables
 
