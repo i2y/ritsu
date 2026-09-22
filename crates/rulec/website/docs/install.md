@@ -207,6 +207,18 @@ replay:
         PR: ${{ github.event.pull_request.number }}
 ```
 
+The job above needs records. The one below needs nothing but the two versions, so it runs
+on every pull request from the first day — and the two comments read side by side: what
+*can* move, and how much of what you have does.
+
+```yaml
+- run: rulec diff rules/送料.rule@origin/main rules/送料.rule --format markdown > region.md || [ $? -eq 1 ]
+  env:
+    RULEC_LANG: ja
+- run: gh pr comment "$PR" --body-file region.md
+```
+
+
 With several rules, `git diff --name-only --diff-filter=M origin/main...HEAD -- 'rules/*.rule'`
 lists the ones the pull request changed, and the same two lines run once
 per rule.

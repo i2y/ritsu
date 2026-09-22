@@ -158,7 +158,9 @@ impl<'a> Env<'a> {
         }
     }
 
-    fn expr(&self, e: &Expr) -> Option<Val> {
+    /// The value of an expression in this environment. Public so that the version diff can
+    /// weigh a `derive` without running the whole rule for every probe (§15.122).
+    pub fn expr(&self, e: &Expr) -> Option<Val> {
         match e {
             Expr::Name(n, _) => self.vals.get(n).cloned(),
             // A literal inside an expression is read **in its own unit**, which is the

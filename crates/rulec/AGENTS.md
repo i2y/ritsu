@@ -32,7 +32,7 @@ write  →  fmt  →  check  →  (fix, repeat)  →  examples  →  gen  →  t
                                                                     │
              CI: fmt --check, check --diff-base, gen --check, coverage, test
                                                                     │
-       legacy implementation? → verify        past records? → replay, diff
+       legacy implementation? → verify   past records? → replay, diff   neither? → diff
                                                                     │
                                               a person approves → doc
 ```
@@ -309,18 +309,18 @@ than the output's rounding grid is flagged as a suspected rounding difference.
 implementation, a transcription error in your table, dirty records, or a rounding convention.
 The cluster and its witness are what tell them apart.
 
-### If there are past records: `rulec fixtures lint`, `replay`, `diff`
+### Comparing two versions: `rulec diff`, with records and without
 
-`fixtures lint` first, always — it reports records whose shape disagrees with the rule instead
-of quietly dropping them. The generated `_record` writes that shape already; only a log of some
-other implementation has to be extracted. Then `replay` compares the rule against what actually
-happened — and, for records carrying the rows that matched, row by row: an amount that agrees
-under a different row is reported apart, as a moved row. `diff` compares two versions over the
-same records and reports **how many change and by how much**, which is the number a person
-needs before approving. A version is named by its file, by its git tag (`送料@v3` is the tag
-`rules/送料/v3`, or failing that the revision `v3`), or by a path at a revision — on a pull
-request the old version is `rules/送料.rule@origin/main`. `--format markdown` is what gets
-posted, and `--terse` keeps every value of a record out of it.
+**With no `--fixtures`** it answers what a log cannot: which inputs get a different answer, as
+a region in the rule's own columns, plus the claim that there are none outside — withheld when
+it was not earned. Run it first: the region is what the whole rule does with the change, not
+what the changed row says (a base fee a later table multiplies by 0% moves nobody). **With
+`--fixtures`** it answers how many of your records move and by how much, which is the number a
+person needs before approving; run `fixtures lint` first, always, and `replay` against the log.
+
+A version is named by its file, its git tag (`送料@v3` is `rules/送料/v3`, else the revision
+`v3`), or a path at a revision — on a PR, `rules/送料.rule@origin/main`. `--format markdown` is
+what gets posted and `--terse` keeps record values out; [formats.md](docs/formats.md) has both shapes.
 
 ### For the person who approves: `rulec doc`
 

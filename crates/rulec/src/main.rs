@@ -619,27 +619,38 @@ fn commands() -> Vec<Cmd> {
             name: "diff",
             args: "<old> <new>",
             purpose: tr!(
-                "二つの版を同じ記録に当て、何件がいくら動くかを出す",
-                "apply two versions to the same records and report how many change and by how much"
+                "二つの版を比べる。記録があれば何件がいくら動くかを、無ければどの入力で答えが変わるかを出す",
+                "compare two versions: against records, how many move and by how much; with no records, which inputs get a different answer"
             ),
             params: vec![
                 ("<old>", tr!("旧の規則。file.rule、送料@v3（git タグ rules/送料/v3）、または rules/送料.rule@origin/main（そのリビジョンのそのパス）", "the old rule: file.rule, 送料@v3 (the git tag rules/送料/v3), or rules/送料.rule@origin/main (that path at that revision)")),
                 ("<new>", tr!("新の規則。同じ書き方", "the new rule, written the same way")),
             ],
             flags: vec![
-                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
-                flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
+                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。付けなければ、入力の全体で比べる", "the past records; with none, the two versions are compared over the whole input space")),
+                flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言（--fixtures のとき）", "the declaration of the default values used for filling (with --fixtures)")),
                 flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかを出さずにそう言う（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
-                flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
+                flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないため、無いときは領域だけを短く出すため", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),
             ],
             exits: vec![
-                (0, tr!("全件同じ答え（影響なし）", "both versions answered the same everywhere (no impact)")),
-                (1, tr!("影響がある", "there is an impact")),
+                (
+                    0,
+                    tr!(
+                        "動いたものは無い。--fixtures なら全件同じ答え、無いなら答えが違う入力を一つも見つけていない（決められなかった領域があれば、それは出ているが 1 にはしない。JSON の total を読む）",
+                        "nothing moved: with --fixtures every record answered the same, without it no input was found that answers differently (a region that could not be settled is reported and does not raise this to 1; read `total` in the JSON)"
+                    ),
+                ),
+                (
+                    1,
+                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった", "there is an impact: inputs that answer differently, or a change in what the rule accepts"),
+                ),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
                 "rulec diff 送料@v3 送料@v4 --fixtures replay/2025-08.jsonl".into(),
+                "rulec diff 送料@v3 送料@v4".into(),
                 "rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures \"$FIXTURES\" --format markdown --terse".into(),
             ],
             codes: &[],
@@ -1701,6 +1712,65 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
 }
 
 /// §10.4: apply two versions to the same records and report how many change and by how much.
+/// `rulec diff <old> <new>` with no `--fixtures`: the difference over the whole input
+/// space (§15.122). Exit 1 when anything moved, the way the record-shaped answer does.
+fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitCode {
+    let terse = opts.has("--terse");
+    // A flag that means nothing without records is refused, not ignored — the line the
+    // whole CLI draws around an unknown flag, held to a known one in the wrong mode (§12.1).
+    for f in ["--manifest", "--fill"] {
+        if opts.has(f) {
+            eprintln!(
+                "{}",
+                tr!(
+                    "error: {} は --fixtures と一緒にしか使えません。補完は記録に当てるときの話です",
+                    "error: {} needs --fixtures: filling is about records",
+                    f
+                )
+            );
+            return ExitCode::from(2);
+        }
+    }
+    let r = (|| -> Result<_, String> {
+        let (_, of, oc) = load_rule_with(a, true)?;
+        let (_, nf, nc) = load_rule_with(b, true)?;
+        if of.name.text != nf.name.text {
+            return Err(tr!(
+                "別の規則を比べようとしています（`{}` と `{}`）",
+                "comparing different rules (`{}` and `{}`)",
+                of.name.text, nf.name.text
+            ));
+        }
+        Ok((of, oc, nf, nc))
+    })();
+    let (of, oc, nf, nc) = match r {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let budget = match opts.get("--budget") {
+        Some(v) => match v.parse::<usize>() {
+            Ok(n) => n,
+            Err(_) => {
+                eprintln!("{}", tr!("error: --budget は正の整数です", "error: --budget takes a positive integer"));
+                return ExitCode::from(2);
+            }
+        },
+        None => rulec::vdiff::DEFAULT_BUDGET,
+    };
+    let d = rulec::vdiff::diff((&of, &oc), (&nf, &nc), budget);
+    if json {
+        println!("{}", rulec::vdiff::render_json(&d, &nc, a, b));
+    } else if md {
+        print!("{}", rulec::vdiff::markdown(&d, &nc, a, b, terse));
+    } else {
+        print!("{}", rulec::vdiff::render(&d, &nc, terse));
+    }
+    ExitCode::from(u8::from(d.any()))
+}
+
 fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
         eprintln!("{}", tr!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
@@ -1709,6 +1779,17 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     let terse = opts.has("--terse");
     if json && terse {
         return terse_with_json();
+    }
+    if opts.get("--budget").is_some() && opts.get("--fixtures").is_some() {
+        eprintln!("{}", tr!("error: --budget は --fixtures と一緒には使えません", "error: --budget cannot be used with --fixtures"));
+        return ExitCode::from(2);
+    }
+    // With no records to replay against, the two versions are compared over the whole input
+    // space instead: which inputs get a different answer, and the claim that outside them
+    // there are none (§15.122). The same command, because it is the same question asked of
+    // the rule rather than of a log.
+    if opts.get("--fixtures").is_none() {
+        return vdiff_cmd(a, b, opts, md, json);
     }
     let r = (|| -> Result<_, String> {
         let (_, of, oc) = load_rule_with(a, true)?;

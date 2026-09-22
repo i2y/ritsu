@@ -149,6 +149,16 @@ replay:
         PR: ${{ github.event.pull_request.number }}
 ```
 
+上のジョブは記録が要ります。下のジョブは二つの版だけで走るので、初日から PR ごとに回せます。コメントは二つ並べて読むものです——**何が動きうるか**と、**手元の記録のうち何件が動くか**。
+
+```yaml
+- run: rulec diff rules/送料.rule@origin/main rules/送料.rule --format markdown > region.md || [ $? -eq 1 ]
+  env:
+    RULEC_LANG: ja
+- run: gh pr comment "$PR" --body-file region.md
+```
+
+
 規則が複数あるなら、`git diff --name-only --diff-filter=M origin/main...HEAD -- 'rules/*.rule'` がこの PR で変わったものを並べるので、同じ二行を規則ごとに回します。
 
 ## 次に読むもの

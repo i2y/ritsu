@@ -186,6 +186,7 @@ $ rulec gen rules/*.rule --out generated [--check]
 $ rulec vectors | coverage | test                  # the test cases, their coverage, the run
 $ rulec adapter | schema | verify                  # against a legacy implementation
 $ rulec fixtures lint | replay | diff              # against past records
+$ rulec diff rules/parcel.rule@HEAD rules/parcel.rule  # …and with no records: which inputs move
 $ rulec doc rules/parcel.rule --lang ja            # for whoever approves the table; --format html
 $ rulec certificate rules/parcel.rule              # the evidence, for another program to re-check
 $ rulec graph rules/parcel.rule                    # what decides each value, and what reads it
@@ -248,11 +249,12 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
                   built from those very functions
-src/              43 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
+src/              44 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
                   (the tables that define one output, as one set), region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
                   cert (the certificate), graph (the rule as one graph of what decides
-                  what), import and xlsx (a draft from a sheet: ZIP, deflate,
+                  what), vdiff (two versions compared over the whole input space),
+                  import and xlsx (a draft from a sheet: ZIP, deflate,
                   the number formats), proto and jsonschema (the enums whose values are
                   declared outside the rule), enums, mcp (the command table as MCP tools),
                   codegen/tool (the rule as an MCP tool and its view), codegen/connect (the
@@ -286,7 +288,7 @@ data. The two premium tables are also held,
 grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 486 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
+$ cargo test          # 514 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
 ```
 
 ## Where to read next

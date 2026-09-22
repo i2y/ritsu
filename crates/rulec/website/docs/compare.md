@@ -70,7 +70,65 @@ Records written by the generated code carry the rows that matched (the `_record`
 function writes them), and `replay` compares those too: a record whose amount agrees but
 whose row differs from the rule's is reported apart, as a moved row, clustered by the move.
 
-## Between two versions
+## Between two versions with no records at all
+
+Records tell you how many of *your* cases move. They cannot tell you
+about a case you have never seen. Leave `--fixtures` off and the same
+command answers that instead:
+
+```console
+$ rulec diff 送料@v3 送料@v4
+規則 送料 v3 → v4
+入力の組み合わせ 7050 通り。うち起きうるのは 3525 通りで、同じ 3501 / 違う 24 / 決められず 0 / 入力を作れず 0
+
+  会員 not プラチナ  かつ  重量 >=2001g <=40000g  かつ  注文金額 >=0円 <=29999円  かつ  届け先 = 遠隔地
+    送料: 1800 → 2000
+    当たる行: 表 基本送料 行2, 表 負担判定 行3
+    例: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
+
+  会員 = プラチナ  かつ  重量 >=2001g <=40000g  かつ  注文金額 >=0円 <=29999円  かつ  届け先 = 遠隔地
+    送料: 900 → 1000
+    当たる行: 表 基本送料 行2, 表 負担判定 行2
+    例: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
+
+ここに挙げた入力のほかでは、二つの版は同じ答えを返します。
+```
+
+Two things in that answer are not available from a log.
+
+**`注文金額 >=0円 <=29999円`.** The change was one amount in the base fee
+table, and nothing about it mentions the order total. But an order of
+30,000 yen or more pays 0% of the base fee, and zero times the new
+amount is zero times the old one: the change is *erased* on that side.
+The region is what the whole rule does with the change, not what the
+changed row says.
+
+**The last line.** Outside the region, the two versions are the same —
+not "the records we had did not show a difference", but the same. That
+is a claim, and it is withheld when it was not earned: a rule that folds
+a sequence is not a function of finitely many columns, and two derived
+columns that share an input can ask for a combination the sieve cannot
+rule out and no input can be built for ([the blind spot W114 already
+names](checks.md)). Those parts are reported as parts that could not be
+settled, with the region they cover, rather than passed over.
+
+How it works: both versions' boundaries are put on one set of axes —
+**the rule's columns**, not its inputs. A derived column can cut the
+input space diagonally (`余裕 = 床面積 - 占有面積` tested at `<10m2` is a
+slab, not a box), so a region over inputs alone could not be written
+down, and a tool that tried would answer "no difference" where there is
+one. Each cell of the refinement is settled three ways: the same
+computation ran, so they agree over the whole cell; an input was found
+where they disagree; or neither, which says so. The differing cells are
+covered with boxes again and written in the notation a cell is written
+in.
+
+The two answers are meant to be held against each other. Run this
+first — it says what *can* change — and `--fixtures` second, which says
+how many of your records land in it. They agree over the whole corpus,
+and `tests/vdiff.rs` is what holds them to it.
+
+## Between two versions, over the records you have
 
 ```console
 $ rulec diff ゆうパック運賃@v1 ゆうパック運賃@v2 --fixtures replay/2025-08.jsonl

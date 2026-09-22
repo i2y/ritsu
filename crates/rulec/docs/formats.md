@@ -189,6 +189,66 @@ than the output's own rounding grid — a difference in rounding convention rath
 values (§10.4). It is a conjunction over the whole cluster, so values that really differ are
 never blamed on rounding.
 
+## `diff` with no records: the region
+
+`rulec diff <old> <new>` **without** `--fixtures` answers a different question with a
+different shape: not "how many of these records moved" but "which inputs get a different
+answer, and is there anything outside them" (DESIGN §15.122).
+
+```json
+{"rule":"送料","old":"送料@v3","new":"送料@v4","old_version":"3","new_version":"4",
+ "over_budget":false,"total":true,
+ "cells":7050,"feasible":3525,"same":3501,"differing":24,"unsettled":0,"unrealized":0,
+ "domain":[],
+ "changes":[{"region":[{"column":"届け先","kind":"input","accepts":["北海道","沖縄県"],
+                        "text":"届け先 = 遠隔地"},
+                       {"column":"重量","kind":"input",
+                        "accepts":[{"from":"2001","to":"39999"},{"from":"40000","to":"40000"}],
+                        "text":"重量 >=2001g <=40000g"}],
+             "text":"届け先 = 遠隔地  かつ  重量 >=2001g <=40000g",
+             "outputs":[{"output":"送料","old":"1800","new":"2000"}],
+             "uniform":true,
+             "old_rows":[{"table":"基本送料","row":2}],
+             "new_rows":[{"table":"基本送料","row":2}],
+             "witness":[{"input":"届け先","value":"北海道"},{"input":"重量","value":"2001"}],
+             "cells":16}],
+ "unknown":[]}
+```
+
+| field | meaning |
+|---|---|
+| `total` | **whether "outside the reported regions the two versions answer alike" is a claim this run earned.** False when the space was over the budget, when the rule folds a sequence, or when anything landed in `unknown` |
+| `cells` | cells of the common refinement of the two versions' axes |
+| `feasible` | of those, how many an input could be built for. The rest are combinations of coordinates no caller can send |
+| `same` / `differing` / `unsettled` | settled alike / settled apart / neither |
+| `unrealized` | cells that were not shown to be impossible and that no input could be built for. They are also listed in `unknown` |
+| `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`. A wider door is not a different answer, so it is reported apart from `changes` |
+| `changes` | the regions where the two answer differently |
+| `unknown` | the regions that could not be settled, each with `why` |
+| `blocked` | present only when the two cannot be compared cell by cell at all, with the reason. A rule that folds a sequence is the case that exists today: its answer depends on the whole sequence, so it is not a function of finitely many columns |
+
+A region is a **box over the rule's columns**, one entry per column that says anything; a
+column the region leaves alone is absent. `kind` is `input`, `derived` or `walk` — a point
+on an input is a value a caller sends, one on a derived column or a walk's summary is a
+value those columns take, which is weaker and says so. `accepts` holds the coordinates: a
+word for an enum, a boolean or a string class, and `{"from":…,"to":…}` (either end absent
+for unbounded) for a number or a date, as **closed** intervals of true values. `text` is the
+same thing worded in the rule's own notation, in the language `--lang` selects; everything
+else is fixed in English.
+
+`outputs` is the transition **at the witness**, and `uniform` says whether every cell of
+the box moves that way. It is false where the amounts come out of an expression rather
+than off the row, and then the numbers are the witness's own and not the box's.
+
+`old_rows` and `new_rows` are the rows that fired, in the shape a fixture's `trace` uses.
+`cells` on a change is how many cells of the refinement actually differ inside that box —
+a box may be widened over cells no input reaches, which is what keeps a column that decides
+nothing out of the description.
+
+The two answers are meant to be held against each other: every record whose answer moves
+under `--fixtures` falls inside one of these regions. `tests/vdiff.rs` does exactly that
+over the corpus.
+
 ## `fixtures lint`
 
 One object for the run.

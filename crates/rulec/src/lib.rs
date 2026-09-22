@@ -55,6 +55,7 @@ pub mod sha256;
 pub mod sources;
 pub mod types;
 pub mod vfs;
+pub mod vdiff;
 pub mod vectors;
 pub mod verify;
 pub mod xlsx;
