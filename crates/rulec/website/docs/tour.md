@@ -635,7 +635,7 @@ the applied rule's completeness was proved over that range and no further, and w
 the range or to define the excess in a clause of this rule is a business decision.
 
 When the applied rule is amended, the digest no longer matches and the check stops with E040.
-`rulec diff` shows how many answers of this rule move and by how much; once that is accepted,
+`rulec diff` shows which inputs of this rule move — with past records, how many of them and by how much; once that is accepted,
 `rulec source pin` writes the new digest. Rows of the applied rule's tables that this rule's
 ranges never reach are not errors: the approver's page lists them as unused by this apply, and
 only a table none of whose rows is reached draws W118.

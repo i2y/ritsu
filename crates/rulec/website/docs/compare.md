@@ -78,20 +78,20 @@ command answers that instead:
 
 ```console
 $ rulec diff 送料@v3 送料@v4
-規則 送料 v3 → v4
-入力の組み合わせ 7050 通り。うち起きうるのは 3525 通りで、同じ 3501 / 違う 24 / 決められず 0 / 入力を作れず 0
+rule 送料 v3 → v4
+7050 cells, of which 3525 are inputs that can occur: 3501 same, 24 differ, 0 unsettled, 0 unrealized
 
-  会員 not プラチナ  かつ  重量 >=2001g <=40000g  かつ  注文金額 >=0円 <=29999円  かつ  届け先 = 遠隔地
+  会員 not プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
     送料: 1800 → 2000
-    当たる行: 表 基本送料 行2, 表 負担判定 行3
-    例: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
+    rows: table 基本送料 row 2, table 負担判定 row 3
+    example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
 
-  会員 = プラチナ  かつ  重量 >=2001g <=40000g  かつ  注文金額 >=0円 <=29999円  かつ  届け先 = 遠隔地
+  会員 = プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
     送料: 900 → 1000
-    当たる行: 表 基本送料 行2, 表 負担判定 行2
-    例: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
+    rows: table 基本送料 row 2, table 負担判定 row 2
+    example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
 
-ここに挙げた入力のほかでは、二つの版は同じ答えを返します。
+outside this region the two versions answer alike.
 ```
 
 Two things in that answer are not available from a log.

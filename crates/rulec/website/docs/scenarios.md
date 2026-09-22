@@ -434,7 +434,36 @@ $ rulec doc rules/shipping_fee.rule --audience customer > shipping_fee_article.m
 
 Who: rulec (rulec diff). A person decides whether it ships
 
-When a rule is revised, how many cases move and by how much can be known first. With past records (one JSON object per line), both versions are applied to the same records.
+When a rule is revised, what it does can be known first — in two ways, and the first needs
+nothing but the two versions.
+
+**With no records**, `rulec diff` answers which inputs get a different answer, as a region in
+the rule's own columns, plus the claim that there are none outside it.
+
+```console
+$ rulec diff shipping_fee.rule shipping_fee_new.rule
+rule 送料 v3 → v4
+7050 cells, of which 3525 are inputs that can occur: 3501 same, 24 differ, 0 unsettled, 0 unrealized
+
+  会員 not プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
+    送料: 1800 → 2000
+    rows: table 基本送料 row 2, table 負担判定 row 3
+    example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
+
+  会員 = プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
+    送料: 900 → 1000
+    rows: table 基本送料 row 2, table 負担判定 row 2
+    example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
+
+outside this region the two versions answer alike.
+```
+
+注文金額 is in there on its own: an order of 30,000 yen or more pays 0% of the base fee,
+so the rise is multiplied away. That comes out of the whole rule, not out of the row
+that changed.
+
+**With past records** (one JSON object per line), both versions are applied to the same
+records and the answer is how many of *yours* move, by name.
 
 ```console
 $ rulec fixtures lint records.jsonl rules/shipping_fee.rule
@@ -449,7 +478,7 @@ Affected 10 (14.286%)  amount +1,700
   table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference +200 uniform  total +1,400
 ```
 
-Where an implementation already runs, [2-3](#2-3-hold-it-to-the-code-that-runs-today) holds the table to it before anything is replaced. Both are on [Compare and replay](compare.md).
+Run the first before the second: it says what *can* move, and the second says how many of your records land there. `--format json` names every record that moved, by its line and tag. Where an implementation already runs, [2-3](#2-3-hold-it-to-the-code-that-runs-today) holds the table to it before anything is replaced. All of it is on [Compare and replay](compare.md).
 
 ---
 

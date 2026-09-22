@@ -368,9 +368,10 @@ fn bump_each_amount(src: &str) -> Vec<String> {
     out
 }
 
-/// The example printed on the site is what the tool prints. Two copies of it, one per
-/// language, and either going stale is exactly the kind of thing a reader cannot tell from
-/// the page (§15.73).
+/// The example printed on the site is what the tool prints. Four copies of it — two pages
+/// in two languages — and any of them going stale is exactly the kind of thing a reader
+/// cannot tell from the page (§15.73). Each page is held to the output **in its own
+/// language**: an English page showing Japanese output is its own kind of stale.
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
@@ -379,22 +380,28 @@ fn 文書に載せた実演は_いまの出力と一致する() {
     let (a, b) = (dir.join("v3.rule"), dir.join("v4.rule"));
     std::fs::write(&a, src.replace("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v3")).unwrap();
     std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
-        .current_dir(root())
-        .env("RULEC_LANG", "ja")
-        .args(["diff", &a.to_string_lossy(), &b.to_string_lossy()])
-        .output()
-        .expect("rulec を起動できない");
-    let got = String::from_utf8_lossy(&o.stdout).into_owned();
-    // ファイルの名前は文書のほうで `送料@v3` と書いてあるので、そこだけ読み替える。
-    let body: Vec<&str> = got.lines().skip(1).collect();
-    for doc in ["website/docs/compare.md", "website/docs-ja/compare.md"] {
-        let page = std::fs::read_to_string(root().join(doc)).unwrap();
-        for line in &body {
-            assert!(
-                line.trim().is_empty() || page.contains(line),
-                "{doc} の実演がいまの出力と食い違う。無い行:\n{line}\n出力全体:\n{got}"
-            );
+
+    for (lang, pages) in [
+        ("ja", ["website/docs-ja/compare.md", "website/docs-ja/scenarios.md"]),
+        ("en", ["website/docs/compare.md", "website/docs/scenarios.md"]),
+    ] {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .current_dir(root())
+            .env("RULEC_LANG", lang)
+            .args(["diff", &a.to_string_lossy(), &b.to_string_lossy()])
+            .output()
+            .expect("rulec を起動できない");
+        let got = String::from_utf8_lossy(&o.stdout).into_owned();
+        // 一行目はファイルの名前を含むので飛ばす。文書は `送料@v3` と書いている。
+        let body: Vec<&str> = got.lines().skip(1).collect();
+        for doc in pages {
+            let page = std::fs::read_to_string(root().join(doc)).unwrap();
+            for line in &body {
+                assert!(
+                    line.trim().is_empty() || page.contains(line),
+                    "{doc} の実演がいまの出力と食い違う。無い行:\n{line}\n出力全体:\n{got}"
+                );
+            }
         }
     }
 }
