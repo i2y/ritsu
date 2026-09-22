@@ -128,6 +128,19 @@ fn cases() -> Vec<(String, String)> {
         "corpus".into(),
         std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap(),
     ));
+    // Two rules whose answer the elimination decides (§15.126, §15.127), because the three
+    // above do not reach it — and a sample that does not reach a check cannot tell a stale
+    // module from a fresh one. The committed file went on printing W114 for the first of
+    // these for a whole session after the binary had stopped (§15.131). Neither needs a
+    // file beside it, which is what makes them runnable where there is no filesystem.
+    out.push((
+        "elimination".into(),
+        std::fs::read_to_string(root().join("tests/corpus/クーポン併用.rule")).unwrap(),
+    ));
+    out.push((
+        "undecided".into(),
+        std::fs::read_to_string(root().join("tests/mutants/m_w114.rule")).unwrap(),
+    ));
     out
 }
 
