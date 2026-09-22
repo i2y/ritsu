@@ -229,7 +229,7 @@ answer, and is there anything outside them" (DESIGN §15.122).
 | `cells` | cells of the common refinement of the two versions' axes |
 | `feasible` | of those, how many an input could be built for. The rest are combinations of coordinates no caller can send |
 | `same` / `differing` / `unsettled` | settled alike / settled apart / neither |
-| `unrealized` | cells that were not shown to be impossible and that no input could be built for. They are also listed in `unknown` |
+| `unrealized` | cells that were not shown to be impossible and that no input could be built for. They are also listed in `unknown`. A cell the arithmetic proves no input reaches is not one of these: it is passed over like a cell the shape ruled out |
 | `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`. A wider door is not a different answer, so it is reported apart from `changes` |
 | `changes` | the regions where the two answer differently |
 | `unknown` | the regions that could not be settled, each with `why` |

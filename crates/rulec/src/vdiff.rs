@@ -841,6 +841,7 @@ fn realize(
     // Two derives can also read the same input (`最低差` and `支払差` both read `現在残額`),
     // so settling one can unsettle another: the whole pass repeats until they hold at once.
     let input_names: BTreeSet<String> = axes.iter().filter(|a| a.kind == Kind::Input).map(|a| a.col.clone()).collect();
+    let climbed: Option<HashMap<String, Val>> = 'climb: {
     for _pass in 0..4 {
         let mut moved = false;
         for (name, expr) in scalars {
@@ -930,7 +931,7 @@ fn realize(
                 }
             }
             if !ok(&base) {
-                return None;
+                break 'climb None;
             }
             moved |= walked;
         }
@@ -952,18 +953,29 @@ fn realize(
             }
         }
     }
+    if settled { Some(base) } else { None }
+    };
+    // The walk moves one input at a time towards the middle of each target, which cannot
+    // reach a point that only the **intersection** of two targets holds — `残高A > 1000円`
+    // and `残高B < 3980円` off one 合計 is such a cell. The elimination solves the whole
+    // cell at once and hands back a point (§15.129). What it hands back is then held to the
+    // coordinates exactly as the walk's own answer is, so nothing is trusted here on the
+    // strength of the arithmetic: a point that does not verify is a cell not realized, as
+    // before.
+    let base = match climbed.or_else(|| solved_point(axes, cell, f, c, scalars, &input_names)) {
+        Some(b) => b,
+        None => {
+            if seed.is_none() && !cone.is_empty() {
+                memo.insert(key, None);
+            }
+            return None;
+        }
+    };
     if seed.is_none() && !cone.is_empty() {
         memo.insert(
             key,
-            if settled {
-                Some(cone.iter().filter(|&&i| axes[i].kind == Kind::Input).map(|&i| (axes[i].col.clone(), base[&axes[i].col].clone())).collect())
-            } else {
-                None
-            },
+            Some(cone.iter().filter(|&&i| axes[i].kind == Kind::Input).filter_map(|&i| base.get(&axes[i].col).map(|v| (axes[i].col.clone(), v.clone()))).collect()),
         );
-    }
-    if !settled {
-        return None;
     }
     finish(axes, cell, f, c, menu, base, &computed)
 }
@@ -1683,12 +1695,19 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
             }
         } {
             // The coordinates do not contradict each other, yet no input was built for them.
-            // Not proved impossible, so not passed over in silence (§15.99). This is the
-            // same blind spot as W114: two derived columns that share an input are looked
-            // at one at a time, so a pair that cannot happen together is not ruled out.
-            out.unrealized += 1;
-            considered[at] = true;
-            unbuilt.push(at);
+            // Before calling that unknown, ask linear arithmetic whether the cell holds any
+            // input at all — it is the same question W114 asks about a pair of rows, over
+            // the same system, and the columns of a cell are the conditions (§15.129). A
+            // cell that neither version can reach is nobody's case, so it takes nothing
+            // away from "elsewhere the two answer alike".
+            // Proved empty: the cell is not a case anybody can send, so it is passed over
+            // exactly as one the shape ruled out is — counted nowhere and claimed nothing
+            // about.
+            if !(linearly_empty(&axes, &cell, o) && linearly_empty(&axes, &cell, n)) {
+                out.unrealized += 1;
+                considered[at] = true;
+                unbuilt.push(at);
+            }
         }
         // odometer
         let mut i = axes.len();
@@ -2363,6 +2382,161 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
 /// scalar `derive` can reach its coordinate from somewhere inside the inputs' boxes. A cell
 /// that fails this holds no input at all and is not counted against the claim; one that
 /// passes it and still could not be realized is.
+/// The inputs of a point inside the cell, solved rather than walked towards (§15.129).
+///
+/// `None` when the arithmetic cannot read the cell, when there is no point, or when the
+/// point it found is not whole. Nothing here is trusted: the caller holds what comes back to
+/// every coordinate, the same way it holds the walk's own answer.
+fn solved_point(
+    axes: &[Axis],
+    cell: &[usize],
+    f: &RuleFile,
+    c: &Checked,
+    scalars: &[(String, Expr)],
+    inputs: &BTreeSet<String>,
+) -> Option<HashMap<String, Val>> {
+    use crate::fourier::{ground, Lin};
+    // Only a cell whose computed columns are correlated is worth solving; where they are
+    // not, the walk already reached whatever there was.
+    if !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
+        return None;
+    }
+    let seed: Vec<String> = axes.iter().map(|a| a.col.clone()).collect();
+    let g = ground(&seed, f, c)?;
+    let mut sys = g.sys;
+    for (ai, a) in axes.iter().enumerate() {
+        if !g.vars.contains(&a.col) {
+            continue;
+        }
+        let Some(co) = a.coords.get(cell[ai]) else { continue };
+        let x = Lin::var(&a.col);
+        match co {
+            Coord::Point(p) => {
+                let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
+                sys.push(d.clone().le(false));
+                sys.push(d.ge(false));
+            }
+            Coord::Open(lo, hi) => {
+                if let Some(lo) = lo {
+                    sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
+                }
+                if let Some(hi) = hi {
+                    sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
+                }
+            }
+            Coord::Word(_) | Coord::OtherStr => {}
+        }
+    }
+    let at = crate::fourier::solve(sys)?;
+    // Only the free inputs are taken from the solution; every computed column is recomputed
+    // from them and checked, which is what makes an unsound point harmless.
+    let mut out: HashMap<String, Val> = HashMap::new();
+    for a in axes {
+        if a.kind != Kind::Input {
+            continue;
+        }
+        match at.get(&a.col) {
+            Some(v) if v.is_int() => {
+                out.insert(a.col.clone(), Val::Num(*v));
+            }
+            // A free input the system said nothing about keeps the coordinate the cell gave
+            // it; one the system placed off the grid is not a value a caller can send.
+            Some(_) => return None,
+            None => {
+                let i = axes.iter().position(|x| x.col == a.col)?;
+                out.insert(a.col.clone(), coord_val(a, cell[i])?);
+            }
+        }
+    }
+    let _ = inputs;
+    (!out.is_empty()).then_some(out)
+}
+
+/// Whether no input of this version reaches the cell, as far as linear arithmetic can tell
+/// (§15.129).
+///
+/// The per-axis walk gives every computed column an axis of its own, so two columns off one
+/// input move independently there and a cell that no caller can reach still looks like one
+/// the walk owes an answer for. The columns of the cell are conditions on a system the rule
+/// already fixes — the defining equation of each `derive`, each declared range, each
+/// `constraint` — and eliminating variables decides it.
+///
+/// **`true` means proved empty; `false` means nothing.** A coordinate this cannot read is
+/// dropped, which only relaxes the system, so a `true` really does settle the cell and a
+/// `false` leaves it exactly where it was.
+fn linearly_empty(axes: &[Axis], cell: &[usize], v: (&RuleFile, &Checked)) -> bool {
+    use crate::fourier::{ground, pinned, Lin};
+    let (f, c) = v;
+    // A boolean `define` the cell fixes: its body is a comparison that has to hold there.
+    let body_of = |n: &str| -> Option<&Expr> {
+        f.items.iter().find_map(|it| match it {
+            Item::Define(d) if d.name.text == n => Some(&d.expr),
+            _ => None,
+        })
+    };
+    let mut pins: Vec<(&Expr, bool)> = Vec::new();
+    let mut seed: Vec<String> = Vec::new();
+    for (ai, a) in axes.iter().enumerate() {
+        match (&a.ty, a.coords.get(cell[ai])) {
+            (Ty::Bool, Some(Coord::Word(w))) => {
+                let Some(e) = body_of(&a.col) else { continue };
+                let mut names = Vec::new();
+                names_of(e, &mut names);
+                seed.extend(names);
+                pins.push((e, w == crate::kw::TRUE));
+            }
+            _ => seed.push(a.col.clone()),
+        }
+    }
+    let Some(g) = ground(&seed, f, c) else { return false };
+    // Nothing correlated: the walk already sees everything this would.
+    let computed = |n: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == n));
+    if pins.is_empty() && !g.vars.iter().any(|n| computed(n)) {
+        return false;
+    }
+    let mut sys = g.sys;
+    for (ai, a) in axes.iter().enumerate() {
+        if !g.vars.contains(&a.col) {
+            continue;
+        }
+        let Some(co) = a.coords.get(cell[ai]) else { continue };
+        let x = Lin::var(&a.col);
+        match co {
+            Coord::Point(p) => {
+                let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
+                sys.push(d.clone().le(false));
+                sys.push(d.ge(false));
+            }
+            Coord::Open(lo, hi) => {
+                if let Some(lo) = lo {
+                    sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
+                }
+                if let Some(hi) = hi {
+                    sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
+                }
+            }
+            Coord::Word(_) | Coord::OtherStr => {}
+        }
+    }
+    for (e, yes) in &pins {
+        sys.extend(pinned(e, *yes, &g.want, c));
+    }
+    crate::fourier::unsat(sys)
+}
+
+/// Every name an expression mentions, appended.
+fn names_of(e: &Expr, out: &mut Vec<String>) {
+    match e {
+        Expr::Name(n, _) => out.push(n.clone()),
+        Expr::Lit(..) => {}
+        Expr::Bin(a, _, b, _) => {
+            names_of(a, out);
+            names_of(b, out);
+        }
+        Expr::Call(_, args, _) => args.iter().for_each(|a| names_of(a, out)),
+    }
+}
+
 fn feasible_shape(axes: &[Axis], cell: &[usize], f: &RuleFile, c: &Checked, scalars: &[(String, Expr)]) -> bool {
     let ax_of: HashMap<&str, usize> = axes.iter().enumerate().map(|(i, a)| (a.col.as_str(), i)).collect();
     for (name, expr) in scalars {

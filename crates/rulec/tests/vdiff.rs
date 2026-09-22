@@ -521,3 +521,30 @@ fn 書き方だけ変えたら_短絡してよい() {
     assert_eq!(code, 0);
     assert!(is_true(&j, "total"));
 }
+
+/// A rule whose computed columns share an input: the walk gives each of them an axis of its
+/// own, so cells that no caller can reach look like cells the walk owes an answer for, and a
+/// point that only the **intersection** of two targets holds is one it cannot climb to.
+///
+/// Both are decided by eliminating variables (§15.129), and what they cost while they were
+/// not is the headline claim: 38 of the cells of this pair came back unrealized, and
+/// "outside the reported region the two answer alike" was withheld because of them.
+#[test]
+fn 入力を共有する導出の規則でも_外について言い切れる() {
+    let src = std::fs::read_to_string(root().join("tests/corpus/クーポン併用.rule")).unwrap();
+    let dir = std::env::temp_dir().join(format!("rulec-vdiff-stack-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let old = dir.join("old.rule");
+    let new = dir.join("new.rule");
+    std::fs::write(&old, &src).unwrap();
+    // One output moved, which is what makes there be anything to report at all.
+    std::fs::write(&new, src.replace("| >=3980円 | 対象  ", "| >=3980円 | 対象外")).unwrap();
+    let (code, out) =
+        rulec(&["diff", &old.to_string_lossy(), &new.to_string_lossy(), "--format", "json"]);
+    let j = json(&out);
+    assert_eq!(int(&j, "unrealized"), 0, "実現できなかった升目が残っている\n{out}");
+    assert!(is_true(&j, "total"), "外について言い切れていない\n{out}");
+    assert!(int(&j, "differing") > 0, "差があるはず\n{out}");
+    assert_eq!(code, 1, "差があるので exit は 1");
+    let _ = std::fs::remove_dir_all(&dir);
+}

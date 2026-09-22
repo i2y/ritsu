@@ -1523,15 +1523,12 @@ impl TableRegion {
     /// system that is still unsatisfiable proves the original one is, and one that is
     /// satisfiable over the rationals proves nothing about the integers. So a `false` leaves
     /// W114 standing exactly as it stood before.
-    fn linearly_impossible(&self, t: &Table, i: usize, j: usize, c: &Checked) -> bool {
-        use crate::fourier::{Ineq, Lin};
-        // Every name the system will mention, and the one type they all have to share: a
-        // linear form has no units in it, so two names measured differently cannot go into
-        // one system without a conversion this does not do.
+    fn linearly_impossible(&self, t: &Table, i: usize, j: usize, f: &RuleFile, c: &Checked) -> bool {
+        use crate::fourier::{ground, pinned, Lin};
         // A boolean `define` the overlap pins to one truth value (§15.127). Its body is one
         // comparison, so there it is a linear condition — and the thresholds inside it, which
         // the per-axis sieve never looks at, come into the system with it.
-        let pinned: Vec<(&Expr, bool)> = (0..self.axes.len())
+        let pins: Vec<(&Expr, bool)> = (0..self.axes.len())
             .filter(|&ai| self.is_define[ai] && matches!(self.axes[ai], Axis::Bool))
             .filter_map(|ai| {
                 let both: Vec<usize> =
@@ -1542,101 +1539,36 @@ impl TableRegion {
                 Some((self.defines.get(&self.col_names[ai])?, k == 0))
             })
             .collect();
-        let mut want: Option<Ty> = None;
-        let mut vars: Vec<String> = Vec::new();
-        let mut queue: Vec<String> = self.col_names.clone();
-        for (e, _) in &pinned {
-            if let Expr::Bin(a, _, b, _) = e {
-                names_in(a, &mut queue);
-                names_in(b, &mut queue);
-            }
+        let mut seed: Vec<String> = self.col_names.clone();
+        for (e, _) in &pins {
+            names_in(e, &mut seed);
         }
-        while let Some(n) = queue.pop() {
-            if vars.contains(&n) {
-                continue;
-            }
-            let Some(ty) = c.ty_of(&n) else { continue };
-            // A column this arithmetic has no place for — an enum, a bool, a date, a string
-            // — constrains nothing here and is simply left out.
-            // A date is an ordinal (§2.1), so it sits in a linear system like any other
-            // whole number; what it cannot do is share one with a money or a quantity, and
-            // the type check below is what stops that.
-            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate | Ty::Date) {
-                continue;
-            }
-            match &want {
-                None => want = Some(ty.clone()),
-                Some(w) if *w == ty => {}
-                Some(_) => return false,
-            }
-            vars.push(n.clone());
-            if let Some(e) = self.exprs.get(&n) {
-                let Some(l) = lin_of(e, &ty, c) else { return false };
-                queue.extend(l.terms.keys().cloned());
-            }
-        }
-        let Some(want) = want else { return false };
-        if pinned.is_empty() && !vars.iter().any(|n| self.exprs.contains_key(n)) {
+        let Some(g) = ground(&seed, f, c) else { return false };
+        if pins.is_empty() && !g.vars.iter().any(|n| self.exprs.contains_key(n)) {
             // Nothing correlated: the sieve already sees everything this would.
             return false;
         }
-        let mut sys: Vec<Ineq> = Vec::new();
-        // The defining equation of every derived value, as two inequalities.
-        for n in &vars {
-            let Some(e) = self.exprs.get(n) else { continue };
-            let Some(l) = lin_of(e, &want, c) else { return false };
-            let d = Lin::var(n).plus(&l.scale(crate::num::Rat::int(-1)));
-            sys.push(d.clone().le(false));
-            sys.push(d.ge(false));
-        }
-        // The declared range of every name in it.
-        for n in &vars {
-            let Some((lo, hi)) = self.spans.get(n) else { continue };
-            if let Some(lo) = lo {
-                sys.push(Lin::var(n).plus(&Lin::con(lo.mul(crate::num::Rat::int(-1)))).ge(false));
-            }
-            if let Some(hi) = hi {
-                sys.push(Lin::var(n).plus(&Lin::con(hi.mul(crate::num::Rat::int(-1)))).le(false));
-            }
-        }
-        // What the caller guarantees (§15.55).
-        for k in &self.constraints {
-            if !vars.contains(&k.left) || !vars.contains(&k.right) {
-                continue;
-            }
-            let d = Lin::var(&k.left).plus(&Lin::var(&k.right).scale(crate::num::Rat::int(-1)));
-            sys.push(match k.op {
-                CmpOp::Le => d.le(false),
-                CmpOp::Lt => d.le(true),
-                CmpOp::Ge => d.ge(false),
-                CmpOp::Gt => d.ge(true),
-            });
-        }
+        let mut sys = g.sys;
         // The cells of both rows. A cell this cannot read is dropped, which only relaxes.
         for row in [i, j] {
             for (ai, name) in self.col_names.iter().enumerate() {
-                if !vars.contains(name) {
+                if !g.vars.contains(name) {
                     continue;
                 }
                 let Some(cell) = t.rows[row].cells.get(self.display_of[ai]) else { continue };
                 let v = Lin::var(name);
                 match cell {
                     Cell::Lit(l) => {
-                        let Some(r) = lit_rat(l, &want) else { continue };
+                        let Some(r) = crate::fourier::lit_of(l, &g.want) else { continue };
                         let d = v.plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
                         sys.push(d.clone().le(false));
                         sys.push(d.ge(false));
                     }
                     Cell::Cmp(ops) => {
                         for (op, l) in ops {
-                            let Some(r) = lit_rat(l, &want) else { continue };
+                            let Some(r) = crate::fourier::lit_of(l, &g.want) else { continue };
                             let d = v.clone().plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
-                            sys.push(match op {
-                                CmpOp::Le => d.le(false),
-                                CmpOp::Lt => d.le(true),
-                                CmpOp::Ge => d.ge(false),
-                                CmpOp::Gt => d.ge(true),
-                            });
+                            sys.push(crate::fourier::cmp(d, *op, false));
                         }
                     }
                     _ => {}
@@ -1644,32 +1576,8 @@ impl TableRegion {
             }
         }
         // And the definitions the overlap pinned, as the comparisons they are.
-        for (e, yes) in &pinned {
-            let Expr::Bin(a, op, b, _) = e else { continue };
-            let (Some(la), Some(lb)) = (lin_of(a, &want, c), lin_of(b, &want, c)) else { continue };
-            let d = la.plus(&lb.scale(crate::num::Rat::int(-1)));
-            // A comparison that has to fail is its own negation: not(<=) is >, and the
-            // boundary moves to the other side with it.
-            let op = match (op, yes) {
-                (BinOp::Le, true) | (BinOp::Gt, false) => BinOp::Le,
-                (BinOp::Lt, true) | (BinOp::Ge, false) => BinOp::Lt,
-                (BinOp::Ge, true) | (BinOp::Lt, false) => BinOp::Ge,
-                (BinOp::Gt, true) | (BinOp::Le, false) => BinOp::Gt,
-                // `=` holding is two inequalities; `=` failing is a disjunction, which one
-                // system cannot carry, so it is left out.
-                (BinOp::Eq, true) => {
-                    sys.push(d.clone().le(false));
-                    sys.push(d.ge(false));
-                    continue;
-                }
-                _ => continue,
-            };
-            sys.push(match op {
-                BinOp::Le => d.le(false),
-                BinOp::Lt => d.le(true),
-                BinOp::Ge => d.ge(false),
-                _ => d.ge(true),
-            });
+        for (e, yes) in &pins {
+            sys.extend(pinned(e, *yes, &g.want, c));
         }
         crate::fourier::unsat(sys)
     }
@@ -1685,49 +1593,6 @@ fn names_in(e: &Expr, out: &mut Vec<String>) {
             names_in(b, out);
         }
         Expr::Call(_, args, _) => args.iter().for_each(|a| names_in(a, out)),
-    }
-}
-
-/// A `derive` expression as a linear form, or `None` for anything that is not one.
-///
-/// §5 says a derived value is a linear combination of inputs, so this reads exactly that:
-/// names and literals, added and subtracted, and multiplied or divided by a **constant**.
-/// A product of two names is not linear and is refused rather than approximated.
-fn lin_of(e: &Expr, want: &Ty, c: &Checked) -> Option<crate::fourier::Lin> {
-    use crate::fourier::Lin;
-    match e {
-        Expr::Name(n, _) => {
-            let ty = c.ty_of(n)?;
-            (ty == *want).then(|| Lin::var(n))
-        }
-        Expr::Lit(l, _) => lit_rat(l, want).map(Lin::con),
-        Expr::Bin(a, op, b, _) => match op {
-            BinOp::Add => Some(lin_of(a, want, c)?.plus(&lin_of(b, want, c)?)),
-            BinOp::Sub => Some(lin_of(a, want, c)?.plus(&lin_of(b, want, c)?.scale(crate::num::Rat::int(-1)))),
-            // One side has to be a constant, and a scalar carries no unit of its own: a rate
-            // or a bare number reads as the factor it is.
-            BinOp::Mul => match (scalar(a), scalar(b)) {
-                (Some(k), None) => Some(lin_of(b, want, c)?.scale(k)),
-                (None, Some(k)) => Some(lin_of(a, want, c)?.scale(k)),
-                _ => None,
-            },
-            BinOp::Div => {
-                let k = scalar(b)?;
-                (k.num != 0).then(|| lin_of(a, want, c).map(|l| l.scale(crate::num::Rat::int(1).div(k))))?
-            }
-            _ => None,
-        },
-        Expr::Call(..) => None,
-    }
-}
-
-/// A literal with no unit, or a rate, as the factor it multiplies by.
-fn scalar(e: &Expr) -> Option<crate::num::Rat> {
-    let Expr::Lit(Lit::Num(n), _) = e else { return None };
-    match n.unit.as_deref() {
-        None => crate::types::lit_value_in_pub(n, &Ty::Number),
-        Some("%") | Some("％") => crate::types::lit_value_in_pub(n, &Ty::Rate),
-        _ => None,
     }
 }
 
@@ -1911,7 +1776,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                         // it cannot read only relaxes the system, so a `true` here really
                         // does settle the pair, and a `false` leaves W114 where it was.
                         nodes += (reg.axes.len() * 32) as i64;
-                        ruled_out = reg.linearly_impossible(t, i, j, c);
+                        ruled_out = reg.linearly_impossible(t, i, j, f, c);
                         feas = Feasible::Unknown;
                     }
                 }
