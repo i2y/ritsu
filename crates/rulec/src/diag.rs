@@ -98,6 +98,10 @@ pub enum FixKind {
     /// The pin of a source, as `rulec source pin` would write it: a `source` line with its
     /// digest, or one `  <fragment> sha256:…` line (§15.68).
     PinSource,
+    /// The cell rewritten with one boundary's strictness toggled, so that the boundary value
+    /// falls on the side the copy puts it on: `<60cm` becomes `<=60cm`, the direction left
+    /// alone because it is the table's geometry and not the copy's to decide (§15.124).
+    FlipBound,
     /// No single mechanical edit is right. The reason is in the notes.
     None,
 }
@@ -116,6 +120,7 @@ impl FixKind {
             FixKind::ChangePolicy => "change_policy",
             FixKind::AddExpected => "add_expected",
             FixKind::PinSource => "pin_source",
+            FixKind::FlipBound => "flip_bound",
             FixKind::None => "none",
         }
     }

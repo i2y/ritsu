@@ -325,6 +325,287 @@ pub fn stated(grid: &[Vec<String>]) -> Vec<(String, (Option<String>, crate::num:
     out
 }
 
+/// Which of the two bands a boundary number belongs to, as a document says it.
+///
+/// A threshold separates two bands, and the one thing a transcription can get wrong without
+/// any other check noticing is **which band the boundary value itself falls in**: the copy
+/// says `60cm以下` and the row says `<60cm`, the number 60 is used either way so W120 is
+/// quiet, and no gap and no overlap appears, so E101 and E105 are quiet too. Only the
+/// customer's page shows it, and only to a reader who compares two pages (§15.124).
+///
+/// Reading the side rather than the operator is what makes this comparable at all. A rule
+/// may write a band from either end — `<=60cm` and `>60cm` are the two halves of one
+/// boundary — and both say that 60 is in the band below. **Negating a comparison swaps its
+/// direction and keeps its side**, so the side survives every rewriting a transcription
+/// does, which the operator does not.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Side {
+    /// The number is in the band below it: `60cm以下`, `60cmを超え`, `over £125,140`.
+    Lower,
+    /// The number is in the band above it: `60cm未満`, `18歳以上`, `21 and over`.
+    Upper,
+}
+
+/// A boundary the copy states: the number, which side of it the document puts the number on,
+/// and the words that said so.
+pub struct Bound {
+    /// The cell as the copy holds it. The message quotes it, because what a reader has to do
+    /// with this diagnostic is read that cell again.
+    pub cell: String,
+    pub value: (Option<String>, crate::num::Rat),
+    pub side: Side,
+    pub word: &'static str,
+    /// The bound was read from a heading over the number's column, not from its own cell.
+    /// The message says so, because what the reader has to look at is a different cell.
+    pub column: bool,
+}
+
+/// The words that stand **after** a number, and which side they put it on. Japanese writes
+/// them all here.
+///
+/// A negation is not read and does not need to be: `60円以下` and `60円を超え` are the two
+/// sides of one boundary and both leave 60 in the band below.
+const AFTER: &[(&str, Side)] = &[
+    ("以下", Side::Lower),
+    ("まで", Side::Lower),
+    ("以内", Side::Lower),
+    ("を超え", Side::Lower),
+    ("超", Side::Lower),
+    ("より大きい", Side::Lower),
+    ("未満", Side::Upper),
+    ("に満たない", Side::Upper),
+    ("より小さい", Side::Upper),
+    ("以上", Side::Upper),
+    ("or less", Side::Lower),
+    ("or under", Side::Lower),
+    ("and under", Side::Lower),
+    ("or below", Side::Lower),
+    ("and below", Side::Lower),
+    ("or more", Side::Upper),
+    ("and over", Side::Upper),
+    ("or over", Side::Upper),
+    ("and above", Side::Upper),
+    ("or above", Side::Upper),
+];
+
+/// The words that stand **before** a number. English only, and a different list from the one
+/// above for the same words: `over £125,140` starts the band past the number and `21 and
+/// over` starts it at the number.
+const BEFORE: &[(&str, Side)] = &[
+    ("up to", Side::Lower),
+    ("not over", Side::Lower),
+    ("not more than", Side::Lower),
+    ("no more than", Side::Lower),
+    ("at most", Side::Lower),
+    ("more than", Side::Lower),
+    ("greater than", Side::Lower),
+    ("exceeding", Side::Lower),
+    ("over", Side::Lower),
+    ("above", Side::Lower),
+    ("not less than", Side::Upper),
+    ("no less than", Side::Upper),
+    ("at least", Side::Upper),
+    ("less than", Side::Upper),
+    ("under", Side::Upper),
+    ("below", Side::Upper),
+];
+
+/// Every boundary a copy states. Read strictly on purpose: a number with no word of the two
+/// lists next to it, or with words of both, yields nothing — `18 to 20` and `60〜80` say
+/// which numbers bound a band but not which band holds them, and a guess here would be an
+/// error against a rule that is right.
+pub fn bounds(grid: &[Vec<String>]) -> Vec<Bound> {
+    let mut out = Vec::new();
+    let heads = headings(grid);
+    for row in grid {
+        for (ci, c) in row.iter().enumerate() {
+            let plain = c.replace(',', "");
+            // Where every number of the cell stands, so that the words next to one are never
+            // read as the words next to the one after it: `Over $11,925 but not over $48,475`
+            // has a bound on each, and each takes only the text up to its neighbour.
+            let mut nums: Vec<(usize, usize, (Option<String>, crate::num::Rat))> = Vec::new();
+            let mut i = 0;
+            while i < plain.len() {
+                if plain.as_bytes()[i].is_ascii_digit() {
+                    if let Some((n, len)) = crate::lex::number(&plain[i..]) {
+                        if let Some(v) = crate::types::comparable(&n) {
+                            nums.push((i, i + digits_len(&plain[i..]), v));
+                        }
+                        i += len.max(1);
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+            let col = heads.get(ci).and_then(|h| h.as_ref());
+            for (k, (start, digits_end, v)) in nums.iter().enumerate() {
+                // A currency written before the digits is the number's unit, and reading it
+                // is what lines `$11,925` up with a rule that counts cents. Only the three
+                // signs that name one currency each are read; `¥` is left out because a
+                // Japanese document writes `円` after the number, where the lexer already
+                // sees it, and reading a sign that names several currencies would be a guess.
+                let v = &sigil(&plain[..*start]).map_or_else(|| v.clone(), |u| in_unit(u, &v.1));
+                let from = if k == 0 { 0 } else { nums[k - 1].1 };
+                let upto = nums.get(k + 1).map_or(plain.len(), |n| n.0);
+                let said = [read_side(&plain[from..*start], BEFORE), read_side(&plain[*digits_end..upto], AFTER)];
+                let mut found = None;
+                for s in said.into_iter().flatten() {
+                    match found {
+                        None => found = Some(s),
+                        Some(had) if had.0 == s.0 => {}
+                        // A number the cell bounds both ways is not a boundary this can read.
+                        Some(_) => {
+                            found = None;
+                            break;
+                        }
+                    }
+                }
+                match (found, col) {
+                    (Some((side, word)), _) => out.push(Bound { cell: c.clone(), value: v.clone(), side, word, column: false }),
+                    // A number whose own cell says nothing takes what the heading over its
+                    // column says, when there is one.
+                    (None, Some((side, word, head))) => {
+                        out.push(Bound { cell: head.clone(), value: v.clone(), side: *side, word, column: true })
+                    }
+                    (None, None) => {}
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The currency a sign right before the digits names, when it names exactly one.
+fn sigil(before: &str) -> Option<&'static str> {
+    match before.chars().next_back()? {
+        '$' => Some("USD"),
+        '£' => Some("GBP"),
+        '€' => Some("EUR"),
+        _ => None,
+    }
+}
+
+/// A magnitude read back as an amount in `unit`, the way a rule that wrote the same number
+/// with that unit would be read — so that a document's `$11,925` and a rule's `1192500USDc`
+/// are one value. One of the unit is read for its scale, rather than the table of factors
+/// being reached into: the conversion stays in the one place that owns it (§2.1).
+fn in_unit(unit: &str, v: &crate::num::Rat) -> (Option<String>, crate::num::Rat) {
+    let one = crate::lex::Num {
+        neg: false,
+        digits: "1".into(),
+        frac: String::new(),
+        mult: 1,
+        unit: Some(unit.into()),
+        raw: String::new(),
+    };
+    match crate::types::comparable(&one) {
+        Some((dim, f)) => (dim, v.mul(f)),
+        None => (None, *v),
+    }
+}
+
+/// The bound each column of a copy is headed with, where it is headed with one.
+///
+/// A Japanese premium or tax table is written this way — `円以上` and `円未満` stand over two
+/// columns and the numbers underneath are bare — and reading only the cell a number sits in
+/// sees nothing at all in it. The pension table of the corpus is 31 boundaries of exactly
+/// this shape (§15.124).
+///
+/// A heading counts only when it is **a bounding word and a unit and nothing else**, so that
+/// `円以上` is read and `超過額` is not: the word is taken out and what is left has to be a
+/// unit the tool knows, or nothing. A column headed two ways is headed no way.
+fn headings(grid: &[Vec<String>]) -> Vec<Option<(Side, &'static str, String)>> {
+    let width = grid.iter().map(|r| r.len()).max().unwrap_or(0);
+    let mut out = vec![None; width];
+    let mut clash = vec![false; width];
+    for row in grid {
+        for (i, c) in row.iter().enumerate() {
+            if c.chars().any(|ch| ch.is_ascii_digit()) {
+                continue;
+            }
+            let Some((side, word)) = read_side(c, AFTER).or_else(|| read_side(c, BEFORE)) else { continue };
+            if !only_unit_left(c, word) {
+                continue;
+            }
+            match out[i] {
+                _ if clash[i] => {}
+                None => out[i] = Some((side, word, c.clone())),
+                Some((had, _, _)) if had == side => {}
+                Some(_) => {
+                    clash[i] = true;
+                    out[i] = None;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether a heading is the bounding word and a unit and nothing else.
+fn only_unit_left(cell: &str, word: &str) -> bool {
+    let rest: String = cell
+        .to_lowercase()
+        .replace(word, "")
+        .chars()
+        .filter(|c| !c.is_whitespace() && !matches!(c, '(' | ')' | '（' | '）' | '・' | '.'))
+        .collect();
+    if rest.is_empty() {
+        return true;
+    }
+    // A unit is known when a number written in it can be read as a value.
+    in_unit(&rest, &crate::num::Rat::int(1)).0.is_some()
+}
+
+/// The side one stretch of text next to a number says, and the word that said it. Text that
+/// holds words of both sides says nothing.
+fn read_side(text: &str, words: &[(&'static str, Side)]) -> Option<(Side, &'static str)> {
+    let t = text.to_lowercase();
+    let mut found: Option<(Side, &'static str)> = None;
+    for (w, s) in words {
+        if !holds(&t, w) {
+            continue;
+        }
+        match found {
+            None => found = Some((*s, w)),
+            Some((had, _)) if had == *s => {}
+            Some(_) => return None,
+        }
+    }
+    found
+}
+
+/// Whether a stretch of text holds a bounding word. An English word has to stand on its own —
+/// `over` is in `cover charge` and in `however`, and neither bounds anything — while a
+/// Japanese one is looked for as it is, there being no letter either side of it to check.
+fn holds(text: &str, word: &str) -> bool {
+    if !word.is_ascii() {
+        return text.contains(word);
+    }
+    let edge = |c: Option<char>| c.is_none_or(|c| !c.is_ascii_alphanumeric());
+    text.match_indices(word).any(|(i, _)| {
+        edge(text[..i].chars().next_back()) && edge(text[i + word.len()..].chars().next())
+    })
+}
+
+/// How many bytes at the front of `s` are the number's own digits, its unit left out. The
+/// word that bounds a number stands after the unit as often as after the digits (`60cm以下`,
+/// but `18歳未満`, where `歳` is no unit the lexer knows and `1万円以下`, where the
+/// multiplier sits in between), so the text read for it starts where the digits end.
+fn digits_len(s: &str) -> usize {
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'_') {
+        i += 1;
+    }
+    if i < b.len() && b[i] == b'.' && b.get(i + 1).is_some_and(|c| c.is_ascii_digit()) {
+        i += 1;
+        while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'_') {
+            i += 1;
+        }
+    }
+    i
+}
+
 // --- An extractor that is not this program (§15.82) --------------------------------------
 
 /// Run an extractor over a document and read the tables it hands back.

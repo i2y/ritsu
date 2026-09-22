@@ -59,11 +59,21 @@ in.
 - **W120** — a number the copy states as a whole cell is used by no row, which is what **a row
   that was never transcribed** looks like. Completeness cannot see it: the inputs of a dropped
   row fall into one of the rows that remain.
+- **E119** — a boundary falls on the other side of itself from where the copy puts it: the copy
+  says `60cm以下` and the row says `<60cm`. Nothing else can see this either. The number 60 is
+  still used, so W120 is quiet; move both of the rows that share the boundary and the table is
+  still complete with no overlap; and exactly one input in the whole space changes hands.
 
-Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで`
-becomes `<=1949000円`) and an amount is not. The approver's page quotes the copy under the
-table and adds a line to what was verified: every amount in this table is a value the copy
-shows.
+A threshold cannot be compared as text — it is rewritten as it is transcribed (`1,949,000円まで`
+becomes `<=1949000円`) — but one thing survives the rewriting: which of the two bands the
+boundary value itself falls in. `60cm以下` and `60cmを超え` agree that 60cm is in the band below,
+and so do `<=60cm` and `>60cm`, so a rule that writes a band from either end can still be held
+to the copy. The word is read beside the number (`60cm以下`, `Under 18`, `Not over $11,925`) or
+in a heading over its column (`円以上`, `円未満` — the shape a Japanese premium table takes). A
+boundary the copy words neither way, `18 to 20` or `60〜80`, is left alone: naming the numbers
+that bound a band does not say which band holds them. The approver's page quotes the copy under
+the table and adds two lines to what was verified: every amount in this table is a value the
+copy shows, and its boundaries fall on the side the copy puts them on.
 
 A rule that applies another (`apply`, the way a statute applies one provision to another case
 with its terms read differently) is held to the applied rule's digest (E040), has to substitute

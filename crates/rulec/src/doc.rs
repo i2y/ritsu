@@ -2404,12 +2404,23 @@ fn transcribed(f: &RuleFile, t: &Table, path: &str) -> String {
     if frags.is_empty() {
         return String::new();
     }
-    tr!(
+    let mut out = tr!(
         "- この表の金額は、引いた写し（{} {}）に出てくる値です（E116）\n",
         "- Every amount in this table is a value the copy it cites ({} {}) shows (E116)\n",
         cite.source,
         frags.join(sep())
-    )
+    );
+    // The second fact, and only when the copy really words the boundaries (§15.124). A
+    // document that writes its bands as `18 to 20` words none of them, and a line saying
+    // they had been held would be saying nothing.
+    let held = crate::sources::boundaries_held(path, d, &frags, t);
+    if held > 0 {
+        out += &tr!(
+            "- この表の境界 {held} 個は、写しが書いている側と同じです（E119）\n",
+            "- {held} of this table's boundaries fall on the side the copy puts them on (E119)\n"
+        );
+    }
+    out
 }
 
 /// One pass, so that bold may hold a code span (`**`rulec check` が確かめたこと**` does).

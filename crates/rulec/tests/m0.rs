@@ -90,6 +90,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_w118.rule", &[("W118", 1)], "呼び先の表の全行に優先する節を足した"),
         ("m_e116.rule", &[("E116", 1), ("W120", 1)], "写しの 880円 を 890円 と写した（打ち間違いは二つ同時に出る）"),
         ("m_w120.rule", &[("W120", 1)], "写しの一行を写し忘れ、残った行がその入力を拾っている"),
+        ("m_e119.rule", &[("E119", 2)], "写しの「Under 18」の側を取り違えた（境界を分け合う二行の両方が出る）"),
+        ("m_e119col.rule", &[("E119", 2)], "写しが「円以上」「円未満」と欄の見出しで言っている側を取り違えた"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
         // made of correct rules, so a position no check visits looks exactly like a position

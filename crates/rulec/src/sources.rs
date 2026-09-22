@@ -527,11 +527,12 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
 /// transcribed all three) — and only cells that are nothing but a number are asked about, so
 /// that `2026年4月1日改定` is not read as an amount somebody forgot.
 ///
-/// **Conditions are not held to the copy, only amounts are.** A threshold is rewritten as it
-/// is transcribed — `1,949,000円まで` becomes `<=1949000円` — and an amount is not.
+/// E119 (§15.124) is the third direction and the one that reaches a condition. **A threshold
+/// is rewritten as it is transcribed** — `1,949,000円まで` becomes `<=1949000円` — so the two
+/// cannot be compared as text. What survives the rewriting is **which of the two bands the
+/// boundary value itself falls in**, and that is the half of a threshold that moves money.
 fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
-    let dir = Path::new(rule_path).parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut copies: BTreeMap<(String, String), Option<Vec<Vec<String>>>> = BTreeMap::new();
     // The copy of one cited table, read once however many rows cite it.
     let mut copy = |src: &str, frag: &str| -> Option<Vec<Vec<String>>> {
@@ -545,12 +546,7 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             if d.base.is_some() {
                 return None;
             }
-            let SourceKind::File { path, .. } = &d.kind else { return None };
-            crate::extract::fragment(frag)?;
-            let doc = dir.join(path);
-            let tsv =
-                std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
-            Some(crate::extract::from_tsv(&tsv))
+            fragment_grid(rule_path, d, frag)
         })();
         copies.insert(key, g.clone());
         g
@@ -580,15 +576,16 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 .filter(|(_, v, _)| !shown.iter().any(|s| crate::types::same_value(s, v)))
                 .map(|(text, _, span)| (text, span))
                 .collect();
-            if missing.is_empty() {
-                continue;
-            }
             let frags = grids.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(sep());
-            let values = missing.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>().join(sep());
             let rn = match &r.label {
                 Some(l) => tr!("行{}（{}）", "row {} ({})", r.index, l.text),
                 None => tr!("行{}", "row {}", r.index),
             };
+            boundaries(r, &grids, &rn, &frags, &c.source, rule_path, &word, &name, &mut out);
+            if missing.is_empty() {
+                continue;
+            }
+            let values = missing.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>().join(sep());
             out.push(
                 Diag::error("E116", tr!("{rn} の金額が、引いた写しにありません", "The amount of {rn} is not in the copy it cites"))
                     .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
@@ -639,6 +636,119 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
         }
     }
     out
+}
+
+/// E119 (§15.124): the boundaries of one row, against the copy the row cites.
+///
+/// What is compared is not the operator but **the side** — which of the two bands the
+/// boundary value itself falls in — because a rule may write one boundary from either end
+/// (`<=60cm` and `>60cm` are its two halves) and both say the same thing about 60. A number
+/// the copy bounds one way here and the other way there is left alone, and so is one the
+/// copy states with no bounding word at all: `18 to 20` names the numbers that bound a band
+/// without saying which band holds them.
+#[allow(clippy::too_many_arguments)]
+fn boundaries(
+    r: &crate::ast::Row,
+    grids: &[(String, Vec<Vec<String>>)],
+    rn: &str,
+    frags: &str,
+    src: &str,
+    rule_path: &str,
+    word: &str,
+    table: &str,
+    out: &mut Vec<Diag>,
+) {
+    use crate::ast::{Cell, CmpOp, Lit};
+    use crate::extract::Side;
+    let marks: Vec<crate::extract::Bound> = grids.iter().flat_map(|(_, g)| crate::extract::bounds(g)).collect();
+    if marks.is_empty() {
+        return;
+    }
+    let sides = |s: Side| match s {
+        Side::Lower => tr!("小さいほう", "the smaller side"),
+        Side::Upper => tr!("大きいほう", "the larger side"),
+    };
+    // A bound read from a heading is quoted as one, because the cell the reader has to look
+    // at is not the cell the number is in.
+    let quote = |b: &crate::extract::Bound| match b.column {
+        true => tr!("「{}」の欄", "the \u{201c}{}\u{201d} column", b.cell),
+        false => tr!("「{}」", "\u{201c}{}\u{201d}", b.cell),
+    };
+    for (k, cell) in r.cells.iter().enumerate() {
+        let Cell::Cmp(ops) = cell else { continue };
+        for (j, (op, lit)) in ops.iter().enumerate() {
+            let Lit::Num(n) = lit else { continue };
+            let Some(v) = crate::types::comparable(n) else { continue };
+            let said: Vec<&crate::extract::Bound> =
+                marks.iter().filter(|b| crate::types::same_value(&b.value, &v)).collect();
+            let Some(first) = said.first() else { continue };
+            // A copy that puts the same number on one side here and the other side there is
+            // not read at all: two tables of one fragment, or a number that means two things.
+            if said.iter().any(|b| b.side != first.side) {
+                continue;
+            }
+            let mine = match op {
+                CmpOp::Le | CmpOp::Gt => Side::Lower,
+                CmpOp::Lt | CmpOp::Ge => Side::Upper,
+            };
+            if mine == first.side {
+                continue;
+            }
+            // The same cell with this one boundary's strictness toggled: the direction is the
+            // table's geometry and stays, the side is what the copy decides.
+            let fixed: String = ops
+                .iter()
+                .enumerate()
+                .map(|(i, (o, l))| {
+                    let o = if i != j {
+                        *o
+                    } else {
+                        match o {
+                            CmpOp::Le => CmpOp::Lt,
+                            CmpOp::Lt => CmpOp::Le,
+                            CmpOp::Ge => CmpOp::Gt,
+                            CmpOp::Gt => CmpOp::Ge,
+                        }
+                    };
+                    format!("{}{}", o.word(), lit_text(l))
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            let here = format!("{}{}", op.word(), n.raw);
+            let span = r.cell_spans.get(k).cloned().unwrap_or_else(|| r.span.clone());
+            out.push(
+                Diag::error("E119", tr!("{rn} の境界が、引いた写しと反対側です", "The boundary of {rn} falls on the other side from the copy it cites"))
+                    .at(tr!("{rule_path}:{} {word} {table} {rn}", "{rule_path}:{} {word} {table} {rn}", r.span.line))
+                    .table(table.to_string())
+                    .row(r.index)
+                    .mark(span, tr!("写し: {}", "the copy: {}", quote(first)))
+                    .note(tr!("引いた写し: {src} {frags}", "The copy cited: {src} {frags}"))
+                    .note(tr!(
+                        "ちょうど {} のとき、写しの{}は{}に入れ、`{here}` は{}に入れます。変わるのはこの一点だけです。",
+                        "At exactly {}, the copy's {} takes it with {}, and `{here}` takes it with {}. That one point is the whole of the difference.",
+                        n.raw,
+                        quote(first),
+                        sides(first.side),
+                        sides(mine)
+                    ))
+                    .note(tr!(
+                        "閾値は写すときに書き換わる（`60cmまで` は `<=60cm` になる）ので、比べているのは境界の値がどちらに入るかだけです。写し間違いなら向きを直してください。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                        "A threshold is rewritten as it is transcribed (`60cmまで` becomes `<=60cm`), so the one thing held to the copy here is which side the boundary value falls on. If it was mistyped, correct it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
+                    ))
+                    .fix(crate::diag::FixKind::FlipBound, fixed),
+            );
+        }
+    }
+}
+
+/// A literal as it was written, for a cell rebuilt in a fix.
+fn lit_text(l: &crate::ast::Lit) -> String {
+    match l {
+        crate::ast::Lit::Num(n) => n.raw.clone(),
+        crate::ast::Lit::Word(w) => w.clone(),
+        crate::ast::Lit::Str(s) => format!("\"{s}\""),
+        crate::ast::Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+    }
 }
 
 /// The amounts a row writes: the literals of its output cells, with the text as written and
@@ -772,13 +882,46 @@ pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Stri
             Some(xml_text(&xml))
         }
         // A document's fragment is a table, and it is quoted as one (§15.82).
-        SourceKind::File { path, .. } => {
-            crate::extract::fragment(frag)?;
-            let doc = Path::new(base).parent().unwrap_or(Path::new(".")).join(path);
-            let tsv = std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
-            Some(crate::extract::markdown(&crate::extract::from_tsv(&tsv)))
+        SourceKind::File { .. } => Some(crate::extract::markdown(&fragment_grid(rule_path, d, frag)?)),
+    }
+}
+
+/// The copy of one fragment of a document, as the grid it is. `None` for a law, whose
+/// fragments are articles and not tables, and for a copy that has not been fetched.
+pub fn fragment_grid(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Vec<Vec<String>>> {
+    let base = d.base.as_deref().unwrap_or(rule_path);
+    let SourceKind::File { path, .. } = &d.kind else { return None };
+    crate::extract::fragment(frag)?;
+    let doc = Path::new(base).parent().unwrap_or(Path::new(".")).join(path);
+    let tsv = std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
+    Some(crate::extract::from_tsv(&tsv))
+}
+
+/// How many of a table's own boundaries the copy it cites really words, for the line the
+/// approver's page adds (§15.124). A document that writes its bands as `18 to 20`, or with
+/// `円以上` over a column of its own, words none of them — and a page that claimed the
+/// boundaries had been held would be claiming nothing.
+pub fn boundaries_held(rule_path: &str, d: &SourceDecl, frags: &[&str], t: &crate::ast::Table) -> usize {
+    use crate::ast::{Cell, Lit};
+    let marks: Vec<crate::extract::Bound> = frags
+        .iter()
+        .filter_map(|f| fragment_grid(rule_path, d, f))
+        .flat_map(|g| crate::extract::bounds(&g))
+        .collect();
+    let mut held: Vec<crate::num::Rat> = Vec::new();
+    for r in &t.rows {
+        for c in &r.cells {
+            let Cell::Cmp(ops) = c else { continue };
+            for (_, l) in ops {
+                let Lit::Num(n) = l else { continue };
+                let Some(v) = crate::types::comparable(n) else { continue };
+                if marks.iter().any(|b| crate::types::same_value(&b.value, &v)) && !held.contains(&v.1) {
+                    held.push(v.1);
+                }
+            }
         }
     }
+    held.len()
 }
 
 /// Whether two copies of a fragment say the same thing: the text, not the markup. e-Gov

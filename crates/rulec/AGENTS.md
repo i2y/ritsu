@@ -119,9 +119,9 @@ A few shapes are worth knowing before the first draft:
   or a scan, `fetch --via <cmd>` runs an extractor (docling and the like) as a child process
   and pins what it produced, so the extraction happens once and is reviewed once —
   `rulec adapter <file.rule> --template docling` prints the shape. **The rows are then held to that copy**: an
-  amount the copy does not show is E116, and a number the copy states that no row uses is
-  W120 — the two halves of a mistyped digit, and the one check that looks outside the rule
-  at all.
+  amount the copy does not show is E116, a number the copy states that no row uses is W120,
+  and a boundary the copy puts on the other side of itself is E119 — the only checks that
+  look outside the rule at all.
 
 - **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
   sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
@@ -203,10 +203,10 @@ meet while transcribing:
 - **E112 derived range too narrow** — the message states the interval to widen to.
 - **E014 expression in an output cell** — a cell to the right of `->` holds one value or one
   name. Give the calculation a name on a `define` line and put that name in the table.
-- **E116 an amount that is not in the copy** / **W120 a value of the copy that no row uses**
-  — the row and the table it cites disagree. Reread the copy: a mistyped digit raises both
-  and names both halves. An amount that came from elsewhere loses its citation and gains a
-  comment saying where it came from.
+- **E116 an amount not in the copy** / **W120 a value of the copy no row uses** / **E119 a
+  boundary on the other side of itself** — the row and the table it cites disagree. A mistyped
+  digit raises the first two; `60cm以下` transcribed as `<60cm` raises the third, and nothing
+  else catches that one. A value from elsewhere loses its citation and gains a comment saying so.
 - **E114 value off the column’s step** — `0.5%` in a `rate[step 1%]` column has no runtime
   representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`).
 - **E022 / E023 / E024 a fold with a hole** — `empty` and `exhausted` are both required, and

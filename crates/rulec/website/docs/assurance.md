@@ -7,8 +7,8 @@ of them share no code with the checker at all.
 
 The short version is the order they run in. A rule that fails a layer never reaches the next.
 
-![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance.svg#only-dark)
-![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance-light.svg#only-light)
+![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, E119, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance.svg#only-dark)
+![Which joint each of the nine layers watches. The spine is four things — the business as it is, the document it was copied from, the table as written, and the generated code — each a copy of the one before it. Between the document and the table stands layer 9, the source check (E116, E119, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria and the model checker. The table itself is watched by layers 1, 2 and 3, the five proofs, the two declarations and the examples. At the leftmost joint, between the business and the document, there is no layer at all: that is where a person read and decided. Layers 7 and 8, the certificate with its two re-checkers and the repository's own tests, are aimed at the tool rather than at a joint.](images/assurance-light.svg#only-light)
 
 Drawn out, the layers fall into place. **The spine is four things**, each a copy of the one
 above it, and most of the checking lives at a **joint**, holding two of them to each other.
@@ -27,7 +27,7 @@ down, and nothing here can check that reading.
 | **5. The five coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every rounding tie and every fold transition | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 86 deliberately broken rules each produce the diagnostic they should; 45 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 88 deliberately broken rules each produce the diagnostic they should; 45 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -146,14 +146,14 @@ independent of it.
 The five proofs come out of rulec's implementation, and **that implementation has not been
 proved correct**. What stands in for a proof is evidence, and it is kept deliberately:
 
-- **86 deliberately broken rules**, each producing the diagnostic it should — and the
+- **88 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
 - **45 rules** — 36 transcribed from real published terms, 9 written to reach the corners of
   the language — checked, generated and run in every language on every commit.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
   held to the corpus files they came from. A page that drifts is a failing test.
-- **Every diagnostic is in the ledger**: 77 codes, each with a smallest reproduction that is
+- **Every diagnostic is in the ledger**: 78 codes, each with a smallest reproduction that is
   run on every commit to check it still produces that code.
 
 ## 9. The source a rule was transcribed from
@@ -163,7 +163,8 @@ A rule can cite the document it came from: a law in the government's own databas
 Rows, tables, clauses and derivations then carry `@法 別表第一`, and `rulec check` compares
 the amounts in the table with the amounts in the copy. One that is nowhere in the copy is
 E116; a value of the copy that no row uses is W120, which is what usually comes with a
-mistyped digit.
+mistyped digit. A threshold is compared too, in the one way it can be: the copy's `60cm以下`
+puts 60cm in the band below, `<60cm` puts it in the band above, and that is E119.
 
 **Where it stops:** agreement with the copy, not with the world. And a rule with no citation
 gets none of it — transcribe the tariff wrong and everything stays green.

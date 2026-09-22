@@ -80,7 +80,7 @@ def gap_mid(i):
 JA = dict(
     alt="九つの層が、何と何のあいだを見張っているか。上から順に 現実の業務 → 写した文書 → 書かれた表 → 生成コード が並び、"
         "隣どうしは写しの関係にある。書かれた表からはもう一つ、証明書（cert.json、五つの証明の中身）が出ていて、左を回る線で"
-        "表とつながっている。写した文書と書かれた表のあいだは 9 出典（E116・W120）が、書かれた表と生成コードのあいだは "
+        "表とつながっている。写した文書と書かれた表のあいだは 9 出典（E116・E119・W120）が、書かれた表と生成コードのあいだは "
         "4 ベクタ・5 網羅・6 モデル検査器が見張る。書かれた表そのものは 1 五つの証明・2 二つの宣言・3 例 が見て、証明書は "
         "7 二つの再検査器が読み直す。いちばん上、現実の業務と写した文書のあいだには層が一つも無く、そこは人が読んで決める"
         "ところ。8 リポジトリのテストだけは継ぎ目ではなく、道具そのものに向いている。",
@@ -93,7 +93,7 @@ JA = dict(
     ],
     cards=[
         ("層がありません", ["人が読んで書いたところ。rulec が", "見るのは、ここから下だけ"], ("joint", 0), "human"),
-        ("9 — 出典を見る", ["写し間違いを捕まえる。", "@法 別表第一 → E116・W120"], ("joint", 1), "accent"),
+        ("9 — 出典を見る", ["写し間違いを捕まえる。", "@法 別表第一 → E116・E119・W120"], ("joint", 1), "accent"),
         ("1・2・3 — 表を見る", ["五つの証明（抜け、重なり、当たらない", "行、単位、int64）。丸めの宣言と、例"], ("box", 2), "accent"),
         ("4・5・6 — コードを見る", ["12 言語が一バイトずつ一致。網羅の五基準。", "モデル検査器は Rust を全入力で読む"], ("joint", 2), "accent"),
         ("7 — 証拠を読み直す", ["rulec とコードを共有しない二つが読む。", "依存ゼロの一ファイルと、Lean の証明つき"], ("box", 4), "accent"),
@@ -109,7 +109,7 @@ EN = dict(
         "was copied from, the table as written, and the generated code, each a copy of the one above it. The table "
         "produces one more thing, the certificate (cert.json, what the five proofs rest on), joined to it by a line "
         "that runs down the left margin. Between the document and the table stands layer 9, the source check "
-        "(E116, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria "
+        "(E116, E119, W120); between the table and the code stand layers 4, 5 and 6, the vectors, the coverage criteria "
         "and the model checker. The table itself is watched by layers 1, 2 and 3; the certificate is read back by "
         "layer 7, two programs that share no code with rulec. At the topmost joint, between the business and the "
         "document, there is no layer at all: that is where a person read and decided. Only layer 8, the "
@@ -123,7 +123,7 @@ EN = dict(
     ],
     cards=[
         ("No layer here", ["A person read, and wrote it down.", "rulec sees only from here down"], ("joint", 0), "human"),
-        ("9 — the source", ["Catches a mistyped amount.", "@法 別表第一 → E116, W120"], ("joint", 1), "accent"),
+        ("9 — the source", ["Catches a mistyped amount.", "@法 別表第一 → E116, E119, W120"], ("joint", 1), "accent"),
         ("1, 2, 3 — the table", ["Five proofs: gaps, overlaps, dead rows,", "units, int64. Rounding. Examples."], ("box", 2), "accent"),
         ("4, 5, 6 — the code", ["Twelve languages, byte for byte. Five", "coverage criteria. Rust over every input"], ("joint", 2), "accent"),
         ("7 — the evidence, re-read", ["Two programs share no code with rulec:", "one file with no imports, and Lean's proofs"], ("box", 4), "accent"),

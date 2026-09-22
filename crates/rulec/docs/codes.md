@@ -72,6 +72,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E116](#e116) | error | A row's amount is not in the copy it cites |
 | [E117](#e117) | error | A share without what a share needs |
 | [E118](#e118) | error | The call is not written correctly |
+| [E119](#e119) | error | A row's boundary falls on the other side from the copy it cites |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -2130,6 +2131,56 @@ result o = r
 ```
 
 Related codes: [E103](#e103), [E115](#e115)
+
+## E119
+
+`error` — **A row's boundary falls on the other side from the copy it cites**
+
+**When.** A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60〜80`), with the word in another column (`円以上` over its own column, as an insurance premium table writes it), or with words on both sides, is left alone.
+
+**Fix.** Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+source 寸法表 = file "寸法表.md" sha256:a19333e262c10371
+  表1 sha256:a5c05813ad703b8e
+
+inputs
+  a(a) : length[cm]  range >=1cm <=80cm
+
+outputs
+  x(x) : money[円]  round up(10円)
+
+table 表(t1)  @寸法表 表1
+policy unique
+| a             | -> x   |
+| <60cm         | 1410円 |
+| >=60cm <=80cm | 1710円 |
+```
+
+With `寸法表.md` beside it:
+
+```proto
+# 寸法表
+
+| サイズ | 運賃 |
+|---|---|
+| 60cmまで | 1410円 |
+| 60cmを超え80cm以下 | 1710円 |
+```
+
+With `寸法表.md.fragments/表1.tsv` beside it:
+
+```proto
+サイズ	運賃
+60cmまで	1410円
+60cmを超え80cm以下	1710円
+```
+
+Related codes: [E116](#e116), [W120](#w120), [E105](#e105)
 
 ## W105
 

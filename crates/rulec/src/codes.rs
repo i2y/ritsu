@@ -273,6 +273,14 @@ const TARIFF_DOC: &[(&str, &str)] = &[
 ];
 const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| true | 990円 |\n| false | 890円 |\n";
 const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| - | 990円 |\n";
+/// The document of the E119 example, and the copy of its table. A second document, because
+/// the boundary check needs a table that cuts a number line and the E116 one lists a price
+/// per destination (§15.124).
+const SIZE_DOC: &[(&str, &str)] = &[
+    ("寸法表.md", "# 寸法表\n\n| サイズ | 運賃 |\n|---|---|\n| 60cmまで | 1410円 |\n| 60cmを超え80cm以下 | 1710円 |\n"),
+    ("寸法表.md.fragments/表1.tsv", "サイズ\t運賃\n60cmまで\t1410円\n60cmを超え80cm以下\t1710円\n"),
+];
+const X_E119: &str = "rule t(t) v1\n\nsource 寸法表 = file \"寸法表.md\" sha256:a19333e262c10371\n  表1 sha256:a5c05813ad703b8e\n\ninputs\n  a(a) : length[cm]  range >=1cm <=80cm\n\noutputs\n  x(x) : money[円]  round up(10円)\n\ntable 表(t1)  @寸法表 表1\npolicy unique\n| a             | -> x   |\n| <60cm         | 1410円 |\n| >=60cm <=80cm | 1710円 |\n";
 const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
@@ -1388,6 +1396,21 @@ pub fn ledger() -> Vec<Entry> {
             X_E118,
             &["E103", "E115"],
         ),
+        err(
+            "E119",
+            tr!("行の境界が、引いた写しと反対側です", "A row's boundary falls on the other side from the copy it cites"),
+            tr!(
+                "引用のある行の閾値が、境界の値を写しと反対の側に入れているとき（§15.124）。閾値は写すときに書き換わる（`1,949,000円まで` は `<=1949000円` になる）ので文字としては比べられず、比べているのは**境界の値がどちらに入るか**だけです。写しの「60cm以下」と「60cmを超え」はどちらも 60cm を小さいほうに入れ、`<=60cm` と `>60cm` も同じことを言います。写しに境界の語が無いとき（`18 to 20`、`60〜80`）、語が数と別の列にあるとき（保険料額表の「円以上／円未満」）、同じ数を写しが両側に置いているときは、何も言いません。",
+                "A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60〜80`), with the word in another column (`円以上` over its own column, as an insurance premium table writes it), or with words on both sides, is left alone."
+            ),
+            tr!(
+                "写しを読み直して直してください。`fix.text` はこのセルの境界の側だけを入れ替えた形です——向きは表の幾何であって写しが決めることではないので、`<` と `<=` の入れ替えしか書きません。一つの境界を写し間違えると、それを分け合う二つの行の両方が出ます。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                "Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
+            ),
+            X_E119,
+            &["E116", "W120", "E105"],
+        )
+        .with_files(SIZE_DOC),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

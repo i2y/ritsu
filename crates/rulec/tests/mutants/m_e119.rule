@@ -1,0 +1,43 @@
+rule uk_minimum_wage v1
+description "The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. An English transcription with a main rule and its exception"
+
+# GOV.UK states a rate for each age band, and then states the apprentice rate as an
+# exception to it: an apprentice takes the apprentice rate while under 19, or while in the
+# first year of the apprenticeship, and the rate for their age afterwards. Two tables, the
+# second overriding the first, is that sentence. One table with an apprentice column would
+# give the same answers with the shape of the source lost.
+source gov = file "sources/uk-nmw.md" sha256:bc45eedf7f908896  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:3c2fa10da7e3bf65
+
+inputs
+  age        : number  range >=16 <=70
+  apprentice : bool
+  first_year : bool
+
+# A wage is not a price, so there is no tax flag on it. The rates are whole pence, and the
+# rounding is declared because every numeric output must declare one.
+outputs
+  hourly : money[GBPc]  round down(1GBPc)
+
+table by_age  @gov table1
+policy unique
+| age       | -> hourly : money[GBPc] |
+| <=18      | 800GBPc                 |
+| >18 <=20  | 1085GBPc                |
+| >=21      | 1271GBPc                |
+
+table apprentice_rate  @gov table1
+policy unique
+overrides by_age
+| apprentice | first_year | age  | -> hourly : money[GBPc] |
+| true       | -          | <19  | 800GBPc                 |
+| true       | true       | >=19 | 800GBPc                 |
+
+examples
+| age | apprentice | first_year | -> hourly |
+| 25  | false      | false      | 1271GBPc  |
+| 19  | false      | false      | 1085GBPc  |
+| 17  | false      | false      | 800GBPc   |
+| 25  | true       | true       | 800GBPc   |
+| 25  | true       | false      | 1271GBPc  |
+| 18  | true       | false      | 800GBPc   |

@@ -53,7 +53,8 @@ still means the same thing, and `v` says which version wrote the line.
 | `key` | the identity `--diff-base` compares on. Two runs that name the same finding use the same key |
 
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
-`add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`, `none`.
+`add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
+`flip_bound`, `none`.
 `none` means no single mechanical edit is right; the reason is in `notes`.
 
 **`fix.text` is a form, not a decision.** It parses and it removes the code, and that much is

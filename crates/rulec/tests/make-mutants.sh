@@ -86,6 +86,16 @@ awk '/^  第91条 sha256:/ { sub(/sha256:[0-9a-f]+/, "sha256:0000000000000000") 
 awk '/^table 軽減/ { sub(/@措置法 第91条/, "@措置法 第92条") } { print }'  "$s" > "$M/m_e039.rule"
 # A pin no citation uses
 awk '{ print } /^  第91条 sha256:/ { print "  第92条 sha256:0000000000000000" }' "$s" > "$M/m_w119.rule"
+# A boundary transcribed onto the other side of itself. Both rows that share the boundary are
+# moved, so the table stays complete and has no overlap — E101 and E105 have nothing to say,
+# the number 18 is still used so W120 has nothing to say, and the copy's "Under 18" is the
+# only thing left that knows (§15.124).
+awk '/ <18 / { sub(/<18 /, "<=18") } / >=18 <=20 / { sub(/>=18 <=20/, ">18 <=20 ") } { print }' \
+  "$C/uk_minimum_wage.rule" > "$M/m_e119.rule"
+# The same mistake where the copy says which side in a heading over the column (`円以上` and
+# `円未満`) instead of in the cell, which is the shape a Japanese premium table takes.
+awk '/\| <93000円/ { sub(/<93000円/, "<=93000円") } /\| >=93000円 </ { sub(/>=93000円/, ">93000円") } { print }' \
+  "$C/厚生年金保険料.rule" > "$M/m_e119col.rule"
 
 # --- A rule applied by another (§15.69). The callee stays in the corpus, so the
 # mutants reach it by a relative path; the digest in the heading is the corpus caller's own.

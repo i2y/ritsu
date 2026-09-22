@@ -357,8 +357,15 @@ it says the table is consistent with itself, not that it says what the document 
 a row writes that the copy does not show anywhere is **E116**; a number the copy states as a
 whole cell that no row of the citing table uses is **W120**, and the two together are what a
 mistyped digit looks like (`890円` is nowhere in the copy, and the copy's `880円` is used by
-nobody). Only amounts are held: a threshold is rewritten as it is transcribed — `1,949,000円まで`
-becomes `<=1949000円` — and an amount is not. W120 asks only about cells that are nothing but a
+nobody). A threshold is rewritten as it is
+transcribed — `1,949,000円まで` becomes `<=1949000円` — so its text cannot be compared, but one
+thing survives the rewriting: **which of the two bands the boundary value itself falls in**.
+The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and
+`>60cm`; a row that puts it in the other band is **E119**, reported on both of the rows that
+share the boundary. The word is read beside the number (`60cm以下`, `Under 18`, `Not over
+$11,925`) or in a heading over its column (`円以上` and `円未満`, as a premium table writes
+them). A boundary the copy words neither way — `18 to 20`, `60〜80` — is left alone, because
+naming the numbers that bound a band does not say which band holds them. W120 asks only about cells that are nothing but a
 number, and a row that merges what the copy lists one by one (`<=3kg` over its `1kg`, `2kg` and
 `3kg`) accounts for all of them. A table that transcribes only part of a fragment moves its
 citation from the `table` line onto the rows that came from it: a row's citation says only where
