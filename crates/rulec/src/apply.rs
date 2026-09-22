@@ -598,7 +598,7 @@ fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
     }
 }
 
-fn expr_names(e: &Expr) -> Vec<String> {
+pub(crate) fn expr_names(e: &Expr) -> Vec<String> {
     let mut out = Vec::new();
     fn walk(e: &Expr, out: &mut Vec<String>) {
         match e {

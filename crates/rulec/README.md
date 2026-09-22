@@ -188,6 +188,7 @@ $ rulec adapter | schema | verify                  # against a legacy implementa
 $ rulec fixtures lint | replay | diff              # against past records
 $ rulec doc rules/parcel.rule --lang ja            # for whoever approves the table; --format html
 $ rulec certificate rules/parcel.rule              # the evidence, for another program to re-check
+$ rulec graph rules/parcel.rule                    # what decides each value, and what reads it
 $ rulec source fetch | pin | outdated              # the copies of the documents a rule cites
 $ rulec api rules/parcel.rule                      # how to call the generated code, without reading it
 $ rulec explain E101                               # when it appears, how to fix it, a repro
@@ -247,10 +248,11 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
                   built from those very functions
-src/              42 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
+src/              43 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
                   (the tables that define one output, as one set), region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
-                  cert (the certificate), import and xlsx (a draft from a sheet: ZIP, deflate,
+                  cert (the certificate), graph (the rule as one graph of what decides
+                  what), import and xlsx (a draft from a sheet: ZIP, deflate,
                   the number formats), proto and jsonschema (the enums whose values are
                   declared outside the rule), enums, mcp (the command table as MCP tools),
                   codegen/tool (the rule as an MCP tool and its view), codegen/connect (the

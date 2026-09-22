@@ -5749,38 +5749,6 @@ impl Gen<'_> {
     /// Both entry guards above take `lo.num` and `hi.num`, so this does too: an inventory that
     /// disagreed with the guard would send a caller values the code then rejects. A test holds
     /// these two numbers to the text of the generated guard (§8.6).
-    /// The preconditions of §15.116, as data. Structured and not prose: a caller matches on
-    /// the shape of the entry, and the sentence the generated code refuses with moves with
-    /// `--lang` while these do not (§12.1).
-    fn preconditions_json(&self) -> String {
-        use crate::verify::Pre;
-        crate::json::arr(
-            &crate::verify::preconditions(self.f, self.c)
-                .iter()
-                .map(|p| match p {
-                    Pre::Rel { left, op, right } => crate::json::Obj::new()
-                        .str("kind", "constraint")
-                        .str("left", left)
-                        .str("op", op)
-                        .str("right", right)
-                        .finish(),
-                    Pre::Sum { name, over, of, max } => crate::json::Obj::new()
-                        .str("kind", "sum")
-                        .str("name", name)
-                        .str("over", over)
-                        .str("of", of)
-                        .int("max", *max)
-                        .finish(),
-                    Pre::Length { sequence, max } => crate::json::Obj::new()
-                        .str("kind", "length")
-                        .str("sequence", sequence)
-                        .int("max", *max)
-                        .finish(),
-                })
-                .collect::<Vec<_>>(),
-        )
-    }
-
     fn range_json(&self, name: &str) -> Option<String> {
         let (lo, hi) = self.c.ranges.get(name)?;
         let (lo, hi) = (lo.as_ref()?, hi.as_ref()?);
@@ -6455,7 +6423,7 @@ impl Gen<'_> {
             .str("source_sha256", &self.src_hash)
             // What the entry guard holds a caller to that `rulec schema` cannot say. A
             // caller that validated the shape and stopped is not done (§15.116).
-            .raw("preconditions", self.preconditions_json())
+            .raw("preconditions", crate::verify::preconditions_json(self.f, self.c))
             .raw("applies", crate::json::arr(&self.f.applies.iter().map(|a| {
                 crate::json::Obj::new()
                     .str("name", &a.name.text)

@@ -384,6 +384,33 @@ fn commands() -> Vec<Cmd> {
             codes: &[],
         },
         Cmd {
+            name: "graph",
+            args: "<file.rule>",
+            purpose: tr!(
+                "値の出どころと読み先を、一枚のグラフとして出す",
+                "what decides each value and which values it reads, as one graph"
+            ),
+            params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
+            flags: vec![
+                flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）。既定も json", "machine-facing JSON (docs/formats.md); also the default")).choices(&["json"]),
+            ],
+            // **Less than `check`, on purpose.** A graph is about which value is read
+            // while which other is decided, and that is settled once the names and the
+            // types resolve — a table with a gap in it has the same edges as one without.
+            // The picture is most wanted while a rule is still being fixed, so this
+            // command does not wait for the proofs the way `doc` does (§15.117).
+            exits: vec![
+                (0, tr!("出した", "emitted")),
+                (1, tr!("名前か型が解決しない", "a name or a type does not resolve")),
+                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "rulec graph rules/送料.rule".into(),
+                r#"rulec graph rules/送料.rule | jq -r '.edges[] | .from + " -> " + .to'"#.into(),
+            ],
+            codes: &[],
+        },
+        Cmd {
             name: "certificate",
             args: "<file.rule>",
             purpose: tr!(
@@ -1006,6 +1033,7 @@ fn main() -> ExitCode {
         // through `one`.
         "api" => api(&files),
         "certificate" => certificate(&files),
+        "graph" => graph(&files),
         "adapter" => {
             let lang = a.get("--template").unwrap_or("python").to_string();
             // The extraction adapter is about a document, not about this rule, so it needs
@@ -1811,6 +1839,23 @@ fn certificate(files: &[&String]) -> ExitCode {
             return ExitCode::from(1);
         };
         println!("{}", rulec::cert::certificate(&f, &c, &src));
+    }
+    ExitCode::from(0)
+}
+
+/// §15.117: the rule as a graph. The same relation `doc` prints under every table, in one
+/// place — so that the shape of a rule can be seen rather than read a table at a time.
+fn graph(files: &[&String]) -> ExitCode {
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+            return ExitCode::from(2);
+        };
+        let Ok((f, c)) = rulec::prepare(&src, path) else {
+            eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
+            return ExitCode::from(1);
+        };
+        print!("{}", rulec::graph::json(&f, &c, &rulec::sha256::hex(src.as_bytes())));
     }
     ExitCode::from(0)
 }

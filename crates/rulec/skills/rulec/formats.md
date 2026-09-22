@@ -371,6 +371,64 @@ calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `ru
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
 
+## `graph`
+
+One object: the rule as a graph of **what decides each value and which values it reads**.
+
+Nothing in it is new knowledge — `doc` already prints, under every table, the columns it
+reads and where each one comes from. This is that same relation gathered into one place,
+which is what it takes to see the shape of a rule rather than read it a table at a time. A
+rule whose two upstream tables cut the same input at different thresholds is a diamond, and
+a diamond is something you notice; in the text it is two tables you have to read side by
+side.
+
+**It is a graph of dependency, not of time.** Every edge says "this value is read while
+that one is decided", and all of it happens in one call: there is no step between two nodes
+for anything to happen in. What happens outside is at the edge of the picture, which is why
+the crossings carry their guards and `preconditions` comes along.
+
+```json
+{"rule":"買物かごの送料","alias":"cart_shipping","version":"1","source_sha256":"…",
+ "nodes":[{"name":"区分","alias":"tier","kind":"input","type":"会員区分"},
+          {"name":"明細","alias":"lines","kind":"sequence"},
+          {"name":"金額","alias":"amount","kind":"element","of":"明細","type":"money[円]",
+           "range":{"min":0,"max":100000}},
+          {"name":"合計","alias":"total","kind":"value","type":"money[円]",
+           "range":{"min":0,"max":1000000},
+           "by":[{"kind":"sum","over":"明細","of":"金額"}]},
+          {"name":"送料","alias":"fee","kind":"value","type":"money[円]","output":true,
+           "by":[{"kind":"table","name":"送料表","policy":"unique","rows":4}]}],
+ "edges":[{"from":"金額","to":"合計","kind":"walk"},
+          {"from":"合計","to":"送料","kind":"reads","via":"送料表"},
+          {"from":"区分","to":"送料","kind":"reads","via":"送料表"}],
+ "preconditions":[{"kind":"sum","name":"合計","over":"明細","of":"金額","max":1000000}]}
+```
+
+**A node is a value, not an item.** A table is not a node: it is how one or more values are
+decided, and it rides on them in `by`. That keeps the graph in the reader's own vocabulary
+— the names in a rule are values — and it is what lets one value carry two deciders where a
+clause takes precedence over a table.
+
+| field | |
+|---|---|
+| `kind` | `input`, `sequence` (the list a walk runs over), `element` (a field of one element of it), or `value` |
+| `of` | for an `element`, the sequence it belongs to |
+| `type`, `range` | what the value is, and what it is held to. On an `input` or an `element` these are the guard the caller is held to at the door |
+| `output` | present and true where the rule declares the value as an output |
+| `per_element` | present and true where the value is decided once **per element** rather than once per call. A `sum`, a `count` and a `fold` are the three ways out of that frame, and nothing in the rule's text says which side of the line a value is on |
+| `from_apply` | the `apply` a value came in through. Its name is `<apply>:<name>`, and everything under one apply is one subgraph |
+| `by` | how the value is decided, one entry per decider, in the order precedence is declared: `{"kind":"table"\|"clause","name":…,"policy":…,"rows":…,"overrides":[…]}`, `{"kind":"derive"\|"define"}`, `{"kind":"sum"\|"count","over":…,"of":…,"where":…}`, `{"kind":"fold","verdict":…,"over":…}` |
+
+An edge is `{"from":…,"to":…,"kind":…}` with `via` naming the decider that reads it, where
+one is named. `kind` is `reads`, or `walk` for the edge that crosses the element frame —
+many elements in, one value out.
+
+**`graph` asks less than `check`.** Which value is read while which other is decided is
+settled once the names and the types resolve, so a table with a gap in it has the same
+edges as one without and still gets a graph; the picture is most wanted while a rule is
+still being fixed. A rule whose names do not resolve gets none, because then there is
+nothing to draw an edge between.
+
 ## `certificate`
 
 One object per rule: the **evidence** behind all five things `check` proves — completeness,

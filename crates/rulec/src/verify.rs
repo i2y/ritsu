@@ -416,6 +416,37 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
     v
 }
 
+/// The preconditions of §15.116, as data. Structured and not prose: a caller matches on the
+/// kind of the entry, and the sentence the generated code refuses with moves with `--lang`
+/// while these do not (§12.1).
+pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
+    crate::json::arr(
+        &preconditions(f, c)
+            .iter()
+            .map(|p| match p {
+                Pre::Rel { left, op, right } => crate::json::Obj::new()
+                    .str("kind", "constraint")
+                    .str("left", left)
+                    .str("op", op)
+                    .str("right", right)
+                    .finish(),
+                Pre::Sum { name, over, of, max } => crate::json::Obj::new()
+                    .str("kind", "sum")
+                    .str("name", name)
+                    .str("over", over)
+                    .str("of", of)
+                    .int("max", *max)
+                    .finish(),
+                Pre::Length { sequence, max } => crate::json::Obj::new()
+                    .str("kind", "length")
+                    .str("sequence", sequence)
+                    .int("max", *max)
+                    .finish(),
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
 /// The kinds of precondition this rule has, named, or nothing when it has none. Only the
 /// kinds that are actually there: a note that lists a kind the rule does not have teaches
 /// the reader to skim the next one.
