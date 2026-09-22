@@ -485,3 +485,59 @@ fn ブロックの途中のコメント行はブロックを切らない() {
     let split = "rule t v1\n\ninputs\n  a : bool\n\n  b : bool\n\noutputs\n  x : bool\n";
     assert!(rulec::has_error(&rulec::check_source(split, "t.rule")), "空行でブロックが切れなくなっています");
 }
+
+/// **A command's exit table is a contract** (§12.1), and six of them were not keeping it.
+///
+/// `rulec::prepare` stops where the names and the types do; the region checks of §6 come
+/// after. Four commands said "1: the rule does not pass check" and ran only the first half,
+/// so a rule with a completeness gap got a certificate whose cover was `null`, an inventory
+/// of code that would not be generated, and vectors for a table nothing had settled — each
+/// with exit 0. What is pinned here is both halves of the line: what waits for the proofs,
+/// and what does not and says so.
+#[test]
+fn 検査を通らない規則に_どのコマンドが何を返すか() {
+    let d = std::env::temp_dir().join(format!("rulec-exit-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    // A hole, and nothing else: the names and the types all resolve.
+    let p = d.join("hole.rule");
+    std::fs::write(
+        &p,
+        "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| true | true |\n",
+    )
+    .unwrap();
+    let f = p.to_str().unwrap();
+
+    // What the proofs are about waits for them.
+    for cmd in ["check", "gen", "doc", "certificate", "api", "vectors", "coverage"] {
+        let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .args([cmd, f])
+            .output()
+            .expect("rulec を起動できない");
+        assert_eq!(
+            o.status.code(),
+            Some(1),
+            "{cmd}: 穴のある規則に 0 を返した。終了コードの表は契約である（§12.1）"
+        );
+    }
+    // What is the shape of the rule rather than its proof does not: these are wanted while
+    // the rule is still being made, and `adapter --template` is what lets a source be
+    // fetched at all — a source not yet fetched being exactly why a rule does not pass yet.
+    for cmd in ["graph", "schema", "adapter"] {
+        let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .args([cmd, f])
+            .output()
+            .expect("rulec を起動できない");
+        assert_eq!(o.status.code(), Some(0), "{cmd}: 形を訊いただけなのに断られた");
+    }
+    // The refusal says what is wrong, on stderr, so a caller reading JSON on stdout is not
+    // handed prose in the middle of it.
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .args(["certificate", f])
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("E101"), "何が悪いか言っていない: {err}");
+    assert!(String::from_utf8_lossy(&o.stdout).trim().is_empty(), "断ったのに標準出力に何か書いた");
+    let _ = std::fs::remove_dir_all(&d);
+}

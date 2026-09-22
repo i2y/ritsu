@@ -274,7 +274,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("五基準すべてを満たす", "all five criteria are met")),
-                (1, tr!("欠けている義務がある（名指しされる）", "an obligation is missing (it is named)")),
+                (1, tr!("欠けている義務がある（名指しされる）、または規則が検査を通らない", "an obligation is missing (it is named), or the rule does not pass check")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec!["rulec coverage rules/送料.rule".into(), "rulec coverage rules/".into()],
@@ -445,7 +445,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("出した", "emitted")),
-                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (1, tr!("名前か型が解決しない", "a name or a type does not resolve")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
@@ -476,7 +476,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("出した", "emitted")),
-                (1, tr!("規則が検査を通らない", "the rule does not pass check")),
+                (1, tr!("名前か型が解決しない", "a name or a type does not resolve")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
@@ -1754,9 +1754,9 @@ fn coverage(files: &[&String], json: bool) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
-        let Ok((f, c)) = rulec::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
-            return ExitCode::from(1);
+        let (f, c) = match checked(&src, path) {
+            Ok(x) => x,
+            Err(e) => return e,
         };
         let (a, vs, rf) = rulec::coverage::audit_file(&f, &c, path);
         if json {
@@ -1780,9 +1780,9 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
-        let Ok((f, c)) = rulec::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていないのでベクタを作りません", "error: `{path}` does not pass check, so no vectors are generated"));
-            return ExitCode::from(1);
+        let (f, c) = match checked(&src, path) {
+            Ok(x) => x,
+            Err(e) => return e,
         };
         let vs = rulec::vectors::generate(&f, &c);
         let body: String = vs
@@ -1817,9 +1817,9 @@ fn api(files: &[&String]) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
-        let Ok((f, c)) = rulec::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
-            return ExitCode::from(1);
+        let (f, c) = match checked(&src, path) {
+            Ok(x) => x,
+            Err(e) => return e,
         };
         println!("{}", rulec::codegen::Gen::new(&f, &c, &src).api());
     }
@@ -1834,13 +1834,39 @@ fn certificate(files: &[&String]) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
-        let Ok((f, c)) = rulec::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
-            return ExitCode::from(1);
+        let (f, c) = match checked(&src, path) {
+            Ok(x) => x,
+            Err(e) => return e,
         };
         println!("{}", rulec::cert::certificate(&f, &c, &src));
     }
     ExitCode::from(0)
+}
+
+/// **The whole of `check`, not the half `prepare` runs** (§15.119).
+///
+/// `rulec::prepare` stops where the names and the types do; the region checks of §6 — the
+/// completeness, the overlaps, the rows nothing reaches — come after it. Four commands
+/// said "1: the rule does not pass check" in their own exit table and only ran the first
+/// half, so they answered 0 about a rule with a hole in it: a certificate whose cover is
+/// `null`, an inventory of code that would not be generated, vectors for a table that
+/// cannot be relied on. The findings are printed the way `check` prints them, because a
+/// refusal that does not say what is wrong sends the reader to another command to find out.
+fn checked(src: &str, path: &str) -> Result<(rulec::ast::RuleFile, rulec::types::Checked), ExitCode> {
+    let rep = rulec::report(src, path);
+    if rulec::has_error(&rep.diags) {
+        let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+        for d in rep.diags.iter().filter(|d| d.severity == rulec::diag::Severity::Error) {
+            eprint!("{}", render(d, &lines));
+            eprintln!();
+        }
+        eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+        return Err(ExitCode::from(1));
+    }
+    rulec::prepare(src, path).map_err(|_| {
+        eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+        ExitCode::from(1)
+    })
 }
 
 /// §15.117: the rule as a graph. The same relation `doc` prints under every table, in one
@@ -1870,8 +1896,13 @@ fn one(
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
+        // **Not `checked`.** These two are the shape of the rule, not its proof, and they
+        // are wanted while it is still being made — `adapter --template` is what produces
+        // the extractor a source needs, and a source not yet fetched is exactly why the
+        // rule does not pass check yet. Gating them on the proofs would be a loop with no
+        // way in (§15.119).
         let Ok((rf, c)) = rulec::prepare(&src, path) else {
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていません", "error: `{path}` does not pass check"));
+            eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
             return ExitCode::from(1);
         };
         if let Some(s) = f(&rf, &c, path) {
