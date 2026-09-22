@@ -212,3 +212,143 @@ fn 射影の無い規則には何も出ない() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A projected **date** becomes the day number the rule counts in, which means each of the
+/// five carries its own `days_from_civil` — five hand-written copies of one formula, and no
+/// corpus rule projects a date, so nothing ran any of them.
+///
+/// So a sweep: one date every 37 days across eleven years, leap days included, through every
+/// language, held to what `datetime` says. Agreeing on the boundary is the whole claim: a
+/// copy that is off by a day, or that reads February wrong, moves it.
+#[test]
+fn 日付の射影は五つの言語で同じ日を指す() {
+    let dir = std::env::temp_dir().join(format!("rulec-projection-date-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("o.json"),
+        "{\"$defs\":{\"O\":{\"type\":\"object\",\"properties\":{\"placed_at\":{\"type\":\"string\"}}}}}\n",
+    )
+    .unwrap();
+    let rule = "rule d(d) v1\n\n\
+        shape o(o) = jsonschema \"o.json\" \"#/$defs/O\"\n\n\
+        inputs\n  placed(placed) : date  range >=2020-01-01 <=2030-12-31  from o.placed_at\n\n\
+        outputs\n  first_half(first_half) : bool\n\n\
+        table decide(decide)\npolicy unique\n\
+        | placed       | -> first_half(first_half) : bool |\n\
+        | <=2026-06-30 | true                             |\n\
+        | >2026-06-30  | false                            |\n";
+    std::fs::write(dir.join("d.rule"), rule).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .args(["gen", &dir.join("d.rule").to_string_lossy(), "--out", &dir.to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+
+    // One date every 37 days, and what each one's answer has to be.
+    let dates = sweep();
+    let want: Vec<bool> = dates.iter().map(|d| d.as_str() <= "2026-06-30").collect();
+    let lines: Vec<String> = dates.iter().map(|d| format!("{{\"placed_at\":\"{d}\"}}")).collect();
+    let payload = lines.join("\n");
+    let mut ran = 0;
+
+    let say = |lang: &str, out: &str, want: &[bool], dates: &[String]| {
+        let got: Vec<bool> = out.trim().split(',').map(|x| x == "true").collect();
+        assert_eq!(got.len(), want.len(), "{lang}: 件数が違う: {out}");
+        for (k, (g, w)) in got.iter().zip(want).enumerate() {
+            assert_eq!(g, w, "{lang}: {} の答えが違う", dates[k]);
+        }
+    };
+
+    assert!(have("python3"), "python3 が要ります");
+    let script = format!(
+        "import json,sys,d\nprint(','.join('true' if d.d_from(json.loads(l)) else 'false' for l in sys.stdin if l.strip()))\n"
+    );
+    let out = piped("Python", Command::new("python3").current_dir(dir.join("python")).args(["-B", "-c", &script]), &payload);
+    say("Python", &out, &want, &dates);
+    ran += 1;
+
+    for (lang, sub, file) in
+        [("JavaScript", "javascript", "d.mjs"), ("TypeScript", "typescript", "d.ts")]
+    {
+        if !have("node") {
+            eprintln!("注意: node が無いので {lang} 側を飛ばした");
+            continue;
+        }
+        let script = format!(
+            "const m=await import('./{file}');const o=[];for(const l of `{payload}`.split('\\n'))if(l.trim())o.push(m.d_from(JSON.parse(l))?'true':'false');console.log(o.join(','));"
+        );
+        let out = piped(
+            lang,
+            Command::new("node").current_dir(dir.join(sub)).args(["--no-warnings", "--input-type=module", "-e", &script]),
+            "",
+        );
+        say(lang, &out, &want, &dates);
+        ran += 1;
+    }
+
+    if have("ruby") {
+        let script = "require 'json'\nrequire './d.rb'\nputs STDIN.read.split(\"\\n\").reject(&:empty?).map{|l| D.d_from(JSON.parse(l))}.join(',')";
+        let out = piped("Ruby", Command::new("ruby").current_dir(dir.join("ruby")).args(["-e", script]), &payload);
+        say("Ruby", &out, &want, &dates);
+        ran += 1;
+    } else {
+        eprintln!("注意: ruby が無いので Ruby 側を飛ばした");
+    }
+
+    if have("php") {
+        let script = "require './d.php';\n$o=[];foreach(explode(\"\\n\",trim(stream_get_contents(STDIN))) as $l){ if(trim($l)==='')continue; $o[]=\\D\\d_from(json_decode($l,true))?'true':'false'; }\necho implode(',',$o);";
+        let out = piped("PHP", Command::new("php").current_dir(dir.join("php")).args(["-r", script]), &payload);
+        say("PHP", &out, &want, &dates);
+        ran += 1;
+    } else {
+        eprintln!("注意: php が無いので PHP 側を飛ばした");
+    }
+
+    eprintln!("日付の射影を走らせた言語: {ran}（日付 {} 件）", dates.len());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The first and last day of every month in the declared range, both kinds of February
+/// included, **and the two days either side of the rule's own boundary** — which is the pair
+/// that actually pins the conversion. A copy that is off by a constant moves the boundary and
+/// nothing else, so a sweep that steps over it proves nothing.
+fn sweep() -> Vec<String> {
+    let leap = |y: i32| y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let len = |y: i32, m: u32| match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ => {
+            if leap(y) {
+                29
+            } else {
+                28
+            }
+        }
+    };
+    let mut out = vec!["2026-06-30".to_string(), "2026-07-01".to_string()];
+    for y in 2020..=2030 {
+        for m in 1..=12u32 {
+            out.push(format!("{y:04}-{m:02}-01"));
+            out.push(format!("{y:04}-{m:02}-{:02}", len(y, m)));
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Run a command with `input` on its stdin and give back what it printed.
+fn piped(lang: &str, cmd: &mut Command, input: &str) -> String {
+    use std::io::Write;
+    let mut p = cmd
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("起動できない");
+    p.stdin.as_mut().unwrap().write_all(input.as_bytes()).unwrap();
+    let o = p.wait_with_output().unwrap();
+    assert!(o.status.success(), "{lang}: 走らない:\n{}", String::from_utf8_lossy(&o.stderr));
+    String::from_utf8_lossy(&o.stdout).into_owned()
+}

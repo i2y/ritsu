@@ -697,3 +697,85 @@ fn 新しい次元の規則も評価器と全言語で一致する() {
     agrees_everywhere("dimensions", &dir);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A sequence is a parameter of every generated function and the fields of one element are
+/// locals inside the loop, so an `elements` alias that matches a helper's own local collides
+/// with it. `elements 候補(rows)` made the TypeScript and JavaScript modules **unparseable** —
+/// the record function already builds its trace in a `const rows` — and the corpus aliases no
+/// sequence that way, so nothing ever ran it (§15.128).
+///
+/// The sweep is over the names the generator asks `temp` for today, so the next helper local
+/// somebody adds is not free to reintroduce this.
+#[test]
+fn 並びの別名が生成物の局所変数と同じでも生成物は動く() {
+    // `rows` is the one that actually collided, and it gets the full sweep.
+    let dir = generate("seqrows", &seq_rule("rows"));
+    agrees_everywhere("seqrows", &dir);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // The rest only have to parse and run: a collision shows up as a module that will not
+    // load at all, which is what `ts_runs` and the JavaScript beside it catch.
+    for name in TEMP_LOCALS {
+        let d = generate(&format!("seq{name}"), &seq_rule(name));
+        ts_runs(&d, "seq");
+        js_runs(&d, "seq");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+/// Every base name the generator asks `temp` for. Kept here rather than derived, because a
+/// test that read them out of the generator would go green the moment the generator stopped
+/// naming one.
+const TEMP_LOCALS: &[&str] = &[
+    "answer", "args", "best", "d", "e", "elem", "els", "f", "head", "held", "ins", "kept",
+    "key", "line", "obs", "out", "r", "seq", "stopped", "tag", "taken", "trace",
+];
+
+/// The smallest rule that walks a sequence, under a chosen alias for it.
+fn seq_rule(alias: &str) -> String {
+    format!(
+        "\
+rule seq v1
+description \"並びの別名が生成物の局所変数と衝突する\"
+
+enum 採用区分(verdict_kind) = 確定(take) | 見送(skip)
+
+elements 候補({alias})
+  額(amt) : money[円]  range >=0円 <=1000円
+
+outputs
+  答(ans) : money[円]  round down(1円)
+
+table 判定(decide)
+policy unique
+| 額      | -> 採用(verdict) : 採用区分 |
+| >=500円 | 確定                        |
+| <500円  | 見送                        |
+
+fold 採用 over 候補
+  確定 -> stop with 額
+  見送 -> next
+  empty -> 0円
+  exhausted -> 0円
+"
+    )
+}
+
+/// The JavaScript twin of `ts_runs`.
+fn js_runs(dir: &Path, module: &str) {
+    if !have("node") {
+        eprintln!("注意: node が無いので JavaScript 側を飛ばした");
+        return;
+    }
+    let o = Command::new("node")
+        .current_dir(dir.join("javascript"))
+        .args([&format!("{module}_runner.mjs")])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("node を起動できない");
+    assert!(
+        o.status.success(),
+        "生成した JavaScript のランナーが走らない:\n{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+}

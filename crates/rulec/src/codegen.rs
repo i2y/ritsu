@@ -432,6 +432,17 @@ impl<'a> Gen<'a> {
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
+            // The sequence a walk reads is a parameter of every generated function, and the
+            // fields of one element are locals inside the loop — so both are names a helper
+            // must not take. `elements 候補(rows)` used to collide with the `rows` the record
+            // function builds its trace in, and the TypeScript and JavaScript modules then
+            // would not parse at all (§15.128).
+            .chain(f.elements.iter().flat_map(|el| {
+                std::iter::once(&el.name).chain(el.fields.iter().map(|fd| &fd.name))
+            }))
+            // A `shape` is a parameter of the projection function for the same reason
+            // (§15.125).
+            .chain(f.shapes.iter().map(|d| &d.name))
             .collect();
         let mut n = base.to_string();
         // A name declared without an alias is its own identifier, so the text counts too.
