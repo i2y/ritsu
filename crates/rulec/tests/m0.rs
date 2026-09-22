@@ -95,7 +95,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e120.rule", &[("E120", 1)], "件数を受ける入力を bool のままにした"),
         ("m_e121.rule", &[("E121", 1)], "契約が持っていない欄を射影した（欄の名前が変わったときの姿）"),
         ("m_w122.rule", &[("W122", 1)], "契約を宣言したまま、どの入力も射影していない"),
-        ("m_w114.rule", &[("W114", 1)], "真偽の定義が二つ同じ入力から出ている（消去が届かない重なり）"),
+        ("m_w114.rule", &[("W114", 1)], "境界が導出の取れる値のあいだに落ちている（整数であることまでは見ていない）"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
         // made of correct rules, so a position no check visits looks exactly like a position
@@ -248,10 +248,24 @@ fn 共有する入力ごしの重なりは消去で決まる() {
 }
 
 #[test]
-fn 真偽の定義ごしの重なりは警告に落ちる() {
-    // 消去が届かないのは、真偽の `define` の中身である。二つの定義が同じ入力から出ていても
-    // 検査からは自由に動く二本の軸に見え、入力も構成できない。証明できていないものを
-    // 証明済みとして出さないので、E105 ではなく W114 になる（§15.126 の正直な限界）。
+fn 真偽の定義の中の閾値も消去に入る() {
+    // §15.127: 重なりが真偽の定義を一つの値に決めているなら、その定義の本体は
+    // そこで成り立たなければならない比較である。中の閾値が連立に入り、同じ入力から
+    // 出た二つの定義が同時に真になれないことが決まる。
+    let ds = inline(
+        "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\noutputs\n  r(r) : bool\n\n\
+         define 上(up) : bool = a >= 8\ndefine 下(dn) : bool = a <= 2\n\n\
+         table j(j)\npolicy unique\n| 上 | 下 | -> r(r) : bool |\n\
+         | true | - | true |\n| - | true | false |\n| false | false | false |\n",
+    );
+    assert!(!ds.iter().any(|c| c == "W114"), "消去で決まるので W114 は出ないはず: {ds:?}");
+    assert!(!ds.iter().any(|c| c == "E105"), "起きない重なりをエラーにしてはいけない: {ds:?}");
+}
+
+#[test]
+fn 有理数で解く限界は警告に落ちる() {
+    // 残るのは、消去が有理数の上で解いているために決まらない形である。証明できていない
+    // ものを証明済みとして出さないので、E105 ではなく W114 になる（§15.127 の正直な限界）。
     let ds = codes("tests/mutants/m_w114.rule");
     assert_eq!(ds.iter().filter(|c| *c == "W114").count(), 1, "W114 が一件出るはず");
     assert!(!ds.iter().any(|c| c == "E105"), "判定できない重なりをエラーにしてはいけない");
@@ -428,23 +442,39 @@ fn 定義が絡む実在の重なりは入力を構成して示す() {
 }
 
 #[test]
-fn 定義が矛盾する重なりはガードへ降ろす() {
-    // For the same input, `>=3万円` and `<=1000円` cannot both hold, but region analysis treats
-    // definitions as free axes and so cannot eliminate this intersection. Since no witness can be
-    // constructed, even under `unique` it is not an error; it is demoted to W114 and a guard (an
-    // unproven existence must not stop CI; §6.2). It is **not a proof of nonexistence**, so the
-    // generated code gets a runtime guard.
+fn 定義の中で矛盾する重なりは消去が決める() {
+    // For the same input, `>=3万円` and `<=1000円` cannot both hold. The region analysis
+    // treats definitions as free axes and cannot eliminate the intersection on its own, and
+    // no witness can be constructed either — it used to be demoted to W114 and a runtime
+    // guard. §15.127 puts the thresholds inside the definitions into the system, so the
+    // pair is decided and neither the warning nor the guard is written.
     let src = "rule t(t) v1\n\ninputs\n  金額(a) : money[円, incl_tax]  range >=0円 <=10万円\n\n\
                outputs\n  r(r) : bool\n\n\
                define 大口(bulk) : bool = 金額 >= 3万円\ndefine 小口(small) : bool = 金額 <= 1000円\n\n\
                table x(x)\npolicy unique\n| 大口 | 小口 | -> r(r) : bool |\n\
                | true   | -    | true |\n| -    | true   | false |\n| false   | false   | false |\n";
     let ds = rulec::check_source(src, "d.rule");
-    assert!(
-        !ds.iter().any(|d| d.code == "E105"),
-        "構成できない重なりでエラーにしている: {:?}",
-        ds.iter().map(|d| &d.code).collect::<Vec<_>>()
-    );
+    let codes: Vec<&str> = ds.iter().map(|d| d.code).collect();
+    assert!(!codes.contains(&"E105"), "起きない重なりでエラーにしている: {codes:?}");
+    assert!(!codes.contains(&"W114"), "消去で決まるので警告も出ない: {codes:?}");
+    let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
+    let py = rulec::codegen::Gen::new(&f, &c, src).python();
+    // The exception class is part of every module; what a decided pair does not get is the
+    // guard, and the guard names the code it came from.
+    assert!(!py.contains("W114"), "決まった対にガードは要らない");
+}
+
+#[test]
+fn 決められない重なりはガードへ降ろす() {
+    // What the elimination cannot decide it does not claim: it solves over the rationals, so
+    // a pair kept apart only by the values being whole stays unconfirmed. Not an error, and
+    // **not a proof of nonexistence** either — so the generated code gets a runtime guard.
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants/m_w114.rule"),
+    )
+    .unwrap();
+    let ds = rulec::check_source(&src, "d.rule");
+    assert!(!ds.iter().any(|d| d.code == "E105"), "構成できない重なりでエラーにしている");
     let w = ds.iter().find(|d| d.code == "W114").expect("W114 に降りるはず");
     assert!(
         w.notes.iter().any(|n| n.contains("構成できませんでした")),
@@ -457,8 +487,8 @@ fn 定義が矛盾する重なりはガードへ降ろす() {
         w.notes
     );
     // The matching guard goes into the generated code (§8.1).
-    let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
-    let py = rulec::codegen::Gen::new(&f, &c, src).python();
+    let (f, c) = rulec::prepare(&src, "d.rule").expect("検査は通る");
+    let py = rulec::codegen::Gen::new(&f, &c, &src).python();
     assert!(py.contains("ガード"), "ガードが入っていない");
     assert!(py.contains("RuleContradictionError"), "ガードが例外を投げない");
 }

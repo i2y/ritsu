@@ -88,13 +88,12 @@ fn 制約も消去に入る() {
     );
 }
 
-/// A product of two names is not a linear form, and nothing is claimed about it.
+/// Two boolean definitions off one input: the thresholds inside them come into the system
+/// and settle the pair (§15.127).
 #[test]
-fn 非線形の導出には何も言わない() {
+fn 真偽の定義の中の閾値も消去に入る() {
     let src = "rule t(t) v1\n\n\
-        inputs\n  \
-          a(a) : number  range >=0 <=100\n  \
-          b(b) : number  range >=0 <=100\n\n\
+        inputs\n  a(a) : number  range >=0 <=100\n\n\
         outputs\n  可否(v) : bool\n\n\
         define 大(big) : bool = a >= 90\n\
         define 小(small) : bool = a <= 10\n\n\
@@ -103,9 +102,39 @@ fn 非線形の導出には何も言わない() {
         | true  | -     | true              |\n\
         | -     | true  | false             |\n\
         | false | false | false             |\n";
-    // Two boolean definitions off one input: the elimination has no equation for a `define`
-    // body, so the pair stays unconfirmed rather than being claimed either way.
+    let ds = codes(src);
+    assert!(!ds.iter().any(|c| c == "W114"), "閾値が入るので決まるはず: {ds:?}");
+    assert!(!ds.iter().any(|c| c == "E105"), "起きない重なりをエラーにしてはいけない: {ds:?}");
+
+    // And the other way: two definitions that really can hold together are left alone.
+    let both = src.replace("a <= 10", "a <= 95");
+    let ds = codes(&both);
+    assert!(
+        ds.iter().any(|c| c == "W114" || c == "E105"),
+        "本当に重なる対を黙って消してはいけない: {ds:?}"
+    );
+}
+
+/// What the elimination cannot decide it does not claim: it works over the rationals, so a
+/// pair kept apart only by the values being whole stays unconfirmed.
+#[test]
+fn 有理数で解く限界は主張しない() {
+    let src = "rule t(t) v1\n\n\
+        inputs\n  a(a) : money[円]  range >=0円 <=10万円\n\n\
+        outputs\n  可否(v) : bool\n\n\
+        derive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\n\
+        define 上(up) : bool = 倍 >= 5円\n\
+        define 下(dn) : bool = 倍 <= 5円\n\n\
+        table 表(t1)\npolicy unique\n\
+        | 上    | 下    | -> 可否(v) : bool |\n\
+        | true  | -     | true              |\n\
+        | -     | true  | false             |\n\
+        | false | false | false             |\n";
     let ds = codes(src);
     assert!(ds.iter().any(|c| c == "W114"), "決められないものは W114 のまま: {ds:?}");
     assert!(!ds.iter().any(|c| c == "E105"), "{ds:?}");
+    // On an even boundary there is an integer and the pair really can meet; the sieve
+    // cannot build it either, so it stays a warning rather than becoming an error.
+    let even = src.replace("5円", "6円");
+    assert!(codes(&even).iter().any(|c| c == "W114" || c == "E105"), "偶数の境界では重なる");
 }

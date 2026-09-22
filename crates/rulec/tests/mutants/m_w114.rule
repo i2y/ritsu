@@ -1,19 +1,23 @@
-rule 段階判定(band_check) v1
-description "真偽の定義が二つ、同じ入力から出ている。列ごとに独立に見る検査には結びつきが見えない（W114 の題材）"
+rule 半額境界(half_bound) v1
+description "境界が、導出の取れる値のあいだに落ちている。有理数では重なり、整数では重ならない（W114 の題材）"
 
 inputs
-  点数(score) : number  range >=0 <=10
+  支払額(paid) : money[円]  range >=0円 <=10万円
 
 outputs
-  合格(passed) : bool
+  可否(v) : bool
 
-# どちらも 点数 から出ているので、同時に true にはならない。検査はそれを見ていない。
-define 上位(high) : bool = 点数 >= 8
-define 下位(low)  : bool = 点数 <= 2
+# 倍額は必ず偶数なので、5円 ちょうどには決してならない。だから下の 行1 と 行2 は
+# 同時には当たらない——が、消去は有理数の上で解くので 2.5円 のところで止まり、
+# 起きないことを示せない。整数であることまでは見ていない（§15.127 の正直な限界）。
+derive 倍額(doubled) : money[円] = 支払額 + 支払額  range >=0円 <=20万円
+
+define 上(up) : bool = 倍額 >= 5円
+define 下(dn) : bool = 倍額 <= 5円
 
 table 判定(decide)
 policy unique
-| 上位  | 下位  | -> 合格(passed) : bool |
-| true  | -     | true                   |
-| -     | true  | false                  |
-| false | false | false                  |
+| 上    | 下    | -> 可否(v) : bool |
+| true  | -     | true              |
+| -     | true  | false             |
+| false | false | false             |

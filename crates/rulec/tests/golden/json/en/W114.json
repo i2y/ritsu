@@ -20,12 +20,12 @@ Obj(
             "true|-\u{1}-|true",
         ),
         "line": Int(
-            17,
+            21,
         ),
         "notes": Arr(
             [
                 Str(
-                    "Overlapping condition: 上位 = true and 下位 = true",
+                    "Overlapping condition: 上 = true and 下 = true",
                 ),
                 Str(
                     "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.",
@@ -79,10 +79,10 @@ Obj(
                             "row 1",
                         ),
                         "length": Int(
-                            42,
+                            37,
                         ),
                         "line": Int(
-                            17,
+                            21,
                         ),
                     },
                 ),
@@ -95,10 +95,10 @@ Obj(
                             "row 2",
                         ),
                         "length": Int(
-                            42,
+                            37,
                         ),
                         "line": Int(
-                            18,
+                            22,
                         ),
                     },
                 ),
@@ -119,7 +119,7 @@ Obj(
                     "tests/mutants/m_w114.rule",
                 ),
                 "line": Int(
-                    17,
+                    21,
                 ),
                 "table": Str(
                     "判定",
@@ -130,10 +130,10 @@ Obj(
             {
                 "inputs": Obj(
                     {
-                        "上位": Bool(
+                        "上": Bool(
                             true,
                         ),
-                        "下位": Bool(
+                        "下": Bool(
                             true,
                         ),
                     },

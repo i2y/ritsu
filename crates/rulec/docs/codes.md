@@ -2654,7 +2654,7 @@ Related codes: [E024](#e024)
 
 `warning` — **Unconfirmed overlap: an input may match both rows**
 
-**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Sifting independent intervals does not see how two boolean `define`s are tied together — `big` and `small` above come from one input and look like two free axes from here. Derived values that share inputs no longer fall to this code: Fourier–Motzkin elimination decides them (§15.126).
+**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `倍` above is always even and never exactly `5円`, but `2.5円` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible.
 
 **Fix.** If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row.
 
@@ -2664,17 +2664,19 @@ Related codes: [E024](#e024)
 rule t(t) v1
 
 inputs
-  a(a) : number  range >=0 <=10
+  a(a) : money[円]  range >=0円 <=10万円
 
 outputs
   r(r) : bool
 
-define big(big) : bool = a >= 8
-define small(small) : bool = a <= 2
+derive 倍(d) : money[円] = a + a  range >=0円 <=20万円
+
+define 上(up) : bool = 倍 >= 5円
+define 下(dn) : bool = 倍 <= 5円
 
 table j(j)
 policy unique
-| big   | small | -> r(r) : bool |
+| 上    | 下    | -> r(r) : bool |
 | true  | -     | true           |
 | -     | true  | false          |
 | false | false | false          |

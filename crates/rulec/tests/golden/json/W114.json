@@ -20,12 +20,12 @@ Obj(
             "true|-\u{1}-|true",
         ),
         "line": Int(
-            17,
+            21,
         ),
         "notes": Arr(
             [
                 Str(
-                    "重なる条件: 上位 = true かつ 下位 = true",
+                    "重なる条件: 上 = true かつ 下 = true",
                 ),
                 Str(
                     "定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。",
@@ -79,10 +79,10 @@ Obj(
                             "行1",
                         ),
                         "length": Int(
-                            42,
+                            37,
                         ),
                         "line": Int(
-                            17,
+                            21,
                         ),
                     },
                 ),
@@ -95,10 +95,10 @@ Obj(
                             "行2",
                         ),
                         "length": Int(
-                            42,
+                            37,
                         ),
                         "line": Int(
-                            18,
+                            22,
                         ),
                     },
                 ),
@@ -119,7 +119,7 @@ Obj(
                     "tests/mutants/m_w114.rule",
                 ),
                 "line": Int(
-                    17,
+                    21,
                 ),
                 "table": Str(
                     "判定",
@@ -130,10 +130,10 @@ Obj(
             {
                 "inputs": Obj(
                     {
-                        "上位": Bool(
+                        "上": Bool(
                             true,
                         ),
-                        "下位": Bool(
+                        "下": Bool(
                             true,
                         ),
                     },

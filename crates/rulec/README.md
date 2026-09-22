@@ -139,9 +139,9 @@ What is **not** proved matters just as much.
 3. **Row pairs the overlap proof could not reach.** When neither an input matching both rows
    nor its impossibility could be constructed, **W114 names the pair and moves the check into a
    runtime guard** — the one place with no static proof. It returns an error rather than
-   silently picking a side. Derived values that share an input used to land here and no longer
-   do: Fourier–Motzkin elimination decides those. What is left is a pair that meets only
-   through the body of a boolean `define`.
+   silently picking a side. Derived values that share an input and the thresholds inside a
+   boolean definition used to land here and no longer do: Fourier–Motzkin elimination decides
+   both. What is left is what it cannot decide because it works over the rationals.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
    implementation, which has not itself been proved correct.
 

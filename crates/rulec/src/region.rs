@@ -236,6 +236,11 @@ pub struct TableRegion {
     /// inputs** (§5), so the interval it can actually reach is decidable by arithmetic on the
     /// intervals of those inputs — which is what the per-axis sieve does not look at.
     exprs: BTreeMap<String, Expr>,
+    /// Every `define` in the rule, by name. A boolean one is a **single comparison** (§6.2),
+    /// and where an overlap pins it to one truth value that comparison is a linear condition
+    /// like any other — which is how the thresholds inside a definition become visible to
+    /// the arithmetic that decides the pair (§15.127).
+    defines: BTreeMap<String, Expr>,
     /// The declared range of every name, for the ones this table has no axis for.
     spans: BTreeMap<String, Ival>,
     /// Row → axis → whether each coordinate is selected.
@@ -871,9 +876,16 @@ impl TableRegion {
     pub fn build(t: &Table, c: &Checked, f: &RuleFile) -> Option<TableRegion> {
         let inputs = &f.inputs;
         let mut exprs: BTreeMap<String, Expr> = BTreeMap::new();
+        let mut defines: BTreeMap<String, Expr> = BTreeMap::new();
         for it in &f.items {
-            if let Item::Derived(d) = it {
-                exprs.insert(d.name.text.clone(), d.expr.clone());
+            match it {
+                Item::Derived(d) => {
+                    exprs.insert(d.name.text.clone(), d.expr.clone());
+                }
+                Item::Define(d) => {
+                    defines.insert(d.name.text.clone(), d.expr.clone());
+                }
+                _ => {}
             }
         }
         let spans: BTreeMap<String, Ival> =
@@ -1060,6 +1072,7 @@ impl TableRegion {
             is_define,
             derived,
             exprs,
+            defines,
             spans,
             masks,
             unanalyzable,
@@ -1515,9 +1528,29 @@ impl TableRegion {
         // Every name the system will mention, and the one type they all have to share: a
         // linear form has no units in it, so two names measured differently cannot go into
         // one system without a conversion this does not do.
+        // A boolean `define` the overlap pins to one truth value (§15.127). Its body is one
+        // comparison, so there it is a linear condition — and the thresholds inside it, which
+        // the per-axis sieve never looks at, come into the system with it.
+        let pinned: Vec<(&Expr, bool)> = (0..self.axes.len())
+            .filter(|&ai| self.is_define[ai] && matches!(self.axes[ai], Axis::Bool))
+            .filter_map(|ai| {
+                let both: Vec<usize> =
+                    (0..self.axes[ai].len()).filter(|&k| self.masks[i][ai][k] && self.masks[j][ai][k]).collect();
+                // Pinned only when the overlap leaves it one value. Where both survive, the
+                // pair does not depend on the definition and there is nothing to add.
+                let [k] = both[..] else { return None };
+                Some((self.defines.get(&self.col_names[ai])?, k == 0))
+            })
+            .collect();
         let mut want: Option<Ty> = None;
         let mut vars: Vec<String> = Vec::new();
         let mut queue: Vec<String> = self.col_names.clone();
+        for (e, _) in &pinned {
+            if let Expr::Bin(a, _, b, _) = e {
+                names_in(a, &mut queue);
+                names_in(b, &mut queue);
+            }
+        }
         while let Some(n) = queue.pop() {
             if vars.contains(&n) {
                 continue;
@@ -1525,7 +1558,10 @@ impl TableRegion {
             let Some(ty) = c.ty_of(&n) else { continue };
             // A column this arithmetic has no place for — an enum, a bool, a date, a string
             // — constrains nothing here and is simply left out.
-            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate) {
+            // A date is an ordinal (§2.1), so it sits in a linear system like any other
+            // whole number; what it cannot do is share one with a money or a quantity, and
+            // the type check below is what stops that.
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate | Ty::Date) {
                 continue;
             }
             match &want {
@@ -1540,7 +1576,7 @@ impl TableRegion {
             }
         }
         let Some(want) = want else { return false };
-        if !vars.iter().any(|n| self.exprs.contains_key(n)) {
+        if pinned.is_empty() && !vars.iter().any(|n| self.exprs.contains_key(n)) {
             // Nothing correlated: the sieve already sees everything this would.
             return false;
         }
@@ -1607,7 +1643,48 @@ impl TableRegion {
                 }
             }
         }
+        // And the definitions the overlap pinned, as the comparisons they are.
+        for (e, yes) in &pinned {
+            let Expr::Bin(a, op, b, _) = e else { continue };
+            let (Some(la), Some(lb)) = (lin_of(a, &want, c), lin_of(b, &want, c)) else { continue };
+            let d = la.plus(&lb.scale(crate::num::Rat::int(-1)));
+            // A comparison that has to fail is its own negation: not(<=) is >, and the
+            // boundary moves to the other side with it.
+            let op = match (op, yes) {
+                (BinOp::Le, true) | (BinOp::Gt, false) => BinOp::Le,
+                (BinOp::Lt, true) | (BinOp::Ge, false) => BinOp::Lt,
+                (BinOp::Ge, true) | (BinOp::Lt, false) => BinOp::Ge,
+                (BinOp::Gt, true) | (BinOp::Le, false) => BinOp::Gt,
+                // `=` holding is two inequalities; `=` failing is a disjunction, which one
+                // system cannot carry, so it is left out.
+                (BinOp::Eq, true) => {
+                    sys.push(d.clone().le(false));
+                    sys.push(d.ge(false));
+                    continue;
+                }
+                _ => continue,
+            };
+            sys.push(match op {
+                BinOp::Le => d.le(false),
+                BinOp::Lt => d.le(true),
+                BinOp::Ge => d.ge(false),
+                _ => d.ge(true),
+            });
+        }
         crate::fourier::unsat(sys)
+    }
+}
+
+/// Every name an expression mentions, appended.
+fn names_in(e: &Expr, out: &mut Vec<String>) {
+    match e {
+        Expr::Name(n, _) => out.push(n.clone()),
+        Expr::Lit(..) => {}
+        Expr::Bin(a, _, b, _) => {
+            names_in(a, out);
+            names_in(b, out);
+        }
+        Expr::Call(_, args, _) => args.iter().for_each(|a| names_in(a, out)),
     }
 }
 

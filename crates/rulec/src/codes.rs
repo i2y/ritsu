@@ -453,7 +453,7 @@ const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  r
                       outputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
                       | true | true |\n| false | false |\n";
-const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\noutputs\n  r(r) : bool\n\ndefine big(big) : bool = a >= 8\ndefine small(small) : bool = a <= 2\n\ntable j(j)\npolicy unique\n| big   | small | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
+const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  r(r) : bool\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable j(j)\npolicy unique\n| 上    | 下    | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
 
 // ── The ledger ───────────────────────────────────────────────────────────
 
@@ -1598,8 +1598,8 @@ pub fn ledger() -> Vec<Entry> {
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
-                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。列ごとに独立に見る検査には、真偽の `define` どうしの結びつきが見えません——上の例の `big` と `small` は同じ入力から出ているのに、検査からは自由に動く二本の軸に見えます。導出どうしが入力を共有する形は、Fourier–Motzkin 消去が決めるようになったので、ここには落ちてきません（§15.126）。",
-                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Sifting independent intervals does not see how two boolean `define`s are tied together — `big` and `small` above come from one input and look like two free axes from here. Derived values that share inputs no longer fall to this code: Fourier–Motzkin elimination decides them (§15.126)."
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形（§15.126）と、真偽の `define` の中の閾値（§15.127）は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です——上の例の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。予算（400 本）を超えた系と、単位をまたぐ系も同じで、どれも「証明できなかった」であって「起こりうる」ではありません。",
+                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `倍` above is always even and never exactly `5円`, but `2.5円` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible."
             ),
             tr!(
                 "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",

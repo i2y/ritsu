@@ -1,12 +1,12 @@
 warning[W114]: Unconfirmed overlap: an input may match both row 1 and row 2
-  --> tests/mutants/m_w114.rule:18 table 判定
+  --> tests/mutants/m_w114.rule:22 table 判定
    |
-17 | | true  | -     | true                   |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
-18 | | -     | true  | false                  |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+21 | | true  | -     | true              |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+22 | | -     | true  | false             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
    |
- Overlapping condition: 上位 = true and 下位 = true
+ Overlapping condition: 上 = true and 下 = true
  No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.
  If one exists: fix the rows. The outputs differ (true vs false), so a match would be a contradiction.
  If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row 1.

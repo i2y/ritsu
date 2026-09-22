@@ -837,13 +837,14 @@ guard that stops rather than silently picking the earlier row.
 
 ```python
 # guard: W114 (table 判定, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
-if high and low:
+if up and dn:
     raise RuleContradictionError("table 判定: row 1 and row 2 matched at the same time")
 ```
 
-`high` and `low` are two boolean definitions off one input, which is the shape that is left
-once the elimination has decided the arithmetic ones. A pair that meets only across derived
-values sharing an input gets no guard any more: it is proved apart.
+`up` and `dn` compare a doubled amount with an odd boundary, so no whole value reaches it —
+but the elimination that decides these pairs works over the rationals and stops half way.
+Derived values that share an input, and the thresholds inside a boolean definition, get no
+guard any more: they are proved apart.
 
 If this ever fires in production, it is evidence — the overlap the checker could not decide is
 real, and the rule needs fixing.
