@@ -707,7 +707,7 @@ fn 新しい次元の規則も評価器と全言語で一致する() {
 /// The sweep is over the names the generator asks `temp` for today, so the next helper local
 /// somebody adds is not free to reintroduce this.
 #[test]
-fn 並びの別名が生成物の局所変数と同じでも生成物は動く() {
+fn 並びの別名が局所変数と同じでも生成物は動く() {
     // `rows` is the one that actually collided, and it gets the full sweep.
     let dir = generate("seqrows", &seq_rule("rows"));
     agrees_everywhere("seqrows", &dir);

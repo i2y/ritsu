@@ -9386,7 +9386,7 @@ impl<'a> Gen<'a> {
     /// five say the same thing.
     pub(crate) fn proj_doc(&self) -> String {
         tr!(
-            "呼び出し側のオブジェクトから入力を取り出して、この規則を呼びます。道は宣言した契約に照らして検査済みです（§15.125）。",
+            "呼び出し側のオブジェクトから入力を取り出して、この規則を呼びます。パスは宣言した契約に照らして検査済みです（§15.125）。",
             "Reads the inputs out of the caller's object and calls this rule. The paths were held to the declared contract before this was written (§15.125)."
         )
     }

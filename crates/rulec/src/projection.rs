@@ -330,7 +330,7 @@ fn fits_the_type(pr: &Projection, ty: &Ty, rule_path: &str, name: &str) -> Vec<D
                     "`count` is how many elements passed, so the input that takes it is a `number`. It needs a range too: the cap on the walk is the universe the checks quantify over."
                 ),
                 _ => tr!(
-                    "`any` と `all` は当てはまるかどうかなので、受ける入力は `bool` です。値そのものが欲しいなら `from <形>.<欄>` を書いてください。",
+                    "`any` と `all` は当てはまるかどうかなので、受ける入力は `bool` です。値そのものが欲しいなら `from <shape の名前>.<欄>` を書いてください。",
                     "`any` and `all` say whether the elements passed, so the input that takes one is a `bool`. For the value itself, write `from <shape>.<field>`."
                 ),
             }),
@@ -344,7 +344,7 @@ fn no_such_root(f: &RuleFile, pr: &Projection, rule_path: &str) -> Diag {
         .mark(pr.root.span.clone(), "")
         .note(if known.is_empty() {
             tr!(
-                "`from` の道は宣言した `shape` から始まります。`shape {}(...) = jsonschema \"<ファイル>\" \"<ポインタ>\"` を足してください。",
+                "`from` のパスは宣言した `shape` から始まります。`shape {}(...) = jsonschema \"<ファイル>\" \"<ポインタ>\"` を足してください。",
                 "A `from` path starts at a declared `shape`. Add `shape {}(...) = jsonschema \"<file>\" \"<pointer>\"`.",
                 pr.root.text
             )
@@ -360,7 +360,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
     let full = || format!("{}.{}", pr.root.text, steps.join("."));
     let stuck = |s: Stuck| {
         let where_ = if s.reached.is_empty() { pr.root.text.clone() } else { format!("{}.{}", pr.root.text, s.reached) };
-        Diag::error("E121", tr!("`{}` という道は契約にありません", "The contract has no path `{}`", full()))
+        Diag::error("E121", tr!("`{}` というパスは契約にありません", "The contract has no path `{}`", full()))
             .at(at.clone())
             .mark(pr.span.clone(), "")
             .note(if s.had.is_empty() {
@@ -391,7 +391,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
                         .at(at.clone())
                         .mark(pr.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
                         .note(tr!(
-                            "`any`・`all`・`count` は並びを一度だけ歩きます。値そのものが欲しいなら `from <形>.<欄>` を書いてください。",
+                            "`any`・`all`・`count` は並びを一度だけ歩きます。値そのものが欲しいなら `from <shape の名前>.<欄>` を書いてください。",
                             "`any`, `all` and `count` walk a collection once. For the value itself, write `from <shape>.<field>`."
                         )),
                 );

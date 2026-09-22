@@ -338,7 +338,7 @@ Two derived values share an input, so whether two rows can fire together is not 
 
 ```rule
 rule クーポン併用(coupon_stack) v1
-description "二つの導出が入力を共有する 一意 の表。列ごとの篩には重なって見え、消去が起きないと決める題材（§6.2、§15.126）"
+description "二つの導出が入力を共有する 一意 の表。列ごとのふるいには重なって見え、消去が起きないと決める題材（§6.2、§15.126）"
 
 enum 判定(verdict) = 対象外(no) default | 対象(yes)
 

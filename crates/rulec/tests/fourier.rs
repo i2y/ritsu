@@ -34,7 +34,7 @@ fn rule(a: i64, b: i64) -> String {
 }
 
 #[test]
-fn 起きない重なりは静かに落ち_起きる重なりは残る() {
+fn 起きない重なりは消え_起きる重なりは残る() {
     let mut decided = 0;
     let mut kept = 0;
     for a in [0i64, 1_000, 5_000, 50_000, 300_000] {

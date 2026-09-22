@@ -264,7 +264,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         // this as "what the application has to have got right", and `check` held the path
         // to the contract before the page was rendered.
         if let Some(pr) = &i.from {
-            note.push(tr!("呼び出し側の `{}` から取ります", "Taken from `{}` of the caller's object", pr.text()));
+            note.push(tr!("呼び出し側のオブジェクトから取ります: `{}`", "Taken from the caller's object: `{}`", pr.text()));
         }
         if let Some(cm) = trailing_comment(&lines, i.name.span.line) {
             note.push(cm);

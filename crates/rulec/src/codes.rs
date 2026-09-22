@@ -1397,11 +1397,11 @@ pub fn ledger() -> Vec<Entry> {
             "E120",
             tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
             tr!(
-                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。道の先にあるものの型が入力と合わないとき（契約が文字列と言っている欄を `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値が欄の型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
+                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っている欄を `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値が欄の型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
                 "What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
             ),
             tr!(
-                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <形>.<欄>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
+                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <shape の名前>.<欄>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
                 "Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly."
             ),
             X_E120,
@@ -1410,13 +1410,13 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(SHAPE_DOC),
         err(
             "E121",
-            tr!("`from` の道が契約にありません", "The contract has no such path"),
+            tr!("`from` のパスが契約にありません", "The contract has no such path"),
             tr!(
-                "`from` の道が、宣言した `shape` の契約の中に見つからないとき（§15.125）。道の最初の語が `shape` の名前でないとき、途中の欄が無いとき、`where` の見る欄が要素に無いときの三つです。どこまで届いたかと、そこにあった欄の名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき（§15.125）。パスの最初の語が `shape` の名前でないとき、途中の欄が無いとき、`where` の見る欄が要素に無いときの三つです。どこまで届いたかと、そこにあった欄の名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
                 "A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
             ),
             tr!(
-                "綴りを直すか、契約のほうが動いたのなら道を書き直してください。**これが出るのが目的です**——契約が欄の名前を変えたとき、手書きのグルーなら実行時まで気づかず、ここなら生成の前に止まります。",
+                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**これが出るのが目的です**——契約が欄の名前を変えたとき、手書きのつなぎのコードなら実行時まで気づかず、ここなら生成の前に止まります。",
                 "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
             ),
             X_E121,

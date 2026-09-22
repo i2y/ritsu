@@ -578,7 +578,7 @@ impl P {
             Diag::error("E013", tr!("`from` の形が違います", "The shape of `from` is wrong"))
                 .mark(span_of(ts), "")
                 .note(tr!(
-                    "形は `from <形>.<欄>…`、`from any|all <形>.<並び> where <欄> = <値>`、`from count <形>.<並び> [where <欄> = <値>]` です。",
+                    "形は `from <shape の名前>.<欄>…`、`from any|all <shape の名前>.<並び> where <欄> = <値>`、`from count <shape の名前>.<並び> [where <欄> = <値>]` です。",
                     "The shapes are `from <shape>.<field>…`, `from any|all <shape>.<collection> where <field> = <value>`, and `from count <shape>.<collection> [where <field> = <value>]`."
                 ))
         };
