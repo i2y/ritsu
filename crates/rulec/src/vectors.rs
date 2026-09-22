@@ -1789,8 +1789,13 @@ pub fn pair_witness(
         .iter()
         .map(|x| Some((x.name.text.clone(), cands.get(&x.name.text)?.first()?.clone())))
         .collect::<Option<BTreeMap<_, _>>>()?;
+    // A witness has to be a case somebody could really send (§6.1). An assignment that
+    // breaks a `constraint` is not one, and calling such a pair an overlap would name an
+    // input the caller has already guaranteed cannot arrive. Where the columns are derived
+    // values the region's own sieve cannot apply the constraints — they are stated over
+    // inputs, and those inputs are not columns — so this is the place that can (§15.126).
     let hold = |a: &BTreeMap<String, Val>| {
-        row_holds(f, c, t, &t.rows[i], a) && row_holds(f, c, t, &t.rows[j], a)
+        allowed(f, a) && row_holds(f, c, t, &t.rows[i], a) && row_holds(f, c, t, &t.rows[j], a)
     };
     // Bring the columns in one by one. Fixing one can break an earlier one, so loop until
     // nothing breaks any more.

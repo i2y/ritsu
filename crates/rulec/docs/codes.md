@@ -2654,7 +2654,7 @@ Related codes: [E024](#e024)
 
 `warning` — **Unconfirmed overlap: an input may match both rows**
 
-**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency.
+**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Sifting independent intervals does not see how two boolean `define`s are tied together — `big` and `small` above come from one input and look like two free axes from here. Derived values that share inputs no longer fall to this code: Fourier–Motzkin elimination decides them (§15.126).
 
 **Fix.** If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row.
 
@@ -2664,23 +2664,20 @@ Related codes: [E024](#e024)
 rule t(t) v1
 
 inputs
-  total(total) : money[円, incl_tax]  range >=0円 <=100万円
-  d1(d1) : money[円, incl_tax]  range >=0円 <=100万円
-  d2(d2) : money[円, incl_tax]  range >=0円 <=100万円
+  a(a) : number  range >=0 <=10
 
 outputs
   r(r) : bool
 
-derive restA(rest_a) : money[円, incl_tax] = total - d1  range >=-100万円 <=100万円
-derive restB(rest_b) : money[円, incl_tax] = total - d1 - d2  range >=-200万円 <=100万円
+define big(big) : bool = a >= 8
+define small(small) : bool = a <= 2
 
 table j(j)
 policy unique
-| restA | restB | -> r(r) : bool |
-| <=1000円 | - | false |
-| >1000円 | <3980円 | false |
-| >1000円 | >=3980円 | true |
-| <=1000円 | >=3980円 | true |
+| big   | small | -> r(r) : bool |
+| true  | -     | true           |
+| -     | true  | false          |
+| false | false | false          |
 ```
 
 Related codes: [E105](#e105), [W105](#w105), [E109](#e109)

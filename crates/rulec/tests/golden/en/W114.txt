@@ -1,13 +1,13 @@
 warning[W114]: Unconfirmed overlap: an input may match both row 1 and row 2
-  --> tests/corpus/クーポン併用.rule:25 table 適用判定
+  --> tests/mutants/m_w114.rule:18 table 判定
    |
-24 | | <=1000円 | -        | 対象外                      |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
-25 | | -        | >=3980円 | 対象                        |
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+17 | | true  | -     | true                   |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+18 | | -     | true  | false                  |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
    |
- Overlapping condition: 残高A <= 1000円 and 残高B >= 3980円
- Because the derived values (残高A, 残高B) share inputs, the check could not decide whether an order satisfying this condition exists.
- If one exists: fix the rows. The outputs differ (対象外 vs 対象), so a match would be a contradiction.
+ Overlapping condition: 上位 = true and 下位 = true
+ No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.
+ If one exists: fix the rows. The outputs differ (true vs false), so a match would be a contradiction.
  If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row 1.
  Under check --diff-base, only new instances of this warning are shown.

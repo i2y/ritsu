@@ -453,16 +453,7 @@ const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  r
                       outputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
                       | true | true |\n| false | false |\n";
-const X_W114: &str = "rule t(t) v1\n\n\
-                      inputs\n  total(total) : money[円, incl_tax]  range >=0円 <=100万円\n  \
-                      d1(d1) : money[円, incl_tax]  range >=0円 <=100万円\n  \
-                      d2(d2) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
-                      outputs\n  r(r) : bool\n\n\
-                      derive restA(rest_a) : money[円, incl_tax] = total - d1  range >=-100万円 <=100万円\n\
-                      derive restB(rest_b) : money[円, incl_tax] = total - d1 - d2  range >=-200万円 <=100万円\n\n\
-                      table j(j)\npolicy unique\n| restA | restB | -> r(r) : bool |\n\
-                      | <=1000円 | - | false |\n| >1000円 | <3980円 | false |\n\
-                      | >1000円 | >=3980円 | true |\n| <=1000円 | >=3980円 | true |\n";
+const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\noutputs\n  r(r) : bool\n\ndefine big(big) : bool = a >= 8\ndefine small(small) : bool = a <= 2\n\ntable j(j)\npolicy unique\n| big   | small | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
 
 // ── The ledger ───────────────────────────────────────────────────────────
 
@@ -1607,8 +1598,8 @@ pub fn ledger() -> Vec<Entry> {
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
-                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出どうしが入力を共有していると起こります（列ごとに独立に見る検査では、その結びつきが見えません）。",
-                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. It happens when derived values share inputs: sifting independent intervals does not see the dependency."
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。列ごとに独立に見る検査には、真偽の `define` どうしの結びつきが見えません——上の例の `big` と `small` は同じ入力から出ているのに、検査からは自由に動く二本の軸に見えます。導出どうしが入力を共有する形は、Fourier–Motzkin 消去が決めるようになったので、ここには落ちてきません（§15.126）。",
+                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Sifting independent intervals does not see how two boolean `define`s are tied together — `big` and `small` above come from one input and look like two free axes from here. Derived values that share inputs no longer fall to this code: Fourier–Motzkin elimination decides them (§15.126)."
             ),
             tr!(
                 "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",

@@ -232,8 +232,10 @@ fn 書き出す資料は決定的である() {
 /// Nothing an approver needs to know is dropped (the list in §1.6).
 #[test]
 fn 承認者が知るべきことが載る() {
-    // W114 and the presence of the guard.
-    let (_, d, _) = run(&["doc", "tests/corpus/クーポン併用.rule"]);
+    // W114 and the presence of the guard. The corpus rule that used to show it is decided
+    // by the elimination now (§15.126), so the shape it is still shown for is the one the
+    // elimination does not reach: two boolean definitions off one input.
+    let (_, d, _) = run(&["doc", "tests/mutants/m_w114.rule"]);
     assert!(d.contains("証明できていません**（W114）"), "{d}");
     assert!(d.contains("ガード"), "ガードの存在を言う: {d}");
 

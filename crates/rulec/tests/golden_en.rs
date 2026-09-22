@@ -117,7 +117,7 @@ golden!(e108_overflow, "E108", "tests/mutants/m_e108.rule", "E108");
 golden!(e111_missing_expected, "E111", "tests/mutants/m_e111.rule", "E111");
 golden!(e112_derived_range, "E112", "tests/mutants/m_e112.rule", "E112");
 golden!(e113_atom, "E113", "tests/mutants/m_e113.rule", "E113");
-golden!(w114_unverified_overlap, "W114", "tests/corpus/クーポン併用.rule", "W114");
+golden!(w114_unverified_overlap, "W114", "tests/mutants/m_w114.rule", "W114");
 golden!(w111_unused, "W111", "tests/mutants/m_w111.rule", "W111");
 golden!(w105_needs_review, "W105", "tests/mutants/m_w105.rule", "W105");
 golden!(w105_shipping, "W105-b", "tests/corpus/送料.rule", "W105");

@@ -139,7 +139,9 @@ What is **not** proved matters just as much.
 3. **Row pairs the overlap proof could not reach.** When neither an input matching both rows
    nor its impossibility could be constructed, **W114 names the pair and moves the check into a
    runtime guard** — the one place with no static proof. It returns an error rather than
-   silently picking a side.
+   silently picking a side. Derived values that share an input used to land here and no longer
+   do: Fourier–Motzkin elimination decides those. What is left is a pair that meets only
+   through the body of a boolean `define`.
 4. **That the checker itself is right.** The proofs above come out of rulec's own
    implementation, which has not itself been proved correct.
 
@@ -249,7 +251,7 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
                   built from those very functions
-src/              45 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
+src/              46 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
                   (the tables that define one output, as one set), region, eval, fmt, json,
                   codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
                   cert (the certificate), graph (the rule as one graph of what decides
@@ -264,7 +266,7 @@ src/              45 modules, and 6 more under codegen/: kw, i18n, lex, parse, t
                   pinned), apply (a rule applied to another case), vfs (reading at a git
                   revision), sha256, wasm (the checker as the site's playground)
 tests/corpus/     46 rules, and the copies of the documents they cite
-tests/mutants/    91 files, each with one mistake planted in it
+tests/mutants/    92 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 42 in Japanese, 36 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
                   which tests/library.rs replays the rules over

@@ -836,10 +836,14 @@ that none exists, it does not pretend either way: it warns, and the generated co
 guard that stops rather than silently picking the earlier row.
 
 ```python
-# guard: W114 (table 適用判定, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
-if 残高A <= 1000 and 残高B >= 3980:
-    raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
+# guard: W114 (table 判定, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
+if high and low:
+    raise RuleContradictionError("table 判定: row 1 and row 2 matched at the same time")
 ```
+
+`high` and `low` are two boolean definitions off one input, which is the shape that is left
+once the elimination has decided the arithmetic ones. A pair that meets only across derived
+values sharing an input gets no guard any more: it is proved apart.
 
 If this ever fires in production, it is evidence — the overlap the checker could not decide is
 real, and the rule needs fixing.

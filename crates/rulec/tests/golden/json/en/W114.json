@@ -7,7 +7,7 @@ Obj(
             1,
         ),
         "file": Str(
-            "tests/corpus/クーポン併用.rule",
+            "tests/mutants/m_w114.rule",
         ),
         "fix": Obj(
             {
@@ -17,21 +17,21 @@ Obj(
             },
         ),
         "key": Str(
-            "<=1000円|-\u{1}-|>=3980円",
+            "true|-\u{1}-|true",
         ),
         "line": Int(
-            24,
+            17,
         ),
         "notes": Arr(
             [
                 Str(
-                    "Overlapping condition: 残高A <= 1000円 and 残高B >= 3980円",
+                    "Overlapping condition: 上位 = true and 下位 = true",
                 ),
                 Str(
-                    "Because the derived values (残高A, 残高B) share inputs, the check could not decide whether an order satisfying this condition exists.",
+                    "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.",
                 ),
                 Str(
-                    "If one exists: fix the rows. The outputs differ (対象外 vs 対象), so a match would be a contradiction.",
+                    "If one exists: fix the rows. The outputs differ (true vs false), so a match would be a contradiction.",
                 ),
                 Str(
                     "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row 1.",
@@ -49,7 +49,7 @@ Obj(
                             1,
                         ),
                         "table": Str(
-                            "適用判定",
+                            "判定",
                         ),
                     },
                 ),
@@ -59,7 +59,7 @@ Obj(
                             2,
                         ),
                         "table": Str(
-                            "適用判定",
+                            "判定",
                         ),
                     },
                 ),
@@ -79,10 +79,10 @@ Obj(
                             "row 1",
                         ),
                         "length": Int(
-                            57,
+                            42,
                         ),
                         "line": Int(
-                            24,
+                            17,
                         ),
                     },
                 ),
@@ -95,10 +95,10 @@ Obj(
                             "row 2",
                         ),
                         "length": Int(
-                            56,
+                            42,
                         ),
                         "line": Int(
-                            25,
+                            18,
                         ),
                     },
                 ),
@@ -116,13 +116,13 @@ Obj(
                     1,
                 ),
                 "file": Str(
-                    "tests/corpus/クーポン併用.rule",
+                    "tests/mutants/m_w114.rule",
                 ),
                 "line": Int(
-                    24,
+                    17,
                 ),
                 "table": Str(
-                    "適用判定",
+                    "判定",
                 ),
             },
         ),
@@ -130,11 +130,11 @@ Obj(
             {
                 "inputs": Obj(
                     {
-                        "残高A": Int(
-                            999,
+                        "上位": Bool(
+                            true,
                         ),
-                        "残高B": Int(
-                            3980,
+                        "下位": Bool(
+                            true,
                         ),
                     },
                 ),

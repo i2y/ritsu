@@ -2654,7 +2654,7 @@ fold d over xs
 
 `warning` — **未確認の重なり: 両方に当てはまる入力が有り得ます**
 
-**いつ出るか。** `policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出どうしが入力を共有していると起こります（列ごとに独立に見る検査では、その結びつきが見えません）。
+**いつ出るか。** `policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。列ごとに独立に見る検査には、真偽の `define` どうしの結びつきが見えません——上の例の `big` と `small` は同じ入力から出ているのに、検査からは自由に動く二本の軸に見えます。導出どうしが入力を共有する形は、Fourier–Motzkin 消去が決めるようになったので、ここには落ちてきません（§15.126）。
 
 **直し方。** その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。
 
@@ -2664,23 +2664,20 @@ fold d over xs
 rule t(t) v1
 
 inputs
-  total(total) : money[円, incl_tax]  range >=0円 <=100万円
-  d1(d1) : money[円, incl_tax]  range >=0円 <=100万円
-  d2(d2) : money[円, incl_tax]  range >=0円 <=100万円
+  a(a) : number  range >=0 <=10
 
 outputs
   r(r) : bool
 
-derive restA(rest_a) : money[円, incl_tax] = total - d1  range >=-100万円 <=100万円
-derive restB(rest_b) : money[円, incl_tax] = total - d1 - d2  range >=-200万円 <=100万円
+define big(big) : bool = a >= 8
+define small(small) : bool = a <= 2
 
 table j(j)
 policy unique
-| restA | restB | -> r(r) : bool |
-| <=1000円 | - | false |
-| >1000円 | <3980円 | false |
-| >1000円 | >=3980円 | true |
-| <=1000円 | >=3980円 | true |
+| big   | small | -> r(r) : bool |
+| true  | -     | true           |
+| -     | true  | false          |
+| false | false | false          |
 ```
 
 関係するコード: [E105](#e105), [W105](#w105), [E109](#e109)

@@ -31,6 +31,7 @@ pub mod enums;
 pub mod eval;
 pub mod fixtures;
 pub mod fmt;
+pub mod fourier;
 pub mod graph;
 pub mod i18n;
 pub mod extract;

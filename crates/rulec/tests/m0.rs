@@ -95,6 +95,7 @@ fn 変異は決めたコードだけを出す() {
         ("m_e120.rule", &[("E120", 1)], "件数を受ける入力を bool のままにした"),
         ("m_e121.rule", &[("E121", 1)], "契約が持っていない欄を射影した（欄の名前が変わったときの姿）"),
         ("m_w122.rule", &[("W122", 1)], "契約を宣言したまま、どの入力も射影していない"),
+        ("m_w114.rule", &[("W114", 1)], "真偽の定義が二つ同じ入力から出ている（消去が届かない重なり）"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
         // made of correct rules, so a position no check visits looks exactly like a position
@@ -236,13 +237,24 @@ fn 例は実行される仕様である() {
 }
 
 #[test]
-fn 篩が判定できない重なりは警告に落ちる() {
-    // §6.2: when two derivations share an input, the sieve of independent intervals cannot see the
-    // dependency. Nothing unproven is presented as proven, so it is W114, not E105.
+fn 共有する入力ごしの重なりは消去で決まる() {
+    // §6.2 の篩は導出ごとに独立な区間しか見ないので、入力を共有する二つの導出の結びつきが
+    // 見えない。§15.126 の Fourier–Motzkin 消去がそれを決める。この規則の 行1 と 行2 は
+    // 重なって見えるが、残高B <= 残高A なので同時には当たらない。
     let ds = codes("tests/corpus/クーポン併用.rule");
+    assert!(!ds.iter().any(|c| c == "W114"), "消去で決まるので W114 は出ないはず");
+    assert!(!ds.iter().any(|c| c == "E105"), "起きない重なりをエラーにしてはいけない");
+    assert!(!ds.iter().any(|c| c == "E101"), "この表は完全なはず");
+}
+
+#[test]
+fn 真偽の定義ごしの重なりは警告に落ちる() {
+    // 消去が届かないのは、真偽の `define` の中身である。二つの定義が同じ入力から出ていても
+    // 検査からは自由に動く二本の軸に見え、入力も構成できない。証明できていないものを
+    // 証明済みとして出さないので、E105 ではなく W114 になる（§15.126 の正直な限界）。
+    let ds = codes("tests/mutants/m_w114.rule");
     assert_eq!(ds.iter().filter(|c| *c == "W114").count(), 1, "W114 が一件出るはず");
     assert!(!ds.iter().any(|c| c == "E105"), "判定できない重なりをエラーにしてはいけない");
-    assert!(!ds.iter().any(|c| c == "E101"), "この表は完全なはず");
 }
 
 /// Check an inline source and return the codes it emitted.
@@ -538,8 +550,17 @@ fn 変異はコーパスから作り直せる() {
     // `m_e101c.rule` is written here rather than cut from a corpus rule: the shape it needs
     // is a `constraint` whose forbidden corner hides an uncovered box (§15.98), and no
     // corpus rule has one.
-    const BY_HAND: &[&str] =
-        &["m_e116.rule", "m_w120.rule", "m_e032.rule", "m_e033.rule", "m_e101c.rule"];
+    const BY_HAND: &[&str] = &[
+        "m_e116.rule",
+        "m_w120.rule",
+        "m_e032.rule",
+        "m_e033.rule",
+        "m_e101c.rule",
+        // §15.126: the shape that is left over once the elimination has decided the
+        // arithmetic ones is two boolean definitions off one input, and no corpus rule has
+        // one — the corpus is made of rules that are right.
+        "m_w114.rule",
+    ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let tmp = std::env::temp_dir().join(format!("rulec-mutants-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);

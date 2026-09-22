@@ -272,7 +272,10 @@ It says so. It does not approximate and pass.
   could neither construct an input that proves it nor prove that none
   exists. It warns, and **the generated code carries a guard** that
   returns an error rather than silently picking the earlier row. If that
-  guard ever fires, the overlap was real.
+  guard ever fires, the overlap was real. Two derived values that share
+  an input no longer land here: those are decided by eliminating one
+  variable at a time, which is exact over the rationals. What is left is
+  a pair that meets only through the body of a boolean `define`.
 
 ## Showing it to the person who approves
 
