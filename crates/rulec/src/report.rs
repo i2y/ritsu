@@ -72,7 +72,10 @@ impl Fired {
 }
 
 pub struct Mismatch {
-    pub id: usize,
+    /// Where the record came in, 1-based: the line of the fixtures file for `replay` and
+    /// `diff`, the vector's place in the stream for `verify`. It is what names a record
+    /// when the record carries no `tag` of its own.
+    pub line: usize,
     /// The record's label (e.g. `order:1234567`). Empty when there is none.
     pub tag: String,
     pub input: BTreeMap<String, Val>,
@@ -309,6 +312,9 @@ pub struct Cluster<'a> {
     pub deltas: BTreeMap<String, Delta>,
     /// The record shown as the example.
     pub example: &'a Mismatch,
+    /// Every record in the cluster, in the order they came in. The example is the first of
+    /// them; a gate that has to act on the records themselves needs all of them.
+    pub members: Vec<&'a Mismatch>,
     /// The output grid, when every difference in the cluster is below it (§10.4).
     pub suspect_grid: Option<String>,
     /// Set when the counterpart declared it could not answer. **Prose.**
@@ -336,6 +342,7 @@ fn build<'a>(ms: &'a [Mismatch], f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> 
             suspect_grid: sub_grid(&ms, f, c),
             error: ms[0].err.clone(),
             example: ms[0],
+            members: ms,
         })
         .collect()
 }
@@ -552,6 +559,14 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
     };
     let one = |cl: &Cluster| {
             let rows: Vec<String> = cl.fired.iter().map(|x| x.json()).collect();
+            // Every record of the cluster by name, not only the example. A gate that has to
+            // do something with the records — hold a version back, re-quote an order — needs
+            // to name them; counting them is not enough.
+            let members: Vec<String> = cl
+                .members
+                .iter()
+                .map(|m| crate::json::Obj::new().int("line", m.line as i128).str("tag", &m.tag).finish())
+                .collect();
             let mut delta = crate::json::Obj::new();
             for (n, d) in &cl.deltas {
                 delta = delta.raw(
@@ -587,6 +602,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 .int("count", cl.count as i128)
                 .raw("delta", delta.finish())
                 .raw("witness", wit)
+                .raw("records", format!("[{}]", members.join(",")))
                 .bool("suspect_rounding", cl.suspect_grid.is_some())
                 .opt_str("error", cl.error.as_deref())
                 .finish()

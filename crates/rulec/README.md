@@ -288,7 +288,7 @@ data. The two premium tables are also held,
 grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 516 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
+$ cargo test          # 517 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
 ```
 
 ## Where to read next

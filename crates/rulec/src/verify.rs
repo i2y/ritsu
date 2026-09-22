@@ -121,7 +121,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         if let Some(e) = field(&line, "err") {
             rep.errored += 1;
             rep.mismatches.push(Mismatch {
-                id,
+                line: id + 1,
                 tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,
@@ -135,7 +135,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             rep.agreed += 1;
         } else {
             rep.mismatches.push(Mismatch {
-                id,
+                line: id + 1,
                 tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,

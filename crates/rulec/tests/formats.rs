@@ -221,12 +221,18 @@ fn verifyは一致率とクラスタを構造で出す() {
     let rulec::json::Json::Arr(cs) = j.get("clusters").unwrap() else { panic!() };
     assert!(!cs.is_empty(), "{out}");
     for c in cs {
-        keys(c, &["rows", "count", "delta", "witness", "suspect_rounding"], "cluster");
+        keys(c, &["rows", "count", "delta", "witness", "records", "suspect_rounding"], "cluster");
         let rulec::json::Json::Arr(rows) = c.get("rows").unwrap() else { panic!() };
         for r in rows {
             keys(r, &["table", "row"], "row");
         }
         keys(c.get("witness").unwrap(), &["in", "ours", "theirs"], "witness");
+        // Every record of the cluster is named, not only the example.
+        let rulec::json::Json::Arr(recs) = c.get("records").unwrap() else { panic!() };
+        assert_eq!(recs.len() as i128, c.get("count").unwrap().as_int().unwrap(), "records が count と合わない");
+        for r in recs {
+            keys(r, &["line", "tag"], "record");
+        }
         // The delta is keyed by output name, so several outputs can move independently.
         let rulec::json::Json::Obj(d) = c.get("delta").unwrap() else { panic!() };
         for v in d.values() {
@@ -405,5 +411,64 @@ fn 飛ばした言語があると要求時に落ちる() {
 
     let (c, out) = run_with_path(&["--require-all"]);
     assert_eq!(c, 1, "--require-all が飛ばしを見逃した: {out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `diff --format json` names **every** record that moved, not only one per cluster.
+/// Counting them is not enough for anything that has to act on them — hold a version back,
+/// re-quote an order — and reading the names back out of the text rendering is not an
+/// interface. The line is the record's line in the fixtures file, so a record with no tag
+/// of its own can still be found.
+#[test]
+fn diffは動いた記録を全部名指しする() {
+    let dir = std::env::temp_dir().join("rulec-formats-names");
+    let _ = std::fs::create_dir_all(&dir);
+    let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
+    let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
+    std::fs::write(&a, &src).unwrap();
+    std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
+
+    // 動くもの、動かないもの、名前の無いものを混ぜる。
+    let recs = [
+        (r#"{"tag":"a","in":{"届け先":"北海道","重量":2500,"注文金額":0,"会員":"一般"},"observed":{"送料":1800}}"#, true),
+        (r#"{"tag":"b","in":{"届け先":"東京都","重量":2500,"注文金額":0,"会員":"一般"},"observed":{"送料":1100}}"#, false),
+        (r#"{"in":{"届け先":"沖縄県","重量":9000,"注文金額":0,"会員":"一般"},"observed":{"送料":1800}}"#, true),
+        (r#"{"tag":"d","in":{"届け先":"北海道","重量":2500,"注文金額":50000,"会員":"一般"},"observed":{"送料":0}}"#, false),
+        (r#"{"tag":"e","in":{"届け先":"沖縄県","重量":3000,"注文金額":0,"会員":"プラチナ"},"observed":{"送料":900}}"#, true),
+    ];
+    let f = dir.join("f.jsonl");
+    let body = recs.iter().map(|(l, _)| l.to_string()).collect::<Vec<_>>().join("\n") + "\n";
+    std::fs::write(&f, body).unwrap();
+
+    let (as_, bs, fs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string(), f.to_string_lossy().to_string());
+    let (_, out) = run(&["diff", &as_, &bs, "--fixtures", &fs, "--format", "json"]);
+    let j = obj(&out);
+    let rulec::json::Json::Arr(cs) = j.get("clusters").unwrap() else { panic!("{out}") };
+
+    let mut named: Vec<(i128, String)> = Vec::new();
+    for c in cs {
+        let rulec::json::Json::Arr(rs) = c.get("records").unwrap() else { panic!() };
+        for r in rs {
+            named.push((
+                r.get("line").unwrap().as_int().unwrap(),
+                r.get("tag").unwrap().as_str().unwrap().to_string(),
+            ));
+        }
+    }
+    named.sort();
+    let want: Vec<(i128, String)> = recs
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, moves))| *moves)
+        .map(|(i, (l, _))| {
+            let tag = l.split("\"tag\":\"").nth(1).map(|x| x.split('"').next().unwrap()).unwrap_or("");
+            (i as i128 + 1, tag.to_string())
+        })
+        .collect();
+    assert_eq!(named, want, "動いた記録の名前が合わない\n{out}");
+    // 名前の無い記録も、行で見つけられる。
+    assert!(named.iter().any(|(_, t)| t.is_empty()), "tag の無い記録が落ちている");
+    let total: i128 = cs.iter().map(|c| c.get("count").unwrap().as_int().unwrap()).sum();
+    assert_eq!(total, want.len() as i128);
     let _ = std::fs::remove_dir_all(&dir);
 }

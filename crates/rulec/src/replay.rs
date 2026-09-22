@@ -31,7 +31,7 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
     }
 
-    for (id, r) in l.records.iter().enumerate() {
+    for r in l.records.iter() {
         let (outs, _, fired, _) = eval::run_all_traced(f, c, r.input.clone().into_iter().collect());
         let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = outs
             .into_iter()
@@ -69,9 +69,9 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         };
         let rows_moved = !r.trace.is_empty() && !same_rows(&r.trace, &r.trace_labels, &fired, c);
         if !same {
-            rep.mismatches.push(Mismatch { id, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
+            rep.mismatches.push(Mismatch { line: r.line, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
         } else if rows_moved {
-            rep.moved.push(Mismatch { id, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
+            rep.moved.push(Mismatch { line: r.line, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
         }
     }
     rep
@@ -99,7 +99,7 @@ pub fn diff(
         rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
     }
 
-    for (id, r) in l.records.iter().enumerate() {
+    for r in l.records.iter() {
         let ins: std::collections::HashMap<_, _> = r.input.clone().into_iter().collect();
         let (o_outs, _, o_fired, _) = eval::run_all_traced(old.0, old.1, ins.clone());
         let (n_outs, _, n_fired, _) = eval::run_all_traced(new.0, new.1, ins);
@@ -132,7 +132,7 @@ pub fn diff(
             // "row 3" when the row stayed, "row 3→row 5" when it moved. What the reader is
             // looking for is the row that moved.
             rep.mismatches.push(Mismatch {
-                id,
+                line: r.line,
                 tag: r.tag.clone(),
                 input: r.input.clone(),
                 outs: pairs,

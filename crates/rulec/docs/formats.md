@@ -157,6 +157,7 @@ The same shape for all three: they differ only in what the rule is compared agai
               "delta":{"運賃":{"min":-10,"max":-10,"uniform":true,"total":-70}},
               "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},
                          "ours":{"運賃":1450},"theirs":{"運賃":1460}},
+              "records":[{"line":12,"tag":"order:1234567"},{"line":88,"tag":""}],
               "suspect_rounding":false}],
  "moved":[],
  "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"unanswered":0}
@@ -170,6 +171,7 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `counterpart` | who the rule was compared against: an adapter's self-reported id, a fixtures path, or `送料@v3 → 送料@v4` |
 | `unanswered` | records the counterpart declared it could not answer. Excluded from the denominator |
 | `clusters` | mismatches grouped by the rows that matched |
+| `clusters[].records` | **every** record in the cluster, in the order they came in — `line` is the record's line in the fixtures file (for `verify`, the vector's place in the stream) and `tag` is its label, empty when it has none. `witness` shows one of them; this names them all, which is what something that has to act on the records needs. `count` is its length |
 | `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
 | `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format` |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
@@ -179,6 +181,11 @@ without a `trace`; for `diff` it is `{"table":…,"from":…,"to":…}`, the tra
 that matched between the two versions, and `replay` uses the same transition for a record
 that carries a `trace` — `from` is the recorded row, `to` the rule's. A row that exists on one
 side only has `from` or `to` set to `null`.
+
+A record is named by `line` and `tag` together, the same pair `fixtures lint` uses, because
+a record need not carry a tag: the line always finds it. Nothing else in this report names a
+record, so `--terse` — which keeps production values out of a pull-request comment — does not
+apply here; it cannot be combined with `--format json` at all.
 
 `delta` is keyed by output name, because a rule can have several outputs and they move
 independently. `uniform` is true when every record in the cluster moved by the same amount,
