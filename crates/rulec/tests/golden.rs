@@ -91,6 +91,8 @@ golden!(e116_写しに無い金額, "E116", "tests/mutants/m_e116.rule", "E116")
 golden!(w120_写し忘れた行, "W120", "tests/mutants/m_w120.rule", "W120");
 golden!(e119_境界の側, "E119", "tests/mutants/m_e119.rule", "E119");
 golden!(e119_欄の見出しの側, "E119-col", "tests/mutants/m_e119col.rule", "E119");
+golden!(e120_射影の型, "E120", "tests/mutants/m_e120.rule", "E120");
+golden!(e121_契約に無い道, "E121", "tests/mutants/m_e121.rule", "E121");
 
 // A rule applied by another (§15.69).
 golden!(e040_呼び先が変わった, "E040", "tests/mutants/m_e040.rule", "E040");

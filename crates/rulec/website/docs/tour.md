@@ -49,6 +49,7 @@ These are all the words that may start a line.
 | `overrides` | when a table above defines the same output, says that this table's rows take precedence over it. The line after `policy`; `table:label` names one row |
 | `clause` | a one-line rule that does not fit a table, written as a sentence: `when <column> <cell> and …` (`when always` when there is no condition), `then <value>`, and `overrides` when needed |
 | `source` | a document the rule transcribes: a law in a statute database (`law [<database>] "<id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
+| `shape` | the shape of the caller's object, borrowed from the contract it already has (`jsonschema "<file>" "<pointer>"` or `proto "<file>" <Message>`). An input then says `from <shape>.<field>` at the end of its line |
 | `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
 | `examples` | an executable specification |

@@ -260,6 +260,12 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
                 crate::kw::CONTRACT_ONLY
             ));
         }
+        // Where the caller's object holds it, when it says (§15.125). The approver reads
+        // this as "what the application has to have got right", and `check` held the path
+        // to the contract before the page was rendered.
+        if let Some(pr) = &i.from {
+            note.push(tr!("呼び出し側の `{}` から取ります", "Taken from `{}` of the caller's object", pr.text()));
+        }
         if let Some(cm) = trailing_comment(&lines, i.name.span.line) {
             note.push(cm);
         }
@@ -269,6 +275,17 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
             md_esc(&ty_text(c, n)),
             md_esc(&range_text(c, n)),
             md_esc(&note.join(" / "))
+        ));
+    }
+    if !f.shapes.is_empty() {
+        o.push_str(&tr!(
+            "\n引いている契約: {}\n",
+            "\nThe contracts the paths were held to: {}\n",
+            f.shapes
+                .iter()
+                .map(|d| format!("{} ({})", d.file, d.at))
+                .collect::<Vec<_>>()
+                .join(&tr!("、", ", "))
         ));
     }
 

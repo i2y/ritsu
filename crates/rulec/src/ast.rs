@@ -129,6 +129,115 @@ pub struct VarDecl {
     pub range: Option<Range>,
     /// §11 W111: silences the unused-declaration warning for a range-guard-only input.
     pub contract_only: bool,
+    /// Where the caller's object holds this input, when it says (§15.125). It changes no
+    /// check of the table: what comes out of a projection is a scalar input like any other,
+    /// and the region analysis never sees that it was projected.
+    pub from: Option<Projection>,
+    pub span: Span,
+}
+
+/// `from order.shipping.prefecture`, and the three that walk one collection.
+///
+/// The language stops here on purpose: **one collection, `any` / `all` / `count`, and a
+/// unary test on a field of an element**. A join, a nested quantifier or a path inside a
+/// cell would put the caller's object model inside the checks, and the cell language is
+/// where this tool's boundary is (§0).
+#[derive(Debug, Clone)]
+pub struct Projection {
+    /// The `shape` the path starts at.
+    pub root: Name,
+    /// The field names after the root, in order. For a walk, the path of the collection.
+    pub path: Vec<Name>,
+    pub kind: ProjKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProjKind {
+    /// `order.shipping.prefecture` — the value at the path.
+    Field,
+    /// `any order.lines where category = chilled` — true when some element passes.
+    Any(Name, Cell),
+    /// `all order.lines where category = chilled` — true when every element does.
+    All(Name, Cell),
+    /// `count order.lines [where category = chilled]` — how many pass.
+    Count(Option<(Name, Cell)>),
+}
+
+impl ProjKind {
+    /// How it is written back, for a message and for `fmt`.
+    pub fn word(&self) -> &'static str {
+        match self {
+            ProjKind::Field => "",
+            ProjKind::Any(..) => crate::kw::ANY,
+            ProjKind::All(..) => crate::kw::ALL,
+            ProjKind::Count(_) => crate::kw::COUNT,
+        }
+    }
+
+    /// The test on an element, when there is one.
+    pub fn test(&self) -> Option<(&Name, &Cell)> {
+        match self {
+            ProjKind::Any(n, c) | ProjKind::All(n, c) => Some((n, c)),
+            ProjKind::Count(Some((n, c))) => Some((n, c)),
+            _ => None,
+        }
+    }
+}
+
+impl Projection {
+    /// The clause written back as it is read, for the inventory and for the approver's
+    /// page. One spelling, so the two cannot disagree.
+    pub fn text(&self) -> String {
+        let path = std::iter::once(self.root.text.clone())
+            .chain(self.path.iter().map(|n| n.text.clone()))
+            .collect::<Vec<_>>()
+            .join(".");
+        let head = match self.kind.word() {
+            "" => path,
+            w => format!("{w} {path}"),
+        };
+        match self.kind.test() {
+            Some((fd, c)) => format!("{head} {} {} {}", crate::kw::WHERE, fd.text, cell_text(c)),
+            None => head,
+        }
+    }
+}
+
+/// A cell written back, for the one place outside the generator that has to quote one.
+pub fn cell_text(c: &Cell) -> String {
+    let lit = |l: &Lit| match l {
+        Lit::Num(n) => n.raw.clone(),
+        Lit::Word(w) => w.clone(),
+        Lit::Str(s) => format!("{s:?}"),
+        Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+    };
+    match c {
+        Cell::DontCare => "-".into(),
+        Cell::Nothing => crate::kw::NONE.into(),
+        Cell::Lit(l) => format!("= {}", lit(l)),
+        Cell::Set(ls) => format!("= {}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
+        Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
+        Cell::Cmp(ops) => ops.iter().map(|(o, l)| format!("{}{}", o.word(), lit(l))).collect::<Vec<_>>().join(" "),
+        Cell::Prefix(ps) => {
+            format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("{p:?}")).collect::<Vec<_>>().join(", "))
+        }
+    }
+}
+
+/// `shape order(order) = jsonschema "order.json" "#/$defs/Order"` — the contract the caller's
+/// object is already described by (§15.125).
+///
+/// It is read on every `check`, unpinned, the way `import proto` is (§15.59): a contract that
+/// moved is a change nobody has read, and the paths are what say so.
+#[derive(Debug, Clone)]
+pub struct ShapeDecl {
+    pub name: Name,
+    pub source: EnumSource,
+    /// The contract file, relative to the rule.
+    pub file: String,
+    /// A JSON Pointer for a schema, a message name for a `.proto`.
+    pub at: String,
     pub span: Span,
 }
 
@@ -574,6 +683,8 @@ pub struct RuleFile {
     pub examples: Option<Table>,
     /// The relations between inputs that always hold (§15.55).
     pub constraints: Vec<Constraint>,
+    /// The shapes of the caller's objects that inputs are projected from (§15.125).
+    pub shapes: Vec<ShapeDecl>,
     /// The fields of one element of the sequence, when the rule walks one (§15.56).
     pub elements: Option<ElementsDecl>,
     /// Named lists of elements. A cell of `examples` names one, which is how a case for a

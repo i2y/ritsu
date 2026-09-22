@@ -218,7 +218,7 @@ Beside the module, `coupon_step_proof.rs` holds proof harnesses for the [Kani Ru
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani coupon_step_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 45 rules it
+a flag because it is the one pass whose cost is noticeable: on the corpus of 46 rules it
 adds about 164 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
@@ -666,6 +666,49 @@ element's fields under `elements`, and the record written for one call carries t
 an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from
 row to row, and a walk is not a column operation.
+
+## A rule whose inputs are projected from the caller's object
+
+A rule whose inputs say `from`
+([reference §3.3](reference.md#33-shape-and-from--where-the-callers-object-holds-an-input))
+gets one more function beside the others: the same call, taking the caller's object instead of
+the scalars.
+
+```python
+def order_shipping_from(order: dict) -> Yen:
+    """Reads the inputs out of the caller's object and calls this rule."""
+    return order_shipping(
+        Zone(order["shipping"]["zone"]),
+        any(_e["chilled"] == True for _e in order["lines"]),
+        len(order["lines"]),
+    )
+```
+
+```typescript
+export function orderShippingFrom(order: _Obj): Yen {
+  return orderShipping(
+    parseZone(String(order["shipping"]["zone"])),
+    (order["lines"] as _Row[]).some((_e) => _e["chilled"] === true),
+    BigInt((order["lines"] as _Row[]).length),
+  );
+}
+```
+
+It is the glue an application writes by hand otherwise, once per input per language, with
+nothing checking it. Here the paths were held to the contract by `rulec check` before the
+function was written, so a field the contract renamed is E121 at build time rather than a
+`KeyError` in production. The object is **read and never named**: the parameter is a plain map,
+because a type for it would be a domain object model and this tool makes none.
+
+A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
+the projection function, after the objects, and a sequence stays last.
+
+**Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
+the caller's object as a type, and naming that type would mean generating it or following the
+caller's own; SQL takes a relation of flat columns, NumPy takes columns, and the Wasm ABI takes
+one JSON object of the rule's own inputs. The **path check applies to every target equally** —
+it happens in `check`. `rulec api` lists it all under `projection`: the contracts, the path of
+every projected input, and the function name and signature in each of the five.
 
 ## The digest in the header
 

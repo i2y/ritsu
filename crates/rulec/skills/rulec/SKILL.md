@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E119, W105, W110, W111, W114-W121) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E121, W105, W110, W111, W114-W122) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -121,13 +121,11 @@ A few shapes are worth knowing before the first draft:
   <name>(<alias>) over <sequence> of <column>` ends it with a total instead, over a column
   that cannot go negative; an average does not, dividing by the count being division by a
   variable. A rule has a `fold` or a `count`/`sum`, never both (E031).
-
 - **Handing one amount out over several lines.** `allocate(<amount>, <running total>,
   <whole>)` is `<amount> × <running total> ÷ <whole>` rounded down. Write one line's share
   as the share up to it minus the share up to the line before: the parts then add up to the
   amount exactly, odd yen included. Three names with declared ranges, nothing negative, a
   positive whole, and a `constraint` that the running total never passes it — else E117.
-
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
   takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`
@@ -138,37 +136,38 @@ A few shapes are worth knowing before the first draft:
   one output are checked together — completeness over their union, every overlap either
   ordered by an `overrides` line or reported (E105) — and `doc` says which is the exception
   (§7 of the grammar).
-
 - **A source is declared, cited and pinned.** `source 法 = law "342AC0000000023" asof
   2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word
   after `law` picks the database, e-Gov when left out. `@法 別表第一` at the end of a table,
-  clause, row, derive or define line says what it transcribes, quoted if not one word; `rulec source fetch` puts a copy of each cited
-  fragment beside the rule and `rulec source pin` writes its digest under the `source` line.
-  `check` then holds the rule to the copies (E037–E039, W119) without reading the network,
-  and `doc` quotes the fragment under the definition. Any other document is
-  `source 郵便 = file "…" sha256:…`, and a `url "…"` on it says where that copy came from, so
-  `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a commit
-  (`raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>`) the answer names the commits
-  that touched it, otherwise it can only say that the bytes differ. **A document's fragments
-  are its tables**: `@郵便 表1` cites the first table of the document in document order (a
-  sheet, in a workbook), `fetch` takes it out and writes it beside the document as
-  `<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and from there it is pinned, checked and quoted exactly as a
-  law's article is. Cite the table the rows came from and a revision that moves it fails the
-  check, naming the rows to reread. The formats read are csv, md, xlsx and docx; for a PDF
-  or a scan, `fetch --via <cmd>` runs an extractor (docling and the like) as a child process
-  and pins what it produced, so the extraction happens once and is reviewed once —
-  `rulec adapter <file.rule> --template docling` prints the shape. **The rows are then held to that copy**: an
-  amount the copy does not show is E116, a number the copy states that no row uses is W120,
-  and a boundary the copy puts on the other side of itself is E119 — the only checks that
-  look outside the rule at all.
-
+  clause, row, derive or define line says what it transcribes, quoted if not one word.
+  `rulec source fetch` puts a copy of each cited fragment beside the rule and `rulec source
+  pin` writes its digest; `check` then holds the rule to the copies (E037–E039, W119) without
+  reading the network, and `doc` quotes the fragment under the definition. Any other document
+  is `source 郵便 = file "…" sha256:…`, and a `url "…"` on it says where that copy came from,
+  so `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a
+  commit the answer names the commits that touched it, otherwise only that the bytes differ.
+  **A document's fragments are its tables**: `@郵便 表1` cites the first table in document
+  order (a sheet, in a workbook), and `fetch` writes it beside the document under
+  `<document>.fragments/`, where it is pinned, checked and quoted exactly as a law's article
+  is. Cite the table the rows came from and a revision that moves it fails the check, naming
+  the rows to reread. The formats read are csv, md, xlsx and docx; for a PDF or a scan,
+  `fetch --via <cmd>` runs an extractor (docling and the like) as a child process and pins
+  what it produced, so the extraction happens once and is reviewed once — `rulec adapter
+  <file.rule> --template docling` prints the shape. **The rows are then held to that copy**:
+  an amount the copy does not show is E116, a number the copy states that no row uses is
+  W120, and a boundary the copy puts on the other side of itself is E119 — the only checks
+  that look outside the rule at all.
 - **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
   sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
   `with 任期満了 -> 定年`), definitions left out with `except 減額`, and outputs taken under a
   name (`手当 -> 非常勤手当`). The callee is expanded into the rule under `退職手当:…`, held to
   its digest (E040, `rulec source pin` writes it), and what is passed has to stay inside its
   ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
-
+- **An input may say where the caller's object holds it.** `shape 注文(order) = jsonschema
+  "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
+  `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
+  where chilled = true`, `from count order.lines`. **It changes no check of the table**; what
+  it buys is the glue generated and a renamed field caught as E121 (§3.3 of the grammar).
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
   "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)

@@ -29,6 +29,8 @@ import jsonschema "<file>" "<pointer>" -> <enum of this rule>
 source <name> = law [<database>] "<law id>" asof <date>
   <fragment> sha256:<digest>
 source <name> = file "<file>" [url "<url>"] sha256:<digest>
+shape <name>(<alias>) = jsonschema "<file>" "<pointer>"
+shape <name>(<alias>) = proto "<file>" <Message>
 enum   …
 group  …
 inputs
@@ -402,6 +404,65 @@ with the date that text came into force and the amending law; a document's table
 itself, beside the rows transcribed from it. Every generated file names the sources in its header
 (`Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
 them under `sources`, a file source carrying its `url` in both.
+
+## 3.3 shape and from — where the caller's object holds an input
+
+An input may say where it comes from, and a `shape` says which contract the object it comes
+from is already described by:
+
+```rule
+shape order(order) = jsonschema "api/order.json" "#/$defs/Order"
+shape order(order) = proto "api/v1/order.proto" shop.v1.Order
+
+inputs
+  届け先(dest)   : 都道府県  from order.shipping.prefecture
+  冷蔵あり(cold) : bool      from any order.lines where category = "chilled"
+  明細数(lines)  : number    range >=0 <=200  from count order.lines
+```
+
+**It changes no check of the table.** What comes out of a projection is a scalar input like
+any other: the region analysis never learns that it was projected, and completeness, overlap,
+units and overflow are decided exactly as they would be without it. What the two declarations
+buy is that the glue between the caller's object and the rule's flat inputs is **generated**
+rather than written by hand, and that a field the contract renamed is E121 rather than a
+`KeyError` in production.
+
+`from` comes last on the line and runs to its end. Four shapes, and no more:
+
+| written | what it yields |
+|---|---|
+| `from <shape>.<field>…` | the value at the path |
+| `from any <shape>.<collection> where <field> = <value>` | `bool` — some element passed |
+| `from all <shape>.<collection> where <field> = <value>` | `bool` — every element did |
+| `from count <shape>.<collection> [where …]` | `number` — how many passed |
+
+**One collection, and a unary test on a field of an element.** A join, a nested quantifier
+and a path inside a cell are all refused, for the reason §0 gives: the cell language is where
+this tool's boundary is, and a path in a cell would put the caller's object model inside the
+checks. The test after `where` takes the same forms a cell does (`= a`, `= a, b`, `not: a`,
+`<=100`), and it compares the **raw** value the contract carries, so a literal in it carries
+no unit — a contract has none, and comparing a scaled number with a raw one is refused (E120).
+
+The contract is read on every `check`, resolved against the directory of the rule, and
+carries **no digest** — the same footing as `import proto` (§3.1): what holds the two together
+is the paths. A JSON Schema is read far enough to resolve a path: `properties`, `items`, and a
+`$ref` that stays inside the document. A `.proto` is read far enough for the same: messages
+and their fields, `repeated` included, with `map` and `oneof` skipped rather than guessed at.
+A path that cannot be resolved is **E121**, which says how far it got and which names were
+there; a type that does not fit is **E120**; a `shape` no input projects from is **W122**.
+
+A contract says how a value **travels**, and the rule says what it **means**: an enum and a
+date arrive as strings, and money and a quantity as whole numbers in the unit the rule
+declares.
+
+**Five of the twelve targets generate the projection function** — Python, TypeScript,
+JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name. Go,
+Swift, Java and Rust hold it as a type, and the only ways to name that type would be to
+generate it (this tool makes no domain object model) or to follow the caller's own; SQL takes
+a relation of flat columns, NumPy takes columns, and the Wasm ABI takes one JSON object of the
+rule's own inputs. **The path check applies to every target equally** — it happens in `check`,
+before anything is generated. `rulec api` lists the contracts, the path of every projected
+input, and the function in each language that reads them, under `projection`.
 
 ## 4. inputs and outputs
 

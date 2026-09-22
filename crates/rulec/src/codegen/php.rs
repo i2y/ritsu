@@ -406,6 +406,10 @@ impl<'a> Gen<'a> {
         o.push_str(&self.php_fn());
         o.push('\n');
         o.push_str(&self.php_record());
+        if self.projects() {
+            o.push('\n');
+            o.push_str(&self.php_from());
+        }
         o
     }
 
@@ -1155,4 +1159,100 @@ pub fn round_tests_php() -> String {
     o.push_str("if ($bad > 0) {\n    exit(1);\n}\n");
     o.push_str(&format!("echo {};\n", tr!("'ok ' . count($cases) . \" 件\\n\"", "'ok ' . count($cases) . \" cases\\n\"")));
     o
+}
+
+impl<'a> Gen<'a> {
+    /// One projected value as the PHP the module takes (§15.125).
+    fn php_take(&self, ty: &Ty, e: String) -> String {
+        let ns = self.php_ns();
+        match ty {
+            Ty::Enum(n) => {
+                format!("\\{ns}\\{}::from((string) {e})", php_name(&self.enum_names.get(n).cloned().unwrap_or_default()))
+            }
+            Ty::Str => format!("(string) {e}"),
+            Ty::Bool => format!("(bool) {e}"),
+            Ty::Date => format!("_days((string) {e})"),
+            Ty::Opt(inner) => format!("({e} === null ? null : {})", self.php_take(inner, e.clone())),
+            _ => format!("(int) {e}"),
+        }
+    }
+
+    fn php_proj(&self, p: &super::Proj) -> String {
+        let walk = p.path.iter().fold(php_var_pub(&p.root), |o, s| format!("{o}[{}]", php_str(s)));
+        let cond = || match p.kind.test() {
+            Some((fd, c)) => super::elem_cond(
+                c,
+                &format!("$e[{}]", php_str(&fd.text)),
+                &super::Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None },
+            ),
+            None => "true".into(),
+        };
+        match p.kind {
+            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk),
+            crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
+            crate::ast::ProjKind::All(..) => {
+                format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond())
+            }
+            crate::ast::ProjKind::Count(None) => format!("count({walk})"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
+        }
+    }
+
+    pub(super) fn php_from(&self) -> String {
+        if !self.projects() {
+            return String::new();
+        }
+        let fname = self.php_fname();
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("array {}", php_var_pub(r))).collect();
+        params.extend(
+            self.proj_rest()
+                .iter()
+                .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&pub_name(&i.name)))),
+        );
+        if let Some(el) = &self.f.elements {
+            params.push(format!("array {}", php_var_pub(&pub_name(&el.name))));
+        }
+        let mut o = String::new();
+        if self.proj_dates() {
+            o.push_str(
+                "function _days(string $s): int\n{\n    \
+                 [$y, $m, $d] = array_map('intval', explode('-', $s));\n    \
+                 $y -= $m <= 2 ? 1 : 0;\n    \
+                 $era = intdiv($y >= 0 ? $y : $y - 399, 400);\n    \
+                 $yoe = $y - $era * 400;\n    \
+                 $doy = intdiv(153 * ($m + ($m > 2 ? -3 : 9)) + 2, 5) + $d - 1;\n    \
+                 return $era * 146097 + $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy - 719468;\n}\n\n",
+            );
+        }
+        o.push_str(&format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {fname}(\n", self.proj_doc(), params.join(", ")));
+        let projs = self.projections();
+        let mut args: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            args.push(match projs.iter().find(|p| p.jp == i.name.text) {
+                Some(p) => self.php_proj(p),
+                None => php_var_pub(&pub_name(&i.name)),
+            });
+        }
+        if let Some(el) = &self.f.elements {
+            args.push(php_var_pub(&pub_name(&el.name)));
+        }
+        for a in &args {
+            o.push_str(&format!("        {a},\n"));
+        }
+        o.push_str("    );\n}\n");
+        o
+    }
+}
+
+impl Gen<'_> {
+    /// The projection function's signature, for the inventory (§15.125).
+    pub(super) fn php_from_signature(&self) -> String {
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("array {}", php_var_pub(r))).collect();
+        params.extend(
+            self.proj_rest()
+                .iter()
+                .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&super::pub_name(&i.name)))),
+        );
+        format!("function {}_from({})", self.php_fname(), params.join(", "))
+    }
 }

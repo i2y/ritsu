@@ -1,0 +1,7 @@
+error[E121]: `注文.shipping.region` という道は契約にありません
+  --> tests/mutants/m_e121.rule:11
+   |
+11 |   あて先(zone)   : 地域    from 注文.shipping.region
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ `注文.shipping` までは届きました。そこにある欄: postcode, zone

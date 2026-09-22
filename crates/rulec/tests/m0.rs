@@ -92,6 +92,9 @@ fn 変異は決めたコードだけを出す() {
         ("m_w120.rule", &[("W120", 1)], "写しの一行を写し忘れ、残った行がその入力を拾っている"),
         ("m_e119.rule", &[("E119", 2)], "写しの「Under 18」の側を取り違えた（境界を分け合う二行の両方が出る）"),
         ("m_e119col.rule", &[("E119", 2)], "写しが「円以上」「円未満」と欄の見出しで言っている側を取り違えた"),
+        ("m_e120.rule", &[("E120", 1)], "件数を受ける入力を bool のままにした"),
+        ("m_e121.rule", &[("E121", 1)], "契約が持っていない欄を射影した（欄の名前が変わったときの姿）"),
+        ("m_w122.rule", &[("W122", 1)], "契約を宣言したまま、どの入力も射影していない"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
         // made of correct rules, so a position no check visits looks exactly like a position

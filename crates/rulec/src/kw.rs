@@ -42,6 +42,17 @@ pub const ASOF: &str = "asof";
 pub const URL: &str = "url";
 /// A rule applied with its inputs bound — a provision applied mutatis mutandis (§15.69). The callee is expanded into this rule for the checks and the generators.
 pub const APPLY: &str = "apply";
+
+/// `shape order(order) = jsonschema "order.json" "#/$defs/Order"` — the shape of the object
+/// the caller already has, borrowed from the contract it is already described by (§15.125).
+pub const SHAPE: &str = "shape";
+/// `dest(dest) : prefecture  from order.shipping.prefecture` — where an input is projected
+/// from, so the glue between the caller's object and the rule's flat inputs is generated and
+/// held to the contract rather than written by hand (§15.125).
+pub const FROM: &str = "from";
+/// `from any order.lines where category = chilled` and its companion.
+pub const ANY: &str = "any";
+pub const ALL: &str = "all";
 /// Inside an `apply`: the callee definitions left out (`第20条（第2項を除く。）`).
 pub const EXCEPT: &str = "except";
 pub const RESULT: &str = "result";
@@ -62,6 +73,7 @@ pub const FOLD: &str = "fold";
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
+    SHAPE,
 ];
 
 // --- Declaration modifiers

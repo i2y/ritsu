@@ -72,7 +72,10 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E116](#e116) | error | A row's amount is not in the copy it cites |
 | [E117](#e117) | error | A share without what a share needs |
 | [E118](#e118) | error | The call is not written correctly |
+| [E120](#e120) | error | A `from` does not fit the input's type |
+| [E121](#e121) | error | The contract has no such path |
 | [E119](#e119) | error | A row's boundary falls on the other side from the copy it cites |
+| [W122](#w122) | warning | No input is projected from that shape |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -144,7 +147,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -162,7 +165,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -2132,6 +2135,76 @@ result o = r
 
 Related codes: [E103](#e103), [E115](#e115)
 
+## E120
+
+`error` — **A `from` does not fit the input's type**
+
+**When.** What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares.
+
+**Fix.** Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+Related codes: [E121](#e121), [W122](#w122), [E103](#e103)
+
+## E121
+
+`error` — **The contract has no such path**
+
+**When.** A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
+
+**Fix.** Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from order.nope
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+Related codes: [E120](#e120), [W122](#w122), [E032](#e032)
+
 ## E119
 
 `error` — **A row's boundary falls on the other side from the copy it cites**
@@ -2181,6 +2254,41 @@ With `寸法表.md.fragments/表1.tsv` beside it:
 ```
 
 Related codes: [E116](#e116), [W120](#w120), [E105](#e105)
+
+## W122
+
+`warning` — **No input is projected from that shape**
+
+**When.** A `shape` is declared and no input says `from <that name>.…` (§15.125). The contract is read and holds nothing.
+
+**Fix.** Use it or delete it. A contract that is only read makes the next reader believe this rule is held to it; what is held to it is the inputs that say `from`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+Related codes: [E121](#e121), [W111](#w111)
 
 ## W105
 

@@ -3,9 +3,9 @@ rulec 0.16.0, Kani Rust Verifier 0.68.0 (standalone) CBMC 6.11.0
 apply_order                1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 baggage_fee                2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 cancel_verdict             1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
-cart_shipping              1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
-claude_usage_fee          18s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
-compensation               2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
+cart_shipping              2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+claude_usage_fee          17s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+compensation               3s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 coupon_discount            3s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 coupon_stack               1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 coupon_step                2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
@@ -14,18 +14,19 @@ ec261                      4s  Complete - 4 successfully verified harnesses, 0 f
 freight                    2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 income_tax                 1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 kenpo_premium             26s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
-member_perk                3s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+member_perk                4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 office_standard            2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
+order_shipping             3s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 osha_excavation            1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_extinguisher          1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 osha_noise                 2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
-parcel_rate                4s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
-part_time_allowance        2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
+parcel_rate                5s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
+part_time_allowance        1s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 payment_fee                2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 paypal_fee                 1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 pension_premium            9s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 period                     1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
-points                     2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+points                     1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 pro_rata                   0s  no harness written — see the head of pro_rata_proof.rs
 rank                       1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 receipt_stamp              3s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
@@ -33,17 +34,17 @@ retirement_allowance       1s  Complete - 2 successfully verified harnesses, 0 f
 return_eligibility         1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 shipment_surcharge         2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 shipping_fee               4s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
-shipping_proviso           1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+shipping_proviso           2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 sku_handling               0s  no harness written — see the head of sku_handling_proof.rs
-stamp_duty                 5s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
-stamp_duty_split           3s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
-storage                    5s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
+stamp_duty                 4s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+stamp_duty_split           4s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+storage                    4s  Complete - 4 successfully verified harnesses, 0 failures, 4 total.
 supplier_match            25s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
 two_bands                  3s  Complete - 5 successfully verified harnesses, 0 failures, 5 total.
 uk_income_tax              2s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 uk_minimum_wage            1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
-uk_stamp_duty              1s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
-us_income_tax              2s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+uk_stamp_duty              2s  Complete - 1 successfully verified harnesses, 0 failures, 1 total.
+us_income_tax              1s  Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 yupack_fee                 9s  Complete - 3 successfully verified harnesses, 0 failures, 3 total.
 
-総計 164s
+総計 168s

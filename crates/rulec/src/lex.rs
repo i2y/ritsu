@@ -53,6 +53,10 @@ pub enum Kind {
     Question,
     /// `..` — always an error (§3.1 forbids range notation), lexed so E010 can point at it.
     DotDot,
+    /// `.` — the step of a path into the caller's object (`order.shipping.prefecture`),
+    /// and nowhere else: a decimal point is read inside the number, and `..` is read above
+    /// this (§15.125).
+    Dot,
     /// `@` — starts a citation: `@<source> <fragment>, …` at the end of a line (§15.68).
     At,
     /// `sha256:9e4edb5b6a1c0f42` — a pinned digest, one token so that the hex digits are
@@ -203,6 +207,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
 
         let single = match c {
             '|' => Some(Kind::Pipe),
+            '.' => Some(Kind::Dot),
             '@' => Some(Kind::At),
             '→' => Some(Kind::Arrow),
             ':' => Some(Kind::Colon),

@@ -63,6 +63,152 @@ impl Enum {
     }
 }
 
+/// One field of a message, as far as a path needs it: its name, the word that names its
+/// type, and whether it is a collection (§15.125).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Field {
+    pub name: String,
+    /// The type as written — `string`, `int64`, or a message name, qualified or not.
+    pub ty: String,
+    pub repeated: bool,
+}
+
+/// One message declared in a `.proto`, named as it is written. A nested message is listed
+/// under its own short name as well, which is how a path names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Message {
+    pub name: String,
+    pub fields: Vec<Field>,
+}
+
+/// The kinds a proto scalar travels as. A rule's numbers are whole in their declared unit
+/// (§2.1), so the floating kinds are named apart rather than folded in with the integers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scalar {
+    Str,
+    Int,
+    Frac,
+    Bool,
+}
+
+/// The kind a proto type word travels as, or `None` for a message or an enum. An enum is a
+/// message-shaped name here and resolves to nothing, which is right: what a rule takes from
+/// an enum is its value set (§15.59), and that is `import proto`'s business, not a path's.
+pub fn scalar(ty: &str) -> Option<Scalar> {
+    match ty.rsplit('.').next().unwrap_or(ty) {
+        "string" => Some(Scalar::Str),
+        "bool" => Some(Scalar::Bool),
+        "double" | "float" => Some(Scalar::Frac),
+        "int32" | "int64" | "uint32" | "uint64" | "sint32" | "sint64" | "fixed32" | "fixed64"
+        | "sfixed32" | "sfixed64" => Some(Scalar::Int),
+        // `bytes` is not a kind a rule's input can be, and saying so is better than calling
+        // it a string: the two do not travel the same way.
+        _ => None,
+    }
+}
+
+/// Whether a message name written one way is the one written another. A `.proto` may name a
+/// message bare, package-qualified or nested-qualified, and a `shape` line may name it any
+/// of those ways; the last segment is what they always agree on.
+pub fn same_message(declared: &str, wanted: &str) -> bool {
+    let last = |s: &str| s.rsplit('.').next().unwrap_or(s).to_string();
+    declared == wanted || last(declared) == last(wanted)
+}
+
+/// Every message in the file, in the order they appear, nested ones included.
+///
+/// Read far enough for a path and no further: a field is `[repeated] <type> <name> = <n>;`,
+/// and `oneof`, `map`, `option`, `reserved` and `extend` are skipped. A `map` field is
+/// skipped rather than guessed at, so a path into one gets stuck instead of being waved
+/// through.
+pub fn messages(src: &str) -> Vec<Message> {
+    let b: Vec<char> = strip_comments(src).chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if !word_starts_at(&b, i, "message") {
+            i += 1;
+            continue;
+        }
+        let j = skip_ws(&b, i + 7);
+        let (name, k) = ident(&b, j);
+        let j = skip_ws(&b, k);
+        if name.is_empty() || b.get(j) != Some(&'{') {
+            i += 1;
+            continue;
+        }
+        out.push(Message { name, fields: fields_of(&b, j + 1) });
+        // A nested message is found by the same walk, so the cursor only steps past `{`.
+        i = j + 1;
+    }
+    out
+}
+
+/// The fields between `{` and its `}`, the bodies of anything nested skipped over.
+fn fields_of(b: &[char], from: usize) -> Vec<Field> {
+    let mut out = Vec::new();
+    let mut stmt = String::new();
+    let mut i = from;
+    let mut depth = 0usize;
+    while i < b.len() {
+        match b[i] {
+            '{' => {
+                // A nested message, enum or oneof. Its own fields belong to it, not here.
+                depth += 1;
+                stmt.clear();
+                i += 1;
+            }
+            '}' => {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+                i += 1;
+            }
+            '[' => {
+                while i < b.len() && b[i] != ']' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            ';' => {
+                if depth == 0 {
+                    if let Some(f) = field_of(&stmt) {
+                        out.push(f);
+                    }
+                }
+                stmt.clear();
+                i += 1;
+            }
+            c => {
+                stmt.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// `repeated Line lines = 3` → a field. Anything that is not three words and a number is
+/// not one.
+fn field_of(stmt: &str) -> Option<Field> {
+    let s = stmt.trim();
+    let mut w: Vec<&str> = s.split_whitespace().collect();
+    let repeated = w.first() == Some(&"repeated");
+    if repeated || w.first() == Some(&"optional") {
+        w.remove(0);
+    }
+    // `map<string, Line> by_id = 1` is not read: its shape is not a path's to guess.
+    if w.len() < 4 || w[2] != "=" || w[0].starts_with("map<") {
+        return None;
+    }
+    if matches!(w[0], "option" | "reserved" | "extensions" | "import" | "package" | "syntax") {
+        return None;
+    }
+    w[3].trim_end_matches(';').parse::<i64>().ok()?;
+    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated })
+}
+
 fn strip<'a>(name: &'a str, prefix: &str) -> &'a str {
     name.strip_prefix(prefix).unwrap_or(name)
 }

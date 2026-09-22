@@ -97,6 +97,17 @@ awk '/ <18 / { sub(/<18 /, "<=18") } / >=18 <=20 / { sub(/>=18 <=20/, ">18 <=20 
 awk '/\| <93000円/ { sub(/<93000円/, "<=93000円") } /\| >=93000円 </ { sub(/>=93000円/, ">93000円") } { print }' \
   "$C/厚生年金保険料.rule" > "$M/m_e119col.rule"
 
+# --- A projection into the caller's object (§15.125). The contract stays in the corpus, so
+# the mutants reach it by the same relative path the corpus rule uses.
+p="$C/注文の送料.rule"
+# `count` gives a number and the input that takes it is a bool
+awk '/from any 注文.lines/ { sub(/any 注文.lines where chilled = true/, "count 注文.lines") } { print }' \
+  "$p" > "$M/m_e120.rule"
+# A field the contract does not have — what a renamed field looks like
+awk '{ sub(/注文.shipping.zone/, "注文.shipping.region"); print }'  "$p" > "$M/m_e121.rule"
+# The contract declared and nothing projected from it
+awk '{ sub(/  from .*$/, ""); print }'                              "$p" > "$M/m_w122.rule"
+
 # --- A rule applied by another (§15.69). The callee stays in the corpus, so the
 # mutants reach it by a relative path; the digest in the heading is the corpus caller's own.
 a="$C/非常勤退職手当.rule"

@@ -50,6 +50,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/適用順序.rule", "apply_order"),
     ("tests/corpus/クーポン一枚.rule", "coupon_step"),
     ("tests/corpus/決済手数料.rule", "payment_fee"),
+    ("tests/corpus/注文の送料.rule", "order_shipping"),
     ("tests/corpus/ポイント付与.rule", "points"),
     ("tests/corpus/評価ランク.rule", "rank"),
     ("tests/corpus/値引の充当.rule", "discount_fill"),

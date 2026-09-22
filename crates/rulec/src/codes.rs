@@ -281,6 +281,12 @@ const SIZE_DOC: &[(&str, &str)] = &[
     ("寸法表.md.fragments/表1.tsv", "サイズ\t運賃\n60cmまで\t1410円\n60cmを超え80cm以下\t1710円\n"),
 ];
 const X_E119: &str = "rule t(t) v1\n\nsource 寸法表 = file \"寸法表.md\" sha256:a19333e262c10371\n  表1 sha256:a5c05813ad703b8e\n\ninputs\n  a(a) : length[cm]  range >=1cm <=80cm\n\noutputs\n  x(x) : money[円]  round up(10円)\n\ntable 表(t1)  @寸法表 表1\npolicy unique\n| a             | -> x   |\n| <60cm         | 1410円 |\n| >=60cm <=80cm | 1710円 |\n";
+/// The contract of the `shape` examples: one object with one collection in it, which is
+/// what a path and a walk both need (§15.125).
+const SHAPE_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"category\":{\"type\":\"string\"}}}}}}}}\n")];
+const X_E120: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E121: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from order.nope\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_W122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
 const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
@@ -1397,6 +1403,36 @@ pub fn ledger() -> Vec<Entry> {
             &["E103", "E115"],
         ),
         err(
+            "E120",
+            tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
+            tr!(
+                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。道の先にあるものの型が入力と合わないとき（契約が文字列と言っている欄を `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値が欄の型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
+                "What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
+            ),
+            tr!(
+                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <形>.<欄>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
+                "Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly."
+            ),
+            X_E120,
+            &["E121", "W122", "E103"],
+        )
+        .with_files(SHAPE_DOC),
+        err(
+            "E121",
+            tr!("`from` の道が契約にありません", "The contract has no such path"),
+            tr!(
+                "`from` の道が、宣言した `shape` の契約の中に見つからないとき（§15.125）。道の最初の語が `shape` の名前でないとき、途中の欄が無いとき、`where` の見る欄が要素に無いときの三つです。どこまで届いたかと、そこにあった欄の名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
+            ),
+            tr!(
+                "綴りを直すか、契約のほうが動いたのなら道を書き直してください。**これが出るのが目的です**——契約が欄の名前を変えたとき、手書きのグルーなら実行時まで気づかず、ここなら生成の前に止まります。",
+                "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
+            ),
+            X_E121,
+            &["E120", "W122", "E032"],
+        )
+        .with_files(SHAPE_DOC),
+        err(
             "E119",
             tr!("行の境界が、引いた写しと反対側です", "A row's boundary falls on the other side from the copy it cites"),
             tr!(
@@ -1411,6 +1447,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E116", "W120", "E105"],
         )
         .with_files(SIZE_DOC),
+        warn(
+            "W122",
+            tr!("その `shape` を使っている入力がありません", "No input is projected from that shape"),
+            tr!(
+                "`shape` を宣言しているのに、`from <その名前>.…` と書いた入力が一つも無いとき（§15.125）。契約は読まれますが、何も確かめていません。",
+                "A `shape` is declared and no input says `from <that name>.…` (§15.125). The contract is read and holds nothing."
+            ),
+            tr!(
+                "使うか、消してください。読まれているだけの契約は、次に読む人に「ここは契約に縛られている」と思わせます。縛られているのは `from` を書いた入力だけです。",
+                "Use it or delete it. A contract that is only read makes the next reader believe this rule is held to it; what is held to it is the inputs that say `from`."
+            ),
+            X_W122,
+            &["E121", "W111"],
+        )
+        .with_files(SHAPE_DOC),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

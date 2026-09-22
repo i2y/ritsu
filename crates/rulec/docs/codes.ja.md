@@ -72,7 +72,10 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E116](#e116) | error | 行の金額が、引いた写しにありません |
 | [E117](#e117) | error | 配分の前提が揃っていません |
 | [E118](#e118) | error | 呼び出しの形が違います |
+| [E120](#e120) | error | `from` が入力の型と合いません |
+| [E121](#e121) | error | `from` の道が契約にありません |
 | [E119](#e119) | error | 行の境界が、引いた写しと反対側です |
+| [W122](#w122) | warning | その `shape` を使っている入力がありません |
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
@@ -144,7 +147,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -162,7 +165,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -2132,6 +2135,76 @@ result o = r
 
 関係するコード: [E103](#e103), [E115](#e115)
 
+## E120
+
+`error` — **`from` が入力の型と合いません**
+
+**いつ出るか。** `from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。道の先にあるものの型が入力と合わないとき（契約が文字列と言っている欄を `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値が欄の型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。
+
+**直し方。** 型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <形>.<欄>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+関係するコード: [E121](#e121), [W122](#w122), [E103](#e103)
+
+## E121
+
+`error` — **`from` の道が契約にありません**
+
+**いつ出るか。** `from` の道が、宣言した `shape` の契約の中に見つからないとき（§15.125）。道の最初の語が `shape` の名前でないとき、途中の欄が無いとき、`where` の見る欄が要素に無いときの三つです。どこまで届いたかと、そこにあった欄の名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。
+
+**直し方。** 綴りを直すか、契約のほうが動いたのなら道を書き直してください。**これが出るのが目的です**——契約が欄の名前を変えたとき、手書きのグルーなら実行時まで気づかず、ここなら生成の前に止まります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from order.nope
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+関係するコード: [E120](#e120), [W122](#w122), [E032](#e032)
+
 ## E119
 
 `error` — **行の境界が、引いた写しと反対側です**
@@ -2181,6 +2254,41 @@ policy unique
 ```
 
 関係するコード: [E116](#e116), [W120](#w120), [E105](#e105)
+
+## W122
+
+`warning` — **その `shape` を使っている入力がありません**
+
+**いつ出るか。** `shape` を宣言しているのに、`from <その名前>.…` と書いた入力が一つも無いとき（§15.125）。契約は読まれますが、何も確かめていません。
+
+**直し方。** 使うか、消してください。読まれているだけの契約は、次に読む人に「ここは契約に縛られている」と思わせます。縛られているのは `from` を書いた入力だけです。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+関係するコード: [E121](#e121), [W111](#w111)
 
 ## W105
 

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order",
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shipping": { "$ref": "#/$defs/Shipping" },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/Line" } }
+      },
+      "required": ["shipping", "lines"]
+    },
+    "Shipping": {
+      "type": "object",
+      "properties": {
+        "zone": { "type": "string", "enum": ["honshu", "hokkaido", "okinawa"] },
+        "postcode": { "type": "string" }
+      },
+      "required": ["zone"]
+    },
+    "Line": {
+      "type": "object",
+      "properties": {
+        "sku": { "type": "string" },
+        "chilled": { "type": "boolean" },
+        "amount_jpy": { "type": "integer" }
+      },
+      "required": ["sku", "chilled", "amount_jpy"]
+    }
+  }
+}

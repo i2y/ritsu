@@ -49,6 +49,7 @@ pub mod prelude;
 pub mod proto;
 pub mod region;
 pub mod replay;
+pub mod projection;
 pub mod report;
 pub mod runtest;
 pub mod sha256;
@@ -110,6 +111,7 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     // The stages that read other files: the enums declared outside it (§15.59, §15.60), and
     // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
+    diags.extend(projection::check(f, &t, path));
     diags.extend(sources::check(f, path));
     enrich_e104(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {

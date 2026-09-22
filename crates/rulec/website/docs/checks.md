@@ -39,6 +39,13 @@ to an enum is a compatible change on the wire, so the tools that guard
 the contract let it through — this is the check that stops it from
 passing quietly through a table with a `-` row.
 
+A rule whose inputs say where the caller's object holds them (`shape` and `from`) is held to
+that contract the same way. The path is resolved on every `rulec check`: one the contract does
+not have is **E121**, which says how far it got and which fields were there; a type that does
+not fit the input is **E120**; a contract nothing projects from is **W122**. None of this
+changes a check of the table — what comes out of a projection is a scalar input like any other
+— and what it stops is the glue between an application and a rule going stale in silence.
+
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
 the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses

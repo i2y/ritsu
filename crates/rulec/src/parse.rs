@@ -115,6 +115,7 @@ impl P {
             result: None,
             examples: None,
             constraints: Vec::new(),
+            shapes: Vec::new(),
             elements: None,
             sequences: Vec::new(),
             fold: None,
@@ -192,6 +193,12 @@ impl P {
                     if let Some(mut d) = self.define(&head) {
                         d.cite = cite;
                         f.items.push(Item::Define(d));
+                    }
+                    self.i += 1;
+                }
+                crate::kw::SHAPE => {
+                    if let Some(d) = self.shape_decl(&line) {
+                        f.shapes.push(d);
                     }
                     self.i += 1;
                 }
@@ -509,11 +516,130 @@ impl P {
         for line in self.block_lines() {
             let Some((name, k)) = self.name_at(&line, 0) else { continue };
             let Some((ty, k)) = self.type_ref(&line, k) else { continue };
-            let (range, contract_only) = self.tail_range(&line, k);
-            self.tail_junk(&line, k);
-            v.push(VarDecl { name, ty, range, contract_only, span: span_of(&line) });
+            // `from …` runs to the end of the line, so everything before it is the tail the
+            // range and the markers are read from (§15.125).
+            let cut = line.iter().position(|t| t.ident() == Some(crate::kw::FROM)).unwrap_or(line.len());
+            let head = &line[..cut];
+            let from = (cut < line.len()).then(|| self.projection(&line[cut..])).flatten();
+            let (range, contract_only) = self.tail_range(head, k);
+            self.tail_junk(head, k);
+            v.push(VarDecl { name, ty, range, contract_only, from, span: span_of(&line) });
         }
         v
+    }
+
+    /// `shape order(order) = jsonschema "order.json" "#/$defs/Order"` (§15.125).
+    fn shape_decl(&mut self, line: &[Token]) -> Option<ShapeDecl> {
+        let shape = || {
+            Diag::error("E013", tr!("`shape` の行の形が違います", "The shape of the `shape` line is wrong"))
+                .mark(span_of(line), "")
+                .note(tr!(
+                    "形は `shape <名前>(<別名>) = jsonschema \"<ファイル>\" \"<ポインタ>\"` か `shape <名前>(<別名>) = proto \"<ファイル>\" <メッセージ>` です。",
+                    "The shape is `shape <name>(<alias>) = jsonschema \"<file>\" \"<pointer>\"` or `shape <name>(<alias>) = proto \"<file>\" <Message>`."
+                ))
+        };
+        let Some((name, k)) = self.name_at(line, 1) else {
+            self.err(shape());
+            return None;
+        };
+        if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
+            self.err(shape());
+            return None;
+        }
+        let source = match line.get(k + 1).and_then(|t| t.ident()) {
+            Some(crate::kw::PROTO) => EnumSource::Proto,
+            Some(crate::kw::JSONSCHEMA) => EnumSource::JsonSchema,
+            _ => {
+                self.err(shape());
+                return None;
+            }
+        };
+        let Some(Kind::Str(file)) = line.get(k + 2).map(|t| t.kind.clone()) else {
+            self.err(shape());
+            return None;
+        };
+        let at = match line.get(k + 3).map(|t| t.kind.clone()) {
+            Some(Kind::Str(s)) => s,
+            _ => match line.get(k + 3).and_then(|t| t.ident()).map(|s| s.to_string()) {
+                Some(s) => s,
+                None => {
+                    self.err(shape());
+                    return None;
+                }
+            },
+        };
+        self.tail_junk(line, k + 4);
+        Some(ShapeDecl { name, source, file, at, span: span_of(line) })
+    }
+
+    /// The tail of an input line, from `from` to the end (§15.125).
+    fn projection(&mut self, ts: &[Token]) -> Option<Projection> {
+        let shape = || {
+            Diag::error("E013", tr!("`from` の形が違います", "The shape of `from` is wrong"))
+                .mark(span_of(ts), "")
+                .note(tr!(
+                    "形は `from <形>.<欄>…`、`from any|all <形>.<並び> where <欄> = <値>`、`from count <形>.<並び> [where <欄> = <値>]` です。",
+                    "The shapes are `from <shape>.<field>…`, `from any|all <shape>.<collection> where <field> = <value>`, and `from count <shape>.<collection> [where <field> = <value>]`."
+                ))
+        };
+        let (word, mut k) = match ts.get(1).and_then(|t| t.ident()) {
+            Some(w @ (crate::kw::ANY | crate::kw::ALL | crate::kw::COUNT)) => (Some(w.to_string()), 2),
+            _ => (None, 1),
+        };
+        // The path: a name, then `.name` as far as it goes.
+        let Some(root) = ts.get(k).and_then(|t| t.ident()).map(|w| Name {
+            text: w.to_string(),
+            ascii: None,
+            span: ts[k].span.clone(),
+        }) else {
+            self.err(shape());
+            return None;
+        };
+        k += 1;
+        let mut path = Vec::new();
+        while ts.get(k).is_some_and(|t| t.is(&Kind::Dot)) {
+            let Some(n) = ts.get(k + 1).and_then(|t| t.ident()) else {
+                self.err(shape());
+                return None;
+            };
+            path.push(Name { text: n.to_string(), ascii: None, span: ts[k + 1].span.clone() });
+            k += 2;
+        }
+        if path.is_empty() {
+            self.err(shape());
+            return None;
+        }
+        // `where <field> [=] <test>`
+        let test = if ts.get(k).and_then(|t| t.ident()) == Some(crate::kw::WHERE) {
+            let Some(field) = ts.get(k + 1).and_then(|t| t.ident()).map(|w| Name {
+                text: w.to_string(),
+                ascii: None,
+                span: ts[k + 1].span.clone(),
+            }) else {
+                self.err(shape());
+                return None;
+            };
+            let mut j = k + 2;
+            if ts.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
+                j += 1;
+            }
+            let c = self.cell(&ts[j..])?;
+            Some((field, c))
+        } else {
+            self.tail_junk(ts, k);
+            None
+        };
+        let kind = match (word.as_deref(), test) {
+            (None, None) => ProjKind::Field,
+            (Some(crate::kw::ANY), Some((n, c))) => ProjKind::Any(n, c),
+            (Some(crate::kw::ALL), Some((n, c))) => ProjKind::All(n, c),
+            (Some(crate::kw::COUNT), t) => ProjKind::Count(t),
+            _ => {
+                self.err(shape());
+                return None;
+            }
+        };
+        Some(Projection { root, path, kind, span: span_of(ts) })
     }
 
     fn out_block(&mut self) -> Vec<OutDecl> {

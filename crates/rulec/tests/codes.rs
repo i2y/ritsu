@@ -99,7 +99,7 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     }
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
-    assert_eq!(all.len(), 78, "台帳の件数が変わった: {}", all.len());
+    assert_eq!(all.len(), 81, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {
