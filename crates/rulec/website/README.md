@@ -133,8 +133,10 @@ $ website/tools/make_wasm.sh
 
 `tests/wasm.rs` drives the committed file through node and holds its answers to
 the binary's, byte for byte, in both languages — and holds `rulec_version` to the
-crate's version. A stale `rulec.wasm` is a failing test, not a page that quietly
-answers an old way.
+crate's version. The version is what makes a release with a stale `rulec.wasm` fail.
+Between releases the answers are only compared on the rules the test drives, and a
+change those rules do not reach passes with the old file still in place (DESIGN
+§15.131) — so re-build after the change, not at the release.
 
 ## The social preview
 

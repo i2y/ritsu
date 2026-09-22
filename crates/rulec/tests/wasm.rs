@@ -4,8 +4,10 @@
 //! the site needs no Rust toolchain — which means it can go stale. So it is held the way
 //! every other target is held in this repository: driven over the same inputs and compared
 //! **byte for byte** against the tool itself. `check` in both languages, everything `gen`
-//! writes, and the version string, which is what makes a stale file a failing test rather
-//! than a page quietly answering an old way.
+//! writes, and the version string. The version is what makes a *release* with a stale file
+//! fail; between releases, a change none of the rules below reaches passes with the old file
+//! in place, which is how a whole day of changes to the elimination went unnoticed here
+//! (§15.131). The rules are chosen to reach as much as they can without a file beside them.
 //!
 //! Needs `node` (for `WebAssembly`); skipped where there is none. Re-build the file with
 //! `website/tools/make_wasm.sh`.

@@ -4,8 +4,9 @@
 # It is committed, like the diagrams and the screenshots, so that building the site needs
 # no Rust toolchain — and like them it is a build product, so re-run this after anything
 # that changes what `check`, `gen` or `doc` answer. `tests/wasm.rs` drives the committed
-# file through node and holds its answers to this repository's own, so a stale one is a
-# failing test rather than a page that quietly answers an old way.
+# file through node and holds its answers to this repository's own on the rules it drives,
+# and its version to the crate's — so a release with a stale file fails, and a change those
+# rules do not reach does not (DESIGN §15.131).
 #
 #   $ website/tools/make_wasm.sh
 #
