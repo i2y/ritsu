@@ -92,8 +92,30 @@ pub struct Graph {
 
 /// The graph itself. `json` writes it out; `svg` draws it. Two renderings of one structure,
 /// built once so they cannot be about different things (§15.31).
-pub fn build(f: &RuleFile, c: &Checked) -> Graph {
+pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
     let mut vals: Vec<Val> = Vec::new();
+    // The expression as the author wrote it, taken from the line it is on. A `define` whose
+    // card says only "definition" tells the reader the value exists and nothing about how it
+    // is arrived at — which is the one thing the name does not already say.
+    let lines: Vec<&str> = src.lines().collect();
+    // A value that came in through an `apply` was written in the callee's file, and its
+    // line number indexes that file — reading it here would print whatever happens to be on
+    // that line of this one. The callee's source is not in hand, so such a value keeps the
+    // line it reads instead of an expression.
+    //
+    // A value is written `name = expr`. What an `apply` binds (`手当 -> 非常勤手当`) is not,
+    // and neither is anything whose line is in the other file, so both keep the line they
+    // read rather than an expression read off the wrong place.
+    let by_expr = |kind: &str, name: &Name, line: usize| {
+        let l = lines.get(line.saturating_sub(1)).copied().unwrap_or("");
+        let mine = from_apply(f, &name.text).is_none()
+            && l.split_once('=').is_some_and(|(lhs, _)| lhs.contains(&name.text));
+        let o = Obj::new().str("kind", kind);
+        match mine {
+            true => o.str("expr", &crate::doc::expr_src(&lines, line)).finish(),
+            false => o.finish(),
+        }
+    };
 
     for i in &f.inputs {
         vals.push(val(&i.name, "input"));
@@ -124,13 +146,13 @@ pub fn build(f: &RuleFile, c: &Checked) -> Graph {
             }
             Item::Derived(d) => {
                 let mut v = val(&d.name, "value");
-                v.by.push(Obj::new().str("kind", "derive").finish());
+                v.by.push(by_expr("derive", &d.name, d.name.span.line));
                 v.reads = names(&d.expr);
                 vals.push(v);
             }
             Item::Define(d) => {
                 let mut v = val(&d.name, "value");
-                v.by.push(Obj::new().str("kind", "define").finish());
+                v.by.push(by_expr("define", &d.name, d.name.span.line));
                 v.reads = names(&d.expr);
                 vals.push(v);
             }
@@ -208,7 +230,7 @@ pub fn build(f: &RuleFile, c: &Checked) -> Graph {
     if let Some(r) = &f.result {
         if let Some(o) = f.outputs.iter().find(|o| o.name.text == r.name) {
             let mut v = val(&o.name, "value");
-            v.by.push(Obj::new().str("kind", "result").finish());
+            v.by.push(by_expr("result", &o.name, r.span.line));
             v.reads = names(&r.expr);
             vals.push(v);
         }
@@ -319,8 +341,8 @@ fn json_str(obj: &str, key: &str) -> String {
     rest.find('"').map(|j| rest[..j].to_string()).unwrap_or_default()
 }
 
-pub fn json(f: &RuleFile, c: &Checked, src_hash: &str) -> String {
-    let g = build(f, c);
+pub fn json(f: &RuleFile, c: &Checked, src: &str, src_hash: &str) -> String {
+    let g = build(f, c, src);
     let nodes: Vec<String> = g
         .nodes
         .iter()
@@ -419,8 +441,8 @@ fn kind_line(n: &GNode) -> String {
 /// The card sizes are the browser's business — a table's width is not knowable here — so
 /// this is data and the page lays it out. Without a script the page is the document it
 /// always was; the board is what the script makes of it.
-pub fn data_json(f: &RuleFile, c: &Checked) -> String {
-    let g = build(f, c);
+pub fn data_json(f: &RuleFile, c: &Checked, src: &str) -> String {
+    let g = build(f, c, src);
     let dec: Vec<usize> = (0..g.nodes.len()).filter(|&i| !g.nodes[i].by.is_empty()).collect();
     let is_dec = |name: &str| g.nodes.iter().any(|n| n.name == name && !n.by.is_empty());
 
@@ -467,11 +489,18 @@ pub fn data_json(f: &RuleFile, c: &Checked) -> String {
                 .collect();
             let tables: Vec<String> =
                 n.by.iter().filter(|(k, _)| k == "table" || k == "clause").map(|(_, w)| w.clone()).collect();
+            // The expression, where the value has one. A `define` card that says only
+            // "definition" names the value and says nothing about how it is arrived at,
+            // which is the one thing its name does not already say.
+            let expr = n.by_json.iter().map(|b| json_str(b, "expr")).find(|e| !e.is_empty()).unwrap_or_default();
             let mut o = Obj::new()
                 .str("v", &n.name)
                 .str("by", &kind_line(n))
                 .raw("reads", crate::json::strs(&reads))
                 .raw("tables", crate::json::strs(&tables));
+            if !expr.is_empty() {
+                o = o.str("expr", &expr);
+            }
             if n.output {
                 o = o.bool("out", true);
             }
@@ -545,6 +574,7 @@ body.boarded main { display: none; }
 .gcard .by { font-size: 0.8rem; color: #888; margin: 3px 0 0; }
 .gcard .by .r { color: #c07800; font-weight: 600; }
 .gcard .rd { font-size: 0.8rem; color: #666; margin: 2px 0 0; }
+.gcard .ex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: #333; margin: 6px 0 0; padding: 5px 8px; background: #f6f7f8; border-radius: 5px; }
 .gcard table { margin: 10px 0 0; }
 .gcard th, .gcard td { padding: 3px 8px; white-space: nowrap; }
 .app .side table { width: 100%; }
@@ -589,7 +619,11 @@ pub const APP_JS: &str = r##"
       const by = mk("p", "by"); by.textContent = n.by;
       const r = mk("span", "r"); by.append(r);
       card.append(h, by);
-      if (n.reads.length) { const rd = mk("p", "rd"); rd.textContent = "← " + n.reads.join("　"); card.append(rd); }
+      // What the value is, when it is an expression rather than a table: the line as the
+      // author wrote it. It already names what it reads, so it stands in for the reads line
+      // rather than joining it.
+      if (n.expr) { const ex = mk("p", "ex"); ex.textContent = n.expr; card.append(ex); }
+      else if (n.reads.length) { const rd = mk("p", "rd"); rd.textContent = "← " + n.reads.join("　"); card.append(rd); }
       // The table itself, taken out of the document and put where the picture says it is.
       //
       // It is found through a row, not through a heading: a row carries `data-t` with the

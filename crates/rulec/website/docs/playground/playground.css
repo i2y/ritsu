@@ -101,12 +101,19 @@
   max-width: 44em;
 }
 
-.pg-open {
+/* A link, not a button, so the theme's own anchor colour applies to it — and that colour
+   is the one this sits on. It is said here with the specificity to win, in the same pair
+   the selected tab above uses. */
+.pg a.pg-open,
+.pg a.pg-open:hover {
   display: inline-block;
-  padding: 0.5em 1.1em;
-  border-radius: 0.3em;
-  font-weight: 600;
+  padding: .4rem 1rem;
+  border-radius: .15rem;
+  font-size: .72rem;
+  font-weight: 700;
   text-decoration: none;
-  color: #fff;
-  background: var(--md-primary-fg-color, #3f51b5);
+  background: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
 }
+
+.pg a.pg-open:hover { background: var(--md-accent-fg-color); }

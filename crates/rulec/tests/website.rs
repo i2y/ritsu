@@ -620,6 +620,47 @@ fn playgroundの表は絵の表と同じ() {
     }
 }
 
+/// **Every sample the playground offers is a rule the repository already checks.** The page
+/// carries them as text — it is three files and fetches nothing — so the copy can drift from
+/// the corpus, and a sample that drifted would be a rule nothing runs: the one place on the
+/// site where a reader types into the checker, showing a table no test has seen.
+///
+/// The button that offers a sample lives in the markdown, so it is checked here too: a key
+/// the script does not carry would put a button on the page that empties the box.
+#[test]
+fn playgroundのサンプルはコーパスの規則と一字一句同じ() {
+    const SAMPLES: [(&str, &str); 6] = [
+        ("en:multi", "tests/corpus/parcel_rate.rule"),
+        ("ja:multi", "tests/corpus/送料.rule"),
+        ("en:big", "tests/corpus/Claude利用料.rule"),
+        ("ja:big", "tests/corpus/クーポン割引.rule"),
+        ("en:walk", "tests/corpus/shipment_surcharge.rule"),
+        ("ja:walk", "tests/corpus/買物かごの送料.rule"),
+    ];
+    let js = read("website/docs/playground/playground.js");
+    for (key, rule) in SAMPLES {
+        let open = format!("  \"{key}\": `");
+        let start = js
+            .find(&open)
+            .unwrap_or_else(|| panic!("playground.js に {key} が無い。website/tools/samples.py で作り直してください"))
+            + open.len();
+        let got = &js[start..start + js[start..].find("`,").expect("規則が閉じていない")];
+        assert_eq!(got, read(rule), "playground.js の {key} が {rule} と違う。website/tools/samples.py で作り直してください");
+    }
+    // Both pages offer the same set, and offer nothing the script cannot serve.
+    for page in ["website/docs/playground.md", "website/docs-ja/playground.md"] {
+        let md = read(page);
+        let keys: Vec<&str> = md
+            .match_indices("data-preset=\"")
+            .map(|(i, m)| {
+                let rest = &md[i + m.len()..];
+                &rest[..rest.find('"').expect("data-preset が閉じていない")]
+            })
+            .collect();
+        assert_eq!(keys, ["gap", "full", "multi", "big", "walk"], "{page} の並びが違う");
+    }
+}
+
 /// The count of target languages, written out in words. `tests/docs.rs` holds the *list* to
 /// `src/backend.rs` wherever a document enumerates it, but a sentence that says "seven
 /// languages" names none of them, so nothing caught the home page saying that after the

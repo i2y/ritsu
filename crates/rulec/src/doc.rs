@@ -572,7 +572,7 @@ fn arm_src(lines: &[&str], line: usize) -> String {
 }
 
 /// The right-hand side of `=` on a declaration line, verbatim from the source file.
-fn expr_src(lines: &[&str], line: usize) -> String {
+pub(crate) fn expr_src(lines: &[&str], line: usize) -> String {
     let Some(l) = lines.get(line.saturating_sub(1)) else { return String::new() };
     let (body, _) = split_comment(l);
     let rhs = match body.split_once('=') {
@@ -1912,9 +1912,9 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     o.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
     o.push_str(PAGE_JS);
-    // The board (§15.120). It is built out of the document above, so a reader with no
+    // The board (§15.118). It is built out of the document above, so a reader with no
     // script still has the document — this only rearranges it.
-    o.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c)));
+    o.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c, src)));
     o.push_str(crate::graph::APP_JS);
     // Last, because both ask the board about something only the board knows: where the
     // answer goes, and whether the name in the address is a card of its own.

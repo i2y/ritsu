@@ -1843,7 +1843,7 @@ fn certificate(files: &[&String]) -> ExitCode {
     ExitCode::from(0)
 }
 
-/// **The whole of `check`, not the half `prepare` runs** (§15.119).
+/// **The whole of `check`, not the half `prepare` runs** (§15.120).
 ///
 /// `rulec::prepare` stops where the names and the types do; the region checks of §6 — the
 /// completeness, the overlaps, the rows nothing reaches — come after it. Four commands
@@ -1881,7 +1881,7 @@ fn graph(files: &[&String]) -> ExitCode {
             eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
             return ExitCode::from(1);
         };
-        print!("{}", rulec::graph::json(&f, &c, &rulec::sha256::hex(src.as_bytes())));
+        print!("{}", rulec::graph::json(&f, &c, &src, &rulec::sha256::hex(src.as_bytes())));
     }
     ExitCode::from(0)
 }
@@ -1900,7 +1900,7 @@ fn one(
         // are wanted while it is still being made — `adapter --template` is what produces
         // the extractor a source needs, and a source not yet fetched is exactly why the
         // rule does not pass check yet. Gating them on the proofs would be a loop with no
-        // way in (§15.119).
+        // way in (§15.120).
         let Ok((rf, c)) = rulec::prepare(&src, path) else {
             eprintln!("{}", tr!("error: `{path}` の名前か型が解決しません", "error: a name or a type in `{path}` does not resolve"));
             return ExitCode::from(1);

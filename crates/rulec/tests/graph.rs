@@ -78,6 +78,71 @@ fn 辺は実在する節点をつなぎ_どの値にも出どころがある() {
     }
 }
 
+/// **A value that is an expression says what the expression is.** `define`, `derive` and
+/// `result` decide a value in one line, and without that line the graph — and the card the
+/// page draws from it — says only that the value exists and is not a table, which its name
+/// already said.
+///
+/// The check runs both ways against `doc`, which prints the same expressions in its own
+/// table: every expression the graph carries is one `doc` prints, and every one `doc` prints
+/// is on the node it belongs to. One way alone would pass on a graph that carried none.
+#[test]
+fn 式で決まる値は_その式を持つ() {
+    for rule in corpus() {
+        let g = graph(&rule);
+        let (dc, md) = run(&["doc", &rule, "--lang", "ja"]);
+        assert_eq!(dc, 0, "{rule}");
+        // Only this rule's own section. What follows `## 準用` is the callee's, read out of
+        // the callee's file — which `graph` never opens, so it carries no expression for a
+        // value an `apply` brought in (§15.121).
+        let md = md.split("\n## 準用 ").next().unwrap_or("").to_string();
+        // `| 名前 | 導出 | `式` | …` in the definitions table, and the one line of `## 結果`.
+        let mut want: Vec<(String, String)> = Vec::new();
+        for line in md.lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            if cells.len() >= 5 && (cells[2] == "導出" || cells[2] == "定義") {
+                if let Some(e) = cells[3].strip_prefix('`').and_then(|x| x.strip_suffix('`')) {
+                    want.push((cells[1].to_string(), e.to_string()));
+                }
+            }
+        }
+        if let Some(i) = md.find("\n## 結果\n") {
+            let after = md[i + "\n## 結果\n".len()..].trim_start();
+            if let Some(e) = after.lines().next().and_then(|l| l.strip_prefix('`')).and_then(|l| l.strip_suffix('`')) {
+                // The section does not name the value, and a rule may declare two outputs;
+                // the `result` line says which one it is.
+                let src = std::fs::read_to_string(root().join(&rule)).expect(&rule);
+                let out = src
+                    .lines()
+                    .find_map(|l| l.strip_prefix("result "))
+                    .and_then(|r| r.split('=').next())
+                    .map(|n| n.split('(').next().unwrap_or(n).trim().to_string())
+                    .unwrap_or_default();
+                want.push((out, e.to_string()));
+            }
+        }
+        let got: Vec<(String, String)> = arr(&g, "nodes")
+            .iter()
+            .flat_map(|n| {
+                let name = s(n, "name");
+                match n.get("by") {
+                    Some(rulec::json::Json::Arr(a)) => a.clone(),
+                    _ => Vec::new(),
+                }
+                .into_iter()
+                .filter(|b| !s(b, "expr").is_empty())
+                .map(move |b| (name.clone(), s(&b, "expr")))
+                .collect::<Vec<_>>()
+            })
+            .collect();
+        let mut want_s = want.clone();
+        let mut got_s = got.clone();
+        want_s.sort();
+        got_s.sort();
+        assert_eq!(got_s, want_s, "{rule}: グラフの式と doc の式が違う");
+    }
+}
+
 /// **The graph reaches the answer.** Every value the rule declares as an output has a node,
 /// whatever decided it. A `result` line is the case this was written for: it decides the
 /// output in one line and appears in no `item`, so a graph built by walking the items alone

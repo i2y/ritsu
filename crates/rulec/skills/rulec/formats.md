@@ -417,7 +417,11 @@ clause takes precedence over a table.
 | `output` | present and true where the rule declares the value as an output |
 | `per_element` | present and true where the value is decided once **per element** rather than once per call. A `sum`, a `count` and a `fold` are the three ways out of that frame, and nothing in the rule's text says which side of the line a value is on |
 | `from_apply` | the `apply` a value came in through. Its name is `<apply>:<name>`, and everything under one apply is one subgraph |
-| `by` | how the value is decided, one entry per decider, in the order precedence is declared: `{"kind":"table"\|"clause","name":…,"policy":…,"rows":…,"overrides":[…]}`, `{"kind":"derive"\|"define"}`, `{"kind":"sum"\|"count","over":…,"of":…,"where":…}`, `{"kind":"fold","verdict":…,"over":…}`, `{"kind":"result"}` |
+| `by` | how the value is decided, one entry per decider, in the order precedence is declared: `{"kind":"table"\|"clause","name":…,"policy":…,"rows":…,"overrides":[…]}`, `{"kind":"derive"\|"define","expr":…}`, `{"kind":"sum"\|"count","over":…,"of":…,"where":…}`, `{"kind":"fold","verdict":…,"over":…}`, `{"kind":"result","expr":…}` |
+
+`expr` is the line as the author wrote it, with the declared range and the citation taken
+off — it is what `doc` prints in the expression column, from the same place. A value decided
+by a table has no `expr`: the table is the expression.
 
 An edge is `{"from":…,"to":…,"kind":…}` with `via` naming the decider that reads it, where
 one is named. `kind` is `reads`, or `walk` for the edge that crosses the element frame —

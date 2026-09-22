@@ -40,6 +40,7 @@ fn rulec(args: &[&str]) -> String {
 const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/品番の扱い.rule", "sku_handling"),
     ("tests/corpus/買物かごの送料.rule", "cart_shipping"),
+    ("tests/corpus/shipment_surcharge.rule", "shipment_surcharge"),
     ("tests/corpus/比例配分.rule", "pro_rata"),
     ("tests/corpus/ゆうパック運賃.rule", "yupack_fee"),
     ("tests/corpus/クーポン割引.rule", "coupon_discount"),

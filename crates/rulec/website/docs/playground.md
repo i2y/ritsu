@@ -9,6 +9,9 @@ form is safe to paste here.
   <div class="pg-bar">
     <button data-preset="gap" type="button">the table with a row missing</button>
     <button data-preset="full" type="button">the whole table</button>
+    <button data-preset="multi" type="button">tables in stages</button>
+    <button data-preset="big" type="button">a bigger rule</button>
+    <button data-preset="walk" type="button">walking a list</button>
     <select class="pg-picker" hidden></select>
     <span class="pg-status"></span>
   </div>
@@ -46,6 +49,13 @@ input falls through, and gives the shape of the row that closes it.
 5. **Break something on purpose.** Change `<=2kg` to `<=6kg` and watch the overlap come
    back with the input that matches both rows; take the `round up(1USD)` off the output and
    read what the rounding diagnostic asks.
+6. **Open one of the other samples.** Three rules that do not end at one table.
+   ***tables in stages*** has a table read what an earlier one decided, with a `define` and
+   a `result` along the way. ***a bigger rule*** has two lines out of the same inputs meet
+   again further down — open the approver's page on it and that shape is the page.
+   ***walking a list*** takes a sequence whose length the caller decides, with `elements`
+   and `sum`, so the form grows an *add a row* button. All three are
+   [corpus rules](examples.md), run in every language on every commit.
 
 ## What is not here
 

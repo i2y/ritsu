@@ -29,6 +29,7 @@ const CORPUS: &[&str] = &[
     "tests/corpus/二つの区分.rule",
     "tests/corpus/品番の扱い.rule",
     "tests/corpus/買物かごの送料.rule",
+    "tests/corpus/shipment_surcharge.rule",
     "tests/corpus/比例配分.rule",
     "tests/corpus/ゆうパック運賃.rule",
     "tests/corpus/Claude利用料.rule",

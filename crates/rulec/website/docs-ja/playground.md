@@ -6,6 +6,9 @@
   <div class="pg-bar">
     <button data-preset="gap" type="button">一行足りない表</button>
     <button data-preset="full" type="button">そろった表</button>
+    <button data-preset="multi" type="button">表をつなぐ</button>
+    <button data-preset="big" type="button">大きい規則</button>
+    <button data-preset="walk" type="button">並びを歩く</button>
     <select class="pg-picker" hidden></select>
     <span class="pg-status"></span>
   </div>
@@ -29,6 +32,7 @@
 3. **「生成コード」を開く。** `rulec gen` がこの表に対して書くもの全部です。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy と、それぞれのランナー、規則を MCP ツールにするサーバ、そして表の境界から作ったテストベクタ。
 4. **「承認者向けの資料」を開く。** `rulec doc --format html` が、表に判子を押す人のために用意するページです。ウィンドウいっぱいを使うページなので、この中ではなく**別のタブで**開きます。あらかじめ用意した答えを見せているのではありません。**生成した JavaScript がその場で動いている**ので、打ち込んだケースは同じコードが決めています。
 5. **わざと壊す。** `<=2kg` を `<=6kg` に変えると、両方の行に当てはまる入力つきで重なりが返ります。出力から `round up(10円)` を消すと、丸めの診断が何を訊いてくるか読めます。
+6. **他のサンプルを開く。** 一枚の表で終わらない規則が三つあります。**「表をつなぐ」**は、表が決めた値を次の表が読む形（`define` と `result` も入ります）。**「大きい規則」**は、同じ入力から出た二本の筋が下でまた合流する形で、承認者向けのページを開くと、その形がそのまま並びます。**「並びを歩く」**は、件数が呼び出しのたびに変わる明細を `elements` で受けて `sum` で畳む形——入力欄が「行を足す」になります。どれも[コーパスの規則そのもの](examples.md)で、毎コミット全言語で走っているものです。
 
 ## ここに無いもの
 

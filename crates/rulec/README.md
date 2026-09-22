@@ -261,7 +261,7 @@ src/              43 modules, and 6 more under codegen/: kw, i18n, lex, parse, t
                   and the same query as a function), sources (a law on e-Gov, cited and
                   pinned), apply (a rule applied to another case), vfs (reading at a git
                   revision), sha256, wasm (the checker as the site's playground)
-tests/corpus/     44 rules, and the copies of the documents they cite
+tests/corpus/     45 rules, and the copies of the documents they cite
 tests/mutants/    86 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 38 in Japanese, 36 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
@@ -274,7 +274,7 @@ tests/            and the properties: threeway (every language agrees), readme, 
                   playground answers what the binary answers)
 ```
 
-44 rules — 36 taken from real published terms, 8 written to reach the rest of the language — are checked, generated and run on every commit, and all 77 diagnostics are implemented.
+45 rules — 36 taken from real published terms, 9 written to reach the rest of the language — are checked, generated and run on every commit, and all 77 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

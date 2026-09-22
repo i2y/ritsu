@@ -385,6 +385,25 @@ impl<'a> Gen<'a> {
         self.c.ty_of(n).unwrap_or(Ty::Unknown)
     }
 
+    /// Every name whose type needs a brand in the generated code: the inputs, the fields of
+    /// one element, and the outputs.
+    ///
+    /// A field of `elements` is as much a value the caller hands over as an input is, and it
+    /// is written into a struct of its own — so a brand it does not get is a type the
+    /// generated code *names* and never defines. Nothing caught this because every rule that
+    /// walks a sequence was written in Japanese and its element fields were all `money`,
+    /// whose brand the outputs already pulled in (§15.9: a shape reached in one language is
+    /// a shape checked in one language).
+    fn branded(&self) -> Vec<&String> {
+        self.f
+            .inputs
+            .iter()
+            .map(|i| &i.name.text)
+            .chain(self.f.elements.iter().flat_map(|e| e.fields.iter().map(|fd| &fd.name.text)))
+            .chain(self.f.outputs.iter().map(|o| &o.name.text))
+            .collect()
+    }
+
     /// The identifier a declared name gets in the generated code. §1.3: the public face
     /// always uses its ASCII alias, and an internal name uses one when the author wrote it
     /// and the name itself when they did not. Every lookup in this file keys on the declared
@@ -864,7 +883,7 @@ impl<'a> Gen<'a> {
 
         // Brands. They work with mypy and pyright and cost nothing at runtime.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+        for v in self.branded() {
             let ty = self.ty_of(v);
             // A number gets no brand: it is a plain integer on purpose, and branding it
             // would shadow the language's own `int`.
@@ -1843,7 +1862,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\npackage {pkg}\n\n{IMPORT_MARK}"));
 
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+        for v in self.branded() {
             let ty = self.ty_of(v);
             // A number gets no brand: it is a plain integer on purpose, and branding it
             // would shadow the language's own `int`.
@@ -3223,7 +3242,7 @@ impl<'a> Gen<'a> {
         // Brands. A branded bigint is still a bigint at runtime; the brand exists only for
         // the type checker, exactly as `NewType` does on the Python side.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+        for v in self.branded() {
             let ty = self.ty_of(v);
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
@@ -4085,7 +4104,7 @@ impl<'a> Gen<'a> {
 
         // Brands: a newtype over i64, which is what the overflow proof is stated in.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+        for v in self.branded() {
             let ty = self.ty_of(v);
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
@@ -7711,7 +7730,7 @@ impl<'a> Gen<'a> {
         // Brands. A struct with one stored property is laid out as that property, so the
         // type costs nothing at run time — the same bargain the Rust backend makes.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.f.inputs.iter().map(|i| &i.name.text).chain(self.f.outputs.iter().map(|o| &o.name.text)) {
+        for v in self.branded() {
             let ty = self.ty_of(v);
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
