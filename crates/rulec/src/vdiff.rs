@@ -1220,6 +1220,34 @@ fn same_machinery(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> bool {
 /// writes into each, keyed by the name a trace calls the row.
 type RowMap = HashMap<(String, usize), (Vec<String>, Vec<String>)>;
 
+/// One cell as what it tests, not as how it is spelled. A set and a conjunction of
+/// comparisons are unordered, so they are sorted: swapping `>=1kg <=5kg` for `<=5kg >=1kg`
+/// tests the same thing.
+fn cell_key(cell: &Cell) -> String {
+    let many = |ls: &[Lit], tag: &str| {
+        let mut v: Vec<String> = ls.iter().map(lit_key).collect();
+        v.sort();
+        format!("{tag}:{}", v.join("|"))
+    };
+    match cell {
+        Cell::DontCare => "-".into(),
+        Cell::Nothing => "none".into(),
+        Cell::Lit(l) => format!("={}", lit_key(l)),
+        Cell::Set(ls) => many(ls, "in"),
+        Cell::Not(ls) => many(ls, "not"),
+        Cell::Prefix(ps) => {
+            let mut v = ps.to_vec();
+            v.sort();
+            format!("pre:{}", v.join("|"))
+        }
+        Cell::Cmp(cs) => {
+            let mut v: Vec<String> = cs.iter().map(|(op, l)| format!("{}{}", op.word(), lit_key(l))).collect();
+            v.sort();
+            format!("cmp:{}", v.join("|"))
+        }
+    }
+}
+
 fn row_map(c: &Checked) -> RowMap {
     let mut m = HashMap::new();
     for set in &c.sets {
@@ -1233,10 +1261,46 @@ fn row_map(c: &Checked) -> RowMap {
                     OutCell::Lit(l) => lit_key(l),
                 })
                 .collect();
-            m.insert((set.row_table(i).to_string(), r.index), (cols.clone(), outs));
+            // **What the row tests, not only what it answers.** Moving a threshold leaves
+            // every output cell where it was, so a fingerprint made of answers alone says
+            // "nothing changed" about a rule that now charges a different amount.
+            let mut tests: Vec<String> = set
+                .table
+                .inputs
+                .iter()
+                .enumerate()
+                .map(|(ci, (col, _))| format!("{col}{}", r.cells.get(ci).map(cell_key).unwrap_or_default()))
+                .collect();
+            tests.push(format!("policy:{}", if matches!(set.policy_of(i), Policy::TopDown) { "first" } else { "unique" }));
+            let mut beats: Vec<String> = set.beats[i].iter().map(|b| b.to_string()).collect();
+            beats.sort();
+            tests.push(format!("beats:{}", beats.join(",")));
+            m.insert((set.row_table(i).to_string(), r.index), (cols.clone(), [outs, tests].concat()));
         }
     }
     m
+}
+
+/// Everything outside the rows that decides an answer: which values a group stands for, and
+/// which combinations the caller promises never to send. Neither is written in a row, and
+/// both change what the rows mean.
+fn around_rows(f: &RuleFile, c: &Checked) -> Vec<String> {
+    let mut out: Vec<String> = c
+        .groups
+        .iter()
+        .map(|(g, (en, ms))| {
+            let mut v = ms.clone();
+            v.sort();
+            format!("group {g}:{en}={}", v.join("|"))
+        })
+        .collect();
+    out.extend(
+        f.constraints
+            .iter()
+            .map(|k| format!("constraint {} {} {}", k.left, k.op.word(), k.right)),
+    );
+    out.sort();
+    out
 }
 
 /// Whether the two versions ran the identical computation here: the same rows, writing the
@@ -1445,7 +1509,7 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
     // depends on the whole sequence, and a region over the summaries would not say what it
     // sounds like it says. What can be settled is whether anything inside the walk changed.
     if o.0.fold.is_some() || n.0.fold.is_some() {
-        if same_machinery(o, n) && row_map(o.1) == row_map(n.1) && fold_same(o.0, n.0) {
+        if decides_alike(o, n) {
             out.same = 1;
             out.cells = 1;
             out.feasible = 1;
@@ -1463,7 +1527,7 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
     // every input there is, and walking the space would only spend time confirming it.
     // This is the same argument `identical_run` makes about one cell, made about all of
     // them at once, and it is what keeps `--diff-base`-shaped use cheap.
-    if same_machinery(o, n) && row_map(o.1) == row_map(n.1) && fold_same(o.0, n.0) && out.domain.is_empty() {
+    if decides_alike(o, n) && out.domain.is_empty() {
         out.cells = 1;
         out.feasible = 1;
         out.same = 1;
@@ -1676,6 +1740,20 @@ fn same_arm(a: &Arm, b: &Arm) -> bool {
         (Arm::KeepMax { expr: p, key: k1 }, Arm::KeepMax { expr: q, key: k2 }) => same_expr(p, q) && same_expr(k1, k2),
         _ => false,
     }
+}
+
+/// Whether **nothing that decides an answer** differs: the rows (what each tests and what
+/// it answers, in what order and under which policy), the expressions and rounding above
+/// them, the walk, the groups and the constraints. Then the two versions are the same
+/// function on every input, and the space need not be walked at all.
+///
+/// Getting this list wrong is the one way this command can lie outright, so it is written
+/// as one place rather than spelled out at each call.
+fn decides_alike(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> bool {
+    same_machinery(o, n)
+        && fold_same(o.0, n.0)
+        && row_map(o.1) == row_map(n.1)
+        && around_rows(o.0, o.1) == around_rows(n.0, n.1)
 }
 
 /// Whether the two walks reduce the same way.

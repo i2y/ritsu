@@ -433,3 +433,84 @@ fn 意味の無い旗は断り_意味のある旗は効く() {
     let (_, md_full) = rulec(&["diff", &as_, &bs, "--format", "markdown"]);
     assert!(md_full.contains("会員=一般"), "markdown に入力例が無い:\n{md_full}");
 }
+
+/// The short cut — "nothing that decides an answer changed, so do not walk" — is the one
+/// place this command can lie outright, and it did: its first version fingerprinted a row
+/// by what it **answers**, so moving a threshold left every output cell where it was and
+/// the command said "every input gets the same answer" about a rule that now charges a
+/// different amount. Each thing that decides an answer without being written in an output
+/// cell gets a case here.
+#[test]
+fn 答えを決めるものを変えたら_短絡してはいけない() {
+    let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
+    let dir = std::env::temp_dir().join("rulec-vdiff-decides");
+    let _ = std::fs::create_dir_all(&dir);
+    let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
+    std::fs::write(&a, &src).unwrap();
+    let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
+
+    for (what, from, to, expect) in [
+        // 行の条件。出力セルは一つも動かない。
+        (
+            "閾値",
+            vec![
+                ("| 遠隔地      | <=2000g | 1200円", "| 遠隔地      | <=1500g | 1200円"),
+                ("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >1500g  | 1800円"),
+            ],
+            "重量 >=1501g <=2000g",
+            "届け先 = 遠隔地",
+        ),
+        // 群。行にも出力にも現れないのに、行が何に当たるかを変える。
+        (
+            "群",
+            vec![("group 遠隔地(remote) = 北海道, 沖縄県", "group 遠隔地(remote) = 北海道, 沖縄県, 青森県")],
+            "青森県",
+            "送料",
+        ),
+    ] {
+        let mut mutated = src.clone();
+        for (f, t) in &from {
+            assert!(mutated.contains(f), "{what}: 狙った行が見つからない: {f}");
+            mutated = mutated.replace(f, t);
+        }
+        std::fs::write(&b, &mutated).unwrap();
+        assert_eq!(rulec(&["check", &bs]).0, 0, "{what}: 変えた版が check を通らない");
+
+        let (code, out) = rulec(&["diff", &as_, &bs, "--format", "json"]);
+        let j = json(&out);
+        assert!(int(&j, "cells") > 1, "{what} を変えたのに短絡した\n{out}");
+        assert_eq!(code, 1, "{what} を変えたのに影響なしと言っている\n{out}");
+        assert!(int(&j, "differing") > 0, "{what} を変えたのに差が出ていない\n{out}");
+        let texts: Vec<&str> =
+            arr(&j, "changes").iter().filter_map(|c| c.get("text").and_then(|x| x.as_str())).collect();
+        assert!(texts.iter().any(|t| t.contains(to)), "{what}: 領域に {to} が無い: {texts:?}");
+        assert!(
+            texts.iter().any(|t| t.contains(expect)) || out.contains(expect),
+            "{what}: 領域に {expect} が無い: {texts:?}"
+        );
+    }
+}
+
+/// A rule that only looks different — the same tests written in another order — is the same
+/// rule, and the short cut is allowed to say so without walking anything.
+#[test]
+fn 書き方だけ変えたら_短絡してよい() {
+    let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
+    let dir = std::env::temp_dir().join("rulec-vdiff-same");
+    let _ = std::fs::create_dir_all(&dir);
+    let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
+    std::fs::write(&a, &src).unwrap();
+    let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
+    // 群の中身の順だけ入れ替える。集合としては同じもの。
+    let mutated = src.replace("group 遠隔地(remote) = 北海道, 沖縄県", "group 遠隔地(remote) = 沖縄県, 北海道");
+    assert_ne!(mutated, src);
+    std::fs::write(&b, &mutated).unwrap();
+    if rulec(&["check", &bs]).0 != 0 {
+        return;
+    }
+    let (code, out) = rulec(&["diff", &as_, &bs, "--format", "json"]);
+    let j = json(&out);
+    assert_eq!(int(&j, "cells"), 1, "順を入れ替えただけで空を当たっている\n{out}");
+    assert_eq!(code, 0);
+    assert!(is_true(&j, "total"));
+}
