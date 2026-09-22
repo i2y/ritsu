@@ -617,6 +617,159 @@ fn narrow_by_siblings(
     }
 }
 
+/// A span of one input column: an interval where the column is a number, the values it is
+/// allowed to take where it is not.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CertSpan {
+    Num(Option<Rat>, Option<Rat>),
+    Words(Vec<String>),
+}
+
+impl CertSpan {
+    /// Whether two spans of the same column have anything in common.
+    fn meets(&self, other: &CertSpan) -> bool {
+        match (self, other) {
+            (CertSpan::Num(a, b), CertSpan::Num(c, d)) => ivals_meet((*a, *b), (*c, *d)),
+            (CertSpan::Words(a), CertSpan::Words(b)) => a.iter().any(|x| b.contains(x)),
+            // Two spans of one column are read off two axes for that column, so they are
+            // the same kind. A mix means the certificate is about to say something it
+            // cannot support, and saying nothing is the safe half.
+            _ => true,
+        }
+    }
+}
+
+/// Why a box no row takes is a box no input reaches: one input column, and two spans of it
+/// that do not meet.
+///
+/// Each span comes with what forces it. A span named by a column above says "while that
+/// column holds that value, this input lies in here", and a re-checker earns it back from
+/// that column's own table: the rows of it that write the value, and the boxes those rows
+/// take. A span with no column is what the box itself already fixes the input to. Two
+/// spans, one intersection, and the leaf is settled the way every other leaf is — by
+/// redoing it, not by believing it (§15.115).
+/// A fact a table gets from the ones above it, written on its own axes so that what rests
+/// on it is a coordinate test and nothing more (§15.115).
+#[derive(Debug, Clone)]
+pub enum AboveFact {
+    /// No row of the table that decides this axis's column writes this coordinate's value.
+    Never { axis: usize, coord: usize },
+    /// These two coordinates cannot stand together: on the input they share, the spans the
+    /// tables above leave them do not meet.
+    Apart {
+        a: (usize, usize),
+        b: (usize, usize),
+        input: String,
+        spans: (CertSpan, CertSpan),
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum Apart {
+    /// No row of the table that decides this column writes this value at all. The smallest
+    /// reason there is, and a re-checker settles it by reading that table's rows.
+    Never { column: String, value: String },
+    /// One input column, and two spans of it that do not meet.
+    Spans {
+        input: String,
+        /// The two spans, as `(the column above that forces it, the value it holds, the
+        /// span)`. `None` in the first field is the box's own coordinate on that column.
+        spans: Vec<(Option<String>, Option<String>, CertSpan)>,
+    },
+}
+
+/// The span an upstream column's value puts one of that table's own input columns into.
+///
+/// The union of the boxes of the rows that write the value, read on the axis for `col`.
+/// A row's box contains the region where it actually fires, and the per-axis union contains
+/// the union of the boxes, so what comes back is a **superset** of the inputs on which the
+/// column really holds the value — which is the direction that keeps "these two do not
+/// meet" honest. `None` where a row's output cannot be read as a value, or where the axis
+/// is one no span can be written for.
+fn span_of_value(up: &Upstream, c: &Checked, val: &str, col: &str) -> Option<CertSpan> {
+    let ai = up.reg.col_names.iter().position(|n| n == col)?;
+    let mut picked: Vec<usize> = Vec::new();
+    for ri in 0..up.table.rows.len() {
+        let w = match up.table.rows[ri].outs.get(up.oi) {
+            Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !c.syms.contains_key(w) => w.clone(),
+            _ => return None,
+        };
+        if w == val {
+            picked.push(ri);
+        }
+    }
+    if picked.is_empty() {
+        return None;
+    }
+    // A coordinate is in the span when some row that writes the value can still fire
+    // somewhere above it. Under `first` a row's box is not where it fires: an earlier row
+    // may take all of it, and the catch-all at the bottom of a table has the whole axis for
+    // a box while firing only on what is left. The reading is the sieve's (§15.30): a row
+    // counts as blocked only when a **single** earlier row takes the whole of its box at
+    // this coordinate, which is loose in the safe direction — what drops out is only what
+    // certainly cannot fire.
+    let live = |x: usize| {
+        picked.iter().any(|&ri| {
+            if !up.reg.masks[ri][ai][x] {
+                return false;
+            }
+            if up.table.policy != Policy::TopDown {
+                return true;
+            }
+            !(0..ri).any(|e| {
+                (0..up.reg.axes.len()).all(|a| {
+                    (0..up.reg.axes[a].len()).all(|y| {
+                        let inside =
+                            up.reg.masks[ri][a][y] && (a != ai || y == x);
+                        !inside || up.reg.masks[e][a][y]
+                    })
+                })
+            })
+        })
+    };
+    match &up.reg.axes[ai] {
+        Axis::Num { .. } => {
+            let (mut lo, mut hi): (Option<Rat>, Option<Rat>) = (None, None);
+            let (mut any, mut open_lo, mut open_hi) = (false, false, false);
+            for x in 0..up.reg.axes[ai].len() {
+                if !live(x) {
+                    continue;
+                }
+                let (a, b) = up.reg.coord_closed(ai, x)?;
+                any = true;
+                match (a, lo) {
+                    (None, _) => open_lo = true,
+                    (Some(v), Some(l)) if v.cmp_to(l) == std::cmp::Ordering::Less => lo = Some(v),
+                    (Some(v), None) => lo = Some(v),
+                    _ => {}
+                }
+                match (b, hi) {
+                    (None, _) => open_hi = true,
+                    (Some(v), Some(h)) if v.cmp_to(h) == std::cmp::Ordering::Greater => hi = Some(v),
+                    (Some(v), None) => hi = Some(v),
+                    _ => {}
+                }
+            }
+            if !any {
+                return None;
+            }
+            Some(CertSpan::Num(if open_lo { None } else { lo }, if open_hi { None } else { hi }))
+        }
+        Axis::Enum { values } => Some(CertSpan::Words(
+            values.iter().enumerate().filter(|(x, _)| live(*x)).map(|(_, v)| v.clone()).collect(),
+        )),
+        Axis::Bool => Some(CertSpan::Words(
+            (0..2)
+                .filter(|&x| live(x))
+                .map(|x| if x == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() })
+                .collect(),
+        )),
+        // A prefix axis cuts the strings by the patterns one table happens to name, and two
+        // tables need not name the same ones. No span is written rather than a wrong one.
+        Axis::Prefix { .. } => None,
+    }
+}
+
 /// Which coordinates of an axis a cell selects.
 ///
 /// Pulled out of the region build so the same reading can be applied to a cell from **another**
@@ -2157,6 +2310,143 @@ impl TableRegion {
         })
     }
 
+    /// The evidence behind an upstream leaf, where it can be written small (§15.115).
+    ///
+    /// Two spans of one input column that do not meet. One always comes from a column above;
+    /// the other comes from a second column above, or from what this box already fixes that
+    /// input to. `None` when no such pair settles it — the leaf then goes out bare and is
+    /// counted among the things the certificate states rather than proves.
+    fn apart_at(&self, path: &[usize], ups: &[Upstream], c: &Checked) -> Option<Apart> {
+        let held: Vec<(&Upstream, String)> = ups
+            .iter()
+            .filter_map(|up| {
+                let ai = self.col_names.iter().position(|x| *x == up.name)?;
+                let &ci = path.get(ai)?;
+                let v = match &self.axes[ai] {
+                    Axis::Enum { values } => values.get(ci)?.clone(),
+                    Axis::Bool => {
+                        if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() }
+                    }
+                    _ => return None,
+                };
+                Some((up, v))
+            })
+            .collect();
+        // The smallest reason first: the table that decides the column never writes the
+        // value, whatever the rest of the box says.
+        for (up, v) in &held {
+            if !up.table.rows.iter().any(|r| {
+                matches!(r.outs.get(up.oi),
+                    Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !c.syms.contains_key(w) && w == v)
+            }) && up.table.rows.iter().all(|r| {
+                matches!(r.outs.get(up.oi),
+                    Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !c.syms.contains_key(w))
+            }) {
+                return Some(Apart::Never { column: up.name.clone(), value: v.clone() });
+            }
+        }
+        for (i, (up, v)) in held.iter().enumerate() {
+            for col in &up.reg.col_names {
+                let Some(mine) = span_of_value(up, c, v, col) else { continue };
+                for (up2, v2) in held.iter().skip(i + 1) {
+                    let Some(theirs) = span_of_value(up2, c, v2, col) else { continue };
+                    if !mine.meets(&theirs) {
+                        return Some(Apart::Spans {
+                            input: col.clone(),
+                            spans: vec![
+                                (Some(up.name.clone()), Some(v.clone()), mine),
+                                (Some(up2.name.clone()), Some(v2.clone()), theirs),
+                            ],
+                        });
+                    }
+                }
+                if let Some(here) = self.span_here(col, path) {
+                    if !mine.meets(&here) {
+                        return Some(Apart::Spans {
+                            input: col.clone(),
+                            spans: vec![(Some(up.name.clone()), Some(v.clone()), mine), (None, None, here)],
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Every fact the leaves of a cover rest on, written on this table's own axes and
+    /// listed once. What the leaf itself then needs is a coordinate test.
+    fn gather_above(&self, cv: &Cover, out: &mut Vec<AboveFact>) {
+        let idx = |col: &str, val: &str| -> Option<(usize, usize)> {
+            let ai = self.col_names.iter().position(|n| n == col)?;
+            let ci = match &self.axes[ai] {
+                Axis::Enum { values } => values.iter().position(|v| v == val)?,
+                Axis::Bool => {
+                    if val == crate::kw::TRUE { 0 } else if val == crate::kw::FALSE { 1 } else { return None }
+                }
+                _ => return None,
+            };
+            Some((ai, ci))
+        };
+        match cv {
+            Cover::Split(kids) => kids.iter().for_each(|k| self.gather_above(k, out)),
+            Cover::ByUpstream(_, Some(Apart::Never { column, value })) => {
+                if let Some((axis, coord)) = idx(column, value) {
+                    if !out.iter().any(|f| matches!(f, AboveFact::Never { axis: x, coord: y } if *x == axis && *y == coord)) {
+                        out.push(AboveFact::Never { axis, coord });
+                    }
+                }
+            }
+            Cover::ByUpstream(what, Some(Apart::Spans { input, spans })) => {
+                // A span with no column of its own is the box's own coordinate on the
+                // shared input, and the leaf's own text names which one it is.
+                let pin = |col: &Option<String>, val: &Option<String>| -> Option<(usize, usize)> {
+                    match (col, val) {
+                        (Some(c), Some(v)) => idx(c, v),
+                        _ => {
+                            let ai = self.col_names.iter().position(|n| n == input)?;
+                            let ci = what
+                                .split(", ")
+                                .find_map(|part| part.strip_prefix(&format!("{input} = ")))
+                                .and_then(|v| match &self.axes[ai] {
+                                    Axis::Enum { values } => values.iter().position(|x| x == v),
+                                    _ => None,
+                                })?;
+                            Some((ai, ci))
+                        }
+                    }
+                };
+                if let (Some(a), Some(b)) = (pin(&spans[0].0, &spans[0].1), pin(&spans[1].0, &spans[1].1)) {
+                    let f = AboveFact::Apart {
+                        a,
+                        b,
+                        input: input.clone(),
+                        spans: (spans[0].2.clone(), spans[1].2.clone()),
+                    };
+                    if !out.iter().any(|g| matches!((g, &f), (AboveFact::Apart { a: x, b: y, .. }, AboveFact::Apart { a: p, b: q, .. }) if x == p && y == q)) {
+                        out.push(f);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The span this box puts one of its **own** columns into.
+    fn span_here(&self, col: &str, path: &[usize]) -> Option<CertSpan> {
+        let ai = self.col_names.iter().position(|n| n == col)?;
+        let &ci = path.get(ai)?;
+        match &self.axes[ai] {
+            Axis::Num { .. } => self.coord_closed(ai, ci).map(|(a, b)| CertSpan::Num(a, b)),
+            Axis::Enum { values } => values.get(ci).map(|v| CertSpan::Words(vec![v.clone()])),
+            Axis::Bool => Some(CertSpan::Words(vec![if ci == 0 {
+                crate::kw::TRUE.to_string()
+            } else {
+                crate::kw::FALSE.to_string()
+            }])),
+            Axis::Prefix { .. } => None,
+        }
+    }
+
     /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
     /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
     /// more constrained derived values share an input, their dependency cannot be examined.
@@ -2417,6 +2707,12 @@ pub struct CertRow {
     /// merged member table does not have (§15.31). The certificate says so rather than
     /// quoting the wrong text.
     pub spans: Vec<Option<(usize, usize, usize)>>,
+    /// The value this row writes into each of the table's own output columns, in the order
+    /// `CertTable::decides` names them, and `None` where the cell is not a plain value word
+    /// — an amount, an expression, a name that stands for something else. A table below
+    /// reads these to learn which rows of this one can put a column at a value, which is
+    /// what turns an upstream leaf from a claim into a check (§15.115).
+    pub produces: Vec<Option<String>>,
     /// The member table the row was written in. Rows that share one were written in one
     /// table, so they have a cell in the same columns and in no others.
     pub origin: String,
@@ -2446,6 +2742,10 @@ pub struct CertTable {
     /// cells the certificate names have to be **every** field before them (§15.99).
     pub outputs: usize,
     pub axes: Vec<CertAxis>,
+    /// The columns this table writes, in the order `CertRow::produces` lists their values.
+    /// A table below names one of these as an axis of kind `upstream`, and that is the link
+    /// a re-checker follows to find the rows that can put it at a value (§15.115).
+    pub decides: Vec<String>,
     pub rows: Vec<CertRow>,
     /// `unique` only: for each pair of rows, an axis on which their coordinates do not meet.
     /// Checking one entry is one set intersection; a pair that is missing from this list and
@@ -2473,6 +2773,10 @@ pub struct CertTable {
     pub cover: Option<Cover>,
     /// The `constraint` lines a cover leaf can point at.
     pub constraints: Vec<(String, &'static str, String)>,
+    /// What the tables above rule out, written on this table's own axes. A leaf that rests
+    /// on them is settled by a coordinate test; the facts themselves are earned back from
+    /// the rows of the tables that decide the columns (§15.115).
+    pub above: Vec<AboveFact>,
 }
 
 /// The certificate of one definition set (§15.96), or nothing when the set has no region to
@@ -2583,6 +2887,14 @@ impl TableRegion {
                 accepts: (0..self.axes.len())
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
                     .collect(),
+                produces: (0..t.outputs.len())
+                    .map(|oi| match row.outs.get(oi) {
+                        Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !chk.syms.contains_key(w) => {
+                            Some(w.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect(),
                 origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
                 line: if applied.get(ri).copied().unwrap_or(false) { 0 } else { row.span.line },
                 spans: if applied.get(ri).copied().unwrap_or(false) {
@@ -2648,12 +2960,20 @@ impl TableRegion {
             policy: if unique { "unique" } else { "first" },
             outputs: t.outputs.len(),
             axes,
+            decides: t.outputs.iter().map(|o| o.name.text.clone()).collect(),
             rows,
             disjoint,
             undecided,
             reach,
             unused,
             unreachable,
+            above: {
+                let mut v = Vec::new();
+                if let Some(cv) = cover.as_ref() {
+                    self.gather_above(cv, &mut v);
+                }
+                v
+            },
             cover,
             constraints: self.constraint_list(),
         }
@@ -2718,9 +3038,11 @@ pub enum Cover {
     /// Every point of the box was asked about one at a time, and the sieve ruled each one
     /// out. The re-checker redoes exactly that (§15.98).
     ByPoints,
-    /// The upstream table cannot produce this value. **Stated, not proved**: re-checking it
-    /// needs the upstream table's own region, which this certificate does not carry.
-    ByUpstream(String),
+    /// The tables above cannot produce this combination. When the reason can be written
+    /// small — two spans on one input that do not meet — it comes with it and is re-checked
+    /// like any other leaf; otherwise the leaf is bare and is **stated, not proved**
+    /// (§15.115).
+    ByUpstream(String, Option<Apart>),
 }
 
 impl TableRegion {
@@ -2762,7 +3084,7 @@ impl TableRegion {
                 }
             }
             if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
-                return Some(Cover::ByUpstream(self.witness_text(path)));
+                return Some(Cover::ByUpstream(self.witness_text(path), self.apart_at(path, ups, chk)));
             }
             // Point by point, then: the box is only impossible when every point in it is.
             if self.first_reachable(path, ups, chk, budget).is_none() {

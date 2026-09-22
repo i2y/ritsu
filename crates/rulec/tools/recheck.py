@@ -39,9 +39,13 @@ the certificate names and held beside the parsed form it states. A literal is tu
 a number by looking it up among the axis's own boundary coordinates, so no unit table is
 needed here; a literal that is not one of them is counted and reported rather than passed.
 
-What it does **not** check: a leaf that rests on an upstream table (re-checking one needs
-that table's own region, and the summary says how many there were), and the pairs W114
-left undecided, which are listed rather than proved.
+A leaf that rests on the tables above is re-checked too, and only with what the certificate
+carries: the columns each table decides, the value each of its rows writes, and the boxes
+those rows take are all here, so the span a value puts an input into is recomputed rather
+than believed. Such a leaf has to come with its reason or it is refused.
+
+What it does **not** check: the pairs the axes do not part, which are listed rather than
+proved.
 
 Exit code 0 when every table holds, 1 when one does not, 2 on a certificate it cannot
 read. No dependencies; Python 3.9 or later.
@@ -357,6 +361,248 @@ def derived_rules_out(t, ai, path):
     return (hi is not None and hi < reach[0]) or (lo is not None and lo > reach[1])
 
 
+def closed_at(u, ai, x):
+    """A coordinate as a **closed** interval of true values.
+
+    `bounds` gives a coordinate's ends as they are written, and an interval coordinate does
+    not contain them: the values sit on the axis's grid, so `(10, 30)` on a grid of 1 is
+    `[11, 29]`. A point coordinate has the same value at both ends and stays as it is.
+    """
+    a, b = bound_at(u, ai, x)
+    if a is not None and b is not None and a == b:
+        return (a, b)
+    st = num(u["axes"][ai].get("step"))
+    if st is None:
+        return (a, b)
+    return (None if a is None else a + st, None if b is None else b - st)
+
+
+def _taken_earlier(u, row, ai, x):
+    """Whether a single earlier row of `u` takes the whole of `row`'s box at coordinate `x`."""
+    for e in u["rows"]:
+        if e["row"] >= row["row"]:
+            continue
+        if all(
+            all(
+                (y not in row["accepts"][a] or (a == ai and y != x)) or y in e["accepts"][a]
+                for y in range(len(u["axes"][a]["coords"]))
+            )
+            for a in range(len(u["axes"]))
+        ):
+            return True
+    return False
+
+
+def produced_where(tables, column, value, inp):
+    """Where a column another table decides can hold a value, read on one of that table's
+    own columns.
+
+    The rows of that table that write the value, and the coordinates of `inp` at which one
+    of them can still fire. Under `first` a row's box is not where it fires — an earlier row
+    may take all of it, and the catch-all at the bottom has the whole axis for a box while
+    firing only on what is left — so a row counts only while no single earlier row takes the
+    whole of its box at that coordinate. That reading is loose the safe way: what drops out
+    is only what certainly cannot fire, so the span that comes back contains every input on
+    which the column really holds the value.
+
+    `("num", (lo, hi))` or `("words", {…})`, or `None` when no table here decides the column,
+    it has no axis for `inp`, or a row of it writes something this program cannot read.
+    """
+    for u in tables:
+        decides = u.get("decides") or []
+        if column not in decides:
+            continue
+        oi = decides.index(column)
+        ai = next((i for i, a in enumerate(u["axes"]) if a["column"] == inp), None)
+        if ai is None:
+            return None
+        picked = []
+        for r in u["rows"]:
+            p = r.get("produces")
+            if not isinstance(p, list) or oi >= len(p) or p[oi] is None:
+                return None
+            if p[oi] == value:
+                picked.append(r)
+        if not picked:
+            return None
+        first = u["policy"] == "first"
+        axis = u["axes"][ai]
+        live = [
+            x
+            for x in range(len(axis["coords"]))
+            for r in picked
+            if x in r["accepts"][ai] and (not first or not _taken_earlier(u, r, ai, x))
+        ]
+        live = sorted(set(live))
+        if not live:
+            return None
+        if any(b is not None for b in (axis.get("bounds") or [])):
+            lo = hi = None
+            open_lo = open_hi = False
+            for x in live:
+                a, b = closed_at(u, ai, x)
+                if a is None:
+                    open_lo = True
+                elif lo is None or a < lo:
+                    lo = a
+                if b is None:
+                    open_hi = True
+                elif hi is None or b > hi:
+                    hi = b
+            return ("num", (None if open_lo else lo, None if open_hi else hi))
+        return ("words", frozenset(axis["coords"][x] for x in live))
+    return None
+
+
+def closed_span(t, ai, ci):
+    """One coordinate of one axis, as a span."""
+    axis = t["axes"][ai]
+    if any(b is not None for b in (axis.get("bounds") or [])):
+        return ("num", closed_at(t, ai, ci))
+    return ("words", frozenset([axis["coords"][ci]]))
+
+
+def spans_meet(a, b):
+    """Whether two spans of one column have anything in common. Two kinds that do not match
+    are not compared: saying they meet is the half that refuses to conclude."""
+    if a[0] != b[0]:
+        return True
+    if a[0] == "num":
+        (al, ah), (bl, bh) = a[1], b[1]
+        return not (
+            (ah is not None and bl is not None and ah < bl) or (bh is not None and al is not None and bh < al)
+        )
+    return bool(a[1] & b[1])
+
+
+def span_contains(outer, inner):
+    if outer[0] != inner[0]:
+        return False
+    if outer[0] == "num":
+        (ol, oh), (il, ih) = outer[1], inner[1]
+        lo_ok = ol is None or (il is not None and ol <= il)
+        hi_ok = oh is None or (ih is not None and ih <= oh)
+        return lo_ok and hi_ok
+    return inner[1] <= outer[1]
+
+
+def stated_span(st, kind):
+    """A span as the certificate writes it: two ends for a number, the values otherwise.
+    The kind comes from the span this one is held against, so the two shapes never have to
+    be told apart by guessing."""
+    if not isinstance(st, list):
+        return None
+    if kind == "num":
+        if len(st) != 2 or not all(x is None or isinstance(x, str) for x in st):
+            return None
+        return ("num", (num(st[0]), num(st[1])))
+    if all(isinstance(x, str) for x in st):
+        return ("words", frozenset(st))
+    return None
+
+
+def box_holds(t, path, column, value):
+    """Whether this box fixes one of its own columns to that value.
+
+    A reason is about the box it is written under, and nothing else ties the two together:
+    without this, a reason earned honestly for one box could be copied onto another where
+    the columns hold something else entirely, and every span in it would still recompute.
+    """
+    ai = next((i for i, x in enumerate(t["axes"]) if x["column"] == column), None)
+    return ai is not None and ai < len(path) and t["axes"][ai]["coords"][path[ai]] == value
+
+
+def never_written(t, u, oi, col, val):
+    """No row of the table that decides a column writes a value at all."""
+    for r in u["rows"]:
+        p = r.get("produces")
+        if not isinstance(p, list) or oi >= len(p) or p[oi] is None:
+            raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this "
+                      f"program cannot read, so «{col} is never {val}» cannot be settled")
+        if p[oi] == val:
+            raise Bad(f"{t['table']}: row {r['row']} of {u['table']} does write {col} = {val}, "
+                      f"so it is not a value the tables above never reach")
+    return True
+
+
+def decider(tables, column):
+    """The table that decides a column, and where the column sits among its outputs."""
+    for u in tables:
+        decides = u.get("decides") or []
+        if column in decides:
+            return u, decides.index(column)
+    return None, None
+
+
+def check_above(t):
+    """Every fact this table rests on, earned back from the tables that decide its columns.
+
+    A `never` fact is settled by reading those rows. An `apart` fact is settled by
+    recomputing both spans and finding that they do not meet — and the spans the
+    certificate wrote have to **contain** the ones recomputed, so it cannot quietly write a
+    narrower span than the truth and call apart two things that meet.
+    """
+    ab = t.get("above") or {}
+    axes, tables = t["axes"], (t.get("_tables") or [])
+
+    def named(q):
+        ai, ci = q.get("axis"), q.get("coord")
+        if not isinstance(ai, int) or not 0 <= ai < len(axes):
+            raise Bad(f"{t['table']}: a fact points at axis {ai}, which does not exist")
+        coords = axes[ai]["coords"]
+        if not isinstance(ci, int) or not 0 <= ci < len(coords):
+            raise Bad(f"{t['table']}: a fact points at coordinate {ci} of {axes[ai]['column']}, "
+                      f"which does not exist")
+        return ai, axes[ai]["column"], coords[ci]
+
+    for f in ab.get("never", []):
+        _, col, val = named(f)
+        u, oi = decider(tables, col)
+        if u is None:
+            raise Bad(f"{t['table']}: a fact says {col} is never {val}, and no table here decides {col}")
+        never_written(t, u, oi, col, val)
+
+    for f in ab.get("apart", []):
+        inp = f.get("input")
+        stated = f.get("spans")
+        if not isinstance(inp, str) or not isinstance(stated, list) or len(stated) != 2:
+            raise Bad(f"{t['table']}: a fact gives a reason this program cannot read")
+        got = []
+        for q, st in zip((f.get("a") or {}, f.get("b") or {}), stated):
+            ai, col, val = named(q)
+            if col == inp:
+                real = closed_span(t, ai, q["coord"])
+            else:
+                real = produced_where(tables, col, val, inp)
+            if real is None:
+                raise Bad(f"{t['table']}: this program cannot work out where {col} = {val} "
+                          f"puts {inp}, so the fact is not settled")
+            sp = stated_span(st, real[0])
+            if sp is None:
+                raise Bad(f"{t['table']}: a span for {inp} is written in no shape this program reads")
+            if not span_contains(sp, real):
+                raise Bad(f"{t['table']}: the span written for {inp} while {col} = {val} is "
+                          f"narrower than the one this certificate's own tables give")
+            got.append(real)
+        if spans_meet(got[0], got[1]):
+            raise Bad(f"{t['table']}: the two spans of {inp} meet, so the pair is not apart")
+
+
+def above_rules_out(t, path):
+    """Whether a fact of this table's own rules the box under `path` out."""
+    ab = t.get("above") or {}
+    for f in ab.get("never", []):
+        ai, ci = f.get("axis"), f.get("coord")
+        if isinstance(ai, int) and ai < len(path) and path[ai] == ci:
+            return True
+    for f in ab.get("apart", []):
+        a, b = f.get("a") or {}, f.get("b") or {}
+        if (isinstance(a.get("axis"), int) and a["axis"] < len(path) and path[a["axis"]] == a.get("coord")
+                and isinstance(b.get("axis"), int) and b["axis"] < len(path) and path[b["axis"]] == b.get("coord")):
+            return True
+    return False
+
+
 def point_ruled_out(t, path):
     """Whether the sieve rules this point out: some constraint cannot hold at it, or some
     derived column cannot reach it."""
@@ -381,7 +627,7 @@ def check_cover(t):
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
-    seen = {"rows": 0, "constraint": 0, "derived": 0, "upstream": 0, "points": 0}
+    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -437,7 +683,10 @@ def check_cover(t):
             if not any(a.get("kind") == "upstream" for a in axes):
                 raise Bad(f"{t['table']}: a leaf rests on a table above, and no column of "
                           f"this table comes from one")
-            seen["upstream"] += 1
+            if not above_rules_out(t, path):
+                raise Bad(f"{t['table']}: a leaf rests on the tables above, and no fact this "
+                          f"certificate states about them rules this box out")
+            seen["above"] += 1
             return
         raise Bad(f"{t['table']}: a leaf of the cover has no kind this program knows")
 
@@ -716,17 +965,16 @@ def check_table(t):
     if missing:
         raise Bad(f"{name}: no point is given for row(s) {missing}")
 
-    # (3) The table is complete.
+    # (3) The table is complete. What the tables above rule out is earned back first, so a
+    # leaf that rests on it rests on something already checked.
+    check_above(t)
     seen = check_cover(t)
     if True:
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
-                        ("points", "point by point")):
+                        ("above", "for the tables above"), ("points", "point by point")):
             if seen[k]:
                 cover_note += f" + {seen[k]} impossible {word}"
-        if seen["upstream"]:
-            cover_note += f" + {seen['upstream']} on an upstream claim this program does not re-check"
-            STATED.append(f"{name}: {seen['upstream']} leaves rest on a table above")
 
     kinds = {a["kind"] for a in axes}
     note = "" if kinds == {"input"} else f" (columns: {', '.join(sorted(kinds))})"
@@ -1083,6 +1331,7 @@ def check(cert):
         out.append("  no table states a certificate")
     for t in cert["tables"]:
         t["_reach_of"] = reach
+        t["_tables"] = cert["tables"]
         t["_ranges"] = cert.get("ranges", {})
         t["_sieve"] = True
         for what, n in (("pairs the axes do not part", len(t.get("undecided", []))),

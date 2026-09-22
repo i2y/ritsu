@@ -130,16 +130,16 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
     );
 }
 
-/// The leaf the proved checker is deliberately not about, and the edge of it.
+/// The leaf the proved checker used to be deliberately not about.
 ///
-/// `Certified.coverChecks` carries `!C.cover.leansOnUpstream` as a *premise*: the theorems
-/// say nothing about a cover that rests on a table above, because re-checking one needs that
-/// table's own region and the certificate does not carry it. So the binary has to do two
-/// things and no others — let such a certificate through, and say in the closing line that it
-/// did. Between them sits the only way a forged certificate can hide a real gap, and this
-/// test is what holds that opening to its declared width (§15.115).
+/// `Certified.coverChecks` used to carry `!C.cover.leansOnUpstream` as a premise: the
+/// theorems said nothing about a cover resting on a table above. Since §15.115 the facts
+/// those tables give are part of the sieve, the premise is gone, and such a box is settled
+/// by `boxRuledOut` like any other — so what the theorems cover now includes it. The facts
+/// themselves are recomputed from the rows of the tables that decide the columns, which is
+/// what the four lies below are refused by.
 #[test]
-fn 上流由来の葉は_通るが最後に並ぶ() {
+fn 上流由来の葉は_定理の中に入った() {
     let Some(bin) = checker() else {
         eprintln!("skip: proofs/ が build されていない");
         return;
@@ -147,40 +147,43 @@ fn 上流由来の葉は_通るが最後に並ぶ() {
     let rel = "tests/corpus/二つの区分.rule";
     let (c, cert) = rulec(&["certificate", rel]);
     assert_eq!(c, 0, "{cert}");
-    let (code, said) = lean(&bin, &cert, Some(rel));
-    assert_eq!(code, 0, "そのままの証明書が通らない:\n{said}");
-    assert!(
-        said.contains("手数料表's cover rests on a table above"),
-        "上流由来の葉が最後の一行に出ていない:\n{said}"
-    );
-    assert!(!said.contains("FAILED"), "正直な証明書が落ちている:\n{said}");
+    const FACT: &str = r#""a":{"axis":0,"coord":0},"b":{"axis":1,"coord":1},"input":"重量","spans":[["0","2"],["11","30"]]"#;
+    assert!(cert.contains(FACT), "証明書の形が変わっています:\n{cert}");
 
-    // Inside: a box a row really takes, re-labelled. The checker is not about this leaf, so
-    // it passes — and the closing line is the whole of the defence.
-    let hidden = cert.replace(
-        r#"{"split":[{"row":1},{"upstream":"#,
-        r#"{"split":[{"upstream":"forged"},{"upstream":"#,
-    );
-    assert_ne!(hidden, cert, "偽れていない");
-    let (code, said) = lean(&bin, &hidden, Some(rel));
-    assert_eq!(code, 0, "この葉は定理の外なので、通るのが正しい:\n{said}");
-    assert!(
-        said.contains("手数料表's cover rests on a table above"),
-        "隠したのに最後の一行が黙っている。黙るなら、この穴は見えない穴になる:\n{said}"
-    );
-
-    for (what, forged) in [
-        // Outside: a table no column of which comes from above cannot carry the leaf at all.
-        ("上流の列が無い表に置く", cert.replacen(r#""cover":{"row":2}"#, r#""cover":{"upstream":"forged"}"#, 1)),
-        // The leaf removed rather than re-labelled: the children no longer tile the axis.
+    let forgeries: Vec<(&str, String)> = vec![
+        // The leaf with no fact under it. Before §15.115 this was the way through.
+        ("葉だけ書いて事実を消す", cert.replace(FACT, "")),
+        // The pair moved onto two values that really do arrive together.
         (
-            "葉ごと落とす",
+            "起こる組を離れていると言う",
             cert.replace(
-                r#"{"split":[{"row":1},{"upstream":"送料区分 = 小口, 扱い区分 = 重量物"}]}"#,
-                r#"{"split":[{"row":1}]}"#,
+                FACT,
+                r#""a":{"axis":0,"coord":1},"b":{"axis":1,"coord":0},"input":"重量","spans":[["3","30"],["0","10"]]"#,
             ),
         ),
-    ] {
+        // The written span narrowed until two spans that meet look apart.
+        (
+            "範囲を狭く書いて離す",
+            cert.replace(
+                FACT,
+                r#""a":{"axis":0,"coord":1},"b":{"axis":1,"coord":0},"input":"重量","spans":[["11","30"],["0","2"]]"#,
+            ),
+        ),
+        // A value the table above does write, called one it never writes.
+        (
+            "never をでっち上げる",
+            cert.replace(r#""above":{"never":[],"apart":[{"# , r#""above":{"never":[{"axis":0,"coord":0}],"apart":[{"#),
+        ),
+    ];
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "そのままの証明書が通らない:\n{said}");
+    assert!(!said.contains("FAILED"), "正直な証明書が落ちている:\n{said}");
+    assert!(
+        !said.contains("rests on a table above"),
+        "まだ「述べただけ」として数えられている:\n{said}"
+    );
+
+    for (what, forged) in forgeries {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
         let (code, said) = lean(&bin, &forged, None);
         assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");

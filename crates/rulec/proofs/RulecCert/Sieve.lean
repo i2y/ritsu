@@ -106,6 +106,20 @@ structure Sieve where
   coords : List (List (Option Coord))
   cons : List Constraint
   reach : List (Option Ival)
+  /-- `(axis, coordinate)` pairs no table above ever writes: not one row of the table that
+      decides the column puts it there. -/
+  never : List (Nat × Nat)
+  /-- Pairs of `(axis, coordinate)` the tables above cannot hold at the same time.
+      Two columns decided above can be cut from one input at different thresholds, and then
+      each value arrives on its own while the pair never does.
+
+      Where the pairs come from: a table above writes a value only in some of its rows, and
+      a row fires only inside its box, so the union of those boxes contains every input on
+      which the column holds the value. Two such unions that do not meet are a pair that
+      cannot stand together. That reading is arithmetic on the very rows the certificate
+      carries, so the checker earns each pair back rather than believing it; what is settled
+      **here** is the step from the pair to the box, which is the step the cover rests on. -/
+  apart : List ((Nat × Nat) × (Nat × Nat))
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -121,7 +135,9 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
       ∃ w, v[i]? = some w ∧ x.holds w) ∧
     (∀ k ∈ s.cons, ∃ x y, v[k.left]? = some x ∧ v[k.right]? = some y ∧ k.op.holds x y) ∧
-    (∀ (i : Nat) (I : Ival), s.reach[i]? = some (some I) → ∃ w, v[i]? = some w ∧ inIval I w)
+    (∀ (i : Nat) (I : Ival), s.reach[i]? = some (some I) → ∃ w, v[i]? = some w ∧ inIval I w) ∧
+    (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
+    (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2))
 
 /-! ## One constraint rules a box out -/
 
@@ -153,6 +169,14 @@ def derivedRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
     | none => false
   | _, _ => false
 
+/-- A coordinate no table above ever writes. -/
+def neverRulesOut (s : Sieve) (p : Point) : Bool :=
+  s.never.any (fun q => p[q.1]? == some q.2)
+
+/-- Two coordinates the tables above cannot hold at once, both of them held here. -/
+def apartRulesOut (s : Sieve) (p : Point) : Bool :=
+  s.apart.any (fun qr => p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2)
+
 /-- The reading of a point the two tests above share: pull the value out of the assignment
     and bound it by the coordinate's span. -/
 private theorem value_at {s : Sieve} {p : Point} {v : List Rat} {i c : Nat} {x : Coord}
@@ -165,7 +189,7 @@ private theorem value_at {s : Sieve} {p : Point} {v : List Rat} {i c : Nat} {x :
 
 theorem not_asked_of_constraint {s : Sieve} {k : Constraint} {p : Point}
     (hk : k ∈ s.cons) (h : constraintRulesOut s k p = true) : ¬ s.asked p := by
-  rintro ⟨v, hf, hc, _⟩
+  rintro ⟨v, hf, hc, _, _, _⟩
   obtain ⟨x, y, hx, hy, hop⟩ := hc k hk
   unfold constraintRulesOut at h
   split at h
@@ -204,7 +228,7 @@ theorem not_asked_of_constraint {s : Sieve} {k : Constraint} {p : Point}
 
 theorem not_asked_of_derived {s : Sieve} {i : Nat} {p : Point}
     (h : derivedRulesOut s i p = true) : ¬ s.asked p := by
-  rintro ⟨v, hf, _, hr⟩
+  rintro ⟨v, hf, _, hr, _, _⟩
   unfold derivedRulesOut at h
   split at h
   case _ c I hp hri =>
@@ -232,16 +256,33 @@ theorem not_asked_of_derived {s : Sieve} {i : Nat} {p : Point}
 /-- **One point is ruled out**: some constraint, or some derived column, leaves it no
     values. This is the test §15.98 is about — the sieve asks about a point, and a leaf of
     the cover stands for a whole box. -/
+theorem not_asked_of_never {s : Sieve} {p : Point} (h : neverRulesOut s p = true) :
+    ¬ s.asked p := by
+  simp only [neverRulesOut, List.any_eq_true, beq_iff_eq] at h
+  rcases h with ⟨q, hq, hpq⟩
+  rintro ⟨_, _, _, _, hnv, _⟩
+  exact hnv q hq hpq
+
+theorem not_asked_of_apart {s : Sieve} {p : Point} (h : apartRulesOut s p = true) :
+    ¬ s.asked p := by
+  simp only [apartRulesOut, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+  rcases h with ⟨qr, hqr, hq, hr⟩
+  rintro ⟨_, _, _, _, _, hap⟩
+  exact hap qr hqr ⟨hq, hr⟩
+
 def pointRuledOut (s : Sieve) (p : Point) : Bool :=
   s.cons.any (fun k => constraintRulesOut s k p) ||
-    (List.range p.length).any (fun i => derivedRulesOut s i p)
+    (List.range p.length).any (fun i => derivedRulesOut s i p) ||
+    neverRulesOut s p || apartRulesOut s p
 
 theorem not_asked_of_pointRuledOut {s : Sieve} {p : Point} (h : pointRuledOut s p = true) :
     ¬ s.asked p := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true] at h
-  rcases h with ⟨k, hk, hkr⟩ | ⟨i, _, hir⟩
+  rcases h with ((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab
   · exact not_asked_of_constraint hk hkr
   · exact not_asked_of_derived hir
+  · exact not_asked_of_never (by simpa [neverRulesOut] using hn)
+  · exact not_asked_of_apart (by simpa [apartRulesOut] using hab)
 
 
 /-! ## A whole box, not one corner of it
@@ -277,12 +318,27 @@ theorem derivedRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
   case _ c I hp hri => rw [prefix_getElem? hpre (lt_of_getElem? hp), hp, hri]; exact h
   case _ => exact absurd h (by simp)
 
+theorem neverRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
+    (h : neverRulesOut s path = true) : neverRulesOut s p = true := by
+  simp only [neverRulesOut, List.any_eq_true, beq_iff_eq] at h ⊢
+  rcases h with ⟨q, hq, hpq⟩
+  exact ⟨q, hq, by rw [prefix_getElem? hpre (lt_of_getElem? hpq)]; exact hpq⟩
+
+theorem apartRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
+    (h : apartRulesOut s path = true) : apartRulesOut s p = true := by
+  simp only [apartRulesOut, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h ⊢
+  rcases h with ⟨qr, hqr, hq, hr⟩
+  exact ⟨qr, hqr, by rw [prefix_getElem? hpre (lt_of_getElem? hq)]; exact hq,
+         by rw [prefix_getElem? hpre (lt_of_getElem? hr)]; exact hr⟩
+
 theorem pointRuledOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
     (h : pointRuledOut s path = true) : pointRuledOut s p = true := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true, List.mem_range] at h ⊢
-  rcases h with ⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩
-  · exact Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩
-  · exact Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩
+  rcases h with ((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab
+  · exact Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩))
+  · exact Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩))
+  · exact Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn)))
+  · exact Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab))
 
 /-- Every point the path opens onto. The walk stops where the axes do, so the list is the
     box below the path and nothing else. -/
@@ -387,13 +443,15 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
   s.cons.all (fun k =>
     match v[k.left]?, v[k.right]? with
     | some x, some y => cmpHolds k.op x y
-    | _, _ => false)
+    | _, _ => false) &&
+  s.never.all (fun q => !(p[q.1]? == some q.2)) &&
+  s.apart.all (fun qr => !(p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2))
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨hco, hre⟩, hcs⟩ := h
-  refine ⟨v, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -418,5 +476,14 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     | some w =>
       simp only [hI, hv] at hi
       exact ⟨w, rfl, inIval_of_ivalHolds hi⟩
+  · intro q hq
+    have := List.all_eq_true.1 hnv q hq
+    simpa using this
+  · intro qr hqr hboth
+    have := List.all_eq_true.1 hap qr hqr
+    simp only [Bool.not_eq_true', Bool.and_eq_false_iff, beq_eq_false_iff_ne] at this
+    rcases this with h1 | h1
+    · exact h1 hboth.1
+    · exact h1 hboth.2
 
 end RulecCert

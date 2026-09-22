@@ -363,6 +363,172 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report) : Report �
     | _ => pure ()
   return (r, read, apart)
 
+/-- A span of one column: an interval where the column is a number, the values it may take
+    where it is not. -/
+inductive Span where
+  | num : Option Rat → Option Rat → Span
+  | words : List String → Span
+  deriving Inhabited
+
+/-- Whether two spans of one column have anything in common. Two shapes that do not match
+    are not compared: saying they meet is the half that declines to conclude. -/
+def Span.meets : Span → Span → Bool
+  | .num _ ah, .num bl _ =>
+    !((match ah, bl with | some x, some y => decide (x < y) | _, _ => false) ||
+      (match bl, ah with | some _, some _ => false | _, _ => false))
+  | .words a, .words b => a.any (fun x => b.contains x)
+  | _, _ => true
+
+/-- Whether the first span holds all of the second. -/
+def Span.holds : Span → Span → Bool
+  | .num ol oh, .num il ih =>
+    (match ol, il with | none, _ => true | some a, some b => decide (a ≤ b) | some _, none => false) &&
+    (match oh, ih with | none, _ => true | some a, some b => decide (b ≤ a) | some _, none => false)
+  | .words o, .words i => i.all (fun x => o.contains x)
+  | _, _ => false
+
+/-- One coordinate of one axis as a **closed** interval of true values. `bounds` writes an
+    interval coordinate's ends, and the coordinate does not contain them: the values sit on
+    the axis's grid, so `(10, 30)` on a grid of 1 is `[11, 29]`. -/
+def closedAt (ax : Json) (ci : Nat) : Option Rat × Option Rat :=
+  let bs := fieldArr ax "bounds"
+  match bs[ci]? >>= arr with
+  | none => (none, none)
+  | some v =>
+    let lo := v[0]? >>= optRat
+    let hi := v[1]? >>= optRat
+    match lo, hi with
+    | some a, some c => if a == c then (lo, hi) else
+      match (field ax "step") >>= optRat with
+      | some st => (some (a + st), some (c - st))
+      | none => (lo, hi)
+    | _, _ =>
+      match (field ax "step") >>= optRat with
+      | some st => (lo.map (· + st), hi.map (· - st))
+      | none => (lo, hi)
+
+/-- One coordinate of one axis, as a span. -/
+def spanAt (ax : Json) (ci : Nat) : Span :=
+  if (fieldArr ax "bounds").any (fun b => !b.isNull) then
+    let (lo, hi) := closedAt ax ci
+    .num lo hi
+  else .words (((fieldArr ax "coords")[ci]? >>= str).toList)
+
+/-- The table that decides a column, and where the column sits among its outputs. -/
+def decider (all : Array Json) (column : String) : Option (Json × Nat) :=
+  all.findSome? (fun u =>
+    let ds := (fieldArr u "decides").toList.filterMap str
+    (ds.findIdx? (· == column)).map (fun i => (u, i)))
+
+/-- Where a column another table decides can hold a value, read on one of that table's own
+    columns.
+
+    The rows that write the value, and the coordinates of `input` at which one of them can
+    still fire. Under `first` a row's box is not where it fires — an earlier row may take
+    all of it — so a row counts only while no single earlier row takes the whole of its box
+    at that coordinate. That is loose the safe way: what drops out certainly cannot fire, so
+    the span contains every input on which the column really holds the value. -/
+def producedWhere (all : Array Json) (column value input : String) : Option Span := do
+  let (u, oi) ← decider all column
+  let axes := fieldArr u "axes"
+  let ai ← axes.toList.findIdx? (fun a => fieldStr a "column" == input)
+  let rows := (fieldArr u "rows").toList
+  let outs ← rows.mapM (fun r => (fieldArr r "produces")[oi]? >>= str)
+  let accepts : List (List (List Nat)) := rows.map (fun r =>
+    (fieldArr r "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat))
+  let first := fieldStr u "policy" == "first"
+  let arity : Nat → Nat := fun a => (fieldArr ((axes[a]?).getD Json.null) "coords").size
+  let nAx := axes.size
+  let picked := (List.range rows.length).filter (fun i => (outs[i]?).getD "" == value)
+  if picked.isEmpty then none else
+  let boxOf : Nat → Nat → List Nat := fun i a => (((accepts[i]?).getD [])[a]?).getD []
+  let takenEarlier : Nat → Nat → Bool := fun i x =>
+    (List.range i).any (fun e =>
+      (List.range nAx).all (fun a =>
+        (List.range (arity a)).all (fun y =>
+          !((boxOf i a).contains y && (a != ai || y == x)) || (boxOf e a).contains y)))
+  let live := (List.range (arity ai)).filter (fun x =>
+    picked.any (fun i => (boxOf i ai).contains x && (!first || !takenEarlier i x)))
+  if live.isEmpty then none else
+  let ax := (axes[ai]?).getD Json.null
+  if (fieldArr ax "bounds").any (fun b => !b.isNull) then
+    let ends := live.map (closedAt ax)
+    let lo := if ends.any (fun e => e.1.isNone) then none
+              else ends.foldl (fun acc e => match acc, e.1 with
+                | none, v => v
+                | some a, some b => some (if b < a then b else a)
+                | some a, none => some a) none
+    let hi := if ends.any (fun e => e.2.isNone) then none
+              else ends.foldl (fun acc e => match acc, e.2 with
+                | none, v => v
+                | some a, some b => some (if a < b then b else a)
+                | some a, none => some a) none
+    some (.num lo hi)
+  else some (.words (live.filterMap (fun x => (fieldArr ax "coords")[x]? >>= str)))
+
+/-- A span as the certificate writes it, read against the shape of the one it is held to. -/
+def statedSpan (j : Json) (like : Span) : Option Span :=
+  match arr j, like with
+  | some v, .num _ _ => if v.size == 2 then some (.num (v[0]? >>= optRat) (v[1]? >>= optRat)) else none
+  | some v, .words _ => some (.words (v.toList.filterMap str))
+  | none, _ => none
+
+/-- **Every fact this table rests on, earned back from the tables that decide its columns.**
+    A `never` fact is settled by reading those rows; an `apart` fact by recomputing both
+    spans and finding they do not meet. The spans the certificate wrote have to contain the
+    ones recomputed, so it cannot write a narrower span than the truth and call apart two
+    things that meet. The verdict rests on the recomputed pair (§15.115). -/
+def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
+  let mut r := r
+  let name := fieldStr tj "table"
+  let axes := fieldArr tj "axes"
+  let ab := (field tj "above").getD Json.null
+  let named : Json → Option (String × String) := fun q => do
+    let ai ← fieldNat q "axis"; let ci ← fieldNat q "coord"
+    let ax ← axes[ai]?
+    let v ← (fieldArr ax "coords")[ci]? >>= str
+    some (fieldStr ax "column", v)
+  for f in fieldArr ab "never" do
+    match named f with
+    | none => r := r.fail s!"{name}: a fact points at a coordinate that does not exist"
+    | some (col, val) =>
+      match decider all col with
+      | none => r := r.fail s!"{name}: a fact says {col} is never {val}, and no table here decides {col}"
+      | some (u, oi) =>
+        for row in fieldArr u "rows" do
+          match (fieldArr row "produces")[oi]? >>= str with
+          | none => r := r.fail s!"{name}: a row of {fieldStr u "table"} writes something this program cannot read, so «{col} is never {val}» is not settled"
+          | some w => if w == val then
+              r := r.fail s!"{name}: {fieldStr u "table"} does write {col} = {val}, so it is not a value the tables above never reach"
+  for f in fieldArr ab "apart" do
+    let input := fieldStr f "input"
+    let stated := fieldArr f "spans"
+    let ends := #[(field f "a").getD Json.null, (field f "b").getD Json.null]
+    let mut got : Array Span := #[]
+    let mut ok := true
+    for i in [0, 1] do
+      match named (ends[i]!) with
+      | none => r := r.fail s!"{name}: a fact points at a coordinate that does not exist"; ok := false
+      | some (col, val) =>
+        let ai := (axes.toList.findIdx? (fun a => fieldStr a "column" == input)).getD axes.size
+        let real :=
+          if col == input then
+            (fieldNat (ends[i]!) "coord").map (spanAt (axes[ai]!))
+          else producedWhere all col val input
+        match real with
+        | none => r := r.fail s!"{name}: this program cannot work out where {col} = {val} puts {input}"; ok := false
+        | some sp =>
+          match (stated[i]?).bind (fun j => statedSpan j sp) with
+          | none => r := r.fail s!"{name}: a span for {input} is written in no shape this program reads"; ok := false
+          | some st =>
+            if !st.holds sp then
+              r := r.fail s!"{name}: the span written for {input} while {col} = {val} is narrower than the one this certificate's own tables give"
+              ok := false
+            else got := got.push sp
+    if ok && got.size == 2 && (got[0]!).meets (got[1]!) then
+      r := r.fail s!"{name}: the two spans of {input} meet, so the pair is not apart"
+  return r
+
 def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   let mut r := r
   let C := t.cert
@@ -371,10 +537,7 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   -- E101
   if t.upstream && !t.kinds.contains "upstream" then
     r := r.fail s!"{t.name}: the cover rests on a table above, and no column of this table comes from one"
-  if t.upstream then
-    r := r.state s!"{t.name}'s cover rests on a table above"
-    notes := notes.push "cover rests on a table above (not re-checked)"
-  else if C.coverChecks then
+  if C.coverChecks then
     notes := notes.push "complete"
   else
     r := r.fail s!"{t.name}: the cover does not tile the space"
@@ -450,7 +613,10 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     for tj in fieldArr cert "tables" do
       match readTable reachOf groups declaredRange tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
-      | some t => r := checkTable t r; tables := tables.push t
+      | some t =>
+        r := checkAbove tj (fieldArr cert "tables") r
+        r := checkTable t r
+        tables := tables.push t
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"

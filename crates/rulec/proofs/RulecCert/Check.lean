@@ -140,7 +140,10 @@ def coverOk (arities : List Arity) (rows : List Row) (ruledOut : Point → Bool)
     | none => false
     | some r => takesPath r.box path && spansRest r.box arities path.length
   | .impossible, path => ruledOut path
-  | .upstream, _ => true
+  -- A box the tables above rule out is no longer a leaf of its own: the facts they give
+  -- are part of the sieve, so such a box arrives here as `.impossible` and is checked
+  -- like any other. A document that still writes this leaf gets no free pass (§15.115).
+  | .upstream, _ => false
 
 /-- The children of a `split`, checked one coordinate at a time. `left` counts the
     coordinates the axis still owes: the list has to run out exactly when the axis does,

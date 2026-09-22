@@ -35,10 +35,11 @@ def Certified.table (C : Certified) : Table where
   policy := C.policy
   asked := C.sieve.asked
 
-/-- The completeness check: the rows are shaped like the axes, the cover leans on nothing
-    upstream, and the walk goes through. -/
+/-- The completeness check: the rows are shaped like the axes, and the walk goes through.
+    A box the tables above rule out is no longer outside this — the facts they give are part
+    of the sieve, so such a leaf is checked like any other impossible box (§15.115). -/
 def Certified.coverChecks (C : Certified) : Bool :=
-  rowsShaped C.arities C.rows && !C.cover.leansOnUpstream &&
+  rowsShaped C.arities C.rows &&
     coverOk C.arities C.rows (boxRuledOut C.sieve C.arities) C.cover []
 
 /-- The reachability check, for the rows the certificate claims a point for. -/
@@ -56,9 +57,9 @@ def Certified.pairChecks (C : Certified) : Bool :=
 
 theorem Certified.complete (C : Certified) (h : C.coverChecks = true) :
     C.table.completeHolds := by
-  simp only [Certified.coverChecks, Bool.and_eq_true, Bool.not_eq_true'] at h
-  obtain ⟨⟨hshape, hup⟩, hcov⟩ := h
-  refine complete_of_coverOk (t := C.table) hshape ?_ hup hcov
+  simp only [Certified.coverChecks, Bool.and_eq_true] at h
+  obtain ⟨hshape, hcov⟩ := h
+  refine complete_of_coverOk (t := C.table) hshape ?_ hcov
   intro path p hro hpre hsp
   exact not_asked_of_boxRuledOut hro hpre hsp
 

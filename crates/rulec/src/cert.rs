@@ -275,6 +275,17 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .int("line", r.line as i128)
                 .raw("source", source_json(src, &r.spans, &r.tests))
                 .raw("accepts", arr(&accepts))
+                .raw(
+                    "produces",
+                    arr(&r
+                        .produces
+                        .iter()
+                        .map(|p| match p {
+                            Some(w) => crate::json::quote(w),
+                            None => "null".into(),
+                        })
+                        .collect::<Vec<_>>()),
+                )
                 .finish()
         })
         .collect();
@@ -315,6 +326,7 @@ fn table_json(t: CertTable, src: &str) -> String {
         .str("policy", t.policy)
         .int("outputs", t.outputs as i128)
         .raw("axes", arr(&axes))
+        .raw("decides", crate::json::strs(&t.decides))
         .raw("rows", arr(&rows))
         .raw("disjoint", arr(&disjoint))
         .raw("undecided", arr(&undecided))
@@ -329,6 +341,29 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .map(|(l, op, r)| Obj::new().str("left", l).str("op", op).str("right", r).finish())
                 .collect::<Vec<_>>()),
         )
+        .raw(
+            "above",
+            Obj::new()
+                .raw(
+                    "never",
+                    arr(&t
+                        .above
+                        .iter()
+                        .filter(|f| matches!(f, crate::region::AboveFact::Never { .. }))
+                        .map(above_json)
+                        .collect::<Vec<_>>()),
+                )
+                .raw(
+                    "apart",
+                    arr(&t
+                        .above
+                        .iter()
+                        .filter(|f| matches!(f, crate::region::AboveFact::Apart { .. }))
+                        .map(above_json)
+                        .collect::<Vec<_>>()),
+                )
+                .finish(),
+        )
         .raw("cover", t.cover.as_ref().map(cover_json).unwrap_or_else(|| "null".into()))
         .finish()
 }
@@ -342,8 +377,39 @@ fn cover_json(c: &Cover) -> String {
         Cover::Row(r) => Obj::new().int("row", *r as i128).finish(),
         Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
-        Cover::ByUpstream(what) => Obj::new().str("upstream", what).finish(),
+        Cover::ByUpstream(what, _) => Obj::new().str("upstream", what).finish(),
         Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
+    }
+}
+
+/// What the tables above rule out, on this table's own axes.
+///
+/// A `never` fact says no row of the table that decides the column writes the value at all.
+/// An `apart` fact says two coordinates cannot stand together, and carries the reason: the
+/// input the two columns share, and the span each of them leaves it. Both are earned back
+/// from the rows of the tables that decide the columns, so the numbers here are what a
+/// re-checker holds its own arithmetic to, not what it takes on trust (§15.115).
+fn above_json(f: &crate::region::AboveFact) -> String {
+    use crate::region::{AboveFact, CertSpan};
+    let at = |(a, c): &(usize, usize)| Obj::new().int("axis", *a as i128).int("coord", *c as i128).finish();
+    let span = |sp: &CertSpan| match sp {
+        CertSpan::Num(lo, hi) => format!(
+            "[{},{}]",
+            lo.map(|v| crate::json::quote(&rat(&v))).unwrap_or_else(|| "null".into()),
+            hi.map(|v| crate::json::quote(&rat(&v))).unwrap_or_else(|| "null".into())
+        ),
+        CertSpan::Words(ws) => crate::json::strs(ws),
+    };
+    match f {
+        AboveFact::Never { axis, coord } => {
+            Obj::new().int("axis", *axis as i128).int("coord", *coord as i128).finish()
+        }
+        AboveFact::Apart { a, b, input, spans } => Obj::new()
+            .raw("a", at(a))
+            .raw("b", at(b))
+            .str("input", input)
+            .raw("spans", format!("[{},{}]", span(&spans.0), span(&spans.1)))
+            .finish(),
     }
 }
 

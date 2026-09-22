@@ -213,18 +213,18 @@ theorem coverOk_sound {t : Table} {ruledOut : Point → Bool}
     (hr : ∀ path p, ruledOut path = true → path <+: p → inSpace t.arities p = true →
       ¬ t.asked p) :
     ∀ (n : Nat) (cv : Cover) (path p : Point), cv.size ≤ n →
-      coverOk t.arities t.rows ruledOut cv path = true → cv.leansOnUpstream = false →
+      coverOk t.arities t.rows ruledOut cv path = true →
       path <+: p → inSpace t.arities p = true → t.asked p →
       ∃ r ∈ t.rows, inBox r.box p = true := by
   intro n
   induction n with
   | zero =>
-    intro cv _ _ hsz _ _ _ _ _
+    intro cv _ _ hsz _ _ _ _
     cases cv <;> simp [Cover.size] at hsz
   | succ n ih =>
-    intro cv path p hsz hok hup hpre hsp hask
+    intro cv path p hsz hok hpre hsp hask
     cases cv with
-    | upstream => simp [Cover.leansOnUpstream] at hup
+    | upstream => simp [coverOk] at hok
     | impossible =>
       exact absurd hask (hr path p (by simpa [coverOk] using hok) hpre hsp)
     | row i =>
@@ -273,20 +273,17 @@ theorem coverOk_sound {t : Table} {ruledOut : Point → Bool}
         rw [Nat.zero_add] at hchild
         have hksz : k.size < kids.size := Kids.get?_lt_size hk
         have : Cover.size (.split kids) = kids.size + 1 := rfl
-        exact ih k (path ++ [c]) p (by omega) hchild
-          (Kids.leans_get hk (by simpa [Cover.leansOnUpstream] using hup))
-          (prefix_extend hpre hpc) hsp hask
+        exact ih k (path ++ [c]) p (by omega) hchild (prefix_extend hpre hpc) hsp hask
 
 /-- **E101 is settled by the cover.** -/
 theorem complete_of_coverOk {t : Table} {ruledOut : Point → Bool} {tree : Cover}
     (hshape : rowsShaped t.arities t.rows = true)
     (hr : ∀ path p, ruledOut path = true → path <+: p → inSpace t.arities p = true →
       ¬ t.asked p)
-    (hup : tree.leansOnUpstream = false)
     (h : coverOk t.arities t.rows ruledOut tree [] = true) : t.completeHolds := by
   intro p hsp hask
   obtain ⟨r, hmem, hb⟩ :=
-    coverOk_sound hshape hr tree.size tree [] p (Nat.le_refl _) h hup List.nil_prefix hsp hask
+    coverOk_sound hshape hr tree.size tree [] p (Nat.le_refl _) h List.nil_prefix hsp hask
   exact List.ne_nil_of_mem (List.mem_filter.2 ⟨hmem, hb⟩)
 
 /-! ## The two together
@@ -301,11 +298,10 @@ theorem unique_of_checks {t : Table} {ruledOut : Point → Bool} {tree : Cover}
     (hdist : rowsDistinct t.rows = true)
     (hr : ∀ path p, ruledOut path = true → path <+: p → inSpace t.arities p = true →
       ¬ t.asked p)
-    (hup : tree.leansOnUpstream = false)
     (hcover : coverOk t.arities t.rows ruledOut tree [] = true)
     (hpairs : pairsPart t.rows told (fun _ _ => false) = true) : t.uniqueHolds := by
   intro p hsp hask
-  have h1 : t.firing p ≠ [] := complete_of_coverOk hshape hr hup hcover p hsp hask
+  have h1 : t.firing p ≠ [] := complete_of_coverOk hshape hr hcover p hsp hask
   have h2 : (t.firing p).length ≤ 1 :=
     disjoint_of_pairsPart hdist (fun _ _ => rfl) hpairs p
   have h3 : (t.firing p).length ≠ 0 := fun h => h1 (List.eq_nil_of_length_eq_zero h)

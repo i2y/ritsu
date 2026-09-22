@@ -34,10 +34,10 @@ a true certificate is still evidence — the corpus, the mutants, the second opi
 proof. What changes is where the trust sits: a certificate that passes now means something
 exact, and that meaning is written down in `Semantics.lean` rather than in prose.
 
-Five things the document states and this program cannot re-check. It names them in a line
-of its own rather than printing a clean "ok": a cover leaf that rests on a table above, the
-row pairs the axes do not part, rows an `apply` brought in from another file, rows the
-sieve rules out entirely, and a reach point handed over with no values behind it.
+Four things the document states and this program cannot re-check. It names them in a line
+of its own rather than printing a clean "ok": the row pairs the axes do not part, rows an
+`apply` brought in from another file, rows the sieve rules out entirely, and a reach point
+handed over with no values behind it.
 
 Beyond those, the document's own account of the rule — the declared ranges, the types, the
 groups, the constraints, each value's expression and scale — is its word. The digest ties

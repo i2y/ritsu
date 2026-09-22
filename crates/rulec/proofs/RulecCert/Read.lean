@@ -157,6 +157,15 @@ def coordOfJson (j : Json) : Option Coord :=
     | _, _ => none
   | none => none
 
+/-- Whether the cover written in the document rests anywhere on the tables above. The
+    reading below turns such a leaf into an ordinary impossible box, settled by the facts
+    this table states about those tables, so the shape alone no longer says it. -/
+partial def leansAbove : Json → Bool
+  | c =>
+    match field c "split" >>= arr with
+    | some kids => kids.toList.any leansAbove
+    | none => (field c "upstream").isSome
+
 mutual
 
 /-- The cover as the certificate writes it. The three impossible leaves — a constraint, a
@@ -171,10 +180,9 @@ partial def coverOfJson : Option Json → Option Cover
       match fieldNat c "row" with
       | some i => some (.row i)
       | none =>
-        if (field c "upstream").isSome then some .upstream
-        else if (field c "constraint").isSome || (field c "derived_axis").isSome
-          || (field c "every_point_ruled_out").isSome then some .impossible
-        else none
+        if (field c "upstream").isSome || (field c "constraint").isSome
+          || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
+        then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
   | [] => some .nil
@@ -343,10 +351,18 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
       | some ps => ps.toList.map (fun x => (str x).map String.toList)
       | none => [])
     declared := columns.map declaredOf
-    upstream := cover.leansOnUpstream
+    upstream := leansAbove ((field j "cover").getD Json.null)
     cert := {
       arities := arities, rows := rows, policy := policy
-      sieve := { coords := coords, cons := cons, reach := reach }
+      sieve := { coords := coords, cons := cons, reach := reach
+                 never := (fieldArr ((field j "above").getD Json.null) "never").toList.filterMap
+                   (fun f => do let a ← fieldNat f "axis"; let c ← fieldNat f "coord"; some (a, c))
+                 apart := (fieldArr ((field j "above").getD Json.null) "apart").toList.filterMap
+                   (fun f => do
+                     let a ← field f "a"; let b ← field f "b"
+                     let ai ← fieldNat a "axis"; let ac ← fieldNat a "coord"
+                     let bi ← fieldNat b "axis"; let bc ← fieldNat b "coord"
+                     some ((ai, ac), (bi, bc))) }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
