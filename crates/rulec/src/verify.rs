@@ -359,20 +359,109 @@ pub fn schema_out(f: &RuleFile, c: &Checked, alias: bool) -> String {
     format!("{{\"type\":\"object\",\"properties\":{{{}}}}}", outs.join(","))
 }
 
+/// A precondition the entry guard holds a caller to that the **shape** of the input cannot
+/// carry.
+///
+/// `rulec schema` says what the wire looks like: the fields, their types, and each one's own
+/// range. A caller that validates against it has done everything JSON Schema can express —
+/// and is still not done. A relation between two inputs (§15.55), a bound on the total of a
+/// sequence (§15.100) and a cap on how many elements one may have (§15.58) are all refused
+/// at the door by the generated code, and not one of the three is a shape.
+///
+/// Where the caller is a step of a workflow that went and fetched the sequence, learning
+/// this by being refused is one boundary too late: the value is already recorded, and the
+/// refusal happens again on every replay (§15.116).
+#[derive(Debug, Clone)]
+pub enum Pre {
+    /// `constraint <left> <op> <right>`.
+    Rel { left: String, op: &'static str, right: String },
+    /// The total of one column over a sequence, bounded above.
+    Sum { name: String, over: String, of: String, max: i128 },
+    /// How many elements a sequence may have.
+    Length { sequence: String, max: i128 },
+}
+
+/// Every precondition of the rule, in the order a reader meets them: the declared relations
+/// first, then what the walk is held to.
+pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
+    use crate::ast::{AggKind, Item};
+    let mut v: Vec<Pre> = f
+        .constraints
+        .iter()
+        .map(|k| Pre::Rel { left: k.left.clone(), op: k.op.word(), right: k.right.clone() })
+        .collect();
+    let aggs: Vec<&crate::ast::AggDecl> =
+        f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect();
+    for d in aggs.iter().filter(|d| d.kind == AggKind::Sum) {
+        let Some(hi) = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi) else { continue };
+        let sc = c.scales.get(&d.name.text).copied().unwrap_or(1);
+        v.push(Pre::Sum {
+            name: d.name.text.clone(),
+            over: d.over.clone(),
+            of: d.column.text.clone(),
+            max: crate::types::wire_int(hi, sc),
+        });
+    }
+    // A count can be as large as the sequence, so the smallest upper bound any of them
+    // declares is what the length is held to (§15.58). A `sum` says nothing about length.
+    let cap = aggs
+        .iter()
+        .filter(|d| d.kind == AggKind::Count)
+        .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+        .map(|hi| crate::types::wire_int(hi, 1))
+        .min();
+    if let (Some(cap), Some(el)) = (cap, f.elements.as_ref()) {
+        v.push(Pre::Length { sequence: el.name.text.clone(), max: cap });
+    }
+    v
+}
+
+/// The kinds of precondition this rule has, named, or nothing when it has none. Only the
+/// kinds that are actually there: a note that lists a kind the rule does not have teaches
+/// the reader to skim the next one.
+fn pre_kinds(f: &RuleFile, c: &Checked) -> Option<String> {
+    let ps = preconditions(f, c);
+    let mut words: Vec<String> = Vec::new();
+    if ps.iter().any(|p| matches!(p, Pre::Rel { .. })) {
+        words.push(tr!("入力どうしの関係", "a relation between two inputs"));
+    }
+    if ps.iter().any(|p| matches!(p, Pre::Sum { .. })) {
+        words.push(tr!("並びの合計の上限", "a bound on a sequence's total"));
+    }
+    if ps.iter().any(|p| matches!(p, Pre::Length { .. })) {
+        words.push(tr!("並びの長さの上限", "a cap on a sequence's length"));
+    }
+    if words.is_empty() {
+        return None;
+    }
+    Some(words.join(if crate::i18n::ja() { "と" } else { ", " }))
+}
+
 /// §10.1: emits the wire format as a JSON Schema. Names are the canonical (Japanese) names,
 /// or the ASCII aliases with `alias` (§15.45); values are integers in the canonical unit.
 pub fn schema(f: &RuleFile, c: &Checked, alias: bool) -> String {
     tr!(
         "{{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \
          \"title\": \"規則 {} v{}\",\n  \"type\": \"object\",\n  \
-         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}\n}}\n",
+         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}{}\n}}\n",
         "{{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \
          \"title\": \"Rule {} v{}\",\n  \"type\": \"object\",\n  \
-         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}\n}}\n",
+         \"properties\": {{\n    \"in\": {},\n    \"out\": {}\n  }}{}\n}}\n",
         f.name.text,
         f.version,
         schema_in(f, c, alias),
-        schema_out(f, c, alias)
+        schema_out(f, c, alias),
+        // **The shape is necessary and not sufficient.** A caller that validates against it
+        // and stops has done everything this document can ask for and can still be refused
+        // at the door. `$comment` is the one place a schema may say so without pretending
+        // to be a keyword a validator will act on (§15.116).
+        match pre_kinds(f, c) {
+            None => String::new(),
+            Some(kinds) => tr!(
+                ",\n  \"$comment\": \"入力の形だけでは足りません。ここに書けないものは、入口で断られます——{kinds}。`rulec api` の `preconditions` に並びます。\"",
+                ",\n  \"$comment\": \"The shape is not the whole contract. What it cannot say is refused at the door instead: {kinds}. `rulec api` lists these under `preconditions`.\""
+            ),
+        }
     )
 }
 

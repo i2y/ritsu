@@ -211,6 +211,23 @@ when the problem is about the record as a whole. `what` and `hint` are **prose**
 One object. It says how to call the generated code without reading it; the field-by-field
 meaning is in [generated-code.md](generated-code.md).
 
+**`preconditions` is the half `schema` cannot carry.** A caller that validates its input
+against `rulec schema` has done everything JSON Schema can express and is still not done:
+three things the generated code refuses at the door are not shapes at all. Each entry names
+one, and a caller reads them by `kind` rather than by prose — the sentence the refusal
+carries moves with `--lang`, these do not.
+
+| `kind` | fields | what the generated code refuses |
+|---|---|---|
+| `constraint` | `left`, `op`, `right` | a declared relation between two inputs that does not hold (§15.55) |
+| `sum` | `name`, `over`, `of`, `max` | a sequence whose total over that column passes `max` (§15.100) |
+| `length` | `sequence`, `max` | a sequence with more than `max` elements (§15.58) |
+
+The list is empty where the rule has none, and never absent: a caller has to be able to tell
+"there are none" from "this tool does not say". Where the caller is a step of a workflow
+that fetched the sequence, checking these before returning it is the difference between a
+value refused at its own boundary and one refused after it is recorded (§15.116).
+
 ```json
 {"rule":"クーポン一枚","alias":"coupon_step","version":"1","source_sha256":"…",
  "python":{"module":"coupon_step","mcp":"coupon_step_mcp.py","page":"coupon_step_page.html","function":"coupon_step",
@@ -473,6 +490,9 @@ Already machine-readable and take no `--format`.
 - `schema` prints one JSON Schema for the wire an adapter speaks (see below). The
   description of an integer property says its unit and, for a rate, its step, so that a
   caller who never reads the rule knows that 18.3% at a step of 0.1% travels as 183.
+  Where the rule has preconditions this shape cannot state, a `$comment` says so and names
+  their kinds — a document that passes validation and is refused anyway has to say that
+  about itself. The preconditions themselves are in `api` under `preconditions`.
   `--keys alias` names every property by its ASCII alias instead of the rule's name, with
   the name as the property's `title`, which is the shape an HTTP request body or a form
   wants; the wire itself, and the tool built on it, keep the names.

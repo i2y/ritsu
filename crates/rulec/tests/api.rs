@@ -69,6 +69,140 @@ const RULES: &[(&str, &str)] = &[
     ("date", "tests/corpus/期間区分.rule"),
 ];
 
+/// **The shape is not the whole contract** (§15.116).
+///
+/// `rulec schema` says what the wire looks like, and a caller that validates against it has
+/// done everything JSON Schema can express. Three things the generated code refuses at the
+/// door are not shapes at all — a relation between two inputs, a bound on the total of a
+/// sequence, a cap on how many elements it may have — and until they were listed, a caller
+/// learned them only by being refused. Where that caller is a step of a workflow that went
+/// and fetched the sequence, the refusal lands one boundary too late.
+///
+/// What is held here is that the list is **not decoration**: for each entry, an input that
+/// satisfies the whole schema and breaks only that entry is actually refused, and the same
+/// input just inside the bound is taken.
+#[test]
+fn 形だけでは足りない前提が_目録に並び_実際に断られる() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので飛ばした");
+        return;
+    }
+    // (rule, the entries expected, an input that only this entry refuses, one just inside)
+    let cases: &[(&str, &str, &[&str], &str, &str)] = &[
+        (
+            "rel",
+            "tests/corpus/比例配分.rule",
+            &[
+                "constraint 直前までの定価 <= ここまでの定価",
+                "constraint ここまでの定価 <= 定価合計",
+            ],
+            r#"{"in":{"値引き総額":1000,"直前までの定価":5000,"ここまでの定価":4000,"定価合計":10000,"対象":true}}"#,
+            r#"{"in":{"値引き総額":1000,"直前までの定価":4000,"ここまでの定価":5000,"定価合計":10000,"対象":true}}"#,
+        ),
+        (
+            "sum",
+            "tests/corpus/買物かごの送料.rule",
+            &["sum 合計 over 明細 of 金額 max 1000000"],
+            &{
+                let lines = vec![r#"{"金額":100000}"#; 11].join(",");
+                format!(r#"{{"in":{{"区分":"一般","明細":[{lines}]}}}}"#)
+            },
+            &{
+                let lines = vec![r#"{"金額":100000}"#; 10].join(",");
+                format!(r#"{{"in":{{"区分":"一般","明細":[{lines}]}}}}"#)
+            },
+        ),
+        (
+            "len",
+            "tests/corpus/納入先照合.rule",
+            &["length 候補 max 50"],
+            &{
+                let c = vec![r#"{"会社名一致":true,"住所一致":true}"#; 51].join(",");
+                format!(r#"{{"in":{{"自動確定可":true,"候補":[{c}]}}}}"#)
+            },
+            &{
+                let c = vec![r#"{"会社名一致":true,"住所一致":true}"#; 50].join(",");
+                format!(r#"{{"in":{{"自動確定可":true,"候補":[{c}]}}}}"#)
+            },
+        ),
+    ];
+
+    for (tag, rule, want, over, under) in cases {
+        let (dir, inv) = setup(tag, rule);
+        // One line per entry, in the words the rule was written with, so a mismatch reads
+        // as the precondition it is rather than as a diff of JSON.
+        let got: Vec<String> = arr(&inv, "preconditions")
+            .iter()
+            .map(|p| {
+                let g = |k: &str| p.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let n = |k: &str| p.get(k).and_then(|v| v.as_int()).unwrap_or(-1);
+                match g("kind").as_str() {
+                    "constraint" => format!("constraint {} {} {}", g("left"), g("op"), g("right")),
+                    "sum" => format!("sum {} over {} of {} max {}", g("name"), g("over"), g("of"), n("max")),
+                    "length" => format!("length {} max {}", g("sequence"), n("max")),
+                    other => format!("(kind {other} は目録に無いはず)"),
+                }
+            })
+            .collect();
+        for w in *want {
+            assert!(
+                got.iter().any(|g| g == w),
+                "{rule}: 目録に {w} が無い。あるのは {got:?}"
+            );
+        }
+        assert_eq!(got.len(), want.len(), "{rule}: 目録の件数が違う: {got:?}");
+
+        let runner = dir.join("python").join(format!(
+            "{}_runner.py",
+            s(inv.get("python").expect("python が無い"), "module").trim_end_matches(".py")
+        ));
+        let run_one = |line: &str| -> std::process::Output {
+            let mut p = Command::new("python3")
+                .arg(&runner)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .expect("python3 を起動できない");
+            use std::io::Write;
+            p.stdin.as_mut().unwrap().write_all(line.as_bytes()).unwrap();
+            p.wait_with_output().unwrap()
+        };
+        let inside = run_one(under);
+        assert!(
+            inside.status.success(),
+            "{rule}: 境目の内側が断られた:\n{}",
+            String::from_utf8_lossy(&inside.stderr)
+        );
+        let outside = run_one(over);
+        assert!(
+            !outside.status.success(),
+            "{rule}: 形には合っているのに前提を破った入力が通ってしまった。\
+             目録に並べた前提が、生成コードの断りと結びついていない"
+        );
+        let said = String::from_utf8_lossy(&outside.stderr);
+        assert!(said.contains("RuleInputError"), "{rule}: 入口で断ったのではない:\n{said}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// A rule with nothing but shapes says so: an empty list, not a missing field. A caller that
+/// reads the inventory has to be able to tell "there are none" from "this tool does not say".
+#[test]
+fn 前提の無い規則は_空の一覧を出す() {
+    let inv = api("tests/corpus/送料.rule");
+    assert!(arr(&inv, "preconditions").is_empty(), "前提が無いのに並んでいる");
+    let (c, out, _) = run(&["schema", "tests/corpus/送料.rule"]);
+    assert_eq!(c, 0);
+    assert!(!out.contains("$comment"), "前提が無いのに schema が断り書きを付けている");
+    let (c, out, _) = run(&["schema", "tests/corpus/買物かごの送料.rule"]);
+    assert_eq!(c, 0);
+    assert!(
+        out.contains("$comment") && out.contains("preconditions"),
+        "前提があるのに schema が「形だけでは足りない」と言っていない:\n{out}"
+    );
+}
+
 #[test]
 fn 署名とガードが生成物と一致する() {
     // The cheapest check that cannot be fooled: every name and number the inventory states
