@@ -1916,6 +1916,9 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
     // script still has the document — this only rearranges it.
     o.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c)));
     o.push_str(crate::graph::APP_JS);
+    // Last, because both ask the board about something only the board knows: where the
+    // answer goes, and whether the name in the address is a card of its own.
+    o.push_str("\nif (lastRun && window.rulecBoardFill) rulecBoardFill(lastRun.trace, lastRun.outs);\nlandOnHash();\n");
     o.push_str("</script>\n</body>\n</html>\n");
     o
 }
@@ -2242,6 +2245,9 @@ function shown(o, v) {
   if (o.kind === "date") return dateOf(v);
   return String(v) + (o.unit ? o.unit : "");
 }
+// The last answer, kept because the board is built after the first run: a page opened on
+// `?example=2` has already run by the time there are cards to put the result on.
+let lastRun = null;
 function run() {
   const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
   if (RULE.elements) {
@@ -2254,7 +2260,6 @@ function run() {
     );
   }
   for (const el of document.querySelectorAll(".hit")) el.classList.remove("hit");
-  for (const td of document.querySelectorAll("#rule-graph .gv")) td.textContent = "";
   try {
     const [out, trace] = FN.run(...args);
     const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
@@ -2263,27 +2268,14 @@ function run() {
       const tr = document.querySelector('tr[data-t="' + CSS.escape(f.table) + '"][data-r="' + f.row + '"]');
       if (tr) tr.classList.add("hit");
     }
-    // The same trace, on the map. A row that matched decided a value, so the box that value
-    // is in lights up in the colour the row does, and so do the arrows that fed it. What
-    // stays dark is a decider this case did not go through — which is the whole of what a
-    // picture can add to a list of fired rows (§15.117).
-    const fired = new Set(trace.map((f) => f.table));
-    const lit = new Set();
-    for (const g of document.querySelectorAll("#rule-graph .gn[data-t]")) {
-      if (g.dataset.t.split("\u001f").some((t) => fired.has(t))) {
-        g.classList.add("hit");
-        lit.add(g.dataset.v);
-      }
-    }
-    for (const p of document.querySelectorAll("#rule-graph .ge")) {
-      if (lit.has(p.dataset.to)) p.classList.add("hit");
-    }
-    // …and the answer lands in the pane that is about the answer.
-    if (window.rulecBoardFill) {
-      const outs = {};
-      RULE.outputs.forEach((o, i) => { outs[o.name] = shown(o, vals[i]); });
-      rulecBoardFill(trace, outs);
-    }
+    // The same trace, on the board: the row that fired is lit inside the card that holds
+    // its table, the card says which row that was, and the value it decided goes beside the
+    // card's name. What stays without a row number is a decider this case did not go
+    // through — which is the whole of what a picture can add to a list of fired rows.
+    const outs = {};
+    RULE.outputs.forEach((o, i) => { outs[o.name] = shown(o, vals[i]); });
+    lastRun = { trace, outs };
+    if (window.rulecBoardFill) rulecBoardFill(trace, outs);
     $("#try-record").textContent = FN.record(...args, out, trace, "");
     try {
       // The sequence is not put in the address: a link carries the scalar inputs.
@@ -2340,9 +2332,15 @@ if (ex) {
   }
   run();
 }
-// `#t-基本送料` lands on that table, after the run above has settled the page's height.
-if (location.hash) {
-  const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+// `#t-基本送料` names that table. On the board it selects the decider that holds it; on a
+// page without the board — no JavaScript for it, or a rule with nothing to draw — it lands
+// on the heading. Called once the board has had its turn, and after the run above has
+// settled the page's height.
+function landOnHash() {
+  if (!location.hash) return;
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (window.rulecBoardSelect && window.rulecBoardSelect(id.replace(/^t-/, ""))) return;
+  const target = document.getElementById(id);
   if (target) target.scrollIntoView();
 }
 // MCP Apps (SEP-1865). Inside a host's frame this page is the view of one call, so it says

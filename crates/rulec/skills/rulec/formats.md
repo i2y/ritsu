@@ -417,7 +417,7 @@ clause takes precedence over a table.
 | `output` | present and true where the rule declares the value as an output |
 | `per_element` | present and true where the value is decided once **per element** rather than once per call. A `sum`, a `count` and a `fold` are the three ways out of that frame, and nothing in the rule's text says which side of the line a value is on |
 | `from_apply` | the `apply` a value came in through. Its name is `<apply>:<name>`, and everything under one apply is one subgraph |
-| `by` | how the value is decided, one entry per decider, in the order precedence is declared: `{"kind":"table"\|"clause","name":…,"policy":…,"rows":…,"overrides":[…]}`, `{"kind":"derive"\|"define"}`, `{"kind":"sum"\|"count","over":…,"of":…,"where":…}`, `{"kind":"fold","verdict":…,"over":…}` |
+| `by` | how the value is decided, one entry per decider, in the order precedence is declared: `{"kind":"table"\|"clause","name":…,"policy":…,"rows":…,"overrides":[…]}`, `{"kind":"derive"\|"define"}`, `{"kind":"sum"\|"count","over":…,"of":…,"where":…}`, `{"kind":"fold","verdict":…,"over":…}`, `{"kind":"result"}` |
 
 An edge is `{"from":…,"to":…,"kind":…}` with `via` naming the decider that reads it, where
 one is named. `kind` is `reads`, or `walk` for the edge that crosses the element frame —
@@ -563,13 +563,19 @@ Already machine-readable and take no `--format`.
 is that shape; `--format html` is the same document as one page with a form on it, where the
 generated JavaScript runs the case the approver types in.
 
-The HTML page also draws the rule: one box per value, one arrow per "read while deciding",
-laid out by how far a value is from the ones that arrive from the caller. It is `rulec
-graph` drawn, held to it by a test, and the same trace that lights the rows lights the
-values those rows decided — so what stays dark is a decider the case did not go through. A
-value decided once per element sits inside a dashed frame, and so does everything an
-`apply` brought in; the guard at each crossing is on the box, and what a shape cannot say
-about a crossing is in the caption.
+The HTML page is laid out as a board. The left pane holds the form, the inputs, the
+outputs and the types; the middle is a canvas that scrolls both ways, with one card per
+**decider** — a table, a `derive`, a `define` — placed left to right by how far it is from
+the values that arrive from the caller; a dock opens below a card you select, holding that
+table's "column / where it comes from" and what `rulec check` verified about it. Both
+borders can be dragged.
+
+A card carries the decision table itself, moved out of the body of the document rather than
+drawn again, so the two cannot disagree. The trace that lights a row lights it inside the
+card, and the card's heading says which row fired and what it decided; cards you have not
+selected are monochrome. It is `rulec graph` laid out, held to it by a test. The arrows are
+not an order of events — everything is decided in one call — so nothing in the caption says
+"next" or "then". Without JavaScript the page is the document it always was.
 
 `--audience customer` renders the same rule as the article a help centre publishes: the
 inputs in plain words, the tables with `-` as "any" and `not:` as "other than", the rounding

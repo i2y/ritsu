@@ -40,8 +40,9 @@ input falls through, and gives the shape of the row that closes it.
    TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy, each with its runner, the rule as
    an MCP server, and the test vectors built from the table's own boundaries.
 4. **Open *the approver's page*.** What `rulec doc --format html` renders for whoever signs
-   the table off — and it is not a picture of the answer: the page runs the generated
-   JavaScript, so a case typed into it is decided by the same code.
+   the table off. It is a board laid out for a whole window, so it opens in a tab of its
+   own rather than in a box on this page — and it is not a picture of the answer: the page
+   runs the generated JavaScript, so a case typed into it is decided by the same code.
 5. **Break something on purpose.** Change `<=2kg` to `<=6kg` and watch the overlap come
    back with the input that matches both rows; take the `round up(1USD)` off the output and
    read what the rounding diagnostic asks.

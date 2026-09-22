@@ -78,6 +78,35 @@ fn 辺は実在する節点をつなぎ_どの値にも出どころがある() {
     }
 }
 
+/// **The graph reaches the answer.** Every value the rule declares as an output has a node,
+/// whatever decided it. A `result` line is the case this was written for: it decides the
+/// output in one line and appears in no `item`, so a graph built by walking the items alone
+/// stops one step short of the value the caller asked for — and the board then draws every
+/// decider except the one that produced the answer.
+#[test]
+fn 宣言した出力はすべて_グラフの節点になる() {
+    for rule in corpus() {
+        let g = graph(&rule);
+        let outs: Vec<String> = arr(&g, "nodes")
+            .iter()
+            .filter(|n| matches!(n.get("output"), Some(rulec::json::Json::Bool(true))))
+            .map(|n| s(n, "name"))
+            .collect();
+        let src = std::fs::read_to_string(root().join(&rule)).expect(&rule);
+        for line in src.lines() {
+            if let Some(r) = line.strip_prefix("result ") {
+                let name = r.split('=').next().unwrap_or("").trim();
+                let name = name.split('(').next().unwrap_or(name).trim();
+                assert!(
+                    outs.iter().any(|o| o == name),
+                    "{rule}: result {name} に節点が無い（出力の節点は {outs:?}）"
+                );
+            }
+        }
+        assert!(!outs.is_empty(), "{rule}: 出力の節点が一つも無い");
+    }
+}
+
 /// **The graph says what `doc` says.** Under every table, `doc` prints the columns it reads
 /// and where each comes from; the graph is that same relation gathered up. Two renderings of
 /// one fact drift the moment nobody holds them together, and then the picture quietly stops

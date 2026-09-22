@@ -202,6 +202,18 @@ pub fn build(f: &RuleFile, c: &Checked) -> Graph {
         }
     }
 
+    // `result 送料 = 基本送料 × 負担率` decides the rule's output in one line, and nothing in
+    // `items` mentions it. Without this the value the caller actually asked for has no node
+    // at all — the graph stops one step short of the answer, and so does the board.
+    if let Some(r) = &f.result {
+        if let Some(o) = f.outputs.iter().find(|o| o.name.text == r.name) {
+            let mut v = val(&o.name, "value");
+            v.by.push(Obj::new().str("kind", "result").finish());
+            v.reads = names(&r.expr);
+            vals.push(v);
+        }
+    }
+
     // One node per value: a second decider joins the first rather than standing beside it.
     let mut merged: Vec<Val> = Vec::new();
     for v in vals {
@@ -376,6 +388,7 @@ fn word_for(kind: &str) -> String {
         "sum" => tr!("合計", "sum"),
         "count" => tr!("数え上げ", "count"),
         "fold" => tr!("畳み込み", "fold"),
+        "result" => tr!("結果", "result"),
         _ => String::new(),
     }
 }
@@ -397,7 +410,7 @@ fn kind_line(n: &GNode) -> String {
 /// definition — with the values it reads written inside it, is five boxes and four arrows
 /// where the other was fifteen and twenty. And once the box is a card rather than a
 /// rectangle, the table itself goes inside it, which is what the reader came for: the rows,
-/// with the one that fired lit, in the place the picture says it belongs (§15.120).
+/// with the one that fired lit, in the place the picture says it belongs (§15.118).
 ///
 /// Columns run left to right by how far a decider is from the inputs. Left to right, not
 /// top to bottom, because a table shown whole is tall: side by side, two of them are one
@@ -508,7 +521,10 @@ pub const APP_CSS: &str = r##"
 body.boarded { max-width: none; margin: 0; padding: 0; }
 body.boarded main { display: none; }
 .app { display: flex; height: 100vh; align-items: stretch; }
-.app .side { width: 24rem; flex: none; min-width: 14rem; border-right: 1px solid #e0e0e0; background: #fafbfc; padding: 22px 24px; overflow-y: auto; }
+/* A third of the window, but never more than a comfortable measure and never less than
+   the form needs. A fixed width takes over half of a narrow window — an MCP host's panel,
+   the playground's frame — and leaves the board nowhere to be. */
+.app .side { box-sizing: border-box; width: clamp(15rem, 34%, 26rem); flex: none; border-right: 1px solid #e0e0e0; background: #fafbfc; padding: 22px 24px; overflow-y: auto; }
 .app .split { flex: none; width: 6px; cursor: col-resize; background: #ececec; }
 .app .split:hover, .app .split.on { background: #c9d6e2; }
 .app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
@@ -558,6 +574,9 @@ pub const APP_JS: &str = r##"
   const wires = document.createElementNS("http://www.w3.org/2000/svg", "svg"); wires.id = "wires";
   canvas.append(wires); stage.append(canvas);
   const byName = {}; for (const n of GRAPH.nodes) byName[n.v] = n;
+  // A table's name reaches its card: `#t-基本送料` named a heading before the board moved
+  // the headings into the dock, and it has to keep naming something.
+  const byTable = {}; for (const n of GRAPH.nodes) for (const t of n.tables) byTable[t] = n.v;
   const el = {}, detail = {};
   for (const col of GRAPH.cols) {
     const c = mk("div", "gcol");
@@ -633,17 +652,32 @@ pub const APP_JS: &str = r##"
     }
     requestAnimationFrame(() => requestAnimationFrame(wire));
   };
-  for (const v in el) el[v].addEventListener("click", () => {
-    const on = el[v].classList.contains("sel");
+  // Selecting a card, from a click or from the address.
+  function select(v, toggle) {
+    if (!el[v]) return false;
+    const on = toggle && el[v].classList.contains("sel");
     for (const o of document.querySelectorAll(".gcard.sel")) o.classList.remove("sel");
     dock.innerHTML = ""; dock.hidden = true; hsplit.hidden = true;
-    if (on) return;
+    mark(on ? "" : v);
+    if (on) return true;
     el[v].classList.add("sel");
-    const parts = detail[v] || []; if (!parts.length) return;
+    el[v].scrollIntoView({ block: "nearest", inline: "nearest" });
+    const parts = detail[v] || []; if (!parts.length) return true;
     const x = mk("span", "x"); x.textContent = GRAPH.text.close;
-    x.addEventListener("click", (ev) => { ev.stopPropagation(); el[v].classList.remove("sel"); dock.hidden = true; });
+    x.addEventListener("click", (ev) => { ev.stopPropagation(); select(v, true); });
     dock.append(x, ...parts); dock.hidden = false; hsplit.hidden = false; wire();
-  });
+    return true;
+  }
+  // The card is in the address, beside the case: `?…#t-基本送料` opens on that decider, so
+  // "look at this one" can say which one.
+  function mark(v) {
+    const n = v && byName[v];
+    const key = n ? (n.tables[0] || v) : "";
+    try { history.replaceState(null, "", location.pathname + location.search + (key ? "#t-" + encodeURIComponent(key) : "")); } catch (_) {}
+  }
+  for (const v in el) el[v].addEventListener("click", () => select(v, true));
+  // A name from the address: a table's, or a value's.
+  window.rulecBoardSelect = (key) => select(byTable[key] || key, false);
   // Both borders move: the side pane's width, and the dock's height.
   let drag = null;
   split.addEventListener("mousedown", (e) => { drag = "x"; split.classList.add("on"); e.preventDefault(); });

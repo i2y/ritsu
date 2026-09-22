@@ -304,21 +304,24 @@ again" into "compare this row with that cell".
 $ rulec doc rules/送料.rule --lang ja --format html > 送料.html
 ```
 
-`--format html` renders the same document as one HTML page with a form at the top. The
-approver types a case: the rows that matched light up, the outputs appear, and the line the
-generated code would write to a log is shown as it is. The example buttons fill in the
-rule's own verified examples.
+`--format html` renders the same document as one HTML page, laid out as a board. The form
+is on the left; the middle holds one card per **decider** — one table, one `derive`, one
+`define` — with that table itself inside the card. The approver types a case: the row that
+fired lights up inside the card it belongs to, the card says which row that was, the answer
+appears on the card that produced it, and the line the generated code would write to a log
+is shown as it is. The example buttons fill in the rule's own verified examples.
 
-![The top of the page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form, the result reads 送料 = 400円, and under it is the line the generated code would write to a log](images/try-en.png)
+![The board for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the result reads 送料 = 400円; the cards 大口, 基本送料, 負担率 and 送料 run left to right, with row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) lit](images/try-en.png)
 
-Further down the same page, the rows that matched are highlighted: row 3 of 基本送料 (not
-a remote area, up to 2000g) and row 2 of 負担判定 (platinum).
+Selecting a card opens a dock below it: where that table's columns come from, and what
+`rulec check` verified about it. Only the selected card carries colour, so which one you
+are reading is never in doubt.
 
-![The two tables of the same page, with row 3 of 基本送料 and row 2 of 負担判定 highlighted](images/try-rows-en.png)
+![The same board with 基本送料 selected: the card is in colour, and the dock below holds its "column / where it comes from" table and what rulec check verified](images/try-dock-en.png)
 
 What runs in the page is the generated JavaScript itself, so the page says nothing the code
-does not. The case stays in the page's address (`?dest=東京都&weight=1999&…`), so "look at
-this one" is a link.
+does not. The case and the card both stay in the page's address
+(`?dest=東京都&weight=1999&…#t-基本送料`), so "look at this table on this case" is a link.
 
 
 There is one prohibition. **It writes no sentence that is not in the

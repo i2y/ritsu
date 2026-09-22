@@ -17,6 +17,8 @@ const TEXT = {
     generated: (n, ms) => `${n} files · ${ms} ms`,
     broken: "the checker stopped on this input and was reloaded; please report the table that did it",
     file: "file",
+    board: "The approver's page is a board that wants the whole window, so it opens in a tab of its own. Edit the table and the link below is the new one.",
+    open: "open the approver's page →",
   },
   ja: {
     booting: "検査器を読み込んでいます…",
@@ -26,6 +28,8 @@ const TEXT = {
     generated: (n, ms) => `${n} ファイル ・ ${ms} ms`,
     broken: "この入力で検査器が止まったので読み直しました。その表を報告してください",
     file: "ファイル",
+    board: "承認者向けのページは窓いっぱいを使う盤面なので、別のタブで開きます。表を直すと、下のリンクはその新しいほうになります。",
+    open: "承認者向けのページを開く →",
   },
 };
 
@@ -156,6 +160,24 @@ function start(root) {
     return el;
   };
 
+  // The address of the approver's page as it stands. A link, not `window.open`: a scripted
+  // pop-up is blocked often enough to be unreliable, and a link the reader clicks is a
+  // plain navigation — which also means a middle click or a cmd click does what it should.
+  //
+  // What the link points at is a one-line host document holding the page in a sandboxed
+  // frame: the generated JavaScript runs with scripts and no same-origin, exactly as it did
+  // in the pane, so nothing on this site is ever in its reach.
+  let docUrl = "";
+  function boardUrl(html) {
+    if (docUrl) URL.revokeObjectURL(docUrl);
+    const host =
+      '<!doctype html><meta charset="utf-8"><title>rulec</title>' +
+      "<style>html,body{margin:0;height:100%;background:#fff}iframe{display:block;border:0;width:100%;height:100%}</style>" +
+      '<iframe sandbox="allow-scripts" srcdoc="' + html.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '"></iframe>';
+    docUrl = URL.createObjectURL(new Blob([host], { type: "text/html" }));
+    return docUrl;
+  }
+
   function run() {
     if (!inst) return;
     const started = performance.now();
@@ -182,14 +204,23 @@ function start(root) {
       return;
     }
     if (view === "doc") {
-      // The approver's page runs the generated JavaScript, so it gets a frame of its own
-      // with nothing else in reach: scripts, and no same-origin.
-      const frame = document.createElement("iframe");
-      frame.className = "pg-frame";
-      frame.setAttribute("sandbox", "allow-scripts");
-      frame.srcdoc = answer.html;
+      // The approver's page is a board laid out for a window, and this pane is a box inside
+      // a documentation page — so it is not shown here. It is held, and opened full-screen
+      // in a tab of its own when the reader asks for it. Rendering still happens on every
+      // edit, so the tab that opens is always the current table's.
       status.textContent = `${ms} ms`;
-      show(frame);
+      const box = document.createElement("div");
+      box.className = "pg-board";
+      const p = document.createElement("p");
+      p.textContent = t.board;
+      const a = document.createElement("a");
+      a.className = "pg-open";
+      a.href = boardUrl(answer.html);
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = t.open;
+      box.append(p, a);
+      show(box);
       return;
     }
     files = answer.files;
