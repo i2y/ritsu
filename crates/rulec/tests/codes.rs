@@ -91,7 +91,7 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     let mut seen = BTreeSet::new();
     for e in &all {
         assert!(seen.insert(e.code), "台帳に {} が二度ある", e.code);
-        assert!(!e.title.is_empty() && !e.when.is_empty() && !e.fix.is_empty(), "{} の欄が空", e.code);
+        assert!(!e.title.is_empty() && !e.when.is_empty() && !e.fix.is_empty(), "{} のフィールドが空", e.code);
         for r in e.related {
             assert!(all.iter().any(|x| x.code == *r), "{} が台帳に無い {r} を指している", e.code);
             assert_ne!(r, &e.code, "{} が自分自身を指している", e.code);

@@ -171,7 +171,7 @@ impl Manifest {
     /// Read the `会員=一般` form (a one-off override for sensitivity analysis, §10.3).
     pub fn add(&mut self, spec: &str, f: &RuleFile, c: &Checked) -> Result<(), String> {
         let (name, text) = spec.split_once('=').ok_or_else(|| {
-            tr!("`{spec}` は `欄=値` の形ではありません", "`{spec}` is not of the form `field=value`")
+            tr!("`{spec}` は `フィールド=値` の形ではありません", "`{spec}` is not of the form `field=value`")
         })?;
         let (name, text) = (name.trim(), text.trim());
         if !f.inputs.iter().any(|i| i.name.text == name) {
@@ -281,7 +281,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
             bad(
                 "unknown_field",
                 extra[0],
-                tr!("`in` に規則が知らない欄があります: {}", "`in` has fields the rule does not know: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
+                tr!("`in` に規則が知らないフィールドがあります: {}", "`in` has fields the rule does not know: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
                 &tr!("規則の入力の和名と綴りを合わせてください。", "Match the spelling of the rule's input names."),
             );
             continue;
@@ -423,7 +423,7 @@ pub fn render_lint(l: &Load, path: &str) -> String {
         l.filled()
     );
     if l.dropped > 0 {
-        o.push_str(&tr!("欄が欠けていたので外した記録: {} 件\n", "Records excluded because a field was missing: {}\n", l.dropped));
+        o.push_str(&tr!("フィールドが欠けていたので外した記録: {} 件\n", "Records excluded because a field was missing: {}\n", l.dropped));
     }
     if l.problems.is_empty() {
         o.push_str(&tr!("形式の問題はありません。\n", "No format problems.\n"));

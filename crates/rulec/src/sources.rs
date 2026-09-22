@@ -671,7 +671,7 @@ fn boundaries(
     // A bound read from a heading is quoted as one, because the cell the reader has to look
     // at is not the cell the number is in.
     let quote = |b: &crate::extract::Bound| match b.column {
-        true => tr!("「{}」の欄", "the \u{201c}{}\u{201d} column", b.cell),
+        true => tr!("「{}」の列", "the \u{201c}{}\u{201d} column", b.cell),
         false => tr!("「{}」", "\u{201c}{}\u{201d}", b.cell),
     };
     for (k, cell) in r.cells.iter().enumerate() {

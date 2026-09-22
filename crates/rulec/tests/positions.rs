@@ -157,8 +157,8 @@ fn 単位の違うリテラルはどの位置でも止まる() {
     seed("出力の丸めの格子（単位なし）", PLAIN, "round up(10円)", "round up(10)", "E103");
     seed("出力の丸めの格子（補助単位）", PLAIN, "round up(10円)", "round up(10銭)", "E103");
     seed("型の刻み", PLAIN, "rate[step 1%]", "rate[step 1g]", "E103");
-    seed("要素の欄の刻み", WALK, "rate[step 1%]", "rate[step 1円]", "E103");
-    seed("要素の欄の range", COUNT, "range >=0g <=1000g", "range >=0g <=1000円", "E103");
+    seed("要素のフィールドの刻み", WALK, "rate[step 1%]", "rate[step 1円]", "E103");
+    seed("要素のフィールドの range", COUNT, "range >=0g <=1000g", "range >=0g <=1000円", "E103");
 
     // --- Expressions
     seed("導出の式", PLAIN, "= 重さ + 100g", "= 重さ + 100円", "E103");
@@ -234,7 +234,7 @@ fn 種類の違う値はどの位置でも止まる() {
     // --- A value that is not on the column's declared step
     seed("表の入力セル（刻み）", PLAIN, "when 割合 >=90%", "when 割合 >=90.5%", "E114");
     seed("例の入力セル（刻み）", PLAIN, "| 100g  | 10%", "| 100g  | 10.5%", "E114");
-    seed("要素の欄（刻み）", WALK, "| 2000円  | 10%  |", "| 2000円  | 10.5% |", "E114");
+    seed("要素のフィールド（刻み）", WALK, "| 2000円  | 10%  |", "| 2000円  | 10.5% |", "E114");
 
     // --- A boolean where an enum is wanted
     seed("表の入力セル（真偽）", PLAIN, "| true  | 乙   |", "| true  | true |", "E103");

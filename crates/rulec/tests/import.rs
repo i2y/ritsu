@@ -46,7 +46,7 @@ fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
     assert!(out.contains("enum サイズの値(c2_kind) = S60 | S80"), "ASCII の値に別名は要らない: {out}");
     assert!(out.contains("  運賃(o1) : money[円, incl_tax]  round down(1円)  # 推定"), "{out}");
     assert!(out.contains("| 近畿圏 | S80 | 1310円 |"), "桁区切りを外して写す: {out}");
-    assert!(out.contains("# 出典: "), "出典の欄が用意される: {out}");
+    assert!(out.contains("# 出典: "), "出典の列が用意される: {out}");
     // A draft is honest about itself: every guess is marked.
     assert!(out.matches("推定").count() >= 4, "{out}");
     // Four rows over 2 × 2 values: complete as it stands, so check passes.

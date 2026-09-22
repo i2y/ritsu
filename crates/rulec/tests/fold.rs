@@ -201,7 +201,7 @@ fn 十言語に生成し_SQLは名指しで断る() {
 /// spells it — a caller that reads `rulec api` rather than the code would otherwise build a
 /// call with one argument missing.
 #[test]
-fn 一覧は並びを欄として載せる() {
+fn 一覧は並びをフィールドとして載せる() {
     let d = dir("api");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
@@ -229,11 +229,11 @@ fn 一覧は並びを欄として載せる() {
         // carries — not just a name in a signature string.
         let key = if lang == "go" { "input_fields" } else { "params" };
         let rulec::json::Json::Arr(ps) = e.get(key).unwrap() else { panic!() };
-        let seq = ps.iter().find(|p| p.get("name").and_then(|v| v.as_str()) == Some("運賃行")).expect("列が欄に無い");
-        let rulec::json::Json::Arr(fs) = seq.get("elements").expect("要素の欄が無い") else { panic!() };
-        assert_eq!(fs.len(), 3, "{lang}: 要素の欄が三つでない");
+        let seq = ps.iter().find(|p| p.get("name").and_then(|v| v.as_str()) == Some("運賃行")).expect("並びが一覧に無い");
+        let rulec::json::Json::Arr(fs) = seq.get("elements").expect("要素のフィールドが無い") else { panic!() };
+        assert_eq!(fs.len(), 3, "{lang}: 要素のフィールドが三つでない");
         let th = fs.iter().find(|f| f.get("name").and_then(|v| v.as_str()) == Some("閾値")).unwrap();
-        assert!(th.get("range").is_some(), "{lang}: 要素の欄に範囲が無い");
+        assert!(th.get("range").is_some(), "{lang}: 要素のフィールドに範囲が無い");
     }
     let _ = std::fs::remove_dir_all(&d);
 }

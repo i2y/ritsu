@@ -135,7 +135,7 @@ fn 入口のガードは刻みの個数で比べる() {
     assert!(py.contains("if not 0 <= rate <= 100:"), "Python のガードが刻みの個数でない:\n{py}");
     // The struct field comment has to agree with the guard, or a reader of the Go side is
     // told the field runs 0..1.
-    assert!(go.contains("// 割引率 範囲 0..100"), "Go の欄の注記がガードと食い違う:\n{go}");
+    assert!(go.contains("// 割引率 範囲 0..100"), "Go のフィールドの注記がガードと食い違う:\n{go}");
     assert!(go.contains("int64(in.Rate) < 0 || int64(in.Rate) > 100"), "Go のガードが刻みの個数でない:\n{go}");
     let _ = std::fs::remove_dir_all(&dir);
 }

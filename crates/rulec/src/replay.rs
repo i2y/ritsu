@@ -25,7 +25,7 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
     rep.impl_id = source.into();
     rep.fills_used = m.shown.clone();
     if l.dropped > 0 {
-        rep.excluded.push(("missing_field", tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
+        rep.excluded.push(("missing_field", tr!("フィールドが欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
     }
     if !l.problems.is_empty() {
         rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
@@ -93,7 +93,7 @@ pub fn diff(
     rep.impl_id = format!("{} → {}", label.0, label.1);
     rep.fills_used = m.shown.clone();
     if l.dropped > 0 {
-        rep.excluded.push(("missing_field", tr!("欄が欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
+        rep.excluded.push(("missing_field", tr!("フィールドが欠けていて既定値も無い", "missing a field that has no default value"), l.dropped));
     }
     if !l.problems.is_empty() {
         rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));

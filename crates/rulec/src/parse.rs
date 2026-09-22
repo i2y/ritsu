@@ -324,7 +324,7 @@ impl P {
                                 .at(self.at(o.span.line))
                                 .mark(o.span.clone(), tr!("`->` があります", "there is a `->` here"))
                                 .note(tr!(
-                                    "これは値の並びであって表ではありません。欄は `elements` の欄だけです。",
+                                    "これは値の並びであって表ではありません。フィールドは `elements` のフィールドだけです。",
                                     "This is a list of values, not a table: its columns are the fields of `elements` and nothing else."
                                 )),
                         );
@@ -578,7 +578,7 @@ impl P {
             Diag::error("E013", tr!("`from` の形が違います", "The shape of `from` is wrong"))
                 .mark(span_of(ts), "")
                 .note(tr!(
-                    "形は `from <shape の名前>.<欄>…`、`from any|all <shape の名前>.<並び> where <欄> = <値>`、`from count <shape の名前>.<並び> [where <欄> = <値>]` です。",
+                    "形は `from <shape の名前>.<フィールド>…`、`from any|all <shape の名前>.<並び> where <フィールド> = <値>`、`from count <shape の名前>.<並び> [where <フィールド> = <値>]` です。",
                     "The shapes are `from <shape>.<field>…`, `from any|all <shape>.<collection> where <field> = <value>`, and `from count <shape>.<collection> [where <field> = <value>]`."
                 ))
         };

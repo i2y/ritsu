@@ -143,7 +143,7 @@ fn producer(f: &RuleFile, col: &str) -> String {
         return tr!("入力", "Input");
     }
     if f.elements.iter().flat_map(|e| &e.fields).any(|i| i.name.text == col) {
-        return tr!("要素の欄", "Field of one element");
+        return tr!("要素のフィールド", "Field of one element");
     }
     for it in &f.items {
         match it {
@@ -293,7 +293,7 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
     // who cannot see these is reading half the rule: the caller passes them too.
     if let Some(el) = &f.elements {
         o.push_str(&tr!(
-            "\n## 順に見ていく並び: {}\n\n一件ぶんの欄です。呼び出し側は、この欄のそろった要素を何件でも渡します。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "\n## 順に見ていく並び: {}\n\n一件ぶんのフィールドです。呼び出し側は、このフィールドのそろった要素を何件でも渡します。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
             "\n## The sequence walked: {}\n\nThe fields of one element. The caller passes any number of elements, each with these fields filled in.\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
             el.name.text
         ));

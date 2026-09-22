@@ -330,7 +330,7 @@ fn fits_the_type(pr: &Projection, ty: &Ty, rule_path: &str, name: &str) -> Vec<D
                     "`count` is how many elements passed, so the input that takes it is a `number`. It needs a range too: the cap on the walk is the universe the checks quantify over."
                 ),
                 _ => tr!(
-                    "`any` と `all` は当てはまるかどうかなので、受ける入力は `bool` です。値そのものが欲しいなら `from <shape の名前>.<欄>` を書いてください。",
+                    "`any` と `all` は当てはまるかどうかなので、受ける入力は `bool` です。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
                     "`any` and `all` say whether the elements passed, so the input that takes one is a `bool`. For the value itself, write `from <shape>.<field>`."
                 ),
             }),
@@ -364,10 +364,10 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
             .at(at.clone())
             .mark(pr.span.clone(), "")
             .note(if s.had.is_empty() {
-                tr!("`{where_}` までは届きました。その先に欄はありません。", "It resolved as far as `{where_}`, which has no fields under it.")
+                tr!("`{where_}` までは届きました。その先にフィールドはありません。", "It resolved as far as `{where_}`, which has no fields under it.")
             } else {
                 tr!(
-                    "`{where_}` までは届きました。そこにある欄: {}",
+                    "`{where_}` までは届きました。そこにあるフィールド: {}",
                     "It resolved as far as `{where_}`. The fields there: {}",
                     s.had.join(", ")
                 )
@@ -391,7 +391,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
                         .at(at.clone())
                         .mark(pr.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
                         .note(tr!(
-                            "`any`・`all`・`count` は並びを一度だけ歩きます。値そのものが欲しいなら `from <shape の名前>.<欄>` を書いてください。",
+                            "`any`・`all`・`count` は並びを一度だけ歩きます。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
                             "`any`, `all` and `count` walk a collection once. For the value itself, write `from <shape>.<field>`."
                         )),
                 );
@@ -400,23 +400,23 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
             if let Some((field, cell)) = pr.kind.test() {
                 let At::Object(had) = elem.as_ref() else {
                     out.push(
-                        Diag::error("E121", tr!("`{}` の要素に欄はありません", "An element of `{}` has no fields", full()))
+                        Diag::error("E121", tr!("`{}` の要素にフィールドはありません", "An element of `{}` has no fields", full()))
                             .at(at.clone())
                             .mark(field.span.clone(), tr!("契約では {}", "the contract says {}", elem.word()))
-                            .note(tr!("`where` は要素の欄を見ます。", "`where` tests a field of an element.")),
+                            .note(tr!("`where` は要素のフィールドを見ます。", "`where` tests a field of an element.")),
                     );
                     return out;
                 };
                 if !had.contains(&field.text) {
                     out.push(
-                        Diag::error("E121", tr!("要素に `{}` という欄はありません", "An element has no field `{}`", field.text))
+                        Diag::error("E121", tr!("要素に `{}` というフィールドはありません", "An element has no field `{}`", field.text))
                             .at(at.clone())
                             .mark(field.span.clone(), "")
-                            .note(tr!("要素にある欄: {}", "The fields of an element: {}", had.join(", "))),
+                            .note(tr!("要素にあるフィールド: {}", "The fields of an element: {}", had.join(", "))),
                     );
                 } else if let Some(bad) = cell_clashes(con, &steps, &field.text, cell) {
                     out.push(
-                        Diag::error("E120", tr!("`where` の値が欄の型と合いません", "The value of `where` does not fit the field"))
+                        Diag::error("E120", tr!("`where` の値がフィールドの型と合いません", "The value of `where` does not fit the field"))
                             .at(at.clone())
                             .mark(field.span.clone(), tr!("契約では {}", "the contract says {}", bad))
                             .note(tr!(

@@ -169,7 +169,7 @@ fn 射影を出すのは五つの言語だけ() {
 
 /// The paths are held to the contract, and the contract is read from beside the rule.
 #[test]
-fn 契約の欄が変われば止まる() {
+fn 契約のフィールドが変われば止まる() {
     let dir = std::env::temp_dir().join(format!("rulec-projection-moved-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("contracts")).unwrap();
@@ -183,7 +183,7 @@ fn 契約の欄が変われば止まる() {
         .output()
         .expect("rulec を起動できない");
     let out = String::from_utf8_lossy(&o.stdout);
-    assert!(out.contains("\"E121\""), "欄の名前が変わっても止まらない:\n{out}");
+    assert!(out.contains("\"E121\""), "フィールドの名前が変わっても止まらない:\n{out}");
     assert_eq!(o.status.code(), Some(1), "E121 は error です");
     let _ = std::fs::remove_dir_all(&dir);
 }

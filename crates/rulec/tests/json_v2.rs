@@ -128,7 +128,7 @@ fn 証人と直し方は言語で変わらない() {
 }
 
 #[test]
-fn v1の欄は全部残っている() {
+fn v1のフィールドは全部残っている() {
     // A reader written against v1 keeps working; `v` says who wrote the line.
     let (_, out) = run(&["check", "tests/mutants/m_e101.rule", "--format", "json"]);
     for l in out.lines().filter(|l| !l.trim().is_empty()) {

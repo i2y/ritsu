@@ -205,14 +205,14 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         // A decimal is refused at the field, naming it: §10.2 wants an integer in the
         // canonical unit, and the record says which field broke that.
         "`observed.運賃`: 決まった単位の整数 を期待しましたが 小数 でした",
-        "規則が知らない欄",
+        "規則が知らないフィールド",
         "列挙 都道府県 の値ではありません",
         "宣言範囲 1..170 の外",
         "`observed.運賃` がありません",
     ] {
         assert!(out.contains(want), "`{want}` を言っていない:\n{out}");
     }
-    assert!(out.contains("欄が欠けていたので外した記録: 5 件"), "{out}");
+    assert!(out.contains("フィールドが欠けていたので外した記録: 5 件"), "{out}");
     // A witness (which line, which record) is required.
     assert!(out.contains("order:b3"), "証人を出す: {out}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -239,7 +239,7 @@ fn 補った記録は分けて数え_使った既定値を書き残す() {
     // Without a default value, a record with a missing field is excluded entirely.
     let (_, plain, _) = rulec(&["replay", RULE, "--fixtures", fx]);
     assert!(plain.contains(&format!("照合 {base} 件")), "そのままの記録だけを数える: {plain}");
-    assert!(plain.contains("欄が欠けていて既定値も無い記録を 4 件外しました"), "{plain}");
+    assert!(plain.contains("フィールドが欠けていて既定値も無い記録を 4 件外しました"), "{plain}");
 
     // Filling through the manifest counts them separately as the filled-in series, and the default
     // value is recorded.
@@ -248,7 +248,7 @@ fn 補った記録は分けて数え_使った既定値を書き残す() {
     let (_, filled, _) =
         rulec(&["replay", RULE, "--fixtures", fx, "--manifest", m.to_str().unwrap()]);
     assert!(filled.contains(&format!("照合 {base} 件")), "補完を見出しに混ぜている: {filled}");
-    assert!(filled.contains("補った記録 4 件（重量 4 件）"), "欄ごとの件数を刻む: {filled}");
+    assert!(filled.contains("補った記録 4 件（重量 4 件）"), "フィールドごとの件数を刻む: {filled}");
     assert!(filled.contains("使った既定値: 重量 = 1000"), "既定値を刻む: {filled}");
 
     // --fill is a temporary override for sensitivity analysis. It applies after the manifest.

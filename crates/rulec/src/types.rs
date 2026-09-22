@@ -889,7 +889,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if let Some(el) = &f.elements {
             take(&el.name, tr!("並び", "sequence"), false, &mut aliases);
             for fd in &el.fields {
-                take(&fd.name, tr!("要素の欄", "element field"), false, &mut aliases);
+                take(&fd.name, tr!("要素のフィールド", "element field"), false, &mut aliases);
             }
         }
         for it in &f.items {
@@ -1120,7 +1120,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
                     .note(tr!(
-                        "たどる並びは `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんの欄を書きます。",
+                        "たどる並びは `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんのフィールドを書きます。",
                         "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
                     )),
             );
@@ -1261,11 +1261,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             if !ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
                 let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| fold.span.clone());
                 c.diags.push(
-                    Diag::error("E025", tr!("例に並びの欄がありません", "The examples have no column for the sequence"))
+                    Diag::error("E025", tr!("例に並びの列がありません", "The examples have no column for the sequence"))
                         .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
-                        .mark(sp, tr!("{} の欄がありません", "no column for {}", el.name.text))
+                        .mark(sp, tr!("{} の列がありません", "no column for {}", el.name.text))
                         .note(tr!(
-                            "この規則は並びをたどるので、一件の例は、どの並びをたどるのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の欄を足して、その名前をセルに書いてください。",
+                            "この規則は並びをたどるので、一件の例は、どの並びをたどるのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の列を足して、その名前をセルに書いてください。",
                             "This rule walks a sequence, so an example is only a case once it says which sequence. Write the list with `sequence <name>`, add a `{}` column to the header, and name it in the cell.",
                             el.name.text
                         )),
@@ -1299,7 +1299,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at_seq.clone())
                         .mark(sq.span.clone(), tr!("`elements` がありません", "there is no `elements`"))
                         .note(tr!(
-                            "`sequence` は `elements` で宣言した欄の並びです。たどる並びが無いなら、書く先がありません。",
+                            "`sequence` は `elements` で宣言したフィールドの並びです。たどる並びが無いなら、書く先がありません。",
                             "A `sequence` is a list of the fields `elements` declares. With no sequence to walk there is nothing for it to be a list of."
                         )),
                 );
@@ -1319,11 +1319,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             for (n, sp) in &sq.cols {
                 if !fields.contains(&n.as_str()) {
                     c.diags.push(
-                        Diag::error("E026", tr!("`{n}` は要素の欄ではありません", "`{n}` is not a field of an element"))
+                        Diag::error("E026", tr!("`{n}` は要素のフィールドではありません", "`{n}` is not a field of an element"))
                             .at(at_seq.clone())
                             .mark(sp.clone(), "")
                             .note(tr!(
-                                "書けるのは {} の欄だけです: {}。",
+                                "書けるのは {} のフィールドだけです: {}。",
                                 "Only the fields of {} can be written here: {}.",
                                 el.name.text,
                                 fields.join(" / ")
@@ -1334,11 +1334,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             for fd in &el.fields {
                 if !sq.cols.iter().any(|(n, _)| n == &fd.name.text) {
                     c.diags.push(
-                        Diag::error("E026", tr!("要素の欄 `{}` が書かれていません", "The element's field `{}` is not written", fd.name.text))
+                        Diag::error("E026", tr!("要素のフィールド `{}` が書かれていません", "The element's field `{}` is not written", fd.name.text))
                             .at(at_seq.clone())
-                            .mark(sq.span.clone(), tr!("`{}` の欄がありません", "no column for `{}`", fd.name.text))
+                            .mark(sq.span.clone(), tr!("`{}` の列がありません", "no column for `{}`", fd.name.text))
                             .note(tr!(
-                                "一件の要素は欄が全部そろって一件です。欄を落とすと、その値が何かを誰も決めていないことになります。",
+                                "一件の要素はフィールドが全部そろって一件です。フィールドを落とすと、その値が何かを誰も決めていないことになります。",
                                 "One element is one element only when all of its fields are there. A field left out is a value nobody decided."
                             )),
                     );
@@ -1402,7 +1402,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         }
                     }
                     _ => c.diags.push(
-                        Diag::error("E027", tr!("この欄には `sequence` の名前を書きます", "This column holds the name of a sequence"))
+                        Diag::error("E027", tr!("この列には `sequence` の名前を書きます", "This column holds the name of a sequence"))
                             .at(at_ex)
                             .mark(sp, tr!("名前ではありません", "this is not a name"))
                             .note(tr!(
@@ -1541,12 +1541,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for i in f.elements.iter().flat_map(|e| &e.fields) {
         if !c.used.contains(&i.name.text) && !i.contract_only {
             c.diags.push(
-                Diag::warning("W111", tr!("要素の欄 {} はどの表でも使われていません", "Element field {} is not used by any table", i.name.text))
+                Diag::warning("W111", tr!("要素のフィールド {} はどの表でも使われていません", "Element field {} is not used by any table", i.name.text))
                     .at(at(i.span.line))
                     .fix(crate::diag::FixKind::MarkContractOnly, crate::kw::CONTRACT_ONLY)
                     .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
                     .note(tr!(
-                        "呼び出し側は要素ごとにこの欄を埋めることになります。使わないなら消してください。",
+                        "呼び出し側は要素ごとにこのフィールドを埋めることになります。使わないなら消してください。",
                         "The caller fills this field for every element. If nothing uses it, take it out."
                     )),
             );
@@ -2145,7 +2145,7 @@ impl Checked {
                 self,
                 tr!("{col} は要素ごとの値ではありません", "{col} is not a value of one element"),
                 tr!(
-                    "まとめられるのは、要素の欄か、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値をまとめても、並びの話にはなりません。",
+                    "まとめられるのは、要素のフィールドか、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値をまとめても、並びの話にはなりません。",
                     "Only a field of an element, or a column a per-element table produces, can be summarised. A value there is one of per call says nothing about the sequence."
                 ),
             ),
@@ -2546,7 +2546,7 @@ impl Checked {
                         Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
-                            .note(tr!("例の欄は、入力・導出・表の出力のどれかの名前です（§5.3）。", "A column of the examples names an input, a derived value, or a table's output (§5.3).")),
+                            .note(tr!("例の列は、入力・導出・表の出力のどれかの名前です（§5.3）。", "A column of the examples names an input, a derived value, or a table's output (§5.3).")),
                     );
                     col_ty.push(None);
                 }

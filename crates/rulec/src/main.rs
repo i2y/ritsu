@@ -531,8 +531,8 @@ fn commands() -> Vec<Cmd> {
                 ("<file.rule>", tr!("突き合わせる規則", "the rule to check them against")),
             ],
             flags: vec![
-                flag("--manifest", Some("<m.json>"), tr!("欄が欠けた記録を補完する既定値の宣言", "the declaration of the default values that fill a missing field")),
-                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--manifest", Some("<m.json>"), tr!("フィールドが欠けた記録を補完する既定値の宣言", "the declaration of the default values that fill a missing field")),
+                flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
@@ -557,7 +557,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
-                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
                 flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
             ],
@@ -629,7 +629,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。付けなければ、入力の全体で比べる", "the past records; with none, the two versions are compared over the whole input space")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言（--fixtures のとき）", "the declaration of the default values used for filling (with --fixtures)")),
-                flag("--fill", Some("<欄=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかを出さずにそう言う（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
                 flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないため、無いときは領域だけを短く出すため", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),

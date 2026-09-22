@@ -734,11 +734,11 @@ pub fn ledger() -> Vec<Entry> {
             "E020",
             tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
             tr!(
-                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、その一要素ぶんの欄をそこに書きます（§15.56）。",
+                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、その一要素ぶんのフィールドをそこに書きます（§15.56）。",
                 "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56)."
             ),
             tr!(
-                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんの欄を `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
+                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんのフィールドを `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
                 "Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
             ),
             X_E020,
@@ -802,13 +802,13 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E025",
-            tr!("例に並びの欄がありません", "The examples have no column for the sequence"),
+            tr!("例に並びの列がありません", "The examples have no column for the sequence"),
             tr!(
-                "並びをたどる規則に `examples` があるのに、`elements` の名前の欄が見出しに無いとき。どの並びをたどるかが決まっていない例は、答えの決まっていない例です（§15.56）。",
+                "並びをたどる規則に `examples` があるのに、`elements` の名前の列が見出しに無いとき。どの並びをたどるかが決まっていない例は、答えの決まっていない例です（§15.56）。",
                 "A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56)."
             ),
             tr!(
-                "`sequence <名前>` で並びを書き、例の見出しに並びの欄を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
+                "`sequence <名前>` で並びを書き、例の見出しに並びの列を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
                 "Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it."
             ),
             X_E025,
@@ -818,11 +818,11 @@ pub fn ledger() -> Vec<Entry> {
             "E026",
             tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
             tr!(
-                "`sequence` の欄が `elements` の欄とそろっていないとき——余分な欄がある、欄が足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
+                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき——余分なフィールドがある、フィールドが足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
                 "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
             ),
             tr!(
-                "`elements` の欄をそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。",
+                "`elements` のフィールドをそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。",
                 "Make the header the fields of `elements` as they are, and write one element's values per row. This is not a table: it is the list of values as they would really be passed."
             ),
             X_E026,
@@ -832,7 +832,7 @@ pub fn ledger() -> Vec<Entry> {
             "E027",
             tr!("例が指す並びがありません", "The example names a sequence that is not there"),
             tr!(
-                "例の並びの欄に書かれた名前の `sequence` が無いとき、またはその欄に名前でないもの（数や範囲）が書かれているとき。",
+                "例の並びの列に書かれた名前の `sequence` が無いとき、またはその列に名前でないもの（数や範囲）が書かれているとき。",
                 "The cell in the sequence column names a `sequence` that is not declared, or holds something that is not a name at all."
             ),
             tr!(
@@ -864,7 +864,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum\'s; or an enum column was given no `= <value>` (§15.58)."
             ),
             tr!(
-                "要素の欄か、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。",
+                "要素のフィールドか、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。",
                 "Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check."
             ),
             X_E029,
@@ -1397,11 +1397,11 @@ pub fn ledger() -> Vec<Entry> {
             "E120",
             tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
             tr!(
-                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っている欄を `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値が欄の型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
+                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
                 "What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
             ),
             tr!(
-                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <shape の名前>.<欄>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
+                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <shape の名前>.<フィールド>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
                 "Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly."
             ),
             X_E120,
@@ -1412,11 +1412,11 @@ pub fn ledger() -> Vec<Entry> {
             "E121",
             tr!("`from` のパスが契約にありません", "The contract has no such path"),
             tr!(
-                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき（§15.125）。パスの最初の語が `shape` の名前でないとき、途中の欄が無いとき、`where` の見る欄が要素に無いときの三つです。どこまで届いたかと、そこにあった欄の名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき（§15.125）。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` の見るフィールドが要素に無いときの三つです。どこまで届いたかと、そこにあったフィールドの名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
                 "A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
             ),
             tr!(
-                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**これが出るのが目的です**——契約が欄の名前を変えたとき、手書きのつなぎのコードなら実行時まで気づかず、ここなら生成の前に止まります。",
+                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**これが出るのが目的です**——契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行時まで気づかず、ここなら生成の前に止まります。",
                 "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
             ),
             X_E121,
