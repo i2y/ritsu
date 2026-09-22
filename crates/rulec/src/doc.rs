@@ -1904,7 +1904,7 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
         "<!doctype html>\n<html lang=\"{lang}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n",
         html_esc(&title)
     ));
-    o.push_str(&body.replace("<!--TRY-->", &try_panel()));
+    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->", &crate::graph::svg(f, c)));
     o.push_str("</main>\n<script type=\"module\">\n");
     o.push_str(js);
     o.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
@@ -1921,6 +1921,11 @@ table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
 th, td { border: 1px solid #c8c8c8; padding: 2px 10px; text-align: left; vertical-align: top; }
 th { background: #f2f2f2; }
 tr.hit td { background: #ffe9a8; }
+#rule-graph { margin: 0 0 1.5rem; overflow-x: auto; }
+#rule-graph svg { max-width: 100%; height: auto; }
+#rule-graph figcaption { font-size: 0.85em; color: #555; margin-top: 6px; }
+#rule-graph .gn.hit rect { fill: #ffe9a8; stroke: #c07800; }
+#rule-graph .ge.hit { stroke: #c07800; marker-end: url(#arl); }
 code { background: #f4f4f4; padding: 0 3px; }
 #try { border: 1px solid #c8c8c8; border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: #fafafa; }
 #try h2 { margin-top: 0; }
@@ -2248,7 +2253,7 @@ function run() {
       })
     );
   }
-  for (const tr of document.querySelectorAll("tr.hit")) tr.classList.remove("hit");
+  for (const el of document.querySelectorAll(".hit")) el.classList.remove("hit");
   try {
     const [out, trace] = FN.run(...args);
     const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
@@ -2256,6 +2261,21 @@ function run() {
     for (const f of trace) {
       const tr = document.querySelector('tr[data-t="' + CSS.escape(f.table) + '"][data-r="' + f.row + '"]');
       if (tr) tr.classList.add("hit");
+    }
+    // The same trace, on the map. A row that matched decided a value, so the box that value
+    // is in lights up in the colour the row does, and so do the arrows that fed it. What
+    // stays dark is a decider this case did not go through — which is the whole of what a
+    // picture can add to a list of fired rows (§15.117).
+    const fired = new Set(trace.map((f) => f.table));
+    const lit = new Set();
+    for (const g of document.querySelectorAll("#rule-graph .gn[data-t]")) {
+      if (g.dataset.t.split("\u001f").some((t) => fired.has(t))) {
+        g.classList.add("hit");
+        lit.add(g.dataset.v);
+      }
+    }
+    for (const p of document.querySelectorAll("#rule-graph .ge")) {
+      if (lit.has(p.dataset.to)) p.classList.add("hit");
     }
     $("#try-record").textContent = FN.record(...args, out, trace, "");
     try {
@@ -2355,7 +2375,7 @@ if (window.parent !== window) {
 }
 "##;
 
-fn html_esc(s: &str) -> String {
+pub(crate) fn html_esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
@@ -2542,7 +2562,7 @@ fn md_to_html(md: &str) -> String {
             flush_list(&mut o, &mut list);
             flush_table(&mut o, &mut rows, &table_name);
             if first_h2 {
-                o.push_str("<!--TRY-->\n");
+                o.push_str("<!--TRY-->\n<!--GRAPH-->\n");
                 first_h2 = false;
             }
             // `## 表 X（policy …）` / `## Table X (policy …)` — the name is what the rows carry.

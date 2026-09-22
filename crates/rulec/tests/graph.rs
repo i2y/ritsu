@@ -221,3 +221,68 @@ fn グラフは検査より手前で出る() {
     assert_eq!(c, 1, "名前が解決しないのにグラフが出た: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// **The drawing is the data, drawn.** Every box on the page is a node of `rulec graph` and
+/// every arrow is an edge, so a picture cannot quietly start being about something else.
+/// The sequence is the one node with no box — it is the frame instead, because a box with
+/// no arrow on it reads as something forgotten.
+#[test]
+fn ページの図は_グラフそのものを描いている() {
+    for rule in ["tests/corpus/二つの区分.rule", "tests/corpus/全国運賃.rule", "tests/corpus/非常勤退職手当.rule"] {
+        let g = graph(rule);
+        let (c, html) = run(&["doc", rule, "--format", "html"]);
+        assert_eq!(c, 0, "{rule}");
+        assert!(html.contains("id=\"rule-graph\""), "{rule}: 図がページに無い");
+
+        let seq: Vec<String> = arr(&g, "nodes")
+            .iter()
+            .filter(|n| s(n, "kind") == "sequence")
+            .map(|n| s(n, "name"))
+            .collect();
+        let want: Vec<String> = arr(&g, "nodes")
+            .iter()
+            .map(|n| s(n, "name"))
+            .filter(|n| !seq.contains(n))
+            .collect();
+        let drawn: Vec<String> = html
+            .match_indices("data-v=\"")
+            .map(|(i, p)| {
+                let r = &html[i + p.len()..];
+                r[..r.find('"').unwrap()].to_string()
+            })
+            .collect();
+        assert_eq!(drawn.len(), want.len(), "{rule}: 箱の数が節点の数と違う\n{drawn:?}\n{want:?}");
+        for n in &want {
+            assert!(drawn.iter().any(|d| d == n), "{rule}: {n} の箱が無い");
+        }
+        for nm in &seq {
+            assert!(!drawn.iter().any(|d| d == nm), "{rule}: 並び {nm} に箱が付いている");
+        }
+
+        let arrows = html.matches("class=\"ge\"").count();
+        let want_e = arr(&g, "edges")
+            .iter()
+            .filter(|e| !seq.contains(&s(e, "from")) && !seq.contains(&s(e, "to")))
+            .count();
+        assert_eq!(arrows, want_e, "{rule}: 矢印の数が辺の数と違う");
+    }
+}
+
+/// The trace lights the map, in the colour the rows light in. The page already knew which
+/// rows matched; what the picture adds is which *deciders* the case went through, and that
+/// has to come from the same list or it is a second opinion.
+#[test]
+fn 図は当てはまった表と同じ色で光る() {
+    let (c, html) = run(&["doc", "tests/corpus/二つの区分.rule", "--format", "html"]);
+    assert_eq!(c, 0);
+    for want in [
+        "#rule-graph .gn.hit rect",       // a box lights
+        "#rule-graph .ge.hit",            // and the arrows that fed it
+        "const fired = new Set(trace.map", // out of the very trace the rows come from
+    ] {
+        assert!(html.contains(want), "ページに `{want}` が無い");
+    }
+    // Every box that can light names the deciders it lights for.
+    let tagged = html.matches("data-t=\"").count();
+    assert!(tagged >= 4, "決め手の名前が付いた箱が {tagged} 個しかない");
+}

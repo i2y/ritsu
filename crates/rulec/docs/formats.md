@@ -563,6 +563,14 @@ Already machine-readable and take no `--format`.
 is that shape; `--format html` is the same document as one page with a form on it, where the
 generated JavaScript runs the case the approver types in.
 
+The HTML page also draws the rule: one box per value, one arrow per "read while deciding",
+laid out by how far a value is from the ones that arrive from the caller. It is `rulec
+graph` drawn, held to it by a test, and the same trace that lights the rows lights the
+values those rows decided — so what stays dark is a decider the case did not go through. A
+value decided once per element sits inside a dashed frame, and so does everything an
+`apply` brought in; the guard at each crossing is on the box, and what a shape cannot say
+about a crossing is in the caption.
+
 `--audience customer` renders the same rule as the article a help centre publishes: the
 inputs in plain words, the tables with `-` as "any" and `not:` as "other than", the rounding
 as a sentence, and **the cases on either side of every threshold** — the boundary-pair
