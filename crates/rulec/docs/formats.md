@@ -445,7 +445,7 @@ produces runs those very functions, so what it prints is the theorems applied to
 document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
-{"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.15.0",
+{"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.16.0",
  "ranges":{"合計":["0","1000000"],"割引A":["0","100000"],"残高A":["-100000","1000000"]},
  "constraints":[],
  "values":[{"name":"残高A","expr":{"op":"-","l":{"name":"合計"},"r":{"name":"割引A"}},
@@ -522,7 +522,7 @@ parsed form instead. A rule that does not pass `check` produces no certificate a
 ```console
 $ rulec certificate rules/健康保険料.rule > cert.json
 $ python3 tools/recheck.py --rule rules/健康保険料.rule cert.json
-健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.15.0
+健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.16.0
   units: 4 values keep the type the rule declares
   int64: 4 values fit
   等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
@@ -532,7 +532,7 @@ $ python3 tools/recheck.py --rule rules/健康保険料.rule cert.json
   every claim this program states was proved
 
 $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/健康保険料.rule cert.json
-健康保険料 (0.15.0), re-checked against the Lean proofs
+健康保険料 (0.16.0), re-checked against the Lean proofs
   values: 4 typed, 4 held to int64, 0 not re-checked
   等級: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
     50 boxes read back from the cells they were written as

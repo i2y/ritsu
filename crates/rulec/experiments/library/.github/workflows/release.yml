@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/rulec@v0.15.0
+      - uses: i2y/rulec@v0.16.0
       - run: rulec check rules/ && rulec gen rules/ --out generated/ --check
       - name: One archive per language
         run: |
