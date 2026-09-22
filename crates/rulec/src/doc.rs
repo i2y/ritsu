@@ -1901,16 +1901,21 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
     let lang = if crate::i18n::ja() { "ja" } else { "en" };
     let mut o = String::new();
     o.push_str(&format!(
-        "<!doctype html>\n<html lang=\"{lang}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n",
-        html_esc(&title)
+        "<!doctype html>\n<html lang=\"{lang}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<style>\n{CSS}{}</style>\n</head>\n<body>\n<main>\n",
+        html_esc(&title),
+        crate::graph::APP_CSS
     ));
-    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->", &crate::graph::svg(f, c)));
+    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", ""));
     o.push_str("</main>\n<script type=\"module\">\n");
     o.push_str(js);
     o.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     o.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
     o.push_str(PAGE_JS);
+    // The board (§15.120). It is built out of the document above, so a reader with no
+    // script still has the document — this only rearranges it.
+    o.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c)));
+    o.push_str(crate::graph::APP_JS);
     o.push_str("</script>\n</body>\n</html>\n");
     o
 }
@@ -1921,11 +1926,6 @@ table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
 th, td { border: 1px solid #c8c8c8; padding: 2px 10px; text-align: left; vertical-align: top; }
 th { background: #f2f2f2; }
 tr.hit td { background: #ffe9a8; }
-#rule-graph { margin: 0 0 1.5rem; overflow-x: auto; }
-#rule-graph svg { max-width: 100%; height: auto; }
-#rule-graph figcaption { font-size: 0.85em; color: #555; margin-top: 6px; }
-#rule-graph .gn.hit rect { fill: #ffe9a8; stroke: #c07800; }
-#rule-graph .ge.hit { stroke: #c07800; marker-end: url(#arl); }
 code { background: #f4f4f4; padding: 0 3px; }
 #try { border: 1px solid #c8c8c8; border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: #fafafa; }
 #try h2 { margin-top: 0; }
@@ -2254,6 +2254,7 @@ function run() {
     );
   }
   for (const el of document.querySelectorAll(".hit")) el.classList.remove("hit");
+  for (const td of document.querySelectorAll("#rule-graph .gv")) td.textContent = "";
   try {
     const [out, trace] = FN.run(...args);
     const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
@@ -2276,6 +2277,12 @@ function run() {
     }
     for (const p of document.querySelectorAll("#rule-graph .ge")) {
       if (lit.has(p.dataset.to)) p.classList.add("hit");
+    }
+    // …and the answer lands in the pane that is about the answer.
+    if (window.rulecBoardFill) {
+      const outs = {};
+      RULE.outputs.forEach((o, i) => { outs[o.name] = shown(o, vals[i]); });
+      rulecBoardFill(trace, outs);
     }
     $("#try-record").textContent = FN.record(...args, out, trace, "");
     try {
@@ -2535,6 +2542,21 @@ fn md_to_html(md: &str) -> String {
         rows.clear();
     }
 
+    /// `表 X（policy …）` / `Table X (policy …)`, and the clause form — the name is what
+    /// the rows carry, and a clause fires as `{"table":X,"row":1}`.
+    fn heading_table(h: &str) -> Option<String> {
+        h.strip_prefix("表 ")
+            .map(|r| r.split('（').next().unwrap_or(r).to_string())
+            .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()))
+            .or_else(|| h.strip_prefix("節 ").map(|r| r.split(" →").next().unwrap_or(r).to_string()))
+            .or_else(|| h.strip_prefix("Clause ").map(|r| r.split(" →").next().unwrap_or(r).to_string()))
+    }
+
+    let mut open_sec = false;
+    // Which `apply` the headings below belong to. An applied rule's tables are `###` under
+    // one `##`, and the trace names them `{apply}:{table}` (§15.69) — so without this the
+    // rows of a borrowed table would carry the bare name, or no name at all.
+    let mut applied: Option<String> = None;
     for line in md.lines() {
         let t = line.trim_end();
         if let Some(q) = t.strip_prefix("> ") {
@@ -2565,19 +2587,66 @@ fn md_to_html(md: &str) -> String {
                 o.push_str("<!--TRY-->\n<!--GRAPH-->\n");
                 first_h2 = false;
             }
-            // `## 表 X（policy …）` / `## Table X (policy …)` — the name is what the rows carry.
-            table_name = h
-                .strip_prefix("表 ")
-                .map(|r| r.split('（').next().unwrap_or(r).to_string())
-                .or_else(|| h.strip_prefix("Table ").map(|r| r.split(" (").next().unwrap_or(r).to_string()))
-                // `## 節 X → 出力` / `## Clause X → output`: a clause fires as `{"table":X,"row":1}`.
-                .or_else(|| h.strip_prefix("節 ").map(|r| r.split(" →").next().unwrap_or(r).to_string()))
-                .or_else(|| h.strip_prefix("Clause ").map(|r| r.split(" →").next().unwrap_or(r).to_string()));
+            table_name = heading_table(h);
+            // `## 準用 {an}: …` / `## Applied rule {an}: …` — everything under it is that
+            // rule's, until the next `##`.
+            applied = h
+                .strip_prefix("準用 ")
+                .or_else(|| h.strip_prefix("Applied rule "))
+                .and_then(|r| r.split_once(": ").map(|(a, _)| a.to_string()));
             // A table's heading can be linked to (`#t-基本送料`), which is also how a
             // screenshot lands on it.
+            if open_sec {
+                o.push_str("</section>\n");
+            }
+            open_sec = true;
             match &table_name {
-                Some(t) => o.push_str(&format!("<h2 id=\"t-{}\">{}</h2>\n", html_esc(t), inline_html(h))),
-                None => o.push_str(&format!("<h2>{}</h2>\n", inline_html(h))),
+                Some(t) => o.push_str(&format!(
+                    "<section class=\"sec\" data-table=\"{0}\">\n<h2 id=\"t-{0}\">{1}</h2>\n",
+                    html_esc(t),
+                    inline_html(h)
+                )),
+                // A stable key, not the heading: the script that moves these around must
+                // not have to know which language the page was rendered in (§12.1).
+                None => {
+                    let key = match h.trim() {
+                        x if x == tr!("入力", "Inputs") => "inputs",
+                        x if x == tr!("出力", "Outputs") => "outputs",
+                        x if x == tr!("型", "Types") => "types",
+                        _ => "",
+                    };
+                    o.push_str(&format!(
+                        "<section class=\"sec\"{}>\n<h2>{}</h2>\n",
+                        if key.is_empty() { String::new() } else { format!(" data-sec=\"{key}\"") },
+                        inline_html(h)
+                    ))
+                }
+            }
+            continue;
+        }
+        if let Some(h) = t.strip_prefix("### ") {
+            flush_para(&mut o, &mut para);
+            flush_list(&mut o, &mut list);
+            flush_table(&mut o, &mut rows, &table_name);
+            // A borrowed table gets a section of its own, so that what surrounds it can be
+            // told apart from the next borrowed table's.
+            match (&applied, heading_table(h)) {
+                (Some(a), Some(n)) => {
+                    table_name = Some(format!("{a}:{n}"));
+                    if open_sec {
+                        o.push_str("</section>\n");
+                    }
+                    open_sec = true;
+                    let key = html_esc(table_name.as_deref().unwrap_or(""));
+                    o.push_str(&format!(
+                        "<section class=\"sec\" data-table=\"{key}\">\n<h3 id=\"t-{key}\">{}</h3>\n",
+                        inline_html(h)
+                    ));
+                }
+                _ => {
+                    table_name = None;
+                    o.push_str(&format!("<h3>{}</h3>\n", inline_html(h)));
+                }
             }
             continue;
         }
@@ -2615,6 +2684,9 @@ fn md_to_html(md: &str) -> String {
     flush_list(&mut o, &mut list);
     flush_table(&mut o, &mut rows, &table_name);
     flush_quote(&mut o, &mut quote);
+    if open_sec {
+        o.push_str("</section>\n");
+    }
     o
 }
 

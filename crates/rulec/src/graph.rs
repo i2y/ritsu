@@ -367,11 +367,6 @@ pub fn json(f: &RuleFile, c: &Checked, src_hash: &str) -> String {
         + "\n"
 }
 
-/// How wide a label is, roughly: a full-width character takes two columns.
-fn vis(s: &str) -> usize {
-    s.chars().map(|ch| if (ch as u32) >= 0x1100 && !ch.is_ascii() { 2 } else { 1 }).sum()
-}
-
 fn word_for(kind: &str) -> String {
     match kind {
         "table" => tr!("表", "table"),
@@ -381,59 +376,51 @@ fn word_for(kind: &str) -> String {
         "sum" => tr!("合計", "sum"),
         "count" => tr!("数え上げ", "count"),
         "fold" => tr!("畳み込み", "fold"),
-        "input" => tr!("入力", "input"),
-        "element" => tr!("要素の欄", "element field"),
-        "sequence" => tr!("並び", "sequence"),
         _ => String::new(),
     }
 }
 
-/// The second line of a box: how the value is decided, or — at a crossing — what the caller
-/// is held to there.
-fn sub_of(n: &GNode) -> String {
-    if n.by.is_empty() {
-        let mut s = word_for(n.kind);
-        if let Some(t) = &n.ty {
-            s = format!("{s} · {t}");
-        }
-        // At a crossing the range is not decoration: it is what the caller is refused for.
-        if let Some((lo, hi)) = n.range {
-            s = format!("{s} {lo}–{hi}");
-        }
-        return s;
-    }
+/// How a value is decided, as the line under its name on the card.
+fn kind_line(n: &GNode) -> String {
     n.by
         .iter()
-        .map(|(k, name)| if name.is_empty() { word_for(k) } else { format!("{} {name}", word_for(k)) })
+        .map(|(k, what)| if what.is_empty() { word_for(k) } else { format!("{} {what}", word_for(k)) })
         .collect::<Vec<_>>()
         .join(if crate::i18n::ja() { "／" } else { " / " })
 }
 
-/// **The rule, drawn.** One box per value, one arrow per "read while deciding".
+/// **What the page needs to lay the rule out as a board.**
 ///
-/// Top to bottom, by how far a value is from the ones that arrive from outside — so the top
-/// row is the wall the caller crosses and the bottom row is what comes back. Nothing here
-/// is a step in time: the whole picture happens in one call, and the only thing that
-/// happens *between* anything is above the top row, outside the frame (§15.117).
-pub fn svg(f: &RuleFile, c: &Checked) -> String {
+/// The drawing went through two versions before this one. A box per *value* did not read:
+/// a rule with ten inputs spent three rows on boxes that carry no structure, and the arrows
+/// out of them crossed everything. A box per **decider** — one table, one derive, one
+/// definition — with the values it reads written inside it, is five boxes and four arrows
+/// where the other was fifteen and twenty. And once the box is a card rather than a
+/// rectangle, the table itself goes inside it, which is what the reader came for: the rows,
+/// with the one that fired lit, in the place the picture says it belongs (§15.120).
+///
+/// Columns run left to right by how far a decider is from the inputs. Left to right, not
+/// top to bottom, because a table shown whole is tall: side by side, two of them are one
+/// glance apart however many rows they have.
+///
+/// The card sizes are the browser's business — a table's width is not knowable here — so
+/// this is data and the page lays it out. Without a script the page is the document it
+/// always was; the board is what the script makes of it.
+pub fn data_json(f: &RuleFile, c: &Checked) -> String {
     let g = build(f, c);
-    if g.nodes.is_empty() {
-        return String::new();
-    }
-    let at = |n: &str| g.nodes.iter().position(|x| x.name == n);
+    let dec: Vec<usize> = (0..g.nodes.len()).filter(|&i| !g.nodes[i].by.is_empty()).collect();
+    let is_dec = |name: &str| g.nodes.iter().any(|n| n.name == name && !n.by.is_empty());
 
-    // How far from the outside each value is. The walk is bounded by the node count: the
-    // items of a rule are written define-before-use (§5.1), so there is no cycle to spin on.
     let mut layer = vec![0usize; g.nodes.len()];
-    for _ in 0..g.nodes.len() {
+    for _ in 0..dec.len().max(1) {
         let want: Vec<usize> = g
             .nodes
             .iter()
             .map(|n| {
                 g.edges
                     .iter()
-                    .filter(|e| e.to == n.name)
-                    .filter_map(|e| at(&e.from))
+                    .filter(|e| e.to == n.name && is_dec(&e.from))
+                    .filter_map(|e| g.nodes.iter().position(|x| x.name == e.from))
                     .map(|j| layer[j] + 1)
                     .max()
                     .unwrap_or(0)
@@ -446,173 +433,231 @@ pub fn svg(f: &RuleFile, c: &Checked) -> String {
             layer[i] = layer[i].max(w);
         }
     }
-
-    const BH: f64 = 42.0;
-    const LH: f64 = 82.0;
-    const GX: f64 = 16.0;
-    const PAD: f64 = 22.0;
-    let width_of = |n: &GNode| -> f64 {
-        let w = vis(&n.name).max(vis(&sub_of(n))) as f64;
-        (10.0 + 6.4 * w).clamp(108.0, 208.0)
-    };
-
-    // The sequence itself gets no box: it has no arrow of its own, and a box with nothing
-    // attached reads as something forgotten. Its name goes on the frame instead.
-    let drawn = |i: usize| g.nodes[i].kind != "sequence";
-    let depth = layer.iter().copied().max().unwrap_or(0) + 1;
-    let rows: Vec<Vec<usize>> =
-        (0..depth).map(|l| (0..g.nodes.len()).filter(|&i| layer[i] == l && drawn(i)).collect()).collect();
-    let row_w: Vec<f64> = rows
-        .iter()
-        .map(|r| r.iter().map(|&i| width_of(&g.nodes[i])).sum::<f64>() + GX * (r.len().max(1) - 1) as f64)
-        .collect();
-    let inner = row_w.iter().cloned().fold(0.0_f64, f64::max);
-    let w_total = inner + PAD * 2.0;
-    let h_total = LH * depth as f64 + PAD * 2.0 - (LH - BH);
-
-    let mut x = vec![0.0_f64; g.nodes.len()];
-    let mut y = vec![0.0_f64; g.nodes.len()];
-    for (l, r) in rows.iter().enumerate() {
-        let mut cx = PAD + (inner - row_w[l]) / 2.0;
-        for &i in r {
-            x[i] = cx;
-            y[i] = PAD + LH * l as f64;
-            cx += width_of(&g.nodes[i]) + GX;
-        }
-    }
-
-    let mut o = String::new();
-    o.push_str(&format!(
-        "<figure id=\"rule-graph\">\n<svg viewBox=\"0 0 {:.0} {:.0}\" width=\"{:.0}\" height=\"{:.0}\" \
-         font-family=\"system-ui, sans-serif\" role=\"img\" aria-label=\"{}\">\n\
-         <defs><marker id=\"ar\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\">\
-         <path d=\"M0 0 L8 4 L0 8 z\" fill=\"#9a9a9a\"/></marker>\
-         <marker id=\"arl\" viewBox=\"0 0 8 8\" refX=\"7\" refY=\"4\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\">\
-         <path d=\"M0 0 L8 4 L0 8 z\" fill=\"#c07800\"/></marker></defs>\n",
-        w_total,
-        h_total,
-        w_total,
-        h_total,
-        crate::doc::html_esc(&tr!(
-            "値の出どころと読み先の図",
-            "what decides each value, and which values it reads"
-        ))
-    ));
-
-    // The frames, behind everything: what is decided once per element, and what another
-    // rule brought in. Neither is anywhere in the text of the rule.
-    let frame = |members: Vec<usize>, label: String, o: &mut String| {
-        if members.is_empty() {
-            return;
-        }
-        let x0 = members.iter().map(|&i| x[i]).fold(f64::MAX, f64::min) - 9.0;
-        let x1 = members.iter().map(|&i| x[i] + width_of(&g.nodes[i])).fold(0.0_f64, f64::max) + 9.0;
-        let y0 = members.iter().map(|&i| y[i]).fold(f64::MAX, f64::min) - 24.0;
-        let y1 = members.iter().map(|&i| y[i] + BH).fold(0.0_f64, f64::max) + 9.0;
-        o.push_str(&format!(
-            "<rect x=\"{x0:.1}\" y=\"{y0:.1}\" width=\"{:.1}\" height=\"{:.1}\" rx=\"8\" fill=\"#fbfbfb\" \
-             stroke=\"#c8c8c8\" stroke-dasharray=\"4 3\"/>\
-             <text x=\"{:.1}\" y=\"{:.1}\" font-size=\"10\" fill=\"#777\">{}</text>\n",
-            x1 - x0,
-            y1 - y0,
-            x0 + 7.0,
-            y0 + 12.0,
-            crate::doc::html_esc(&label)
-        ));
-    };
-    let seq = g.nodes.iter().find(|n| n.kind == "sequence").map(|n| n.name.clone()).unwrap_or_default();
-    frame(
-        (0..g.nodes.len()).filter(|&i| drawn(i) && (g.nodes[i].per_element || g.nodes[i].kind == "element")).collect(),
-        tr!("{} の一件ごと", "once per element of {}", seq),
-        &mut o,
-    );
-    for a in &f.applies {
-        frame(
-            (0..g.nodes.len())
-                .filter(|&i| drawn(i) && g.nodes[i].from_apply.as_deref() == Some(a.name.text.as_str()))
-                .collect(),
-            tr!("準用 {}", "applied: {}", a.name.text),
-            &mut o,
-        );
-    }
-
-    for e in &g.edges {
-        let (Some(i), Some(j)) = (at(&e.from), at(&e.to)) else { continue };
-        if !drawn(i) || !drawn(j) {
-            continue;
-        }
-        let (x1, y1) = (x[i] + width_of(&g.nodes[i]) / 2.0, y[i] + BH);
-        let (x2, y2) = (x[j] + width_of(&g.nodes[j]) / 2.0, y[j]);
-        let d = ((y2 - y1) / 2.0).max(10.0);
-        let dash = if e.kind == "walk" { " stroke-dasharray=\"5 3\"" } else { "" };
-        o.push_str(&format!(
-            "<path class=\"ge\" data-from=\"{}\" data-to=\"{}\" d=\"M{x1:.1} {y1:.1} C{x1:.1} {:.1} {x2:.1} {:.1} {x2:.1} {:.1}\" \
-             fill=\"none\" stroke=\"#9a9a9a\"{dash} marker-end=\"url(#ar)\"/>\n",
-            crate::doc::html_esc(&e.from),
-            crate::doc::html_esc(&e.to),
-            y1 + d,
-            y2 - d,
-            y2 - 3.0
-        ));
-    }
-
-    for (i, n) in g.nodes.iter().enumerate() {
-        if !drawn(i) {
-            continue;
-        }
-        let w = width_of(n);
-        let outside = n.kind == "input" || n.kind == "element" || n.kind == "sequence";
-        let deciders: Vec<&str> =
-            n.by.iter().filter(|(k, _)| k == "table" || k == "clause").map(|(_, name)| name.as_str()).collect();
-        o.push_str(&format!(
-            "<g class=\"gn\" data-v=\"{}\"{}>\
-             <rect x=\"{:.1}\" y=\"{:.1}\" width=\"{w:.1}\" height=\"{BH}\" rx=\"5\" fill=\"{}\" stroke=\"{}\" stroke-width=\"{}\"/>\
-             <text x=\"{:.1}\" y=\"{:.1}\" font-size=\"12\" fill=\"#222\">{}</text>\
-             <text x=\"{:.1}\" y=\"{:.1}\" font-size=\"10\" fill=\"#777\">{}</text></g>\n",
-            crate::doc::html_esc(&n.name),
-            if deciders.is_empty() {
-                String::new()
-            } else {
-                format!(" data-t=\"{}\"", crate::doc::html_esc(&deciders.join("\u{1f}")))
-            },
-            x[i],
-            y[i],
-            if outside { "#f4f6f8" } else { "#ffffff" },
-            if n.output { "#8a8a8a" } else { "#c8c8c8" },
-            if n.output { 1.6 } else { 1.0 },
-            x[i] + 8.0,
-            y[i] + 17.0,
-            crate::doc::html_esc(&n.name),
-            x[i] + 8.0,
-            y[i] + 32.0,
-            crate::doc::html_esc(&sub_of(n))
-        ));
-    }
-    o.push_str("</svg>\n<figcaption>");
-    o.push_str(&crate::doc::html_esc(&tr!(
-        "どの値が、どの値を読んで決まるかの図です。上の段が呼び手から渡るもので、下の段がこの規則の答えです。矢印は順番ではありません——全部が一回の呼び出しの中で決まります。試すと、当てはまった行を出した表の値に色が付きます。",
-        "Which value is read while which other is decided. The top row is what arrives from the caller and the bottom row is what comes back. An arrow is not a step: all of it happens in one call. Try a case and the values whose rows matched light up."
-    )));
-    let pre: Vec<String> = crate::verify::preconditions(f, c)
-        .iter()
-        .map(|p| match p {
-            crate::verify::Pre::Rel { left, op, right } => format!("{left} {op} {right}"),
-            crate::verify::Pre::Sum { name: _, over, of, max } => {
-                tr!("{over}の{of}の合計 ≤ {max}", "the total of {of} over {over} ≤ {max}")
-            }
-            crate::verify::Pre::Length { sequence, max } => {
-                tr!("{sequence}は {max} 件まで", "at most {max} elements of {sequence}")
-            }
+    let depth = dec.iter().map(|&i| layer[i]).max().unwrap_or(0) + 1;
+    let cols: Vec<String> = (0..depth)
+        .map(|l| {
+            crate::json::strs(
+                &dec.iter().copied().filter(|&i| layer[i] == l).map(|i| g.nodes[i].name.clone()).collect::<Vec<_>>(),
+            )
         })
         .collect();
-    if !pre.is_empty() {
-        o.push(' ');
-        o.push_str(&crate::doc::html_esc(&tr!(
-            "上の段を渡すとき、呼び手はこれも満たします：{}。形だけでは言えない前提で、破ると入口で断られます。",
-            "Handing the top row over also means satisfying this: {}. None of it is a shape, and breaking it is refused at the door.",
-            pre.join(if crate::i18n::ja() { "、" } else { "; " })
-        )));
-    }
-    o.push_str("</figcaption>\n</figure>\n");
-    o
+
+    let nodes: Vec<String> = dec
+        .iter()
+        .map(|&i| {
+            let n = &g.nodes[i];
+            let reads: Vec<String> = g
+                .edges
+                .iter()
+                .filter(|e| e.to == n.name && !is_dec(&e.from))
+                .map(|e| e.from.clone())
+                .collect();
+            let tables: Vec<String> =
+                n.by.iter().filter(|(k, _)| k == "table" || k == "clause").map(|(_, w)| w.clone()).collect();
+            let mut o = Obj::new()
+                .str("v", &n.name)
+                .str("by", &kind_line(n))
+                .raw("reads", crate::json::strs(&reads))
+                .raw("tables", crate::json::strs(&tables));
+            if n.output {
+                o = o.bool("out", true);
+            }
+            if n.per_element {
+                o = o.bool("per_element", true);
+            }
+            if let Some(a) = &n.from_apply {
+                o = o.str("apply", a);
+            }
+            o.finish()
+        })
+        .collect();
+    let edges: Vec<String> = g
+        .edges
+        .iter()
+        .filter(|e| is_dec(&e.from) && is_dec(&e.to))
+        .map(|e| Obj::new().str("from", &e.from).str("to", &e.to).finish())
+        .collect();
+
+    Obj::new()
+        .raw("cols", arr(&cols))
+        .raw("nodes", arr(&nodes))
+        .raw("edges", arr(&edges))
+        .raw(
+            "text",
+            Obj::new()
+                .str(
+                    "caption",
+                    tr!(
+                        "どの値が何から決まるかを、左から右へ描いています。順番に起きるのではなく、一回の呼び出しで全部が決まります。",
+                        "Which value is decided from what, left to right. It does not happen in that order: all of it is decided in one call."
+                    ),
+                )
+                .str("hint", tr!("箱を押すと、その表について確かめたことがここに出ます。", "Press a card to see what was verified about its table."))
+                .str("close", tr!("閉じる", "close"))
+                .str("row", tr!("行", "row "))
+                .finish(),
+        )
+        .finish()
 }
+
+/// The board's own stylesheet. Two panes with a divider you can drag, a canvas that scrolls
+/// both ways, and a dock along the bottom for what a card is too small to hold.
+pub const APP_CSS: &str = r##"
+/* The document is laid out for reading; the board is laid out for the window. The class is
+   put on by the script, so a page with no script keeps the document's own measure. */
+body.boarded { max-width: none; margin: 0; padding: 0; }
+body.boarded main { display: none; }
+.app { display: flex; height: 100vh; align-items: stretch; }
+.app .side { width: 24rem; flex: none; min-width: 14rem; border-right: 1px solid #e0e0e0; background: #fafbfc; padding: 22px 24px; overflow-y: auto; }
+.app .split { flex: none; width: 6px; cursor: col-resize; background: #ececec; }
+.app .split:hover, .app .split.on { background: #c9d6e2; }
+.app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+.app .stage { flex: 1; min-height: 0; overflow: auto; padding: 30px 38px; }
+.app .cap { font-size: 0.9rem; line-height: 1.8; color: #555; margin: 0; padding: 14px 38px; border-top: 1px solid #eee; }
+.app .hsplit { flex: none; height: 6px; cursor: row-resize; background: #ececec; }
+.app .hsplit:hover, .app .hsplit.on { background: #c9d6e2; }
+.app .hsplit[hidden] { display: none; }
+.app .dock { border-top: 1px solid #dcdcdc; background: #fafbfc; padding: 16px 38px; height: 34vh; overflow-y: auto; }
+.app .dock .x { float: right; font-size: 0.85rem; color: #888; cursor: pointer; }
+#canvas { position: relative; display: flex; gap: 60px; align-items: flex-start; padding: 4px; }
+#wires { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.gcol { display: flex; flex-direction: column; gap: 34px; position: relative; z-index: 1; flex: none; }
+.gcard { border: 1px solid #bdbdbd; border-radius: 10px; background: #fff; padding: 12px 14px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.gcard.out { border-color: #8a8a8a; border-width: 1.5px; }
+.gcard.sel { border-color: #c07800; border-width: 2px; background: #fffbf0; }
+.gcard h3 { margin: 0; font-size: 1rem; display: flex; align-items: baseline; gap: 12px; }
+.gcard h3 .v { margin-left: auto; font-size: 1.1rem; }
+.gcard .by { font-size: 0.8rem; color: #888; margin: 3px 0 0; }
+.gcard .by .r { color: #c07800; font-weight: 600; }
+.gcard .rd { font-size: 0.8rem; color: #666; margin: 2px 0 0; }
+.gcard table { margin: 10px 0 0; }
+.gcard th, .gcard td { padding: 3px 8px; white-space: nowrap; }
+.app .side table { width: 100%; }
+"##;
+
+/// The board, built from the document the page already is. **Without this the page is that
+/// document**: `<main>` is what a reader without a script sees, and nothing here is needed
+/// to read the rule — only to see its shape.
+pub const APP_JS: &str = r##"
+(() => {
+  const m = document.querySelector("main");
+  if (!m || typeof GRAPH === "undefined" || !GRAPH.nodes.length) return;
+  const mk = (t, c) => { const e = document.createElement(t); if (c) e.className = c; return e; };
+  const app = mk("div", "app"), side = mk("div", "side"), split = mk("div", "split"), board = mk("div", "board");
+  const stage = mk("div", "stage"), cap = mk("p", "cap"), dock = mk("div", "dock"), hsplit = mk("div", "hsplit");
+  cap.textContent = GRAPH.text.caption; dock.hidden = true; hsplit.hidden = true;
+  board.append(stage, cap, hsplit, dock); app.append(side, split, board);
+  m.hidden = true; document.body.classList.add("boarded"); document.body.append(app);
+
+  // The panes are made of the document's own sections: nothing is written twice.
+  const sec = (k) => m.querySelector('section[data-sec="' + k + '"]');
+  side.append(document.querySelector("#try"));
+  for (const k of ["inputs", "outputs", "types"]) { const s = sec(k); if (s) side.append(s); }
+
+  const canvas = mk("div"); canvas.id = "canvas";
+  const wires = document.createElementNS("http://www.w3.org/2000/svg", "svg"); wires.id = "wires";
+  canvas.append(wires); stage.append(canvas);
+  const byName = {}; for (const n of GRAPH.nodes) byName[n.v] = n;
+  const el = {}, detail = {};
+  for (const col of GRAPH.cols) {
+    const c = mk("div", "gcol");
+    for (const v of col) {
+      const n = byName[v]; if (!n) continue;
+      const card = mk("div", "gcard" + (n.out ? " out" : "")); card.dataset.v = v;
+      const h = mk("h3");
+      const nm = mk("span"); nm.textContent = v;
+      const val = mk("span", "v");
+      h.append(nm, val);
+      const by = mk("p", "by"); by.textContent = n.by;
+      const r = mk("span", "r"); by.append(r);
+      card.append(h, by);
+      if (n.reads.length) { const rd = mk("p", "rd"); rd.textContent = "← " + n.reads.join("　"); card.append(rd); }
+      // The table itself, taken out of the document and put where the picture says it is.
+      //
+      // It is found through a row, not through a heading: a row carries `data-t` with the
+      // name the trace uses, which is the same name whatever language the page is in and
+      // whatever an `apply` renamed it to (§15.69). A heading would be neither.
+      for (const t of n.tables) {
+        const tr = m.querySelector('tr[data-t="' + CSS.escape(t) + '"]');
+        const tbl = tr && tr.closest("table");
+        if (!tbl) continue;
+        // What is around that table — its heading, what `check` verified, the citation —
+        // is too much for a card and goes to the dock.
+        const sec = tbl.closest("section.sec");
+        if (sec) { detail[v] = detail[v] || []; detail[v].push(sec); }
+        else {
+          const box = mk("div");
+          let p = tbl.previousElementSibling, head = [];
+          while (p && !/^H[1-6]$/.test(p.tagName)) { head.unshift(p); p = p.previousElementSibling; }
+          if (p) head.unshift(p);
+          let q = tbl.nextElementSibling, tail = [];
+          while (q && !/^H[1-6]$/.test(q.tagName)) { tail.push(q); q = q.nextElementSibling; }
+          box.append(...head, ...tail);
+          detail[v] = detail[v] || []; detail[v].push(box);
+        }
+        for (const th of tbl.querySelectorAll("th")) th.textContent = th.textContent.replace(/（.*$/, "").replace(/ \(.*$/, "").trim();
+        card.append(tbl);
+      }
+      c.append(card); el[v] = card;
+    }
+    canvas.append(c);
+  }
+  for (const s of m.querySelectorAll("section.sec")) if (s.parentElement === m) side.append(s);
+
+  function wire() {
+    const b = canvas.getBoundingClientRect();
+    wires.setAttribute("width", canvas.offsetWidth); wires.setAttribute("height", canvas.offsetHeight);
+    wires.setAttribute("viewBox", "0 0 " + canvas.offsetWidth + " " + canvas.offsetHeight);
+    wires.innerHTML = '<defs><marker id="gw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#b0b0b0"/></marker></defs>';
+    for (const e of GRAPH.edges) {
+      const A = el[e.from], B = el[e.to]; if (!A || !B) continue;
+      const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
+      // A card shown whole can be very tall, so an edge leaves and lands at the height of
+      // the card at the other end rather than at the middle of its own.
+      const y1 = Math.min(Math.max(rb.top + rb.height / 2, ra.top + 18), ra.bottom - 18) - b.top;
+      const y2 = Math.min(Math.max(ra.top + ra.height / 2, rb.top + 18), rb.bottom - 18) - b.top;
+      const x1 = ra.right - b.left, x2 = rb.left - b.left, d = Math.max(18, (x2 - x1) / 2);
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", "M" + x1 + " " + y1 + " C" + (x1 + d) + " " + y1 + " " + (x2 - d) + " " + y2 + " " + (x2 - 4) + " " + y2);
+      p.setAttribute("fill", "none"); p.setAttribute("stroke", "#b0b0b0"); p.setAttribute("stroke-width", "1.4");
+      p.setAttribute("marker-end", "url(#gw)"); wires.append(p);
+    }
+  }
+  window.rulecBoardFill = function (trace, outs) {
+    const row = {}; for (const t of trace || []) row[t.table] = t.row;
+    for (const n of GRAPH.nodes) {
+      const card = el[n.v]; if (!card) continue;
+      const hit = n.tables.map((t) => row[t]).find((x) => x !== undefined);
+      card.querySelector(".r").textContent = hit === undefined ? "" : "　" + GRAPH.text.row + hit;
+      card.querySelector(".v").textContent = outs && outs[n.v] !== undefined ? outs[n.v] : "";
+    }
+    requestAnimationFrame(() => requestAnimationFrame(wire));
+  };
+  for (const v in el) el[v].addEventListener("click", () => {
+    const on = el[v].classList.contains("sel");
+    for (const o of document.querySelectorAll(".gcard.sel")) o.classList.remove("sel");
+    dock.innerHTML = ""; dock.hidden = true; hsplit.hidden = true;
+    if (on) return;
+    el[v].classList.add("sel");
+    const parts = detail[v] || []; if (!parts.length) return;
+    const x = mk("span", "x"); x.textContent = GRAPH.text.close;
+    x.addEventListener("click", (ev) => { ev.stopPropagation(); el[v].classList.remove("sel"); dock.hidden = true; });
+    dock.append(x, ...parts); dock.hidden = false; hsplit.hidden = false; wire();
+  });
+  // Both borders move: the side pane's width, and the dock's height.
+  let drag = null;
+  split.addEventListener("mousedown", (e) => { drag = "x"; split.classList.add("on"); e.preventDefault(); });
+  hsplit.addEventListener("mousedown", (e) => { drag = "y"; hsplit.classList.add("on"); e.preventDefault(); });
+  addEventListener("mousemove", (e) => {
+    if (drag === "x") side.style.width = Math.max(220, Math.min(e.clientX, innerWidth * 0.6)) + "px";
+    else if (drag === "y") dock.style.height = Math.max(80, Math.min(innerHeight - e.clientY, innerHeight * 0.8)) + "px";
+  });
+  addEventListener("mouseup", () => {
+    if (!drag) return;
+    split.classList.remove("on"); hsplit.classList.remove("on"); drag = null; wire();
+  });
+  addEventListener("resize", wire);
+  new ResizeObserver(() => wire()).observe(canvas);
+  wire();
+})();
+"##;

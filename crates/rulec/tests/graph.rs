@@ -222,67 +222,88 @@ fn グラフは検査より手前で出る() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// **The drawing is the data, drawn.** Every box on the page is a node of `rulec graph` and
-/// every arrow is an edge, so a picture cannot quietly start being about something else.
-/// The sequence is the one node with no box — it is the frame instead, because a box with
-/// no arrow on it reads as something forgotten.
+/// **The board is the data, laid out.** Every card is a decider of `rulec graph` and every
+/// wire an edge between two of them, so the page's picture cannot quietly start being about
+/// something else. The page carries the graph as data and builds the board from the document
+/// it already is — which is why a reader with no script still has that document.
 #[test]
-fn ページの図は_グラフそのものを描いている() {
+fn ページの盤面は_グラフそのものから組み立てられる() {
     for rule in ["tests/corpus/二つの区分.rule", "tests/corpus/全国運賃.rule", "tests/corpus/非常勤退職手当.rule"] {
         let g = graph(rule);
         let (c, html) = run(&["doc", rule, "--format", "html"]);
         assert_eq!(c, 0, "{rule}");
-        assert!(html.contains("id=\"rule-graph\""), "{rule}: 図がページに無い");
+        let i = html.find("const GRAPH = ").expect("盤面のデータがページに無い");
+        let tail = &html[i + "const GRAPH = ".len()..];
+        let data = rulec::json::parse(tail[..tail.find(";\n").unwrap()].trim())
+            .unwrap_or_else(|e| panic!("{rule}: 盤面のデータが JSON として読めない: {e}"));
 
-        let seq: Vec<String> = arr(&g, "nodes")
-            .iter()
-            .filter(|n| s(n, "kind") == "sequence")
-            .map(|n| s(n, "name"))
-            .collect();
+        // Every decider is a card, in exactly one column, and nothing else is.
         let want: Vec<String> = arr(&g, "nodes")
             .iter()
+            .filter(|n| n.get("by").is_some())
             .map(|n| s(n, "name"))
-            .filter(|n| !seq.contains(n))
             .collect();
-        let drawn: Vec<String> = html
-            .match_indices("data-v=\"")
-            .map(|(i, p)| {
-                let r = &html[i + p.len()..];
-                r[..r.find('"').unwrap()].to_string()
-            })
-            .collect();
-        assert_eq!(drawn.len(), want.len(), "{rule}: 箱の数が節点の数と違う\n{drawn:?}\n{want:?}");
-        for n in &want {
-            assert!(drawn.iter().any(|d| d == n), "{rule}: {n} の箱が無い");
+        let got: Vec<String> = arr(&data, "nodes").iter().map(|n| s(n, "v")).collect();
+        assert_eq!(got.len(), want.len(), "{rule}: 箱の数が決め手の数と違う\n{got:?}\n{want:?}");
+        for w in &want {
+            assert!(got.contains(w), "{rule}: {w} の箱が無い");
         }
-        for nm in &seq {
-            assert!(!drawn.iter().any(|d| d == nm), "{rule}: 並び {nm} に箱が付いている");
-        }
+        let placed: Vec<String> = match data.get("cols") {
+            Some(rulec::json::Json::Arr(cs)) => cs
+                .iter()
+                .flat_map(|c| match c {
+                    rulec::json::Json::Arr(v) => v.iter().filter_map(|x| x.as_str().map(|t| t.to_string())).collect(),
+                    _ => Vec::new(),
+                })
+                .collect(),
+            _ => panic!("cols が配列でない"),
+        };
+        assert_eq!(placed.len(), want.len(), "{rule}: 列に置かれた箱の数が合わない: {placed:?}");
 
-        let arrows = html.matches("class=\"ge\"").count();
-        let want_e = arr(&g, "edges")
+        // A wire for every edge between two deciders, and no other.
+        let want_e: Vec<String> = arr(&g, "edges")
             .iter()
-            .filter(|e| !seq.contains(&s(e, "from")) && !seq.contains(&s(e, "to")))
-            .count();
-        assert_eq!(arrows, want_e, "{rule}: 矢印の数が辺の数と違う");
+            .filter(|e| want.contains(&s(e, "from")) && want.contains(&s(e, "to")))
+            .map(|e| format!("{}→{}", s(e, "from"), s(e, "to")))
+            .collect();
+        let got_e: Vec<String> =
+            arr(&data, "edges").iter().map(|e| format!("{}→{}", s(e, "from"), s(e, "to"))).collect();
+        for w in &want_e {
+            assert!(got_e.contains(w), "{rule}: 矢印 {w} が無い");
+        }
+        assert_eq!(got_e.len(), want_e.len(), "{rule}: 矢印の数が違う");
+
+        // The document is still the document: the board is what the script makes of it.
+        assert!(html.contains("<main>"), "{rule}: 文書そのものが無い");
+        // A card finds its table through a row, not a heading: the row's `data-t` is the
+        // name the trace uses, the same in either language and after an `apply` renamed it.
+        for t in arr(&data, "nodes").iter().flat_map(|n| match n.get("tables") {
+            Some(rulec::json::Json::Arr(a)) => a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>(),
+            _ => Vec::new(),
+        }) {
+            assert!(
+                html.contains(&format!("data-t=\"{t}\"")),
+                "{rule}: 表 {t} の行に印が無いので、盤面が取り出せない"
+            );
+        }
     }
 }
 
-/// The trace lights the map, in the colour the rows light in. The page already knew which
-/// rows matched; what the picture adds is which *deciders* the case went through, and that
-/// has to come from the same list or it is a second opinion.
+/// The trace lights the board in the colour the rows light in, and the answer lands in the
+/// card that decides it. The page already knew which rows matched; what the board adds is
+/// *where* they are, and that has to come from the same list or it is a second opinion.
 #[test]
-fn 図は当てはまった表と同じ色で光る() {
+fn 盤面は当てはまった行と同じ色で光る() {
     let (c, html) = run(&["doc", "tests/corpus/二つの区分.rule", "--format", "html"]);
     assert_eq!(c, 0);
     for want in [
-        "#rule-graph .gn.hit rect",       // a box lights
-        "#rule-graph .ge.hit",            // and the arrows that fed it
-        "const fired = new Set(trace.map", // out of the very trace the rows come from
+        "rulecBoardFill(trace, outs)",   // out of the very trace the rows come from
+        "window.rulecBoardFill = function",
+        ".gcard.sel",                     // the one card that carries colour
+        "tr.hit td { background: #ffe9a8; }", // and the rows, in the same colour
+        "mk(\"div\", \"split\")",   // both borders move
+        "mk(\"div\", \"hsplit\")",
     ] {
         assert!(html.contains(want), "ページに `{want}` が無い");
     }
-    // Every box that can light names the deciders it lights for.
-    let tagged = html.matches("data-t=\"").count();
-    assert!(tagged >= 4, "決め手の名前が付いた箱が {tagged} 個しかない");
 }
