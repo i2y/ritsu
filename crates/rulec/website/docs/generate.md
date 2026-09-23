@@ -218,6 +218,45 @@ Python imports the module and compares `inspect.signature`; and Go
 
 [The generated code in detail](generated-code.md){ .md-button }
 
+## Calling it with the caller's own object
+
+A rule whose inputs say `from` (see [Inputs taken from the caller's object](tour.md) in
+the walkthrough) gets one more function beside the rule's own: the same call, taking the
+caller's object instead. Its name is the rule's function with `_from` on the end.
+
+```python
+from order_shipping import order_shipping_from
+
+order = {
+    "shipping": {"zone": "okinawa"},
+    "lines": [{"sku": f"s{i}", "chilled": i == 3, "amount_jpy": 100} for i in range(11)],
+}
+print(order_shipping_from(order))  # 2200
+```
+
+From a `.proto`, hand it the JSON protojson wrote, as it is: the names may stay in
+lowerCamelCase, a field at its default may be left out, and an int64 may arrive as a string.
+
+```python
+import json
+from shipment_fee import shipment_fee_from
+
+body = """{"destination": {"region": "okinawa"},
+ "parcels": [{"weightG": "1200"}, {"weightG": "800"}, {"weightG": "500"}],
+ "declaredValueJpy": "200000", "deliveryWindow": "evening"}"""
+print(shipment_fee_from(json.loads(body)))  # 5100
+```
+
+Five of the twelve targets write it. Python, TypeScript, JavaScript, Ruby and PHP take the
+object as a plain map, so it needs no name. Go, Swift, Java and Rust hold it as a type, and
+the only ways to name that type would be to generate it or to follow the caller's own; this
+tool does neither. SQL and NumPy take columns, and the Wasm module takes one JSON object of
+the rule's own inputs, so there is no object to project from. The check that holds the paths
+to the contract happens in `rulec check`, and so it applies to all twelve.
+
+`rulec api` lists, under `projection`, the contracts borrowed, the path of every projected
+input, and the function's name and signature in each of the five.
+
 ## Two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every
@@ -254,8 +293,8 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 46 rules, 106 harnesses
-verify in 170 seconds.
+get the input that shows it. On the corpus of 47 rules, 111 harnesses
+verify in 175 seconds.
 
 What it does not say: anything about the table itself, or about any
 target but this one. And two kinds of rule get no harness at all, the

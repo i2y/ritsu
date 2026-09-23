@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+
+// The request the shipping service takes, validated by Protovalidate before anything reads it.
+message CreateShipmentRequest {
+  Destination destination = 1 [(buf.validate.field).required = true];
+  repeated Parcel parcels = 2 [(buf.validate.field).repeated = {min_items: 1, max_items: 20}];
+  int64 declared_value_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 1000000}];
+  optional string delivery_window = 4 [(buf.validate.field).string = {in: ["morning", "evening"]}];
+}
+
+message Destination {
+  string region = 1 [(buf.validate.field).string = {in: ["honshu", "hokkaido", "okinawa"]}];
+  string postcode = 2;
+}
+
+message Parcel {
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  Handling handling = 2;
+}
+
+enum Handling {
+  HANDLING_STANDARD = 0;
+  HANDLING_FRAGILE = 1;
+}

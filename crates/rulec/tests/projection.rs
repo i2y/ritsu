@@ -588,3 +588,47 @@ fn whereの日付は文字列として比べる() {
         ],
     );
 }
+
+/// The corpus rule the examples page shows for a `.proto` contract, called the way its caller
+/// would call it: with a request in protojson's form — names in lowerCamelCase, the int64 a
+/// string, what is at its default left out — and once with the `.proto`'s own names. Each
+/// answer is one of the rule's own examples, so what this holds the five to is a number the
+/// reference evaluator already agreed with.
+#[test]
+fn コーパスのprotoの規則は要求をそのまま読む() {
+    let dir = std::env::temp_dir().join(format!("rulec-projection-shipment-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(root())
+        .args(["gen", "tests/corpus/出荷の送料.rule", "--out", &dir.join("gen").to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    let parcel = |fragile: bool| {
+        if fragile { "{\"weightG\":\"1200\",\"handling\":\"HANDLING_FRAGILE\"}" } else { "{\"weightG\":\"1200\"}" }
+    };
+    let many = |n: usize, fragile: bool| vec![parcel(fragile); n].join(",");
+    five(
+        &dir,
+        "shipment_fee",
+        &[
+            // honshu | false | 1 | 0円 | none -> 800円: the value and the window left out.
+            (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{}]}}", many(1, false)), "800"),
+            // hokkaido | true | 2 | 5万円 | none -> 2900円
+            (
+                format!("{{\"destination\":{{\"region\":\"hokkaido\"}},\"parcels\":[{},{}],\"declaredValueJpy\":\"50000\"}}", parcel(true), parcel(false)),
+                "2900",
+            ),
+            // okinawa | false | 3 | 20万円 | evening -> 5100円
+            (
+                format!("{{\"destination\":{{\"region\":\"okinawa\"}},\"parcels\":[{}],\"declaredValueJpy\":\"200000\",\"deliveryWindow\":\"evening\"}}", many(3, false)),
+                "5100",
+            ),
+            // honshu | true | 20 | 100万円 | morning -> 16900円, under the names the .proto writes.
+            (
+                format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{}],\"declared_value_jpy\":\"1000000\",\"delivery_window\":\"morning\"}}", many(20, true)),
+                "16900",
+            ),
+        ],
+    );
+}

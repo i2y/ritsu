@@ -241,6 +241,42 @@ outputs
 
 負の向きまで決めてあるのは、**Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・Java・TypeScript・JavaScript・PHP の `intdiv`・SQL・Wasm・NumPy は 0 方向で食い違う**からです。言語の素の除算に任せると、同じ規則が言語ごとに違う答えを出します。生成コードは自前のヘルパ関数を通し、どの言語でも答えが揃うことをテストが毎回確かめています。
 
+## 入力を、呼び出し側のオブジェクトから取る（shape と from）
+
+規則の入力は平たい値ですが、呼び出し側が持っているのは、たいてい入れ子のオブジェクトです。API の要求や、キューに流れるメッセージです。その形がもう JSON Schema か `.proto` で決まっているなら、`shape` で借りて、入力の行末の `from` で、その中のどこから来るかを書きます。
+
+```rule
+shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+inputs
+  あて先(zone)   : 地域    from 注文.shipping.zone
+  冷蔵あり(cold) : bool    from any 注文.lines where chilled = true
+  明細数(lines)  : number  range >=1 <=50  from count 注文.lines
+```
+
+`.proto` なら、ファイルとメッセージの名前を書きます。`shape 出荷(shipment) = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest` です。
+
+`from` の形は四つです。
+
+| 書き方 | 返すもの |
+|---|---|
+| `from 注文.shipping.zone` | そのフィールドの値 |
+| `from any 注文.lines where chilled = true` | `bool`。要素のどれかが当てはまるか |
+| `from all 注文.lines where chilled = true` | `bool`。要素の全部が当てはまるか |
+| `from count 注文.lines` | `number`。要素の数（`where` を付ければ、当てはまる要素の数） |
+
+これで起きることは三つです。
+
+- **取り出すコードが生成されます。** `rulec gen` は、規則の関数のほかに `order_shipping_from(order)` を書きます。書くのは、呼び出し側がオブジェクトをただの連想配列として持っている五つの言語です。呼び出し側はオブジェクトをそのまま渡します。`.proto` の形なら、protojson の JSON をそのまま読みます。名前は lowerCamelCase でも `.proto` の名前でもよく、省かれたフィールドは proto の既定値として読みます。呼び方は[生成して呼ぶ](generate.md)にあります。
+- **パスが契約に照らされます。** `rulec check` は走るたびに契約のファイルを読みます。名指したパスが無ければ E121（どこまで届いたかと、そこにあったフィールドを言います）、型が合わなければ E120、どの入力も使わない `shape` は W122 です。契約の側でフィールドの名前が変わっても、本番で KeyError になる前に CI で止まります。
+- **契約の検証が、入力の宣言と突き合わされます。** 契約は通すのに入力が断る値があれば E122 です。たとえば契約の `lines` に `maxItems` が無ければ、51 件の注文は契約を通りますが、`range >=1 <=50` の `明細数` は断ります。`fix.text` は、契約に書き足す注釈やキーワードそのものです。契約が通さない値でしか当たらない行は W123 です。
+
+表の検査は何も変わりません。射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。
+
+**取り出せるのは、一つの並びと、要素のフィールドへの単項のテストまでです。** 結合や入れ子の量化、セルの中のパスは書けません。セルの言語がこの道具の境界だからです。
+
+契約と並べた例が[例で見る](examples.md)に二つあります（JSON Schema と `.proto`）。細部は[文法](reference.md#33-shape-and-from--where-the-callers-object-holds-an-input)にあります。
+
 ## 表
 
 ```rule

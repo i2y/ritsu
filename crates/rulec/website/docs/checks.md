@@ -45,6 +45,8 @@ not have is **E121**, which says how far it got and which fields were there; a t
 not fit the input is **E120**; a contract nothing projects from is **W122**. None of this
 changes a check of the table — what comes out of a projection is a scalar input like any other
 — and what it stops is the glue between an application and a rule going stale in silence.
+How to write one is in [Write a table](tour.md), and two worked rules are in
+[Examples](examples.md).
 
 The contract also says **which values** can come from there, and that is held to the input.
 Protovalidate's rules on a `.proto` field and a schema's `minimum`, `maxItems`, `enum` and

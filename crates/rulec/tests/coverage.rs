@@ -6,7 +6,8 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 44] = [
+const CORPUS: [&str; 45] = [
+    "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
     "tests/corpus/比例配分.rule",
     "tests/corpus/品番の扱い.rule",
@@ -270,6 +271,7 @@ fn 義務の件数を固定する() {
         ("tests/corpus/品番の扱い.rule", 4, 2, 4),
         ("tests/corpus/比例配分.rule", 2, 0, 0),
         ("tests/corpus/注文の送料.rule", 7, 2, 0),
+        ("tests/corpus/出荷の送料.rule", 10, 4, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

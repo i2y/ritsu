@@ -946,6 +946,209 @@ examples
 - **差にすると、配った合計が総額にぴったり一致します。** 隣り合う行で同じ値が足されて引かれるので、端数は最後の行に寄ります。`proofs/` に定理があります（`runTotal_exact`）。
 - **`constraint 累計 <= 全体` が要ります**（E117）。これが無いと配る分が配る額を超えることがあり、区間も二つの範囲の積になってしまいます。制約は二行に分けて書いても、つながって効きます。
 
+## 呼び出し側の注文から入力を取る（JSON Schema）
+
+注文オブジェクトから送料を決めます。呼び出し側はもう JSON Schema で注文の形を決めているので、それを `shape` で借り、入力ごとにその中のどこから来るかを `from` で書きます。表そのものは、ほかの例と同じ平たい入力の表です。
+
+```rule
+rule 注文の送料(order_shipping) v1
+description "注文オブジェクトから送料を決める。呼び出し側の契約から入力を取り出す例（§15.125）"
+
+# 呼び出し側はもう JSON Schema で注文の形を決めている。それを借りて、入力がその形の
+# どこから来るかを書くと、平たくするコードは生成され、パスは毎回の check で契約に照らされる。
+shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum 地域(zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+
+inputs
+  あて先(zone)   : 地域    from 注文.shipping.zone
+  冷蔵あり(cold) : bool    from any 注文.lines where chilled = true
+  明細数(lines)  : number  range >=1 <=50  from count 注文.lines
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 冷蔵は地域を問わず 500円 増し、明細が 10 件を超えると 200円 増し。
+table 地域別(by_zone)
+policy unique
+| あて先   | -> 地域料(zone_fee) : money[円] |
+| honshu   | 800円                           |
+| hokkaido | 1200円                          |
+| okinawa  | 1500円                          |
+
+table 冷蔵加算(cold_extra)
+policy unique
+| 冷蔵あり | -> 冷蔵料(cold_fee) : money[円] |
+| true     | 500円                           |
+| false    | 0円                             |
+
+table 件数加算(bulk_extra)
+policy unique
+| 明細数 | -> 件数料(bulk_fee) : money[円] |
+| >10    | 200円                           |
+| <=10   | 0円                             |
+
+define 合計(total) : money[円] = 地域料 + 冷蔵料 + 件数料
+
+result 送料 = 合計
+
+examples
+| あて先   | 冷蔵あり | 明細数 | -> 送料 |
+| honshu   | false    | 1      | 800円   |
+| honshu   | true     | 1      | 1300円  |
+| okinawa  | true     | 11     | 2200円  |
+| hokkaido | false    | 10     | 1200円  |
+```
+
+規則が読む契約（`contracts/order.schema.json`）:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order",
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shipping": { "$ref": "#/$defs/Shipping" },
+        "lines": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/$defs/Line" } }
+      },
+      "required": ["shipping", "lines"]
+    },
+    "Shipping": {
+      "type": "object",
+      "properties": {
+        "zone": { "type": "string", "enum": ["honshu", "hokkaido", "okinawa"] },
+        "postcode": { "type": "string" }
+      },
+      "required": ["zone"]
+    },
+    "Line": {
+      "type": "object",
+      "properties": {
+        "sku": { "type": "string" },
+        "chilled": { "type": "boolean" },
+        "amount_jpy": { "type": "integer" }
+      },
+      "required": ["sku", "chilled", "amount_jpy"]
+    }
+  }
+}
+```
+
+**この例が見せていること**
+
+- **`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や入れ子の量化は書けません。
+- **`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。書くのは、呼び出し側がオブジェクトをただの連想配列として持っている五つの言語です。
+- **パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを名指しすれば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。
+- **契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は断るので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`"minItems": 1, "maxItems": 50`）そのものです。
+- **表の検査には触れません。** 射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。
+
+## Connect の要求から入力を取る（.proto と Protovalidate）
+
+出荷の要求から送料を決めます。要求の形は `.proto` で決まっていて、フィールドには Protovalidate の注釈が付いています。規則はその `.proto` を借り、入力の宣言を注釈とそろえてあります。
+
+```rule
+rule 出荷の送料(shipment_fee) v1
+description "出荷の要求（.proto）から送料を決める。Protovalidate の注釈と入力の宣言をそろえた例（§15.132、§15.133）"
+
+# 呼び出し側は Connect のサービスで、要求の形は .proto で決まっている。それを借りて、入力が
+# 要求のどこから来るかを書く。生成する shipment_fee_from は、protojson で届いた要求をそのまま読む。
+shape 出荷(shipment) = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest
+
+enum 地域(region) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+enum 時間帯(window) = morning(morning) | evening(evening)
+
+inputs
+  あて先(region)      : 地域  from 出荷.destination.region
+  割れ物あり(fragile) : bool  from any 出荷.parcels where handling = HANDLING_FRAGILE
+  個数(parcels)       : number  range >=1 <=20  from count 出荷.parcels
+  申告額(declared)    : money[円]  range >=0円 <=100万円  from 出荷.declared_value_jpy
+  時間帯(window)      : 時間帯?  from 出荷.delivery_window
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 一個あたりの運賃に個数を掛け、割れ物・補償・時間帯指定の加算を足す。
+table 地域別(by_region)
+policy unique
+| あて先   | -> 一個の運賃(per_parcel) : money[円] |
+| honshu   | 800円                                 |
+| hokkaido | 1200円                                |
+| okinawa  | 1500円                                |
+
+table 割れ物加算(fragile_extra)
+policy unique
+| 割れ物あり | -> 割れ物料(fragile_fee) : money[円] |
+| true       | 300円                                |
+| false      | 0円                                  |
+
+table 補償(insurance)
+policy unique
+| 申告額          | -> 補償料(insurance_fee) : money[円] |
+| <=3万円         | 0円                                  |
+| >3万円 <=10万円 | 200円                                |
+| >10万円         | 500円                                |
+
+table 時間帯指定(window_extra)
+policy unique
+| 時間帯           | -> 指定料(window_fee) : money[円] |
+| none             | 0円                               |
+| morning, evening | 100円                             |
+
+define 合計(total) : money[円] = 一個の運賃 × 個数 + 割れ物料 + 補償料 + 指定料
+
+result 送料 = 合計
+
+examples
+| あて先   | 割れ物あり | 個数 | 申告額  | 時間帯  | -> 送料 |
+| honshu   | false      | 1    | 0円     | none    | 800円   |
+| hokkaido | true       | 2    | 5万円   | none    | 2900円  |
+| okinawa  | false      | 3    | 20万円  | evening | 5100円  |
+| honshu   | true       | 20   | 100万円 | morning | 16900円 |
+```
+
+規則が読む契約（`contracts/shipment.proto`）:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+
+// The request the shipping service takes, validated by Protovalidate before anything reads it.
+message CreateShipmentRequest {
+  Destination destination = 1 [(buf.validate.field).required = true];
+  repeated Parcel parcels = 2 [(buf.validate.field).repeated = {min_items: 1, max_items: 20}];
+  int64 declared_value_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 1000000}];
+  optional string delivery_window = 4 [(buf.validate.field).string = {in: ["morning", "evening"]}];
+}
+
+message Destination {
+  string region = 1 [(buf.validate.field).string = {in: ["honshu", "hokkaido", "okinawa"]}];
+  string postcode = 2;
+}
+
+message Parcel {
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  Handling handling = 2;
+}
+
+enum Handling {
+  HANDLING_STANDARD = 0;
+  HANDLING_FRAGILE = 1;
+}
+```
+
+**この例が見せていること**
+
+- **生成する `shipment_fee_from` は、protojson の JSON をそのまま読みます。** フィールドは lowerCamelCase の名前（`declaredValueJpy`）でも `.proto` に書いた名前（`declared_value_jpy`）でも読み、省かれたフィールドは proto の既定値として読みます。int64 は文字列で届いても、数として読みます。
+- **`optional` のフィールドは `T?` の入力で受けます。** `delivery_window` は送られないことがあるので `時間帯?` にして、無いとき（`none`）の行を表に書いています。
+- **列挙のフィールドは、`where` で値の名前を比べます。** `handling` は `.proto` の列挙で、protojson は値の名前（`HANDLING_FRAGILE`）を運びます。番号 0 の値（`HANDLING_STANDARD`）のときはフィールドごと省かれますが、そのときも `HANDLING_STANDARD` として読みます。
+- **注釈と宣言がそろっているので、`check` は通ります。** `destination` から `required = true` を外すと、要求は `destination` を省けるようになり、そのとき `region` は `""` として届きます。`地域` は `""` を受け付けないので E122 で止まり、`fix.text` は `[(buf.validate.field).required = true]` です。
+
 ## 返品できるかどうかを英語で書く
 
 金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。

@@ -316,6 +316,46 @@ EXAMPLES = [
         ],
     ),
     (
+        "注文の送料.rule",
+        "呼び出し側の注文から入力を取る（JSON Schema）",
+        "注文オブジェクトから送料を決めます。呼び出し側はもう JSON Schema で注文の形を決めているので、それを `shape` で借り、入力ごとにその中のどこから来るかを `from` で書きます。表そのものは、ほかの例と同じ平たい入力の表です。",
+        [
+            "**`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や入れ子の量化は書けません。",
+            "**`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。書くのは、呼び出し側がオブジェクトをただの連想配列として持っている五つの言語です。",
+            "**パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを名指しすれば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。",
+            "**契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は断るので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`\"minItems\": 1, \"maxItems\": 50`）そのものです。",
+            "**表の検査には触れません。** 射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。",
+        ],
+        "Inputs taken from the caller's order (JSON Schema)",
+        "The shipping fee, decided from an order object. The caller already describes its orders with a JSON Schema, so the rule borrows it with `shape` and says, for each input, where in it the value stands, with `from`. The table itself is a table of flat inputs like any other.",
+        [
+            "**`from` comes in four shapes.** The value of a field (`from 注文.shipping.zone`), whether some element passes a test (`from any 注文.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count 注文.lines`). A join or a nested quantifier cannot be written.",
+            "**`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for the five targets whose caller holds the object as a plain map.",
+            "**Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.",
+            "**The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `明細数`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`\"minItems\": 1, \"maxItems\": 50`).",
+            "**No check of the table changes.** What comes out of a projection is a scalar input like any other, and completeness and overlap are decided as they would be without `from`.",
+        ],
+    ),
+    (
+        "出荷の送料.rule",
+        "Connect の要求から入力を取る（.proto と Protovalidate）",
+        "出荷の要求から送料を決めます。要求の形は `.proto` で決まっていて、フィールドには Protovalidate の注釈が付いています。規則はその `.proto` を借り、入力の宣言を注釈とそろえてあります。",
+        [
+            "**生成する `shipment_fee_from` は、protojson の JSON をそのまま読みます。** フィールドは lowerCamelCase の名前（`declaredValueJpy`）でも `.proto` に書いた名前（`declared_value_jpy`）でも読み、省かれたフィールドは proto の既定値として読みます。int64 は文字列で届いても、数として読みます。",
+            "**`optional` のフィールドは `T?` の入力で受けます。** `delivery_window` は送られないことがあるので `時間帯?` にして、無いとき（`none`）の行を表に書いています。",
+            "**列挙のフィールドは、`where` で値の名前を比べます。** `handling` は `.proto` の列挙で、protojson は値の名前（`HANDLING_FRAGILE`）を運びます。番号 0 の値（`HANDLING_STANDARD`）のときはフィールドごと省かれますが、そのときも `HANDLING_STANDARD` として読みます。",
+            "**注釈と宣言がそろっているので、`check` は通ります。** `destination` から `required = true` を外すと、要求は `destination` を省けるようになり、そのとき `region` は `\"\"` として届きます。`地域` は `\"\"` を受け付けないので E122 で止まり、`fix.text` は `[(buf.validate.field).required = true]` です。",
+        ],
+        "Inputs taken from a Connect request (.proto and Protovalidate)",
+        "The shipping fee, decided from a shipment request. The request is described by a `.proto`, and its fields carry Protovalidate's rules. The rule borrows that `.proto`, and its inputs are declared to agree with the rules.",
+        [
+            "**The generated `shipment_fee_from` reads the JSON protojson writes, as it is.** A field is read under its lowerCamelCase name (`declaredValueJpy`) or under the name the `.proto` gives it (`declared_value_jpy`); a field left out is read as its proto default; an int64 that arrives as a string is read as the number it is.",
+            "**An `optional` field is taken by an optional input.** `delivery_window` may not be sent, so the input is `時間帯?`, and the table has a row for when it is missing (`none`).",
+            "**A `where` on an enum field compares the value's name.** `handling` is an enum of the `.proto`, and protojson carries the value's name (`HANDLING_FRAGILE`). At the value numbered 0 (`HANDLING_STANDARD`) the field is left out altogether, and it is read as `HANDLING_STANDARD` all the same.",
+            "**The rules and the declarations agree, so `check` passes.** Take `required = true` off `destination` and a request may leave it out, in which case `region` arrives as `\"\"`. `地域` does not take `\"\"`, so the check stops at E122, with `[(buf.validate.field).required = true]` as `fix.text`.",
+        ],
+    ),
+    (
         "return_eligibility.rule",
         "返品できるかどうかを英語で書く",
         "金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。",
@@ -698,6 +738,14 @@ EXAMPLES = [
         ],
     ),
 ]
+# The contract a projection reads from, shown under the rule: the path the rule's `shape` line
+# names, beside the corpus rule, and the language of its fence. What the page shows is the file
+# `rulec check` read.
+CONTRACTS = {
+    "注文の送料.rule": ("contracts/order.schema.json", "json"),
+    "出荷の送料.rule": ("contracts/shipment.proto", "proto"),
+}
+
 JA_HEAD = """# 例で見る
 
 ここにあるのは全部、**このリポジトリのテストが毎回走らせている規則**です。`rulec check` を通り、書いてある例が実行され、参照評価器と生成したどの言語も同じ答えを返すことまで確かめられています。そのままコピーして動かせます。
@@ -741,11 +789,16 @@ EN_TAIL = """---
 """
 
 
-def page(head, tail, title_i, lede_i, points_i, shows):
+def page(head, tail, title_i, lede_i, points_i, shows, reads):
     out = [head]
     for e in EXAMPLES:
         src = (CORPUS / e[0]).read_text(encoding="utf-8").rstrip("\n")
-        out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```rule\n{src}\n```\n\n**{shows}**\n\n")
+        out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```rule\n{src}\n```\n\n")
+        if e[0] in CONTRACTS:
+            path, fence = CONTRACTS[e[0]]
+            body = (CORPUS / path).read_text(encoding="utf-8").rstrip("\n")
+            out.append(f"{reads.format(path=path)}\n\n```{fence}\n{body}\n```\n\n")
+        out.append(f"**{shows}**\n\n")
         out.append("".join(f"- {p}\n" for p in e[points_i]))
         out.append("\n")
     out.append(tail)
@@ -754,10 +807,10 @@ def page(head, tail, title_i, lede_i, points_i, shows):
 
 def main():
     (ROOT / "website" / "docs-ja" / "examples.md").write_text(
-        page(JA_HEAD, JA_TAIL, 1, 2, 3, "この例が見せていること"), encoding="utf-8"
+        page(JA_HEAD, JA_TAIL, 1, 2, 3, "この例が見せていること", "規則が読む契約（`{path}`）:"), encoding="utf-8"
     )
     (ROOT / "website" / "docs" / "examples.md").write_text(
-        page(EN_HEAD, EN_TAIL, 4, 5, 6, "What this one shows"), encoding="utf-8"
+        page(EN_HEAD, EN_TAIL, 4, 5, 6, "What this one shows", "The contract it reads (`{path}`):"), encoding="utf-8"
     )
     print(f"wrote examples.md (en + ja): {len(EXAMPLES)} rules")
 

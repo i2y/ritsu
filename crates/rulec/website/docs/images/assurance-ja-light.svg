@@ -71,6 +71,6 @@
 <rect x="44" y="710" width="488" height="5" fill="#4457d8" clip-path="url(#clip-foot)"/>
 <text x="288.0" y="753" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">8 — 道具そのものを試す</text>
 <text x="288.0" y="782" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">ここまでの層を出しているのは rulec の実装で、その正しさは証明していません。</text>
-<text x="288.0" y="801" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">わざと壊した 94 本が狙った診断を出し、46 本の規則が毎コミット全言語で走る</text>
+<text x="288.0" y="801" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">わざと壊した 94 本が狙った診断を出し、47 本の規則が毎コミット全言語で走る</text>
 <text x="288.0" y="852" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">出典を引いていない規則には、上から二つめの箱がありません。届かない範囲が表まで広がります。</text>
 </svg>

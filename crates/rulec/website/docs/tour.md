@@ -345,6 +345,62 @@ PHP's `intdiv`, SQL and the Wasm module it truncates toward zero**. Left to the 
 would answer differently in each. The generated code goes through its own helper, and
 that they all agree is checked by unit vectors on every run.
 
+## Inputs taken from the caller's object: shape and from
+
+A rule's inputs are flat values, and what the caller holds is usually a nested object — an
+API request, a message on a queue. When its shape is already described by a JSON Schema or a
+`.proto`, `shape` borrows that description, and a `from` at the end of an input's line says
+where in it the value stands.
+
+```rule
+shape order = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+inputs
+  dest    : zone    from order.shipping.zone
+  chilled : bool    from any order.lines where chilled = true
+  lines   : number  range >=1 <=50  from count order.lines
+```
+
+A `.proto` is named by its file and message:
+`shape shipment = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest`.
+
+`from` comes in four shapes:
+
+| written | what it yields |
+|---|---|
+| `from order.shipping.zone` | the value of that field |
+| `from any order.lines where chilled = true` | `bool` — whether some element passes |
+| `from all order.lines where chilled = true` | `bool` — whether every element does |
+| `from count order.lines` | `number` — how many elements there are (with `where`, how many pass) |
+
+Three things follow.
+
+- **The code that reads the inputs out is generated.** Beside the rule's own function,
+  `rulec gen` writes `order_shipping_from(order)` in the five targets whose caller holds the
+  object as a plain map, and the caller hands it the object as it is. From a `.proto`, it reads the JSON
+  protojson writes: a field under its lowerCamelCase name or its `.proto` name, and one left
+  out as its proto default. How to call it is in [Generate and call](generate.md).
+- **The paths are held to the contract.** Every `rulec check` reads the contract's file. A
+  path it does not have is E121, which says how far the path got and which fields were
+  there; a type that does not fit is E120; a `shape` no input reads from is W122. A field
+  the contract renames stops CI instead of raising a `KeyError` in production.
+- **The contract's validation is held to the inputs' declarations.** A value the contract
+  lets through and an input refuses is E122: without a `maxItems` on the contract's `lines`,
+  an order of 51 lines passes the contract, and `lines`, declared `range >=1 <=50`, refuses
+  it. `fix.text` is the annotation or keyword to add to the contract. A row reached only by
+  values the contract never lets through is W123.
+
+No check of the table changes. What comes out of a projection is a scalar input like any
+other, and completeness and overlap are decided as they would be without `from`.
+
+**One collection, and a unary test on a field of an element, is as far as it goes.** A join,
+a nested quantifier and a path inside a cell cannot be written: the cell language is where
+this tool's boundary is.
+
+[Examples](examples.md) has two worked rules with their contracts beside them, one on a JSON
+Schema and one on a `.proto`; the details are in the
+[grammar](reference.md#33-shape-and-from--where-the-callers-object-holds-an-input).
+
 ## Tables
 
 ```rule

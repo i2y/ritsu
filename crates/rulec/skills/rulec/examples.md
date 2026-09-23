@@ -960,6 +960,209 @@ examples
 - **Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).
 - **A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.
 
+## Inputs taken from the caller's order (JSON Schema)
+
+The shipping fee, decided from an order object. The caller already describes its orders with a JSON Schema, so the rule borrows it with `shape` and says, for each input, where in it the value stands, with `from`. The table itself is a table of flat inputs like any other.
+
+```rule
+rule 注文の送料(order_shipping) v1
+description "注文オブジェクトから送料を決める。呼び出し側の契約から入力を取り出す例（§15.125）"
+
+# 呼び出し側はもう JSON Schema で注文の形を決めている。それを借りて、入力がその形の
+# どこから来るかを書くと、平たくするコードは生成され、パスは毎回の check で契約に照らされる。
+shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum 地域(zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+
+inputs
+  あて先(zone)   : 地域    from 注文.shipping.zone
+  冷蔵あり(cold) : bool    from any 注文.lines where chilled = true
+  明細数(lines)  : number  range >=1 <=50  from count 注文.lines
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 冷蔵は地域を問わず 500円 増し、明細が 10 件を超えると 200円 増し。
+table 地域別(by_zone)
+policy unique
+| あて先   | -> 地域料(zone_fee) : money[円] |
+| honshu   | 800円                           |
+| hokkaido | 1200円                          |
+| okinawa  | 1500円                          |
+
+table 冷蔵加算(cold_extra)
+policy unique
+| 冷蔵あり | -> 冷蔵料(cold_fee) : money[円] |
+| true     | 500円                           |
+| false    | 0円                             |
+
+table 件数加算(bulk_extra)
+policy unique
+| 明細数 | -> 件数料(bulk_fee) : money[円] |
+| >10    | 200円                           |
+| <=10   | 0円                             |
+
+define 合計(total) : money[円] = 地域料 + 冷蔵料 + 件数料
+
+result 送料 = 合計
+
+examples
+| あて先   | 冷蔵あり | 明細数 | -> 送料 |
+| honshu   | false    | 1      | 800円   |
+| honshu   | true     | 1      | 1300円  |
+| okinawa  | true     | 11     | 2200円  |
+| hokkaido | false    | 10     | 1200円  |
+```
+
+The contract it reads (`contracts/order.schema.json`):
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order",
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shipping": { "$ref": "#/$defs/Shipping" },
+        "lines": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/$defs/Line" } }
+      },
+      "required": ["shipping", "lines"]
+    },
+    "Shipping": {
+      "type": "object",
+      "properties": {
+        "zone": { "type": "string", "enum": ["honshu", "hokkaido", "okinawa"] },
+        "postcode": { "type": "string" }
+      },
+      "required": ["zone"]
+    },
+    "Line": {
+      "type": "object",
+      "properties": {
+        "sku": { "type": "string" },
+        "chilled": { "type": "boolean" },
+        "amount_jpy": { "type": "integer" }
+      },
+      "required": ["sku", "chilled", "amount_jpy"]
+    }
+  }
+}
+```
+
+**What this one shows**
+
+- **`from` comes in four shapes.** The value of a field (`from 注文.shipping.zone`), whether some element passes a test (`from any 注文.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count 注文.lines`). A join or a nested quantifier cannot be written.
+- **`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for the five targets whose caller holds the object as a plain map.
+- **Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.
+- **The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `明細数`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`"minItems": 1, "maxItems": 50`).
+- **No check of the table changes.** What comes out of a projection is a scalar input like any other, and completeness and overlap are decided as they would be without `from`.
+
+## Inputs taken from a Connect request (.proto and Protovalidate)
+
+The shipping fee, decided from a shipment request. The request is described by a `.proto`, and its fields carry Protovalidate's rules. The rule borrows that `.proto`, and its inputs are declared to agree with the rules.
+
+```rule
+rule 出荷の送料(shipment_fee) v1
+description "出荷の要求（.proto）から送料を決める。Protovalidate の注釈と入力の宣言をそろえた例（§15.132、§15.133）"
+
+# 呼び出し側は Connect のサービスで、要求の形は .proto で決まっている。それを借りて、入力が
+# 要求のどこから来るかを書く。生成する shipment_fee_from は、protojson で届いた要求をそのまま読む。
+shape 出荷(shipment) = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest
+
+enum 地域(region) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+enum 時間帯(window) = morning(morning) | evening(evening)
+
+inputs
+  あて先(region)      : 地域  from 出荷.destination.region
+  割れ物あり(fragile) : bool  from any 出荷.parcels where handling = HANDLING_FRAGILE
+  個数(parcels)       : number  range >=1 <=20  from count 出荷.parcels
+  申告額(declared)    : money[円]  range >=0円 <=100万円  from 出荷.declared_value_jpy
+  時間帯(window)      : 時間帯?  from 出荷.delivery_window
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 一個あたりの運賃に個数を掛け、割れ物・補償・時間帯指定の加算を足す。
+table 地域別(by_region)
+policy unique
+| あて先   | -> 一個の運賃(per_parcel) : money[円] |
+| honshu   | 800円                                 |
+| hokkaido | 1200円                                |
+| okinawa  | 1500円                                |
+
+table 割れ物加算(fragile_extra)
+policy unique
+| 割れ物あり | -> 割れ物料(fragile_fee) : money[円] |
+| true       | 300円                                |
+| false      | 0円                                  |
+
+table 補償(insurance)
+policy unique
+| 申告額          | -> 補償料(insurance_fee) : money[円] |
+| <=3万円         | 0円                                  |
+| >3万円 <=10万円 | 200円                                |
+| >10万円         | 500円                                |
+
+table 時間帯指定(window_extra)
+policy unique
+| 時間帯           | -> 指定料(window_fee) : money[円] |
+| none             | 0円                               |
+| morning, evening | 100円                             |
+
+define 合計(total) : money[円] = 一個の運賃 × 個数 + 割れ物料 + 補償料 + 指定料
+
+result 送料 = 合計
+
+examples
+| あて先   | 割れ物あり | 個数 | 申告額  | 時間帯  | -> 送料 |
+| honshu   | false      | 1    | 0円     | none    | 800円   |
+| hokkaido | true       | 2    | 5万円   | none    | 2900円  |
+| okinawa  | false      | 3    | 20万円  | evening | 5100円  |
+| honshu   | true       | 20   | 100万円 | morning | 16900円 |
+```
+
+The contract it reads (`contracts/shipment.proto`):
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+
+// The request the shipping service takes, validated by Protovalidate before anything reads it.
+message CreateShipmentRequest {
+  Destination destination = 1 [(buf.validate.field).required = true];
+  repeated Parcel parcels = 2 [(buf.validate.field).repeated = {min_items: 1, max_items: 20}];
+  int64 declared_value_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 1000000}];
+  optional string delivery_window = 4 [(buf.validate.field).string = {in: ["morning", "evening"]}];
+}
+
+message Destination {
+  string region = 1 [(buf.validate.field).string = {in: ["honshu", "hokkaido", "okinawa"]}];
+  string postcode = 2;
+}
+
+message Parcel {
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  Handling handling = 2;
+}
+
+enum Handling {
+  HANDLING_STANDARD = 0;
+  HANDLING_FRAGILE = 1;
+}
+```
+
+**What this one shows**
+
+- **The generated `shipment_fee_from` reads the JSON protojson writes, as it is.** A field is read under its lowerCamelCase name (`declaredValueJpy`) or under the name the `.proto` gives it (`declared_value_jpy`); a field left out is read as its proto default; an int64 that arrives as a string is read as the number it is.
+- **An `optional` field is taken by an optional input.** `delivery_window` may not be sent, so the input is `時間帯?`, and the table has a row for when it is missing (`none`).
+- **A `where` on an enum field compares the value's name.** `handling` is an enum of the `.proto`, and protojson carries the value's name (`HANDLING_FRAGILE`). At the value numbered 0 (`HANDLING_STANDARD`) the field is left out altogether, and it is read as `HANDLING_STANDARD` all the same.
+- **The rules and the declarations agree, so `check` passes.** Take `required = true` off `destination` and a request may leave it out, in which case `region` arrives as `""`. `地域` does not take `""`, so the check stops at E122, with `[(buf.validate.field).required = true]` as `fix.text`.
+
 ## Whether a return is accepted, in English
 
 A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.

@@ -7511,6 +7511,11 @@ impl<'a> Gen<'a> {
             if self.proj_dates() {
                 o.push_str("  private def self._days: (String) -> Integer\n");
             }
+            // The walk over a `.proto` contract's JSON form (§15.133): the object, each step's
+            // two names, and what to read when a step is missing.
+            if self.proj_proto() {
+                o.push_str("  private def self._proto: (untyped, Array[[String, String]], untyped, untyped) -> untyped\n");
+            }
         }
         o.push_str("end\n");
         o
@@ -9601,7 +9606,11 @@ impl<'a> Gen<'a> {
     }
 
     fn rb_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath) -> String {
-        let lit = |z: &crate::projection::Zero| pb_zero(z, "false", &|s| format!("{s:?}"));
+        // `Array.new` rather than `[]`: steep asks an empty literal for a type annotation.
+        let lit = |z: &crate::projection::Zero| match z {
+            crate::projection::Zero::List => "Array.new".to_string(),
+            z => pb_zero(z, "false", &|s| format!("{s:?}")),
+        };
         let root = self.ident(&p.root);
         let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
         let (absent, unset) = self.proto_defaults(p, pp, &lit, "nil");
