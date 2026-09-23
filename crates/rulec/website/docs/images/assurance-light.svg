@@ -71,6 +71,6 @@
 <rect x="44" y="710" width="488" height="5" fill="#4457d8" clip-path="url(#clip-foot)"/>
 <text x="288.0" y="753" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">8 — the tool itself, tried</text>
 <text x="288.0" y="782" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">The layers above come out of rulec's implementation, which is not proved correct.</text>
-<text x="288.0" y="801" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">83 rules broken on purpose hold it to its diagnostics; 33 run in every language</text>
+<text x="288.0" y="801" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">94 rules broken on purpose hold it to its diagnostics; 46 run in every language</text>
 <text x="288.0" y="852" font-size="11" font-weight="400" text-anchor="middle" fill="#5b6478">A rule that cites no document has no second box, and what nothing reaches widens to the table itself.</text>
 </svg>

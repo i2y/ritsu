@@ -25,8 +25,13 @@ must not need Python.
     python3 tools/make_assurance.py --verify
 
 `--verify` holds the picture to the page: every layer number drawn here has to be a row of
-the table in assurance.md, with the same name, in both languages. A picture that drifts
-from the page it illustrates is worse than no picture.
+the table in assurance.md, with the same name, in both languages, and the counts in layer 8
+have to be the ones that row states. A picture that drifts from the page it illustrates is
+worse than no picture.
+
+The counts are not written here. They are the files in tests/mutants and tests/corpus,
+counted when the picture is drawn, so a mutant added without redrawing leaves a stale SVG
+that tests/website.rs catches. Written by hand, they went stale and nothing noticed.
 """
 
 import pathlib
@@ -37,6 +42,15 @@ from diagram import (DARK, LIGHT, FONT, LINE_W, width, fit, esc, text, card, she
                      arrow, marker)
 
 HERE = pathlib.Path(__file__).resolve().parent
+REPO = HERE.parent.parent
+
+
+def count(d):
+    return sum(1 for _ in (REPO / d).glob("*.rule"))
+
+
+MUTANTS = count("tests/mutants")
+RULES = count("tests/corpus")
 
 # --- geometry ---------------------------------------------------------------
 #
@@ -100,7 +114,7 @@ JA = dict(
     ],
     foot=("8 — 道具そのものを試す",
           ["ここまでの層を出しているのは rulec の実装で、その正しさは証明していません。",
-           "わざと壊した 83 本が狙った診断を出し、33 本の規則が毎コミット全言語で走る"]),
+           f"わざと壊した {MUTANTS} 本が狙った診断を出し、{RULES} 本の規則が毎コミット全言語で走る"]),
     note="出典を引いていない規則には、上から二つめの箱がありません。届かない範囲が表まで広がります。",
 )
 
@@ -130,7 +144,7 @@ EN = dict(
     ],
     foot=("8 — the tool itself, tried",
           ["The layers above come out of rulec's implementation, which is not proved correct.",
-           "83 rules broken on purpose hold it to its diagnostics; 33 run in every language"]),
+           f"{MUTANTS} rules broken on purpose hold it to its diagnostics; {RULES} run in every language"]),
     note="A rule that cites no document has no second box, and what nothing reaches widens to the table itself.",
 )
 
@@ -189,6 +203,11 @@ def verify():
         drawn = {n for head in heads for n in re.findall(r"\b([1-9])\b", head)}
         if drawn != set(rows):
             raise SystemExit(f"図が描いている層 {sorted(drawn)} と、表の行 {sorted(rows)} が違う")
+        # Layer 8 states the two counts in the page's own table; the picture says the same.
+        row8 = re.search(r"^\| \*\*8\. [^|]+\| ([^|]+)\|", pages[name].read_text(encoding="utf-8"), re.M)
+        said = [int(n) for n in re.findall(r"\d+", row8.group(1))] if row8 else []
+        if said != [MUTANTS, RULES]:
+            raise SystemExit(f"{pages[name].name}: 8 の行の件数 {said} が、図の件数 {[MUTANTS, RULES]} と違う")
     print("verified against the pages")
 
 

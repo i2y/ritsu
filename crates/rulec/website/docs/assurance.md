@@ -148,7 +148,7 @@ proved correct**. What stands in for a proof is evidence, and it is kept deliber
 
 - **94 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
-- **46 rules** — 36 transcribed from real published terms, 9 written to reach the corners of
+- **46 rules** — 36 transcribed from real published terms, 10 written to reach the corners of
   the language — checked, generated and run in every language on every commit.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
