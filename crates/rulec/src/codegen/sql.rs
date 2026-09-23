@@ -1236,7 +1236,10 @@ for line in sys.stdin:
     # built-in function (`rank`) cannot be called positionally without ambiguity, and a named
     # argument is the one form a variadic built-in cannot answer to.
     args = ", ".join('"%s" => %s::%s' % (a, _lit(k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
-    script.append('SELECT row_to_json(t) FROM "%s"(%s) AS t;' % (FN, args))
+    # Through a subquery, so that the answer is a row however many columns it has: a function
+    # that returns one column — one output and no table to name a row of — is that column's
+    # type in FROM, and row_to_json has no form for a bare bigint.
+    script.append('SELECT row_to_json(t) FROM (SELECT * FROM "%s"(%s)) AS t;' % (FN, args))
 
 p = _psql("\n".join(script))
 # However it went, the function does not stay behind in somebody's database.
