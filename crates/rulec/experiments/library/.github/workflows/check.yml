@@ -32,7 +32,7 @@ jobs:
       PGDATABASE: rulec
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/rulec@v0.18.0
+      - uses: i2y/rulec@v0.19.0
       - run: rulec fmt --check rules/
       - run: rulec check rules/
       - run: rulec gen rules/ --out generated/ --check
