@@ -7,9 +7,11 @@
 #
 # It is the site's own hero, drawn once at 1280×640 (GitHub's size) and photographed by the
 # same headless Chrome that takes the screenshots of the approver's page: the same ink, the
-# same mark, the same ruling of a table behind it. Kept as one HTML document rather than an
-# SVG because the ruling and the gradient are the stylesheet's, and a second set of colours
-# is a second thing to keep in step.
+# same mark, the same ruling of a table behind it, and the same faces: Inter for the text and
+# the site's code face, M PLUS 1 Code, for the wordmark (§15.134). Kept as one HTML document
+# rather than an SVG because the ruling and the gradient are the stylesheet's, and a second
+# set of colours is a second thing to keep in step. The faces come from Google Fonts, so
+# taking the picture needs the network.
 set -eu
 cd "$(dirname "$0")/.."
 out="docs/images/social.png"
@@ -21,6 +23,7 @@ trap 'rm -rf "$tmp"' EXIT
 cat > "$tmp/social.html" <<'ENDHTML'
 <!doctype html>
 <meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=M+PLUS+1+Code:wght@700&display=block">
 <style>
   :root { --ink: #10131a; --ink-2: #080a0f; --mark-light: #8e9cff; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -28,7 +31,7 @@ cat > "$tmp/social.html" <<'ENDHTML'
   body {
     position: relative; overflow: hidden; color: #fff;
     background: radial-gradient(120% 140% at 14% 0%, #1e2331 0%, var(--ink) 46%, var(--ink-2) 100%);
-    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", -apple-system, "Helvetica Neue", Arial, sans-serif;
   }
   /* The faint ruling of a table, as the site draws it. */
   body::after {
@@ -41,7 +44,7 @@ cat > "$tmp/social.html" <<'ENDHTML'
   }
   .wrap { position: relative; z-index: 1; height: 100%; padding: 74px 80px; display: flex; flex-direction: column; }
   .top { display: flex; align-items: center; gap: 26px; }
-  .name { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 76px; font-weight: 700; letter-spacing: -.045em; }
+  .name { font-family: "M PLUS 1 Code", SFMono-Regular, Menlo, Consolas, monospace; font-size: 76px; font-weight: 700; letter-spacing: -.045em; }
   .name .c { color: var(--mark-light); }
   .tag { margin-top: 30px; font-size: 52px; font-weight: 600; letter-spacing: -.015em; color: var(--mark-light); }
   .lede { margin-top: 24px; font-size: 27px; line-height: 1.52; color: rgba(255,255,255,.84); max-width: 980px; }
@@ -72,8 +75,8 @@ cat > "$tmp/social.html" <<'ENDHTML'
   <div class="lede">
     A small language for table-shaped business rules, and a harness for the agent that
     turns them into code.
-    <b>The proof is finished before the code exists</b>: a rule with a gap, a contradiction
-    or an undeclared rounding does not generate.
+    <b>The proof happens before the code exists</b>: no gap, no contradiction, no dead row,
+    and no value the API contract lets through that the rule would refuse.
   </div>
   <div class="foot">
     <span class="langs">Python · NumPy · TypeScript · JavaScript · Rust · Ruby · PHP · Go · Swift · Java · SQL · Wasm</span>
@@ -82,6 +85,7 @@ cat > "$tmp/social.html" <<'ENDHTML'
 </div>
 ENDHTML
 
+# The time budget lets the faces arrive before the picture is taken.
 "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
-  --window-size=1280,640 --screenshot="$out" "file://$tmp/social.html" >/dev/null 2>&1
+  --window-size=1280,640 --virtual-time-budget=10000 --screenshot="$out" "file://$tmp/social.html" >/dev/null 2>&1
 echo "wrote $out ($(du -h "$out" | cut -f1), $(file -b "$out" | sed 's/,.*//'))"
