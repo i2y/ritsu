@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1174 458" width="1174" height="458" role="img" aria-label="API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）を、エージェントが規則の表（.rule）に結ぶ。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の値の集合に結ぶ。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
+<marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
+<marker id="head-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#9c6508"/></marker>
+</defs>
+<path d="M20,20.0 H158 L170,32.0 V120.0 H20 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M158,20.0 V32.0 H170 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="29" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">API の契約</text>
+<text x="29" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">.proto と Protovalidate</text>
+<text x="29" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">OpenAPI</text>
+<text x="29" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">JSON Schema</text>
+<clipPath id="clip-1"><rect x="266" y="20" width="150" height="196" rx="10"/></clipPath>
+<rect x="266" y="20" width="150" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="266" y="20" width="150" height="5" fill="#4457d8" clip-path="url(#clip-1)"/>
+<text x="341.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">エージェント</text>
+<text x="341.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">入力を契約に結ぶ</text>
+<text x="341.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">shape と from</text>
+<text x="341.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">列挙は import</text>
+<path d="M512,20.0 H630 L642,32.0 V120.0 H512 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M630,20.0 V32.0 H642 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="521" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">表</text>
+<text x="633" y="42.0" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
+<text x="521" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">from 注文.lines</text>
+<text x="521" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">import proto</text>
+<clipPath id="clip-3"><rect x="738" y="20" width="150" height="196" rx="10"/></clipPath>
+<rect x="738" y="20" width="150" height="196" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="738" y="20" width="150" height="5" fill="#4457d8" clip-path="url(#clip-3)"/>
+<text x="813.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="813.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">パスをたどる</text>
+<text x="813.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">値の集合をそろえる</text>
+<text x="813.0" y="130" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">検証と宣言を</text>
+<text x="813.0" y="149" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">突き合わせる</text>
+<path d="M984,20.0 H1142 L1154,32.0 V120.0 H984 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1142,20.0 V32.0 H1154 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="993" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">CI の結果</text>
+<text x="993" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">名前が変わった E121</text>
+<text x="993" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">値が増えた E032</text>
+<text x="993" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">契約の方が広い E122</text>
+<line x1="170" y1="70" x2="266" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="218.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">読む</text>
+<line x1="416" y1="70" x2="512" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="464.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">結ぶ</text>
+<line x1="642" y1="70" x2="738" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="690.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec check</text>
+<text x="690.0" y="88" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">変わるたびに</text>
+<line x1="888" y1="70" x2="984" y2="70" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="936.0" y="61" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">止まる / 通る</text>
+<path d="M489.0,132 H653.0 L665.0,144 V212 H489.0 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M653.0,132 V144 H665.0 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="498.0" y="154" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">食い違い</text>
+<text x="498.0" y="172" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">その値と</text>
+<text x="498.0" y="187" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">契約に書く注釈</text>
+<line x1="738" y1="172" x2="665.0" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<line x1="489.0" y1="172" x2="416" y2="172" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="577.0" y="227" font-size="11" font-weight="400" text-anchor="middle" fill="#4457d8">直すまで繰り返す</text>
+<clipPath id="clip-person"><rect x="728.0" y="290" width="170" height="148" rx="10"/></clipPath>
+<rect x="728.0" y="290" width="170" height="148" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="728.0" y="290" width="170" height="5" fill="#9c6508" clip-path="url(#clip-person)"/>
+<text x="813.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">決める人</text>
+<text x="813.0" y="362" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">契約と規則の</text>
+<text x="813.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">どちらを直すか</text>
+<text x="813.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">決める</text>
+<line x1="813.0" y1="216" x2="813.0" y2="290" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="821.0" y="257.0" font-size="10.5" font-weight="400" text-anchor="start" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">E122</text>
+</svg>

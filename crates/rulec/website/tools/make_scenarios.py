@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""The three pictures of the scenarios page: one per reader, drawn with the front page's
+"""The pictures of the scenarios page: one per reader, drawn with the front page's
 vocabulary (cards for actors, sheets for artifacts, three colours for three kinds of path).
 
     python3 tools/make_scenarios.py
 
 Each picture is one left-to-right sentence — what goes in, who does what, what comes out —
 with at most one loop under it (the thing that comes back) and one detour to a person.
-Twelve files come from three layouts: two languages times two colour schemes each, so the
-geometry cannot drift between them; only the words change. The SVGs are committed because
+Four files come from each layout: two languages times two colour schemes, so the geometry
+cannot drift between them; only the words change. The SVGs are committed because
 building the site must not need Python.
 """
 
@@ -145,6 +145,35 @@ FIGS["implementing"] = dict(
         labels=[("rulec gen", ""), ("rulec test", "one answer, nine"), ("rulec api", "how to call it"), ("", "wires it in")],
         loop=None,
         detour=None,
+    ),
+)
+
+FIGS["contract"] = dict(
+    ja=dict(
+        alt="API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）を、エージェントが規則の表（.rule）に結ぶ。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の値の集合に結ぶ。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める。",
+        nodes=[
+            ("sheet", ("API の契約", [".proto と Protovalidate", "OpenAPI", "JSON Schema"]), 150),
+            ("actor", ("エージェント", ["入力を契約に結ぶ", "shape と from", "列挙は import"]), 150),
+            ("sheet", ("表", ["from 注文.lines", "import proto"], ".rule"), 130),
+            ("actor", ("rulec", ["パスをたどる", "値の集合をそろえる", "検証と宣言を", "突き合わせる"]), 150),
+            ("sheet", ("CI の結果", ["名前が変わった E121", "値が増えた E032", "契約の方が広い E122"]), 170),
+        ],
+        labels=[("", "読む"), ("", "結ぶ"), ("rulec check", "変わるたびに"), ("", "止まる / 通る")],
+        loop=(3, 1, ("食い違い", ["その値と", "契約に書く注釈"]), "直すまで繰り返す"),
+        detour=(3, ("決める人", ["契約と規則の", "どちらを直すか", "決める"]), "E122"),
+    ),
+    en=dict(
+        alt="An agent binds a rule's table (.rule) to the API contract (a .proto with Protovalidate, OpenAPI or a JSON Schema): shape and from say where in the contract each input comes from, and an import ties an enum to the contract's set of values. Whenever the contract or the rule changes, rulec check in CI holds the two together and returns a field that was renamed, an enum value that was added, and a value the contract lets through that the rule refuses, with that value. Whether the contract or the rule is the side to change is a person's decision.",
+        nodes=[
+            ("sheet", ("API contract", ["a .proto, Protovalidate", "OpenAPI", "a JSON Schema"]), 150),
+            ("actor", ("Agent", ["binds the inputs", "shape and from", "imports the enums"]), 150),
+            ("sheet", ("Table", ["from order.lines", "import proto"], ".rule"), 130),
+            ("actor", ("rulec", ["follows the paths", "matches the value sets", "holds the validation", "to the declarations"]), 160),
+            ("sheet", ("CI", ["a renamed field: E121", "an added value: E032", "a wider contract: E122"]), 170),
+        ],
+        labels=[("", "reads"), ("", "binds"), ("rulec check", "on every change"), ("", "stops or passes")],
+        loop=(3, 1, ("Mismatch", ["the value, and", "the annotation to add"]), "until it agrees"),
+        detour=(3, ("The owners", ["decide whether the", "contract or the rule", "is the one to change"]), "E122"),
     ),
 )
 

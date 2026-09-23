@@ -1,6 +1,6 @@
 # How to use it, by role
 
-One tool, but **what you have in hand and what you want out** decide the path through it. Four readers, four paths. Start from the one closest to you.
+One tool, but **what you have in hand and what you want out** decide the path through it. Five readers, five paths. Start from the one closest to you.
 
 | You are | What you have | What you want | Read |
 |---|---|---|---|
@@ -8,6 +8,7 @@ One tool, but **what you have in hand and what you want out** decide the path th
 | **implementing a rule of your own that already exists**: an internal policy, your service's terms or tariff, a spreadsheet, and perhaps an implementation that runs today | the policy document, the spreadsheet, the running code | code that does what the document says and answers like the current implementation | [2. Implementing an existing rule of your own](#2-implementing-an-existing-rule-of-your-own) |
 | **designing** a new rule (a new public rule, an internal rule, the terms of an online shop or a service) | the conditions, in prose or in your head | a table with no gap and no contradiction, and the pages that get it approved or published | [3. Designing a new rule](#3-designing-a-new-rule) |
 | **implementing** from a finished rule | a `.rule` that passes check | code in your own language that answers exactly like the table | [4. Implementing from a new rule](#4-implementing-from-a-new-rule) |
+| holding an API's or a message's **contract** (a `.proto`, OpenAPI, a JSON Schema) and wanting it kept in line with the business rule | the contract's file and the rule's table | a CI run that says so whenever the contract and the rule move apart | [5. Holding an API contract to the rule](#5-holding-an-api-contract-to-the-rule) |
 
 The middle step is the same on every path: **nothing comes out of a table that does not pass `rulec check`** ([What it proves](checks.md)). Every command below is one of these:
 
@@ -560,6 +561,126 @@ $ rulec gen rules/ --out generated/ --check
 ```
 
 The whole job is on the [install page](install.md#in-ci), with the two lines that post the impact of a revision to a pull request.
+
+---
+
+## 5. Holding an API contract to the rule
+
+The shape of an API's request or of a message, and the values allowed in it, are usually set
+by a contract: a `.proto` with Protovalidate's annotations, OpenAPI, a JSON Schema. The
+business rule also says which values it takes. The two are written by different people in
+different files, and when they drift apart nobody notices.
+
+When a contract changes, a tool like `buf breaking` checks that the change is compatible on
+the wire. Nothing checks that **the business decisions it feeds still hold**. rulec checks
+that, from the rule's side. The lead role here is the **contract**, and nothing has to be
+generated.
+
+![An agent binds a rule's table (.rule) to the API contract (a .proto with Protovalidate, OpenAPI or a JSON Schema): shape and from say where in the contract each input comes from, and an import ties an enum to the contract's set of values. Whenever the contract or the rule changes, rulec check in CI holds the two together and returns a field that was renamed, an enum value that was added, and a value the contract lets through that the rule refuses, with that value. Whether the contract or the rule is the side to change is a person's decision](images/scenario-contract.svg#only-dark)
+![An agent binds a rule's table (.rule) to the API contract (a .proto with Protovalidate, OpenAPI or a JSON Schema): shape and from say where in the contract each input comes from, and an import ties an enum to the contract's set of values. Whenever the contract or the rule changes, rulec check in CI holds the two together and returns a field that was renamed, an enum value that was added, and a value the contract lets through that the rule refuses, with that value. Whether the contract or the rule is the side to change is a person's decision](images/scenario-contract-light.svg#only-light)
+
+Between a request and the rule's answer there are three joints:
+
+| Joint | What is checked | When | By |
+|---|---|---|---|
+| request and contract | that the request passes the contract's validation | at run time, at the service's door | Protovalidate, the OpenAPI validator |
+| contract and the rule's inputs | that every path exists, that the enums' value sets agree, and that every value the contract lets through is one the inputs take | in CI | `rulec check` |
+| the rule's inputs and the table's rows | that the rows cover the declared inputs exactly once | in CI | `rulec check` |
+
+rulec takes the last two. The first stays with the validation already in place.
+
+### 5-1. Bind the inputs to the contract
+
+Who: the agent
+
+Each input says with `from` where in the contract it comes from, and `shape` names the
+contract.
+
+```rule
+shape shipment = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest
+
+inputs
+  dest    : region  from shipment.destination.region
+  fragile : bool    from any shipment.parcels where handling = HANDLING_FRAGILE
+  parcels : number  range >=1 <=20  from count shipment.parcels
+```
+
+When the contract holds an enum, `import proto "<file>" <Enum> -> <enum of this rule>`
+(`import jsonschema` for a JSON Schema) ties the rule's enum to the contract's set of values.
+How to write both is in [Write a table](tour.md), under Imports and under Inputs taken from
+the caller's object, and two worked rules with their contracts beside them are in
+[Examples](examples.md).
+
+### 5-2. Hold them together
+
+Who: rulec (rulec check)
+
+Every `rulec check` reads the contract's file and holds it to the rule. What it finds:
+
+| Mismatch | Code |
+|---|---|
+| a field the rule names is not in the contract (renamed, removed) | E121 |
+| the type the rule takes does not fit the contract's | E120 |
+| the contract's enum and the rule's hold different values | E032 |
+| a value that came through the contract has no row and no `default` | E033 |
+| a value the contract lets through is one the rule's input refuses | E122 |
+| a row is reached only by values the contract never lets through | W123 |
+
+The one met most is E122. A contract that puts no cap on an order's lines, for example:
+
+```console
+$ rulec check rules/order_shipping.rule
+error[E122]: The contract lets `注文.lines` hold 51, which the rule refuses
+  --> rules/order_shipping.rule:13
+   |
+13 |   明細数(lines)  : number  range >=1 <=50  from count 注文.lines
+   |                                            ^^^^^^^^^^^^^^^^^^^^^ the contract lets through 1 or more; 明細数 takes >=1 <=50
+   |
+ A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ.
+ hint: if that value cannot occur, narrow the contract with "minItems": 1, "maxItems": 50. If it can, widen the rule's range and decide what it answers for that many. Which of the two is a person's decision.
+```
+
+An order of 51 lines passes the contract's validation and is refused by the rule: an API
+answers it with an error, and even where no generated code runs, the rule has no answer for
+that many. `fix.text` is the keyword to add to the contract, here `"minItems": 1,
+"maxItems": 50`.
+
+### 5-3. Decide which side to change
+
+Who: a person
+
+A mismatch can be the contract's error or the rule's. If an order of 51 lines really cannot
+come, narrow the contract; if it can, widen the rule's range and decide what it answers for
+that many. rulec offers both; which one is for the people who own the contract and the rule.
+
+### 5-4. Stop on every change
+
+Who: CI (rulec check)
+
+With the contract's file where the rule can see it, putting `rulec check` in CI is all there
+is to it. A change to the contract and a change to the rule are held together by the same
+job.
+
+```console
+$ rulec check rules/ --diff-base origin/main
+```
+
+`--diff-base` reports only what is new on the branch. A contract kept in another repository
+is fetched beside the rules before the run.
+
+### 5-5. Decide whether to generate
+
+Who: a person
+
+No generated code has appeared in any of this. The service's implementation can stay as it
+is, and the rule can be kept only to check the contract. To hold the implementation to the
+table as well, `rulec verify` in [2-3](#2-3-hold-it-to-the-code-that-runs-today) does that.
+To generate, `rulec gen` also writes a function that takes the request in the contract's
+shape ([Generate and call](generate.md#calling-it-with-the-callers-own-object)).
+
+The same holds for the contract of a message on a queue such as Kafka. A message that passes
+the contract's validation and is refused by the rule stops the consumer or goes to the DLQ;
+CI finds it before any message is sent.
 
 ---
 
