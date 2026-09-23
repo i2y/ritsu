@@ -31,7 +31,7 @@ policy first
 | -      | true         | 対象商品     | -            | -      | -      | false              |
 | -      | -            | -            | -            | <0円   | -      | false              |
 | -      | -            | -            | 額引き       | -      | <=0円  | false              |
-| -      | -            | -            | -            | -      | -      | false |
+| -      | -            | -            | -            | -      | -      | false              |
 
 # 率引きは元価基準、額引きは割引後（現在残額）基準 — 楽天の原文どおり
 define 率割引(rate_off) : money[円,incl_tax] = 元価 × 割引率

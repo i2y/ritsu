@@ -48,16 +48,44 @@ fn gen_dir(tag: &str, rule: &str) -> PathBuf {
     dir
 }
 
+/// A corpus rule with the padding squeezed out of one table row: a file `fmt --check` has to
+/// name. Made here rather than borrowed from `tests/mutants`, whose files are formatted.
+fn unformatted(tag: &str) -> PathBuf {
+    let src = std::fs::read_to_string(root().join("tests/corpus/ゆうパック運賃.rule")).unwrap();
+    let mut done = false;
+    let text: String = src
+        .lines()
+        .map(|l| {
+            if !done && l.starts_with('|') && l.contains("  ") {
+                done = true;
+                l.split_whitespace().collect::<Vec<_>>().join(" ")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(done, "崩す行が見つからない");
+    let dir = std::env::temp_dir().join(format!("{TMP}-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("崩れた表.rule");
+    std::fs::write(&p, text + "\n").unwrap();
+    p
+}
+
 #[test]
 fn fmtは整形されていないファイルを名指しする() {
-    let (c, out) = run(&["fmt", "--check", "tests/mutants/m_e102.rule", "--format", "json"]);
+    let broken = unformatted("fmt");
+    let (c, out) = run(&["fmt", "--check", broken.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 1);
     let js = objects(&out);
     assert_eq!(js.len(), 1, "一件のはず");
     keys(&js[0], &["unformatted", "formatted"], "fmt");
     let rulec::json::Json::Arr(un) = js[0].get("unformatted").unwrap() else { panic!() };
     assert_eq!(un.len(), 1);
-    assert!(un[0].as_str().unwrap().ends_with("m_e102.rule"));
+    assert!(un[0].as_str().unwrap().ends_with("崩れた表.rule"));
+    let _ = std::fs::remove_dir_all(broken.parent().unwrap());
     // A clean file names nothing, and still says so.
     let (c, out) = run(&["fmt", "--check", "tests/corpus/送料.rule", "--format", "json"]);
     assert_eq!(c, 0);

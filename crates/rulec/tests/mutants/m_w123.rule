@@ -31,10 +31,10 @@ policy unique
 
 table 件数加算(bulk_extra)
 policy unique
-| 明細数 | -> 件数料(bulk_fee) : money[円] |
+| 明細数   | -> 件数料(bulk_fee) : money[円] |
 | >10 <=60 | 200円                           |
 | >60      | 300円                           |
-| <=10   | 0円                             |
+| <=10     | 0円                             |
 
 define 合計(total) : money[円] = 地域料 + 冷蔵料 + 件数料
 

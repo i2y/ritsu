@@ -143,6 +143,12 @@ fn cases() -> Vec<(String, String)> {
         "undecided".into(),
         std::fs::read_to_string(root().join("tests/mutants/m_w114.rule")).unwrap(),
     ));
+    // A finding on a row with ℃ before it: where the carets go depends on how wide ℃ is
+    // counted, which changed with §15.134 and which nothing above reaches.
+    let celsius = std::fs::read_to_string(root().join("tests/corpus/保存基準.rule")).unwrap();
+    let row = "| 冷凍     | <=-15℃      | true ";
+    assert_eq!(celsius.matches(row).count(), 1, "保存基準.rule の行が変わった");
+    out.push(("celsius".into(), celsius.replace(row, "| 冷凍     | <=-15℃      | yes  ")));
     out
 }
 

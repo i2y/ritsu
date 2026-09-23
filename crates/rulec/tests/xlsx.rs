@@ -70,6 +70,16 @@ const FEE: &str = r#"{"out":"OUT","compress":"COMP","sheets":[
   [["s","遠隔地"],["inline","S60"],["date","2026-04-01"],["pct","0.05"],["yen","880"]],
   [["s","遠隔地"],["inline","S80"],["date","2026-04-01"],["pct","0.183"],["yen","1200"]]]}]}"#;
 
+/// Whether the draft has a table row that starts with these cells, however it is padded: the
+/// draft is written the way `rulec fmt` leaves it.
+fn has_row(out: &str, cells: &[&str]) -> bool {
+    out.lines().any(|l| {
+        let t = l.trim();
+        let got: Vec<&str> = t.trim_matches('|').split('|').map(str::trim).collect();
+        t.starts_with('|') && got.len() >= cells.len() && got[..cells.len()] == *cells
+    })
+}
+
 #[test]
 fn シートは表になり_日付と率と単位が読める() {
     if !have("python3") {
@@ -86,7 +96,7 @@ fn シートは表になり_日付と率と単位が読める() {
     // A serial number under a date format is a date, in both spellings of the format.
     assert!(out.contains("  改定日(c3) : date  range >=2026-04-01 <=2026-04-01"), "{out}");
     // A percentage is stored as its fraction; 0.183 is 18.3%, exactly.
-    assert!(out.contains("| 近畿圏 | S80 | 2026-04-01 | 18.3% | 1310円 |"), "{out}");
+    assert!(has_row(&out, &["近畿圏", "S80", "2026-04-01", "18.3%", "1310円"]), "{out}");
     assert!(out.contains("  割引率(c4) : rate[step 0.1%]  range >=5% <=18.3%"), "{out}");
     // The unit is in the number format (`#,##0"円"`), not in the cell.
     assert!(out.contains("  運賃(o1) : money[円, incl_tax]"), "{out}");
@@ -167,7 +177,7 @@ fn 長いシートも読める() {
         })
         .count();
     assert_eq!(data, 400, "行が落ちている");
-    assert!(out.contains("| 区分0 | 3990 | 1199円 |"), "最後の行まで読めていない: {out}");
+    assert!(has_row(&out, &["区分0", "3990", "1199円"]), "最後の行まで読めていない: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -204,7 +214,7 @@ fn 一九〇四年のブックも読める() {
     let x = book(&d, "d1904.xlsx", spec);
     let (c, out, e) = run(&["import", "xlsx", &x]);
     assert_eq!(c, 0, "{e}");
-    assert!(out.contains("| B | 2026-05-01 |"), "1904 年起点の通し番号: {out}");
+    assert!(has_row(&out, &["B", "2026-05-01"]), "1904 年起点の通し番号: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -284,7 +294,7 @@ wb.save(sys.argv[1])
     }
     let (c, out, e) = run(&["import", "xlsx", x.to_str().unwrap(), "--lang", "ja"]);
     assert_eq!(c, 0, "{e}");
-    assert!(out.contains("| 遠隔地 | 2026-04-01 | 18.3% | 1200円 |"), "{out}");
+    assert!(has_row(&out, &["遠隔地", "2026-04-01", "18.3%", "1200円"]), "{out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

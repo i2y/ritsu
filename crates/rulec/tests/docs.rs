@@ -234,3 +234,73 @@ fn genが書く言語のディレクトリはレジストリと同じ() {
     assert_eq!(got, want, "gen が書くディレクトリとレジストリが食い違います");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A table in a `rule` block is shown the way `rulec fmt` leaves it: a Japanese character two
+/// columns wide, like ℃. Lined up by hand, a table got lined up by counting characters, and its
+/// bars wandered in any face that draws Japanese two columns wide — the one the site sets code
+/// in, and the one a terminal uses. A row that does not close (`| …`, for the rest) is not
+/// part of the table.
+#[test]
+fn 文書のruleブロックの表はfmtのとおりにそろっている() {
+    // The copies `website/sync.sh` makes are the documents under docs/, already read.
+    const COPIES: &[&str] = &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md"];
+    let mut files = docs();
+    files.push(("DESIGN.md".to_string(), read("DESIGN.md")));
+    for dir in ["website/docs", "website/docs-ja"] {
+        for e in std::fs::read_dir(root().join(dir)).unwrap().flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.ends_with(".md") && !COPIES.contains(&name.as_str()) {
+                files.push((format!("{dir}/{name}"), std::fs::read_to_string(e.path()).unwrap()));
+            }
+        }
+    }
+    let is_row = |l: &str| {
+        let t = l.trim_start();
+        t.starts_with('|') || t.find('|').is_some_and(|p| {
+            let head = t[..p].trim_end();
+            !head.is_empty() && !head.contains(char::is_whitespace) && !head.starts_with('#')
+        })
+    };
+    // Closed: the cells end at a bar, whatever comment or citation follows it.
+    let closed = |l: &str| {
+        let body = l.split(" #").next().unwrap_or(l);
+        let body = body.split("  @").next().unwrap_or(body).trim_end();
+        body.ends_with('|') && body.matches('|').count() >= 2
+    };
+    let mut bad = Vec::new();
+    let mut tables = 0;
+    for (name, body) in &files {
+        let mut in_rule = false;
+        let mut run: Vec<(usize, &str)> = Vec::new();
+        let mut check = |run: &mut Vec<(usize, &str)>| {
+            let rows: Vec<&(usize, &str)> = run.iter().filter(|(_, l)| closed(l)).collect();
+            if rows.len() > 1 {
+                tables += 1;
+                let indent = rows.iter().map(|(_, l)| l.len() - l.trim_start().len()).min().unwrap_or(0);
+                let text: String = rows.iter().map(|(_, l)| format!("{}\n", &l[indent..])).collect();
+                let want = rulec::fmt::format(&text);
+                for ((n, l), w) in rows.iter().zip(want.lines()) {
+                    if l[indent..] != *w {
+                        bad.push(format!("{name}:{}\n    {}\n  → {w}", n + 1, &l[indent..]));
+                    }
+                }
+            }
+            run.clear();
+        };
+        for (n, l) in body.lines().enumerate() {
+            if l.trim_start().starts_with("```") {
+                check(&mut run);
+                in_rule = !in_rule && l.trim_start().trim_start_matches('`').trim() == "rule";
+                continue;
+            }
+            if in_rule && is_row(l) {
+                run.push((n, l));
+            } else {
+                check(&mut run);
+            }
+        }
+        check(&mut run);
+    }
+    assert!(tables > 50, "rule ブロックの表が {tables} 個しか見つかりません。走査が壊れています");
+    assert!(bad.is_empty(), "rule ブロックの表が rulec fmt のとおりにそろっていません:\n{}", bad.join("\n"));
+}

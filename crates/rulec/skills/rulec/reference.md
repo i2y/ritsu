@@ -846,7 +846,7 @@ hole is E101 whichever policy it uses.
 A row may carry a label before its first bar:
 
 ```rule
-     | 金額の記載あり | 契約金額         | -> 印紙税額(tax) : money[円] |
+       | 金額の記載あり | 契約金額         | -> 印紙税額(tax) : money[円] |
 非課税 | true           | <1万円           | 0円                          |
 r3     | true           | >=1万円 <=10万円 | 200円                        |
 ```
@@ -1068,8 +1068,9 @@ Allowing any of the three would make the completeness and overlap checks unable 
 
 `rulec fmt` is the one and only formatter and it is idempotent. It
 
-- aligns the columns of every table (East Asian width, so Japanese names line up in a
-  terminal),
+- aligns the columns of every table by East Asian width — a CJK or fullwidth character, and
+  ℃ and ℉, are two columns — so Japanese lines up in a terminal and in any face that draws
+  Japanese twice as wide as Latin,
 - rewrites `→ ・ 、 ， ≦ ≧` and fullwidth digits to their ASCII forms,
 - folds the `->` of the second and later output columns of `examples`,
 - leaves the inside of a comment alone.

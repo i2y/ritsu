@@ -21,10 +21,10 @@ outputs
 
 table by_age  @gov table1
 policy unique
-| age       | -> hourly : money[GBPc] |
-| <=18      | 800GBPc                 |
-| >18 <=20  | 1085GBPc                |
-| >=21      | 1271GBPc                |
+| age      | -> hourly : money[GBPc] |
+| <=18     | 800GBPc                 |
+| >18 <=20 | 1085GBPc                |
+| >=21     | 1271GBPc                |
 
 table apprentice_rate  @gov table1
 policy unique

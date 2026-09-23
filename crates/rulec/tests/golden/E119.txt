@@ -1,7 +1,7 @@
 error[E119]: 行1 の境界が、引いた写しと反対側です
   --> tests/mutants/m_e119.rule:25 表 by_age 行1
    |
-25 | | <=18      | 800GBPc                 |
+25 | | <=18     | 800GBPc                 |
    |   ^^^^ 写し: 「Under 18」
    |
  引いた写し: gov table1
@@ -11,7 +11,7 @@ error[E119]: 行1 の境界が、引いた写しと反対側です
 error[E119]: 行2 の境界が、引いた写しと反対側です
   --> tests/mutants/m_e119.rule:26 表 by_age 行2
    |
-26 | | >18 <=20  | 1085GBPc                |
+26 | | >18 <=20 | 1085GBPc                |
    |   ^^^^^^^^ 写し: 「Under 18」
    |
  引いた写し: gov table1

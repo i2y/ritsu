@@ -340,7 +340,13 @@ pub fn char_width(c: char) -> usize {
         || (0xF900..=0xFAFF).contains(&u)
         || (0xFE30..=0xFE6F).contains(&u)
         || (0xFF00..=0xFF60).contains(&u)
-        || (0xFFE0..=0xFFE6).contains(&u);
+        || (0xFFE0..=0xFFE6).contains(&u)
+        // ℃ and ℉ are "ambiguous" to Unicode, but every monospace face that has
+        // them at all draws them two columns wide, a Latin one (Noto Sans Mono)
+        // included; counted as one, a table with `<=-15℃` in it is aligned for no
+        // font anyone reads it in.
+        || u == 0x2103
+        || u == 0x2109;
     if wide { 2 } else { 1 }
 }
 

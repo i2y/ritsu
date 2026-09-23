@@ -91,10 +91,31 @@ fn fmt_は冪等で_check_は直すべきものを言う() {
     let twice = rulec::fmt::format(&once);
     assert_eq!(once, twice, "fmt が冪等でない");
 
-    // A broken file is named by --check.
-    let (c, out, _) = run(&["fmt", "--check", "tests/mutants/m_e102.rule"]);
+    // A broken file is named by --check: the same rule with the padding squeezed out of one
+    // table row. The mutants are formatted, so none of them is one.
+    let mut done = false;
+    let broken: String = src
+        .lines()
+        .map(|l| {
+            if !done && l.starts_with('|') && l.contains("  ") {
+                done = true;
+                l.split_whitespace().collect::<Vec<_>>().join(" ")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(done, "崩す行が見つからない");
+    let dir = std::env::temp_dir().join(format!("rulec-cli-fmt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("崩れた表.rule");
+    std::fs::write(&p, broken + "\n").unwrap();
+    let (c, out, _) = run(&["fmt", "--check", p.to_str().unwrap()]);
     assert_eq!(c, 1, "崩れたファイルは 1");
     assert!(out.contains("整形されていません"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -421,7 +442,7 @@ fn importのoutputsは末尾の列を出力にする() {
     let (c, one, e) = run(&["import", "csv", p]);
     assert_eq!(c, 0, "{e}");
     assert!(one.contains("-> 手数料"), "既定では末尾の一列だけが出力: {one}");
-    assert!(one.contains("| 区分 | 送料 |"), "送料 は入力の側にいる: {one}");
+    assert!(one.contains("| 区分 | 送料 "), "送料 は入力の側にいる: {one}");
 
     let (c, two, e) = run(&["import", "csv", p, "--outputs", "2"]);
     assert_eq!(c, 0, "{e}");

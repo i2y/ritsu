@@ -598,6 +598,7 @@ fn 変異はコーパスから作り直せる() {
     let _ = std::fs::remove_dir_all(&tmp);
     let out = std::process::Command::new("sh")
         .current_dir(root)
+        .env("RULEC", env!("CARGO_BIN_EXE_rulec"))
         .arg("tests/make-mutants.sh")
         .arg(&tmp)
         .output()

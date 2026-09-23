@@ -8,8 +8,8 @@ shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
 enum 地域(zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
 
 inputs
-  あて先(zone)   : 地域  
-  冷蔵あり(cold) : bool  
+  あて先(zone)   : 地域
+  冷蔵あり(cold) : bool
   明細数(lines)  : number  range >=1 <=50
 
 outputs

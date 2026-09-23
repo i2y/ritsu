@@ -57,7 +57,7 @@ Obj(
                             "row 8: no input reaches here",
                         ),
                         "length": Int(
-                            16,
+                            43,
                         ),
                         "line": Int(
                             33,

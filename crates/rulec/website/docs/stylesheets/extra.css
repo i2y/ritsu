@@ -4,7 +4,29 @@
    a way of showing the one thing this tool is about: a table on the
    left, the code it became on the right, with the proof in between. */
 
+/* Code is set in a face whose Japanese is exactly twice as wide as its Latin, so a table
+   with Japanese in it lines up the way `rulec fmt` lined it up: fmt counts a CJK character,
+   and ℃ and ℉, as two columns. The theme's JetBrains Mono has no Japanese, and the face the
+   browser borrows for it draws a character 1em wide against Latin at 0.6em, so every bar
+   after a Japanese cell drifted. M PLUS 1 Code has Latin at 0.5em and Japanese at 1em; BIZ
+   UDGothic, in the same proportions, draws what M PLUS 1 Code lacks (℃, full-width
+   punctuation). The wordmark below follows, being set in whatever face code is set in. */
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+1+Code:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap");
+
+/* The theme tightens its text by .01em a character, and code inherited it. Tracking is taken
+   off every character alike, a Japanese one no more than a Latin one, so a character two
+   columns wide came out wider than two that are one column each, and the bars drifted again
+   by 0.15px for every Japanese character in a cell. */
+.md-typeset pre,
+.md-typeset code,
+.md-typeset kbd,
+.pg-src,
+.pg-pre {
+  letter-spacing: 0;
+}
+
 :root {
+  --md-code-font: "M PLUS 1 Code", "BIZ UDGothic";
   --rc-ink: #10131a;
   --rc-ink-2: #080a0f;
   --rc-mark: #4457d8;

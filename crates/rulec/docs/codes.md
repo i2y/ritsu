@@ -219,7 +219,7 @@ outputs
 table j(j)
 policy any
 | x | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [W110](#w110), [E105](#e105), [W105](#w105)
@@ -246,7 +246,7 @@ outputs
 table j(j)
 policy unique
 | x | -> r(r) : bool |
-|   | true |
+|   | true           |
 ```
 
 Related codes: [E101](#e101)
@@ -290,9 +290,9 @@ outputs
 
 table j(j)
 policy unique
-| w | -> r(r) : bool |
-| 0g..1000g | true |
-| >1000g | false |
+| w         | -> r(r) : bool |
+| 0g..1000g | true           |
+| >1000g    | false          |
 ```
 
 Related codes: [E105](#e105), [E101](#e101)
@@ -319,7 +319,7 @@ outputs
 table j(j)
 policy unique
 | 重量 | -> r(r) : bool |
-| - | true |
+| -    | true           |
 ```
 
 Related codes: [E009](#e009), [E012](#e012)
@@ -346,7 +346,7 @@ outputs
 table j(j)
 policy unique
 | y | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E011](#e011), [E013](#e013)
@@ -391,9 +391,9 @@ outputs
 
 table j(j)
 policy first
-| r | -> o(o) : money[円, incl_tax] |
-| <=5% | 0円 |
-| - | p × r |
+| r    | -> o(o) : money[円, incl_tax] |
+| <=5% | 0円                           |
+| -    | p × r                         |
 ```
 
 Related codes: [E008](#e008), [E012](#e012)
@@ -421,7 +421,7 @@ outputs
 table j(j)
 policy unique
 | p | -> a(a) : money[円, incl_tax] |
-| - | 100円 |
+| - | 100円                         |
 
 result b = p
 ```
@@ -450,7 +450,7 @@ outputs
 table j(j)
 policy unique
 | p | -> a(a) : money[円, incl_tax] |
-| - | 100円 |
+| - | 100円                         |
 
 result a = p
 result a = p + 100円
@@ -483,7 +483,7 @@ outputs
 table j(j)
 policy unique
 | a | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E018](#e018)
@@ -512,7 +512,7 @@ outputs
 table j(j)
 policy unique
 | a | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E017](#e017), [W111](#w111)
@@ -542,7 +542,7 @@ outputs
 table j(j)
 policy unique
 | a | b | -> r(r) : bool |
-| - | - | true |
+| - | - | true           |
 
 examples
 | a | b | -> r |
@@ -579,7 +579,7 @@ outputs
 table j(j)
 policy unique
 | n | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E021](#e021)
@@ -609,7 +609,7 @@ outputs
 table j(j)
 policy unique
 | n | -> r(r) : bool |
-| - | true |
+| - | true           |
 
 fold r
   empty -> false
@@ -640,9 +640,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -675,9 +675,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -710,9 +710,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -745,9 +745,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -757,7 +757,7 @@ fold d over xs
 
 examples
 | -> r |
-| 0円 |
+| 0円  |
 ```
 
 Related codes: [E026](#e026), [E027](#e027)
@@ -785,9 +785,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -796,7 +796,7 @@ fold d over xs
   exhausted -> held
 
 sequence s(s)
-| m |
+| m   |
 | 3円 |
 ```
 
@@ -825,9 +825,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -836,8 +836,8 @@ fold d over xs
   exhausted -> held
 
 examples
-| xs | -> r |
-| nope | 0円 |
+| xs   | -> r |
+| nope | 0円  |
 ```
 
 Related codes: [E025](#e025), [E026](#e026)
@@ -869,7 +869,7 @@ count h(h) where b  range >=0 <=10
 table j(j)
 policy unique
 | n | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E029](#e029), [E030](#e030), [E020](#e020)
@@ -902,7 +902,7 @@ count h(h) over xs where ok  range >=0 <=10
 table j(j)
 policy unique
 | h | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E028](#e028), [E012](#e012)
@@ -934,7 +934,7 @@ count h(h) over xs where b
 table j(j)
 policy unique
 | h | -> r(r) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E028](#e028), [E112](#e112)
@@ -962,9 +962,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5 | a |
-| >5 | b |
+| k   | -> d(d) : v |
+| <=5 | a           |
+| >5  | b           |
 
 count h(h) over xs where d = a  range >=0 <=10
 
@@ -1001,8 +1001,8 @@ outputs
 
 table j(j)
 policy unique
-| x | -> r(r) : bool |
-| one | true |
+| x   | -> r(r) : bool |
+| one | true           |
 ```
 
 With `tier.proto` beside it:
@@ -1043,9 +1043,9 @@ outputs
 
 table j(j)
 policy first
-| x | -> r(r) : bool |
-| one | true |
-| - | false |
+| x   | -> r(r) : bool |
+| one | true           |
+| -   | false          |
 ```
 
 With `tier.proto` beside it:
@@ -1082,7 +1082,7 @@ outputs
   x(x) : bool
 
 table 表(t1)
-| a     | -> x  |
+   | a     | -> x  |
 r1 | true  | true  |
 r1 | false | false |
 ```
@@ -1490,7 +1490,7 @@ outputs
   y(y) : bool
 
 table 甲(ko)
-| a | -> x | y |
+| a | -> x | y    |
 | - | true | true |
 
 table 乙(otsu)
@@ -1607,8 +1607,8 @@ outputs
 table j(j)
 policy unique
 | x | -> r(r) : bool |
-| a | true |
-| b | false |
+| a | true           |
+| b | false          |
 ```
 
 Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
@@ -1634,9 +1634,9 @@ outputs
 
 table j(j)
 policy first
-| w | -> r(r) : bool |
-| - | true |
-| <=1000g | false |
+| w       | -> r(r) : bool |
+| -       | true           |
+| <=1000g | false          |
 ```
 
 Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
@@ -1664,7 +1664,7 @@ outputs
 table j(j)
 policy unique
 | w | -> r(r) : money[円, incl_tax] |
-| - | 100円 |
+| - | 100円                         |
 
 result r = p + w
 ```
@@ -1692,9 +1692,9 @@ outputs
 
 table j(j)
 policy unique
-| x | -> r(r) : money[円, incl_tax] |
-| true | 100円 |
-| false | 200円 |
+| x     | -> r(r) : money[円, incl_tax] |
+| true  | 100円                         |
+| false | 200円                         |
 ```
 
 Related codes: [E106](#e106), [E103](#e103)
@@ -1723,10 +1723,10 @@ outputs
 
 table j(j)
 policy unique
-| x | y | -> r(r) : money[円, incl_tax] |
-| a | - | 100円 |
-| - | true | 200円 |
-| b | false | 300円 |
+| x | y     | -> r(r) : money[円, incl_tax] |
+| a | -     | 100円                         |
+| - | true  | 200円                         |
+| b | false | 300円                         |
 ```
 
 Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
@@ -1752,9 +1752,9 @@ outputs
 
 table j(j)
 policy unique
-| x | -> r(r) : money[円, incl_tax] |
-| true | 1451円 |
-| false | 1000円 |
+| x     | -> r(r) : money[円, incl_tax] |
+| true  | 1451円                        |
+| false | 1000円                        |
 ```
 
 Related codes: [E104](#e104)
@@ -1780,12 +1780,12 @@ outputs
 
 table j(j)
 policy unique
-| x | -> r(r) : money[円, incl_tax] |
-| true | 100円 |
-| false | 200円 |
+| x     | -> r(r) : money[円, incl_tax] |
+| true  | 100円                         |
+| false | 200円                         |
 
 examples
-| x | -> r |
+| x    | -> r  |
 | true | 200円 |
 ```
 
@@ -1816,7 +1816,7 @@ define off(off) : money[円, incl_tax] = p × q
 table j(j)
 policy unique
 | off | -> r(r) : money[円, incl_tax] |
-| - | 0円 |
+| -   | 0円                           |
 ```
 
 Related codes: [E112](#e112), [E103](#e103)
@@ -1845,9 +1845,9 @@ outputs
 table j(j)
 policy unique
 | x | -> r(r) : bool |
-| a | true |
-| b | false |
-| c | true |
+| a | true           |
+| b | false          |
+| c | true           |
 ```
 
 Related codes: [E101](#e101), [W114](#w114)
@@ -1873,8 +1873,8 @@ outputs
 
 table j(j)
 policy unique
-| s | -> r(r) : bool |
-| starts_with "a" | true |
+| s               | -> r(r) : bool |
+| starts_with "a" | true           |
 ```
 
 Related codes: [E101](#e101), [E105](#e105)
@@ -1901,13 +1901,13 @@ outputs
 
 table j(j)
 policy unique
-| x | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |
-| true | true | 100円 |
-| false | false | 0円 |
+| x     | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |
+| true  | true             | 100円                          |
+| false | false            | 0円                            |
 
 examples
-| x | -> ok |
-| true | true |
+| x    | -> ok |
+| true | true  |
 ```
 
 Related codes: [E107](#e107)
@@ -1936,9 +1936,9 @@ derive gap(gap) : money[円, incl_tax] = a - b  range >=0円 <=100万円
 
 table j(j)
 policy unique
-| gap | -> r(r) : bool |
-| <=0円 | false |
-| >0円 | true |
+| gap   | -> r(r) : bool |
+| <=0円 | false          |
+| >0円  | true           |
 ```
 
 Related codes: [E108](#e108), [E101](#e101)
@@ -1968,8 +1968,8 @@ define bigger(bigger) : bool = a >= b
 table j(j)
 policy unique
 | bigger | -> r(r) : bool |
-| true | true |
-| false | false |
+| true   | true           |
+| false  | false          |
 ```
 
 Related codes: [E112](#e112), [E103](#e103)
@@ -1995,9 +1995,9 @@ outputs
 
 table j(j)
 policy first
-| r | -> o(o) : bool |
-| <=0.5% | true |
-| - | false |
+| r      | -> o(o) : bool |
+| <=0.5% | true           |
+| -      | false          |
 ```
 
 Related codes: [E103](#e103), [E106](#e106)
@@ -2027,7 +2027,7 @@ define r(r) : number = n ÷ d
 table j(j)
 policy first
 | r | -> o(o) : bool |
-| - | true |
+| - | true           |
 ```
 
 Related codes: [E103](#e103), [E108](#e108)
@@ -2056,8 +2056,8 @@ outputs
 
 table 表(t1)  @料金表 表1
 policy unique
-| a | -> x |
-| true | 990円 |
+| a     | -> x  |
+| true  | 990円 |
 | false | 890円 |
 ```
 
@@ -2387,10 +2387,10 @@ outputs
 
 table j(j)
 policy first
-| x | y | -> r(r) : money[円, incl_tax] |
-| a | - | 100円 |
-| - | true | 200円 |
-| - | - | 300円 |
+| x | y    | -> r(r) : money[円, incl_tax] |
+| a | -    | 100円                         |
+| - | true | 200円                         |
+| - | -    | 300円                         |
 ```
 
 Related codes: [E105](#e105), [W110](#w110), [E102](#e102)
@@ -2419,8 +2419,8 @@ outputs
 table j(j)
 policy first
 | x | -> r(r) : bool |
-| a | true |
-| b | false |
+| a | true           |
+| b | false          |
 ```
 
 Related codes: [W105](#w105), [E105](#e105)
@@ -2447,9 +2447,9 @@ outputs
 
 table j(j)
 policy unique
-| x | -> r(r) : bool |
-| true | true |
-| false | false |
+| x     | -> r(r) : bool |
+| true  | true           |
+| false | false          |
 ```
 
 Related codes: [E101](#e101), [E012](#e012)
@@ -2477,9 +2477,9 @@ outputs
 
 table j(j)
 policy unique
-| k | -> d(d) : v |
-| <=5円 | a |
-| >5円 | b |
+| k     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
 
 fold d over xs
   a -> next
@@ -2488,7 +2488,7 @@ fold d over xs
   exhausted -> held
 
 sequence s(s)
-| k |
+| k   |
 | 3円 |
 ```
 
@@ -2554,7 +2554,7 @@ outputs
 
 table 表(t1)  @料金表 表1
 policy unique
-| a | -> x |
+| a | -> x  |
 | - | 990円 |
 ```
 
@@ -2682,8 +2682,8 @@ outputs
 table j(j)
 policy first
 | 種別 | -> o(o) : number |
-| >=5 | 1 |
-| - | 0 |
+| >=5  | 1                |
+| -    | 0                |
 ```
 
 Related codes: [E009](#e009), [E011](#e011)
@@ -2712,7 +2712,7 @@ outputs
 table j(j)
 policy unique
 | k | -> d(d) : v |
-| - | a |
+| - | a           |
 
 fold d over xs
   a -> take_first k

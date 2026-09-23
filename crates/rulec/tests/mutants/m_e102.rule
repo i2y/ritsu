@@ -30,7 +30,7 @@ policy first
 | <=140cm  | S140                         |
 | <=160cm  | S160                         |
 | -        | S170                         |
-| <=60cm | S60 |
+| <=60cm   | S60                          |
 
 table 運賃表(fee_table)  # 出典: 日本郵便 基本運賃表（東京）
 policy unique

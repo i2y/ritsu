@@ -15,6 +15,10 @@ cd "$(dirname "$0")/.."
 C=tests/corpus
 M=${1:-tests/mutants}
 mkdir -p "$M"
+# Each mutant is left the way `rulec fmt` leaves a file: a seeded row that did not line up
+# with the rest of its table was a second difference nobody meant to plant.
+RULEC=${RULEC:-target/debug/rulec}
+[ -x "$RULEC" ] || { echo "make-mutants.sh: $RULEC がありません。cargo build のあとで走らせてください" >&2; exit 1; }
 y="$C/ゆうパック運賃.rule"
 k="$C/クーポン割引.rule"
 
@@ -266,5 +270,7 @@ awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1�
 # An alias that the target language will not take. `type` is a Rust keyword, and the
 # generated Rust reads `pub fn … (type: i64, …)` — measured, it does not compile (§15.103).
 awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付与.rule" > "$M/m_w121.rule"
+
+for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

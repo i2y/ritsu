@@ -27,6 +27,14 @@ fn run_lang(lang: &str, args: &[&str]) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
+/// Whether the draft has a table row with these cells, however it is padded.
+fn has_row(out: &str, cells: &[&str]) -> bool {
+    out.lines().any(|l| {
+        let t = l.trim();
+        t.starts_with('|') && t.trim_matches('|').split('|').map(str::trim).collect::<Vec<_>>() == cells
+    })
+}
+
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rulec-import-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -45,15 +53,16 @@ fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
     assert!(out.contains("enum あて先の値(c1_kind) = 近畿圏(v1) | 遠隔地(v2)"), "{out}");
     assert!(out.contains("enum サイズの値(c2_kind) = S60 | S80"), "ASCII の値に別名は要らない: {out}");
     assert!(out.contains("  運賃(o1) : money[円, incl_tax]  round down(1円)  # 推定"), "{out}");
-    assert!(out.contains("| 近畿圏 | S80 | 1310円 |"), "桁区切りを外して写す: {out}");
+    assert!(has_row(&out, &["近畿圏", "S80", "1310円"]), "桁区切りを外して写す: {out}");
     assert!(out.contains("# 出典: "), "出典の列が用意される: {out}");
     // A draft is honest about itself: every guess is marked.
     assert!(out.matches("推定").count() >= 4, "{out}");
     // Four rows over 2 × 2 values: complete as it stands, so check passes.
     let rule = d.join("運賃.rule");
     std::fs::write(&rule, &out).unwrap();
-    let (c, o, e) = run(&["fmt", rule.to_str().unwrap()]);
-    assert_eq!(c, 0, "{o}{e}");
+    // Written the way fmt leaves it, Japanese columns and all.
+    let (c, o, e) = run(&["fmt", "--check", rule.to_str().unwrap()]);
+    assert_eq!(c, 0, "下書きが fmt のとおりになっていない:\n{o}{e}");
     let (c, o, e) = run(&["check", rule.to_str().unwrap()]);
     assert_eq!(c, 0, "下書きが check を通らない:\n{o}{e}");
     let _ = std::fs::remove_dir_all(&d);
@@ -68,7 +77,7 @@ fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
     assert_eq!(c, 0, "{e}");
     assert!(out.starts_with("rule 重さ運賃(imported) v1\n"), "{out}");
     assert!(out.contains("  weight : mass[g]  range >=1000g <=5000g  # 推定"), "{out}");
-    assert!(out.contains("| 1000g | 800円 |"), "{out}");
+    assert!(has_row(&out, &["1000g", "800円"]), "{out}");
     assert!(out.contains("等値で写した"), "閾値かもしれないと断る: {out}");
     // It parses, and check says what a person has to decide: the gaps between the values.
     let rule = d.join("wt.rule");
@@ -89,7 +98,7 @@ fn 日付と率の列() {
     assert!(out.contains("  date : date  range >=2026-04-01 <=2026-05-01"), "{out}");
     assert!(out.contains("  rate : rate[step 0.1%]  round down(0.1%)"), "小数の率は 0.1% 刻みで、丸めの刻みも同じ: {out}");
     assert!(out.contains("# 出典: rt.csv（"), "出典はファイル名だけ: {out}");
-    assert!(out.contains("| B | 2026-05-01 | 12.5% |"), "日付の綴りをそろえる: {out}");
+    assert!(has_row(&out, &["B", "2026-05-01", "12.5%"]), "日付の綴りをそろえる: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 

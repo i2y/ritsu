@@ -96,18 +96,18 @@ const X_E004: &str = "rule t(t) v1\n\n= 1\n";
 const X_E005: &str = "rule t(t) v1\n\nfoo bar\n";
 const X_E006: &str = "rule t(t) v1\n\nenum k(k) a(a) | b(b)\n";
 const X_E007: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy any\n| x | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy any\n| x | -> r(r) : bool |\n| - | true           |\n";
 const X_E008: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n|   | true |\n";
+                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n|   | true           |\n";
 const X_E009: &str = "rule t(t) v1\n\nenum range(kind) = a(a) | b(b)\n";
 const X_E010: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| w | -> r(r) : bool |\n\
-                      | 0g..1000g | true |\n| >1000g | false |\n";
+                      table j(j)\npolicy unique\n| w         | -> r(r) : bool |\n\
+                      | 0g..1000g | true           |\n| >1000g    | false          |\n";
 const X_E011: &str = "rule t(t) v1\n\ninputs\n  重量 : bool\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| 重量 | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| 重量 | -> r(r) : bool |\n| -    | true           |\n";
 const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true           |\n";
 const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
 
 /// The `.proto` that E032 and E033 are read against. Two values and proto3's zero value,
@@ -121,40 +121,40 @@ const X_E032: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
                       enum v(v) = one(one)\n\n\
                       inputs\n  x(x) : v\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n| one | true |\n";
+                      table j(j)\npolicy unique\n| x   | -> r(r) : bool |\n| one | true           |\n";
 
 const X_E033: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
                       enum v(v) = one(one) | two(two)\n\n\
                       inputs\n  x(x) : v\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy first\n| x | -> r(r) : bool |\n| one | true |\n| - | false |\n";
+                      table j(j)\npolicy first\n| x   | -> r(r) : bool |\n| one | true           |\n| -   | false          |\n";
 const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n  \
                       r(r) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  o(o) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy first\n| r | -> o(o) : money[円, incl_tax] |\n\
-                      | <=5% | 0円 |\n| - | p × r |\n";
+                      table j(j)\npolicy first\n| r    | -> o(o) : money[円, incl_tax] |\n\
+                      | <=5% | 0円                           |\n| -    | p × r                         |\n";
 
 const X_E015: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n  \
                       b(b) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円 |\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result b = p\n";
 const X_E016: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円 |\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result a = p\nresult a = p + 100円\n";
 
 const X_E017: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
                       b(b) : number  range >=0 <=10\n\nconstraint a\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true           |\n";
 const X_E018: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\n\
                       constraint a <= r\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true           |\n";
 const X_E019: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
                       b(b) : number  range >=0 <=10\n\nconstraint a <= b\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| a | b | -> r(r) : bool |\n| - | - | true |\n\n\
+                      table j(j)\npolicy unique\n| a | b | -> r(r) : bool |\n| - | - | true           |\n\n\
                       examples\n| a | b | -> r |\n| 5 | 1 | true |\n";
 
 /// A rule that walks a sequence: an element decides a verdict, and the fold reduces the
@@ -164,7 +164,7 @@ const FOLD_HEAD: &str = "rule t(t) v1\n\n\
                       enum v(v) = a(a) | b(b)\n\n\
                       elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+                      table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
                       fold d over xs\n";
 const X_E022: &str = const_str_e022();
 const X_E023: &str = const_str_e023();
@@ -175,7 +175,7 @@ const fn const_str_e022() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  exhausted -> held\n"
 }
 
@@ -184,7 +184,7 @@ const fn const_str_e023() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n"
 }
 
@@ -193,7 +193,7 @@ const fn const_str_e024() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  empty -> 0円\n  exhausted -> held\n"
 }
 
@@ -202,9 +202,9 @@ const fn const_str_e025() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
-     examples\n| -> r |\n| 0円 |\n"
+     examples\n| -> r |\n| 0円  |\n"
 }
 
 const fn const_str_e026() -> &'static str {
@@ -212,9 +212,9 @@ const fn const_str_e026() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
-     sequence s(s)\n| m |\n| 3円 |\n"
+     sequence s(s)\n| m   |\n| 3円 |\n"
 }
 
 const fn const_str_e027() -> &'static str {
@@ -222,9 +222,9 @@ const fn const_str_e027() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
-     examples\n| xs | -> r |\n| nope | 0円 |\n"
+     examples\n| xs   | -> r |\n| nope | 0円  |\n"
 }
 
 const fn const_str_w116() -> &'static str {
@@ -232,21 +232,21 @@ const fn const_str_w116() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5円 | a |\n| >5円 | b |\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
-     sequence s(s)\n| k |\n| 3円 |\n"
+     sequence s(s)\n| k   |\n| 3円 |\n"
 }
 
 const X_E026: &str = const_str_e026();
 const X_E027: &str = const_str_e027();
 const X_E034: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
-table 表(t1)\n| a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
+table 表(t1)\n   | a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
 const X_E035: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)\noverrides 無い表\n| a     | -> x  |\n| true  | true  |\n| false | false |\n";
 const X_E036: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
 table 甲(ko)\n| a | -> x |\n| - | true |\n\ntable 乙(otsu)\noverrides 甲\n| a | -> y |\n| - | true |\n";
 const X_E045: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
-table 甲(ko)\n| a | -> x | y |\n| - | true | true |\n\ntable 乙(otsu)\noverrides 甲\n| a    | -> x  |\n| true | false |\n";
+table 甲(ko)\n| a | -> x | y    |\n| - | true | true |\n\ntable 乙(otsu)\noverrides 甲\n| a    | -> x  |\n| true | false |\n";
 const X_W117: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 甲(ko)\n   | a     | -> x  |\nr1 | true  | true  |\nr2 | false | false |\n\n\
 table 乙(otsu)\noverrides 甲:r1, 甲:r2\n| a    | -> x  |\n| true | false |\n";
@@ -271,8 +271,8 @@ const TARIFF_DOC: &[(&str, &str)] = &[
     ("料金表.md", "# 料金表\n\n| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n"),
     ("料金表.md.fragments/表1.tsv", "あて先\t運賃\n近畿\t990円\n関東\t880円\n"),
 ];
-const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| true | 990円 |\n| false | 890円 |\n";
-const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x |\n| - | 990円 |\n";
+const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a     | -> x  |\n| true  | 990円 |\n| false | 890円 |\n";
+const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x  |\n| - | 990円 |\n";
 /// The document of the E119 example, and the copy of its table. A second document, because
 /// the boundary check needs a table that cuts a number line and the E116 one lists a price
 /// per destination (§15.124).
@@ -318,7 +318,7 @@ const fn const_str_w115() -> &'static str {
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| - | a |\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| - | a           |\n\n\
      fold d over xs\n  a -> take_first k\n  b -> next\n  empty -> 0円\n  exhausted -> held\n"
 }
 const X_W115: &str = const_str_w115();
@@ -327,105 +327,105 @@ const X_E020: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\
                       elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
                       elements ys(ys)\n  m(m) : number  range >=0 <=10\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n";
 const X_E021: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
                       elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n\n\
                       fold r\n  empty -> false\n";
 
 const X_E028: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
                       elements xs(xs)\n  b(b) : bool\n\n\
                       outputs\n  r(r) : bool\n\n\
                       count h(h) where b  range >=0 <=10\n\n\
-                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n";
 const X_E029: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n  ok(ok) : bool\n\n\
                       elements xs(xs)\n  b(b) : bool\n\n\
                       outputs\n  r(r) : bool\n\n\
                       count h(h) over xs where ok  range >=0 <=10\n\n\
-                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true           |\n";
 const X_E030: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
                       elements xs(xs)\n  b(b) : bool\n\n\
                       outputs\n  r(r) : bool\n\n\
                       count h(h) over xs where b\n\n\
-                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true |\n";
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true           |\n";
 const X_E031: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
                       elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
                       outputs\n  r(r) : number  round down(1)\n\n\
-                      table j(j)\npolicy unique\n| k | -> d(d) : v |\n| <=5 | a |\n| >5 | b |\n\n\
+                      table j(j)\npolicy unique\n| k   | -> d(d) : v |\n| <=5 | a           |\n| >5  | b           |\n\n\
                       count h(h) over xs where d = a  range >=0 <=10\n\n\
                       fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0\n  exhausted -> held\n";
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
-                      | a | true |\n| b | false |\n";
+                      | a | true           |\n| b | false          |\n";
 const X_E102: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy first\n| w | -> r(r) : bool |\n\
-                      | - | true |\n| <=1000g | false |\n";
+                      table j(j)\npolicy first\n| w       | -> r(r) : bool |\n\
+                      | -       | true           |\n| <=1000g | false          |\n";
 const X_E103: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n  \
                       p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| w | -> r(r) : money[円, incl_tax] |\n| - | 100円 |\n\n\
+                      table j(j)\npolicy unique\n| w | -> r(r) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result r = p + w\n";
 const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : money[円, incl_tax] |\n\
-                      | true | 100円 |\n| false | 200円 |\n";
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 100円                         |\n| false | 200円                         |\n";
 const X_E105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| x | y | -> r(r) : money[円, incl_tax] |\n\
-                      | a | - | 100円 |\n| - | true | 200円 |\n| b | false | 300円 |\n";
+                      table j(j)\npolicy unique\n| x | y     | -> r(r) : money[円, incl_tax] |\n\
+                      | a | -     | 100円                         |\n| - | true  | 200円                         |\n| b | false | 300円                         |\n";
 const X_E106: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round up(10円)\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : money[円, incl_tax] |\n\
-                      | true | 1451円 |\n| false | 1000円 |\n";
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 1451円                        |\n| false | 1000円                        |\n";
 const X_E107: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : money[円, incl_tax] |\n\
-                      | true | 100円 |\n| false | 200円 |\n\n\
-                      examples\n| x | -> r |\n| true | 200円 |\n";
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 100円                         |\n| false | 200円                         |\n\n\
+                      examples\n| x    | -> r  |\n| true | 200円 |\n";
 const X_E108: &str = "rule t(t) v1\n\n\
                       inputs\n  p(p) : money[円, incl_tax]  range >=0円 <=100000000000000000円\n  \
                       q(q) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       define off(off) : money[円, incl_tax] = p × q\n\n\
-                      table j(j)\npolicy unique\n| off | -> r(r) : money[円, incl_tax] |\n| - | 0円 |\n";
+                      table j(j)\npolicy unique\n| off | -> r(r) : money[円, incl_tax] |\n| -   | 0円                           |\n";
 const X_E109: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
-                      | a | true |\n| b | false |\n| c | true |\n";
+                      | a | true           |\n| b | false          |\n| c | true           |\n";
 const X_E110: &str = "rule t(t) v1\n\ninputs\n  s(s) : string?\n\noutputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| s | -> r(r) : bool |\n| starts_with \"a\" | true |\n";
+                      table j(j)\npolicy unique\n| s               | -> r(r) : bool |\n| starts_with \"a\" | true           |\n";
 const X_E111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  ok(ok) : bool\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy unique\n| x | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |\n\
-                      | true | true | 100円 |\n| false | false | 0円 |\n\n\
-                      examples\n| x | -> ok |\n| true | true |\n";
+                      table j(j)\npolicy unique\n| x     | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |\n\
+                      | true  | true             | 100円                          |\n| false | false            | 0円                            |\n\n\
+                      examples\n| x    | -> ok |\n| true | true  |\n";
 const X_E112: &str = "rule t(t) v1\n\n\
                       inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
                       b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
                       outputs\n  r(r) : bool\n\n\
                       derive gap(gap) : money[円, incl_tax] = a - b  range >=0円 <=100万円\n\n\
-                      table j(j)\npolicy unique\n| gap | -> r(r) : bool |\n\
-                      | <=0円 | false |\n| >0円 | true |\n";
+                      table j(j)\npolicy unique\n| gap   | -> r(r) : bool |\n\
+                      | <=0円 | false          |\n| >0円  | true           |\n";
 const X_E113: &str = "rule t(t) v1\n\n\
                       inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
                       b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
                       outputs\n  r(r) : bool\n\n\
                       define bigger(bigger) : bool = a >= b\n\n\
                       table j(j)\npolicy unique\n| bigger | -> r(r) : bool |\n\
-                      | true | true |\n| false | false |\n";
+                      | true   | true           |\n| false  | false          |\n";
 const X_E114: &str = "rule t(t) v1\n\ninputs\n  r(r) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  o(o) : bool\n\n\
-                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n\
-                      | <=0.5% | true |\n| - | false |\n";
+                      table j(j)\npolicy first\n| r      | -> o(o) : bool |\n\
+                      | <=0.5% | true           |\n| -      | false          |\n";
 const X_E115: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
                       d(d) : number  range >=1 <=100\n\n\
                       outputs\n  o(o) : bool\n\n\
                       define r(r) : number = n \u{00f7} d\n\n\
-                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true |\n";
+                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true           |\n";
 
 const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
                       \u{3053}\u{3053}\u{307e}\u{3067}(upto) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
@@ -443,21 +443,21 @@ const X_E118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n
 const X_W121: &str = "rule t(t) v1\n\ninputs\n  \u{7a2e}\u{5225}(type) : number  range >=0 <=10\n\n\
                       outputs\n  o(o) : number  round down(1)\n\n\
                       table j(j)\npolicy first\n| \u{7a2e}\u{5225} | -> o(o) : number |\n\
-                      | >=5 | 1 |\n| - | 0 |\n";
+                      | >=5  | 1                |\n| -    | 0                |\n";
 
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
-                      table j(j)\npolicy first\n| x | y | -> r(r) : money[円, incl_tax] |\n\
-                      | a | - | 100円 |\n| - | true | 200円 |\n| - | - | 300円 |\n";
+                      table j(j)\npolicy first\n| x | y    | -> r(r) : money[円, incl_tax] |\n\
+                      | a | -    | 100円                         |\n| - | true | 200円                         |\n| - | -    | 300円                         |\n";
 const X_W110: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy first\n| x | -> r(r) : bool |\n\
-                      | a | true |\n| b | false |\n";
+                      | a | true           |\n| b | false          |\n";
 const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
                       outputs\n  r(r) : bool\n\n\
-                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
-                      | true | true |\n| false | false |\n";
+                      table j(j)\npolicy unique\n| x     | -> r(r) : bool |\n\
+                      | true  | true           |\n| false | false          |\n";
 const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  r(r) : bool\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable j(j)\npolicy unique\n| 上    | 下    | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
 
 // ── The ledger ───────────────────────────────────────────────────────────

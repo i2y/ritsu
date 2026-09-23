@@ -406,5 +406,7 @@ pub fn draft_rows(
             "# {guess}: a cell in a numeric column was copied as equality with the value written; if it means a threshold, rewrite it as a comparison such as `<=60cm`\n"
         ));
     }
-    Ok(o)
+    // Written the way `rulec fmt` would leave it: a draft is read before anything else is
+    // done to it, and a table whose bars wander is harder to hold against the sheet.
+    Ok(crate::fmt::format(&o))
 }
