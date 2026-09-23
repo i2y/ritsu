@@ -299,7 +299,7 @@ fn table_json(t: CertTable, src: &str) -> String {
     let reach: Vec<String> = t
         .reach
         .iter()
-        .map(|(row, at, input, nums)| {
+        .map(|(row, at, input, nums, extra)| {
             let mut ins = Obj::new();
             for (k, v) in input {
                 ins = ins.raw(k, v.json());
@@ -318,8 +318,23 @@ fn table_json(t: CertTable, src: &str) -> String {
                         })
                         .collect::<Vec<_>>()),
                 )
+                .raw(
+                    "extra_values",
+                    arr(&extra
+                        .iter()
+                        .map(|v| match v {
+                            Some(q) => crate::json::quote(&rat(q)),
+                            None => "null".into(),
+                        })
+                        .collect::<Vec<_>>()),
+                )
                 .finish()
         })
+        .collect();
+    let refuted: Vec<String> = t
+        .refuted
+        .iter()
+        .map(|(a, b, r)| Obj::new().int("a", *a as i128).int("b", *b as i128).raw("farkas", farkas_json(r, &t.model)).finish())
         .collect();
     Obj::new()
         .str("table", &t.name)
@@ -329,6 +344,7 @@ fn table_json(t: CertTable, src: &str) -> String {
         .raw("decides", crate::json::strs(&t.decides))
         .raw("rows", arr(&rows))
         .raw("disjoint", arr(&disjoint))
+        .raw("refuted", arr(&refuted))
         .raw("undecided", arr(&undecided))
         .raw("reach", arr(&reach))
         .raw("unused", arr(&t.unused.iter().map(|r| r.to_string()).collect::<Vec<_>>()))
@@ -364,16 +380,69 @@ fn table_json(t: CertTable, src: &str) -> String {
                 )
                 .finish(),
         )
-        .raw("cover", t.cover.as_ref().map(cover_json).unwrap_or_else(|| "null".into()))
+        .raw(
+            "linear",
+            Obj::new()
+                .raw("extra", crate::json::strs(&t.model_extra))
+                .raw("facts", arr(&t.model.iter().map(fact_json).collect::<Vec<_>>()))
+                .finish(),
+        )
+        .raw("cover", t.cover.as_ref().map(|c| cover_json(c, &t.model)).unwrap_or_else(|| "null".into()))
         .finish()
+}
+
+/// One fact of a table's linear model, named by where it comes from, so that a re-checker
+/// builds the inequality again from the rule rather than reading it here (§15.141). A
+/// `derive`'s equation is two facts, `name − expr <= 0` (`le`) and `>= 0`; a range is two,
+/// its low end and its high end; a `constraint` is one, by its place in `constraints`.
+fn fact_json(o: &crate::fourier::Origin) -> String {
+    use crate::fourier::Origin;
+    match o {
+        Origin::Derive { name, le } => Obj::new().str("derive", name).bool("le", *le).finish(),
+        Origin::Range { name, hi } => Obj::new().str("range", name).bool("hi", *hi).finish(),
+        Origin::Constraint(i) => Obj::new().int("constraint", *i as i128).finish(),
+        // Nothing else is a fact of the model; a re-checker refuses what it cannot rebuild.
+        _ => Obj::new().str("unknown", "").finish(),
+    }
+}
+
+/// A refutation, as the inequalities that take part and the multiplier of each (§15.139):
+/// a fact of the model by its index, or one end of the coordinates the box allows on an
+/// axis. Adding them up, each times its multiplier, cancels every name and leaves a constant
+/// that is false — which is all a re-checker has to do.
+fn farkas_json(r: &crate::fourier::Refutation, model: &[crate::fourier::Origin]) -> String {
+    use crate::fourier::Origin;
+    arr(&r
+        .used()
+        .into_iter()
+        .map(|(q, y)| {
+            let o = match &q.origin {
+                // The end itself travels with it — `x >= at`, or `x > at` where it is left
+                // out — and a re-checker holds every coordinate of the box to it.
+                Origin::Coord { axis, hi } => {
+                    let at = if *hi { q.k.mul(Rat::int(-1)) } else { q.k };
+                    Obj::new().raw(
+                        "coord",
+                        Obj::new().int("axis", *axis as i128).bool("hi", *hi).str("at", &rat(&at)).bool("open", q.strict).finish(),
+                    )
+                }
+                other => match model.iter().position(|m| m == other) {
+                    Some(i) => Obj::new().int("fact", i as i128),
+                    None => Obj::new().str("unknown", ""),
+                },
+            };
+            o.str("y", &rat(&y)).finish()
+        })
+        .collect::<Vec<_>>())
 }
 
 /// The cover, as a tree. An internal node's children are in coordinate order, one per
 /// coordinate of the axis at that depth — which is how "the children tile the axis" is
 /// checked by shape rather than believed.
-fn cover_json(c: &Cover) -> String {
+fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
     match c {
-        Cover::Split(kids) => Obj::new().raw("split", arr(&kids.iter().map(cover_json).collect::<Vec<_>>())).finish(),
+        Cover::Split(kids) => Obj::new().raw("split", arr(&kids.iter().map(|k| cover_json(k, model)).collect::<Vec<_>>())).finish(),
+        Cover::ByFarkas(r) => Obj::new().raw("farkas", farkas_json(r, model)).finish(),
         Cover::Row(r) => Obj::new().int("row", *r as i128).finish(),
         Cover::ByConstraint(k) => Obj::new().int("constraint", *k as i128).finish(),
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),

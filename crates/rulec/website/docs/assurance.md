@@ -115,7 +115,10 @@ come back from the model checker.
 `rulec certificate` prints what the five proofs rest on: the tree that tiles the input space
 with the row covering each box, the axis on which each pair of rows parts, a point that
 reaches every row with the values behind it, the interval and the type every computed value
-is forced into — and where every cell stands in your file, down to the byte.
+is forced into — and where every cell stands in your file, down to the byte. Where no axis
+parts a pair, or no row takes a box, and the rule's derives and constraints rule it out
+together, it prints the multipliers that add those up to a contradiction; a re-checker does
+the addition.
 
 Two programs read it, and neither shares code with rulec:
 

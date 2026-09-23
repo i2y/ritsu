@@ -71,17 +71,23 @@ fn コーパスの証明書は再検査を通る() {
     assert!(tables >= 40, "表の数が減っている: {tables}");
 }
 
-/// The claim W114 could not settle is stated as undecided, not as proved.
+/// A pair the elimination decides is proved in the certificate: the multipliers travel with
+/// it, and the re-checker adds them up (§15.141). A pair it cannot decide — W114 — is stated
+/// as undecided, not as proved.
 #[test]
-fn 決められなかった対は未決と書かれる() {
+fn 消去で決めた対は乗数つきで書かれ_決められない対は未決と書かれる() {
     let (c, cert) = rulec(&["certificate", "tests/corpus/クーポン併用.rule"]);
     assert_eq!(c, 0, "{cert}");
-    assert!(cert.contains(r#""undecided":[{"a":1,"b":2}]"#), "W114 の対が未決として出ていない:\n{cert}");
+    assert!(cert.contains(r#""refuted":[{"a":1,"b":2,"farkas":"#), "消去で決めた対が乗数つきで出ていない:\n{cert}");
+    assert!(cert.contains(r#""undecided":[]"#), "{cert}");
     if have_python() {
         let (code, said) = recheck(&cert);
         assert_eq!(code, 0, "{said}");
-        assert!(said.contains("2 pairs disjoint"), "{said}");
+        assert!(said.contains("2 pairs disjoint + 1 apart on the linear model"), "{said}");
     }
+    let (c, cert) = rulec(&["certificate", "tests/mutants/m_w114.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""undecided":[{"a":1,"b":2}]"#), "W114 の対が未決として出ていない:\n{cert}");
 }
 
 /// A certificate that has been tampered with has to fail, four ways. Without this the
@@ -383,8 +389,8 @@ fn 到達の点は篩を通る() {
     // is one the axis really takes — and given values the `constraint` forbids. Only the
     // constraint can catch this; the coordinates admit both numbers.
     let forged = cert.replace(
-        r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"]}"#,
-        r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"]}"#,
+        r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"],"extra_values":[]}"#,
+        r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"],"extra_values":[]}"#,
     );
     assert_ne!(forged, cert, "証明書の形が変わっていて、偽れていない");
     let (code, said) = recheck(&forged);
@@ -474,4 +480,47 @@ fn 証明書は自分の届く先を言う() {
     for want in ["completeness", "int64", "recheck.py", "undecided", "does not pass `check`", "units", "--rule"] {
         assert!(low.contains(want), "formats.md の certificate の節が `{want}` を言っていない");
     }
+}
+
+/// The two rules of a constraint chain through an input no table has a column for: one
+/// complete only with the chain, one unique only with it (§15.141).
+const CHAIN_GAP: &str = "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x     | -> y  |\n| <=50円 | -     | true  |\n| >50円  | >50円 | false |\n";
+const CHAIN_OVERLAP: &str = "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x      | -> y  |\n| >50円  | -      | true  |\n| -      | <50円  | false |\n| <=50円 | >=50円 | false |\n";
+
+fn chain_cert(tag: &str, src: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("rulec-cert-chain-{tag}-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let p = dir.join("chain.rule");
+    std::fs::write(&p, src).unwrap();
+    let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(c, 0, "{cert}");
+    cert
+}
+
+/// The multipliers of the linear model travel in the certificate, and the re-checker adds
+/// them up — for a box of the cover no row takes, and for a pair the axes do not part. A
+/// multiplier changed is a sum that no longer cancels, and the certificate fails (§15.141).
+#[test]
+fn 線形のモデルの乗数は再検査で足し算される() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let gap = chain_cert("gap", CHAIN_GAP);
+    assert!(gap.contains(r#"{"farkas":["#), "被覆の葉に乗数が無い:\n{gap}");
+    assert!(gap.contains(r#""extra":["b"]"#), "列でない名前がモデルに無い:\n{gap}");
+    let (code, said) = recheck(&gap);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("impossible by the linear model"), "{said}");
+    let forged = gap.replacen(r#"{"fact":6,"y":"#, r#"{"fact":5,"y":"#, 1);
+    assert_ne!(forged, gap, "証明書の形が変わっていて、偽れていない");
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "別の事実を指した乗数が通ってしまった:\n{said}");
+
+    let overlap = chain_cert("overlap", CHAIN_OVERLAP);
+    assert!(overlap.contains(r#""refuted":[{"a":1,"b":2,"farkas":"#), "消去で離れた対が出ていない:\n{overlap}");
+    let (code, said) = recheck(&overlap);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 apart on the linear model"), "{said}");
 }

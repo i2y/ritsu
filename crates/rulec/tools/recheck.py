@@ -636,12 +636,181 @@ def completions(axes, path):
     return out
 
 
+# --- The linear model (§15.141) ------------------------------------------------------------
+#
+# A table's certificate names the facts of its linear model by where each comes from — a
+# `derive`'s equation, a declared range, a `constraint` — and this program builds each one
+# again from the rule's own values, ranges and constraints. A refutation is then a list of
+# those facts and of the ends of a box's coordinates, each with a multiplier, and checking it
+# is addition: every name cancels and what is left is false.
+
+def factor(e):
+    """A literal with no unit, or a rate, as the number it multiplies by — what `rulec`
+    accepts as the constant side of a product. None for anything else."""
+    if "num" not in e or e.get("type") not in ("number", "rate"):
+        return None
+    return num(e.get("value"))
+
+
+def linearize(e, want, types):
+    """An expression as a linear form over names of one type, `({name: coefficient}, k)`, or
+    None — exactly the shapes `rulec` reads as linear: names of that type, literals of it, sums
+    and differences, and products and quotients by a constant."""
+    if "name" in e:
+        return ({e["name"]: Fraction(1)}, Fraction(0)) if types.get(e["name"]) == want else None
+    if "num" in e:
+        v = num(e.get("value"))
+        return ({}, v) if v is not None and e.get("type") == want else None
+    if e.get("op") in ("+", "-"):
+        a, b = linearize(e["l"], want, types), linearize(e["r"], want, types)
+        if a is None or b is None:
+            return None
+        sign = 1 if e["op"] == "+" else -1
+        terms = dict(a[0])
+        for n, c in b[0].items():
+            terms[n] = terms.get(n, Fraction(0)) + sign * c
+        return (terms, a[1] + sign * b[1])
+    if e.get("op") == "*":
+        fa, fb = factor(e["l"]), factor(e["r"])
+        if (fa is None) == (fb is None):
+            return None
+        k, side = (fa, e["r"]) if fa is not None else (fb, e["l"])
+        inner = linearize(side, want, types)
+        return None if inner is None else ({n: c * k for n, c in inner[0].items()}, inner[1] * k)
+    if e.get("op") == "/":
+        k = factor(e["r"])
+        if k is None or k == 0:
+            return None
+        inner = linearize(e["l"], want, types)
+        return None if inner is None else ({n: c / k for n, c in inner[0].items()}, inner[1] / k)
+    return None
+
+
+def model_facts(t, cert):
+    """The facts of a table's linear model, each as `(terms, k, strict)` meaning
+    `sum(c * name) + k <= 0` (`< 0` when strict), built from the rule rather than read."""
+    lin = t.get("linear") or {"extra": [], "facts": []}
+    values = {v["name"]: v for v in cert.get("values", [])}
+    types = cert.get("types", {})
+    out = []
+    for f in lin["facts"]:
+        if "derive" in f:
+            v = values.get(f["derive"])
+            if v is None:
+                raise Bad(f"{t['table']}: the model names the equation of {f['derive']}, which states no expression")
+            got = linearize(v["expr"], v.get("type"), types)
+            if got is None:
+                raise Bad(f"{t['table']}: the model takes {f['derive']} as linear, and its expression is not")
+            terms = {n: -c for n, c in got[0].items()}
+            terms[f["derive"]] = terms.get(f["derive"], Fraction(0)) + 1
+            k = -got[1]
+            if not f["le"]:
+                terms, k = {n: -c for n, c in terms.items()}, -k
+            out.append((terms, k, False))
+        elif "range" in f:
+            r = cert.get("ranges", {}).get(f["range"])
+            end = None if r is None else num(r[1] if f["hi"] else r[0])
+            if end is None:
+                raise Bad(f"{t['table']}: the model names an end of {f['range']}'s range that the rule does not declare")
+            out.append(({f["range"]: Fraction(1)}, -end, False) if f["hi"] else ({f["range"]: Fraction(-1)}, end, False))
+        elif "constraint" in f:
+            ks = cert.get("constraints", [])
+            i = f["constraint"]
+            if not isinstance(i, int) or not 0 <= i < len(ks):
+                raise Bad(f"{t['table']}: the model names constraint {i}, which the rule does not have")
+            k = ks[i]
+            d = {k["left"]: Fraction(1)}
+            d[k["right"]] = d.get(k["right"], Fraction(0)) - 1
+            if k["op"] in (">=", ">"):
+                d = {n: -c for n, c in d.items()}
+            out.append((d, Fraction(0), k["op"] in ("<", ">")))
+        else:
+            raise Bad(f"{t['table']}: a fact of the model comes from nowhere this program knows")
+    return out
+
+
+def beyond(t, ai, coords, hi, at, strict):
+    """Whether every coordinate of the box stays on the right side of an end: at or above
+    `at` for a low end, above it where the end is left out — and the same below a high one."""
+    for c in coords:
+        lo, up = bound_at(t, ai, c)
+        point = lo is not None and up is not None and lo == up
+        v = up if hi else lo
+        if v is None:
+            return False
+        if point:
+            ok = (v < at if hi else v > at) or (v == at and not strict)
+        else:
+            ok = v <= at if hi else v >= at
+        if not ok:
+            return False
+    return True
+
+
+def farkas_holds(t, cert, refs, box):
+    """Whether the multipliers refute the model inside the box. Returns None when they do,
+    or what is wrong."""
+    facts = t.setdefault("_facts", model_facts(t, cert))
+    total, k, strict = {}, Fraction(0), False
+    for ref in refs:
+        y = num(ref.get("y"))
+        if y is None or y < 0:
+            return "a multiplier is not a number at least zero"
+        if "fact" in ref:
+            i = ref["fact"]
+            if not isinstance(i, int) or not 0 <= i < len(facts):
+                return f"it names fact {i}, which the model does not have"
+            terms, fk, fs = facts[i]
+        elif "coord" in ref:
+            cr = ref["coord"]
+            ai, hi, at, left_out = cr.get("axis"), cr.get("hi"), num(cr.get("at")), bool(cr.get("open"))
+            if not isinstance(ai, int) or not 0 <= ai < len(t["axes"]) or ai >= len(box) or at is None:
+                return f"it names axis {ai}, which does not exist"
+            if not beyond(t, ai, box[ai], hi, at, left_out):
+                return f"a coordinate of {t['axes'][ai]['column']} in this box lies beyond the end it names"
+            col = t["axes"][ai]["column"]
+            terms, fk, fs = ({col: Fraction(1)}, -at, left_out) if hi else ({col: Fraction(-1)}, at, left_out)
+        else:
+            return "it names an inequality from nowhere this program knows"
+        for n, c in terms.items():
+            total[n] = total.get(n, Fraction(0)) + y * c
+        k += y * fk
+        strict = strict or (fs and y > 0)
+    if any(c != 0 for c in total.values()):
+        return "the names do not cancel"
+    if k > 0 or (k == 0 and strict):
+        return None
+    return "what is left is not false"
+
+
+def facts_hold(t, cert, values, extra):
+    """Whether a point's values satisfy every fact of the model. None when they do, or why not."""
+    lin = t.get("linear") or {"extra": [], "facts": []}
+    if not lin["facts"]:
+        return None
+    facts = t.setdefault("_facts", model_facts(t, cert))
+    at = {}
+    for ai, a in enumerate(t["axes"]):
+        if values is not None and ai < len(values) and values[ai] is not None:
+            at[a["column"]] = num(values[ai])
+    for n, v in zip(lin["extra"], extra or []):
+        if v is not None:
+            at[n] = num(v)
+    for terms, k, strict in facts:
+        if any(n not in at for n in terms):
+            return "no value is given for a name the model uses"
+        s = sum(c * at[n] for n, c in terms.items()) + k
+        if not (s < 0 if strict else s <= 0):
+            return "the values do not satisfy the rule's linear model"
+    return None
+
+
 def check_cover(t):
     """Completeness: the cover has to tile the space, and every leaf has to hold."""
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
-    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0}
+    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0, "model": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -684,6 +853,13 @@ def check_cover(t):
             if not out:
                 raise Bad(f"{t['table']}: {axes[ai]['column']} can reach this box, so it is not impossible")
             seen["derived"] += 1
+            return
+        if "farkas" in node:
+            box = [[c] for c in path] + [list(range(len(a["coords"]))) for a in axes[len(path):]]
+            why = farkas_holds(t, t["_cert"], node["farkas"], box)
+            if why is not None:
+                raise Bad(f"{t['table']}: a leaf says the linear model has no solution in its box, and {why}")
+            seen["model"] += 1
             return
         if node.get("every_point_ruled_out"):
             # Every point of the box, one at a time (§15.98). The sieve is a question about
@@ -909,7 +1085,7 @@ def check_table(t):
         from_cells += 1
 
     # (1) No two rows of a `unique` table meet.
-    pairs = 0
+    pairs = model_pairs = 0
     if t["policy"] == "unique":
         told = {}
         for d in t["disjoint"]:
@@ -926,13 +1102,25 @@ def check_table(t):
                 )
             told[(a, b)] = ai
             pairs += 1
+        # The pairs the axes do not part and the linear model does: no point the rule is
+        # asked about is in both rows (§15.141).
+        for d in t.get("refuted", []):
+            a, b = d["a"], d["b"]
+            if a not in rows or b not in rows:
+                raise Bad(f"{name}: rows {a} and {b} are not both in the table")
+            box = [sorted(set(rows[a]["accepts"][ai]) & set(rows[b]["accepts"][ai])) for ai in range(len(axes))]
+            why = farkas_holds(t, t["_cert"], d["farkas"], box)
+            if why is not None:
+                raise Bad(f"{name}: rows {a} and {b} are said to part on the linear model, and {why}")
+            told[(a, b)] = None
+            model_pairs += 1
         undecided = {(u["a"], u["b"]) for u in t["undecided"]}
         numbers = sorted(rows)
         for i, a in enumerate(numbers):
             for b in numbers[i + 1:]:
                 if (a, b) not in told and (a, b) not in undecided:
                     raise Bad(f"{name}: rows {a} and {b} are neither proved apart nor listed as undecided")
-    elif t["disjoint"]:
+    elif t["disjoint"] or t.get("refuted"):
         raise Bad(f"{name}: a `first` table cannot claim its rows are disjoint")
 
     # (2) Every row is reached.
@@ -950,11 +1138,13 @@ def check_table(t):
                     f"{axes[ai]['coords'][c]}, which that row does not take"
                 )
         why = sieve_admits(t, r.get("at_values"), at)
+        if why is None:
+            why = facts_hold(t, t["_cert"], r.get("at_values"), r.get("extra_values"))
         if why is not None:
             # Where the certificate hands over no values, the claim falls back to the
             # weaker reading — "the sieve does not exclude this point" — and says so.
             # Where it hands over values that do not hold, it is wrong and fails.
-            if r.get("at_values") is None or "no value is given" in why:
+            if r.get("at_values") is None or "no value is given" in why or "states no values" in why:
                 weak.add(row)
             else:
                 raise Bad(f"{name}: the point for row {row} is one no input reaches — {why}")
@@ -986,7 +1176,8 @@ def check_table(t):
     if True:
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
-                        ("above", "for the tables above"), ("points", "point by point")):
+                        ("above", "for the tables above"), ("points", "point by point"),
+                        ("model", "by the linear model")):
             if seen[k]:
                 cover_note += f" + {seen[k]} impossible {word}"
 
@@ -999,7 +1190,8 @@ def check_table(t):
         unused_note += f", {len(weak)} with no values behind the point"
         STATED.append(f"{name}: {len(weak)} points come with no values behind them")
     boxes = f", {from_cells} boxes read back from their cells" if from_cells else ""
-    return (f"{name}: {t['policy']}, {len(rows)} rows — {pairs} pairs disjoint, "
+    apart = f" + {model_pairs} apart on the linear model" if model_pairs else ""
+    return (f"{name}: {t['policy']}, {len(rows)} rows — {pairs} pairs disjoint{apart}, "
             f"{len(reached)} rows reached{unused_note}{cover_note}{boxes}{note}, "
             f"{tiled} axes tiled")
 
@@ -1348,6 +1540,7 @@ def check(cert):
         t["_tables"] = cert["tables"]
         t["_ranges"] = cert.get("ranges", {})
         t["_sieve"] = True
+        t["_cert"] = cert
         for what, n in (("pairs the axes do not part", len(t.get("undecided", []))),
                         ("rows an `apply` brought in and this rule leaves unused", len(t.get("unused", []))),
                         ("rows the sieve rules out", len(t.get("unreachable", [])))):

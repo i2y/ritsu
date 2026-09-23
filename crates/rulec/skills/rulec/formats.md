@@ -529,11 +529,17 @@ document. The tests hold both to forged certificates as well as to the corpus.
             "origin":"適用判定","line":21,
             "source":[{"line":21,"col":2,"len":9,"text":"<=1000円"},{"line":21,"col":15,"len":1,"text":"-"}],
             "accepts":[[0,1],[0,1,2]]}],
-   "disjoint":[{"a":1,"b":3,"axis":0},{"a":2,"b":3,"axis":0}],
-   "undecided":[{"a":1,"b":2}],
-   "reach":[{"row":1,"at":[0,0],"values":{"残高A":999,"残高B":3979},"at_values":["999","3979"]}],
+   "disjoint":[{"a":1,"b":3,"axis":0},{"a":2,"b":3,"axis":1}],
+   "refuted":[{"a":1,"b":2,"farkas":[{"fact":0,"y":"1/2980"},{"fact":6,"y":"1/2980"},{"fact":11,"y":"1/2980"},
+     {"coord":{"axis":0,"hi":true,"at":"1000","open":false},"y":"1/2980"},
+     {"coord":{"axis":1,"hi":false,"at":"3980","open":false},"y":"1/2980"}]}],
+   "undecided":[],
+   "reach":[{"row":1,"at":[0,0],"values":{"残高A":0,"残高B":-100000},"at_values":["0","-100000"],
+             "extra_values":["0","100000","0"]}],
    "unused":[],"unreachable":[],
    "constraints":[],
+   "linear":{"extra":["割引A","割引B","合計"],
+             "facts":[{"derive":"残高B","le":true},{"derive":"残高B","le":false},{"range":"残高B","hi":false},…]},
    "cover":{"split":[{"row":1},{"row":1},{"split":[{"row":3},{"row":2},{"row":2}]}]}}]}
 ```
 
@@ -549,21 +555,27 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `origin`, `line` | the table the row was written in, and the line it is written on. Rows of one table have a cell in the same columns and in no others, are all written in this file or all brought in by an `apply`, and take a run of lines in row order that no other table's rows fall inside — all of which a re-checker holds them to |
 | `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` a re-checker reads the file and compares, and the span has to be that cell's own place: every cell of a row is on the row's `line`, they are that line's `|`-separated fields, all of them (`outputs` says how many of the line's fields are answers rather than cells), and none of them is empty. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have, and then every row of that table has to agree |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
-| `undecided` | the pairs whose boxes meet on every axis, so the certificate does not claim them apart. A W114 the check could not settle lands here, and so do a pair a declared precedence orders and a pair the sieve ruled out: the certificate states the weaker thing rather than a proof it cannot carry. A pair in neither list is a certificate that does not hold |
-| `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns, and `at_values` those values as plain numbers on the axes' own scale — which is what lets the re-checker show the point is one the sieve admits, and not merely one inside the row's box. Under `policy first` the point is also outside every row above it |
+| `refuted` | `unique` only: the pairs whose boxes meet on every axis and which the table's **linear model** parts (§15.141): nothing both rows take satisfies it. `farkas` is the proof — the inequalities that take part, each with a multiplier at least zero. An inequality is a fact of the model, by its index in `linear.facts`, or an end of the coordinates both rows take on one axis: `{"coord":{"axis":i,"hi":false,"at":"3980","open":false}}` is `v >= 3980` (`>` where `open`), and a re-checker holds every coordinate both rows take there to it. Added up, each times its multiplier, the inequalities have to cancel every name and leave a constant that is false — positive, or zero where a strict one took part. That is all a re-checker does: addition |
+| `undecided` | the pairs whose boxes meet on every axis and which neither the axes nor the linear model part, so the certificate does not claim them apart. A W114 the check could not settle lands here, and so do a pair a declared precedence orders and a pair the sieve ruled out point by point: the certificate states the weaker thing rather than a proof it cannot carry. A pair in none of the three lists is a certificate that does not hold |
+| `reach` | for each row, a point inside it: `at` is the coordinate on every axis, `values` the same point in the table's columns, and `at_values` those values as plain numbers on the axes' own scale — which is what lets the re-checker show the point is one the sieve admits, and not merely one inside the row's box. Where the table has a linear model, the values are solved from it, and `extra_values` gives the model's other names in the order `linear.extra` lists them: the point has to satisfy every fact of the model too. Under `policy first` the point is also outside every row above it |
+| `linear` | the table's linear model (§15.141): every `derive` equation, declared range and `constraint` its numeric columns reach, closed over the names they tie together — a chain of constraints through an input no table has a column for included. `facts` names each one by where it comes from: `{"derive":name,"le":true}` is `name − expr <= 0` and `"le":false` the other half; `{"range":name,"hi":false}` one end of the declared range; `{"constraint":k}` the `constraint` at that place in the document's list. A re-checker **builds each fact again** from `values`, `ranges` and `constraints` — a `derive` has to be linear, names of its own type, literals, sums and differences, and products and quotients by a number or a rate — and refuses one it cannot build. `extra` names the model's names that are not columns of the table. Empty for a table whose model would say nothing the ranges do not |
 | `unused`, `unreachable` | rows outside the reachability claim, named rather than passed over: ones an `apply` brought in that this rule's bindings leave unused (§15.69), and ones the sieve rules out entirely — E102 does not look at the sieve, so `check` passes those and the certificate says so. A row called unused has to be one written in another file, which the `source` of that row shows |
 | `above` | what the tables above rule out, written on this table's own axes (§15.115). `never` is a list of `{"axis":i,"coord":c}`: no row of the table that decides that column writes that value at all. `apart` is a list of pairs that cannot stand together — `a` and `b` as coordinates, `input` the column the two decided columns share, and `spans` the span each of them leaves it, as two ends for a number or a list of values otherwise. A re-checker earns both back from the rows of the deciding tables and rests its verdict on what it recomputed; the written spans have to **contain** those, so a narrower one cannot make two things that meet look apart |
-| `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range, or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"upstream":…}` is a box the tables above cannot produce, and rests on this table's `above` facts: a re-checker settles it by finding a fact the box's coordinates trigger, and the fact itself by recomputing it from the rows of the table that decides the column. `null` when the walk ran past the budget |
+| `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range, `{"farkas":[…]}`, a box the linear model leaves no values in, with the multipliers that say so exactly as under `refuted` — the box being the coordinates the path to the leaf has fixed, and every coordinate of the axes it has not (§15.141) — or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"upstream":…}` is a box the tables above cannot produce, and rests on this table's `above` facts: a re-checker settles it by finding a fact the box's coordinates trigger, and the fact itself by recomputing it from the rows of the table that decides the column. `null` when the walk ran past the budget |
 | `constraints` | the `constraint` lines a cover leaf points at |
 
 **What "proved" means here.** `proofs/RulecCert/Semantics.lean` says what a table claims:
 under `unique`, every point the rule is **asked about** is taken by exactly one row; every
 row answers somewhere; and a value keeps the type it is declared with and fits int64. Asked
-about means the values behind the point satisfy every `constraint` the rule declares and put
-every derived column inside the interval its own expression forces — which is what rulec
-decides, and no more: whether some real input produces a given derived value is not settled
-by anything here. Each check is then a theorem: `Certified.unique`, `Certified.complete`,
-`Certified.reached`, `eval_type_of_typeOf`, `stored_in_i64`. One of them,
+about means the values behind the point satisfy every `constraint` the rule declares, put
+every derived column inside the interval its own expression forces, and — where the table
+has a linear model — satisfy every fact of it, with values for the model's other names as
+well. That is what rulec decides, and no more: whether some real input produces a given
+point is settled over the rationals, not the integers. Each check is then a theorem:
+`Certified.unique`, `Certified.complete`, `Certified.reached`, `eval_type_of_typeOf`,
+`stored_in_i64`. A refutation's is `farkas_sound` — multipliers that pass the check leave no
+values at all — and `not_asked_of_farkas`, which turns that into "no point of this box is asked
+about". One of them,
 `mem_boxOf_cmp_iff`, is what ties the boxes to the cells: a coordinate is taken exactly when
 every value in it satisfies the cell, **provided** no value a cell compares against falls
 strictly inside a coordinate — §6.2's construction, which the checkers verify rather than

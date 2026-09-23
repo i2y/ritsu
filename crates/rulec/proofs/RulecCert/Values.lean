@@ -97,6 +97,40 @@ inductive Expr where
   | unread : Expr
   deriving Repr, Inhabited
 
+/-- A constant a product or a quotient may scale by: a number with no unit, or a rate
+    (§15.141). What `rulec` reads as the constant side of a linear product is exactly this. -/
+def Expr.factor : Expr → Option Rat
+  | .lit v .number => some v
+  | .lit v .rate => some v
+  | _ => none
+
+/-- An expression as a linear form over the names of one type — `(terms, k)` for
+    `Σ c·name + k` — or `none` for anything that is not one: names of that type, literals of
+    it, sums and differences, and products and quotients by a constant (§15.141). The same
+    shapes `rulec` reads as linear, so the facts a certificate's model names are built here
+    again rather than read from it. -/
+def linOf (types : String → Option Ty) (want : Ty) : Expr → Option (List (String × Rat) × Rat)
+  | .name n => if types n == some want then some ([(n, 1)], 0) else none
+  | .lit v t => if t == want then some ([], v) else none
+  | .add a b => do
+      let (ta, ka) ← linOf types want a
+      let (tb, kb) ← linOf types want b
+      some (ta ++ tb, ka + kb)
+  | .sub a b => do
+      let (ta, ka) ← linOf types want a
+      let (tb, kb) ← linOf types want b
+      some (ta ++ tb.map (fun t => (t.1, -t.2)), ka - kb)
+  | .mul a b =>
+      match a.factor, b.factor with
+      | some k, none => (linOf types want b).map (fun l => (l.1.map (fun t => (t.1, k * t.2)), k * l.2))
+      | none, some k => (linOf types want a).map (fun l => (l.1.map (fun t => (t.1, k * t.2)), k * l.2))
+      | _, _ => none
+  | .divc a k kt =>
+      if (kt == .number || kt == .rate) && k != 0 then
+        (linOf types want a).map (fun l => (l.1.map (fun t => (t.1, t.2 / k)), l.2 / k))
+      else none
+  | _ => none
+
 /-- Whether anything in the expression is a leaf this program cannot type. -/
 def Expr.unreadable : Expr → Bool
   | .name _ => false

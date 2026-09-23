@@ -17,6 +17,7 @@
   rests on it means what this definition says and no more.
 -/
 import RulecCert.Sound
+import RulecCert.Linear
 
 namespace RulecCert
 
@@ -138,6 +139,11 @@ structure Sieve where
       carries, so the checker earns each pair back rather than believing it; what is settled
       **here** is the step from the pair to the box, which is the step the cover rests on. -/
   apart : List ((Nat × Nat) × (Nat × Nat))
+  /-- The rule's linear model around the table (§15.141): each `derive`'s equation, the
+      declared ranges and the `constraint`s, over numbered values — the axes first, in axis
+      order, then the names the model uses that are not columns of the table. Values that
+      satisfy the coordinates and not these are values no input produces. -/
+  facts : List LinIneq := []
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -155,7 +161,8 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ k ∈ s.cons, ∃ x y, v[k.left]? = some x ∧ v[k.right]? = some y ∧ k.op.holds x y) ∧
     (∀ (i : Nat) (I : Ival), s.reach[i]? = some (some I) → ∃ w, v[i]? = some w ∧ inIval I w) ∧
     (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
-    (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2))
+    (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
+    (∀ q ∈ s.facts, q.holds v)
 
 /-! ## One constraint rules a box out -/
 
@@ -302,7 +309,7 @@ theorem not_asked_of_apart {s : Sieve} {p : Point} (h : apartRulesOut s p = true
     ¬ s.asked p := by
   simp only [apartRulesOut, List.any_eq_true, Bool.and_eq_true, beq_iff_eq] at h
   rcases h with ⟨qr, hqr, hq, hr⟩
-  rintro ⟨_, _, _, _, _, hap⟩
+  rintro ⟨_, _, _, _, _, hap, _⟩
   exact hap qr hqr ⟨hq, hr⟩
 
 def pointRuledOut (s : Sieve) (p : Point) : Bool :=
@@ -480,13 +487,14 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
     | some x, some y => cmpHolds k.op x y
     | _, _ => false) &&
   s.never.all (fun q => !(p[q.1]? == some q.2)) &&
-  s.apart.all (fun qr => !(p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2))
+  s.apart.all (fun qr => !(p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2)) &&
+  s.facts.all (fun q => q.holdsB v)
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩ := h
-  refine ⟨v, ?_, ?_, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -520,5 +528,217 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     rcases this with h1 | h1
     · exact h1 hboth.1
     · exact h1 hboth.2
+  · intro q hq
+    exact LinIneq.holds_of_holdsB (List.all_eq_true.1 hfa q hq)
+
+/-! ## A box the linear model leaves no values in (§15.141)
+
+A refutation names its inequalities by where each comes from — a fact of the sieve's model,
+or one end of the coordinates the box allows on an axis — and gives each a multiplier. The
+inequalities are built again here, from the sieve and the box, and `farkasOk` adds them up.
+A fact holds at every point the rule is asked about because `asked` says so; an end holds
+at every point of the box because every coordinate the box allows on that axis is checked
+against it. -/
+
+/-- Where one inequality of a refutation comes from. -/
+inductive Ref where
+  /-- The fact of the model at this index. -/
+  | fact : Nat → Ref
+  /-- An end of the coordinates the box allows on an axis: `v[axis] ≥ at` below, or
+      `v[axis] ≤ at` above, strict where the end is left out. -/
+  | coord : (axis : Nat) → (hi : Bool) → (at_ : Rat) → (opn : Bool) → Ref
+  deriving Repr, Inhabited
+
+/-- Whether every value of a coordinate lies on the right side of an end. -/
+def beyondEnd (x : Coord) (hi : Bool) (at_ : Rat) (opn : Bool) : Bool :=
+  match x, hi with
+  | .exactly a, false => decide (at_ < a) || (decide (a = at_) && !opn)
+  | .exactly a, true => decide (a < at_) || (decide (a = at_) && !opn)
+  | .between (some l) _, false => decide (at_ ≤ l)
+  | .between _ (some h), true => decide (h ≤ at_)
+  | _, _ => false
+
+/-- The inequality an end stands for: `−v[i] + at ≤ 0` below, `v[i] − at ≤ 0` above, strict
+    where the end is left out. -/
+def endIneq (i : Nat) (hi : Bool) (at_ : Rat) (opn : Bool) : LinIneq :=
+  if hi then { coeffs := unitAt i 1, k := -at_, strict := opn }
+  else { coeffs := unitAt i (-1), k := at_, strict := opn }
+
+/-- Whether an end holds of every coordinate a box allows on its axis. -/
+def endHolds (s : Sieve) (box : Box) (i : Nat) (hi : Bool) (at_ : Rat) (opn : Bool) : Bool :=
+  match box[i]? with
+  | some cs => cs.all (fun c => match s.coordAt i c with
+      | some x => beyondEnd x hi at_ opn
+      | none => false)
+  | none => false
+
+/-- The inequalities a refutation names, built again from the sieve and the box; `none`
+    where a fact is not there or an end does not hold. -/
+def refIneqs (s : Sieve) (box : Box) : List (Ref × Rat) → Option (List (Rat × LinIneq))
+  | [] => some []
+  | (r, y) :: rest =>
+    match refIneqs s box rest with
+    | none => none
+    | some qs =>
+      match r with
+      | .fact i => (s.facts[i]?).map (fun q => (y, q) :: qs)
+      | .coord i hi at_ opn =>
+        if endHolds s box i hi at_ opn then some ((y, endIneq i hi at_ opn) :: qs) else none
+
+/-- **The linear model leaves the box no values**: the inequalities the refutation names are
+    what it says they are, and `farkasOk` accepts their sum. -/
+def farkasRuledOut (s : Sieve) (box : Box) (refs : List (Ref × Rat)) : Bool :=
+  match refIneqs s box refs with
+  | some ps => farkasOk ps
+  | none => false
+
+theorem getD_of_getElem? {v : List Rat} {i : Nat} {w : Rat} (h : v[i]? = some w) : v.getD i 0 = w := by
+  simp [List.getD, h]
+
+/-- An end that holds of the coordinate a value stands in holds of the value. -/
+theorem endIneq_holds {x : Coord} {w at_ : Rat} {hi opn : Bool} {i : Nat} {v : List Rat}
+    (hb : beyondEnd x hi at_ opn = true) (hx : x.holds w) (hv : v.getD i 0 = w) :
+    (endIneq i hi at_ opn).holds v := by
+  unfold endIneq
+  cases hi <;> simp only [ite_true, Bool.false_eq_true, ite_false] <;>
+    unfold LinIneq.holds LinIneq.lhs <;> simp only [dot_unitAt, hv] <;>
+    cases x with
+    | exactly a =>
+      simp only [Coord.holds] at hx
+      subst hx
+      simp only [beyondEnd, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at hb
+      cases opn <;> simp only [ite_true, Bool.false_eq_true, ite_false] <;> rcases hb with hb | ⟨hb, ho⟩ <;> grind
+    | between lo up =>
+      obtain ⟨hlo, hup⟩ := hx
+      first
+      | (cases lo with
+          | none => simp [beyondEnd] at hb
+          | some l =>
+            simp only [beyondEnd, decide_eq_true_eq] at hb
+            have := hlo l rfl
+            cases opn <;> simp only [ite_true, Bool.false_eq_true, ite_false] <;> grind)
+      | (cases up with
+          | none => simp [beyondEnd] at hb
+          | some h =>
+            simp only [beyondEnd, decide_eq_true_eq] at hb
+            have := hup h rfl
+            cases opn <;> simp only [ite_true, Bool.false_eq_true, ite_false] <;> grind)
+
+/-- Every inequality `refIneqs` builds holds at the values behind a point of the box that the
+    rule is asked about. -/
+theorem refIneqs_hold {s : Sieve} {box : Box} {p : Point} {v : List Rat}
+    (hin : inBox box p = true)
+    (hf : ∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
+      ∃ w, v[i]? = some w ∧ x.holds w)
+    (hfa : ∀ q ∈ s.facts, q.holds v) :
+    ∀ (refs : List (Ref × Rat)) (ps : List (Rat × LinIneq)), refIneqs s box refs = some ps →
+      ∀ q ∈ ps, q.2.holds v
+  | [], ps, h => by simp only [refIneqs, Option.some.injEq] at h; subst h; simp
+  | (r, y) :: rest, ps, h => by
+    simp only [refIneqs] at h
+    split at h
+    · exact absurd h (by simp)
+    · rename_i qs hqs
+      have ih := refIneqs_hold hin hf hfa rest qs hqs
+      cases r with
+      | fact i =>
+        simp only [Option.map_eq_some_iff] at h
+        obtain ⟨q, hq, rfl⟩ := h
+        intro e he
+        simp only [List.mem_cons] at he
+        rcases he with rfl | he
+        · exact hfa q (List.mem_of_getElem? hq)
+        · exact ih e he
+      | coord i hi at_ opn =>
+        by_cases hend : endHolds s box i hi at_ opn = true
+        · simp only [hend, ite_true, Option.some.injEq] at h
+          subst h
+          intro e he
+          simp only [List.mem_cons] at he
+          rcases he with rfl | he
+          · unfold endHolds at hend
+            split at hend
+            · rename_i cs hcs
+              obtain ⟨c, hpc, hmem⟩ := inBox_getElem hin hcs
+              have hall := List.all_eq_true.1 hend c (List.contains_iff_mem.1 hmem)
+              split at hall
+              · rename_i x hx
+                obtain ⟨w, hw, hxw⟩ := hf i c x hpc hx
+                exact endIneq_holds hall hxw (getD_of_getElem? hw)
+              · exact absurd hall (by simp)
+            · exact absurd hend (by simp)
+          · exact ih e he
+        · simp only [hend, Bool.false_eq_true, ite_false] at h
+          exact absurd h (by simp)
+
+/-- **A box the linear model leaves no values in holds no point the rule is asked about.** -/
+theorem not_asked_of_farkas {s : Sieve} {box : Box} {refs : List (Ref × Rat)} {p : Point}
+    (h : farkasRuledOut s box refs = true) (hin : inBox box p = true) : ¬ s.asked p := by
+  rintro ⟨v, hf, _, _, _, _, hfa⟩
+  unfold farkasRuledOut at h
+  split at h
+  · rename_i ps hps
+    exact farkas_sound h v (refIneqs_hold hin hf hfa refs ps hps)
+  · exact absurd h (by simp)
+
+/-! ## The boxes a refutation speaks about -/
+
+/-- The box a path fixes: the coordinate it takes on each axis it has fixed, every one on the
+    axes it has not. -/
+def pathBox (arities : List Arity) (path : Point) : Box :=
+  path.map (fun c => [c]) ++ (arities.drop path.length).map List.range
+
+theorem inBox_pathBox {arities : List Arity} {path p : Point} (hpre : path <+: p)
+    (hsp : inSpace arities p = true) : inBox (pathBox arities path) p = true := by
+  have hlen := inSpace_length hsp
+  have hle : path.length ≤ arities.length := by have := hpre.length_le; omega
+  apply inBox_of_getElem
+  · simp [pathBox]; omega
+  · intro i xs c hb hc
+    unfold pathBox at hb
+    rcases Nat.lt_or_ge i path.length with hi | hi
+    · rw [List.getElem?_append_left (by simpa using hi)] at hb
+      simp only [List.getElem?_map] at hb
+      have hpi := prefix_getElem? hpre hi
+      rw [hc] at hpi
+      rw [← hpi] at hb
+      simp only [Option.map_some, Option.some.injEq] at hb
+      subst hb
+      simp
+    · rw [List.getElem?_append_right (by simpa using hi)] at hb
+      simp only [List.getElem?_map, List.length_map, List.getElem?_drop] at hb
+      have hj : path.length + (i - path.length) = i := by omega
+      rw [hj] at hb
+      cases hn : arities[i]? with
+      | none => rw [hn] at hb; simp at hb
+      | some n =>
+        rw [hn] at hb
+        simp only [Option.map_some, Option.some.injEq] at hb
+        subst hb
+        obtain ⟨c', hc', hlt⟩ := inSpace_getElem hsp hn
+        rw [hc] at hc'
+        simp only [Option.some.injEq] at hc'
+        subst hc'
+        simpa using hlt
+
+/-- The coordinates two boxes both take on each axis. -/
+def pairBox (a b : Box) : Box :=
+  List.zipWith (fun xs ys => xs.filter (fun c => ys.contains c)) a b
+
+theorem inBox_pairBox : ∀ {a b : Box} {p : Point}, inBox a p = true → inBox b p = true →
+    inBox (pairBox a b) p = true
+  | [], [], [], _, _ => by simp [pairBox, inBox]
+  | x :: xs, y :: ys, c :: cs, ha, hb => by
+    simp only [inBox, Bool.and_eq_true] at ha hb
+    simp only [pairBox, List.zipWith_cons_cons, inBox, Bool.and_eq_true]
+    refine ⟨?_, inBox_pairBox ha.2 hb.2⟩
+    simp only [List.contains_iff_mem, List.mem_filter] at ha hb ⊢
+    exact ⟨ha.1, by simpa using hb.1⟩
+  | [], [], _ :: _, ha, _ => by simp [inBox] at ha
+  | [], _ :: _, [], _, hb => by simp [inBox] at hb
+  | [], _ :: _, _ :: _, ha, _ => by simp [inBox] at ha
+  | _ :: _, [], [], ha, _ => by simp [inBox] at ha
+  | _ :: _, [], _ :: _, _, hb => by simp [inBox] at hb
+  | _ :: _, _ :: _, [], ha, _ => by simp [inBox] at ha
 
 end RulecCert

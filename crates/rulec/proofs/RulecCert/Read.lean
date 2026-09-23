@@ -140,6 +140,45 @@ partial def exprOfJson (j : Json) : Option Expr :=
             else none
         | none => none
 
+/-- A truth value, as JSON writes one. -/
+def boolOf : Json → Option Bool
+  | .bool b => some b
+  | _ => none
+
+/-- One inequality of a refutation and its multiplier (§15.141): a fact of the model by its
+    index, or an end of the coordinates a box allows on an axis. -/
+def refOfJson (j : Json) : Option (Ref × Rat) := do
+  let y ← field j "y" >>= optRat
+  match fieldNat j "fact" with
+  | some i => some (.fact i, y)
+  | none => do
+    let c ← field j "coord"
+    let ai ← fieldNat c "axis"
+    let hi ← field c "hi" >>= boolOf
+    let at_ ← field c "at" >>= optRat
+    let opn ← field c "open" >>= boolOf
+    some (.coord ai hi at_ opn, y)
+
+/-- A refutation, as the certificate writes it. -/
+def refsOfJson (j : Json) : Option (List (Ref × Rat)) :=
+  (arr j) >>= (fun a => a.toList.mapM refOfJson)
+
+/-- The cover's leaves the linear model rules out, with the path to each. A leaf whose
+    refutation cannot be read is left out, and then nothing rules its box out: the cover
+    check fails there rather than passing over it. -/
+partial def farkasLeaves (c : Json) (path : Point) : List (Point × List (Ref × Rat)) :=
+  match field c "split" >>= arr with
+  | some kids => ((List.range kids.size).zip kids.toList).flatMap (fun (i, k) => farkasLeaves k (path ++ [i]))
+  | none =>
+    match field c "farkas" >>= refsOfJson with
+    | some rs => [(path, rs)]
+    | none => []
+
+/-- Coefficients over numbered values, from a linear form over names: `idx` says which number
+    a name has, and a name with none leaves the form unreadable. -/
+def denseOf (idx : String → Option Nat) (terms : List (String × Rat)) : Option (List Rat) :=
+  terms.foldlM (fun acc t => do let i ← idx t.1; some (vadd acc (unitAt i t.2))) []
+
 /-! ## One table -/
 
 /-- The span a pair of bounds describes: equal ends are one value, unequal ends the open
@@ -182,6 +221,7 @@ partial def coverOfJson : Option Json → Option Cover
       | none =>
         if (field c "upstream").isSome || (field c "constraint").isSome
           || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
+          || (field c "farkas").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -275,7 +315,8 @@ def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
           some { line := line, col := col, len := len, text := fieldStr x "text" }))
 
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
-    (declaredOf : String → Option Span2) (j : Json) : Option ReadTable := do
+    (declaredOf : String → Option Span2)
+    (factOf : Json → Option (List (String × Rat) × Rat × Bool)) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -310,13 +351,34 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     some (a, b, ax))
   let undec : List (Nat × Nat) := (fieldArr j "undecided").toList.filterMap (fun d => do
     let a ← fieldNat d "a"; let b ← fieldNat d "b"; some (a, b))
+  -- The table's linear model (§15.141): its facts, each built again from where the
+  -- certificate says it comes from, over the axes and then the model's other names.
+  let lin := (field j "linear").getD Json.null
+  let extra := (fieldArr lin "extra").toList.filterMap str
+  let idx : String → Option Nat := fun n =>
+    match columns.idxOf? n with
+    | some i => some i
+    | none => (extra.idxOf? n).map (columns.length + ·)
+  let facts ← (fieldArr lin "facts").toList.mapM (fun f => do
+    let (terms, k, strict) ← factOf f
+    let coeffs ← denseOf idx terms
+    some ({ coeffs := coeffs, k := k, strict := strict } : LinIneq))
+  let refuted : List (Nat × Nat × List (Ref × Rat)) := (fieldArr j "refuted").toList.filterMap (fun d => do
+    let a ← fieldNat d "a"; let b ← fieldNat d "b"
+    let rs ← field d "farkas" >>= refsOfJson
+    some (a, b, rs))
+  let leaves := match field j "cover" with
+    | some c => farkasLeaves c []
+    | none => []
   let wit : List (Nat × Point × List Rat) := (fieldArr j "reach").toList.filterMap (fun w => do
     let i ← fieldNat w "row"
     let at_ := (fieldArr w "at").toList.filterMap nat
     -- `at_values` is the machine-readable half of the witness: one number per axis, on
-    -- the axis's own scale, or `null` for a coordinate that stands for no number.
+    -- the axis's own scale, or `null` for a coordinate that stands for no number. The
+    -- model's other names follow, in the order `linear.extra` gives them.
     let vs := (fieldArr w "at_values").toList.map (fun v => (optRat v).getD 0)
-    some (i, at_, vs))
+    let xs := (fieldArr w "extra_values").toList.map (fun v => (optRat v).getD 0)
+    some (i, at_, vs ++ xs))
   let cover ← coverOfJson (field j "cover")
   let rowsRaw : List ReadRow := (fieldArr j "rows").toList.filterMap (fun r => do
     let i ← fieldNat r "row"
@@ -339,11 +401,13 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     -- claim falls back to the weaker reading rather than failing.
     valuesStated := (fieldArr j "reach").toList.all (fun w =>
       let vs := fieldArr w "at_values"
+      let xs := fieldArr w "extra_values"
       vs.size == axes.size &&
         (List.range axes.size).all (fun ai =>
           match (coords[ai]?).getD [] with
           | [] => true
-          | cs => cs.all (·.isNone) || !(vs[ai]!).isNull))
+          | cs => cs.all (·.isNone) || !(vs[ai]!).isNull) &&
+        (facts.isEmpty || (xs.size == extra.length && xs.all (fun x => !x.isNull))))
     kinds := axes.toList.map (fun a => fieldStr a "kind")
     steps := axes.toList.map (fun a => field a "step" >>= optRat)
     prefixes := axes.toList.map (fun a =>
@@ -362,10 +426,13 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                      let a ← field f "a"; let b ← field f "b"
                      let ai ← fieldNat a "axis"; let ac ← fieldNat a "coord"
                      let bi ← fieldNat b "axis"; let bc ← fieldNat b "coord"
-                     some ((ai, ac), (bi, bc))) }
+                     some ((ai, ac), (bi, bc)))
+                 facts := facts }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
-      undecided := fun a b => (undec.find? (fun u => u.1 == a && u.2 == b)).isSome } }
+      undecided := fun a b => (undec.find? (fun u => u.1 == a && u.2 == b)).isSome
+      refuted := fun a b => (refuted.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
+      farkasAt := fun p => (leaves.find? (fun l => l.1 == p)).map (fun l => l.2) } }
 
 end RulecCert

@@ -255,8 +255,8 @@ fn 制約で閉じた葉も検査される() {
         // The point for row 3 moved into the open coordinate on both axes and given
         // values the constraint forbids. Only the constraint can catch this.
         ("制約を破る値を渡す", cert.replace(
-            r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"]}"#,
-            r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"]}"#)),
+            r#"{"row":3,"at":[1,1],"values":{"全条件一致数":1,"会社名一致数":1},"at_values":["1","1"],"extra_values":[]}"#,
+            r#"{"row":3,"at":[2,2],"values":{"全条件一致数":500,"会社名一致数":3},"at_values":["500","3"],"extra_values":[]}"#)),
     ] {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
         let (code, said) = lean(&bin, &forged, Some(p.to_str().unwrap()));
@@ -335,4 +335,103 @@ fn 証明に穴が無い() {
             );
         }
     }
+}
+
+/// `#print axioms` on the theorems every claim rests on shows only the three Lean itself
+/// stands on — `propext`, `Classical.choice`, `Quot.sound`. A text search for `sorry` cannot
+/// see a gap a tactic leaves, nor an `axiom` declared somewhere it does not look; this asks
+/// Lean, which can.
+#[test]
+fn 定理が立つ公理は三つだけ() {
+    if checker().is_none() {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    }
+    let lake = std::env::var("HOME").map(|h| PathBuf::from(h).join(".elan/bin/lake")).ok().filter(|p| p.exists());
+    let Some(lake) = lake.or_else(|| {
+        Command::new("sh").args(["-c", "command -v lake"]).output().ok().filter(|o| o.status.success()).map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim().to_string()))
+    }) else {
+        eprintln!("skip: lake が無い");
+        return;
+    };
+    const THEOREMS: &[&str] = &[
+        "RulecCert.Certified.complete",
+        "RulecCert.Certified.reached",
+        "RulecCert.Certified.notExcluded",
+        "RulecCert.Certified.disjoint",
+        "RulecCert.Certified.disjointAsked",
+        "RulecCert.Certified.unique",
+        "RulecCert.farkas_sound",
+        "RulecCert.not_asked_of_farkas",
+        "RulecCert.admits_iff",
+        "RulecCert.mem_boxOf_cmp_iff",
+        "RulecCert.eval_type_of_typeOf",
+        "RulecCert.eval_mem_interval",
+        "RulecCert.runTotal_exact",
+    ];
+    let dir = std::env::temp_dir().join(format!("rulec-axioms-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Axioms.lean");
+    let mut src = String::from("import RulecCert\n");
+    for t in THEOREMS {
+        src.push_str(&format!("#print axioms {t}\n"));
+    }
+    std::fs::write(&file, src).unwrap();
+    let o = Command::new(&lake)
+        .current_dir(root().join("proofs"))
+        .args(["env", "lean", &file.to_string_lossy()])
+        .output()
+        .expect("lake を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(o.status.success(), "{said}");
+    let mut seen = 0;
+    for line in said.lines() {
+        if line.contains("does not depend on any axioms") {
+            seen += 1;
+        } else if let Some(rest) = line.split("depends on axioms: [").nth(1) {
+            seen += 1;
+            for ax in rest.trim_end_matches(']').split(',').map(str::trim) {
+                assert!(
+                    ["propext", "Classical.choice", "Quot.sound"].contains(&ax),
+                    "{line}: 三つのほかに `{ax}` に立っている"
+                );
+            }
+        }
+    }
+    assert_eq!(seen, THEOREMS.len(), "`#print axioms` の答えが揃っていない:\n{said}");
+}
+
+/// The same two rules through the proved checks: a box of the cover and a pair of rows the
+/// linear model rules out are proved by `not_asked_of_farkas`, and a changed multiplier is
+/// refused (§15.141).
+#[test]
+fn 線形のモデルの乗数は証明付きの検査器でも確かめられる() {
+    let Some(bin) = checker() else {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    };
+    let rules = [
+        ("gap", "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x     | -> y  |\n| <=50円 | -     | true  |\n| >50円  | >50円 | false |\n"),
+        ("overlap", "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x      | -> y  |\n| >50円  | -      | true  |\n| -      | <50円  | false |\n| <=50円 | >=50円 | false |\n"),
+    ];
+    let dir = std::env::temp_dir().join(format!("rulec-lean-chain-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (tag, src) in rules {
+        let p = dir.join(format!("{tag}.rule"));
+        std::fs::write(&p, src).unwrap();
+        let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+        assert_eq!(c, 0, "{cert}");
+        let (code, said) = lean(&bin, &cert, Some(p.to_str().unwrap()));
+        assert_eq!(code, 0, "{tag}: そのままの証明書が通らない:\n{said}");
+        assert!(said.contains("OK: every claim"), "{tag}: {said}");
+        if tag == "overlap" {
+            assert!(said.contains("(1 by the linear model)"), "{said}");
+        }
+        let forged = cert.replacen(r#"{"fact":6,"y":"#, r#"{"fact":5,"y":"#, 1);
+        assert_ne!(forged, cert, "{tag}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, None);
+        assert_eq!(code, 1, "{tag}: 別の事実を指した乗数が通ってしまった:\n{said}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

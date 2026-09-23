@@ -50,6 +50,9 @@ pub enum Origin {
     /// An atom of a contract, by its index in the list the caller keeps, and which of the
     /// inequalities it became: an equality is two (§15.140).
     Contract { atom: usize, part: usize },
+    /// One end of the coordinates a box allows on an axis: the lowest of their low ends, or
+    /// the highest of their high ends (§15.141).
+    Coord { axis: usize, hi: bool },
 }
 
 /// One inequality: `Σ c·x + k < 0` when `strict`, `<= 0` otherwise.
@@ -247,6 +250,16 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
         vars.push(n.clone());
         if let Some(l) = expr_of(&n).and_then(|e| linear(e, want, c)) {
             queue.extend(l.terms.keys().cloned());
+        }
+        // A `constraint` ties a name to another, and that one may be tied to a third: `a <= b`
+        // and `b <= x` say `a <= x` only with `b` in the system, though no table has a column
+        // for it (§15.141).
+        for k in &f.constraints {
+            if k.left == n {
+                queue.push(k.right.clone());
+            } else if k.right == n {
+                queue.push(k.left.clone());
+            }
         }
     }
     if vars.is_empty() {
@@ -542,11 +555,13 @@ fn between(lo: Option<(Rat, bool)>, hi: Option<(Rat, bool)>) -> Option<Rat> {
         _ => {}
     }
     // No whole value in it. The midpoint still satisfies the system, and a caller that needs
-    // a whole one can see that this is not.
+    // a whole one can see that this is not. An equality leaves a single value, which is the
+    // answer whether it is whole or not (§15.141).
     match (lo, hi) {
         (Some((l, _)), Some((h, _))) if l.checked_cmp(h)? == std::cmp::Ordering::Less => {
             l.checked_add(h)?.checked_div(Rat::int(2))
         }
+        (Some((l, false)), Some((h, false))) if l.checked_cmp(h)? == std::cmp::Ordering::Equal => Some(l),
         _ => None,
     }
 }
@@ -970,6 +985,18 @@ mod solve_tests {
         strict.push(v("b").plus(&Lin::con(Rat::int(-10))).le(true));
         let got = bounds(strict, "a").expect("決まるはず").expect("解があるはず");
         assert_eq!(got.1, Some((Rat::int(10), true)));
+    }
+
+    #[test]
+    fn 等式が決める一点は整数でなくても返す() {
+        // 2x = 41: the one value is 41/2.
+        let sys = vec![
+            v("x").scale(Rat::int(2)).plus(&Lin::con(Rat::int(-41))).le(false),
+            v("x").scale(Rat::int(2)).plus(&Lin::con(Rat::int(-41))).ge(false),
+        ];
+        let at = solve(sys.clone()).expect("解があるはず");
+        assert_eq!(at.get("x"), Some(&Rat::new(41, 2)));
+        assert!(holds(&sys, &at));
     }
 
     /// Where the answer is decidable, the two agree: a system a point comes back for is one

@@ -150,9 +150,10 @@ writes proof harnesses for [Kani](https://model-checking.github.io/kani/) beside
 behind `#[cfg(kani)]`, which decide over **every** input in the declared domain rather than
 over the test cases; on the corpus, 114 of them verify in 209 seconds. `rulec certificate`
 prints what all five proofs rest on — the boxes that tile the input space, the axis each pair
-of rows parts on, the interval every computed value is forced into, and where each cell stands
-in your file, down to the byte — and `tools/recheck.py`, one dependency-free file, holds it to
-those claims in milliseconds without asking the reader to search. And `proofs/` is a Lean 4
+of rows parts on (or, where only the derives and constraints together part it, multipliers
+that add up to a contradiction), the interval every computed value is forced into, and where
+each cell stands in your file, down to the byte — and `tools/recheck.py`, one dependency-free
+file, holds it to those claims in milliseconds without asking the reader to search. And `proofs/` is a Lean 4
 development proving that the checks a certificate has to pass imply the claims; writing it,
 and reading it back adversarially, found a soundness bug in the completeness check, a witness
 that could break the rule's own `constraint`, and eleven ways a forged certificate got past a

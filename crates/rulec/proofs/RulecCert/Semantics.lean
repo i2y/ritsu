@@ -121,6 +121,12 @@ def completeHolds (t : Table) : Prop :=
 def disjointHolds (t : Table) : Prop :=
   ∀ p, (t.firing p).length ≤ 1
 
+/-- **The same, for the points the rule is asked about.** Two rows whose boxes meet only
+    where no input arrives — which the linear model can show where the axes cannot — answer
+    one point each all the same (§15.141). -/
+def disjointAskedHolds (t : Table) : Prop :=
+  ∀ p, inSpace t.arities p = true → t.asked p → (t.firing p).length ≤ 1
+
 /-- **What reachability claims**, for the rows it is claimed of: each of them answers
     somewhere (E102). Under `first` a row that an earlier row always beats answers nowhere,
     so the point has to be one no earlier row takes — and "earlier" is read against the

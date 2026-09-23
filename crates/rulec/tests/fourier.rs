@@ -158,3 +158,34 @@ fn 型の違う列があっても消去は効く() {
     let ds = codes(&dated(50_000, 1_000));
     assert!(ds.iter().any(|c| c == "W114" || c == "E105"), "起きる重なりが黙って消えた: {ds:?}");
 }
+
+/// A chain of constraints through an input no table has a column for (§15.141). `a <= b` and
+/// `b <= x` say `a <= x`, but only with `b` in the system: the sieve reads each constraint on
+/// its own against the declared ranges, and reported a gap at `a = 51, x = 0` and an overlap
+/// at the same place — inputs the door refuses. The gap and the overlap that do exist stay.
+pub fn chained(rows: &str) -> String {
+    format!(
+        "rule 連なる制約(chain) v1\n\n\
+         inputs\n  \
+           a(a) : money[円]  range >=0円 <=100円\n  \
+           b(b) : money[円]  range >=0円 <=100円\n  \
+           x(x) : money[円]  range >=0円 <=100円\n\n\
+         constraint a <= b\nconstraint b <= x\n\n\
+         outputs\n  y(y) : bool\n\n\
+         table 表(t)\npolicy unique\n| a | x | -> y |\n{rows}"
+    )
+}
+
+#[test]
+fn 列でない入力を経て連なる制約で_穴も重なりも決まる() {
+    // Complete only with the chain: a > 50 forces x > 50.
+    let gap = chained("| <=50円 | -      | true  |\n| >50円  | >50円  | false |\n");
+    assert!(codes(&gap).is_empty(), "起きない穴を出した: {:?}", codes(&gap));
+    // Unique only with the chain: rows 1 and 2 meet where a > 50 and x < 50.
+    let overlap = chained("| >50円  | -      | true  |\n| -      | <50円  | false |\n| <=50円 | >=50円 | false |\n");
+    assert!(codes(&overlap).is_empty(), "起きない重なりを出した: {:?}", codes(&overlap));
+    // Take the chain's second link away and both are real.
+    let open = |src: String| src.replace("constraint b <= x\n", "");
+    assert!(codes(&open(gap)).contains(&"E101".to_string()), "起きる穴が黙って消えた");
+    assert!(codes(&open(overlap)).contains(&"E105".to_string()), "起きる重なりが黙って消えた");
+}

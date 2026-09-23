@@ -560,15 +560,20 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   if t.ruledOut.length > 0 then
     r := r.state s!"{t.ruledOut.length} rows of {t.name} the sieve rules out"
     notes := notes.push s!"{t.ruledOut.length} the sieve rules out (stated, not proved)"
-  -- E105
+  -- E105. A pair the axes part meets at no point at all; a pair the linear model parts
+  -- meets at no point the rule is asked about (§15.141), which is what `unique` needs.
   if C.policy == Policy.unique then
-    if C.pairChecks then
+    if C.pairAskedChecks then
       let undec := (C.rows.flatMap (fun a => C.rows.filterMap (fun b =>
         if C.undecided a.index b.index then some (a.index, b.index) else none)))
-      if undec.isEmpty then notes := notes.push "no two rows meet"
+      let byModel := (C.rows.flatMap (fun a => C.rows.filterMap (fun b =>
+        if a.index < b.index && (C.told a.index b.index).isNone && (C.refuted a.index b.index).isSome
+        then some (a.index, b.index) else none))).length
+      let apart := if byModel > 0 then s!" ({byModel} by the linear model)" else ""
+      if undec.isEmpty then notes := notes.push s!"no two rows meet{apart}"
       else
         r := r.state s!"{undec.length} pairs of {t.name} the axes do not part"
-        notes := notes.push s!"{undec.length} pairs undecided (not re-checked)"
+        notes := notes.push s!"{undec.length} pairs undecided (not re-checked){apart}"
     else
       r := r.fail s!"{t.name}: two rows are neither proved apart nor named as undecided"
   let (r', tiled) := checkAxes t r
@@ -609,9 +614,48 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       match (objPairs groupsJson).find? (fun p => p.1 == n) with
       | some (_, v) => ((arr v).getD #[]).toList.filterMap str
       | none => []
+    -- The facts of a table's linear model, each built again from where the certificate
+    -- says it comes from (§15.141): a `derive`'s expression, one end of a declared range, a
+    -- `constraint`. What cannot be built leaves the table unread rather than a fact missing.
+    let typesJson := (field cert "types").getD Json.null
+    let types : String → Option Ty := fun n =>
+      (objPairs typesJson).find? (fun p => p.1 == n) |>.bind (fun p => str p.2 >>= tyOfString)
+    let valuesJ := fieldArr cert "values"
+    let consJ := fieldArr cert "constraints"
+    let rangeEnd : String → Bool → Option Rat := fun n hi =>
+      match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
+      | some (_, v) => (arr v) >>= (fun a => a[if hi then 1 else 0]?) >>= optRat
+      | none => none
+    let factOf : Json → Option (List (String × Rat) × Rat × Bool) := fun f =>
+      match field f "derive" >>= str with
+      | some n => do
+          let v ← valuesJ.find? (fun v => fieldStr v "name" == n)
+          let want ← field v "type" >>= str >>= tyOfString
+          let e ← field v "expr" >>= exprOfJson
+          let (terms, k) ← linOf types want e
+          let le ← field f "le" >>= boolOf
+          let d := (n, (1 : Rat)) :: terms.map (fun t => (t.1, -t.2))
+          if le then some (d, -k, false) else some (d.map (fun t => (t.1, -t.2)), k, false)
+      | none =>
+        match field f "range" >>= str with
+        | some n => do
+            let hi ← field f "hi" >>= boolOf
+            let e ← rangeEnd n hi
+            if hi then some ([(n, 1)], -e, false) else some ([(n, -1)], e, false)
+        | none => do
+            let i ← fieldNat f "constraint"
+            let k ← consJ[i]?
+            let l := fieldStr k "left"
+            let r := fieldStr k "right"
+            match fieldStr k "op" with
+            | "<=" => some ([(l, 1), (r, -1)], 0, false)
+            | "<" => some ([(l, 1), (r, -1)], 0, true)
+            | ">=" => some ([(l, -1), (r, 1)], 0, false)
+            | ">" => some ([(l, -1), (r, 1)], 0, true)
+            | _ => none
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
-      match readTable reachOf groups declaredRange tj with
+      match readTable reachOf groups declaredRange factOf tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r

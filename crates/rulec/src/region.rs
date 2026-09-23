@@ -248,6 +248,14 @@ pub struct TableRegion {
     /// The rule's `constraint` lines (§15.55). A box that no input satisfying them can reach
     /// is not a gap and not an overlap: it is a combination the caller says does not happen.
     constraints: Vec<crate::ast::Constraint>,
+    /// The rule's linear model around this table's numeric axes (§15.141): the defining
+    /// equation of every linear `derive` the axes reach, the declared ranges, and every
+    /// `constraint`, closed over the names they tie together — one system for each type of
+    /// number. The sieve reads a constraint on its own and a derived axis against its own
+    /// range; the model reads them together, which is what a chain of constraints through
+    /// an input no table has a column for needs. Empty when it would say nothing the ranges
+    /// do not.
+    model: Vec<crate::fourier::Ground>,
 }
 
 fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {
@@ -1064,6 +1072,12 @@ impl TableRegion {
             unreachable_row.push(only_unreachable);
             masks.push(m);
         }
+        let seed: Vec<String> =
+            col_names.iter().zip(&axes).filter(|(_, a)| matches!(a, Axis::Num { .. })).map(|(n, _)| n.clone()).collect();
+        let model: Vec<crate::fourier::Ground> = crate::fourier::grounds(&seed, f, c)
+            .into_iter()
+            .filter(|g| g.sys.iter().any(|q| matches!(q.origin, crate::fourier::Origin::Derive { .. } | crate::fourier::Origin::Constraint(_))))
+            .collect();
         Some(TableRegion {
             axes,
             col_names,
@@ -1077,7 +1091,102 @@ impl TableRegion {
             masks,
             unanalyzable,
             constraints: f.constraints.clone(),
+            model,
         })
+    }
+
+    /// The coordinates a path allows on each axis: the one it takes where it has fixed one,
+    /// every one where it has not.
+    pub(crate) fn path_box(&self, path: &[usize]) -> Vec<Vec<usize>> {
+        (0..self.axes.len())
+            .map(|ai| match path.get(ai) {
+                Some(&c) => vec![c],
+                None => (0..self.axes[ai].len()).collect(),
+            })
+            .collect()
+    }
+
+    /// The coordinates two rows both take on each axis.
+    pub(crate) fn pair_box(&self, i: usize, j: usize) -> Vec<Vec<usize>> {
+        (0..self.axes.len())
+            .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[i][ai][c] && self.masks[j][ai][c]).collect())
+            .collect()
+    }
+
+    /// The two ends a set of coordinates allows on a numeric axis, each with whether it is
+    /// left out: the lowest of their low ends, left out only when every coordinate that
+    /// reaches it leaves it out, and the same at the top. `None` inside for an end that is
+    /// not there.
+    #[allow(clippy::type_complexity)]
+    fn ends_of(&self, ai: usize, cs: &[usize]) -> Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)> {
+        use std::cmp::Ordering::*;
+        let Axis::Num { coords, .. } = &self.axes[ai] else { return None };
+        let mut ends: Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)> = None;
+        for &c in cs {
+            let (a, b) = match coords.get(c)? {
+                Coord::Point(v) => (Some((*v, false)), Some((*v, false))),
+                Coord::Open(a, b) => (a.map(|x| (x, true)), b.map(|x| (x, true))),
+            };
+            ends = Some(match ends {
+                None => (a, b),
+                Some((lo, hi)) => (
+                    match (lo, a) {
+                        (Some((x, xs)), Some((y, ys))) => Some(match x.cmp_to(y) {
+                            Less => (x, xs),
+                            Greater => (y, ys),
+                            Equal => (x, xs && ys),
+                        }),
+                        _ => None,
+                    },
+                    match (hi, b) {
+                        (Some((x, xs)), Some((y, ys))) => Some(match x.cmp_to(y) {
+                            Greater => (x, xs),
+                            Less => (y, ys),
+                            Equal => (x, xs && ys),
+                        }),
+                        _ => None,
+                    },
+                ),
+            });
+        }
+        ends
+    }
+
+    /// A refutation of a box on the linear model (§15.141): the model's facts, and the two
+    /// ends of the coordinates the box allows on each numeric axis. `None` when the model is
+    /// empty or leaves the box possible.
+    pub(crate) fn refute_box(&self, bx: &[Vec<usize>]) -> Option<crate::fourier::Refutation> {
+        use crate::fourier::{Lin, Origin, Refutation};
+        for g in &self.model {
+            let mut sys = g.sys.clone();
+            for (ai, name) in self.col_names.iter().enumerate() {
+                if !g.vars.contains(name) {
+                    continue;
+                }
+                let Some((lo, hi)) = bx.get(ai).and_then(|cs| self.ends_of(ai, cs)) else { continue };
+                let off = |x: Rat| Lin::var(name).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some((x, strict)) = lo {
+                    sys.push(off(x).ge(strict).tag(Origin::Coord { axis: ai, hi: false }));
+                }
+                if let Some((x, strict)) = hi {
+                    sys.push(off(x).le(strict).tag(Origin::Coord { axis: ai, hi: true }));
+                }
+            }
+            if let Some(r) = Refutation::of(sys) {
+                return Some(r);
+            }
+        }
+        None
+    }
+
+    /// Whether the linear model rules out the whole of what two rows both take.
+    fn refutes_pair(&self, i: usize, j: usize) -> bool {
+        !self.model.is_empty() && self.refute_box(&self.pair_box(i, j)).is_some()
+    }
+
+    /// Whether the linear model rules out the whole of the box a path fixes.
+    fn refutes_path(&self, path: &[usize]) -> bool {
+        !self.model.is_empty() && self.refute_box(&self.path_box(path)).is_some()
     }
 
     fn intersects(&self, i: usize, j: usize) -> bool {
@@ -1135,7 +1244,7 @@ impl TableRegion {
             // whenever the corner happened to be impossible — a `constraint` that forbids
             // (甲=1, 乙=0) hid the gap at (甲=1, 乙=1), and `check` said ok while the generated
             // code hit its own `unreachable!`.
-            return self.first_reachable(path, ups, chk, budget);
+            return self.first_reachable(path, ups, chk, budget, true);
         }
         if ai == self.axes.len() {
             return None;
@@ -1167,18 +1276,23 @@ impl TableRegion {
     /// common case; the walk below only runs where that is not enough, and it is charged to
     /// the same budget as the rest of the search, so an overrun becomes E109 rather than a
     /// silent pass.
+    ///
+    /// With `linear`, a point the sieve lets through is also held to the rule's linear model
+    /// (§15.141), and one the model rules out is no gap either. The cover's point-by-point
+    /// leaf walks without it, because that leaf is re-checked by walking the sieve alone.
     fn first_reachable(
         &self,
         path: &[usize],
         ups: &[Upstream],
         chk: &Checked,
         budget: &mut i64,
+        linear: bool,
     ) -> Option<Vec<usize>> {
-        if self.feasible(path) == Feasible::No {
+        if self.feasible(path) == Feasible::No || (linear && self.refutes_path(path)) {
             return None;
         }
         let mut p = path.to_vec();
-        self.first_reachable_rec(&mut p, ups, chk, budget)
+        self.first_reachable_rec(&mut p, ups, chk, budget, linear)
     }
 
     fn first_reachable_rec(
@@ -1187,13 +1301,14 @@ impl TableRegion {
         ups: &[Upstream],
         chk: &Checked,
         budget: &mut i64,
+        linear: bool,
     ) -> Option<Vec<usize>> {
         *budget -= 1;
         if *budget < 0 {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) {
+            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) || (linear && self.refutes_path(p)) {
                 return None;
             }
             return Some(p.clone());
@@ -1202,7 +1317,7 @@ impl TableRegion {
         for c in 0..self.axes[ai].len() {
             p.push(c);
             let keep = self.feasible(p) != Feasible::No;
-            let got = if keep { self.first_reachable_rec(p, ups, chk, budget) } else { None };
+            let got = if keep { self.first_reachable_rec(p, ups, chk, budget, linear) } else { None };
             p.pop();
             if got.is_some() {
                 return got;
@@ -1242,7 +1357,7 @@ impl TableRegion {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) {
+            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) || self.refutes_path(p) {
                 return None;
             }
             return Some(p.clone());
@@ -1315,7 +1430,12 @@ impl TableRegion {
 
     /// The same witness, as `(column, value)` pairs in the table's visible column order.
     fn witness_pairs(&self, path: &[usize]) -> Vec<(String, crate::diag::WVal)> {
-        let vals = self.witness_values(path);
+        self.witness_pairs_with(path, self.witness_values(path))
+    }
+
+    /// The same, with the values behind the point already chosen: a certificate hands over
+    /// the ones it solved, and the pairs a reader can paste have to be that same point.
+    fn witness_pairs_with(&self, path: &[usize], vals: Option<Vec<Option<Rat>>>) -> Vec<(String, crate::diag::WVal)> {
         let mut items: Vec<(usize, (String, crate::diag::WVal))> = (0..self.axes.len())
             .map(|ai| {
                 let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
@@ -1720,6 +1840,11 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     for i in 0..t.rows.len() {
         for j in (i + 1)..t.rows.len() {
             if !reg.intersects(i, j) {
+                continue;
+            }
+            // The rule's linear model rules the whole of what both rows take out: no input
+            // satisfying its derives and constraints reaches both (§15.141).
+            if reg.refutes_pair(i, j) {
                 continue;
             }
             // **A point of the intersection nothing rules out, not its first corner.** The
@@ -2901,7 +3026,12 @@ pub struct CertTable {
     /// point stands for, and the same input as plain numbers on the axes' own scale. The
     /// last of these is what a re-checker can compare with the bounds (§15.97); the one
     /// before it is what a reader can put in a fixture.
-    pub reach: Vec<(usize, Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>)>,
+    ///
+    /// Where the table has a linear model, the values come from solving it, and the values of
+    /// the model's other names (`model_extra`, in that order) come with them: the point has to
+    /// satisfy the model as well as the coordinates (§15.141).
+    #[allow(clippy::type_complexity)]
+    pub reach: Vec<(usize, Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>, Vec<Option<Rat>>)>,
     /// Rows a `apply` brought in that this rule's own bindings leave unused (§15.69). They
     /// are outside the reachability claim, and the certificate says which they are rather
     /// than passing over them.
@@ -2919,6 +3049,16 @@ pub struct CertTable {
     /// on them is settled by a coordinate test; the facts themselves are earned back from
     /// the rows of the tables that decide the columns (§15.115).
     pub above: Vec<AboveFact>,
+    /// The table's linear model (§15.141): its facts, by where each came from — a `derive`'s
+    /// equation, a declared range, a `constraint` — in the order a refutation counts them.
+    /// A re-checker builds each one again from the rule rather than reading it here.
+    pub model: Vec<crate::fourier::Origin>,
+    /// The names the model's facts use that are not columns of this table, in the order a
+    /// point's values for them are given.
+    pub model_extra: Vec<String>,
+    /// The pairs the axes do not part and the model does: nothing that satisfies it reaches
+    /// both rows, and the multipliers say why (§15.141).
+    pub refuted: Vec<(usize, usize, crate::fourier::Refutation)>,
 }
 
 /// The certificate of one definition set (§15.96), or nothing when the set has no region to
@@ -3075,20 +3215,50 @@ impl TableRegion {
         }
         undecided.sort_unstable();
         undecided.dedup();
+        // Unless the model rules out what both rows take, and then the multipliers that
+        // say so are the proof (§15.141).
+        let mut refuted = Vec::new();
+        if !self.model.is_empty() {
+            undecided.retain(|&(a, b)| match self.refute_box(&self.pair_box(a - 1, b - 1)) {
+                Some(r) => {
+                    refuted.push((a, b, r));
+                    false
+                }
+                None => true,
+            });
+        }
+        let model: Vec<crate::fourier::Origin> = self.model.iter().flat_map(|g| g.sys.iter().map(|q| q.origin.clone())).collect();
+        let mut model_extra: Vec<String> = self
+            .model
+            .iter()
+            .flat_map(|g| g.vars.iter().cloned())
+            .filter(|n| !self.col_names.iter().zip(&self.axes).any(|(c, a)| c == n && matches!(a, Axis::Num { .. })))
+            .collect();
+        model_extra.sort();
+        model_extra.dedup();
 
         let (mut reach, mut unused, mut unreachable) = (Vec::new(), Vec::new(), Vec::new());
         let mut left = crate::region::DEFAULT_BUDGET;
         for ri in 0..t.rows.len() {
             match self.reach_point(ri, unique, &mut left) {
                 Some(p) => {
-                    let input = self.witness_pairs(&p);
-                    // The values behind the point, solved against the constraints. Where no
-                    // assignment was found the certificate states none, and a re-checker
-                    // falls back to the weaker reading and says which one it used (§15.99).
-                    let nums = self
-                        .witness_values(&p)
-                        .unwrap_or_else(|| vec![None; self.axes.len()]);
-                    reach.push((ri + 1, p, input, nums));
+                    // The values behind the point, solved against the constraints — or,
+                    // where there is a linear model, against the model. Where no assignment
+                    // was found the certificate states none, and a re-checker falls back to
+                    // the weaker reading and says which one it used (§15.99).
+                    let (nums, extra, input) = match self.model_values(&p, &model_extra) {
+                        Some((nums, extra)) => {
+                            let input = self.witness_pairs_with(&p, Some(nums.clone()));
+                            (nums, extra, input)
+                        }
+                        None if self.model.is_empty() => (
+                            self.witness_values(&p).unwrap_or_else(|| vec![None; self.axes.len()]),
+                            Vec::new(),
+                            self.witness_pairs(&p),
+                        ),
+                        None => (vec![None; self.axes.len()], vec![None; model_extra.len()], self.witness_pairs(&p)),
+                    };
+                    reach.push((ri + 1, p, input, nums, extra));
                 }
                 None if applied.get(ri).copied().unwrap_or(false) => unused.push(ri + 1),
                 // The sieve rules out every point of the row. E102 does not sieve, so
@@ -3118,7 +3288,54 @@ impl TableRegion {
             },
             cover,
             constraints: self.constraint_list(),
+            model,
+            model_extra,
+            refuted,
         }
+    }
+
+    /// The values behind a point that satisfy the linear model (§15.141): each of its systems
+    /// solved with the point's coordinates held, the axes' values in axis order and the
+    /// others' in the order `extra` names them. `None` when there is no model, or a system
+    /// could not be solved.
+    #[allow(clippy::type_complexity)]
+    fn model_values(&self, p: &[usize], extra: &[String]) -> Option<(Vec<Option<Rat>>, Vec<Option<Rat>>)> {
+        use crate::fourier::{Lin, Origin};
+        if self.model.is_empty() {
+            return None;
+        }
+        let bx = self.path_box(p);
+        let mut at: BTreeMap<String, Rat> = BTreeMap::new();
+        for g in &self.model {
+            let mut sys = g.sys.clone();
+            for (ai, name) in self.col_names.iter().enumerate() {
+                if !g.vars.contains(name) {
+                    continue;
+                }
+                let Some((lo, hi)) = self.ends_of(ai, &bx[ai]) else { continue };
+                let off = |x: Rat| Lin::var(name).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some((x, strict)) = lo {
+                    sys.push(off(x).ge(strict).tag(Origin::Coord { axis: ai, hi: false }));
+                }
+                if let Some((x, strict)) = hi {
+                    sys.push(off(x).le(strict).tag(Origin::Coord { axis: ai, hi: true }));
+                }
+            }
+            let got = crate::fourier::solve(sys.clone())?;
+            // Hold the answer to every inequality before handing it on: a point that misses
+            // one is a witness to nothing.
+            if !sys.iter().all(|q| q.holds_at(&got) == Some(true)) {
+                return None;
+            }
+            at.extend(got);
+        }
+        let axes = (0..self.axes.len())
+            .map(|ai| match &self.axes[ai] {
+                Axis::Num { .. } => at.get(&self.col_names[ai]).copied().or_else(|| self.axes[ai].witness_num(p[ai], None)),
+                _ => None,
+            })
+            .collect();
+        Some((axes, extra.iter().map(|n| at.get(n).copied()).collect()))
     }
 
     /// A coordinate point that reaches a row: inside its box, feasible, and — under
@@ -3141,7 +3358,7 @@ impl TableRegion {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No {
+            if self.feasible(p) == Feasible::No || self.refutes_path(p) {
                 return None;
             }
             if !unique && (0..ri).any(|k| (0..self.axes.len()).all(|a| self.masks[k][a][p[a]])) {
@@ -3185,6 +3402,9 @@ pub enum Cover {
     /// like any other leaf; otherwise the leaf is bare and is **stated, not proved**
     /// (§15.115).
     ByUpstream(String, Option<Apart>),
+    /// The rule's linear model has no solution anywhere in the box, and the multipliers that
+    /// say so (§15.141).
+    ByFarkas(crate::fourier::Refutation),
 }
 
 impl TableRegion {
@@ -3212,29 +3432,7 @@ impl TableRegion {
             return None;
         }
         if rows.is_empty() {
-            // The reason has to hold for the **whole box**, not for one point of it
-            // (§15.98): an axis the path has not fixed keeps its declared range, which is
-            // what `span_of_name` does when the path is short.
-            for (k, con) in self.constraints.iter().enumerate() {
-                if self.constraint_impossible(con, path) {
-                    return Some(Cover::ByConstraint(k));
-                }
-            }
-            for ai2 in 0..path.len() {
-                if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, path) {
-                    return Some(Cover::ByDerived(ai2));
-                }
-            }
-            if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
-                return Some(Cover::ByUpstream(self.witness_text(path), self.apart_at(path, ups, chk)));
-            }
-            // Point by point, then: the box is only impossible when every point in it is.
-            if self.first_reachable(path, ups, chk, budget).is_none() {
-                return Some(Cover::ByPoints);
-            }
-            // A hole. `check` reports it as E101 and the rule does not pass, so there is no
-            // certificate to write.
-            return None;
+            return self.empty_cover(path, ups, chk, budget);
         }
         if ai == self.axes.len() {
             return Some(Cover::Row(rows[0] + 1));
@@ -3247,6 +3445,56 @@ impl TableRegion {
             let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
             path.push(c);
             let k = self.cover_rec(&sub, ai + 1, path, ups, chk, budget);
+            path.pop();
+            kids.push(k?);
+        }
+        Some(Cover::Split(kids))
+    }
+
+    /// The cover of a box no row takes (§15.98, §15.141). The reason has to hold for the
+    /// **whole box**, not for one point of it: an axis the path has not fixed keeps its
+    /// declared range, which is what `ends_of_name` does when the path is short. The reasons
+    /// are tried in order — a `constraint` that cannot hold anywhere in the box, a derived
+    /// axis outside its own reach, the tables above, the rule's linear model, and the sieve
+    /// point by point — and where none holds for the whole box but the model may rule its
+    /// parts out, the box is split on its next axis and each part covered the same way. A
+    /// point no reason covers is a gap: `check` reports it as E101 and the rule does not
+    /// pass, so there is no certificate to write.
+    fn empty_cover(&self, path: &mut Vec<usize>, ups: &[Upstream], chk: &Checked, budget: &mut i64) -> Option<Cover> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        for (k, con) in self.constraints.iter().enumerate() {
+            if self.constraint_impossible(con, path) {
+                return Some(Cover::ByConstraint(k));
+            }
+        }
+        for ai2 in 0..path.len() {
+            if self.derived[ai2].is_some() && self.derived_out_of_reach(ai2, path) {
+                return Some(Cover::ByDerived(ai2));
+            }
+        }
+        if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
+            return Some(Cover::ByUpstream(self.witness_text(path), self.apart_at(path, ups, chk)));
+        }
+        if !self.model.is_empty() {
+            if let Some(r) = self.refute_box(&self.path_box(path)) {
+                return Some(Cover::ByFarkas(r));
+            }
+        }
+        // Point by point, then: the box is only impossible when every point in it is.
+        if self.first_reachable(path, ups, chk, budget, false).is_none() {
+            return Some(Cover::ByPoints);
+        }
+        if path.len() == self.axes.len() || self.model.is_empty() {
+            return None;
+        }
+        let ai = path.len();
+        let mut kids = Vec::with_capacity(self.axes[ai].len());
+        for c in 0..self.axes[ai].len() {
+            path.push(c);
+            let k = self.empty_cover(path, ups, chk, budget);
             path.pop();
             kids.push(k?);
         }
