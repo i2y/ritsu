@@ -75,6 +75,14 @@ impl Load {
 /// Convert a JSON value into the `Val` of the declared type. On the wire, numbers are
 /// integers in the canonical unit (§10.1).
 pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String> {
+    to_val_as(j, ty, c, name, None)
+}
+
+/// [`to_val`], with the integer read the way `then` — another version of the rule — wrote
+/// it: at that version's step and in its unit, and brought to this one's (§15.145). A record
+/// carries no step and no unit of its own, so one written before either changed can only be
+/// read by naming the version that wrote it.
+pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Checked>) -> Result<Val, String> {
     let inner = match ty {
         Ty::Opt(t) => {
             if *j == Json::Null {
@@ -109,7 +117,10 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
         (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, Json::Int(n)) => {
             // The wire carries an integer in the canonical unit; a rate carries a count of
             // steps (§10.2). The range was declared in true values, so convert first.
-            let v = crate::types::from_wire(*n, c.wire_scale(name));
+            let v = match then {
+                Some(t) => read_as(*n, name, &inner, t)?,
+                None => crate::types::from_wire(*n, c.wire_scale(name)),
+            };
             if let Some((lo, hi)) = c.ranges.get(name) {
                 if lo.is_some_and(|l| v.cmp_to(l) == std::cmp::Ordering::Less)
                     || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater)
@@ -131,6 +142,35 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
             Ok(Val::Num(v))
         }
         (_, got) => Err(tr!("{} を期待しましたが {} でした", "expected {}, found {}", ty_word(&inner), got.kind())),
+    }
+}
+
+/// An integer another version of the rule wrote, read at that version's step and in its
+/// unit, then brought to the unit `now` counts in. `円` and `銭` are one dimension and
+/// convert; two currencies, or a rate and an amount, do not.
+fn read_as(n: i128, name: &str, now: &Ty, then: &Checked) -> Result<Rat, String> {
+    let was = match then.ty_of(name) {
+        Some(Ty::Opt(t)) => *t,
+        Some(t) => t,
+        None => return Err(tr!("読む版の規則に {name} がありません", "the version the records are read as has no {name}")),
+    };
+    let v = crate::types::from_wire(n, then.wire_scale(name));
+    // One of the unit a type counts in, in the base unit of its dimension.
+    let one = |ty: &Ty| -> Option<(Option<String>, Rat)> {
+        let unit = match ty {
+            Ty::Money { cur, .. } => cur,
+            Ty::Qty { unit, .. } => unit,
+            _ => return None,
+        };
+        crate::lex::number(&format!("1{unit}")).and_then(|(num, _)| crate::types::comparable(&num))
+    };
+    match (one(&was), one(now)) {
+        (Some((d1, b1)), Some((d2, b2))) if d1 == d2 => Ok(v.mul(b1).div(b2)),
+        (None, None) if std::mem::discriminant(&was) == std::mem::discriminant(now) => Ok(v),
+        _ => Err(tr!(
+            "読む版の {name} は {was} で、いまは {now} なので、値を移せません",
+            "{name} is {was} in the version the records are read as and {now} now, and a value does not carry across"
+        )),
     }
 }
 
@@ -234,6 +274,12 @@ impl Manifest {
 /// Read and validate the JSONL. **Broken records are reported, not discarded.** Dropping
 /// them silently shrinks the denominator, which makes the agreement rate look higher (§10.3).
 pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
+    load_as(src, f, c, m, None)
+}
+
+/// [`load`], with every number read the way `then` — the version that wrote the records —
+/// wrote it (§15.145).
+pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>) -> Load {
     let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0 };
     for (li, raw) in src.lines().enumerate() {
         let line = li + 1;
@@ -299,7 +345,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
             let name = &i.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
             match ins.get(name) {
-                Some(v) => match to_val(v, &ty, c, name) {
+                Some(v) => match to_val_as(v, &ty, c, name, then) {
                     Ok(v) => {
                         input.insert(name.clone(), v);
                     }
@@ -335,7 +381,7 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
             let name = &o.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
             match obs.get(name) {
-                Some(v) => match to_val(v, &ty, c, name) {
+                Some(v) => match to_val_as(v, &ty, c, name, then) {
                     Ok(v) => {
                         observed.insert(name.clone(), v);
                     }

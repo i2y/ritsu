@@ -535,6 +535,7 @@ fn commands() -> Vec<Cmd> {
             flags: vec![
                 flag("--manifest", Some("<m.json>"), tr!("フィールドが欠けた記録を補完する既定値の宣言", "the declaration of the default values that fill a missing field")),
                 flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（送料@v3 のような git の版も書ける）。刻みや単位を変える前に書いた記録を読み直すため", "read the records at the steps and units of this version of the rule (a git version such as 送料@v3 works too): for records written before a step or a unit changed")),
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
@@ -560,6 +561,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録（必須）", "the past records (required)")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言", "the declaration of the default values used for filling")),
                 flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（送料@v3 のような git の版も書ける）。刻みや単位を変える前に書いた記録を読み直すため", "read the records at the steps and units of this version of the rule (a git version such as 送料@v3 works too): for records written before a step or a unit changed")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
                 flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
             ],
@@ -632,6 +634,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。付けなければ、入力の全体で比べる", "the past records; with none, the two versions are compared over the whole input space")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言（--fixtures のとき）", "the declaration of the default values used for filling (with --fixtures)")),
                 flag("--fill", Some("<フィールド=値>"), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
+                flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（--fixtures のとき）", "read the records at the steps and units of this version of the rule (with --fixtures)")),
                 flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかを出さずにそう言う（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
                 flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないため、無いときは領域だけを短く出すため", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),
@@ -1672,13 +1675,36 @@ fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
         eprintln!("{}", tr!("error: `{jsonl}` を読めません", "error: cannot read `{jsonl}`"));
         return ExitCode::from(2);
     };
-    let l = rulec::fixtures::load(&src, &f, &c, &m);
+    let then = match read_as(a, &f) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let l = rulec::fixtures::load_as(&src, &f, &c, &m, then.as_ref());
     if json {
         println!("{}", rulec::fixtures::render_lint_json(&l, jsonl));
     } else {
         print!("{}", rulec::fixtures::render_lint(&l, jsonl));
     }
     ExitCode::from(u8::from(!l.problems.is_empty()))
+}
+
+/// `--read-as <file.rule[@rev]>`: the version of the rule the records were written by, whose
+/// steps and units their numbers are read at (§15.145). It has to be the same rule.
+fn read_as(a: &Args, f: &rulec::ast::RuleFile) -> Result<Option<rulec::types::Checked>, String> {
+    let Some(spec) = a.get("--read-as") else { return Ok(None) };
+    let (_, then, tc) = load_rule(spec)?;
+    if then.name.text != f.name.text {
+        return Err(tr!(
+            "`{spec}` は別の規則です（`{}` と `{}`）",
+            "`{spec}` is another rule (`{}` and `{}`)",
+            then.name.text,
+            f.name.text
+        ));
+    }
+    Ok(Some(tc))
 }
 
 /// §10.3: apply the rule to past records and compare against the values produced at the time.
@@ -1688,20 +1714,21 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     if json && terse {
         return terse_with_json();
     }
-    let r = (|| -> Result<(String, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
+    let r = (|| -> Result<(Option<rulec::types::Checked>, rulec::ast::RuleFile, rulec::types::Checked, rulec::fixtures::Manifest, String, String), String> {
         let (_, f, c) = load_rule(rule)?;
         let m = build_manifest(a, &f, &c)?;
         let (path, src) = fixtures_arg(a)?;
-        Ok((String::new(), f, c, m, path, src))
+        let then = read_as(a, &f)?;
+        Ok((then, f, c, m, path, src))
     })();
-    let (_, f, c, m, path, src) = match r {
+    let (then, f, c, m, path, src) = match r {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");
             return ExitCode::from(2);
         }
     };
-    let l = rulec::fixtures::load(&src, &f, &c, &m);
+    let l = rulec::fixtures::load_as(&src, &f, &c, &m, then.as_ref());
     let rep = rulec::replay::replay(&f, &c, &l, &m, &path);
     if json {
         println!("{}", rulec::report::render_json(&rep, &f, &c));
@@ -1732,6 +1759,16 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
             );
             return ExitCode::from(2);
         }
+    }
+    if opts.has("--read-as") {
+        eprintln!(
+            "{}",
+            tr!(
+                "error: --read-as は --fixtures と一緒にしか使えません。記録の読み方を指定する引数です",
+                "error: --read-as needs --fixtures: it says how to read records"
+            )
+        );
+        return ExitCode::from(2);
     }
     let r = (|| -> Result<_, String> {
         let (_, of, oc) = load_rule_with(a, true)?;
@@ -1814,7 +1851,14 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let l = rulec::fixtures::load(&src, &nf, &nc, &m);
+    let then = match read_as(opts, &nf) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let l = rulec::fixtures::load_as(&src, &nf, &nc, &m, then.as_ref());
     let rep = rulec::replay::diff((&of, &oc), (&nf, &nc), &l, &m, (a, b));
     let _ = path;
     if json {

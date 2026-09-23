@@ -172,6 +172,17 @@ impl Report {
     pub fn compared_nothing(&self) -> bool {
         self.total <= self.errored && self.filled_total == 0
     }
+
+    /// What to say when records were thrown out for their format and nothing was left: the
+    /// likeliest cause is a step or a unit that changed since they were written (§15.145).
+    fn read_as_hint(&self) -> Option<String> {
+        (self.compared_nothing() && self.excluded.iter().any(|(k, ..)| *k == "bad_format")).then(|| {
+            tr!(
+                "刻みや単位を変える前に書いた記録なら、`--read-as <規則>@<版>` でその版の読み方で読めます。",
+                "If the records were written before a step or a unit changed, `--read-as <rule>@<rev>` reads them the way that version wrote them."
+            )
+        })
+    }
 }
 
 /// Thousands separators. An amount means nothing if the reader cannot count its digits.
@@ -432,6 +443,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
     }
     if rep.compared_nothing() {
         o.push_str(&tr!("照合できた記録はありません。\n", "Not one record was compared.\n"));
+        if let Some(h) = rep.read_as_hint() {
+            o.push_str(&h);
+            o.push('\n');
+        }
     } else if rep.mismatches.is_empty() {
         o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
     } else {
@@ -508,6 +523,11 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
     }
     if rep.compared_nothing() {
         o.push_str(&tr!("\n照合できた記録はありません。\n", "\nNot one record was compared.\n"));
+        if let Some(h) = rep.read_as_hint() {
+            o.push('\n');
+            o.push_str(&h);
+            o.push('\n');
+        }
     } else if rep.mismatches.is_empty() {
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
     } else {

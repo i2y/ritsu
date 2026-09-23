@@ -498,3 +498,64 @@ fn 一件も照合できなければ1で終わる() {
     assert!(out.contains("Not one record was compared") && !out.contains("No mismatches"), "{out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+
+/// Records written before a step or a unit changed are read the way the version that wrote
+/// them wrote them (§15.145). A rate kept in whole percents against a rule that now counts
+/// tenths, and an amount in yen against one that counts sen: without `--read-as` every record
+/// is thrown out and the run says how to read them, with it they agree — named by a file, or
+/// by the git revision that holds the old version.
+#[test]
+fn 刻みや単位を変える前の記録は書いた版で読める() {
+    let dir = setup("read-as");
+    let old = "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction)\n\ninputs\n  区分(kind) : 区分\n\noutputs\n  料率(rate) : rate[step 1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 1%] |\n| 一般 | 1% |\n| 建設 | 2% |\n";
+    let new = old.replace("rate[step 1%]  round down(1%)", "rate[step 0.1%]  round down(0.1%)").replace("-> 料率 : rate[step 1%]", "-> 料率 : rate[step 0.1%]");
+    std::fs::write(dir.join("old.rule"), old).unwrap();
+    std::fs::write(dir.join("new.rule"), &new).unwrap();
+    std::fs::write(dir.join("rec.jsonl"), "{\"in\":{\"区分\":\"一般\"},\"observed\":{\"料率\":1}}\n{\"in\":{\"区分\":\"建設\"},\"observed\":{\"料率\":2}}\n").unwrap();
+    let (c, out, _) = rulec_in(&dir, &["replay", "new.rule", "--fixtures", "rec.jsonl", "--lang", "en"]);
+    assert_eq!(c, 1, "{out}");
+    assert!(out.contains("--read-as"), "読み方を案内していない:\n{out}");
+    let (c, out, e) = rulec_in(&dir, &["replay", "new.rule", "--fixtures", "rec.jsonl", "--read-as", "old.rule", "--lang", "en"]);
+    assert_eq!(c, 0, "{out}{e}");
+    assert!(out.contains("Compared 2 / matched 2"), "{out}");
+    let (c, out, e) = rulec_in(&dir, &["fixtures", "lint", "rec.jsonl", "new.rule", "--read-as", "old.rule"]);
+    assert_eq!(c, 0, "{out}{e}");
+
+    // Yen to sen: one dimension, a hundred times the integer.
+    let yen = "rule 送料(fee) v1\n\nenum 地域(region) = 関東(kanto) | 近畿(kinki)\n\ninputs\n  あて先(dest) : 地域\n\noutputs\n  送料(fee) : money[円]  round down(1円)\n\ntable 表(t)\npolicy unique\n| あて先 | -> 送料 : money[円] |\n| 関東 | 800円 |\n| 近畿 | 1000円 |\n";
+    std::fs::write(dir.join("yen.rule"), yen).unwrap();
+    std::fs::write(dir.join("sen.rule"), yen.replace("money[円]  round down(1円)", "money[銭]  round down(1銭)").replace("-> 送料 : money[円]", "-> 送料 : money[銭]")).unwrap();
+    std::fs::write(dir.join("yen.jsonl"), "{\"in\":{\"あて先\":\"関東\"},\"observed\":{\"送料\":800}}\n").unwrap();
+    let (c, out, e) = rulec_in(&dir, &["replay", "sen.rule", "--fixtures", "yen.jsonl", "--read-as", "yen.rule", "--lang", "en"]);
+    assert_eq!(c, 0, "{out}{e}");
+    assert!(out.contains("Compared 1 / matched 1"), "{out}");
+    // Another rule altogether is refused, and so is the flag where there are no records.
+    let (c, _, e) = rulec_in(&dir, &["replay", "sen.rule", "--fixtures", "yen.jsonl", "--read-as", "old.rule"]);
+    assert_eq!(c, 2, "{e}");
+    let (c, _, e) = rulec_in(&dir, &["diff", "yen.rule", "sen.rule", "--read-as", "yen.rule"]);
+    assert_eq!(c, 2, "{e}");
+
+    // The old version named by its git revision, the way `diff` names one.
+    if which("git").is_some() {
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| {
+            let o = Command::new("git").current_dir(&repo).args(args).output().expect("git");
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "-q", "."]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(repo.join("rate.rule"), old).unwrap();
+        git(&["add", "rate.rule"]);
+        git(&["commit", "-qm", "whole percents"]);
+        std::fs::write(repo.join("rate.rule"), &new).unwrap();
+        git(&["commit", "-qam", "tenths"]);
+        std::fs::copy(dir.join("rec.jsonl"), repo.join("rec.jsonl")).unwrap();
+        let (c, out, e) = rulec_in(&repo, &["replay", "rate.rule", "--fixtures", "rec.jsonl", "--read-as", "rate.rule@HEAD~1", "--lang", "en"]);
+        assert_eq!(c, 0, "{out}{e}");
+        assert!(out.contains("Compared 2 / matched 2"), "{out}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

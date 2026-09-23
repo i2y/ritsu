@@ -799,6 +799,16 @@ A field the rule does not know is an error, not something to ignore — discardi
 would turn a misspelling into "filled with the default value", and only the match rate would
 move.
 
+**A record does not say what its integers count.** They are in the steps and the units of the
+version of the rule that wrote them, so a record written before a declared step or unit
+changed no longer reads as what it meant: its values fall outside the declared ranges and
+the record is excluded. `--read-as <file.rule[@rev]>` (on `fixtures lint`, `replay`, and
+`diff` with records) reads every number at the steps and in the units of that version — a
+file, or a git revision such as `rules/料率.rule@v1` — and brings it to this one's: a rate
+kept in whole percents is read as the rate it was, yen become sen. It has to be the same
+rule. A replay that compared nothing because every record was excluded says so and exits 1
+(§15.144, §15.145).
+
 **Fixtures are not committed to a repository**: they hold order amounts. Pass them to CI as
 an artifact or from protected storage.
 
