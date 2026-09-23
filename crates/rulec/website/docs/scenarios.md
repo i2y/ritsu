@@ -572,8 +572,10 @@ business rule also says which values it takes. The two are written by different 
 different files, and when they drift apart nobody notices.
 
 When a contract changes, a tool like `buf breaking` checks that the change is compatible on
-the wire. Nothing checks that **the business decisions it feeds still hold**. rulec checks
-that, from the rule's side. The lead role here is the **contract**, and nothing has to be
+the wire. Whether **the business decisions it feeds still hold** is left out, and by design:
+`buf breaking` does not read custom options such as Protovalidate's rules, and adding a value
+to a request enum is not a breaking change to it or to oasdiff. We have found no tool that
+checks it. rulec checks that, from the rule's side. The lead role here is the **contract**, and nothing has to be
 generated.
 
 ![An agent binds a rule's table (.rule) to the API contract (a .proto with Protovalidate, OpenAPI or a JSON Schema): shape and from say where in the contract each input comes from, and an import ties an enum to the contract's set of values. Whenever the contract or the rule changes, rulec check in CI holds the two together and returns a field that was renamed, an enum value that was added, and a value the contract lets through that the rule refuses, with that value. Whether the contract or the rule is the side to change is a person's decision](images/scenario-contract.svg#only-dark)

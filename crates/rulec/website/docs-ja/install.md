@@ -1,6 +1,6 @@
 # インストール
 
-rulec はランタイムも外部依存も持たない一つのバイナリです。リリースごとに macOS（arm64、x64）と Linux（x64、arm64）の静的バイナリを、それぞれの SHA-256 と一緒に[リリースのページ](https://github.com/i2y/rulec/releases)に置いています。
+rulec はランタイムも外部依存も持たない一つのバイナリです。リリースごとに macOS（arm64、x64）と Linux（x64、arm64）のバイナリを、それぞれの SHA-256 と一緒に[リリースのページ](https://github.com/i2y/rulec/releases)に置いています。Linux 版は静的にリンクしてあり、macOS 版がリンクするのは、どの Mac にもあるシステムのライブラリだけです。
 
 ## リリースのバイナリ
 

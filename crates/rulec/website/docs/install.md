@@ -1,9 +1,10 @@
 # Install
 
 rulec is one binary with no runtime and no external dependencies. Every
-release publishes a static binary for macOS (arm64, x64) and Linux (x64,
-arm64), with the SHA-256 of each beside it, on the
-[releases page](https://github.com/i2y/rulec/releases).
+release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64),
+with the SHA-256 of each beside it, on the
+[releases page](https://github.com/i2y/rulec/releases). The Linux ones are
+statically linked; the macOS ones link only the system library every Mac has.
 
 ## The release binary
 

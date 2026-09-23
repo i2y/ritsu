@@ -147,9 +147,9 @@ Four things it does **not** prove, and they are kept beside the word:
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
    and that implementation has not been proved correct. The evidence is 94 deliberately broken
-   rules (`tests/mutants/`) each producing the diagnostic it should, 36 rules transcribed from
-   real published terms passing on every commit, and the reference evaluator agreeing with
-   twelve languages. **Evidence, not proof**
+   rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
+   transcriptions of published terms and statutes among them — passing on every commit, and
+   the reference evaluator agreeing with twelve languages. **Evidence, not proof**
 
 For the Rust, a second tool reads what was generated: `gen` writes proof harnesses for
 [Kani](https://model-checking.github.io/kani/), and over every input in the declared domain

@@ -1,6 +1,7 @@
 name: release
 
-# A tag `v*` builds one static binary per platform, checks that the tag is the
+# A tag `v*` builds one binary per platform (static on Linux; on macOS linked only to
+# the system library), checks that the tag is the
 # crate's own version, and publishes the archives with their SHA-256 sums as a
 # GitHub Release (DESIGN §12, §15.42). `action.yml` at the root of the
 # repository installs one of them onto a runner, and the install page says

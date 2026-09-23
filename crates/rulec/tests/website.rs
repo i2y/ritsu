@@ -851,11 +851,11 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 11;
+    const WRITTEN: usize = 26;
     for (page, want) in [
         ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
-        ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from real published terms, {WRITTEN} written", n - WRITTEN)),
-        ("website/docs-ja/assurance.md", format!("**規則 {n} 本**（{} 本は実物の規約や法令からの転記、{WRITTEN} 本は", n - WRITTEN)),
+        ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),
+        ("website/docs-ja/assurance.md", format!("**規則 {n} 本**（{} 本は公開されている出典からの転記、{WRITTEN} 本は", n - WRITTEN)),
         ("website/docs-ja/index.md", format!("規則 **{n} 本**")),
         ("website/docs/generate.md", format!("On the corpus of {n} rules")),
     ] {

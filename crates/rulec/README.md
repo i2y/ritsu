@@ -163,8 +163,9 @@ re-checker.
 
 ## Install
 
-One binary, no runtime. Every release publishes a static binary for macOS (arm64, x64) and
-Linux (x64, arm64), with the SHA-256 of each beside it:
+One binary, no runtime. Every release publishes a binary for macOS (arm64, x64) and Linux
+(x64, arm64), with the SHA-256 of each beside it. The Linux ones are statically linked; the
+macOS ones link only the system library every Mac has:
 
 ```console
 $ v=v0.18.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
@@ -214,10 +215,10 @@ error[E101]: Completeness gap: some input matches no row
  The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
 
-**No legacy implementation and no past data are needed for that.** Every command carries
-`--format json`, where a finding is data — `where`, `witness`, `rows`, `fix` — with the keys
-fixed in English whatever language `--lang` puts the prose in. An unknown flag is refused with
-exit 2 rather than ignored. Every diagnostic is defined once, in `src/codes.rs`, and
+**No legacy implementation and no past data are needed for that.** Every command that reports
+findings carries `--format json` (all but `source` and `import`), where a finding is data —
+`where`, `witness`, `rows`, `fix` — with the keys fixed in English whatever language `--lang`
+puts the prose in. An unknown flag is refused with exit 2 rather than ignored. Every diagnostic is defined once, in `src/codes.rs`, and
 [`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` output.
 
 ## In CI
@@ -278,19 +279,19 @@ tests/            and the properties: threeway (every language agrees), readme, 
                   playground answers what the binary answers)
 ```
 
-47 rules — 36 taken from real published terms, 11 written to reach the rest of the language — are checked, generated and run on every commit, and all 83 diagnostics are implemented.
+47 rules — 21 transcribed from a published source, 26 written to reach the rest of the language — are checked, generated and run on every commit, and all 83 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as
 e-Gov publishes them, the premium tables of 協会けんぽ and 日本年金機構, GOV.UK's minimum wage,
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
 Regulations as the eCFR publishes them, and PayPal's own merchant fees — or are sketches
-written to reach the corners of the language, two of them in English. None of it is private
+written to reach the corners of the language, three of them in English. None of it is private
 data. The two premium tables are also held,
 grade by grade, to the amounts printed in them.
 
 ```console
-$ cargo test          # 519 tests; python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
+$ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
 ```
 
 ## Where to read next
@@ -314,9 +315,17 @@ twice is how one of the copies goes stale.
 
 The decision-table semantics and the hit-policy vocabulary are borrowed from DMN, and the
 detection of overlap and gaps follows the formulation of Calvanese et al. Not borrowed: the
-XML interchange format, the runtime engine, the GUI modeller. What DMN does not cover — units,
-rounding, code generation for several languages, replay against past records — is where this
-tool differs.
+XML interchange format, the runtime engine, the GUI modeller.
+
+Proving a table free of gaps and overlaps is older than DMN — SCR and PVS did it in the 1990s
+— and today most rules engines, Catala's proof plugin and LF-ET check it too; the neighbours
+are laid out, with where each one stops, on
+[the site](https://i2y.github.io/rulec/#what-else-is-out-there). What this tool adds is
+narrower. The checks hand over evidence that another program re-checks, with the checks
+proved in Lean to imply the claims, and an API's contract is held to the rule's inputs, so a
+change that is compatible on the wire and breaks the decision fails in CI. Units and rounding
+in the types, twelve targets with no dependencies, and replay against past records are the
+assembly around those two.
 
 ## License
 
