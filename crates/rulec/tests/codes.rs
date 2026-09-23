@@ -99,7 +99,7 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     }
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
-    assert_eq!(all.len(), 85, "台帳の件数が変わった: {}", all.len());
+    assert_eq!(all.len(), 86, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -188,6 +188,21 @@ fn helpが名指しするコードは台帳にある() {
         }
     }
     assert!(named >= 30, "どの help もコードを名指ししていない");
+}
+
+/// And the other way round: every code in the ledger is on `check`'s page, and on `gen`'s,
+/// which prints check's findings when it refuses to generate. A list kept by hand falls
+/// behind the ledger, so the pages take theirs from it.
+#[test]
+fn 台帳のコードは全部checkとgenのhelpにある() {
+    for c in ["check", "gen"] {
+        let (_, page) = run(&[c, "--help", "--lang", "en"]);
+        let tail = page.split("Diagnostics it can print").nth(1).and_then(|t| t.split(":\n").nth(1)).unwrap_or("");
+        let named: Vec<&str> = tail.split_whitespace().collect();
+        for code in ledger_codes() {
+            assert!(named.contains(&code), "`rulec {c} --help` に {code} が無い");
+        }
+    }
 }
 
 // ── The reference (docs/reference.md) ────────────────────────────────────

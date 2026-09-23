@@ -1143,6 +1143,24 @@ def box_from_cells(t, row, groups):
             if not all(any(p == w for p in ps if p is not None) for w in cell["words"]):
                 raise Bad(f"{t['table']}: {axis['column']} is tested on a prefix it has no coordinate for")
             out.append([i for i, p in enumerate(ps) if p is not None and any(p.startswith(w) for w in cell["words"])])
+        elif kind in ("in", "not_in"):
+            # A set of numbers: each value is a point of the axis, so a coordinate is taken
+            # when it is one of those points (or, for `not`, when it is none of them).
+            tests = [("=", num(v)) for v in cell["values"]]
+            if any(v is None for _, v in tests):
+                return None
+            if not axis_splits(axis, tests):
+                raise Bad(
+                    f"{axis['column']}: the cell names a value that falls inside a coordinate, "
+                    f"so the axis does not stand for what the cell says")
+            hit = []
+            for i in range(len(coords)):
+                b = bounds[i]
+                if b is None:
+                    return None
+                if any(coord_admits((num(b[0]), num(b[1])), op, v) for op, v in tests):
+                    hit.append(i)
+            out.append(hit if kind == "in" else [i for i in range(len(coords)) if i not in set(hit)])
         elif kind == "cmp":
             tests = [(x["op"], num(x["value"])) for x in cell["tests"]]
             if any(v is None for _, v in tests):
@@ -1589,6 +1607,11 @@ def cell_agrees(t, axis, row, shape, st):
         if kind != "none":
             raise Bad(f"{where}: the file says `none`, the certificate reads it as `{kind}`")
         return 0
+    if shape[0] in ("is", "not") and kind in ("in", "not_in"):
+        # A set of numbers: the same members, in the same order, each the value it names.
+        if kind != ("in" if shape[0] == "is" else "not_in") or len(shape[1]) != len(st["values"]):
+            raise Bad(f"{where}: the values in the file are not the ones the certificate states")
+        return sum(literal_agrees(where, axis, w, v) for w, v in zip(shape[1], st["values"]))
     if shape[0] in ("is", "not", "prefix"):
         if kind != shape[0] or list(st.get("words", [])) != shape[1]:
             raise Bad(f"{where}: the words in the file are not the ones the certificate states")

@@ -861,3 +861,17 @@ fn wasiの項は実際に組めて同じ答えを返す() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A rate's rounding grid is written the way the rate travels, in its steps — the scale
+/// `range` is on. It used to be the grid as a fraction cut to an integer, so the `round
+/// down(1%)` of the corpus's income tax came out as `"grid":0`.
+#[test]
+fn 率の丸めの刻みは段で書く() {
+    let j = api("tests/corpus/uk_income_tax.rule");
+    for lang in ["python", "typescript", "rust"] {
+        let o = arr(j.get(lang).unwrap(), "outputs").iter().find(|o| s(o, "name") == "rate").expect("rate が無い");
+        let r = o.get("rounding").expect("rounding が無い");
+        assert_eq!(r.get("grid").and_then(|g| g.as_int()), Some(1), "{lang}");
+        assert_eq!(o.get("range").and_then(|g| g.get("max")).and_then(|m| m.as_int()), Some(45), "{lang}: 範囲と同じ目盛り");
+    }
+}

@@ -106,6 +106,8 @@ pub enum FixKind {
     /// Protovalidate option or JSON Schema keywords to write on the field, as they are written
     /// there (§15.132).
     NarrowContract,
+    /// One literal as it has to be written: `1,000円` becomes `1000円` (E049).
+    RewriteLiteral,
     /// No single mechanical edit is right. The reason is in the notes.
     None,
 }
@@ -126,6 +128,7 @@ impl FixKind {
             FixKind::PinSource => "pin_source",
             FixKind::FlipBound => "flip_bound",
             FixKind::NarrowContract => "narrow_contract",
+            FixKind::RewriteLiteral => "rewrite_literal",
             FixKind::None => "none",
         }
     }

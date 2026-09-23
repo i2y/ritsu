@@ -298,6 +298,14 @@ fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec
                 push(v, &mut set);
             }
         }
+        // Each member of a set is a point of its own, as a single value is.
+        if let Some(Cell::Set(ls) | Cell::Not(ls)) = row.cells.get(ci) {
+            for l in ls {
+                if let Some(v) = lit_rat(l, want) {
+                    push(v, &mut set);
+                }
+            }
+        }
     }
     // A boundary a cell names beyond the declared range is not a coordinate: the range is
     // the universe, and what lies outside it no input reaches. Left in, an interval between
@@ -783,6 +791,40 @@ fn span_of_value(up: &Upstream, c: &Checked, val: &str, col: &str) -> Option<Cer
     }
 }
 
+/// Which coordinates of an axis one literal selects: the enum value or the group it names, the
+/// truth value, the point a number or a date is.
+fn lit_mask(axis: &Axis, l: &Lit, ty: &Ty, c: &Checked) -> Vec<bool> {
+    let mut v = vec![false; axis.len()];
+    match (axis, l) {
+        (Axis::Enum { values }, Lit::Word(w)) => {
+            for (i, val) in values.iter().enumerate() {
+                if val == w {
+                    v[i] = true;
+                }
+            }
+            if let Some((_, members)) = c.groups.get(w) {
+                for (i, val) in values.iter().enumerate() {
+                    if members.contains(val) {
+                        v[i] = true;
+                    }
+                }
+            }
+        }
+        (Axis::Bool, Lit::Word(w)) => v[if w == crate::kw::TRUE { 0 } else { 1 }] = true,
+        (Axis::Num { coords, .. }, l) => {
+            if let Some(x) = lit_rat(l, &ty) {
+                for (i, cd) in coords.iter().enumerate() {
+                    if matches!(cd, Coord::Point(p) if p.cmp_to(x) == std::cmp::Ordering::Equal) {
+                        v[i] = true;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    v
+}
+
 /// Which coordinates of an axis a cell selects.
 ///
 /// Pulled out of the region build so the same reading can be applied to a cell from **another**
@@ -812,50 +854,14 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
                     }
                 }
             }
-            Some(Cell::Lit(l)) => match (axis, l) {
-                (Axis::Enum { values }, Lit::Word(w)) => {
-                    for (i, val) in values.iter().enumerate() {
-                        if val == w {
-                            v[i] = true;
-                        }
-                    }
-                    if let Some((_, members)) = c.groups.get(w) {
-                        for (i, val) in values.iter().enumerate() {
-                            if members.contains(val) {
-                                v[i] = true;
-                            }
-                        }
-                    }
-                }
-                (Axis::Bool, Lit::Word(w)) => v[if w == crate::kw::TRUE { 0 } else { 1 }] = true,
-                (Axis::Num { coords, .. }, l) => {
-                    if let Some(x) = lit_rat(l, &ty) {
-                        for (i, cd) in coords.iter().enumerate() {
-                            if matches!(cd, Coord::Point(p) if p.cmp_to(x) == std::cmp::Ordering::Equal) {
-                                v[i] = true;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            },
+            Some(Cell::Lit(l)) => v = lit_mask(axis, l, ty, c),
+            // A set is its members taken together, on any axis — a column of numbers as much as
+            // an enum: `100, 200` used to take no coordinate at all there, so the row was
+            // unreachable (E102) and the table short of it.
             Some(Cell::Set(ls)) | Some(Cell::Not(ls)) => {
-                if let Axis::Enum { values } = axis {
-                    for l in ls {
-                        if let Lit::Word(w) = l {
-                            for (i, val) in values.iter().enumerate() {
-                                if val == w {
-                                    v[i] = true;
-                                }
-                            }
-                            if let Some((_, members)) = c.groups.get(w) {
-                                for (i, val) in values.iter().enumerate() {
-                                    if members.contains(val) {
-                                        v[i] = true;
-                                    }
-                                }
-                            }
-                        }
+                for l in ls {
+                    for (x, m) in v.iter_mut().zip(lit_mask(axis, l, ty, c)) {
+                        *x |= m;
                     }
                 }
                 if matches!(cell, Some(Cell::Not(_))) {
@@ -2998,6 +3004,10 @@ pub enum CertCell {
     /// `starts_with "ABC"` — the prefixes the cell names (§15.101).
     Prefix(Vec<String>),
     Cmp(Vec<(&'static str, Option<Rat>)>),
+    /// `100, 200` on a column of numbers: the values, each a point of the axis.
+    In(Vec<Option<Rat>>),
+    /// `not: 100, 200`.
+    NotIn(Vec<Option<Rat>>),
 }
 
 /// What the certificate says about one table.
@@ -3094,6 +3104,13 @@ fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
         Some(Cell::Nothing) => CertCell::Nothing,
         Some(Cell::Lit(Lit::Word(w))) => CertCell::Is(vec![w.clone()]),
         Some(Cell::Lit(l)) => CertCell::Cmp(vec![("=", ty.as_ref().and_then(|t| lit_rat(l, t)))]),
+        // A set of numbers or dates is its values; one of words is its words.
+        Some(Cell::Set(ls)) if ls.iter().all(|l| matches!(l, Lit::Num(_) | Lit::Date(..))) => {
+            CertCell::In(ls.iter().map(|l| ty.as_ref().and_then(|t| lit_rat(l, t))).collect())
+        }
+        Some(Cell::Not(ls)) if ls.iter().all(|l| matches!(l, Lit::Num(_) | Lit::Date(..))) => {
+            CertCell::NotIn(ls.iter().map(|l| ty.as_ref().and_then(|t| lit_rat(l, t))).collect())
+        }
         Some(Cell::Set(ls)) => CertCell::Is(ls.iter().map(word).collect()),
         Some(Cell::Not(ls)) => CertCell::Not(ls.iter().map(word).collect()),
         Some(Cell::Prefix(ps)) => CertCell::Prefix(ps.clone()),

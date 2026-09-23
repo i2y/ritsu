@@ -954,7 +954,9 @@ pub fn witness_inputs(f: &RuleFile, c: &Checked, pick: Pick) -> HashMap<String, 
 pub fn unrounded_output(f: &RuleFile, c: &Checked) -> Option<Rat> {
     // Look for a witness that produces a fraction first. If none does, return the value of
     // the first witness (the rule then really produces no fraction, and the wording of E104
-    // branches accordingly).
+    // branches accordingly). A fraction is one of the grid the output is stored on: a whole
+    // yen, a whole gram, one step of a rate — 0.5% is no fraction of `rate[step 0.1%]`.
+    let scale = f.outputs.first().map(|o| c.wire_scale(&o.name.text)).unwrap_or(1);
     let mut first = None;
     let picks = [
         Pick::Mid(0),
@@ -968,7 +970,7 @@ pub fn unrounded_output(f: &RuleFile, c: &Checked) -> Option<Rat> {
     for pick in picks {
         let (v, _) = run_raw(f, c, witness_inputs(f, c, pick));
         if let Some(Val::Num(r)) = v {
-            if !r.is_int() {
+            if !r.mul(Rat::int(scale)).is_int() {
                 return Some(r);
             }
             first.get_or_insert(r);

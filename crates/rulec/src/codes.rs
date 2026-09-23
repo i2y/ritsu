@@ -254,6 +254,8 @@ const X_E046: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) :
 clause 例外(exception) -> x\n  then true\n";
 const X_E047: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax\n\n\
 outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E049: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=5000円\n\n\
+outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a         | -> x  |\n| <=1,000円 | true  |\n| >1,000円  | false |\n";
 const X_E048: &str = "rule t(t) v1\n\ninputs\n  甲(a) : temperature[℃]  range >=0℃ <=40℃\n  \
 乙(b) : temperature[℃]  range >=0℃ <=40℃\n\noutputs\n  x(x) : bool\n\n\
 derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃\n\n\
@@ -1138,6 +1140,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E011", "E103", "E104"],
         ),
         err(
+            "E049",
+            tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"),
+            tr!(
+                "数を `1,000` や `1,949,000円` のように、1〜3 桁のあとに `,` と 3 桁の組を続けて書いたとき。`,` はセルの中で集合の要素を区切る記号なので、そのままでは二つ以上の値に読まれます。いままでは黙ってそう読んでいて、数の列の `<=1,000` は `<=1` として検査を通り、金額の列では `1` に単位が無いという的外れな E103 で止まっていました。文書の数字をそのまま写すと、ここに当たります。",
+                "A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000円`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here."
+            ),
+            tr!(
+                "カンマを外して `1000` と書いてください。桁を区切りたいときは `1_000` と書けます。`fix.text` が書き直したリテラルです。",
+                "Take the commas out and write `1000`; to group the digits, write `1_000`. `fix.text` is the literal rewritten."
+            ),
+            X_E049,
+            &["E014", "E103"],
+        ),
+        err(
             "E048",
             tr!("この型には足し算も掛け算もありません", "This type has no arithmetic"),
             tr!(
@@ -1364,14 +1380,14 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E116",
-            tr!("行の金額が、引いた写しにありません", "A row's amount is not in the copy it cites"),
+            tr!("行の金額が、引いた写しに無いか、別の見出しの下にあります", "A row's amount is not in the copy it cites, or is under another heading there"),
             tr!(
-                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき（§15.82）。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
-                "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
+                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき（§15.82）。行のセルの語（`関東`）と一字一句同じ見出しが写しにあれば、その見出しの行と列の中だけを探します。隣の行の金額は写しのどこかにはあるので、表全体を探したのでは取り違えを見逃すからです（§15.143）。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しの `5/1,000` や `1,000分の5` は 0.5% と読みます。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
+                "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`関東`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. A copy's `5/1,000` or `1,000分の5` reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
             ),
             tr!(
-                "写しを読み直して金額を直してください。一桁の打ち間違いなら、たいてい同時に W120 が出て、どの値が使われずに残っているかを言います。値が別のところ（後の通知、正誤表、人の回答）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。`rulec doc` がそのコメントを承認する人に見せます。",
-                "Reread the copy and correct the amount. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver."
+                "写しを読み直して金額を直してください。別の見出しの下にあると言われたら、行を取り違えています。一桁の打ち間違いなら、たいてい同時に W120 が出て、どの値が使われずに残っているかを言います。値が別のところ（後の通知、正誤表、人の回答）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。`rulec doc` がそのコメントを承認する人に見せます。",
+                "Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver."
             ),
             X_E116,
             &["W120", "E038", "E107"],

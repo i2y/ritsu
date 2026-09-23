@@ -210,6 +210,9 @@ awk '{ sub(/^  注文日\(order_date\) : date/, "  range(order_date) : date"); p
 awk '{ print } /^  注文日\(order_date\)/ { print ""; print "derive 差(gap) : date = 注文日 - 注文日  range >=2026-01-01 <=2026-12-31" }' "$k" > "$M/m_e048.rule"
 # A word after the range that belongs to no modifier. It used to be dropped in silence.
 awk '{ sub(/range >=1cm <=170cm/, "range >=1cm <=170cm incl_tax"); print }'         "$y" > "$M/m_e047.rule"
+# A threshold copied the way the document prints it, with a thousands separator. `,` separates
+# the members of a set, so it used to read as two values and pass (§15.143).
+awk '{ sub(/\| 遠隔地      \| <=2000g \|/, "| 遠隔地      | <=2,000g |"); print }'        "$C/送料.rule" > "$M/m_e049.rule"
 # A rate off the step its own column declares: it has no runtime representation.
 awk '{ sub(/18\.3%/, "18.35%"); print }'                          "$C/厚生年金保険料.rule" > "$M/m_e114.rule"
 # `policy first` on a table whose rows do not overlap: the order is claimed to matter and

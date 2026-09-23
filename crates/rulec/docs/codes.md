@@ -53,6 +53,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E045](#e045) | error | A table that shares an output has two or more output columns |
 | [E046](#e046) | error | A `clause` is not shaped like this |
 | [E047](#e047) | error | Extra token after the declaration |
+| [E049](#e049) | error | A thousands separator cannot be written |
 | [E048](#e048) | error | This type has no arithmetic |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
@@ -69,7 +70,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
 | [E114](#e114) | error | A cell value does not sit on the column's step |
 | [E115](#e115) | error | Cannot divide by a variable |
-| [E116](#e116) | error | A row's amount is not in the copy it cites |
+| [E116](#e116) | error | A row's amount is not in the copy it cites, or is under another heading there |
 | [E117](#e117) | error | A share without what a share needs |
 | [E118](#e118) | error | The call is not written correctly |
 | [E120](#e120) | error | A `from` does not fit the input's type |
@@ -1555,6 +1556,34 @@ policy unique
 
 Related codes: [E011](#e011), [E103](#e103), [E104](#e104)
 
+## E049
+
+`error` — **A thousands separator cannot be written**
+
+**When.** A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000円`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here.
+
+**Fix.** Take the commas out and write `1000`; to group the digits, write `1_000`. `fix.text` is the literal rewritten.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円]  range >=0円 <=5000円
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a         | -> x  |
+| <=1,000円 | true  |
+| >1,000円  | false |
+```
+
+Related codes: [E014](#e014), [E103](#e103)
+
 ## E048
 
 `error` — **This type has no arithmetic**
@@ -2036,11 +2065,11 @@ Related codes: [E103](#e103), [E108](#e108)
 
 ## E116
 
-`error` — **A row's amount is not in the copy it cites**
+`error` — **A row's amount is not in the copy it cites, or is under another heading there**
 
-**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
+**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`関東`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. A copy's `5/1,000` or `1,000分の5` reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
 
-**Fix.** Reread the copy and correct the amount. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver.
+**Fix.** Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver.
 
 **Smallest reproduction**:
 

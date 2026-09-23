@@ -570,12 +570,25 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             if grids.is_empty() {
                 continue;
             }
-            let shown: Vec<_> = grids.iter().flat_map(|(_, g)| crate::extract::shown(g)).collect();
-            let missing: Vec<(String, Span)> = amounts(r)
-                .into_iter()
-                .filter(|(_, v, _)| !shown.iter().any(|s| crate::types::same_value(s, v)))
-                .map(|(text, _, span)| (text, span))
-                .collect();
+            // Where an amount of this row belongs in a copy: under every heading that says a
+            // word of the row's own (`関東`), when the copy has one — so that the amount of the
+            // next row down is not taken for this one's — and anywhere in it otherwise.
+            let words = row_words(r);
+            let under = |g: &[Vec<String>], v: &(Option<String>, crate::num::Rat)| -> Vec<String> {
+                words
+                    .iter()
+                    .filter(|w| {
+                        crate::extract::under(g, w).is_some_and(|m| {
+                            !crate::extract::shown_where(g, |ri, ci| m[ri][ci]).iter().any(|s| crate::types::same_value(s, v))
+                        })
+                    })
+                    .cloned()
+                    .collect()
+            };
+            let in_copy = |v: &(Option<String>, crate::num::Rat)| grids.iter().any(|(_, g)| crate::extract::shown(g).iter().any(|s| crate::types::same_value(s, v)));
+            let placed = |v: &(Option<String>, crate::num::Rat)| grids.iter().any(|(_, g)| crate::extract::shown(g).iter().any(|s| crate::types::same_value(s, v)) && under(g, v).is_empty());
+            let missing: Vec<(String, (Option<String>, crate::num::Rat), Span)> =
+                amounts(r).into_iter().filter(|(_, v, _)| !placed(v)).collect();
             let frags = grids.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(sep());
             let rn = match &r.label {
                 Some(l) => tr!("行{}（{}）", "row {} ({})", r.index, l.text),
@@ -585,19 +598,55 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             if missing.is_empty() {
                 continue;
             }
-            let values = missing.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>().join(sep());
-            out.push(
-                Diag::error("E116", tr!("{rn} の金額が、引いた写しにありません", "The amount of {rn} is not in the copy it cites"))
-                    .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
-                    .table(name.clone())
-                    .row(r.index)
-                    .mark(missing[0].1.clone(), tr!("写しに無い: {values}", "not in the copy: {values}"))
-                    .note(tr!("引いた写し: {} {frags}", "The copy cited: {} {frags}", c.source))
-                    .note(tr!(
-                        "金額は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
-                        "An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. If it came from somewhere else, take the citation off this row and say in a comment at the end of it where the value came from."
-                    )),
-            );
+            let values = missing.iter().map(|(t, ..)| t.as_str()).collect::<Vec<_>>().join(sep());
+            // An amount the copy does show, only not under this row's headings, is most likely
+            // the next row's: say which heading it stands under there.
+            let elsewhere: Vec<(String, Vec<String>, Option<String>)> = missing
+                .iter()
+                .filter(|(_, v, _)| in_copy(v))
+                .map(|(t, v, _)| {
+                    let heads = grids.iter().map(|(_, g)| under(g, v)).find(|h| !h.is_empty()).unwrap_or_default();
+                    let at = grids.iter().find_map(|(_, g)| heading_of(g, v));
+                    (t.clone(), heads, at)
+                })
+                .collect();
+            let mark = if elsewhere.len() == missing.len() {
+                let heads = elsewhere[0].1.join(sep());
+                tr!("写しの {heads} の行にも列にも無い: {values}", "not in the row or the column of {heads} in the copy: {values}")
+            } else {
+                tr!("写しに無い: {values}", "not in the copy: {values}")
+            };
+            let title = if elsewhere.len() == missing.len() {
+                tr!("{rn} の金額が、写しでは別の見出しの下にあります", "The amount of {rn} stands under another heading in the copy it cites")
+            } else {
+                tr!("{rn} の金額が、引いた写しにありません", "The amount of {rn} is not in the copy it cites")
+            };
+            let mut d = Diag::error("E116", title)
+                .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
+                .table(name.clone())
+                .row(r.index)
+                .mark(missing[0].2.clone(), mark)
+                .note(tr!("引いた写し: {} {frags}", "The copy cited: {} {frags}", c.source));
+            for (t, heads, at) in &elsewhere {
+                let heads = heads.join(sep());
+                d = d.note(match at {
+                    Some(h) => tr!(
+                        "{t} は写しにありますが、{heads} の行でも列でもなく、{h} の行にあります。行を取り違えていないか確かめてください。",
+                        "{t} is in the copy, but not in the row or the column of {heads}: it is in the row of {h}. Check that the rows were not mixed up."
+                    ),
+                    None => tr!(
+                        "{t} は写しにありますが、{heads} の行でも列でもないところにあります。行を取り違えていないか確かめてください。",
+                        "{t} is in the copy, but outside the row and the column of {heads}. Check that the rows were not mixed up."
+                    ),
+                });
+            }
+            if elsewhere.len() < missing.len() {
+                d = d.note(tr!(
+                    "金額は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                    "An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. If it came from somewhere else, take the citation off this row and say in a comment at the end of it where the value came from."
+                ));
+            }
+            out.push(d);
         }
         // The other direction, and only for a table that says the whole fragment is what it
         // transcribes: a row that cites on its own says nothing about the rest of the table.
@@ -753,6 +802,36 @@ fn lit_text(l: &crate::ast::Lit) -> String {
 
 /// The amounts a row writes: the literals of its output cells, with the text as written and
 /// where it stands. A cell holding a name carries no value of its own.
+/// The words a row's cells name — `関東` in `| 関東 | … |`, both of `関東, 近畿` — which a copy
+/// may write as the heading of the row or the column the amount was transcribed from.
+fn row_words(r: &crate::ast::Row) -> Vec<String> {
+    use crate::ast::{Cell, Lit};
+    let mut out = Vec::new();
+    for c in &r.cells {
+        let lits: &[Lit] = match c {
+            Cell::Lit(l) => std::slice::from_ref(l),
+            Cell::Set(ls) => ls,
+            _ => &[],
+        };
+        for l in lits {
+            if let Lit::Word(w) = l {
+                if w != crate::kw::TRUE && w != crate::kw::FALSE && !out.contains(w) {
+                    out.push(w.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The heading of the row a copy shows `v` in: the first cell of that row with text in it.
+fn heading_of(g: &[Vec<String>], v: &(Option<String>, crate::num::Rat)) -> Option<String> {
+    (0..g.len()).find_map(|ri| {
+        let here = crate::extract::shown_where(g, |r, _| r == ri).iter().any(|s| crate::types::same_value(s, v));
+        here.then(|| g[ri].iter().map(|s| s.trim()).find(|s| !s.is_empty()).map(str::to_string)).flatten()
+    })
+}
+
 fn amounts(r: &crate::ast::Row) -> Vec<(String, (Option<String>, crate::num::Rat), Span)> {
     let mut out = Vec::new();
     for (k, o) in r.outs.iter().enumerate() {
@@ -1524,12 +1603,17 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
             let line = lines.get(a.span.line - 1).copied().unwrap_or("");
             edits.push((a.span.line - 1, 1, vec![set_hash(line, &h)]));
             report.push(tr!("{}: 元の規則 `{}` のハッシュを sha256:{h} に固定しました", "{}: pinned the callee `{}` at sha256:{h}", a.name.text, a.path));
+        } else {
+            report.push(tr!("{}: 元の規則 `{}` は sha256:{h} に固定済みです", "{}: the callee `{}` is already pinned at sha256:{h}", a.name.text, a.path));
         }
     }
     for d in &f.sources {
         if d.base.is_some() {
             continue;
         }
+        // A source whose pins already match its copies says so: a run that changes nothing
+        // is not a rule that declares nothing.
+        let said = report.len();
         match &d.kind {
             SourceKind::File { path, hash, .. } => {
                 let p = dir.join(path);
@@ -1564,6 +1648,14 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                     edits.push((d.span.line, d.pins.len(), new_pins.clone()));
                     report.push(tr!("{}: {} 箇所のハッシュを固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
                 }
+                if report.len() == said {
+                    report.push(tr!(
+                        "{}: 固定済みです（sha256:{h}、{} 箇所）",
+                        "{}: already pinned (sha256:{h}, {} fragments)",
+                        d.name.text,
+                        new_pins.len()
+                    ));
+                }
             }
             SourceKind::Law { db, id, asof } => {
                 let cdir = copy_dir(rule_path, id, asof);
@@ -1585,6 +1677,9 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                 if old != new_pins {
                     edits.push((d.span.line, d.pins.len(), new_pins.clone()));
                     report.push(tr!("{}: {} 箇所のハッシュを固定しました", "{}: pinned {} fragments", d.name.text, new_pins.len()));
+                }
+                if report.len() == said {
+                    report.push(tr!("{}: {} 箇所とも固定済みです", "{}: all {} fragments already pinned", d.name.text, new_pins.len()));
                 }
             }
         }

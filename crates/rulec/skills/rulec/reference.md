@@ -123,6 +123,10 @@ optionally followed by a multiplier and then a unit:
 a quantity is expected is an error. `2kg` and `2000g` are the same value; the stored integer
 is always in the unit the type declares.
 
+**A thousands separator is not written** (E049): `,` separates the members of a set, so the
+`1,000円` a document prints would be two values. Write `1000円`, or `1_000円` to group the
+digits; the diagnostic's `fix.text` is the literal rewritten.
+
 **Dates** are written `YYYY-MM-DD`. They are held as day ordinals, which is what makes an
 interval over dates exact.
 
@@ -356,7 +360,11 @@ cited whole.
 
 **The rows are then held to that copy**, which is the one thing a completeness proof cannot do:
 it says the table is consistent with itself, not that it says what the document says. An amount
-a row writes that the copy does not show anywhere is **E116**; a number the copy states as a
+a row writes that the copy does not show is **E116**. Where the copy has a heading that says a
+word of the row's cells — `関東`, or `一般` for a row the copy heads `一般の事業` — the amount is
+looked for in that heading's row and column only, since the amount of the next row down is in
+the copy too; and a rate the copy writes per thousand, `5/1,000` or `1,000分の5`, reads as the
+0.5% it is. A number the copy states as a
 whole cell that no row of the citing table uses is **W120**, and the two together are what a
 mistyped digit looks like (`890円` is nowhere in the copy, and the copy's `880円` is used by
 nobody). A threshold is rewritten as it is
@@ -978,7 +986,7 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 |---|---|
 | `-` | any value. **A blank cell is a syntax error** (E008): a blank cannot be told from a forgotten entry |
 | `1200円` `2000g` `true` `2026-04-01` `"abc"` | equality with a literal. A quantity must carry its unit |
-| `北海道, 沖縄県` | a set. Each element is a literal or a group name |
+| `北海道, 沖縄県` | a set. Each element is a literal or a group name; on a column of numbers each is a value of its own (`100, 200`) |
 | `not: 遠隔地` | the complement of a set |
 | `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
 | `>=1000円 <20000円` | an interval — two comparisons side by side mean "and" |

@@ -87,6 +87,7 @@ golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");
 
 // The rows against the copy they were transcribed from (§15.82).
+golden!(e049_桁区切りのカンマ, "E049", "tests/mutants/m_e049.rule", "E049");
 golden!(e116_写しに無い金額, "E116", "tests/mutants/m_e116.rule", "E116");
 golden!(w120_写し忘れた行, "W120", "tests/mutants/m_w120.rule", "W120");
 golden!(e119_境界の側, "E119", "tests/mutants/m_e119.rule", "E119");

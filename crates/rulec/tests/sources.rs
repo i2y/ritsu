@@ -102,6 +102,10 @@ fn pinは固定行だけを書き換える() {
     assert_eq!(after, src, "everything but the pin lines is untouched, and the pins are the copies' digests");
     let (c, out) = rulec(&d, &["check", "a.rule"]);
     assert_eq!(c, 0, "{out}");
+    // Run again with nothing left to change, it says so — not that no source is declared.
+    let (c, out) = rulec(&d, &["source", "pin", "a.rule", "--lang", "ja"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("固定済み") && !out.contains("宣言がありません"), "{out}");
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -334,6 +338,73 @@ fn 写した金額と写しを突き合わせる() {
     let merged = std::fs::read_to_string(&q).unwrap();
     let cs = codes(&merged, &q);
     assert!(!cs.contains(&"W120".to_string()) && !cs.contains(&"E116".to_string()), "{cs:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// An amount is looked for under the headings the row's own words name — the row `関東`, the
+/// column `S60` — where the copy has them, and not anywhere in the table (§15.143). The
+/// amount of the next row is in the copy too, so a search of the whole table let two rows be
+/// swapped, and let a gap be filled with the first row's amount. A rate the copy writes per
+/// thousand is the rate it is.
+#[test]
+fn 金額は行の見出しの下で探す() {
+    let d = scratch("heading");
+    let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
+    std::fs::write(d.join("料金表.md"), doc).unwrap();
+    let rule = |kinki: (&str, &str), kanto: (&str, &str)| {
+        format!(
+            "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\nenum あて先(dest) = 近畿(kinki) | 関東(kanto)\nenum 区分(size) = S60(s60) | S80(s80)\n\n\
+             inputs\n  あて先(dest) : あて先\n  サイズ(size) : 区分\n\noutputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
+             table 運賃表(fee_table)  @料金表 表1\npolicy unique\n| あて先 | サイズ | -> 運賃 |\n\
+             | 近畿 | S60 | {} |\n| 近畿 | S80 | {} |\n| 関東 | S60 | {} |\n| 関東 | S80 | {} |\n",
+            kinki.0, kinki.1, kanto.0, kanto.1
+        )
+    };
+    let p = d.join("a.rule");
+    std::fs::write(&p, rule(("990円", "1210円"), ("880円", "1100円"))).unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let pinned = std::fs::read_to_string(&p).unwrap();
+    assert!(codes(&pinned, &p).is_empty(), "{:?}", codes(&pinned, &p));
+    let as_written = rule(("990円", "1210円"), ("880円", "1100円"));
+    let with = |kinki: (&str, &str), kanto: (&str, &str)| pinned.replace(&as_written[as_written.find("| 近畿 | S60").unwrap()..], &rule(kinki, kanto)[as_written.find("| 近畿 | S60").unwrap()..]);
+
+    // Two rows swapped: each amount is in the copy, under the other region.
+    let ds = rulec::check_source(&with(("880円", "1210円"), ("990円", "1100円")), &p.to_string_lossy());
+    let e: Vec<_> = ds.iter().filter(|x| x.code == "E116").collect();
+    assert_eq!(e.len(), 2, "{ds:?}");
+    assert!(e[0].title.contains("別の見出し"), "{}", e[0].title);
+    assert!(e[0].notes.iter().any(|n| n.contains("関東 の行")), "where it is: {:?}", e[0].notes);
+    // Two columns swapped within one row: the row is right and the column is not.
+    let ds = rulec::check_source(&with(("1210円", "990円"), ("880円", "1100円")), &p.to_string_lossy());
+    assert_eq!(ds.iter().filter(|x| x.code == "E116").count(), 2, "{ds:?}");
+    // The first row's amount copied into another: the gap-filling that looked fine before.
+    let ds = rulec::check_source(&with(("990円", "1210円"), ("990円", "1100円")), &p.to_string_lossy());
+    assert_eq!(ds.iter().filter(|x| x.code == "E116").count(), 1, "{ds:?}");
+
+    // Per thousand, as rates set by statute are written.
+    std::fs::write(d.join("料率.md"), "| 事業の種類 | 労働者負担 |\n|---|---|\n| 一般の事業 | 5/1,000 |\n| 建設の事業 | 1,000分の6 |\n").unwrap();
+    let rate = |general: &str, building: &str| {
+        format!(
+            "rule r(r) v1\n\nsource 料率表 = file \"料率.md\"\n\nenum 事業(kind) = 一般(general) | 建設(construction)\n\n\
+             inputs\n  事業の種類(kind) : 事業\n\noutputs\n  料率(rate) : rate[step 0.1%]  round half_up(0.1%)\n\n\
+             table 料率表(rates)  @料率表 表1\npolicy unique\n| 事業の種類 | -> 料率 : rate[step 0.1%] |\n| 一般 | {general} |\n| 建設 | {building} |\n"
+        )
+    };
+    let q = d.join("b.rule");
+    std::fs::write(&q, rate("0.5%", "0.6%")).unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "b.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let (c, out) = rulec(&d, &["source", "pin", "b.rule"]);
+    assert_eq!(c, 0, "{out}");
+    let pinned = std::fs::read_to_string(&q).unwrap();
+    assert!(codes(&pinned, &q).is_empty(), "5/1,000 と 1,000分の6 を率として読んでいない: {:?}", codes(&pinned, &q));
+    // `一般の事業` is the heading of `一般`, so the other row's rate is not taken for it.
+    let swapped = pinned.replace("| 一般 | 0.5% |", "| 一般 | 0.6% |");
+    assert_ne!(swapped, pinned);
+    assert!(codes(&swapped, &q).contains(&"E116".to_string()), "{:?}", codes(&swapped, &q));
     let _ = std::fs::remove_dir_all(&d);
 }
 

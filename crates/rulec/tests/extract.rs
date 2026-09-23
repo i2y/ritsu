@@ -149,3 +149,48 @@ fn テンプレートは文書を名指しする() {
     assert!(out.contains("rulec source fetch a.rule --via"), "the line that runs it names this rule: {out}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// The template, run the way its own usage line says — `--via ./extract.py`, so the `#!` line
+/// has to come first or a shell reads the file — against a stand-in for docling with the same
+/// calls: `export_to_dataframe` wants the document, and a table docling found no header row
+/// in names its columns 0, 1, 2, …, a row the document does not have.
+#[test]
+fn テンプレートは書いてある使い方のとおりに動く() {
+    if !have("python3") {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let d = scratch("docling");
+    std::fs::write(d.join("a.rule"), RULE.replace("@料金表 表1", "@料金表 表1, 表2")).unwrap();
+    let (c, out) = rulec(&d, &["adapter", "a.rule", "--template", "docling"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.starts_with("#!/usr/bin/env python3\n"), "the `#!` line is not the first:\n{out}");
+    let p = d.join("extract.py");
+    std::fs::write(&p, &out).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::create_dir_all(d.join("docling")).unwrap();
+    std::fs::write(d.join("docling/__init__.py"), "__version__ = \"0-stub\"\n").unwrap();
+    std::fs::write(
+        d.join("docling/document_converter.py"),
+        "class _Values:\n    def __init__(self, rows): self.rows = rows\n    def tolist(self): return self.rows\n\n\
+         class _Frame:\n    def __init__(self, columns, rows): self.columns, self.values = columns, _Values(rows)\n\n\
+         class _Prov:\n    page_no = 12\n\n\
+         class _Table:\n    prov = [_Prov()]\n    def __init__(self, columns, rows): self.frame = _Frame(columns, rows)\n    \
+         def export_to_dataframe(self, doc=None):\n        assert doc is not None, 'export_to_dataframe wants the document'\n        return self.frame\n\n\
+         class _Doc:\n    tables = [_Table(['あて先', 'S60'], [['近畿', '990円'], ['関東', '880円']]), _Table([0, 1], [['注', '税込']])]\n\n\
+         class _Result:\n    document = _Doc()\n\n\
+         class DocumentConverter:\n    def convert(self, path): return _Result()\n",
+    )
+    .unwrap();
+    let (c, out) = rulec(&d, &["source", "fetch", "a.rule", "--via", "./extract.py"]);
+    assert_eq!(c, 0, "{out}");
+    let copies = d.join("料金表.pdf.fragments");
+    assert_eq!(std::fs::read_to_string(copies.join("表1.tsv")).unwrap(), "あて先\tS60\n近畿\t990円\n関東\t880円\n");
+    assert_eq!(std::fs::read_to_string(copies.join("表2.tsv")).unwrap(), "注\t税込\n", "the numbered header was written as a row");
+    assert_eq!(std::fs::read_to_string(copies.join("extractor.txt")).unwrap(), "docling 0-stub\n");
+    let _ = std::fs::remove_dir_all(&d);
+}

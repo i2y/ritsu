@@ -267,3 +267,34 @@ policy unique
     let codes: Vec<&str> = rulec::check_source(src, "region.rule").iter().map(|d| d.code).collect();
     assert!(!codes.contains(&"E101"), "名前の出す値域が下流に届いていない: {codes:?}");
 }
+
+
+/// A set on a column of numbers is its values, each a point of the axis, as it is on an enum
+/// (§15.143). `100, 200` used to take no coordinate at all: the row was unreachable (E102),
+/// and the boundary vectors stood on none of its values.
+#[test]
+fn 数の集合は値ごとの点になる() {
+    let src = "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n";
+    let ds = rulec::check_source(src, "pieces.rule");
+    assert!(!rulec::has_error(&ds), "{:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+    let dir = std::env::temp_dir().join(format!("rulec-region-set-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("pieces.rule");
+    std::fs::write(&p, src).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["vectors", p.to_str().unwrap()]).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let got = |n: i128| {
+        text.lines()
+            .filter_map(|l| rulec::json::parse(l).ok())
+            .filter(|v| v.get("in").and_then(|i| i.get("個数")).and_then(|x| x.as_int()) == Some(n))
+            .map(|v| v.get("out").and_then(|o| o.get("割引")).and_then(|x| x.as_int()) == Some(500))
+            .collect::<Vec<_>>()
+    };
+    for n in [100, 200] {
+        assert_eq!(got(n).first(), Some(&true), "{n} は 500円の行: {text}");
+    }
+    for n in [99, 101, 199, 201] {
+        assert_eq!(got(n).first(), Some(&false), "{n} が境目のベクタに無いか、行を取り違えている: {text}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

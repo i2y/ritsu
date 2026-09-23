@@ -54,7 +54,8 @@ still means the same thing, and `v` says which version wrote the line.
 
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
 `add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
-`flip_bound`, `narrow_contract`, `none`.
+`flip_bound`, `narrow_contract`, `rewrite_literal`, `none`. `rewrite_literal` is one literal as
+it has to be written: `1,000円` becomes `1000円` (E049).
 `none` means no single mechanical edit is right; the reason is in `notes`. `narrow_contract` is
 the one edit that is not to the `.rule`: its `text` is what to write in the contract the input is
 read from — a Protovalidate option, or JSON Schema keywords — as they are written there (E122).
@@ -409,7 +410,9 @@ member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeS
 and in PHP, `CouponKind.PERCENT` in Java, `couponstep.CouponKindPercent` in Go,
 `CouponKind.percent` in Swift; SQL spells no member, an
 enum being its own name there, and the Wasm module and the NumPy plan read and write the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
-type has none. The NumPy entry is shaped differently from the rest, because it names no
+type has none. `range` and `rounding.grid` are integers the way the value itself travels, so
+for a rate they count its steps: a rate stored in tenths of a percent with `round
+half_up(0.1%)` says `"grid":1`. The NumPy entry is shaped differently from the rest, because it names no
 function: it carries `plan` and `runtime`, the two files, `load`, `call` and `traced`, and
 `columns` and `outputs` in place of parameters. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
@@ -554,7 +557,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `contracts` | one entry per `shape` the rule reads inputs from: the condition the contract places on those values, and why the rule's **door** keeps it (§15.142). The claim is inclusion — every value the contract lets through is one the door takes — and the door is what the rule asks of the same values: each numeric input inside its declared range, at the `scale` between the rule's value and the integer the contract carries; each `constraint` between two of them; each enum input among its enum's values. `file` is the contract, named relative to the rule, and `sha256` its digest, which a re-checker given `--rule` holds the file beside the rule to. `vars` names the values the condition speaks of, by kind (`num`, `str`, `bool`): the inputs first, then the contract's other fields a condition mentions, as `@` and their path. An optional input, and one counted or tested with `where`, is not among them; the field-by-field comparison (E122) is what covers those. `atoms` are the conditions: `{"num":{name:coef,…},"k":…,"rel":"le"}` is `Σ coef·name + k <= 0` (`"lt"` is `<`, `"eq"` is `=`), already in whole-number form — `2x < 5` is written `x − 2 <= 0` — so that a sum over the rationals can show a boundary that holds only over the integers; `{"str":name,"values":[…],"in":true}` is a string among those values (`false`: among none); `{"bool":name,"value":v}` a truth value. `cases` opens the condition: a value gets through when it satisfies every atom of some case. `null` means it opens into too many cases, and nothing is claimed. `unread` says a rule of the contract could not be read and was taken as true, so the condition is the contract read wider than it is. `doors` lists what the door asks, `{"range":input,"hi":false}`, `{"constraint":k}` or `{"member":input}`, each with one proof per case: `{"farkas":[…]}` multipliers over the case's atoms (`{"atom":i,"part":0,"y":…}`, `part` 1 being the other half of an equality) and the negation of what is asked (`{"door":true,"y":…}`) that add up to a contradiction, as under `refuted`; `{"clash":name}`, strings or truth values of the case that cannot all hold; `{"within":true}`, every string the case lets the input be is one of the enum's. `proofs` is `null` for a thing the certificate cannot show. A re-checker **builds the door again** from `ranges`, `constraints`, `types` and `enums`, so a thing the list leaves out is named as not shown rather than passed |
 | `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2), for a numeric axis each coordinate as a closed interval in `bounds` and the `step` its values sit on, and for a `string` axis the prefix each coordinate stands for in `prefixes` (`null` for the one coordinate that is under none of them). `kind` is `input`, `derived`, `define`, `walk` (what a `count` or a `sum` left behind) or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker. A re-checker holds a numeric axis to §6.2's construction: the coordinates run from the declared range's low end to its high end, each touching the next or one `step` past it, with nothing between — so a coordinate cannot be quietly removed and the gap under it left uncovered |
 | `decides` | the columns this table writes, in the order `rows[].produces` lists their values. A table below names one of these as an axis of kind `upstream`, and that is the link from a fact to the rows that settle it |
-| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
+| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`, and for a set on a column of numbers its values, each a point of the axis — `{"cell":"in","values":["100","200"]}`, `{"cell":"not_in","values":["300"]}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
 | `origin`, `line` | the table the row was written in, and the line it is written on. Rows of one table have a cell in the same columns and in no others, are all written in this file or all brought in by an `apply`, and take a run of lines in row order that no other table's rows fall inside — all of which a re-checker holds them to |
 | `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` a re-checker reads the file and compares, and the span has to be that cell's own place: every cell of a row is on the row's `line`, they are that line's `|`-separated fields, all of them (`outputs` says how many of the line's fields are answers rather than cells), and none of them is empty. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have, and then every row of that table has to agree |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
@@ -583,7 +586,8 @@ some case of the condition satisfy everything the door asks. One of them,
 `mem_boxOf_cmp_iff`, is what ties the boxes to the cells: a coordinate is taken exactly when
 every value in it satisfies the cell, **provided** no value a cell compares against falls
 strictly inside a coordinate — §6.2's construction, which the checkers verify rather than
-assume.
+assume. `mem_boxOf_in_iff` and `mem_boxOf_notIn_iff` say the same of a set of numbers: in the
+box exactly when the value is one of the set's, or none of them.
 
 **Where it stops.** The file is tied to the document by its digest and, cell by cell, by the
 byte spans above. Everything else the certificate says about the rule is **its own word**,
@@ -689,7 +693,9 @@ implementation of a command.
 
 - **Tools.** One per command, named `rulec_<command>` (`rulec_check`, `rulec_gen`, …). The
   positional arguments become `files` (a list) or `file`, `dir`, `code`, `old` and `new`,
-  `fixtures` and `rule`; every flag becomes a property named after it with `-` as `_`
+  `fixtures` and `rule`, and a command whose usage opens with a choice takes it as
+  `subcommand`, an `enum` of those words, ahead of `file` (`import`: `csv` or `xlsx`; `source`:
+  `fetch`, `pin` or `outdated`); every flag becomes a property named after it with `-` as `_`
   (`diff_base`, `require_all`), a boolean for a flag without a value, a list for a flag that
   may repeat (`fill`), and an `enum` where the flag's values are a closed set. `lang` is
   accepted everywhere. The result is two texts: what the command printed (stdout, then stderr

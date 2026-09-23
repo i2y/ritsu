@@ -117,18 +117,25 @@ fn initialize(params: Option<&Json>) -> String {
 }
 
 /// The positional arguments a command takes, as (property, description, required, is a
-/// list). This is the one place that reads `Cmd::args`, which is written for a person.
-fn positionals(c: &Cmd) -> Vec<(&'static str, String, bool, bool)> {
+/// list, the values it takes when they are a closed set). This is the one place that reads
+/// `Cmd::args`, which is written for a person. A usage line that opens with `a|b|c` names a
+/// subcommand, and that becomes `subcommand`, one of those words, ahead of the file.
+fn positionals(c: &Cmd) -> Vec<(&'static str, String, bool, bool, Vec<&'static str>)> {
     let help = |i: usize| c.params.get(i).map(|(_, h)| h.clone()).unwrap_or_default();
+    let first = c.args.split_whitespace().next().unwrap_or("");
     match c.name {
-        "explain" => vec![("code", help(0), false, false)],
-        "test" => vec![("dir", help(0), true, false)],
-        "fixtures" => vec![("fixtures", help(1), true, false), ("rule", help(2), true, false)],
-        "diff" => vec![("old", help(0), true, false), ("new", help(1), true, false)],
+        "explain" => vec![("code", help(0), false, false, vec![])],
+        "test" => vec![("dir", help(0), true, false, vec![])],
+        "fixtures" => vec![("fixtures", help(1), true, false, vec![]), ("rule", help(2), true, false, vec![])],
+        "diff" => vec![("old", help(0), true, false, vec![]), ("new", help(1), true, false, vec![])],
         "mcp" => vec![],
-        _ if c.args.ends_with("...") => vec![("files", help(0), true, true)],
+        _ if first.contains('|') && !first.starts_with('<') => vec![
+            ("subcommand", help(0), true, false, first.split('|').collect()),
+            ("file", help(1), true, false, vec![]),
+        ],
+        _ if c.args.ends_with("...") => vec![("files", help(0), true, true, vec![])],
         _ if c.args.is_empty() => vec![],
-        _ => vec![("file", help(0), true, false)],
+        _ => vec![("file", help(0), true, false, vec![])],
     }
 }
 
@@ -144,9 +151,11 @@ fn tools_list(cmds: &[Cmd]) -> String {
         .map(|c| {
             let mut props: Vec<String> = Vec::new();
             let mut required: Vec<String> = Vec::new();
-            for (name, desc, req, list) in positionals(c) {
+            for (name, desc, req, list, choices) in positionals(c) {
                 let ty = if list {
                     "\"type\":\"array\",\"items\":{\"type\":\"string\"}".to_string()
+                } else if !choices.is_empty() {
+                    format!("\"type\":\"string\",\"enum\":{}", json::strs(&choices))
                 } else {
                     "\"type\":\"string\"".to_string()
                 };
@@ -220,14 +229,20 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>) -> Result<String, (i64, Strin
         }
     };
     let pos = positionals(c);
-    for (pname, _, req, list) in &pos {
+    for (pname, _, req, list, choices) in &pos {
         match args.get(*pname) {
             Some(Json::Arr(items)) if *list => {
                 for it in items {
                     argv.push(text(it)?);
                 }
             }
-            Some(v) if !*list => argv.push(text(v)?),
+            Some(v) if !*list => {
+                let v = text(v)?;
+                if !choices.is_empty() && !choices.contains(&v.as_str()) {
+                    return Err((-32602, format!("`{pname}` is one of {}", choices.join(", "))));
+                }
+                argv.push(v);
+            }
             Some(_) => return Err((-32602, format!("`{pname}` has the wrong shape"))),
             None if *req => return Err((-32602, format!("`{pname}` is required"))),
             None => {}

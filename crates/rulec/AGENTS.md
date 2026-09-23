@@ -115,9 +115,9 @@ A few shapes are worth knowing before the first draft:
   `fetch --via <cmd>` runs an extractor (docling and the like) as a child process and pins
   what it produced, so the extraction happens once and is reviewed once — `rulec adapter
   <file.rule> --template docling` prints the shape. **The rows are then held to that copy**:
-  an amount the copy does not show is E116, a number the copy states that no row uses is
-  W120, and a boundary the copy puts on the other side of itself is E119 — the only checks
-  that look outside the rule at all.
+  an amount the copy does not show (under the row's own heading, where the copy has one) is E116,
+  a number the copy states that no row uses is W120, and a boundary the copy puts on the other
+  side of itself is E119 — the only checks that look outside the rule at all.
 - **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
   sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
   `with 任期満了 -> 定年`), definitions left out with `except 減額`, and outputs taken under a

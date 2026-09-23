@@ -141,3 +141,52 @@ fn 文書はリソースで_互いへのリンクはリソースを指す() {
     assert!(!text.contains("](docs/"), "リポジトリの相対パスが残っている");
     assert!(a[2].get("error").is_some(), "無いリソースは error");
 }
+
+/// A command whose usage line opens with a choice — `import csv|xlsx`, `source
+/// fetch|pin|outdated` — takes it as `subcommand`, one of those words, ahead of the file.
+/// Without it the file went where the subcommand belongs, and both answered exit 2 to every
+/// call.
+#[test]
+fn サブコマンドは選択肢として渡る() {
+    let d = std::env::temp_dir().join(format!("rulec-mcp-sub-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(d.join("sources/paypal-us-fees.md.fragments")).unwrap();
+    for f in ["paypal_fee.rule", "sources/paypal-us-fees.md", "sources/paypal-us-fees.md.fragments/table1.tsv"] {
+        std::fs::copy(root().join("tests/corpus").join(f), d.join(f)).unwrap();
+    }
+    std::fs::write(d.join("fees.csv"), "地域,料金\n関東,800\n近畿,1000\n").unwrap();
+    let (rule, csv) = (d.join("paypal_fee.rule"), d.join("fees.csv"));
+    let call = |id: u32, tool: &str, sub: &str, file: &std::path::Path| {
+        format!(
+            r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/call","params":{{"name":"{tool}","arguments":{{"subcommand":"{sub}","file":"{}","lang":"en"}}}}}}"#,
+            file.display()
+        )
+    };
+    let reqs = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#.to_string(),
+        call(2, "rulec_source", "pin", &rule),
+        call(3, "rulec_import", "csv", &csv),
+        call(4, "rulec_import", "pdf", &csv),
+    ];
+    let a = talk(&reqs.iter().map(String::as_str).collect::<Vec<_>>());
+    let tools = arr(a[0].get("result").unwrap(), "tools");
+    for (tool, words) in [("rulec_source", vec!["fetch", "pin", "outdated"]), ("rulec_import", vec!["csv", "xlsx"])] {
+        let t = tools.iter().find(|t| s(t, "name") == tool).unwrap();
+        let schema = t.get("inputSchema").unwrap();
+        let sub = schema.get("properties").and_then(|p| p.get("subcommand")).unwrap_or_else(|| panic!("{tool} に subcommand が無い"));
+        let got: Vec<&str> = arr(sub, "enum").iter().filter_map(|w| w.as_str()).collect();
+        assert_eq!(got, words, "{tool}");
+        let req: Vec<&str> = arr(schema, "required").iter().filter_map(|w| w.as_str()).collect();
+        assert_eq!(req, ["subcommand", "file"], "{tool}");
+    }
+    let text = |r: &rulec::json::Json, i: usize| s(&arr(r, "content")[i], "text").to_string();
+    let r = a[1].get("result").unwrap();
+    assert_eq!(text(r, 1), "exit code 0", "{}", text(r, 0));
+    assert!(text(r, 0).contains("already pinned"), "固定済みと言わない: {}", text(r, 0));
+    let r = a[2].get("result").unwrap();
+    assert_eq!(text(r, 1), "exit code 0", "{}", text(r, 0));
+    assert!(text(r, 0).contains("rule fees"), "{}", text(r, 0));
+    let e = a[3].get("error").expect("選択肢に無いサブコマンドを通している");
+    assert!(s(e, "message").contains("subcommand"), "{e:?}");
+    let _ = std::fs::remove_dir_all(&d);
+}

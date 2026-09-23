@@ -622,3 +622,31 @@ fn 契約の関係は再検査で確かめられる() {
     let (code, said) = recheck_rule(&wider, rule);
     assert_eq!(code, 1, "列挙にない値を通す契約が通ってしまった:\n{said}");
 }
+
+
+/// A set on a column of numbers travels as its values (`{"cell":"in"}`), and the re-checker
+/// builds the box from them: a box widened past the cell is refused (§15.143).
+#[test]
+fn 数の集合の箱は値から組み直される() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rulec-cert-set-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join("pieces.rule");
+    std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
+    let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#"{"cell":"in","values":["100","200"]}"#), "{cert}");
+    assert!(cert.contains(r#"{"cell":"not_in","values":["300","400"]}"#), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    let at = cert.find(r#""cell":"in""#).unwrap();
+    let acc = cert[at..].find(r#""accepts":[["#).unwrap() + at + r#""accepts":[["#.len();
+    let mut wide = cert.clone();
+    wide.insert_str(acc, "0,");
+    let (code, said) = recheck(&wide);
+    assert_eq!(code, 1, "広げた箱が通ってしまった:\n{said}");
+}

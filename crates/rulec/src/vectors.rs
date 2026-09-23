@@ -278,6 +278,14 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
                                     push(v, &mut set);
                                 }
                             }
+                            // Each member of a set is a boundary of its own.
+                            Some(Cell::Set(ls) | Cell::Not(ls)) => {
+                                for l in ls {
+                                    if let Some(v) = lit(l) {
+                                        push(v, &mut set);
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     }

@@ -5,7 +5,7 @@
 
 use crate::ast::*;
 use crate::diag::{Diag, Span};
-use crate::lex::{Kind, Token, lex_line};
+use crate::lex::{Kind, Token, lex_line_soft};
 
 /// The keywords that can start a line. Used to detect E009 (a declaration named like a
 /// reserved word) and to check that the README's keyword table matches this list.
@@ -30,16 +30,19 @@ pub fn parse(src: &str, path: &str) -> Parsed {
     let mut lines: Vec<Vec<Token>> = Vec::new();
     let mut diags: Vec<Diag> = Vec::new();
     for (n, text) in src.lines().enumerate() {
-        match lex_line(n + 1, text) {
+        match lex_line_soft(n + 1, text) {
             // A line that is nothing but a comment is not a blank line, and a blank line is
             // what ends a block. After lexing the two look alike — both come back with no
             // tokens — so a comment written between two inputs cut the block in half and the
             // declaration under it was reported as a word that cannot appear there. Dropping
             // it here is what makes a note in the middle of a block mean what it looks like.
-            Ok(t) if t.is_empty() && text.trim_start().starts_with('#') => {}
-            Ok(t) => lines.push(t),
+            Ok((t, _)) if t.is_empty() && text.trim_start().starts_with('#') => {}
+            Ok((t, soft)) => {
+                diags.extend(soft.into_iter().map(|d| placed(d, path, n + 1)));
+                lines.push(t);
+            }
             Err(d) => {
-                diags.push(d);
+                diags.push(placed(d, path, n + 1));
                 lines.push(Vec::new());
             }
         }
@@ -47,6 +50,16 @@ pub fn parse(src: &str, path: &str) -> Parsed {
     let mut p = P { lines, i: 0, diags, path: path.to_string(), ctx: String::new() };
     let file = p.rule_file();
     Parsed { file, diags: p.diags }
+}
+
+/// A diagnostic from the lexer, which sees one line and no file, placed in the file the way
+/// the parser's own are: `file:line`.
+fn placed(d: Diag, path: &str, line: usize) -> Diag {
+    if d.where_.is_empty() {
+        d.at(format!("{path}:{line}"))
+    } else {
+        d
+    }
 }
 
 /// Span covering a whole token run.

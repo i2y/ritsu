@@ -581,3 +581,50 @@ fn result_式も_int64_に収まることを証明する() {
     let 収まる = rule("result y = x × 1\n");
     assert!(!check(&収まる).contains(&"E108".to_string()), "収まる積で出てはいけない");
 }
+
+/// E049: a figure written the way a document writes it. `,` separates the members of a set,
+/// so `<=1,000` used to pass as `<=1` in a column of numbers, and in a column of money it
+/// stopped at an E103 about `1` having no unit.
+#[test]
+fn 桁区切りのカンマは書き直した形で止まる() {
+    for (line, fixed) in [
+        ("| <=1,000 | true |", "1000"),
+        ("| >1,000円 | true |", "1000円"),
+        ("  a(a) : money[円]  range >=0円 <=1,949,000円", "1949000円"),
+        ("| >=-1,000円 | true |", "-1000円"),
+        ("| 12,345.5円 | true |", "12345.5円"),
+        ("| 1，000円 | true |", "1000円"),
+    ] {
+        let e = rulec::lex::lex_line(1, line).expect_err(line);
+        assert_eq!(e.code, "E049", "{line}");
+        assert_eq!(e.fix.text.as_deref(), Some(fixed), "{line}");
+    }
+    // A set, groups that are not three digits, a digit separator, a string and a comment are
+    // what they were.
+    for line in ["| 100, 200 | true |", "| 1,2,3 | true |", "| 1,0000 | true |", "| 1234,567 | true |", "| 1_000円 | true |", "  d \"1,000\"", "| 1 | true |  # 1,000円"] {
+        assert!(rulec::lex::lex_line(1, line).is_ok(), "{line}");
+    }
+}
+
+/// A rate is held as a fraction and written in percent. E104 used to write 12% as "0.12%",
+/// call a table of whole percents "an unrounded value" and round 0.12% for its example.
+#[test]
+fn 率の出力のe104は百分率で言う() {
+    let table = "rule r(r) v1\n\nenum 種類(kind) = 甲(a) | 乙(b)\n\ninputs\n  種類(kind) : 種類\n\n\
+                 outputs\n  率(rate) : rate[step 0.1%]\n\n\
+                 table 率表(t)\npolicy unique\n| 種類 | -> 率 : rate[step 0.1%] |\n| 甲 | 0.5% |\n| 乙 | 1.2% |\n";
+    let ds = rulec::check_source(table, "rate.rule");
+    let d = ds.iter().find(|d| d.code == "E104").expect("E104 が出る");
+    let notes = d.notes.join(" ");
+    assert!(!d.title.contains("unrounded") && !d.title.contains("丸めていない"), "刻みに載った率を端数と言っている: {}", d.title);
+    // The column is stored in tenths of a percent (0.5% and 1.2% share that grid), and the
+    // hint names that grid rather than ten of a unit.
+    assert!(notes.contains("(0.1%)"), "ヒントは率の刻みで言う: {notes}");
+    let ratio = "rule r(r) v1\n\ninputs\n  a(a) : money[円]  range >=1円 <=1000円\n  b(b) : money[円]  range >=1000円 <=3000円\n\n\
+                 outputs\n  率(ratio) : rate\n\nresult 率 = a / b\n";
+    let ds = rulec::check_source(ratio, "ratio.rule");
+    let d = ds.iter().find(|d| d.code == "E104").expect("E104 が出る");
+    let notes = d.notes.join(" ");
+    // 500円 / 1997円 is 25.03…%: the example says so in percent, and rounds it as that.
+    assert!(notes.contains("gives 25%") || notes.contains("なら 25%"), "{notes}");
+}

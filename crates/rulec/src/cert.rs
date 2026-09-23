@@ -598,6 +598,13 @@ fn cell_json(c: &CertCell) -> String {
         CertCell::Is(ws) => Obj::new().str("cell", "is").raw("words", crate::json::strs(ws)).finish(),
         CertCell::Not(ws) => Obj::new().str("cell", "not").raw("words", crate::json::strs(ws)).finish(),
         CertCell::Prefix(ps) => Obj::new().str("cell", "prefix").raw("words", crate::json::strs(ps)).finish(),
+        CertCell::In(vs) | CertCell::NotIn(vs) => Obj::new()
+            .str("cell", if matches!(c, CertCell::In(_)) { "in" } else { "not_in" })
+            .raw(
+                "values",
+                arr(&vs.iter().map(|v| v.as_ref().map(|r| crate::json::quote(&rat(r))).unwrap_or_else(|| "null".into())).collect::<Vec<_>>()),
+            )
+            .finish(),
         CertCell::Cmp(cs) => Obj::new()
             .str("cell", "cmp")
             .raw(

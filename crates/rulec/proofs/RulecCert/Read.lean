@@ -300,6 +300,12 @@ def cellOfJson (groups : String → List String) (j : Json) : Option CellTest :=
         let v ← field x "value" >>= optRat
         some (op, v))
       some (CellTest.cmp ts)
+  | "in" => do
+      let vs ← (fieldArr j "values").toList.mapM optRat
+      some (CellTest.inVals vs)
+  | "not_in" => do
+      let vs ← (fieldArr j "values").toList.mapM optRat
+      some (CellTest.notInVals vs)
   | _ => none
 
 def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=

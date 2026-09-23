@@ -75,7 +75,16 @@ struct Cmd {
     /// Two runnable examples. Fewer than two teaches nothing about combining flags.
     examples: Vec<String>,
     /// The diagnostic codes this command can print.
-    codes: &'static [&'static str],
+    codes: Vec<&'static str>,
+}
+
+/// Every code in the ledger, errors before warnings: what `check` can print, and what `gen`
+/// prints when it refuses to generate. Each has an example that `check` reproduces
+/// (`tests/codes.rs`), so the ledger is the list; written out by hand, it fell behind.
+fn every_code() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = rulec::codes::ledger().iter().map(|e| e.code).collect();
+    v.sort_by_key(|c| (c.starts_with('W'), *c));
+    v
 }
 
 /// `--lang` and `--help` work everywhere, so they are appended to every command rather
@@ -139,14 +148,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec check rules/".into(),
                 "rulec check rules/送料.rule --format json --diff-base origin/main".into(),
             ],
-            codes: &[
-                "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010",
-                "E011", "E012", "E013", "E014", "E015", "E016", "E017", "E018", "E019", "E020",
-                "E021", "E022", "E023", "E024", "E025", "E026", "E027", "E028", "E029", "E030",
-                "E031", "E032", "E033", "E034", "E035", "E036", "E037", "E038", "E039", "E040", "E041", "E042", "E043", "E044", "E045", "E046", "E101", "E102", "E103",
-                "E104", "E105", "E106", "E107", "E108", "E109", "E110", "E111", "E112", "E113",
-                "E114", "E115", "E117", "E118", "W105", "W110", "W111", "W114", "W115", "W116", "W117", "W118", "W119", "W121",
-            ],
+            codes: every_code(),
         },
         Cmd {
             name: "explain",
@@ -172,7 +174,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec explain E101".into(),
                 "rulec explain --all --format json".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "fmt",
@@ -192,7 +194,7 @@ fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec!["rulec fmt rules/送料.rule".into(), "rulec fmt --check rules/".into()],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "gen",
@@ -217,7 +219,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec gen rules/ --out generated/".into(),
                 "rulec gen rules/ --out generated/ --check".into(),
             ],
-            codes: &["E001", "E003", "E009", "E011", "E012", "E013", "E103", "E104", "E106", "E108", "E112", "E113"],
+            codes: every_code(),
         },
         Cmd {
             name: "test",
@@ -259,7 +261,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec test generated/ --require-all".into(),
                 "rulec test generated/ --proofs".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "coverage",
@@ -278,7 +280,7 @@ fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec!["rulec coverage rules/送料.rule".into(), "rulec coverage rules/".into()],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "vectors",
@@ -298,7 +300,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec vectors rules/送料.rule".into(),
                 "rulec vectors rules/ --out vectors/".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "source",
@@ -333,7 +335,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec source outdated rules/印紙税.rule".into(),
                 "rulec source fetch rules/運賃.rule --via ./extract.py".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "doc",
@@ -359,7 +361,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec doc rules/送料.rule --lang ja --audience customer > help.md".into(),
                 "rulec doc rules/ --out docs/".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "api",
@@ -381,7 +383,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec api rules/送料.rule".into(),
                 "rulec api rules/送料.rule | jq -r .python.signature".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "graph",
@@ -408,7 +410,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec graph rules/送料.rule".into(),
                 r#"rulec graph rules/送料.rule | jq -r '.edges[] | .from + " -> " + .to'"#.into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "certificate",
@@ -430,7 +432,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec certificate rules/送料.rule".into(),
                 "rulec certificate rules/送料.rule | python3 tools/recheck.py".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "schema",
@@ -452,7 +454,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec schema rules/送料.rule".into(),
                 "rulec schema rules/送料.rule --keys alias > request.schema.json".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "adapter",
@@ -485,7 +487,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec adapter rules/送料.rule --template connect-python > adapter.py".into(),
                 "rulec adapter rules/運賃.rule --template docling > extract.py".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "verify",
@@ -516,7 +518,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec verify rules/送料.rule --adapter python3 adapter.py".into(),
                 "rulec verify rules/送料.rule --adapter ./legacy --port 0".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "fixtures",
@@ -544,7 +546,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec fixtures lint replay/2025-08.jsonl rules/送料.rule".into(),
                 "rulec fixtures lint replay/2025-08.jsonl rules/送料.rule --fill 重量=1000".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "replay",
@@ -570,7 +572,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec replay rules/送料.rule --fixtures replay/2025-08.jsonl".into(),
                 "rulec replay 送料@v3 --fixtures replay/2025-08.jsonl --format markdown".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "import",
@@ -597,7 +599,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec import xlsx 運賃表.xlsx --sheet 本則 > rules/運賃.rule".into(),
                 "rulec import csv rates.csv --name 料率 --outputs 2".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "mcp",
@@ -613,7 +615,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec mcp".into(),
                 "rulec mcp --lang ja".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
         Cmd {
             name: "diff",
@@ -653,7 +655,7 @@ fn commands() -> Vec<Cmd> {
                 "rulec diff 送料@v3 送料@v4".into(),
                 "rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures \"$FIXTURES\" --format markdown --terse".into(),
             ],
-            codes: &[],
+            codes: vec![],
         },
     ]
 }

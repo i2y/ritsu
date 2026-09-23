@@ -5890,16 +5890,19 @@ impl Gen<'_> {
         )
     }
 
-    /// `{"mode":"down","grid":1}` — the grid as an integer in the canonical unit, so it can be
-    /// compared against a value straight away.
+    /// `{"mode":"down","grid":1}` — the grid as the integer the value itself travels as, so it
+    /// can be compared against a value straight away. For a rate that is steps, the scale
+    /// `range_json` puts `min` and `max` on: `round half_up(0.1%)` came out as `0` when the grid
+    /// was read as a fraction and cut to an integer.
     fn rounding_json(&self, od: &OutDecl) -> Option<String> {
         let rd = od.rounding.as_ref()?;
         let ty = self.ty_of(&od.name.text);
         let g = crate::types::lit_value_in_pub(&rd.grid, &ty)?;
+        let sc = self.c.wire_scale(&od.name.text);
         Some(
             crate::json::Obj::new()
                 .str("mode", &rd.mode)
-                .int("grid", g.num / g.den)
+                .int("grid", crate::types::wire_int(g, sc))
                 .finish(),
         )
     }

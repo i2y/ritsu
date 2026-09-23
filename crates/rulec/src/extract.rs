@@ -276,12 +276,23 @@ mod tests {
 /// well as alone in a cell. This is the side a rule's amount is looked for in, so it is read
 /// leniently: a value the copy does show must not be reported as missing.
 pub fn shown(grid: &[Vec<String>]) -> Vec<(Option<String>, crate::num::Rat)> {
+    shown_where(grid, |_, _| true)
+}
+
+/// The same, in the cells `keep` takes (by row and column).
+pub fn shown_where(grid: &[Vec<String>], keep: impl Fn(usize, usize) -> bool) -> Vec<(Option<String>, crate::num::Rat)> {
     let mut out = Vec::new();
-    for row in grid {
-        for c in row {
+    for (ri, row) in grid.iter().enumerate() {
+        for (ci, c) in row.iter().enumerate() {
+            if !keep(ri, ci) {
+                continue;
+            }
             // A thousands separator is dropped first: a document writes `1,210円` where the
             // rule writes `1210円`, and they are the same amount.
             let plain = c.replace(',', "");
+            for (_, _, v) in shares(&plain) {
+                out.push((Some(crate::kw::RATE.to_string()), v));
+            }
             let mut i = 0;
             while i < plain.len() {
                 // A continuation byte of a multi-byte character is never an ASCII digit, so
@@ -310,6 +321,12 @@ pub fn stated(grid: &[Vec<String>]) -> Vec<(String, (Option<String>, crate::num:
     for row in grid {
         for c in row {
             let plain = c.replace(',', "");
+            if let [(0, end, v)] = shares(&plain)[..] {
+                if end == plain.len() {
+                    out.push((c.clone(), (Some(crate::kw::RATE.to_string()), v)));
+                    continue;
+                }
+            }
             if !plain.starts_with(|ch: char| ch.is_ascii_digit()) {
                 continue;
             }
@@ -323,6 +340,115 @@ pub fn stated(grid: &[Vec<String>]) -> Vec<(String, (Option<String>, crate::num:
         }
     }
     out
+}
+
+/// A rate a document writes as a share of a round number — `5/1,000`, `8.5/1,000`,
+/// `1,000分の5` — read as the rate it is, 0.5%. Rates set by statute are written per thousand,
+/// and read as two plain numbers they never match the `%` a rule writes. Only a power of ten
+/// from 100 up counts as the whole, so `4/1` and `12/31` stay what they were. `text` has had
+/// its thousands separators taken out; what comes back is where each share starts and ends in
+/// it, and its value.
+fn shares(text: &str) -> Vec<(usize, usize, crate::num::Rat)> {
+    use crate::num::Rat;
+    let b = text.as_bytes();
+    // The decimal that starts at `i`, and where it ends.
+    let decimal = |i: usize| -> Option<(Rat, usize)> {
+        let mut j = i;
+        while j < b.len() && b[j].is_ascii_digit() {
+            j += 1;
+        }
+        if j == i {
+            return None;
+        }
+        let mut digits = text[i..j].to_string();
+        let mut places = 0u32;
+        if j + 1 < b.len() && b[j] == b'.' && b[j + 1].is_ascii_digit() {
+            let mut k = j + 1;
+            while k < b.len() && b[k].is_ascii_digit() {
+                k += 1;
+            }
+            digits.push_str(&text[j + 1..k]);
+            places = (k - j - 1) as u32;
+            j = k;
+        }
+        Some((Rat::checked_new(digits.parse().ok()?, 10i128.checked_pow(places)?)?, j))
+    };
+    let whole = |w: Rat| {
+        let mut n = w.num;
+        while n >= 10 && n % 10 == 0 {
+            n /= 10;
+        }
+        w.is_int() && w.num >= 100 && n == 1
+    };
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        let starts = b[i].is_ascii_digit() && (i == 0 || !(b[i - 1].is_ascii_digit() || b[i - 1] == b'.'));
+        let Some((a, j)) = decimal(i).filter(|_| starts) else {
+            i += 1;
+            continue;
+        };
+        let per = "分の";
+        let share = if text[j..].starts_with('/') {
+            decimal(j + 1).filter(|(w, _)| whole(*w)).and_then(|(w, k)| Some((k, a.checked_div(w)?)))
+        } else if text[j..].starts_with(per) && whole(a) {
+            decimal(j + per.len()).and_then(|(m, k)| Some((k, m.checked_div(a)?)))
+        } else {
+            None
+        };
+        match share {
+            // A share runs to the end of its number: `5/10000` is not `5/1000` and a `0`.
+            Some((k, v)) if !(k < b.len() && b[k].is_ascii_digit()) => {
+                out.push((i, k, v));
+                i = k;
+            }
+            _ => i = j,
+        }
+    }
+    out
+}
+
+/// The cells that stand under a heading that says `word`: the rows and the columns in which
+/// some cell says it, each carried on through the empty cells a merged heading leaves below it
+/// or beside it. `None` when no cell says it, and then the word says nothing about where in
+/// the copy a value is.
+///
+/// A cell of the first column says the word when it begins with it, since a rule names the
+/// row `一般の事業` `一般`; any other cell has to say the word and nothing else. Spaces and `・`
+/// are not read on either side. What comes back only ever widens with more cells that say
+/// the word, so a heading read by mistake costs nothing as long as the right one is read too.
+pub fn under(grid: &[Vec<String>], word: &str) -> Option<Vec<Vec<bool>>> {
+    let bare = |s: &str| s.chars().filter(|c| !c.is_whitespace() && *c != '・').collect::<String>();
+    let want = bare(word);
+    if want.is_empty() {
+        return None;
+    }
+    let says = |c: &str, ci: usize| if ci == 0 { bare(c).starts_with(&want) } else { bare(c) == want };
+    let width = grid.iter().map(|r| r.len()).max().unwrap_or(0);
+    let cell = |r: usize, c: usize| grid.get(r).and_then(|row| row.get(c)).map(|s| s.trim()).unwrap_or("");
+    let (mut rows, mut cols) = (vec![false; grid.len()], vec![false; width]);
+    let mut any = false;
+    for (ri, row) in grid.iter().enumerate() {
+        for (ci, c) in row.iter().enumerate() {
+            if !says(c, ci) {
+                continue;
+            }
+            any = true;
+            rows[ri] = true;
+            let mut r = ri + 1;
+            while r < grid.len() && cell(r, ci).is_empty() {
+                rows[r] = true;
+                r += 1;
+            }
+            cols[ci] = true;
+            let mut k = ci + 1;
+            while k < width && cell(ri, k).is_empty() {
+                cols[k] = true;
+                k += 1;
+            }
+        }
+    }
+    any.then(|| grid.iter().enumerate().map(|(ri, row)| (0..row.len()).map(|ci| rows[ri] || cols[ci]).collect()).collect())
 }
 
 /// Which of the two bands a boundary number belongs to, as a document says it.
@@ -728,13 +854,13 @@ pub fn template(f: &crate::ast::RuleFile, rule_path: &str) -> String {
     } else {
         tr!("# この規則が引いていて、抽出器が要る文書: {}\n", "# The documents of this rule that need an extractor: {}\n", docs.join(", "))
     };
-    which + &body(rule_path)
+    // The `#!` line has to be the first, or `--via ./extract.py` hands the file to a shell.
+    format!("#!/usr/bin/env python3\n{which}{}", body(rule_path))
 }
 
 fn body(rule_path: &str) -> String {
     tr!(
-        "#!/usr/bin/env python3\n\
-         # rulec の抽出アダプタのテンプレート（extract/1）。\n\
+        "# rulec の抽出アダプタのテンプレート（extract/1）。\n\
          # 文書のパスを引数で受け取り、表を JSON Lines で標準出力に書くだけ。\n\
          # 使い方: rulec source fetch {rule_path} --via ./extract.py\n\
          import json, sys\n\n\
@@ -746,13 +872,14 @@ fn body(rule_path: &str) -> String {
          print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\
          doc = DocumentConverter().convert(path).document\n\
          for t in doc.tables:\n    \
-         df = t.export_to_dataframe()\n    \
-         grid = [[str(c) for c in df.columns]] + [[str(c) for c in row] for row in df.values.tolist()]\n    \
+         df = t.export_to_dataframe(doc=doc)\n    \
+         # 見出しの行が見つからなかった表は、列の名前が 0, 1, 2, … になる。文書の行ではないので書かない。\n    \
+         head = [] if list(df.columns) == list(range(len(df.columns))) else [[str(c) for c in df.columns]]\n    \
+         grid = head + [[str(c) for c in row] for row in df.values.tolist()]\n    \
          page = (t.prov[0].page_no if t.prov else None)\n    \
          print(json.dumps({{\"block\": \"table\", \"page\": page, \"grid\": grid}}, ensure_ascii=False), flush=True)\n\n\
          print(json.dumps({{\"done\": True}}), flush=True)\n",
-        "#!/usr/bin/env python3\n\
-         # A rulec extraction adapter (extract/1).\n\
+        "# A rulec extraction adapter (extract/1).\n\
          # It takes the document's path as an argument and writes its tables to stdout as JSON Lines.\n\
          # Use it with: rulec source fetch {rule_path} --via ./extract.py\n\
          import json, sys\n\n\
@@ -764,8 +891,10 @@ fn body(rule_path: &str) -> String {
          print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\
          doc = DocumentConverter().convert(path).document\n\
          for t in doc.tables:\n    \
-         df = t.export_to_dataframe()\n    \
-         grid = [[str(c) for c in df.columns]] + [[str(c) for c in row] for row in df.values.tolist()]\n    \
+         df = t.export_to_dataframe(doc=doc)\n    \
+         # A table docling found no header row in has its columns named 0, 1, 2, …; that row is not the document's.\n    \
+         head = [] if list(df.columns) == list(range(len(df.columns))) else [[str(c) for c in df.columns]]\n    \
+         grid = head + [[str(c) for c in row] for row in df.values.tolist()]\n    \
          page = (t.prov[0].page_no if t.prov else None)\n    \
          print(json.dumps({{\"block\": \"table\", \"page\": page, \"grid\": grid}}, ensure_ascii=False), flush=True)\n\n\
          print(json.dumps({{\"done\": True}}), flush=True)\n"

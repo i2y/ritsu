@@ -164,6 +164,10 @@ inductive CellTest where
   /-- `starts_with "ABC"` on a column of strings (§15.101). A finite set of prefixes cuts
       the strings into finitely many classes, which is all §6.2 asks of a column. -/
   | prefixOf : List (List Char) → CellTest
+  /-- `100, 200` on a column of numbers: the values, each a point of the axis (§15.143). -/
+  | inVals : List Rat → CellTest
+  /-- `not: 100, 200`. -/
+  | notInVals : List Rat → CellTest
   deriving Repr, Inhabited
 
 /-- The coordinates a cell takes. An axis arrives as its labels — what each coordinate is
@@ -180,6 +184,14 @@ def boxOf (labels : List String) (coords : List (Option Coord)) : CellTest → L
       | some (some x) => ts.all (fun t => admitsCmp x t.1 t.2)
       | _ => false)
   | .prefixOf _ => []
+  | .inVals ws => (List.range labels.length).filter (fun c =>
+      match coords[c]? with
+      | some (some x) => ws.any (fun w => admitsCmp x .eq w)
+      | _ => false)
+  | .notInVals ws => (List.range labels.length).filter (fun c =>
+      match coords[c]? with
+      | some (some x) => !ws.any (fun w => admitsCmp x .eq w)
+      | _ => false)
 
 /-! Every value a cell compares against falls outside every coordinate of the axis, so no
     coordinate is split by it. This is §6.2's construction, checked rather than assumed. -/
@@ -187,6 +199,10 @@ def axisSplits (coords : List (Option Coord)) : CellTest → Bool
   | .cmp ts => coords.all (fun oc =>
       match oc with
       | some x => ts.all (fun t => splitsAt x t.2)
+      | none => true)
+  | .inVals ws | .notInVals ws => coords.all (fun oc =>
+      match oc with
+      | some x => ws.all (fun w => splitsAt x w)
       | none => true)
   | _ => true
 
@@ -234,6 +250,47 @@ theorem mem_boxOf_prefix_iff {prefixes : List (Option (List Char))} {ws : List (
     obtain ⟨i, hi⟩ := List.getElem?_of_mem hmem
     exact ⟨w, hw, by
       simpa using List.isPrefixOf_iff_prefix.2 (List.prefix_of_prefix_length_le hws hs (hlong i w hi hws))⟩
+
+/-- The values a set cell names split no coordinate of its axis. -/
+theorem splits_of_axisSplits_vals {coords : List (Option Coord)} {ws : List Rat} {c : Nat} {x : Coord}
+    (hc : coords[c]? = some (some x))
+    (hsplit : coords.all (fun oc => match oc with | some x => ws.all (fun w => splitsAt x w) | none => true) = true) :
+    ∀ w ∈ ws, splitsAt x w = true := by
+  intro w hw
+  have hmem : some x ∈ coords := by
+    have := List.mem_of_getElem? hc
+    simpa using this
+  exact List.all_eq_true.1 (List.all_eq_true.1 hsplit (some x) hmem) w hw
+
+/-- **A set cell's box says exactly what the cell says.** For a coordinate whose values the
+    axis knows, being in the box and being one of the cell's values are the same thing. -/
+theorem mem_boxOf_in_iff {labels : List String} {coords : List (Option Coord)}
+    {ws : List Rat} {c : Nat} {x : Coord} {v : Rat}
+    (hlen : c < labels.length) (hc : coords[c]? = some (some x))
+    (hsplit : axisSplits coords (.inVals ws) = true) (hv : x.holds v) :
+    c ∈ boxOf labels coords (.inVals ws) ↔ ∃ w ∈ ws, v = w := by
+  have hx := splits_of_axisSplits_vals hc hsplit
+  simp only [boxOf, List.mem_filter, List.mem_range, hc, hlen, true_and, List.any_eq_true]
+  constructor
+  · rintro ⟨w, hw, h⟩
+    exact ⟨w, hw, (admits_iff (hx w hw) hv).1 h⟩
+  · rintro ⟨w, hw, h⟩
+    exact ⟨w, hw, (admits_iff (hx w hw) hv).2 h⟩
+
+/-- And its complement: in the box exactly when the value is none of the cell's. -/
+theorem mem_boxOf_notIn_iff {labels : List String} {coords : List (Option Coord)}
+    {ws : List Rat} {c : Nat} {x : Coord} {v : Rat}
+    (hlen : c < labels.length) (hc : coords[c]? = some (some x))
+    (hsplit : axisSplits coords (.notInVals ws) = true) (hv : x.holds v) :
+    c ∈ boxOf labels coords (.notInVals ws) ↔ ∀ w ∈ ws, v ≠ w := by
+  have hx := splits_of_axisSplits_vals hc hsplit
+  simp only [boxOf, List.mem_filter, List.mem_range, hc, hlen, true_and, Bool.not_eq_true',
+    List.any_eq_false]
+  constructor
+  · intro h w hw hvw
+    exact h w hw ((admits_iff (hx w hw) hv).2 hvw)
+  · intro h w hw hadm
+    exact h w hw ((admits_iff (hx w hw) hv).1 hadm)
 
 /-- **A comparison cell's box says exactly what the cell says.** For a coordinate whose
     values the axis knows, being in the box and satisfying every comparison in the cell are

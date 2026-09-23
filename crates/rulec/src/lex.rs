@@ -155,9 +155,21 @@ fn is_unit_tail(c: char) -> bool {
 }
 
 pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
+    let (ts, soft) = lex_line_soft(line_no, text)?;
+    match soft.into_iter().next() {
+        Some(d) => Err(d),
+        None => Ok(ts),
+    }
+}
+
+/// The tokens of a line, with the errors that do not stop it. A number written with thousands
+/// separators is reported (E049) and read as the number it plainly is: cutting the line off
+/// there would end the table it stands in, and every row below would be reported as well.
+pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag>), Diag> {
     let b = text.as_bytes();
     let mut i = 0usize;
     let mut out = Vec::new();
+    let mut soft = Vec::new();
 
     while i < b.len() {
         let c = text[i..].chars().next().unwrap();
@@ -239,6 +251,12 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
             let after = text[i + clen..].chars().next();
             if after.is_some_and(|d| d.is_ascii_digit()) {
                 let (num, len) = lex_number(&text[i..], true)?;
+                if let Some((e, whole, n)) = separated(&text[i..], &num, len, line_no, start) {
+                    soft.push(e);
+                    push(Kind::Num(whole), n, &mut out);
+                    i += n;
+                    continue;
+                }
                 push(Kind::Num(num), len, &mut out);
                 i += len;
                 continue;
@@ -268,6 +286,12 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
                 continue;
             }
             let (num, len) = lex_number(&text[i..], false)?;
+            if let Some((e, whole, n)) = separated(&text[i..], &num, len, line_no, start) {
+                soft.push(e);
+                push(Kind::Num(whole), n, &mut out);
+                i += n;
+                continue;
+            }
             push(Kind::Num(num), len, &mut out);
             i += len;
             continue;
@@ -315,7 +339,7 @@ pub fn lex_line(line_no: usize, text: &str) -> Result<Vec<Token>, Diag> {
         push(Kind::Ident(word), n, &mut out);
         i += n;
     }
-    Ok(out)
+    Ok((out, soft))
 }
 
 fn try_date(s: &str) -> Option<(i32, u32, u32, usize)> {
@@ -344,6 +368,55 @@ fn try_date(s: &str) -> Option<(i32, u32, u32, usize)> {
 /// One number at the start of `s`, and how many bytes it took: `990円`, `1.5%`, `100万`. What
 /// a document's cell says is read with this too, so that a copy and a table are read in one
 /// language (§15.82).
+/// E049: a number written with thousands separators, as a document writes it — `1,000`,
+/// `1,949,000円`. `,` separates the members of a set, so the figure would be read as more than
+/// one value, and in a cell it was: `<=1,000` held `<=1` and let `000` fall away. One to three
+/// digits followed by groups of exactly three after `,` is taken for the separator it almost
+/// always is, and refused with the literal as it has to be written — which is also what the
+/// rest of the line is read with: the number, and how many bytes the text spent on it.
+fn separated(text: &str, num: &Num, len: usize, line_no: usize, start: usize) -> Option<(Diag, Num, usize)> {
+    if num.unit.is_some() || !num.frac.is_empty() || num.mult != 1 || !(1..=3).contains(&num.digits.len()) || num.raw.contains('_') {
+        return None;
+    }
+    let rest = &text[len..];
+    let mut j = 0;
+    loop {
+        let r = &rest[j..];
+        let sep = if r.starts_with(',') {
+            1
+        } else if r.starts_with('，') {
+            '，'.len_utf8()
+        } else {
+            break;
+        };
+        let d = r[sep..].as_bytes();
+        if d.len() >= 3 && d[..3].iter().all(u8::is_ascii_digit) && !d.get(3).is_some_and(u8::is_ascii_digit) {
+            j += sep + 3;
+        } else {
+            break;
+        }
+    }
+    if j == 0 {
+        return None;
+    }
+    let digits = format!("{}{}", &text[..len], rest[..j].replace([',', '，'], ""));
+    // What follows the last group — a decimal, a multiplier, a unit — is part of the literal.
+    let (whole, n) = lex_number(&format!("{digits}{}", &rest[j..]), num.neg).ok()?;
+    let written = &text[..len + j + (n - digits.len())];
+    let fixed = whole.raw.clone();
+    Some((
+        Diag::error("E049", tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"))
+            .mark(Span::new(line_no, start, written.len()), tr!("`{fixed}` と書きます", "write `{fixed}`"))
+            .note(tr!(
+                "`,` は集合の要素を区切る記号なので、`{written}` のままでは二つ以上の値に読まれます。桁を区切りたいときは `_` を使えます（`1_000`）。",
+                "`,` separates the members of a set, so `{written}` as it stands reads as more than one value. To group digits, use `_` (`1_000`)."
+            ))
+            .fix(crate::diag::FixKind::RewriteLiteral, fixed),
+        whole,
+        written.len(),
+    ))
+}
+
 pub fn number(s: &str) -> Option<(Num, usize)> {
     if !s.starts_with(|c: char| c.is_ascii_digit()) {
         return None;

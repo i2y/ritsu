@@ -270,8 +270,8 @@ src/              48 modules, and 6 more under codegen/: kw, i18n, lex, parse, t
                   pinned), apply (a rule applied to another case), vfs (reading at a git
                   revision), sha256, wasm (the checker as the site's playground)
 tests/corpus/     48 rules, and the copies of the documents they cite
-tests/mutants/    96 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 46 in Japanese, 36 in English
+tests/mutants/    97 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 47 in Japanese, 36 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
                   which tests/library.rs replays the rules over
 tests/            and the properties: threeway (every language agrees), readme, docs,
@@ -282,7 +282,7 @@ tests/            and the properties: threeway (every language agrees), readme, 
                   playground answers what the binary answers)
 ```
 
-48 rules — 21 transcribed from a published source, 27 written to reach the rest of the language — are checked, generated and run on every commit, and all 85 diagnostics are implemented.
+48 rules — 21 transcribed from a published source, 27 written to reach the rest of the language — are checked, generated and run on every commit, and all 86 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

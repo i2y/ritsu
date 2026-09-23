@@ -88,7 +88,9 @@ in.
 
 - **E116** — an amount a row writes is nowhere in the copy it cites. This is the error no
   check of the table alone can reach: `1100円` written as `1000円` sits on the rounding grid,
-  leaves no gap and overlaps nothing.
+  leaves no gap and overlaps nothing. Where the copy has a heading that says a word of the row
+  (`関東`), the amount is looked for in that heading's row and column, so the amount of the
+  next row, which is somewhere in the copy too, is caught as well.
 - **W120** — a number the copy states as a whole cell is used by no row, which is what **a row
   that was never transcribed** looks like. Completeness cannot see it: the inputs of a dropped
   row fall into one of the rows that remain.
@@ -159,7 +161,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 96 deliberately broken
+   and that implementation has not been proved correct. The evidence is 97 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

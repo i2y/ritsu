@@ -209,6 +209,20 @@ fn thresholds(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
                 out.push((b, b, b.add(q)));
             }
         }
+        // A set is its members, each a point of its own; its complement is the same points
+        // with inside and outside the other way round.
+        Cell::Set(ls) => {
+            for b in ls.iter().filter_map(lit) {
+                out.push((b, b, b.sub(q)));
+                out.push((b, b, b.add(q)));
+            }
+        }
+        Cell::Not(ls) => {
+            for b in ls.iter().filter_map(lit) {
+                out.push((b, b.sub(q), b));
+                out.push((b, b.add(q), b));
+            }
+        }
         _ => {}
     }
     out

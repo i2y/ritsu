@@ -202,27 +202,38 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
     // The example is about this rule's own output, so it is written in that output's unit.
     // It used to be yen whatever the rule counted, which told the writer of a rule in dollars
     // that "some input computes to 35.5 yen" and to try `round up(10円)` — a message about a
-    // currency the rule does not have (§15.111).
+    // currency the rule does not have (§15.111). A rate is held as a fraction and written in
+    // percent, so it is put in percent before anything is said about it: 12% used to come out
+    // as "0.12%", rounded as if it were 0.12%.
     let unit = unit_word(f, t);
     let u = unit.as_str();
+    let first = f.outputs.first().map(|o| o.name.text.as_str()).unwrap_or("");
+    let rate = matches!(t.syms.get(first).map(|s| &s.ty), Some(types::Ty::Rate));
+    let scale = t.wire_scale(first);
+    // A fraction of the grid the output is stored on: a whole yen, one step of a rate.
+    let whole = raw.mul(Rat::int(scale)).is_int();
+    let raw = if rate { raw.mul(Rat::int(100)) } else { raw };
+    // The grid a hint names: a rate's own step, ten of anything else.
+    let grid = if rate { format!("{}%", Rat::new(100, scale)) } else { format!("10{u}") };
+    let typo = if rate { "1.451%".to_string() } else { format!("1451{u}") };
     for d in diags.iter_mut().filter(|d| d.code == "E104") {
         // Only form A (a fraction can occur) says "an unrounded value reaches the output".
         // Giving form B the same first line would claim a leak where nothing leaks.
-        if !raw.is_int() {
+        if !whole {
             d.title = tr!("丸めていない値が出力に到達します", "An unrounded value reaches the output");
         }
-        if raw.is_int() {
+        if whole {
             d.notes.push(tr!(
                 "入力をいくつか試しましたが、この出力に端数は生まれませんでした（表から引いた額がそのまま出るか、式の中で既に丸めているためです）。",
                 "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it)."
             ));
             d.notes.push(tr!(
-                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、1451{u} のような桁の打ち間違いが E106 で止まります。",
-                "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451{u} is stopped by E106."
+                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、{typo} のような桁の打ち間違いが E106 で止まります。",
+                "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as {typo} is stopped by E106."
             ));
             d.notes.push(tr!(
-                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10{u})",
-                "Hint: add rounding to the output declaration, e.g. {} {}(10{u})",
+                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}({grid})",
+                "Hint: add rounding to the output declaration, e.g. {} {}({grid})",
                 crate::kw::ROUND, crate::kw::UP
             ));
         } else {
@@ -242,8 +253,8 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
                 crate::kw::DOWN, crate::kw::HALF_UP, crate::kw::UP
             ));
             d.notes.push(tr!(
-                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}(10{u})",
-                "Hint: add rounding to the output declaration, e.g. {} {}(10{u})",
+                "ヒント: 出力の宣言に丸めを書いてください。例: {} {}({grid})",
+                "Hint: add rounding to the output declaration, e.g. {} {}({grid})",
                 crate::kw::ROUND, crate::kw::UP
             ));
         }
