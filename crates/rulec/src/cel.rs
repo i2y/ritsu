@@ -773,7 +773,9 @@ mod tests {
     fn 読めない部分は真として広く読む() {
         // `startsWith` is not read: the conjunction keeps only what is.
         let got = read("this.region.startsWith('a') && this.b > 0").widen();
-        assert!(matches!(got, Formula::Atom(Atom::Num(_, Rel::Lt))), "{got:?}");
+        // Over whole numbers `b > 0` is `−b + 1 <= 0`.
+        let Formula::Atom(Atom::Num(l, Rel::Le)) = &got else { panic!("{got:?}") };
+        assert_eq!((l.terms.get(&f("b")), l.k), (Some(&Rat::int(-1)), Rat::int(1)), "{got:?}");
         // Under a negation an unread part still widens: !(U && x) is !U || !x, and !U is
         // unknown, which is true.
         assert_eq!(read("!(this.region.startsWith('a') && this.b > 0)").widen(), Formula::True);
@@ -809,8 +811,8 @@ mod tests {
         // Unset, an `optional` number is 0: `!has(x) || x <= b` allows x = 0 or x ≤ b.
         let g = Formula::and(vec![read("!has(this.coupon) || this.coupon <= this.b"), read("this.b <= 10"), read("this.coupon >= 0")]);
         assert_eq!(span(&g, "coupon"), vec![(Some(0), Some(0), vec![]), (Some(0), Some(10), vec![])]);
-        // With no presence of its own, `has` is "not the default".
-        assert_eq!(span(&Formula::and(vec![read("has(this.a)"), read("this.a >= 0 && this.a <= 3")]), "a"), vec![(Some(0), Some(3), vec![0])]);
+        // With no presence of its own, `has` is "not the default": 1 to 3 of 0 to 3.
+        assert_eq!(span(&Formula::and(vec![read("has(this.a)"), read("this.a >= 0 && this.a <= 3")]), "a"), vec![(Some(1), Some(3), vec![])]);
     }
 
     #[test]

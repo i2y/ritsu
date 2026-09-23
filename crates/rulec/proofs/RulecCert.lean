@@ -3,6 +3,7 @@ import RulecCert.Check
 import RulecCert.Sound
 import RulecCert.Sieve
 import RulecCert.Linear
+import RulecCert.Contract
 import RulecCert.Certified
 import RulecCert.Values
 import RulecCert.Read

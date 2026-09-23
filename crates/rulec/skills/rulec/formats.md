@@ -506,8 +506,9 @@ nothing to draw an edge between.
 ## `certificate`
 
 One object per rule: the **evidence** behind all five things `check` proves — completeness,
-the overlaps, the unreachable rows, the units and int64 — small enough that a program which
-shares no code with rulec can re-check it in milliseconds. Two such programs read it.
+the overlaps, the unreachable rows, the units and int64 — and, for each contract the rule
+reads its inputs from, why what the contract lets through is what the rule takes. It is
+small enough that a program which shares no code with rulec can re-check it in milliseconds. Two such programs read it.
 `tools/recheck.py` has no dependencies and fits in one file. `proofs/` is a Lean 4
 development that states the meaning of a rule, writes the checks as functions, and
 **proves** that a `true` from each one settles the matching claim; the program `lake build`
@@ -546,9 +547,11 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | field | meaning |
 |---|---|
 | `types` | every name's declared type, and `groups` every group's members. A row's box and a value's type are **derived** from these by the re-checker, not taken from the certificate |
+| `enums` | every enum's values, which is what a contract's strings are held to |
 | `ranges` | every name's declared range, as exact rationals (`"7/2"`, an open end `null`). The int64 claim is re-checked from these |
 | `constraints` | the `constraint` lines of the rule, once for the whole document: `left`, `op`, `right`. They are what the caller guarantees and the entry guard enforces (§15.55), and a value's interval can rest on one — the share of `allocate` is bounded by the amount only because a running total never passes the whole (§15.102). A re-checker reads them the way rulec does, chains included, and refuses an interval it cannot then derive. Each table repeats the ones its own columns are about, under `tables[].constraints` |
 | `values` | every value the rule computes — `derive`, `define` and `result` alike: the type the rule declares for it, the expression as a tree, the interval the ranges and the guarantees force it into, the scale it is stored at, and the integer that interval reaches. A value with no interval to state (a truth value, an enum) says `null` for all three, and a re-checker refuses that for a type that is stored as an integer. Two things are re-checked from this: the units (§2.1, E103), by deriving each node's type from the leaves up — a name's from `types`, a literal's from the `type` it carries — and int64 (§7.4, E108), by interval arithmetic over the same expression. A literal also carries the value its unit resolves to, so the re-checker does arithmetic and not units |
+| `contracts` | one entry per `shape` the rule reads inputs from: the condition the contract places on those values, and why the rule's **door** keeps it (§15.142). The claim is inclusion — every value the contract lets through is one the door takes — and the door is what the rule asks of the same values: each numeric input inside its declared range, at the `scale` between the rule's value and the integer the contract carries; each `constraint` between two of them; each enum input among its enum's values. `file` is the contract, named relative to the rule, and `sha256` its digest, which a re-checker given `--rule` holds the file beside the rule to. `vars` names the values the condition speaks of, by kind (`num`, `str`, `bool`): the inputs first, then the contract's other fields a condition mentions, as `@` and their path. An optional input, and one counted or tested with `where`, is not among them; the field-by-field comparison (E122) is what covers those. `atoms` are the conditions: `{"num":{name:coef,…},"k":…,"rel":"le"}` is `Σ coef·name + k <= 0` (`"lt"` is `<`, `"eq"` is `=`), already in whole-number form — `2x < 5` is written `x − 2 <= 0` — so that a sum over the rationals can show a boundary that holds only over the integers; `{"str":name,"values":[…],"in":true}` is a string among those values (`false`: among none); `{"bool":name,"value":v}` a truth value. `cases` opens the condition: a value gets through when it satisfies every atom of some case. `null` means it opens into too many cases, and nothing is claimed. `unread` says a rule of the contract could not be read and was taken as true, so the condition is the contract read wider than it is. `doors` lists what the door asks, `{"range":input,"hi":false}`, `{"constraint":k}` or `{"member":input}`, each with one proof per case: `{"farkas":[…]}` multipliers over the case's atoms (`{"atom":i,"part":0,"y":…}`, `part` 1 being the other half of an equality) and the negation of what is asked (`{"door":true,"y":…}`) that add up to a contradiction, as under `refuted`; `{"clash":name}`, strings or truth values of the case that cannot all hold; `{"within":true}`, every string the case lets the input be is one of the enum's. `proofs` is `null` for a thing the certificate cannot show. A re-checker **builds the door again** from `ranges`, `constraints`, `types` and `enums`, so a thing the list leaves out is named as not shown rather than passed |
 | `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2), for a numeric axis each coordinate as a closed interval in `bounds` and the `step` its values sit on, and for a `string` axis the prefix each coordinate stands for in `prefixes` (`null` for the one coordinate that is under none of them). `kind` is `input`, `derived`, `define`, `walk` (what a `count` or a `sum` left behind) or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker. A re-checker holds a numeric axis to §6.2's construction: the coordinates run from the declared range's low end to its high end, each touching the next or one `step` past it, with nothing between — so a coordinate cannot be quietly removed and the gap under it left uncovered |
 | `decides` | the columns this table writes, in the order `rows[].produces` lists their values. A table below names one of these as an axis of kind `upstream`, and that is the link from a fact to the rows that settle it |
 | `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
@@ -575,7 +578,8 @@ point is settled over the rationals, not the integers. Each check is then a theo
 `Certified.unique`, `Certified.complete`, `Certified.reached`, `eval_type_of_typeOf`,
 `stored_in_i64`. A refutation's is `farkas_sound` — multipliers that pass the check leave no
 values at all — and `not_asked_of_farkas`, which turns that into "no point of this box is asked
-about". One of them,
+about". A contract's is `included_sound`: when every proof passes, any values that satisfy
+some case of the condition satisfy everything the door asks. One of them,
 `mem_boxOf_cmp_iff`, is what ties the boxes to the cells: a coordinate is taken exactly when
 every value in it satisfies the cell, **provided** no value a cell compares against falls
 strictly inside a coordinate — §6.2's construction, which the checkers verify rather than
@@ -586,13 +590,18 @@ byte spans above. Everything else the certificate says about the rule is **its o
 and no re-checker can go behind it without parsing the `.rule` file — which neither does, on
 purpose: a checker that reads a rule the way rulec reads it is not independent of it. So
 these are stated, not derived: the declared `ranges` and `types`, the `groups`, the
-`constraints`, each value's `expr` and `scale`, and how many `outputs` a table has. A forged
-one of those is a forged rule, not a forged proof about the rule in front of you.
+`enums`, the `constraints`, each value's `expr` and `scale`, and how many `outputs` a table
+has. A forged one of those is a forged rule, not a forged proof about the rule in front of
+you. The same holds for a contract: its digest ties the section to one text, and the rest
+of the section — which inputs the contract feeds and at what scale, the atoms, how they
+open into cases — is the certificate's reading, since neither re-checker reads CEL or a
+schema. An input left out of the section is one whose door is not checked.
 
 Four more things are named in the run rather than proved, and both programs end with a line
 that lists them rather than printing a clean "ok": the pairs the axes do not part, rows an
 `apply` brought in, rows the sieve rules out, and a point handed over with no values behind
-it. One thing is counted: a cell literal written in a
+it. A contract adds three: a condition with parts taken as true (`unread`), one that opens
+into too many cases, and a thing the door asks that the certificate gives no proof for. One thing is counted: a cell literal written in a
 unit the axis does not write its own coordinates in (`2kg` against an axis of grams), where
 pinning the number would take the lexer's unit table. A literal in the axis's own unit has to
 be one of its boundaries or lie outside it altogether (§6.2).
@@ -621,7 +630,7 @@ $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules
   適用料率: 2 rows — complete, 2 rows reached, no two rows meet
     2 boxes read back from the cells they were written as
   the digest is rules/健康保険料.rule's, and 52 cells are read back out of it
-OK: every claim this program states was proved, by the theorems in RulecCert.Sound.
+OK: every claim this program states was proved, by the theorems of RulecCert.
 ```
 
 Exit code 0 when every table holds and 1 when a claim does not; `tools/recheck.py` answers 2

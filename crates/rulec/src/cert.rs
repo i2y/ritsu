@@ -173,8 +173,9 @@ fn source_json(src: &str, spans: &[Option<(usize, usize, usize)>], tests: &[Cert
         .collect::<Vec<_>>())
 }
 
-pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
+pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> String {
     let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src))).collect();
+    let contracts: Vec<String> = crate::projection::contract_certificates(f, c, rule_path).iter().map(contract_json).collect();
     let mut ranges = Obj::new();
     let mut names: Vec<&String> = c.ranges.keys().collect();
     names.sort();
@@ -221,8 +222,114 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str) -> String {
                 })
                 .collect::<Vec<_>>()),
         )
+        .raw("enums", {
+            let mut e = Obj::new();
+            let mut names: Vec<&String> = c.enums.keys().collect();
+            names.sort();
+            for n in names {
+                e = e.raw(n, crate::json::strs(&c.enums[n]));
+            }
+            e.finish()
+        })
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
+        .raw("contracts", arr(&contracts))
+        .finish()
+}
+
+/// One contract's section (§15.142): the condition it places on what the rule reads, as
+/// atoms over named values opened into cases, and for each thing the rule's door asks — an
+/// end of an input's range, a `constraint`, an enum's values — why every case keeps it. A
+/// re-checker builds the door again from the rule; what it takes from here is the reading of
+/// the contract and the proofs.
+fn contract_json(k: &crate::projection::ContractCert) -> String {
+    use crate::relation::{Atom, Proof, Rel};
+    let name = |t: &crate::relation::Term| k.names.get(t).cloned().unwrap_or_else(|| format!("@{}", t.word()));
+    let atoms: Vec<String> = k
+        .atoms
+        .iter()
+        .map(|a| match a {
+            Atom::Num(l, rel) => {
+                let mut ts = Obj::new();
+                for (t, c) in &l.terms {
+                    ts = ts.str(&name(t), &rat(c));
+                }
+                let r = match rel {
+                    Rel::Le => "le",
+                    Rel::Lt => "lt",
+                    Rel::Eq => "eq",
+                    Rel::Ne => "ne",
+                };
+                Obj::new().raw("num", ts.finish()).str("k", &rat(&l.k)).str("rel", r).finish()
+            }
+            Atom::Str(t, vs, yes) => Obj::new().str("str", &name(t)).raw("values", crate::json::strs(vs)).bool("in", *yes).finish(),
+            Atom::Bool(t, v) => Obj::new().str("bool", &name(t)).bool("value", *v).finish(),
+            Atom::Unknown => Obj::new().bool("unknown", true).finish(),
+        })
+        .collect();
+    let proof = |p: &Proof| match p {
+        Proof::Clash(t) => Obj::new().str("clash", &name(t)).finish(),
+        Proof::Within => Obj::new().bool("within", true).finish(),
+        Proof::Farkas(r) => Obj::new()
+            .raw(
+                "farkas",
+                arr(&r
+                    .used()
+                    .into_iter()
+                    .map(|(q, y)| {
+                        let o = match &q.origin {
+                            crate::fourier::Origin::Contract { atom, part } => Obj::new().int("atom", *atom as i128).int("part", *part as i128),
+                            crate::fourier::Origin::None => Obj::new().bool("door", true),
+                            _ => Obj::new().str("unknown", ""),
+                        };
+                        o.str("y", &rat(&y)).finish()
+                    })
+                    .collect::<Vec<_>>()),
+            )
+            .finish(),
+    };
+    let doors: Vec<String> = k
+        .doors
+        .iter()
+        .map(|(d, ps)| {
+            let o = match d {
+                crate::projection::Door::Range { input, hi } => Obj::new().str("range", input).bool("hi", *hi),
+                crate::projection::Door::Constraint(i) => Obj::new().int("constraint", *i as i128),
+                crate::projection::Door::Member { input } => Obj::new().str("member", input),
+            };
+            o.raw("proofs", ps.as_ref().map(|ps| arr(&ps.iter().map(proof).collect::<Vec<_>>())).unwrap_or_else(|| "null".into())).finish()
+        })
+        .collect();
+    Obj::new()
+        .str("shape", &k.shape)
+        .str("file", &k.file)
+        .str("sha256", &k.sha256)
+        .bool("unread", k.unread)
+        .raw(
+            "vars",
+            Obj::new()
+                .raw("num", crate::json::strs(&k.nums))
+                .raw("str", crate::json::strs(&k.strs))
+                .raw("bool", crate::json::strs(&k.bools))
+                .finish(),
+        )
+        .raw(
+            "inputs",
+            arr(&k
+                .inputs
+                .iter()
+                .map(|(n, sc, path)| Obj::new().str("input", n).int("scale", *sc).str("from", path).finish())
+                .collect::<Vec<_>>()),
+        )
+        .raw("atoms", arr(&atoms))
+        .raw(
+            "cases",
+            match &k.cases {
+                Some(cs) => arr(&cs.iter().map(|c| arr(&c.iter().map(|i| i.to_string()).collect::<Vec<_>>())).collect::<Vec<_>>()),
+                None => "null".into(),
+            },
+        )
+        .raw("doors", arr(&doors))
         .finish()
 }
 

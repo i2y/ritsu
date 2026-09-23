@@ -173,8 +173,20 @@ pub enum Formula {
 }
 
 impl Formula {
-    /// An atom, folded to a constant when it has no term left in it.
+    /// An atom, folded to a constant when it has no term left in it, and a numeric one put in
+    /// the form that says the most over whole numbers (§15.142). Every term a condition speaks
+    /// about is a whole number — a field of an integer kind, or a count — so `a < b` is
+    /// `a − b + 1 <= 0`, `2a <= 3` is `a <= 1`, `2a = 1` is false, and `a ≠ b` is the two
+    /// cases `a − b <= −1` and `a − b >= 1`. Read this way, the rationals a refutation is found
+    /// over have no point between two whole ones for a condition to slip through.
     pub fn atom(a: Atom) -> Formula {
+        if let Atom::Num(l, rel) = &a {
+            if !l.terms.is_empty() {
+                if let Some(f) = whole_atom(l, *rel) {
+                    return f;
+                }
+            }
+        }
         let holds = match &a {
             Atom::Num(l, rel) => l.constant().map(|k| {
                 let o = k.cmp_to(Rat::int(0));
@@ -290,6 +302,45 @@ impl Formula {
     }
 }
 
+/// A numeric atom over whole-number terms, with whole coefficients that share no factor and
+/// the constant rounded the way the inequality allows. `None` where the arithmetic outgrows
+/// 128 bits, and the atom is then kept as it was.
+fn whole_atom(l: &Lin, rel: Rel) -> Option<Formula> {
+    let mut m: i128 = 1;
+    for c in l.terms.values() {
+        m = lcm(m, c.den)?;
+    }
+    let scaled = l.scale(Rat::int(m))?;
+    let mut g: i128 = 0;
+    for c in scaled.terms.values() {
+        let (mut a, mut b) = (g.abs(), c.num.abs());
+        while b != 0 {
+            let t = a % b;
+            a = b;
+            b = t;
+        }
+        g = a;
+    }
+    if g == 0 {
+        return None;
+    }
+    let base = scaled.scale(Rat::new(1, g))?;
+    let with = |k: i128| Lin { terms: base.terms.clone(), k: Rat::int(k) };
+    let neg = |k: i128| -> Option<Lin> { Some(Lin { terms: base.terms.iter().map(|(t, c)| (t.clone(), c.mul(Rat::int(-1)))).collect(), k: Rat::int(k) }) };
+    let k = base.k;
+    Some(match rel {
+        Rel::Le => Formula::Atom(Atom::Num(with(ceil(k)), Rel::Le)),
+        Rel::Lt => Formula::Atom(Atom::Num(with(floor(k).checked_add(1)?), Rel::Le)),
+        Rel::Eq if k.is_int() => Formula::Atom(Atom::Num(with(k.num), Rel::Eq)),
+        Rel::Eq => Formula::False,
+        Rel::Ne if k.is_int() => Formula::or(vec![
+            Formula::Atom(Atom::Num(with(k.num.checked_add(1)?), Rel::Le)),
+            Formula::Atom(Atom::Num(neg(k.num.checked_mul(-1)?.checked_add(1)?)?, Rel::Le)),
+        ]),
+        Rel::Ne => Formula::True,
+    })
+}
+
 /// How many cases a condition may open into before it is given up on. Each `or` under an
 /// `and` multiplies them; a contract that goes past this is read as saying nothing across its
 /// fields, which is the wide reading.
@@ -304,13 +355,15 @@ pub struct Relation {
     pub cases: Option<Vec<Vec<usize>>>,
 }
 
-/// Why one case cannot hold.
+/// Why one case cannot hold, or keeps what it is asked to.
 #[derive(Debug, Clone)]
 pub enum Proof {
     /// The strings or the truth values of one term cannot all hold at once.
     Clash(Term),
     /// The numbers cannot: the system, and the multipliers that refute it (§15.139).
     Farkas(fourier::Refutation),
+    /// The strings the case lets a term be are all among the ones asked for (§15.142).
+    Within,
 }
 
 /// What a search for a point found.
@@ -529,6 +582,27 @@ impl Relation {
                     out.push(v.clone());
                 }
             }
+        }
+        Some(out)
+    }
+
+    /// Why each case lets a string term be only one of `values` (§15.142): its strings or
+    /// truth values clash, the strings it lists for the term are all among `values`, or its
+    /// numbers cannot hold. `None` as soon as one case lets the term be something else.
+    pub fn within(&self, t: &Term, values: &[String], name: &dyn Fn(&Term) -> String) -> Option<Vec<Proof>> {
+        let mut out = Vec::new();
+        for case in self.each() {
+            let s = self.split(&case, &Extra::default(), name);
+            if let Some(c) = s.clash {
+                out.push(Proof::Clash(c));
+                continue;
+            }
+            let ex = s.except.get(t);
+            if s.only.get(t).is_some_and(|vs| vs.iter().all(|v| ex.is_some_and(|e| e.contains(v)) || values.contains(v))) {
+                out.push(Proof::Within);
+                continue;
+            }
+            out.push(Proof::Farkas(fourier::Refutation::of(s.ineqs)?));
         }
         Some(out)
     }
@@ -779,8 +853,20 @@ mod tests {
         let ne7 = Formula::cmp(&Lin::term(f("x")), Rel::Ne, &Lin::con(Rat::int(7)));
         let r = Relation::of(&Formula::and(vec![Formula::or(vec![eq0, band]), ne7]));
         let got = r.span(&f("x"), &Extra::default(), &key).unwrap();
+        // `x ≠ 7` is the two cases `x <= 6` and `x >= 8` over whole numbers.
         assert!(got.contains(&(Some(0), Some(0), vec![])), "{got:?}");
-        assert!(got.contains(&(Some(5), Some(10), vec![7])), "{got:?}");
+        assert!(got.contains(&(Some(5), Some(6), vec![])), "{got:?}");
+        assert!(got.contains(&(Some(8), Some(10), vec![])), "{got:?}");
+    }
+
+    #[test]
+    fn 整数の条件は整数の形にする() {
+        // 2x < 5 is x <= 2; 2x = 5 has no whole solution.
+        let two_x = Lin::term(f("x")).scale(Rat::int(2)).unwrap();
+        let lt = Formula::cmp(&two_x, Rel::Lt, &Lin::con(Rat::int(5)));
+        let Formula::Atom(Atom::Num(l, Rel::Le)) = &lt else { panic!("{lt:?}") };
+        assert_eq!((l.terms.get(&f("x")), l.k), (Some(&Rat::int(1)), Rat::int(-2)));
+        assert_eq!(Formula::cmp(&two_x, Rel::Eq, &Lin::con(Rat::int(5))), Formula::False);
     }
 
     #[test]

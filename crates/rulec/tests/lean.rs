@@ -363,6 +363,7 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.Certified.unique",
         "RulecCert.farkas_sound",
         "RulecCert.not_asked_of_farkas",
+        "RulecCert.included_sound",
         "RulecCert.admits_iff",
         "RulecCert.mem_boxOf_cmp_iff",
         "RulecCert.eval_type_of_typeOf",
@@ -434,4 +435,80 @@ fn 線形のモデルの乗数は証明付きの検査器でも確かめられ�
         assert_eq!(code, 1, "{tag}: 別の事実を指した乗数が通ってしまった:\n{said}");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Ways to lie about a contract, on the certificate of 速達の見積 (§15.142): each with
+/// whether it has to fail, or be said out loud as not shown.
+fn contract_lies(cert: &str) -> Vec<(&'static str, String, bool)> {
+    let p = r#"{"farkas":[{"atom":9,"part":0,"y":"1"},{"door":true,"y":"1"}]}"#;
+    let door = format!(r#"{{"range":"申告額","hi":false,"proofs":[{p},{p}]}},"#);
+    assert!(cert.contains(&door), "証明書の形が変わっていて、偽れない:\n{cert}");
+    let at = cert.find(r#""sha256":""#).unwrap() + r#""sha256":""#.len();
+    let mut digest = cert.to_string();
+    digest.replace_range(at..at + 1, if &cert[at..at + 1] == "0" { "1" } else { "0" });
+    vec![
+        ("乗数を変える", cert.replacen(p, &p.replacen(r#""door":true,"y":"1""#, r#""door":true,"y":"2""#, 1), 1), true),
+        ("契約を広く読む", cert.replacen(r#"{"num":{"申告額":"-1"},"k":"0","rel":"le"}"#, r#"{"num":{"申告額":"-1"},"k":"-5","rel":"le"}"#, 1), true),
+        ("別の条件を指す", cert.replacen(r#"{"atom":9,"part":0"#, r#"{"atom":10,"part":0"#, 1), true),
+        ("場合を一つ欠く", cert.replacen(&door, &format!(r#"{{"range":"申告額","hi":false,"proofs":[{p}]}},"#), 1), true),
+        ("食い違わない場合を食い違うと言う", cert.replacen(&door, &format!(r#"{{"range":"申告額","hi":false,"proofs":[{{"clash":"速達"}},{p}]}},"#), 1), true),
+        ("値を渡す入力を値の一覧から外す", cert.replacen(r#""vars":{"num":["申告額","補償額","重さ"]"#, r#""vars":{"num":["補償額","重さ"]"#, 1), true),
+        ("別の契約の本文", digest, true),
+        ("入口の条件を一つ落とす", cert.replacen(&door, "", 1), false),
+        ("証明を空にする", cert.replacen(&door, r#"{"range":"申告額","hi":false,"proofs":null},"#, 1), false),
+    ]
+}
+
+/// A case whose truth values cannot both hold, added by hand with the proof that says so:
+/// rulec leaves such cases out when it opens a condition, so no certificate of its own
+/// carries one, and this is how the re-checker's reading of that proof is held to account.
+fn with_a_clashing_case(cert: &str) -> String {
+    let last = r#"{"num":{"補償額":"1"},"k":"-300000","rel":"le"}],"cases":["#;
+    assert!(cert.contains(last), "証明書の形が変わっていて、場合を足せない:\n{cert}");
+    cert.replacen(last, r#"{"num":{"補償額":"1"},"k":"-300000","rel":"le"},{"bool":"速達","value":true}],"cases":[[0,15],"#, 1)
+        .replace(r#""proofs":["#, r#""proofs":[{"clash":"速達"},"#)
+}
+
+/// The same through the proved checks: what the door asks is proved to hold in every case
+/// the contract lets through, by `included_sound`, and the same lies are refused (§15.142).
+#[test]
+fn 契約の関係は証明付きの検査器でも確かめられる() {
+    let Some(bin) = checker() else {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    };
+    let rule = "tests/corpus/速達の見積.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("contract 見積: 7 of 7 things the door asks hold in all 2 cases"), "{said}");
+    assert!(said.contains("the digest of contract 見積 is tests/corpus/contracts/quote.proto's"), "{said}");
+    assert!(said.contains("OK: every claim"), "{said}");
+    for (what, forged, fails) in contract_lies(&cert) {
+        assert_ne!(forged, cert, "{what}: 偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rule));
+        if fails {
+            assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった:\n{said}");
+            assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない:\n{said}");
+        } else {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(
+                said.contains("stated rather than proved: contract 見積: the low end of 申告額's range is not shown to hold"),
+                "{what}: 示していない条件を言っていない:\n{said}"
+            );
+        }
+    }
+    let (code, said) = lean(&bin, &with_a_clashing_case(&cert), Some(rule));
+    assert_eq!(code, 0, "食い違う場合の証明が通らない:\n{said}");
+    assert!(said.contains("hold in all 3 cases"), "{said}");
+
+    let rule = "tests/corpus/出荷の送料.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    assert_eq!(lean(&bin, &cert, Some(rule)).0, 0);
+    let wider = cert.replacen(r#""values":["honshu","hokkaido","okinawa"],"in":true"#, r#""values":["honshu","hokkaido","okinawa","kyushu"],"in":true"#, 1);
+    assert_ne!(wider, cert);
+    let (code, said) = lean(&bin, &wider, Some(rule));
+    assert_eq!(code, 1, "列挙にない値を通す契約が通ってしまった:\n{said}");
 }

@@ -118,7 +118,10 @@ reaches every row with the values behind it, the interval and the type every com
 is forced into — and where every cell stands in your file, down to the byte. Where no axis
 parts a pair, or no row takes a box, and the rule's derives and constraints rule it out
 together, it prints the multipliers that add those up to a contradiction; a re-checker does
-the addition.
+the addition. For a contract the rule reads its inputs from, it prints the contract's
+condition opened into cases, and for each case why it keeps what the rule's door asks — each
+declared range, each `constraint` between two inputs, each enum's values — so that a request
+the caller's own validation lets through is one the rule takes.
 
 Two programs read it, and neither shares code with rulec:
 
@@ -140,7 +143,9 @@ forged certificate got past a re-checker.
 those byte spans. Everything else in it — the declared ranges, the types, the groups, the
 constraints, each value's expression — is the document's own word, and going behind that
 would take a parser for the rule. A checker that reads a rule the way rulec reads it is not
-independent of it.
+independent of it. The reading of a contract — which inputs it feeds, which conditions it
+places and how they open into cases — is the document's word too: the certificate is tied to
+the contract's text by a digest, and neither re-checker reads CEL or a schema.
 
 [Formats](formats.md){ .md-button }
 

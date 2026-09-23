@@ -30,14 +30,25 @@ What it checks, per table:
   * the table is **complete**: the cover is a tree whose every internal node has one child
     per coordinate of the axis at its depth, so it tiles the space by shape; every leaf
     either names a row that takes the whole subtree, or says why no input reaches it — a
-    `constraint` that cannot hold there, or a derived value whose coordinate lies outside
-    what the derive can produce. Both of those are re-checked here from the ranges.
+    `constraint` that cannot hold there, a derived value whose coordinate lies outside
+    what the derive can produce, or multipliers that add the box's ends, the derives and
+    the constraints up to a contradiction (§15.141). All of those are re-checked here.
+
+What it checks, per contract (§15.142): the rule's door — each numeric input's declared
+range at the scale the value travels at, each `constraint` between two of them, each enum
+input's values — is built again here from the rule, and every case of the contract's
+condition has to keep each thing the door asks: by multipliers that add the case and the
+thing's negation up to a contradiction, by strings or truth values the case cannot all
+have, or by an enum input's strings all being the enum's. The condition itself, and how it
+opens into cases, is the certificate's reading of the contract.
 
 Given `--rule <file.rule>` it also checks that the certificate is **about that text**: the
 digest matches, and every cell of every row is read back out of the file at the byte span
-the certificate names and held beside the parsed form it states. A literal is turned into
-a number by looking it up among the axis's own boundary coordinates, so no unit table is
-needed here; a literal that is not one of them is counted and reported rather than passed.
+the certificate names and held beside the parsed form it states. Each contract, named
+relative to the rule, has to have the digest the certificate gives for it. A literal is
+turned into a number by looking it up among the axis's own boundary coordinates, so no unit
+table is needed here; a literal that is not one of them is counted and reported rather than
+passed.
 
 A leaf that rests on the tables above is re-checked too, and only with what the certificate
 carries: the columns each table decides, the value each of its rows writes, and the boxes
@@ -54,6 +65,7 @@ read. No dependencies; Python 3.9 or later.
 import hashlib
 import json
 import math
+import os
 import re
 import sys
 from fractions import Fraction
@@ -805,6 +817,155 @@ def facts_hold(t, cert, values, extra):
     return None
 
 
+# --- A contract, held to the rule's door (§15.142) -----------------------------------------
+#
+# What the certificate says about a contract is its condition on the values the rule reads,
+# opened into cases, and for each thing the door asks of those values — an end of an input's
+# range, a `constraint`, an enum's values — why every case keeps it. The door is built again
+# here from the rule's ranges, constraints and enums; what is taken from the certificate is
+# the reading of the contract and the proofs.
+
+def contract_doors(cert, k):
+    """The door, built from the rule: `{key: (terms, k, strict)}` for a numeric condition that
+    has to hold (`sum + k <= 0`), `{key: values}` for an enum input's values."""
+    scales = {i["input"]: Fraction(str(i["scale"])) for i in k["inputs"]}
+    out = {}
+    for inp, sc in scales.items():
+        if inp not in k["vars"]["num"]:
+            raise Bad(f"contract {k['shape']}: {inp} is fed by the contract and missing from its values")
+        r = cert.get("ranges", {}).get(inp)
+        if r is None:
+            continue
+        lo, hi = num(r[0]), num(r[1])
+        if lo is not None:
+            out[("range", inp, False)] = ({inp: Fraction(-1)}, lo * sc, False)
+        if hi is not None:
+            out[("range", inp, True)] = ({inp: Fraction(1)}, -hi * sc, False)
+    for i, c in enumerate(cert.get("constraints", [])):
+        if c["left"] not in scales or c["right"] not in scales:
+            continue
+        d = {c["left"]: 1 / scales[c["left"]]}
+        d[c["right"]] = d.get(c["right"], Fraction(0)) - 1 / scales[c["right"]]
+        if c["op"] in (">=", ">"):
+            d = {n: -v for n, v in d.items()}
+        out[("constraint", i)] = (d, Fraction(0), c["op"] in ("<", ">"))
+    enums = cert.get("enums", {})
+    types = cert.get("types", {})
+    for inp in k["vars"]["str"]:
+        if types.get(inp) in enums:
+            out[("member", inp)] = enums[types[inp]]
+    return out
+
+
+def door_text(cert, key):
+    """One thing the door asks, in words."""
+    if key[0] == "range":
+        return f"the {'high' if key[2] else 'low'} end of {key[1]}'s range"
+    if key[0] == "constraint":
+        c = cert["constraints"][key[1]]
+        return f"constraint {c['left']} {c['op']} {c['right']}"
+    return f"{key[1]} being one of its enum's values"
+
+
+def strings_clash(atoms, case, name, extra_ok=None):
+    """Whether the strings a case lets `name` be are none at all — or, with `extra_ok`, all
+    among those. Needs at least one list the case says the value is in."""
+    yes = [a["values"] for i in case for a in [atoms[i]] if a.get("str") == name and a.get("in")]
+    no = [a["values"] for i in case for a in [atoms[i]] if a.get("str") == name and not a.get("in")]
+    if not yes:
+        return False
+    for v in yes[0]:
+        out = any(v not in y for y in yes) or any(v in n for n in no)
+        if not out and not (extra_ok is not None and v in extra_ok):
+            return False
+    return True
+
+
+def contract_proof(atoms, case, door, proof):
+    """Whether one proof shows one case keeps one door. None when it does, or what is wrong."""
+    if "clash" in proof:
+        n = proof["clash"]
+        bools = {atoms[i]["value"] for i in case if atoms[i].get("bool") == n}
+        if len(bools) == 2 or strings_clash(atoms, case, n):
+            return None
+        return f"the values of {n} in this case do not clash"
+    if proof.get("within"):
+        if not isinstance(door[1], list):
+            return "a numeric condition is not kept by the strings of a case"
+        if strings_clash(atoms, case, door[0], door[1]):
+            return None
+        return f"this case lets {door[0]} be a value the enum does not have"
+    if "farkas" in proof:
+        total, k, strict = {}, Fraction(0), False
+        for ref in proof["farkas"]:
+            y = num(ref.get("y"))
+            if y is None or y < 0:
+                return "a multiplier is not a number at least zero"
+            if ref.get("door"):
+                if isinstance(door[1], list):
+                    return "an enum's values are not an inequality"
+                terms, fk, fs = door[1]
+                terms, fk, fs = {n: -v for n, v in terms.items()}, -fk, not fs
+            elif "atom" in ref:
+                i, part = ref["atom"], ref.get("part", 0)
+                if i not in case:
+                    return f"it names atom {i}, which is not in this case"
+                a = atoms[i]
+                if "num" not in a or a.get("rel") not in ("le", "lt", "eq"):
+                    return f"atom {i} is not an inequality"
+                terms = {n: num(v) for n, v in a["num"].items()}
+                fk = num(a["k"])
+                if a["rel"] == "eq" and part == 1:
+                    terms, fk = {n: -v for n, v in terms.items()}, -fk
+                elif part != 0:
+                    return f"atom {i} has no part {part}"
+                fs = a["rel"] == "lt"
+            else:
+                return "it names an inequality from nowhere this program knows"
+            for n, v in terms.items():
+                total[n] = total.get(n, Fraction(0)) + y * v
+            k += y * fk
+            strict = strict or (fs and y > 0)
+        if any(v != 0 for v in total.values()):
+            return "the names do not cancel"
+        if k > 0 or (k == 0 and strict):
+            return None
+        return "what is left is not false"
+    return "a proof of a kind this program does not know"
+
+
+def check_contract(cert, k):
+    """Re-check one contract's section. Returns a one-line summary; raises Bad on a claim that
+    fails."""
+    name = k["shape"]
+    atoms, cases = k["atoms"], k.get("cases")
+    doors = contract_doors(cert, k)
+    if cases is None:
+        STATED.append(f"contract {name}: its condition opens into too many cases to show anything about")
+        return f"contract {name}: too many cases to open (not re-checked)"
+    said = {}
+    for d in k["doors"]:
+        key = ("range", d["range"], d["hi"]) if "range" in d else ("constraint", d["constraint"]) if "constraint" in d else ("member", d.get("member"))
+        said[key] = d.get("proofs")
+    shown = 0
+    for key, door in doors.items():
+        proofs = said.get(key)
+        what = door_text(cert, key)
+        if proofs is None:
+            STATED.append(f"contract {name}: {what} is not shown to hold")
+            continue
+        if len(proofs) != len(cases):
+            raise Bad(f"contract {name}: {what} has {len(proofs)} proofs for {len(cases)} cases")
+        for ci, (case, proof) in enumerate(zip(cases, proofs)):
+            why = contract_proof(atoms, case, (key[1], door), proof)
+            if why is not None:
+                raise Bad(f"contract {name}: {what}, case {ci + 1}: {why}")
+        shown += 1
+    if k.get("unread"):
+        STATED.append(f"contract {name}: some of its rules could not be read and were taken as true")
+    return f"contract {name}: {shown} of {len(doors)} things the door asks hold in all {len(cases)} cases"
+
+
 def check_cover(t):
     """Completeness: the cover has to tile the space, and every leaf has to hold."""
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
@@ -1551,6 +1712,12 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    for k in cert.get("contracts", []):
+        try:
+            out.append("  " + check_contract(cert, k))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
     return out, ok
 
 
@@ -1600,6 +1767,21 @@ def main(argv):
                 else:
                     lines.append(f"  FAILED the certificate is about another text than {rule}")
                     ok = False
+                # Each contract's reading is tied to its text the same way (§15.142): the file
+                # is named relative to the rule, and its digest is in the certificate.
+                for k in cert.get("contracts", []):
+                    there = os.path.join(os.path.dirname(rule), k["file"])
+                    try:
+                        with open(there, "rb") as fh:
+                            digest = hashlib.sha256(fh.read()).hexdigest()
+                    except OSError:
+                        STATED.append(f"contract {k['shape']} is held to no text: {there} cannot be read")
+                        continue
+                    if digest == k.get("sha256"):
+                        lines.append(f"  the digest of contract {k['shape']} is {there}'s")
+                    else:
+                        lines.append(f"  FAILED contract {k['shape']} is read from another text than {there}")
+                        ok = False
             if rule is None:
                 STATED.append("the certificate is held to no text: pass `--rule <file.rule>`")
             if ok:

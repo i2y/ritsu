@@ -1,10 +1,10 @@
 /-
   `rulec-recheck`: holds a certificate to its claims, and says which of them it proved.
 
-  Every test this program runs is a function from `RulecCert.Check`, `RulecCert.Sieve` or
-  `RulecCert.Values`, and every one of those has a theorem in `RulecCert.Sound` saying what
-  a `true` from it settles. So the program is not a second opinion about the same rule: it
-  is the proofs, run. What it cannot settle it says out loud — a pair W114 left undecided,
+  Every test this program runs is a function from `RulecCert.Check`, `RulecCert.Sieve`,
+  `RulecCert.Linear`, `RulecCert.Values` or `RulecCert.Contract`, and every one of those has
+  a theorem saying what a `true` from it settles. So the program is not a second opinion
+  about the same rule: it is the proofs, run. What it cannot settle it says out loud — a pair W114 left undecided,
   a leaf resting on a table above, a value whose interval this arithmetic gives up on —
   because a checker that printed "ok" over those would be worth less than no checker.
 -/
@@ -583,6 +583,148 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   r := checkBoxes t r
   return r
 
+/-- **The contracts, held to the rule's door** (§15.142). The door is built again here from
+    the rule's ranges, constraints and enums; what is read from the certificate is the reading
+    of each contract and the proofs, and `included_sound` is what a pass settles. -/
+def checkContracts (cert : Json) (r : Report) : Report := Id.run do
+  let mut r := r
+  let typesJson := (field cert "types").getD Json.null
+  let typeOf : String → String := fun n =>
+    ((objPairs typesJson).find? (fun p => p.1 == n)).bind (fun p => str p.2) |>.getD ""
+  let enumsJson := (field cert "enums").getD Json.null
+  let enumOf : String → Option (List String) := fun t =>
+    ((objPairs enumsJson).find? (fun p => p.1 == t)).map (fun p => ((arr p.2).getD #[]).toList.filterMap str)
+  let rangeEnd : String → Bool → Option Rat := fun n hi =>
+    match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
+    | some (_, v) => (arr v) >>= (fun a => a[if hi then 1 else 0]?) >>= optRat
+    | none => none
+  let consJ := fieldArr cert "constraints"
+  for k in fieldArr cert "contracts" do
+    let name := fieldStr k "shape"
+    let vars := (field k "vars").getD Json.null
+    let nums := (fieldArr vars "num").toList.filterMap str
+    let strs := (fieldArr vars "str").toList.filterMap str
+    let bools := (fieldArr vars "bool").toList.filterMap str
+    let atom : Json → Option CAtom := fun a =>
+      match field a "num" with
+      | some ts => do
+          let terms := objPairs ts
+          let coeffs ← terms.foldlM (fun acc t => do
+            let i ← nums.idxOf? t.1
+            let c ← optRat t.2
+            some (vadd acc (unitAt i c))) []
+          let kk ← field a "k" >>= optRat
+          let q : LinIneq := { coeffs := coeffs, k := kk, strict := fieldStr a "rel" == "lt" }
+          match fieldStr a "rel" with
+          | "le" => some (.le q)
+          | "lt" => some (.le q)
+          | "eq" => some (.eq q)
+          | _ => none
+      | none =>
+        match field a "str" >>= str with
+        | some n => do
+            let i ← strs.idxOf? n
+            let yes ← field a "in" >>= boolOf
+            some (.str i ((fieldArr a "values").toList.filterMap str) yes)
+        | none => do
+            let n ← field a "bool" >>= str
+            let i ← bools.idxOf? n
+            let b ← field a "value" >>= boolOf
+            some (.bool i b)
+    let why : Json → Option CaseWhy := fun p =>
+      match field p "farkas" >>= arr with
+      | some refs => do
+          let rs ← refs.toList.mapM (fun ref => do
+            let y ← field ref "y" >>= optRat
+            if (field ref "door" >>= boolOf) == some true then some (CRef.door, y)
+            else do
+              let i ← fieldNat ref "atom"
+              some (CRef.atom i ((fieldNat ref "part").getD 0), y))
+          some (.farkas rs)
+      | none =>
+        match field p "clash" >>= str with
+        | some n =>
+          match strs.idxOf? n, bools.idxOf? n with
+          | some i, _ => some (.clashStr i)
+          | none, some i => some (.clashBool i)
+          | none, none => none
+        | none => if (field p "within" >>= boolOf) == some true then some .within else none
+    let some atoms := (fieldArr k "atoms").toList.mapM atom
+      | r := r.fail s!"contract {name}: a condition this program cannot read"; continue
+    let casesJ := (field k "cases").getD Json.null
+    if casesJ.isNull then
+      r := r.state s!"contract {name}: its condition opens into too many cases to show anything about"
+      r := r.say s!"  contract {name}: too many cases to open (not re-checked)"
+      continue
+    let cases : List (List Nat) := ((arr casesJ).getD #[]).toList.map (fun c => ((arr c).getD #[]).toList.filterMap nat)
+    -- The door, from the rule: each numeric input's range at the scale it travels at, each
+    -- `constraint` between two of them, each enum input's values.
+    let inputs : List (String × Rat) := (fieldArr k "inputs").toList.filterMap (fun i => do
+      let n ← field i "input" >>= str
+      let sc ← field i "scale" >>= optRat
+      some (n, sc))
+    let mut doors : List (String × String × Door) := []
+    for (n, sc) in inputs do
+      match nums.idxOf? n with
+      | none => r := r.fail s!"contract {name}: {n} is fed by the contract and missing from its values"
+      | some i =>
+        if let some lo := rangeEnd n false then
+          doors := doors ++ [(s!"range {n} lo", s!"the low end of {n}'s range",
+            .num { coeffs := unitAt i (-1), k := lo * sc, strict := false })]
+        if let some hi := rangeEnd n true then
+          doors := doors ++ [(s!"range {n} hi", s!"the high end of {n}'s range",
+            .num { coeffs := unitAt i 1, k := -(hi * sc), strict := false })]
+    for ci in [0 : consJ.size] do
+      let c := consJ[ci]!
+      let l := fieldStr c "left"
+      let rr := fieldStr c "right"
+      let op := fieldStr c "op"
+      match inputs.lookup l, inputs.lookup rr, nums.idxOf? l, nums.idxOf? rr with
+      | some sl, some sr, some il, some ir =>
+        let d := vadd (unitAt il (1 / sl)) (unitAt ir (-(1 / sr)))
+        let coeffs := if op == ">=" || op == ">" then vscale (-1) d else d
+        doors := doors ++ [(s!"constraint {ci}", s!"constraint {l} {op} {rr}",
+          .num { coeffs := coeffs, k := 0, strict := op == "<" || op == ">" })]
+      | _, _, _, _ => pure ()
+    for n in strs do
+      match enumOf (typeOf n), strs.idxOf? n with
+      | some vs, some i => doors := doors ++ [(s!"member {n}", s!"{n} being one of its enum's values", .member i vs)]
+      | _, _ => pure ()
+    -- The proofs the certificate gives, by the thing the door asks.
+    let keyOf : Json → String := fun d =>
+      match field d "range" >>= str with
+      | some n => s!"range {n} {if (field d "hi" >>= boolOf) == some true then "hi" else "lo"}"
+      | none =>
+        match fieldNat d "constraint" with
+        | some i => s!"constraint {i}"
+        | none => s!"member {fieldStr d "member"}"
+    let said : List (String × Json) := (fieldArr k "doors").toList.map (fun d => (keyOf d, (field d "proofs").getD Json.null))
+    let mut checked : List (String × Door × List CaseWhy) := []
+    let mut unshown : List String := []
+    let mut bad := false
+    for (key, text, door) in doors do
+      match said.lookup key with
+      | none => unshown := unshown ++ [text]
+      | some pj =>
+        if pj.isNull then unshown := unshown ++ [text]
+        else
+          match ((arr pj).getD #[]).toList.mapM why with
+          | none => bad := true
+          | some ws => checked := checked ++ [(text, door, ws)]
+    if bad then
+      r := r.fail s!"contract {name}: a proof this program cannot read"
+    else if includedOk atoms cases (checked.map (·.2)) then
+      r := r.say s!"  contract {name}: {checked.length} of {doors.length} things the door asks hold in all {cases.length} cases"
+    else
+      for (text, door, ws) in checked do
+        if !includedOk atoms cases [(door, ws)] then
+          r := r.fail s!"contract {name}: the proofs for {text} do not hold in every case"
+    for text in unshown do
+      r := r.state s!"contract {name}: {text} is not shown to hold"
+    if (field k "unread" >>= boolOf) == some true then
+      r := r.state s!"contract {name}: some of its rules could not be read and were taken as true"
+  return r
+
 /-- The file a certificate is about, split into lines the way a span counts them. -/
 def readLines (bs : ByteArray) : Array ByteArray := Id.run do
   let mut out : Array ByteArray := #[]
@@ -661,6 +803,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         r := checkAbove tj (fieldArr cert "tables") r
         r := checkTable t r
         tables := tables.push t
+    r := checkContracts cert r
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"
@@ -679,10 +822,25 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         if apart > 0 then
           r := r.state s!"{apart} rows written in an applied rule, and read back in its own certificate"
         r := r.say s!"  the digest is {path}'s, and {read} cells are read back out of it{rest}"
+        -- Each contract's reading is tied to its text the same way (§15.142): the file is
+        -- named relative to the rule, and its digest is in the certificate.
+        let dir : System.FilePath := match (System.FilePath.mk path).parent with
+          | some d => if d.toString.isEmpty then "." else d
+          | none => "."
+        for k in fieldArr cert "contracts" do
+          let there := dir / fieldStr k "file"
+          let got ← try pure (some (← IO.FS.readBinFile there)) catch _ => pure none
+          match got with
+          | none => r := r.state s!"contract {fieldStr k "shape"} is held to no text: {there} cannot be read"
+          | some cb =>
+            if Sha256.hex cb == fieldStr k "sha256" then
+              r := r.say s!"  the digest of contract {fieldStr k "shape"} is {there}'s"
+            else
+              r := r.fail s!"contract {fieldStr k "shape"} is read from another text than {there}"
     for l in r.lines do IO.println l
     if r.bad.isEmpty then
       if r.stated.isEmpty then
-        IO.println "OK: every claim this program states was proved, by the theorems in RulecCert.Sound."
+        IO.println "OK: every claim this program states was proved, by the theorems of RulecCert."
       else
         let n := if r.stated.size == 1 then "one thing is" else s!"{r.stated.size} things are"
         IO.println s!"OK, and {n} stated rather than proved: {", ".intercalate r.stated.toList}."

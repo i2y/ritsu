@@ -1919,7 +1919,7 @@ fn certificate(files: &[&String]) -> ExitCode {
             Ok(x) => x,
             Err(e) => return e,
         };
-        println!("{}", rulec::cert::certificate(&f, &c, &src));
+        println!("{}", rulec::cert::certificate(&f, &c, &src, path));
     }
     ExitCode::from(0)
 }

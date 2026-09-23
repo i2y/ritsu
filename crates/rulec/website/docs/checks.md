@@ -67,7 +67,10 @@ validation and breaks the constraint, and the generated code refuses it at the d
 example is that request, and for a `.proto` `fix.text` is the `(buf.validate.message).cel` that
 would promise it. A row whose cells ask for a combination the contract never lets through —
 express above 5 kg where the contract caps express at 5 kg — is **W124**. What cannot be read of
-a condition (a remainder, a string function) is taken as true, so neither can miss.
+a condition (a remainder, a string function) is taken as true, so neither can miss. When the
+contract keeps everything the rule asks of these values, `rulec certificate` writes down why,
+case by case, and both re-checkers verify it — the Lean one on the theorem `included_sound`
+([How it is checked](assurance.md)).
 
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in

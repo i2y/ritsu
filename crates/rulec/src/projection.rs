@@ -2659,3 +2659,145 @@ fn unset_step<'c>(chain: &[&'c crate::proto::Field], to_leaf: bool) -> Option<(u
         unset.then_some((i, *fd))
     })
 }
+
+// --- What the certificate says about the contracts (§15.142) -----------------------------
+
+/// One thing the rule's door asks of the values a contract feeds it: an end of an input's
+/// declared range, a `constraint` between two of them, or that an enum input is one of its
+/// values.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Door {
+    Range { input: String, hi: bool },
+    Constraint(usize),
+    Member { input: String },
+}
+
+/// The certificate's section on one contract: the condition it places on what the rule reads,
+/// opened into cases, and for each thing the door asks, why every case keeps it. A door with
+/// no proofs is one this could not show, which a re-checker says out loud.
+pub struct ContractCert {
+    pub shape: String,
+    pub file: String,
+    /// The digest of the contract's text, which ties the reading below to one file as the
+    /// certificate's own digest ties it to one rule.
+    pub sha256: String,
+    /// Whether some rule of the contract could not be read and was taken as true: the claim is
+    /// then about the contract read wider than it is, which is still a claim about the contract.
+    pub unread: bool,
+    /// The names of the values, by kind: the inputs the contract feeds first, then its other
+    /// fields a condition mentions (`@` and the path).
+    pub nums: Vec<String>,
+    pub strs: Vec<String>,
+    pub bools: Vec<String>,
+    /// Each numeric input, with the scale it travels at and the path it is read from.
+    pub inputs: Vec<(String, i128, String)>,
+    pub atoms: Vec<Atom>,
+    pub cases: Option<Vec<Vec<usize>>>,
+    pub doors: Vec<(Door, Option<Vec<crate::relation::Proof>>)>,
+    /// How each term is named here.
+    pub names: BTreeMap<Term, String>,
+}
+
+/// The contracts' sections of a certificate: every shape an input reads from, with what its
+/// condition says and why the rule's door keeps it (§15.142).
+pub fn contract_certificates(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<ContractCert> {
+    let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+    let mut out = Vec::new();
+    for d in &f.shapes {
+        let Ok(text) = std::fs::read_to_string(dir.join(&d.file)) else { continue };
+        let Ok(con) = read(d, &text) else { continue };
+        let ac = con.across(f, c, &d.name.text);
+        if ac.terms.is_empty() {
+            continue;
+        }
+        // The names of the terms: an input's own name where one reads it, `@path` otherwise.
+        let mut names: BTreeMap<Term, String> = ac.names.clone();
+        let mut kinds: BTreeMap<Term, u8> = BTreeMap::new();
+        for a in &ac.rel.atoms {
+            match a {
+                Atom::Num(l, _) => l.terms.keys().for_each(|t| {
+                    kinds.insert(t.clone(), 0);
+                }),
+                Atom::Str(t, ..) => {
+                    kinds.insert(t.clone(), 1);
+                }
+                Atom::Bool(t, _) => {
+                    kinds.insert(t.clone(), 2);
+                }
+                Atom::Unknown => {}
+            }
+        }
+        for (input, t) in &ac.terms {
+            let ty = c.ty_of(input).unwrap_or(Ty::Unknown);
+            let k = match ty {
+                Ty::Enum(_) => 1,
+                Ty::Bool => 2,
+                _ => 0,
+            };
+            kinds.insert(t.clone(), k);
+        }
+        for t in kinds.keys() {
+            names.entry(t.clone()).or_insert_with(|| format!("@{}", t.word()));
+        }
+        let listed = |kind: u8| -> Vec<String> {
+            let mut inputs: Vec<String> = kinds.iter().filter(|(t, k)| **k == kind && ac.names.contains_key(*t)).map(|(t, _)| names[t].clone()).collect();
+            inputs.sort();
+            let mut others: Vec<String> = kinds.iter().filter(|(t, k)| **k == kind && !ac.names.contains_key(*t)).map(|(t, _)| names[t].clone()).collect();
+            others.sort();
+            inputs.extend(others);
+            inputs
+        };
+        let (nums, strs, bools) = (listed(0), listed(1), listed(2));
+        let name = |t: &Term| ac.name(t);
+        let mut inputs = Vec::new();
+        let mut doors = Vec::new();
+        for (input, t) in &ac.terms {
+            let path = f.inputs.iter().find(|i| i.name.text == *input).and_then(|i| i.from.as_ref()).map(full_path).unwrap_or_default();
+            match c.ty_of(input).unwrap_or(Ty::Unknown) {
+                Ty::Enum(e) => {
+                    let vals = c.enums.get(&e).cloned().unwrap_or_default();
+                    doors.push((Door::Member { input: input.clone() }, ac.rel.within(t, &vals, &name)));
+                }
+                Ty::Bool => {}
+                _ => {
+                    let sc = c.wire_scale(input);
+                    inputs.push((input.clone(), sc, path));
+                    let Some((lo, hi)) = c.ranges.get(input).copied() else { continue };
+                    let v = fourier::Lin::var(input);
+                    let s = Rat::int(sc);
+                    // The door's negation: a value below the low end, or above the high one.
+                    if let Some(lo) = lo {
+                        let neg = v.clone().plus(&fourier::Lin::con(lo.mul(s).mul(Rat::int(-1)))).le(true);
+                        doors.push((Door::Range { input: input.clone(), hi: false }, ac.rel.refute(&Extra { ineqs: vec![neg], ..Extra::default() }, &name)));
+                    }
+                    if let Some(hi) = hi {
+                        let neg = v.plus(&fourier::Lin::con(hi.mul(s).mul(Rat::int(-1)))).ge(true);
+                        doors.push((Door::Range { input: input.clone(), hi: true }, ac.rel.refute(&Extra { ineqs: vec![neg], ..Extra::default() }, &name)));
+                    }
+                }
+            }
+        }
+        for (i, k) in f.constraints.iter().enumerate() {
+            if ac.term(&k.left).is_some() && ac.term(&k.right).is_some() {
+                let neg = wire_constraint(k, i, c, true).tag(fourier::Origin::None);
+                doors.push((Door::Constraint(i), ac.rel.refute(&Extra { ineqs: vec![neg], ..Extra::default() }, &name)));
+            }
+        }
+        inputs.sort();
+        out.push(ContractCert {
+            shape: d.name.text.clone(),
+            file: d.file.clone(),
+            sha256: crate::sha256::hex(text.as_bytes()),
+            unread: ac.unread,
+            nums,
+            strs,
+            bools,
+            inputs,
+            atoms: ac.rel.atoms.clone(),
+            cases: ac.rel.cases.clone(),
+            doors,
+            names,
+        });
+    }
+    out
+}

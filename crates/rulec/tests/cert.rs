@@ -477,7 +477,7 @@ fn 証明書は自分の届く先を言う() {
     let cut = doc.find("## `certificate`").expect("formats.md に certificate の節が無い");
     let sect = &doc[cut..doc[cut + 4..].find("\n## ").map(|i| cut + 4 + i).unwrap_or(doc.len())];
     let low = sect.to_lowercase();
-    for want in ["completeness", "int64", "recheck.py", "undecided", "does not pass `check`", "units", "--rule"] {
+    for want in ["completeness", "int64", "recheck.py", "undecided", "does not pass `check`", "units", "--rule", "`contracts`", "`enums`", "included_sound"] {
         assert!(low.contains(want), "formats.md の certificate の節が `{want}` を言っていない");
     }
 }
@@ -523,4 +523,102 @@ fn 線形のモデルの乗数は再検査で足し算される() {
     let (code, said) = recheck(&overlap);
     assert_eq!(code, 0, "{said}");
     assert!(said.contains("1 apart on the linear model"), "{said}");
+}
+
+/// Ways to lie about a contract, on the certificate of 速達の見積 (§15.142): each with
+/// whether it has to fail, or be said out loud as not shown.
+fn contract_lies(cert: &str) -> Vec<(&'static str, String, bool)> {
+    let p = r#"{"farkas":[{"atom":9,"part":0,"y":"1"},{"door":true,"y":"1"}]}"#;
+    let door = format!(r#"{{"range":"申告額","hi":false,"proofs":[{p},{p}]}},"#);
+    assert!(cert.contains(&door), "証明書の形が変わっていて、偽れない:\n{cert}");
+    let at = cert.find(r#""sha256":""#).unwrap() + r#""sha256":""#.len();
+    let mut digest = cert.to_string();
+    digest.replace_range(at..at + 1, if &cert[at..at + 1] == "0" { "1" } else { "0" });
+    vec![
+        ("乗数を変える", cert.replacen(p, &p.replacen(r#""door":true,"y":"1""#, r#""door":true,"y":"2""#, 1), 1), true),
+        ("契約を広く読む", cert.replacen(r#"{"num":{"申告額":"-1"},"k":"0","rel":"le"}"#, r#"{"num":{"申告額":"-1"},"k":"-5","rel":"le"}"#, 1), true),
+        ("別の条件を指す", cert.replacen(r#"{"atom":9,"part":0"#, r#"{"atom":10,"part":0"#, 1), true),
+        ("場合を一つ欠く", cert.replacen(&door, &format!(r#"{{"range":"申告額","hi":false,"proofs":[{p}]}},"#), 1), true),
+        ("食い違わない場合を食い違うと言う", cert.replacen(&door, &format!(r#"{{"range":"申告額","hi":false,"proofs":[{{"clash":"速達"}},{p}]}},"#), 1), true),
+        ("値を渡す入力を値の一覧から外す", cert.replacen(r#""vars":{"num":["申告額","補償額","重さ"]"#, r#""vars":{"num":["補償額","重さ"]"#, 1), true),
+        ("別の契約の本文", digest, true),
+        ("入口の条件を一つ落とす", cert.replacen(&door, "", 1), false),
+        ("証明を空にする", cert.replacen(&door, r#"{"range":"申告額","hi":false,"proofs":null},"#, 1), false),
+    ]
+}
+
+/// A case whose truth values cannot both hold, added by hand with the proof that says so:
+/// rulec leaves such cases out when it opens a condition, so no certificate of its own
+/// carries one, and this is how the re-checker's reading of that proof is held to account.
+fn with_a_clashing_case(cert: &str) -> String {
+    let last = r#"{"num":{"補償額":"1"},"k":"-300000","rel":"le"}],"cases":["#;
+    assert!(cert.contains(last), "証明書の形が変わっていて、場合を足せない:\n{cert}");
+    cert.replacen(last, r#"{"num":{"補償額":"1"},"k":"-300000","rel":"le"},{"bool":"速達","value":true}],"cases":[[0,15],"#, 1)
+        .replace(r#""proofs":["#, r#""proofs":[{"clash":"速達"},"#)
+}
+
+/// Feed one certificate to the re-checker with the rule it is about.
+fn recheck_rule(cert: &str, rule: &str) -> (i32, String) {
+    use std::io::Write;
+    let mut p = Command::new("python3")
+        .current_dir(root())
+        .args(["tools/recheck.py", "--rule", rule])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("python3 を起動できない");
+    p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+    let o = p.wait_with_output().unwrap();
+    (
+        o.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr),
+    )
+}
+
+/// What a contract lets through is held to the rule's door (§15.142). The door is built
+/// again from the rule, each case of the contract has to keep each thing it asks, and the
+/// contract has to be the text the certificate names. A lie fails; a door the certificate
+/// leaves unproved is said out loud rather than passed.
+#[test]
+fn 契約の関係は再検査で確かめられる() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let rule = "tests/corpus/速達の見積.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = recheck_rule(&cert, rule);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("contract 見積: 7 of 7 things the door asks hold in all 2 cases"), "{said}");
+    assert!(said.contains("the digest of contract 見積 is tests/corpus/contracts/quote.proto's"), "{said}");
+    for (what, forged, fails) in contract_lies(&cert) {
+        assert_ne!(forged, cert, "{what}: 偽れていない");
+        let (code, said) = recheck_rule(&forged, rule);
+        if fails {
+            assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった:\n{said}");
+            assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない:\n{said}");
+        } else {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(
+                said.contains("contract 見積: the low end of 申告額's range is not shown to hold"),
+                "{what}: 示していない条件を言っていない:\n{said}"
+            );
+        }
+    }
+    let (code, said) = recheck_rule(&with_a_clashing_case(&cert), rule);
+    assert_eq!(code, 0, "食い違う場合の証明が通らない:\n{said}");
+    assert!(said.contains("hold in all 3 cases"), "{said}");
+
+    // An enum input: the strings a case lets it be have to be the enum's.
+    let rule = "tests/corpus/出荷の送料.rule";
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#"{"member":"あて先","proofs":[{"within":true},{"within":true}]}"#), "{cert}");
+    assert_eq!(recheck_rule(&cert, rule).0, 0);
+    let wider = cert.replacen(r#""values":["honshu","hokkaido","okinawa"],"in":true"#, r#""values":["honshu","hokkaido","okinawa","kyushu"],"in":true"#, 1);
+    assert_ne!(wider, cert);
+    let (code, said) = recheck_rule(&wider, rule);
+    assert_eq!(code, 1, "列挙にない値を通す契約が通ってしまった:\n{said}");
 }
