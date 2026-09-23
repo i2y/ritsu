@@ -675,18 +675,18 @@ gets one more function beside the others: the same call, taking the caller's obj
 the scalars.
 
 ```python
-def order_shipping_from(order: dict) -> Yen:
-    """Reads the inputs out of the caller's object and calls this rule."""
+def order_shipping_from(order: dict[str, Any]) -> Yen:
+    """Reads the inputs out of the caller's object and calls this rule. …"""
     return order_shipping(
         Zone(order["shipping"]["zone"]),
-        any(_e["chilled"] == True for _e in order["lines"]),
+        any(_e["chilled"] for _e in order["lines"]),
         len(order["lines"]),
     )
 ```
 
 ```typescript
-export function orderShippingFrom(order: _Obj): Yen {
-  return orderShipping(
+export function order_shipping_from(order: _Obj): Yen {
+  return order_shipping(
     parseZone(String(order["shipping"]["zone"])),
     (order["lines"] as _Row[]).some((_e) => _e["chilled"] === true),
     BigInt((order["lines"] as _Row[]).length),
@@ -703,10 +703,28 @@ because a type for it would be a domain object model and this tool makes none.
 A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
 the projection function, after the objects, and a sequence stays last.
 
-An optional input (`T?`) reads its field so that a missing one — or a missing object on the way
-to it — is none: `_dig(order, "coupon", "kind")` in the Python module, and the same in each of the
-other four. Every other input reads straight into the object, which is why `rulec check`
-requires a field a required input reads to be `required` in the contract (E122).
+From a JSON Schema, an optional input (`T?`) reads its field so that a missing one — or a
+missing object on the way to it — is none: `_dig(order, "coupon", "kind")` in the Python module,
+and the same in each of the other four. Every other input reads straight into the object, which
+is why `rulec check` requires a field a required input reads to be `required` in the contract
+(E122).
+
+From a `.proto`, the object is taken in the JSON form protojson gives it, and every read goes
+through one helper, `_proto`, given each step's JSON name and `.proto` name and what to read
+when protojson left the field out:
+
+```python
+Zone(_proto(order, (("shipping", "shipping"), ("zoneCode", "zone_code")), "", "")),
+any(_e.get("chilled", False) for _e in _proto(order, (("lines", "lines"),), [], [])),
+len(_proto(order, (("lines", "lines"),), [], [])),
+```
+
+A step is looked up under its JSON name first — `json_name`, or the lowerCamelCase of the name —
+and then under the name the `.proto` writes. A field that is not there reads as its default — 0, `""`, false, no
+elements, an enum's value numbered 0 — and an optional input reads an unset message or
+`optional` field as none. A 64-bit integer, which protojson writes as a string, is made the
+number it is before a `where` compares it (a BigInt in TypeScript and JavaScript), and an enum
+is compared by its value's name.
 
 **Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
 the caller's object as a type, and naming that type would mean generating it or following the

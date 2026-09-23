@@ -79,6 +79,34 @@ pub struct Field {
     pub optional: bool,
     /// What Protovalidate lets through here, as far as it was read (§15.132).
     pub rules: Rules,
+    /// The `json_name` option, when the field sets one (§15.133).
+    pub json_name: Option<String>,
+}
+
+impl Field {
+    /// The name protojson writes this field under: its `json_name`, or the lowerCamelCase of
+    /// its name (§15.133). Readers of protojson accept the name as written too.
+    pub fn json(&self) -> String {
+        self.json_name.clone().unwrap_or_else(|| json_name(&self.name))
+    }
+}
+
+/// protobuf's own rule for a field's JSON name: an underscore is dropped and the letter after
+/// it is capitalised, so `weight_g` is `weightG` and `order_lines` is `orderLines`.
+pub fn json_name(field: &str) -> String {
+    let mut out = String::new();
+    let mut up = false;
+    for c in field.chars() {
+        if c == '_' {
+            up = true;
+        } else if up {
+            out.extend(c.to_uppercase());
+            up = false;
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// The Protovalidate rules on one field that decide which values pass: `(buf.validate.field)`
@@ -102,8 +130,9 @@ pub struct Rules {
     pub str_const: Option<String>,
     pub str_in: Vec<String>,
     pub str_not_in: Vec<String>,
-    /// A rule on the string that is not a list of values (`pattern`, `prefix`, `email`, …).
-    pub str_other: bool,
+    /// The least length the string rules ask for (`min_len`, `len`, and the two in bytes):
+    /// what a date needs to know of them, which is whether "" passes (§15.133).
+    pub str_min_len: Option<i128>,
     pub unread: Vec<String>,
 }
 
@@ -243,6 +272,10 @@ fn fields_of(b: &[char], from: usize, strs: &[String]) -> Vec<Field> {
                 if depth == 0 {
                     if let Some(mut f) = field_of(&stmt) {
                         f.rules = rules_of(&opts, strs);
+                        f.json_name = option_list(&opts, strs).into_iter().find_map(|(n, v)| match v {
+                            Tv::Str(s) if n == "json_name" => Some(s),
+                            _ => None,
+                        });
                         out.push(f);
                     }
                 }
@@ -298,7 +331,7 @@ fn field_of(stmt: &str) -> Option<Field> {
         return None;
     }
     w[3].trim_end_matches(';').parse::<i64>().ok()?;
-    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated, optional, rules: Rules::default() })
+    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated, optional, rules: Rules::default(), json_name: None })
 }
 
 // --- Protovalidate, as far as a value's bounds go (§15.132) -------------------------------
@@ -573,10 +606,11 @@ fn rules_of(text: &str, strs: &[String]) -> Rules {
             ["string", "in"] => r.str_in.extend(strs_of(&v)),
             ["string", "not_in"] => r.str_not_in.extend(strs_of(&v)),
             ["string", "example"] => {}
-            ["string", ..] => {
-                r.str_other = true;
+            ["string", "min_len" | "len" | "min_bytes" | "len_bytes"] => {
+                r.str_min_len = r.str_min_len.max(int_of(&v));
                 r.unread.push(path.join("."));
             }
+            ["string", ..] => r.unread.push(path.join(".")),
             ["cel", ..] | ["cel_expression", ..] => {
                 if !r.unread.iter().any(|u| u == "cel") {
                     r.unread.push("cel".to_string());
@@ -869,6 +903,16 @@ message Line {
         assert_eq!(field(&ms, "Order", "note").rules, Rules::default());
         let c = field(&ms, "Order", "coupon");
         assert!(c.optional && c.rules == Rules::default());
+    }
+
+    #[test]
+    fn protojson_の名前() {
+        let ms = messages(ORDER);
+        assert_eq!(field(&ms, "Order", "weight_g").json(), "weightG");
+        assert_eq!(field(&ms, "Order", "note").json(), "memo");
+        assert_eq!(json_name("order_lines"), "orderLines");
+        assert_eq!(json_name("zone"), "zone");
+        assert_eq!(json_name("a1_b"), "a1B");
     }
 
     #[test]

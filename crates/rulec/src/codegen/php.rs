@@ -1178,6 +1178,9 @@ impl<'a> Gen<'a> {
     }
 
     fn php_proj(&self, p: &super::Proj) -> String {
+        if let Some(pp) = &p.proto {
+            return self.php_proto(p, pp);
+        }
         let walk = p.path.iter().fold(php_var_pub(&p.root), |o, s| format!("{o}[{}]", php_str(s)));
         let cond = || match p.kind.test() {
             Some((fd, c)) => super::elem_cond(
@@ -1200,6 +1203,36 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// One projection read from a `.proto` contract's JSON form, through `_proto` (§15.133).
+    fn php_proto(&self, p: &super::Proj, pp: &crate::projection::ProtoPath) -> String {
+        let lit = |z: &crate::projection::Zero| super::pb_zero(z, "false", &php_str);
+        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
+        let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
+        let walk = format!("_proto({}, [{}], {absent}, {unset})", php_var_pub(&p.root), steps.join(", "));
+        let syn = super::Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None };
+        let cond = || match (p.kind.test(), &pp.elem) {
+            (Some((_, c)), Some((j, n, z))) => {
+                let at = if j == n {
+                    format!("($e[{}] ?? {})", php_str(j), lit(z))
+                } else {
+                    format!("($e[{}] ?? $e[{}] ?? {})", php_str(j), php_str(n), lit(z))
+                };
+                // protojson writes a 64-bit integer as a string.
+                let at = if *z == crate::projection::Zero::Int { format!("(int) {at}") } else { at };
+                super::elem_cond(c, &at, &syn)
+            }
+            (Some((fd, c)), None) => super::elem_cond(c, &format!("$e[{}]", php_str(&fd.text)), &syn),
+            (None, _) => "true".into(),
+        };
+        match p.kind {
+            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk),
+            crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
+            crate::ast::ProjKind::All(..) => format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond()),
+            crate::ast::ProjKind::Count(None) => format!("count({walk})"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
+        }
+    }
+
     pub(super) fn php_from(&self) -> String {
         if !self.projects() {
             return String::new();
@@ -1215,6 +1248,19 @@ impl<'a> Gen<'a> {
             params.push(format!("array {}", php_var_pub(&pub_name(&el.name))));
         }
         let mut o = String::new();
+        if self.proj_proto() {
+            o.push_str(
+                "function _proto($o, array $path, $absent, $unset)\n{\n    \
+                 foreach ($path as $i => [$j, $p]) {\n        \
+                 $v = is_array($o) ? ($o[$j] ?? $o[$p] ?? null) : null;\n        \
+                 if ($v === null) {\n            \
+                 return $i === count($path) - 1 ? $absent : $unset;\n        \
+                 }\n        \
+                 $o = $v;\n    \
+                 }\n    \
+                 return $o;\n}\n\n",
+            );
+        }
         if self.proj_dates() {
             o.push_str(
                 "function _days(string $s): int\n{\n    \

@@ -9337,11 +9337,18 @@ pub(crate) struct Proj<'x> {
     pub(crate) root: String,
     pub(crate) path: Vec<String>,
     pub(crate) kind: &'x crate::ast::ProjKind,
+    /// How the path is read when the shape is a `.proto`: its JSON form (§15.133).
+    pub(crate) proto: Option<crate::projection::ProtoPath>,
 }
 
 impl<'a> Gen<'a> {
     /// The projections of this rule, in the order the inputs are declared.
     pub(crate) fn projections(&self) -> Vec<Proj<'_>> {
+        let reads = if self.f.shapes.iter().any(|d| d.source == crate::ast::EnumSource::Proto) {
+            crate::projection::proto_paths(self.f, &self.path)
+        } else {
+            Default::default()
+        };
         self.f
             .inputs
             .iter()
@@ -9360,6 +9367,7 @@ impl<'a> Gen<'a> {
                     root,
                     path: p.path.iter().map(|n| n.text.clone()).collect(),
                     kind: &p.kind,
+                    proto: reads.get(&i.name.text).cloned(),
                 })
             })
             .collect()
@@ -9407,7 +9415,35 @@ fn raw_lit(l: &Lit, tru: &str, fls: &str) -> String {
         Lit::Word(w) if w == crate::kw::FALSE => fls.to_string(),
         Lit::Word(w) => format!("{w:?}"),
         Lit::Num(n) => n.raw.clone(),
-        Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+        // A date travels as `YYYY-MM-DD`, and in that form the strings order as the dates do.
+        Lit::Date(y, m, d) => format!("\"{y:04}-{m:02}-{d:02}\""),
+    }
+}
+
+/// Whether every number a `where` cell names is whole, so that a BigInt can be compared with
+/// each of them for equality as well as for order.
+fn cell_whole(c: &Cell) -> bool {
+    let whole = |l: &Lit| match l {
+        Lit::Num(n) => n.raw.chars().all(|ch| ch.is_ascii_digit() || ch == '-'),
+        _ => true,
+    };
+    match c {
+        Cell::Lit(l) => whole(l),
+        Cell::Set(ls) | Cell::Not(ls) => ls.iter().all(whole),
+        Cell::Cmp(ops) => ops.iter().all(|(_, l)| whole(l)),
+        _ => true,
+    }
+}
+
+/// What a `.proto` field reads as when protojson leaves it out, in one language's spelling
+/// (§15.133).
+pub(crate) fn pb_zero(z: &crate::projection::Zero, fls: &str, quote: &dyn Fn(&str) -> String) -> String {
+    match z {
+        crate::projection::Zero::Int | crate::projection::Zero::Frac => "0".to_string(),
+        crate::projection::Zero::Str => quote(""),
+        crate::projection::Zero::Bool => fls.to_string(),
+        crate::projection::Zero::List => "[]".to_string(),
+        crate::projection::Zero::Enum(v) => quote(v),
     }
 }
 
@@ -9429,8 +9465,13 @@ pub(crate) struct Syn<'s> {
 
 /// A `where` test on one element, in the spelling one language asks for.
 pub(crate) fn elem_cond(cell: &Cell, at: &str, y: &Syn) -> String {
-    let (is, isnt, and, or, tru, fls) = (y.is, y.isnt, y.and, y.or, y.tru, y.fls);
-    let lit = |l: &Lit| raw_lit(l, tru, fls);
+    elem_cond_with(cell, at, y, &|l| raw_lit(l, y.tru, y.fls))
+}
+
+/// `elem_cond` with the literals spelled by the caller: a JavaScript BigInt is compared with
+/// `100n`, not `100` (§15.133).
+pub(crate) fn elem_cond_with(cell: &Cell, at: &str, y: &Syn, lit: &dyn Fn(&Lit) -> String) -> String {
+    let (is, isnt, and, or, tru) = (y.is, y.isnt, y.and, y.or, y.tru);
     // A boolean field tested against `true` or `false` is the field itself, or its negation,
     // where the language would rather have it that way.
     let boolean = |l: &Lit, neg: bool| -> Option<String> {
@@ -9471,7 +9512,118 @@ impl<'a> Gen<'a> {
     /// Whether some projected value lands in an optional input, which reads a field the
     /// contract lets an object leave out: the Python side then needs `_dig` (§15.132).
     pub(crate) fn proj_optional(&self) -> bool {
-        self.projections().iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Field) && matches!(p.ty, Ty::Opt(_)))
+        self.projections()
+            .iter()
+            .any(|p| p.proto.is_none() && matches!(p.kind, crate::ast::ProjKind::Field) && matches!(p.ty, Ty::Opt(_)))
+    }
+
+    /// Whether some projection reads a `.proto` contract's JSON form, which every one of the
+    /// five reads through its own `_proto` (§15.133).
+    pub(crate) fn proj_proto(&self) -> bool {
+        self.projections().iter().any(|p| p.proto.is_some())
+    }
+
+    /// The two defaults a `.proto` read passes to `_proto`, in one language's spelling: what the
+    /// value reads as when it is missing, and when a message on the way to it is. An optional
+    /// input reads as none where the contract gives presence — an unset message, an `optional`
+    /// field — and as the default where it does not, because a proto3 field without presence
+    /// that is missing *is* its default (§15.133).
+    fn proto_defaults(&self, p: &Proj, pp: &crate::projection::ProtoPath, lit: &dyn Fn(&crate::projection::Zero) -> String, none: &str) -> (String, String) {
+        let opt = matches!(p.ty, Ty::Opt(_));
+        let zero = lit(&pp.zero);
+        match (matches!(p.kind, crate::ast::ProjKind::Field), opt) {
+            (true, true) => (if pp.leaf_optional { none.to_string() } else { zero }, none.to_string()),
+            (true, false) => (zero.clone(), zero),
+            // A walk: a missing collection, or one behind a missing message, has no elements.
+            (false, _) => (zero.clone(), zero),
+        }
+    }
+
+    fn py_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath, root: &str) -> String {
+        let lit = |z: &crate::projection::Zero| pb_zero(z, "False", &|s| format!("{s:?}"));
+        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({j:?}, {n:?})")).collect();
+        let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
+        let (absent, unset) = self.proto_defaults(p, pp, &lit, "None");
+        let walk = format!("_proto({root}, {tuple}, {absent}, {unset})");
+        let syn = Syn { is: "==", isnt: "!=", and: "and", or: "or", tru: "True", fls: "False", not: Some("not ") };
+        let cond = || match (p.kind.test(), &pp.elem) {
+            (Some((_, c)), Some((j, n, z))) => {
+                let at = if j == n { format!("_e.get({j:?}, {})", lit(z)) } else { format!("_e.get({j:?}, _e.get({n:?}, {}))", lit(z)) };
+                // protojson writes a 64-bit integer as a string.
+                let at = if *z == crate::projection::Zero::Int { format!("int({at})") } else { at };
+                elem_cond(c, &at, &syn)
+            }
+            (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
+            (None, _) => "True".into(),
+        };
+        match p.kind {
+            crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
+            crate::ast::ProjKind::Any(..) => format!("any({} for _e in {walk})", cond()),
+            crate::ast::ProjKind::All(..) => format!("all({} for _e in {walk})", cond()),
+            crate::ast::ProjKind::Count(None) => format!("len({walk})"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("sum(1 for _e in {walk} if {})", cond()),
+        }
+    }
+
+    fn ts_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath) -> String {
+        let lit = |z: &crate::projection::Zero| pb_zero(z, "false", &|s| format!("{s:?}"));
+        let root = self.ident(&p.root);
+        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
+        let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
+        let walk = format!("_proto({root}, [{}], {absent}, {unset})", steps.join(", "));
+        let syn = Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None };
+        let cond = || match (p.kind.test(), &pp.elem) {
+            (Some((_, c)), Some((j, n, z))) => {
+                let at = if j == n { format!("(_e[{j:?}] ?? {})", lit(z)) } else { format!("(_e[{j:?}] ?? _e[{n:?}] ?? {})", lit(z)) };
+                // protojson writes a 64-bit integer as a string, which a JavaScript number
+                // cannot always hold; a whole literal is compared as a BigInt too.
+                if *z == crate::projection::Zero::Int && cell_whole(c) {
+                    elem_cond_with(c, &format!("BigInt({at})"), &syn, &|l| match l {
+                        Lit::Num(n) => format!("{}n", n.raw),
+                        l => raw_lit(l, syn.tru, syn.fls),
+                    })
+                } else if *z == crate::projection::Zero::Int {
+                    elem_cond(c, &format!("Number({at})"), &syn)
+                } else {
+                    elem_cond(c, &at, &syn)
+                }
+            }
+            (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
+            (None, _) => "true".into(),
+        };
+        match p.kind {
+            crate::ast::ProjKind::Field => self.ts_take(&p.ty, walk),
+            crate::ast::ProjKind::Any(..) => format!("({walk} as _Row[]).some((_e) => {})", cond()),
+            crate::ast::ProjKind::All(..) => format!("({walk} as _Row[]).every((_e) => {})", cond()),
+            crate::ast::ProjKind::Count(None) => format!("BigInt(({walk} as _Row[]).length)"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("BigInt(({walk} as _Row[]).filter((_e) => {}).length)", cond()),
+        }
+    }
+
+    fn rb_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath) -> String {
+        let lit = |z: &crate::projection::Zero| pb_zero(z, "false", &|s| format!("{s:?}"));
+        let root = self.ident(&p.root);
+        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
+        let (absent, unset) = self.proto_defaults(p, pp, &lit, "nil");
+        let walk = format!("_proto({root}, [{}], {absent}, {unset})", steps.join(", "));
+        let syn = Syn { is: "==", isnt: "!=", and: "&&", or: "||", tru: "true", fls: "false", not: None };
+        let cond = || match (p.kind.test(), &pp.elem) {
+            (Some((_, c)), Some((j, n, z))) => {
+                let at = if j == n { format!("e.fetch({j:?}, {})", lit(z)) } else { format!("e.fetch({j:?}) {{ e.fetch({n:?}, {}) }}", lit(z)) };
+                // protojson writes a 64-bit integer as a string.
+                let at = if *z == crate::projection::Zero::Int { format!("({at}).to_i") } else { at };
+                elem_cond(c, &at, &syn)
+            }
+            (Some((fd, c)), None) => elem_cond(c, &format!("e[{:?}]", fd.text), &syn),
+            (None, _) => "true".into(),
+        };
+        match p.kind {
+            crate::ast::ProjKind::Field => self.rb_take(&p.ty, walk),
+            crate::ast::ProjKind::Any(..) => format!("{walk}.any? {{ |e| {} }}", cond()),
+            crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),
+            crate::ast::ProjKind::Count(None) => format!("{walk}.length"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("{walk}.count {{ |e| {} }}", cond()),
+        }
     }
 
     /// Hinnant's days_from_civil, the inverse of the `civil_from_days` the record function
@@ -9522,6 +9674,9 @@ impl<'a> Gen<'a> {
             None => "True".into(),
         };
         let walk = at(&p.path);
+        if let Some(pp) = &p.proto {
+            return self.py_proto(p, pp, &root);
+        }
         match p.kind {
             // An optional input takes a field the contract lets an object leave out, and a
             // missing one — or a missing object on the way to it — is read as none (§15.132).
@@ -9551,6 +9706,17 @@ impl<'a> Gen<'a> {
             params.push(format!("{}: list[Element]", pub_name(&el.name)));
         }
         let mut o = String::new();
+        if self.proj_proto() {
+            o.push_str(
+                "def _proto(o: Any, path: tuple[tuple[str, str], ...], absent: Any, unset: Any) -> Any:\n    \
+                 for i, (j, p) in enumerate(path):\n        \
+                 v = o.get(j, o.get(p)) if isinstance(o, dict) else None\n        \
+                 if v is None:\n            \
+                 return absent if i == len(path) - 1 else unset\n        \
+                 o = v\n    \
+                 return o\n\n\n",
+            );
+        }
         if self.proj_optional() {
             o.push_str(
                 "def _dig(o: Any, *path: str) -> Any:\n    \
@@ -9619,6 +9785,9 @@ impl<'a> Gen<'a> {
     }
 
     fn ts_proj(&self, p: &Proj) -> String {
+        if let Some(pp) = &p.proto {
+            return self.ts_proto(p, pp);
+        }
         let root = self.ident(&p.root);
         let walk = p.path.iter().fold(root, |o, s| format!("{o}[{s:?}]"));
         let cond = || match p.kind.test() {
@@ -9664,6 +9833,19 @@ impl<'a> Gen<'a> {
         // The caller's object is read, never named: a type for it would be a domain object
         // model, and this tool does not make one (§15-6).
         o.push_str("type _Obj = { [k: string]: any };\ntype _Row = { [k: string]: any };\n\n");
+        if self.proj_proto() {
+            o.push_str(
+                "function _proto(o: _Obj, path: [string, string][], absent: unknown, unset: unknown): any {\n  \
+                 let v: any = o;\n  \
+                 for (let i = 0; i < path.length; i++) {\n    \
+                 const [j, p] = path[i];\n    \
+                 const next = v == null ? undefined : (v[j] ?? v[p]);\n    \
+                 if (next == null) return i === path.length - 1 ? absent : unset;\n    \
+                 v = next;\n  \
+                 }\n  \
+                 return v;\n}\n\n",
+            );
+        }
         if self.proj_dates() {
             o.push_str(
                 "function _days(s: string): bigint {\n  \
@@ -9709,6 +9891,9 @@ impl<'a> Gen<'a> {
     }
 
     fn rb_proj(&self, p: &Proj) -> String {
+        if let Some(pp) = &p.proto {
+            return self.rb_proto(p, pp);
+        }
         let root = self.ident(&p.root);
         let walk = p.path.iter().fold(root, |o, s| format!("{o}[{s:?}]"));
         let cond = || match p.kind.test() {
@@ -9744,6 +9929,18 @@ impl<'a> Gen<'a> {
             params.push(pub_name(&el.name));
         }
         let mut o = String::new();
+        if self.proj_proto() {
+            o.push_str(
+                "  def self._proto(o, path, absent, unset)\n    \
+                 path.each_with_index do |(j, p), i|\n      \
+                 v = o.is_a?(Hash) ? (o.key?(j) ? o[j] : o[p]) : nil\n      \
+                 return (i == path.length - 1 ? absent : unset) if v.nil?\n      \
+                 o = v\n    \
+                 end\n    \
+                 o\n  \
+                 end\n\n",
+            );
+        }
         if self.proj_dates() {
             o.push_str(
                 "  def self._days(s)\n    \

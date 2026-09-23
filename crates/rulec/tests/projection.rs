@@ -411,3 +411,180 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A rule and its contract written to a fresh directory, checked and generated: the directory
+/// the five modules are in.
+fn built(tag: &str, rule: &str, contract: (&str, &str)) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("rulec-projection-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("r.rule"), rule).unwrap();
+    std::fs::write(dir.join(contract.0), contract.1).unwrap();
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().expect("rulec を起動できない");
+    let o = rulec(&["check", "r.rule", "--format", "json"]);
+    assert!(o.status.success(), "契約と規則はそろっているはず:\n{}", String::from_utf8_lossy(&o.stdout));
+    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    dir
+}
+
+/// Each case — an object as JSON text, and the answer it has to get — through the projection
+/// function of every one of the five whose toolchain is here. Python is required.
+fn five(dir: &Path, alias: &str, cases: &[(String, &str)]) {
+    let module: String = alias.split('_').map(|w| w[..1].to_uppercase() + &w[1..]).collect();
+    let g = dir.join("gen");
+    let want = |lang: &str, cmd: &mut Command, want: &str, case: &str| {
+        let o = cmd.output().unwrap_or_else(|e| panic!("{lang} を起動できない: {e}"));
+        let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        assert!(o.status.success(), "{lang}: {case} で落ちた:\n{out}\n{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(out, want, "{lang}: {case} の答えが違う");
+    };
+    assert!(have("python3"), "python3 が要ります");
+    for (case, w) in cases {
+        let py = format!("import json, {alias} as m\nprint(m.{alias}_from(json.loads({case:?})))\n");
+        want("Python", Command::new("python3").current_dir(g.join("python")).args(["-B", "-c", &py]), w, case);
+        if have("node") {
+            for (lang, sub, file) in [("JavaScript", "javascript", format!("{alias}.mjs")), ("TypeScript", "typescript", format!("{alias}.ts"))] {
+                let js = format!("import('./{file}').then(m => console.log(String(m.{alias}_from(JSON.parse({case:?})))));");
+                want(lang, Command::new("node").current_dir(g.join(sub)).args(["--no-warnings", "--input-type=module", "-e", &js]), w, case);
+            }
+        }
+        if have("ruby") {
+            let rb = format!("require 'json'\nrequire './{alias}.rb'\nputs {module}.{alias}_from(JSON.parse({case:?}))\n");
+            want("Ruby", Command::new("ruby").current_dir(g.join("ruby")).args(["-e", &rb]), w, case);
+        }
+        if have("php") {
+            let php = format!("require './{alias}.php'; echo \\{module}\\{alias}_from(json_decode({}, true));", php_str(case));
+            want("PHP", Command::new("php").current_dir(g.join("php")).args(["-r", &php]), w, case);
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A `.proto` shape is read in the JSON form protojson gives it (§15.133): a field under its
+/// JSON name (`json_name`, or the lowerCamelCase of its name) or under its name as the
+/// `.proto` writes it, an int64 as a string, and a field left out at its default, an empty
+/// `repeated`, an unset `optional`, all read as proto reads them. Before, the five read the
+/// `.proto` names straight and failed on every field protojson leaves out.
+#[test]
+fn protoの形はprotojsonのとおりに読む() {
+    const PROTO: &str = "syntax = \"proto3\";\npackage shop.v1;\n\n\
+        message Order {\n  Shipping shipping = 1 [(buf.validate.field).required = true];\n  \
+        repeated Line order_lines = 2 [(buf.validate.field).repeated.max_items = 50];\n  \
+        int64 total_jpy = 3 [json_name = \"total\", (buf.validate.field).int64 = {gte: 0, lte: 10000000}];\n  \
+        optional string coupon_kind = 4 [(buf.validate.field).string = {in: [\"percent\", \"fixed\"]}];\n}\n\n\
+        message Shipping {\n  string zone_code = 1 [(buf.validate.field).string = {in: [\"honshu\", \"hokkaido\", \"okinawa\"]}];\n}\n\n\
+        message Line {\n  bool is_chilled = 1;\n  int64 amount = 2;\n}\n";
+    const RULE: &str = "rule 注文の送料pb(order_fee_pb) v1\n\n\
+        shape 注文(order) = proto \"order.proto\" shop.v1.Order\n\n\
+        enum 地域(zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)\n\
+        enum 種別(kind) = percent(percent) | fixed(fixed)\n\n\
+        inputs\n  \
+        地域(zone)     : 地域                               from 注文.shipping.zone_code\n  \
+        冷蔵あり(cold) : bool                               from any 注文.order_lines where is_chilled = true\n  \
+        明細数(lines)  : number     range >=0 <=50          from count 注文.order_lines\n  \
+        金額(total)    : money[円]  range >=0円 <=1000万円  from 注文.total_jpy\n  \
+        種別(kind)     : 種別?                              from 注文.coupon_kind\n\n\
+        outputs\n  送料(fee) : money[円]  round up(10円)\n\n\
+        table 送料表(t)\npolicy first\n\
+        | 地域    | 冷蔵あり | 明細数 | 金額      | 種別  | -> 送料 |\n\
+        | -       | -        | -      | >=10000円 | -     | 0円     |\n\
+        | okinawa | -        | -      | -         | -     | 1500円  |\n\
+        | -       | true     | -      | -         | -     | 1300円  |\n\
+        | -       | -        | >10    | -         | -     | 1000円  |\n\
+        | -       | -        | -      | -         | fixed | 700円   |\n\
+        | -       | -        | -      | -         | -     | 800円   |\n";
+    let dir = built("pb", RULE, ("order.proto", PROTO));
+    let eleven = vec!["{}"; 11].join(",");
+    five(
+        &dir,
+        "order_fee_pb",
+        &[
+            // protojson as it comes by default: lowerCamelCase, defaults left out, int64 a string.
+            ("{\"shipping\":{\"zoneCode\":\"honshu\"},\"orderLines\":[{\"isChilled\":true,\"amount\":\"100\"}],\"total\":\"5000\"}".into(), "1300"),
+            // The names as the .proto writes them, and the defaults written out.
+            ("{\"shipping\":{\"zone_code\":\"honshu\"},\"order_lines\":[{\"is_chilled\":false,\"amount\":\"100\"}],\"total_jpy\":\"0\",\"coupon_kind\":\"fixed\"}".into(), "700"),
+            // Everything at its default: no lines, no total, no coupon.
+            ("{\"shipping\":{\"zoneCode\":\"okinawa\"}}".into(), "1500"),
+            // Eleven lines, none chilled: a `false` is left out of every element.
+            (format!("{{\"shipping\":{{\"zoneCode\":\"hokkaido\"}},\"orderLines\":[{eleven}]}}"), "1000"),
+            // An encoder that writes an int64 as a number.
+            ("{\"shipping\":{\"zoneCode\":\"honshu\"},\"total\":20000}".into(), "0"),
+        ],
+    );
+}
+
+/// What a `where` tests on an element of a `.proto` shape is the value protojson carries
+/// (§15.133): an int64 as a string, compared as the number it is, and an enum as its value's
+/// name, which is left out when it is the value numbered 0. A where-test on an int64 compared
+/// a string with a number before — a `TypeError` in Python, and never equal anywhere — and one
+/// on an enum was not read at all.
+#[test]
+fn protoの要素のwhereはprotojsonの値で比べる() {
+    const PROTO: &str = "syntax = \"proto3\";\npackage shop.v1;\n\n\
+        enum Temp {\n  TEMP_AMBIENT = 0;\n  TEMP_CHILLED = 1;\n  TEMP_FROZEN = 2;\n}\n\n\
+        message Order {\n  repeated Line lines = 1 [(buf.validate.field).repeated.max_items = 20];\n}\n\n\
+        message Line {\n  Temp temp = 1;\n  int64 amount_jpy = 2;\n}\n";
+    const RULE: &str = "rule 明細の判定(line_checks) v1\n\n\
+        shape 注文(order) = proto \"order.proto\" shop.v1.Order\n\n\
+        inputs\n  \
+        冷凍あり(frozen)  : bool                     from any 注文.lines where temp = TEMP_FROZEN\n  \
+        常温だけ(ambient) : bool                     from all 注文.lines where temp = TEMP_AMBIENT\n  \
+        高額の数(big)     : number  range >=0 <=20  from count 注文.lines where amount_jpy >= 10000\n  \
+        ちょうど(exact)   : bool                     from any 注文.lines where amount_jpy = 5000\n\n\
+        outputs\n  送料(fee) : money[円]  round up(10円)\n\n\
+        table 送料表(t)\npolicy first\n\
+        | 冷凍あり | 常温だけ | 高額の数 | ちょうど | -> 送料 |\n\
+        | true     | -        | -        | -        | 1500円  |\n\
+        | -        | -        | >=2      | -        | 900円   |\n\
+        | -        | true     | -        | true     | 600円   |\n\
+        | -        | true     | -        | -        | 500円   |\n\
+        | -        | -        | -        | true     | 700円   |\n\
+        | -        | -        | -        | -        | 800円   |\n";
+    let dir = built("pb-where", RULE, ("order.proto", PROTO));
+    five(
+        &dir,
+        "line_checks",
+        &[
+            ("{\"lines\":[{\"temp\":\"TEMP_FROZEN\",\"amountJpy\":\"100\"}]}".into(), "1500"),
+            // Neither line says `temp`, so both are TEMP_AMBIENT; the second is 5000 as a string.
+            ("{\"lines\":[{},{\"amountJpy\":\"5000\"}]}".into(), "600"),
+            // Two lines at 10000 or more, the second under the name the .proto writes.
+            ("{\"lines\":[{\"temp\":\"TEMP_CHILLED\",\"amountJpy\":\"20000\"},{\"amount_jpy\":\"10000\"}]}".into(), "900"),
+            // No lines: `all` holds of none, `any` of none does not.
+            ("{}".into(), "500"),
+            // An encoder that writes an int64 as a number.
+            ("{\"lines\":[{\"temp\":\"TEMP_CHILLED\",\"amountJpy\":5000}]}".into(), "700"),
+        ],
+    );
+}
+
+/// A date in a `where` is compared with the string the contract carries. It was written into
+/// the five as `2026-01-01` bare — arithmetic in four of them, and a syntax error in Python,
+/// whose integers take no leading zero.
+#[test]
+fn whereの日付は文字列として比べる() {
+    const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"required\":[\"lines\"],\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":20,\
+        \"items\":{\"type\":\"object\",\"required\":[\"ships_on\"],\"properties\":{\"ships_on\":{\"type\":\"string\",\"format\":\"date\"}}}}}}}}";
+    const RULE: &str = "rule 出荷日の判定(ship_dates) v1\n\n\
+        shape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+        inputs\n  \
+        今年(this_year)   : bool  from any 注文.lines where ships_on >= 2026-01-01\n  \
+        七月一日(july)    : bool  from any 注文.lines where ships_on = 2026-07-01\n\n\
+        outputs\n  送料(fee) : money[円]  round up(10円)\n\n\
+        table 送料表(t)\npolicy first\n\
+        | 今年  | 七月一日 | -> 送料 |\n\
+        | -     | true     | 0円     |\n\
+        | true  | -        | 500円   |\n\
+        | false | -        | 800円   |\n";
+    let dir = built("where-date", RULE, ("order.json", SCHEMA));
+    five(
+        &dir,
+        "ship_dates",
+        &[
+            ("{\"lines\":[{\"ships_on\":\"2025-12-31\"}]}".into(), "800"),
+            ("{\"lines\":[{\"ships_on\":\"2025-12-31\"},{\"ships_on\":\"2026-01-01\"}]}".into(), "500"),
+            ("{\"lines\":[{\"ships_on\":\"2026-07-01\"}]}".into(), "0"),
+        ],
+    );
+}

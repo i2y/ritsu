@@ -53,7 +53,9 @@ the contract lets through and the input refuses is **E122** — a request the AP
 accepted, refused at the door of the generated code. `fix.text` is the annotation to add to
 the contract. A row reached only by values the contract never lets through is **W123**. A
 proto3 number field with no rule lets 0 through, because that is what an unset field is, and
-that is the mismatch this finds most often.
+that is the mismatch this finds most often. A message field that is not `required` may be left
+unset, and Protovalidate then validates nothing inside it: the value under it arrives as its
+default whatever its own rules say, so an input that refuses the default is E122 as well.
 
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in

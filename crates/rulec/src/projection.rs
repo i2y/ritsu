@@ -39,6 +39,9 @@ pub enum At {
     /// A record with fields. Carries the names it has, so a message can list them.
     Object(Vec<String>),
     Array(Box<At>),
+    /// A kind no input can be, named as the contract writes it: `bytes`, or a type the file
+    /// does not declare.
+    Other(String),
 }
 
 impl At {
@@ -51,6 +54,7 @@ impl At {
             At::Bool => "boolean".into(),
             At::Object(_) => "object".into(),
             At::Array(e) => format!("array of {}", e.word()),
+            At::Other(t) => t.clone(),
         }
     }
 
@@ -85,6 +89,9 @@ pub struct Contract {
     doc: Option<Json>,
     /// For a `.proto`: every message of the file, as (name, fields).
     msgs: Vec<crate::proto::Message>,
+    /// For a `.proto`: every enum of the file. A field of one travels as its value's name, and
+    /// a field left at the value numbered 0 is left out (§15.133).
+    enums: Vec<crate::proto::Enum>,
     /// Where the root stands: a pointer into the schema, or a message name.
     at: String,
 }
@@ -94,7 +101,7 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
     match d.source {
         EnumSource::JsonSchema => {
             let doc = crate::jsonschema::read(text, &d.file)?;
-            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), at: d.at.clone() })
+            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone() })
         }
         EnumSource::Proto => {
             let msgs = crate::proto::messages(text);
@@ -109,12 +116,17 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
                     )
                 });
             }
-            Ok(Contract { kind: d.source, doc: None, msgs, at: d.at.clone() })
+            Ok(Contract { kind: d.source, doc: None, msgs, enums: crate::proto::enums(text), at: d.at.clone() })
         }
     }
 }
 
 impl Contract {
+    /// The enum of the `.proto` a field's type names, if the file declares it.
+    pub(crate) fn enum_of(&self, ty: &str) -> Option<&crate::proto::Enum> {
+        self.enums.iter().find(|e| crate::proto::same_message(&e.name, ty))
+    }
+
     /// What stands at a path from the root, or where the walk got stuck.
     pub fn at(&self, path: &[String]) -> Result<At, Stuck> {
         match self.kind {
@@ -168,8 +180,13 @@ impl Contract {
             let here = match (&scalar, msg) {
                 (Some(s), _) => s.clone(),
                 (None, Some(m)) => At::Object(m.fields.iter().map(|x| x.name.clone()).collect()),
-                // A message the file does not hold: the path cannot go on, and a leaf of an
-                // unknown type is not claimed to be anything.
+                // At the end of the path, a kind no input takes is named, so the finding says
+                // what is there rather than that nothing is: an enum of the file, `bytes`, or a
+                // type the file does not declare (§15.133).
+                (None, None) if i + 1 == path.len() => {
+                    At::Other(if self.enum_of(&fd.ty).is_some() { format!("enum {}", fd.ty) } else { fd.ty.clone() })
+                }
+                // A message the file does not hold: the path cannot go on.
                 (None, None) => return Err(Stuck { reached, had: Vec::new() }),
             };
             last = Some(if fd.repeated { At::Array(Box::new(here)) } else { here });
@@ -306,7 +323,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         // What the contract lets through is only asked of a path that reached a value of the
         // input's kind: past an E120 or an E121 there is nothing to compare.
         if fits && resolved.is_empty() {
-            let (found, dom) = holds(con, pr, i, c, rule_path);
+            let (found, dom) = holds(f, con, pr, i, c, rule_path);
             out.extend(found);
             if let Some(d) = dom {
                 doms.push((i.name.text.clone(), d, pr));
@@ -455,13 +472,23 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
 }
 
 fn mismatch(at: &str, pr: &Projection, full: &str, here: &At, ty: &Ty, name: &str) -> Diag {
-    Diag::error("E120", tr!("`{full}` の型が入力と合いません", "The type at `{full}` does not fit the input"))
+    let d = Diag::error("E120", tr!("`{full}` の型が入力と合いません", "The type at `{full}` does not fit the input"))
         .at(at.to_string())
         .mark(pr.span.clone(), tr!("契約では {}、入力 {name} は {ty}", "the contract says {}, the input {name} is {ty}", here.word()))
         .note(tr!(
             "契約は値がどう運ばれるかを言い、規則はそれが何を意味するかを言います。列挙も日付も文字列で来て、金額と数量は宣言した単位の整数で来ます。",
             "A contract says how a value travels and the rule says what it means: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
-        ))
+        ));
+    match here {
+        // What protojson carries is the `.proto` value's name, and taking it into the rule's
+        // enum would need the two tied value by value, which `import proto` does and a path
+        // does not (§15.133).
+        At::Other(t) if t.starts_with("enum ") => d.note(tr!(
+            "`.proto` の列挙は、値の名前（`ZONE_HONSHU` のような）で運ばれます。パスはそれを規則の列挙に渡しません。`where` で比べることはできます。",
+            "A `.proto` enum travels as its value's name (such as `ZONE_HONSHU`), and a path does not hand that to the rule's enum. A `where` can compare it."
+        )),
+        _ => d,
+    }
 }
 
 /// The word for the element field's kind, when a `where` cell cannot be a value of it.
@@ -509,11 +536,18 @@ impl Contract {
                     msg = self.msgs.iter().find(|x| crate::proto::same_message(&x.name, &fd.ty))?;
                 }
                 let fd = msg.fields.iter().find(|x| x.name == field)?;
-                crate::proto::scalar(&fd.ty).map(|s| match s {
-                    crate::proto::Scalar::Str => At::Str,
-                    crate::proto::Scalar::Int => At::Int,
-                    crate::proto::Scalar::Frac => At::Frac,
-                    crate::proto::Scalar::Bool => At::Bool,
+                Some(match crate::proto::scalar(&fd.ty) {
+                    Some(crate::proto::Scalar::Str) => At::Str,
+                    Some(crate::proto::Scalar::Int) => At::Int,
+                    Some(crate::proto::Scalar::Frac) => At::Frac,
+                    Some(crate::proto::Scalar::Bool) => At::Bool,
+                    // An enum travels as the name of its value (§15.133), which a `where`
+                    // compares like any other string.
+                    None if self.enum_of(&fd.ty).is_some() => At::Str,
+                    None => match self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty)) {
+                        Some(m) => At::Object(m.fields.iter().map(|x| x.name.clone()).collect()),
+                        None => At::Other(fd.ty.clone()),
+                    },
                 })
             }
         }
@@ -905,7 +939,7 @@ fn unread_note(unread: &[String]) -> Option<String> {
 /// E122: what the contract lets through where an input is read, held against what the input
 /// takes. Returns the findings, and what passes when the contract names it — the set W123
 /// holds the rows to.
-fn holds(con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str) -> (Vec<Diag>, Option<Dom>) {
+fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str) -> (Vec<Diag>, Option<Dom>) {
     let mut out = Vec::new();
     let name = input.name.text.as_str();
     let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
@@ -1007,7 +1041,15 @@ fn holds(con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_pat
                     (_, Some(fd), _) => proto_ints(fd).map(|s| (s, fd.rules.unread.clone(), Some(fd.ty.rsplit('.').next().unwrap_or(&fd.ty).to_string()))),
                     _ => None,
                 };
-                let Some((seen, unread, kind)) = seen else { return (out, dom) };
+                // Under a step the contract lets be unset, the value arrives as its default
+                // whatever the rules on it say: Protovalidate validates nothing under an unset
+                // message, nor an unset `optional` field (§15.133).
+                let unset = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true));
+                let refused = unset.filter(|_| !(rl <= 0 && 0 <= rh)).map(|(si, _)| defaulted(&at, pr, &steps, si, &full, "0", WVal::Int(0), name, &inner));
+                let Some((seen, unread, kind)) = seen else {
+                    out.extend(refused);
+                    return (out, dom);
+                };
                 let below = seen.intersect(&Ints::between(None, Some(rl - 1)));
                 let above = seen.intersect(&Ints::between(Some(rh + 1), None));
                 if !below.is_empty() || !above.is_empty() {
@@ -1031,6 +1073,8 @@ fn holds(con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_pat
                     }
                     out.push(d.note(two_ways(Some(&fix), tr!("規則の範囲を広げて、その値の答えを決めてください", "widen the rule's range and decide what it answers there"))));
                 }
+                out.extend(refused);
+                let seen = if unset.is_some() { seen.union(&Ints::points(&[0])) } else { seen };
                 dom = Some(Dom::Ints(seen, false));
             }
             Ty::Enum(e) => {
@@ -1073,14 +1117,53 @@ fn holds(con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_pat
                     _ => None,
                 };
                 if let Some(mut dd) = d.take() {
-                    dd = dd.at(at.clone()).mark(pr.span.clone(), label).fix(FixKind::NarrowContract, fix.clone()).note(refused_note());
+                    dd = dd.at(at.clone()).mark(pr.span.clone(), label).note(refused_note());
+                    // Narrowing to none of the enum's values is no fix: an empty `in` is no rule.
+                    dd = if keep.is_empty() {
+                        let aliases: Vec<String> =
+                            f.enums.iter().find(|d| d.name.text == *e).map(|d| d.values.iter().filter_map(|v| v.ascii.clone()).collect()).unwrap_or_default();
+                        let spelled = list.as_ref().is_some_and(|l| !l.is_empty() && l.iter().all(|x| aliases.contains(x)));
+                        let dd = dd.fix_kind(FixKind::None);
+                        if spelled {
+                            dd.note(tr!(
+                                "契約の通す値は、列挙 {e} の別名です（{}）。運ばれるのは、規則に書いた値の名前（{}）のほうです。値の名前を契約の綴りにそろえるか、呼び出し側に名前を送らせてください。",
+                                "The values the contract lets through are the aliases of enum {e} ({}), and what travels is the name the rule gives a value ({}). Name the values the way the contract spells them, or have the caller send the names.",
+                                quoted(&aliases),
+                                quoted(&vals)
+                            ))
+                        } else {
+                            dd.note(tr!("契約の通す値に、列挙 {e} の値は一つもありません。", "None of the values the contract lets through is a value of enum {e}."))
+                                .note(two_ways(None, widen))
+                        }
+                    } else {
+                        dd.fix(FixKind::NarrowContract, fix.clone()).note(two_ways(Some(&fix), widen))
+                    };
                     if let Some(u) = unread_note(&unread) {
                         dd = dd.note(u);
                     }
-                    out.push(dd.note(two_ways(Some(&fix), widen)));
+                    out.push(dd);
                 }
-                if let Some(l) = list {
+                let unset = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true));
+                if let Some((si, _)) = unset.filter(|_| !vals.iter().any(String::is_empty)) {
+                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner));
+                }
+                if let Some(mut l) = list {
+                    if unset.is_some() && !l.iter().any(String::is_empty) {
+                        l.push(String::new());
+                    }
                     dom = Some(Dom::Strs(l));
+                }
+            }
+            // A date travels as a string, and the dates themselves are not compared (§15.132).
+            // The one string that is compared is "", which protojson leaves out and the function
+            // reads back, and which is not a date (§15.133).
+            Ty::Date => {
+                let Some(fs) = fields.as_deref() else { return (out, dom) };
+                if let Some((si, _)) = fs.last().and_then(|_| if optional { None } else { unset_step(fs, true) }) {
+                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner));
+                }
+                if let Some(fd) = fs.last().filter(|fd| empty_passes(fd)) {
+                    out.push(empty_date(&at, pr, fd, &full, name, optional));
                 }
             }
             _ => {}
@@ -1137,11 +1220,111 @@ fn holds(con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_pat
                 }
                 out.push(d.note(two_ways(fix.as_deref(), tr!("規則の範囲を広げて、その件数のときの答えを決めてください", "widen the rule's range and decide what it answers for that many"))));
             }
+            let unset = fields.as_deref().and_then(|fs| unset_step(fs, false));
+            // What a `where` picks out can be none at all, and the finding above says so already;
+            // making the message `required` would not change it.
+            if let Some((si, _)) = unset.filter(|_| rl > 0 && !filtered) {
+                out.push(defaulted(&at, pr, &steps, si, &full, &tr!("0 件", "0 elements"), WVal::Int(0), name, &inner));
+            }
+            let seen = if unset.is_some() { seen.union(&Ints::points(&[0])) } else { seen };
             dom = Some(Dom::Ints(seen, true));
         }
         ProjKind::Any(..) | ProjKind::All(..) => {}
     }
     (out, dom)
+}
+
+/// E122 for a default: a `.proto` step that may be unset, under which the value read arrives
+/// as its default with no rule of the contract applied to it (§15.133).
+#[allow(clippy::too_many_arguments)]
+fn defaulted(at: &str, pr: &Projection, steps: &[String], si: usize, full: &str, zero: &str, w: WVal, name: &str, inner: &Ty) -> Diag {
+    let step = std::iter::once(pr.root.text.as_str()).chain(steps[..=si].iter().map(String::as_str)).collect::<Vec<_>>().join(".");
+    let fix = "[(buf.validate.field).required = true]".to_string();
+    let why = if si + 1 < steps.len() {
+        tr!(
+            "`{step}` が無いとき、Protovalidate はその中の規則を検証しません。生成した `…_from` の関数は、無いフィールドを既定値として読みます。",
+            "Protovalidate validates nothing inside `{step}` when it is not set, and the generated `…_from` function reads a field that is not there as its default."
+        )
+    } else {
+        tr!(
+            "`{step}` は `optional` なので、無いときは Protovalidate がその規則を検証しません。生成した `…_from` の関数は、無いフィールドを既定値として読みます。",
+            "`{step}` is `optional`, so Protovalidate applies no rule to it when it is not set, and the generated `…_from` function reads it as its default."
+        )
+    };
+    Diag::error(
+        "E122",
+        tr!(
+            "契約では `{step}` を省略でき、そのとき `{full}` は {zero} として届きますが、規則はそれを断ります",
+            "The contract lets `{step}` be left out, and `{full}` then arrives as {zero}, which the rule refuses"
+        ),
+    )
+    .at(at.to_string())
+    .win(name, w)
+    .mark(pr.span.clone(), tr!("`{step}` に `required` がありません", "`{step}` is not `required`"))
+    .fix(FixKind::NarrowContract, fix.clone())
+    .note(why)
+    .note(tr!(
+        "ヒント: いつもあるはずなら、`{step}` に {fix} と書いてください。無いことがあるなら、入力を `{inner}?` にしてください。無いときは none として読みます。",
+        "hint: if it is always there, write {fix} on `{step}`. If it can be missing, make the input `{inner}?`; a missing value is then read as none."
+    ))
+}
+
+/// Whether Protovalidate lets "" through a string field: nothing on it rules the empty string
+/// out, or it is told to skip the rules for the zero value. `required` rules it out only where
+/// the field has no presence of its own; on an `optional` one it asks only that the field be
+/// set. A rule this does not read (a `pattern`, say) is read as not there, as everywhere else
+/// (§15.132).
+fn empty_passes(fd: &crate::proto::Field) -> bool {
+    let r = &fd.rules;
+    if r.ignore.as_deref() == Some("IGNORE_ALWAYS") || ignores_zero(r) {
+        return true;
+    }
+    if (r.required && !fd.optional) || r.str_min_len.is_some_and(|n| n >= 1) || r.str_not_in.iter().any(String::is_empty) {
+        return false;
+    }
+    if let Some(k) = &r.str_const {
+        return k.is_empty();
+    }
+    r.str_in.is_empty() || r.str_in.iter().any(String::is_empty)
+}
+
+/// E122 for a date read from a `.proto` string that may be "": not a date, and the function
+/// that reads it out cannot turn it into one (§15.133).
+fn empty_date(at: &str, pr: &Projection, fd: &crate::proto::Field, full: &str, name: &str, optional: bool) -> Diag {
+    // On an `optional` field, `required` asks only that it be set, and a set "" passes it.
+    let fix = if fd.optional { "[(buf.validate.field).string.min_len = 1]" } else { "[(buf.validate.field).required = true]" }.to_string();
+    let mut d = Diag::error("E122", tr!("契約は `{full}` に \"\" を通しますが、\"\" は日付ではありません", "The contract lets `{full}` be \"\", which is not a date"))
+        .at(at.to_string())
+        .win(name, WVal::Str(String::new()))
+        .mark(pr.span.clone(), tr!("`{}` は \"\" を断りません", "nothing on `{}` rules \"\" out", fd.name))
+        .fix(FixKind::NarrowContract, fix.clone())
+        .note(if fd.optional {
+            tr!(
+                "`{}` に \"\" を入れて送ると、Protovalidate はそれを通し、生成した `…_from` の関数はそれを日付として読めずに落ちます。",
+                "A message that sets `{}` to \"\" passes Protovalidate, and the generated `…_from` function fails on it, since it cannot read it as a date.",
+                fd.name
+            )
+        } else {
+            tr!(
+                "protojson は空の文字列を出さず、生成した `…_from` の関数は無い `{}` を \"\" として読みます。\"\" は日付として読めず、関数はそこで落ちます。",
+                "protojson leaves an empty string out, and the generated `…_from` function reads a missing `{}` as \"\" — which it cannot read as a date, and fails there.",
+                fd.name
+            )
+        });
+    if let Some(u) = unread_note(&fd.rules.unread) {
+        d = d.note(u);
+    }
+    d.note(if optional && !fd.optional {
+        tr!(
+            "ヒント: いつもあるはずなら、`{full}` に {fix} と書いてください。無いことがあるなら、`.proto` でそのフィールドに `optional` を付けてください。付けたフィールドが無いときは none として読みます。",
+            "hint: if it is always there, write {fix} on `{full}`. If it can be missing, mark the field `optional` in the `.proto`; an unset one is then read as none."
+        )
+    } else {
+        tr!(
+            "ヒント: `{full}` に {fix} と書いてください。Protovalidate が \"\" を断るようになります。",
+            "hint: write {fix} on `{full}`, and Protovalidate refuses \"\"."
+        )
+    })
 }
 
 fn refused_note() -> String {
@@ -1278,4 +1461,95 @@ fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, &Projection)], rul
         }
     }
     out
+}
+
+// --- Reading a `.proto` contract's JSON form (§15.133) ------------------------------------
+
+/// What a field of a `.proto` reads as when protojson leaves it out: the zero value of its
+/// kind, or an empty list for a `repeated`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Zero {
+    /// An integer, which protojson writes as a string when it is 64 bits wide.
+    Int,
+    Frac,
+    Str,
+    Bool,
+    List,
+    /// An enum: the name of its value numbered 0.
+    Enum(String),
+}
+
+fn zero_of(con: &Contract, fd: &crate::proto::Field) -> Option<Zero> {
+    if fd.repeated {
+        return Some(Zero::List);
+    }
+    Some(match crate::proto::scalar(&fd.ty) {
+        Some(crate::proto::Scalar::Int) => Zero::Int,
+        Some(crate::proto::Scalar::Frac) => Zero::Frac,
+        Some(crate::proto::Scalar::Str) => Zero::Str,
+        Some(crate::proto::Scalar::Bool) => Zero::Bool,
+        None => {
+            let e = con.enum_of(&fd.ty)?;
+            // proto3 puts 0 first; proto2's default is the first value written.
+            let v = e.values.iter().find(|v| v.number == 0).or(e.values.first())?;
+            Zero::Enum(v.name.clone())
+        }
+    })
+}
+
+/// How the function that reads the inputs out reads one projection from a `.proto`
+/// contract's JSON form (§15.133). protojson writes a field under its JSON name and leaves out
+/// a field at its default value, an empty `repeated`, and an unset message or `optional`
+/// field; its readers take the name as written in the `.proto` as well.
+#[derive(Debug, Clone)]
+pub struct ProtoPath {
+    /// Each step's JSON name and its name as the `.proto` writes it.
+    pub steps: Vec<(String, String)>,
+    /// What the last step reads as when it is not there.
+    pub zero: Zero,
+    /// The last step has presence of its own (`optional`): missing is unset, not zero.
+    pub leaf_optional: bool,
+    /// For a `where`: the element field's two names and what it reads as when missing.
+    pub elem: Option<(String, String, Zero)>,
+}
+
+/// The `.proto` reads of every input projected from a `.proto` shape, by input name. The
+/// contract is read from beside the rule, the way `check` read it; an input whose path does
+/// not resolve has none, and `check` has already refused the rule for it.
+pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<String, ProtoPath> {
+    let mut out = std::collections::HashMap::new();
+    let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+    for i in &f.inputs {
+        let Some(pr) = &i.from else { continue };
+        let Some(d) = f.shapes.iter().find(|d| d.name.text == pr.root.text && d.source == EnumSource::Proto) else { continue };
+        let Ok(text) = std::fs::read_to_string(dir.join(&d.file)) else { continue };
+        let Ok(con) = read(d, &text) else { continue };
+        let steps: Vec<String> = pr.path.iter().map(|n| n.text.clone()).collect();
+        let Some(chain) = con.proto_chain(&steps) else { continue };
+        let Some(leaf) = chain.last() else { continue };
+        let Some(zero) = zero_of(&con, leaf) else { continue };
+        let elem = pr.kind.test().and_then(|(field, _)| {
+            let m = con.msgs.iter().find(|m| crate::proto::same_message(&m.name, &leaf.ty))?;
+            let fd = m.fields.iter().find(|x| x.name == field.text)?;
+            Some((fd.json(), fd.name.clone(), zero_of(&con, fd)?))
+        });
+        out.insert(
+            i.name.text.clone(),
+            ProtoPath { steps: chain.iter().map(|fd| (fd.json(), fd.name.clone())).collect(), zero, leaf_optional: leaf.optional, elem },
+        );
+    }
+    out
+}
+
+/// The first step a `.proto` contract lets be unset on the way to a value an input reads,
+/// whose absence then reads as the value's default (§15.133): a message field that is not
+/// `required`, or an `optional` field at the end that is not. Protovalidate validates
+/// nothing under an unset message, so the rules on the value do not see that default.
+fn unset_step<'c>(chain: &[&'c crate::proto::Field], to_leaf: bool) -> Option<(usize, &'c crate::proto::Field)> {
+    let n = chain.len();
+    chain.iter().enumerate().find_map(|(i, fd)| {
+        let parent = i + 1 < n;
+        let unset = if parent { !fd.rules.required } else { to_leaf && fd.optional && !fd.rules.required };
+        unset.then_some((i, *fd))
+    })
 }

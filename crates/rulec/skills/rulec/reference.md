@@ -442,6 +442,9 @@ this tool's boundary is, and a path in a cell would put the caller's object mode
 checks. The test after `where` takes the same forms a cell does (`= a`, `= a, b`, `not: a`,
 `<=100`), and it compares the **raw** value the contract carries, so a literal in it carries
 no unit — a contract has none, and comparing a scaled number with a raw one is refused (E120).
+From a `.proto`, the raw value is what protojson writes: an enum is its value's name
+(`where temp = TEMP_FROZEN`), a 64-bit integer is compared as the number it is though it
+arrives as a string, and `bytes` or a message is nothing a `where` can compare (E120).
 
 The contract is read on every `check`, resolved against the directory of the rule, and
 carries **no digest** — the same footing as `import proto` (§3.1): what holds the two together
@@ -470,7 +473,21 @@ compared is the contract with the input's own declaration.
 
 A field the contract lets an object leave out can only be taken by an optional input (`T?`),
 and the projection function reads a missing one — or a missing object on the way to it — as
-`none`. A required input read from such a field is E122, since the function could not read it.
+`none`. In a JSON Schema that is a field not in `required`, and a required input read from one
+is E122, since the function could not read it.
+
+**A `.proto` shape is read in the JSON form protojson gives it.** A field is read under its
+JSON name — `json_name`, or the lowerCamelCase of its name, so `zone_code` is `zoneCode` — or
+under the name the `.proto` writes, which protojson's readers accept as well. A field protojson
+leaves out is read as proto reads it: a number as 0, a string as `""`, a `bool` as false, a
+`repeated` as no elements, an enum as its value numbered 0, and a message as one with every
+field left out. The defaults arrive, then, and they are held to the input like any other value.
+Under a message field that is not `required`, and in an `optional` field, Protovalidate
+validates nothing while it is unset, so the default arrives whatever the rules on the field
+say; an input that does not take it is E122, with `(buf.validate.field).required = true` as the
+fix. An optional input (`T?`) reads an unset message or `optional` field as `none` instead — a
+field without presence cannot be missing apart from its default. A date read from a string is
+held to whether `""` passes, since protojson leaves an empty string out and `""` is not a date.
 
 A contract says how a value **travels**, and the rule says what it **means**: an enum and a
 date arrive as strings, and money and a quantity as whole numbers in the unit the rule
