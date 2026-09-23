@@ -150,15 +150,15 @@ FIGS["implementing"] = dict(
 
 FIGS["contract"] = dict(
     ja=dict(
-        alt="API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）を、エージェントが規則の表（.rule）に結ぶ。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の値の集合に結ぶ。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める。",
+        alt="API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）と規則の表（.rule）を、エージェントが対応づける。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の列挙と対応づける。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める。",
         nodes=[
             ("sheet", ("API の契約", [".proto と Protovalidate", "OpenAPI", "JSON Schema"]), 150),
-            ("actor", ("エージェント", ["入力を契約に結ぶ", "shape と from", "列挙は import"]), 150),
+            ("actor", ("エージェント", ["入力の出どころを書く", "shape と from", "列挙は import"]), 150),
             ("sheet", ("表", ["from 注文.lines", "import proto"], ".rule"), 130),
             ("actor", ("rulec", ["パスをたどる", "値の集合をそろえる", "検証と宣言を", "突き合わせる"]), 150),
             ("sheet", ("CI の結果", ["名前が変わった E121", "値が増えた E032", "契約の方が広い E122"]), 170),
         ],
-        labels=[("", "読む"), ("", "結ぶ"), ("rulec check", "変わるたびに"), ("", "止まる / 通る")],
+        labels=[("", "読む"), ("", "書く"), ("rulec check", "変わるたびに"), ("", "止まる / 通る")],
         loop=(3, 1, ("食い違い", ["その値と", "契約に書く注釈"]), "直すまで繰り返す"),
         detour=(3, ("決める人", ["契約と規則の", "どちらを直すか", "決める"]), "E122"),
     ),

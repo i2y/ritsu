@@ -598,8 +598,8 @@ API の要求やメッセージの形と、そこに入ってよい値は、た�
 
 契約を変えたとき、それがワイヤの上で互換かどうかは `buf breaking` のような道具が見ます。けれど、その変更で**業務の判断が壊れないか**を見る道具はありません。rulec はそこを、ルールの側から見ます。ここでの主役は**契約**で、コードを生成しなくても使えます。
 
-![API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）を、エージェントが規則の表（.rule）に結ぶ。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の値の集合に結ぶ。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める](images/scenario-contract-ja.svg#only-dark)
-![API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）を、エージェントが規則の表（.rule）に結ぶ。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の値の集合に結ぶ。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める](images/scenario-contract-ja-light.svg#only-light)
+![API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）と規則の表（.rule）を、エージェントが対応づける。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の列挙と対応づける。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める](images/scenario-contract-ja.svg#only-dark)
+![API の契約（.proto と Protovalidate、OpenAPI や JSON Schema）と規則の表（.rule）を、エージェントが対応づける。入力ごとに shape と from で契約のどこから来るかを書き、列挙は import で契約の列挙と対応づける。契約か規則が変わるたびに、CI の rulec check が二つを突き合わせ、名前が変わったフィールド、増えた列挙の値、契約は通すのに規則が断る値を、その値つきで返す。契約と規則のどちらを直すかは、人が決める](images/scenario-contract-ja-light.svg#only-light)
 
 要求が規則にたどり着くまでに、つなぎ目は三つあります。
 
@@ -611,7 +611,7 @@ API の要求やメッセージの形と、そこに入ってよい値は、た�
 
 rulec が見るのは下の二つです。上の一つは、いまある検証の道具がそのまま受け持ちます。
 
-### 5-1. 入力を契約に結ぶ
+### 5-1. 入力が契約のどこから来るかを書く
 
 担当: エージェント
 
@@ -626,7 +626,7 @@ inputs
   個数(parcels)       : number  range >=1 <=20  from count 出荷.parcels
 ```
 
-契約が列挙を持っているなら、`import proto "<ファイル>" <列挙> -> <この規則の列挙>`（JSON Schema なら `import jsonschema`）で、規則の列挙を契約の値の集合に結びます。書き方は[表(.rule)を書く](tour.md)の「取り込み」と「入力を、呼び出し側のオブジェクトから取る」に、契約と並べた例は[例で見る](examples.md)にあります。
+契約が列挙を持っているなら、`import proto "<ファイル>" <列挙> -> <この規則の列挙>`（JSON Schema なら `import jsonschema`）で、規則の列挙を契約の列挙と対応づけます。書き方は[表(.rule)を書く](tour.md)の「取り込み」と「入力を、呼び出し側のオブジェクトから取る」に、契約と並べた例は[例で見る](examples.md)にあります。
 
 ### 5-2. 突き合わせる
 
