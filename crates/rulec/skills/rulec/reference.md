@@ -159,7 +159,7 @@ Fourteen, and no others.
 | temperature | `temperature[℃]`, `temperature[℉]` | `℃` `℉`. **Ordered, not arithmetic**: comparison and `range` only (E048). 41℉ is exactly 5℃, and a literal converts between them; a difference of two temperatures is not written at all |
 | sound | `sound[dB]` | `dB`, a sound pressure level. **Ordered, not arithmetic** (E048): a decibel is a logarithm, so adding two of them is not two sounds' worth |
 | money | `money[円, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
-| rate | `rate`, `rate[step 1%]`, `rate[step 0.1%]` | with a step, the stored integer counts steps; without one, the step comes from the literals in the column |
+| rate | `rate[step 1%]`, `rate[step 0.1%]`, `rate` | the stored integer counts steps. **An input declares its step** (E103 without one): what the caller passes is that integer, and its meaning cannot change when a row is added. A computed rate may leave the step out; it then comes from the literals in its column |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |

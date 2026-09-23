@@ -1585,8 +1585,17 @@ impl<'a> Gen<'a> {
     /// answer with. Refusing at the door is the same line as the range and the integer checks
     /// — the entry guard enforces exactly what the proof assumed (§15.43, §15.45).
     ///
-    /// Both sides are inputs of the same type, so their wire values share a scale and compare
-    /// directly.
+    /// Both sides are inputs of one type, but not always of one step: a rate in 1% steps and
+    /// one in 0.1% steps hold 50% as 50 and as 500, and comparing those integers as they stand
+    /// let 50% ≤ 10% through. So each side is brought to the step the two share first
+    /// (§15.139); E108 has already proved the product fits.
+    fn constraint_sides(&self, k: &crate::ast::Constraint, a: String, b: String) -> (String, String) {
+        let (sa, sb) = (self.scale(&k.left).max(1), self.scale(&k.right).max(1));
+        let common = lcm(sa, sb);
+        let side = |t: String, s: i128| if common / s == 1 { t } else { format!("{t} * {}", common / s) };
+        (side(a, sa), side(b, sb))
+    }
+
     fn constraint_guards(
         &self,
         local: &dyn Fn(&str) -> String,
@@ -1597,7 +1606,7 @@ impl<'a> Gen<'a> {
         let sp = lang.spelling();
         let mut o = String::new();
         for k in &self.f.constraints {
-            let (a, b) = (local(&k.left), local(&k.right));
+            let (a, b) = self.constraint_sides(k, local(&k.left), local(&k.right));
             let op = k.op.word();
             let said = format!("{} {op} {}", k.left, k.right);
             o.push_str(&format!(
@@ -4725,6 +4734,7 @@ impl<'a> Gen<'a> {
         for k in &self.f.constraints {
             let name = |n: &String| self.f.inputs.iter().find(|i| &i.name.text == n).map(|i| pub_name(&i.name));
             if let (Some(a), Some(b)) = (name(&k.left), name(&k.right)) {
+                let (a, b) = self.constraint_sides(k, a, b);
                 decls.push_str(&format!("        kani::assume({a} {} {b});\n", k.op.word()));
             }
         }

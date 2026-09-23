@@ -138,3 +138,23 @@ fn 有理数で解く限界は主張しない() {
     let even = src.replace("5円", "6円");
     assert!(codes(&even).iter().any(|c| c == "W114" || c == "E105"), "偶数の境界では重なる");
 }
+
+/// A column of another type in the table no longer switches the elimination off. §15.126
+/// gave up on the whole question as soon as two types met; each type now gets a system of
+/// its own, and the one that holds the correlation still decides the pair (§15.139).
+#[test]
+fn 型の違う列があっても消去は効く() {
+    let dated = |a: i64, b: i64| {
+        rule(a, b)
+            .replace("  割引B(d2) : money[円]  range >=0円 <=10万円\n", "  割引B(d2) : money[円]  range >=0円 <=10万円\n  注文日(day) : date  range >=2026-01-01 <=2026-12-31\n")
+            .replace("| 残高A   | 残高B   | -> 可否(v) : 判定 |", "| 残高A   | 残高B   | 注文日 | -> 可否(v) : 判定 |")
+            .replace(&format!("| <={a}円 | -       | 外                |"), &format!("| <={a}円 | -       | -      | 外                |"))
+            .replace(&format!("| -       | >={b}円 | 内                |"), &format!("| -       | >={b}円 | -      | 内                |"))
+            .replace(&format!("| >{a}円  | <{b}円  | 外                |"), &format!("| >{a}円  | <{b}円  | -      | 外                |"))
+    };
+    let ds = codes(&dated(1_000, 50_000));
+    assert!(!ds.iter().any(|c| c == "W114" || c == "E105"), "起きない重なりが残っている: {ds:?}");
+    // And the direction that must never flip: where the rows really meet, they still do.
+    let ds = codes(&dated(50_000, 1_000));
+    assert!(ds.iter().any(|c| c == "W114" || c == "E105"), "起きる重なりが黙って消えた: {ds:?}");
+}

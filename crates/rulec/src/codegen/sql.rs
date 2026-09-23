@@ -452,10 +452,9 @@ impl<'a> Gen<'a> {
         for k in &self.f.constraints {
             let op = k.op.word();
             let said = format!("{} {op} {}", k.left, k.right);
+            let (a, b) = self.constraint_sides(k, q(&local(&k.left)), q(&local(&k.right)));
             guard.push(format!(
-                "WHEN NOT ({} {op} {}) THEN {}",
-                q(&local(&k.left)),
-                q(&local(&k.right)),
+                "WHEN NOT ({a} {op} {b}) THEN {}",
                 lit(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
             ));
         }

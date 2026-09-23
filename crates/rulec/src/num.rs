@@ -56,6 +56,45 @@ impl Rat {
     pub fn cmp_to(self, o: Rat) -> std::cmp::Ordering {
         (self.num * o.den).cmp(&(o.num * self.den))
     }
+
+    /// The same arithmetic, `None` where the exact result does not fit in 128 bits.
+    ///
+    /// The elimination of §15.126 multiplies coefficients together step after step, and the
+    /// plain operators above wrap silently in a release build. A wrapped product is a wrong
+    /// answer that looks like a right one — the one thing a proof must never hand back — so
+    /// the elimination uses these and gives up where they refuse.
+    pub fn checked_new(num: i128, den: i128) -> Option<Self> {
+        if den == 0 {
+            return None;
+        }
+        let (mut a, mut b) = (num.checked_abs()?, den.checked_abs()?);
+        while b != 0 {
+            let t = a % b;
+            a = b;
+            b = t;
+        }
+        let g = if a == 0 { 1 } else { a };
+        let s = if den < 0 { -1 } else { 1 };
+        Some(Rat { num: (num / g).checked_mul(s)?, den: (den / g).checked_mul(s)? })
+    }
+    pub fn checked_add(self, o: Rat) -> Option<Rat> {
+        let a = self.num.checked_mul(o.den)?;
+        let b = o.num.checked_mul(self.den)?;
+        Rat::checked_new(a.checked_add(b)?, self.den.checked_mul(o.den)?)
+    }
+    pub fn checked_sub(self, o: Rat) -> Option<Rat> {
+        self.checked_add(Rat { num: o.num.checked_neg()?, den: o.den })
+    }
+    pub fn checked_mul(self, o: Rat) -> Option<Rat> {
+        Rat::checked_new(self.num.checked_mul(o.num)?, self.den.checked_mul(o.den)?)
+    }
+    pub fn checked_div(self, o: Rat) -> Option<Rat> {
+        Rat::checked_new(self.num.checked_mul(o.den)?, self.den.checked_mul(o.num)?)
+    }
+    /// The comparison, `None` where the cross products do not fit.
+    pub fn checked_cmp(self, o: Rat) -> Option<std::cmp::Ordering> {
+        Some(self.num.checked_mul(o.den)?.cmp(&o.num.checked_mul(self.den)?))
+    }
 }
 
 impl std::fmt::Display for Rat {

@@ -1645,9 +1645,9 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3).
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled.
 
-**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula.
+**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`).
 
 **Smallest reproduction**:
 

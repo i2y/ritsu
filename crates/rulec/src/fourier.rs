@@ -23,17 +23,63 @@ use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use std::collections::BTreeMap;
 
+/// Where one inequality of a system came from.
+///
+/// A refutation is a set of multipliers over the inequalities it combined (§15.139), and a
+/// certificate that hands one over has to say what each of those inequalities was — which
+/// cell of which row, which declared range, which `derive`, which `constraint` — so that a
+/// re-checker can build it again from the rule and hold the multipliers to it without
+/// trusting this module. `None` is a row nobody will be asked about.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Origin {
+    #[default]
+    None,
+    /// One side of a `derive`'s defining equation: `name − expr <= 0` when `le`, `>= 0`
+    /// otherwise.
+    Derive { name: String, le: bool },
+    /// One end of a declared range.
+    Range { name: String, hi: bool },
+    /// The `constraint` at this index in the file.
+    Constraint(usize),
+    /// One comparison of a row's cell: the row (0-based), the column, and which comparison of
+    /// the cell (a literal cell is two, `<=` then `>=`).
+    Cell { row: usize, col: String, part: usize },
+    /// A boolean `define` the question pins to one truth value (§15.127), and which of the
+    /// inequalities that truth value becomes.
+    Pin { name: String, yes: bool, part: usize },
+    /// An atom of a contract, by its index in the list the caller keeps (§15.139).
+    Contract(usize),
+}
+
 /// One inequality: `Σ c·x + k < 0` when `strict`, `<= 0` otherwise.
 #[derive(Debug, Clone)]
 pub struct Ineq {
     pub terms: BTreeMap<String, Rat>,
     pub k: Rat,
     pub strict: bool,
+    pub origin: Origin,
 }
 
 impl Ineq {
+    /// The same inequality, saying where it came from.
+    pub fn tag(mut self, origin: Origin) -> Ineq {
+        self.origin = origin;
+        self
+    }
+
     fn constant(&self) -> bool {
         self.terms.values().all(|c| c.num == 0)
+    }
+
+    /// Whether the inequality holds at a point that gives every one of its names a value.
+    /// `None` when a name has none, or the arithmetic does not fit.
+    pub fn holds_at(&self, at: &BTreeMap<String, Rat>) -> Option<bool> {
+        let mut k = self.k;
+        for (n, c) in &self.terms {
+            k = k.checked_add(c.checked_mul(*at.get(n)?)?)?;
+        }
+        let o = k.checked_cmp(Rat::int(0))?;
+        Some(if self.strict { o.is_lt() } else { o.is_le() })
     }
 
     /// Whether a system with no variables left is already false here.
@@ -82,7 +128,7 @@ impl Lin {
 
     /// `self <= 0`, or `< 0`.
     pub fn le(self, strict: bool) -> Ineq {
-        Ineq { terms: self.terms, k: self.k, strict }
+        Ineq { terms: self.terms, k: self.k, strict, origin: Origin::None }
     }
 
     /// `self >= 0`, or `> 0`, written the one way this module reads.
@@ -155,67 +201,85 @@ pub struct Ground {
     pub sys: Vec<Ineq>,
 }
 
-/// The ground of a system, seeded with the names a caller cares about and closed over what
-/// they are computed from. `None` when the names do not share one type — a linear form has
-/// no units in it, so two names measured differently cannot go into one system without a
-/// conversion this does not do — or when an expression is not linear.
-pub fn ground(seed: &[String], f: &RuleFile, c: &Checked) -> Option<Ground> {
+/// The grounds of a question, one for each type of number among the names a caller cares
+/// about, each closed over what its names are computed from.
+///
+/// A linear form carries no unit, so two names measured differently cannot share a system
+/// without a conversion this does not make. What it does instead is keep them apart: the
+/// grams in one system, the yen in another. **Each is a relaxation of the whole question** —
+/// it keeps some of the conditions and drops the rest — so whichever of them turns out to
+/// have no solution settles the question, and the ones that have a solution settle nothing.
+/// The same reasoning drops a `derive` whose expression is not linear: its name stays in the
+/// system, free inside its range, and only the equation that would have tied it down is
+/// left out. §15.126 gave up on the whole question in both cases; there was no need to.
+pub fn grounds(seed: &[String], f: &RuleFile, c: &Checked) -> Vec<Ground> {
+    let mut types: Vec<Ty> = Vec::new();
+    for n in seed {
+        if let Some(ty) = c.ty_of(n) {
+            if numeric(&ty) && !types.contains(&ty) {
+                types.push(ty);
+            }
+        }
+    }
+    types.iter().filter_map(|want| ground_in(seed, want, f, c)).collect()
+}
+
+/// Whether a name of this type belongs in a linear system at all. A date is an ordinal and
+/// does (§2.1); an enum, a bool or a string constrains nothing here.
+fn numeric(ty: &Ty) -> bool {
+    matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate | Ty::Date)
+}
+
+fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Ground> {
     let expr_of = |n: &str| -> Option<&Expr> {
         f.items.iter().find_map(|it| match it {
             crate::ast::Item::Derived(d) if d.name.text == n => Some(&d.expr),
             _ => None,
         })
     };
-    let mut want: Option<Ty> = None;
     let mut vars: Vec<String> = Vec::new();
     let mut queue: Vec<String> = seed.to_vec();
     while let Some(n) = queue.pop() {
-        if vars.contains(&n) {
+        if vars.contains(&n) || c.ty_of(&n).as_ref() != Some(want) {
             continue;
-        }
-        let Some(ty) = c.ty_of(&n) else { continue };
-        // A name this arithmetic has no place for — an enum, a bool, a string — constrains
-        // nothing here and is simply left out. A date is an ordinal and does belong (§2.1).
-        if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate | Ty::Date) {
-            continue;
-        }
-        match &want {
-            None => want = Some(ty.clone()),
-            Some(w) if *w == ty => {}
-            Some(_) => return None,
         }
         vars.push(n.clone());
-        if let Some(e) = expr_of(&n) {
-            let l = linear(e, &ty, c)?;
+        if let Some(l) = expr_of(&n).and_then(|e| linear(e, want, c)) {
             queue.extend(l.terms.keys().cloned());
         }
     }
-    let want = want?;
+    if vars.is_empty() {
+        return None;
+    }
     let mut sys: Vec<Ineq> = Vec::new();
     for n in &vars {
-        if let Some(e) = expr_of(n) {
-            let l = linear(e, &want, c)?;
+        if let Some(l) = expr_of(n).and_then(|e| linear(e, want, c)) {
+            // Every name the expression reads is in the system, because the closure above put
+            // it there; a name of another type made `linear` refuse, and then there is no
+            // equation to add.
             let d = Lin::var(n).plus(&l.scale(Rat::int(-1)));
-            sys.push(d.clone().le(false));
-            sys.push(d.ge(false));
+            sys.push(d.clone().le(false).tag(Origin::Derive { name: n.clone(), le: true }));
+            sys.push(d.ge(false).tag(Origin::Derive { name: n.clone(), le: false }));
         }
         if let Some((lo, hi)) = c.ranges.get(n) {
             if let Some(lo) = lo {
-                sys.push(Lin::var(n).plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(false));
+                let q = Lin::var(n).plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(false);
+                sys.push(q.tag(Origin::Range { name: n.clone(), hi: false }));
             }
             if let Some(hi) = hi {
-                sys.push(Lin::var(n).plus(&Lin::con(hi.mul(Rat::int(-1)))).le(false));
+                let q = Lin::var(n).plus(&Lin::con(hi.mul(Rat::int(-1)))).le(false);
+                sys.push(q.tag(Origin::Range { name: n.clone(), hi: true }));
             }
         }
     }
-    for k in &f.constraints {
+    for (i, k) in f.constraints.iter().enumerate() {
         if !vars.contains(&k.left) || !vars.contains(&k.right) {
             continue;
         }
         let d = Lin::var(&k.left).plus(&Lin::var(&k.right).scale(Rat::int(-1)));
-        sys.push(cmp(d, k.op, false));
+        sys.push(cmp(d, k.op, false).tag(Origin::Constraint(i)));
     }
-    Some(Ground { vars, want, sys })
+    Some(Ground { vars, want: want.clone(), sys })
 }
 
 /// `form <op> 0`, written the one way this module reads.
@@ -268,27 +332,108 @@ pub const CAP: usize = 400;
 /// Whether the system has **no** rational solution.
 ///
 /// `false` means "not proven unsatisfiable", which is what a caller has to treat it as: it
-/// covers a system with a solution, a system too big for the cap, and a system whose only
-/// obstruction is integrality.
-pub fn unsat(mut sys: Vec<Ineq>) -> bool {
-    // The variables, eliminated in the order that keeps the system smallest: the one with
-    // the fewest pairings first.
+/// covers a system with a solution, a system too big for the cap, a system whose arithmetic
+/// outgrew 128 bits, and a system whose only obstruction is integrality.
+pub fn unsat(sys: Vec<Ineq>) -> bool {
+    refute(&sys).is_some()
+}
+
+/// The refutation of a system: one non-negative multiplier for each of its inequalities, such
+/// that adding them up, each times its multiplier, cancels every variable and leaves a
+/// constant that is false — positive, or zero where a strict inequality took part (§15.139).
+///
+/// That sum is the whole proof. It is a handful of rational numbers anybody can check by
+/// addition, and checking it needs no trust in the elimination that found it, which is why a
+/// certificate carries it rather than the conclusion. Finding it costs nothing extra: every
+/// inequality the elimination makes is a positive combination of two it already had, so
+/// carrying the combination along gives the multipliers of the first row that comes out
+/// false. `None` means exactly what `unsat` returning `false` means. What comes back is held
+/// to `farkas_holds` before it is returned, so a slip here costs a proof, never a wrong one.
+pub fn refute(sys: &[Ineq]) -> Option<Vec<Rat>> {
+    let mut rows: Vec<Row> = sys
+        .iter()
+        .enumerate()
+        .map(|(i, q)| Row { q: q.clone(), y: BTreeMap::from([(i, Rat::int(1))]) })
+        .collect();
     loop {
-        sys.retain(|q| !q.constant() || !q.k.cmp_to(Rat::int(0)).is_le() || q.strict);
-        if sys.iter().any(|q| q.constant() && q.false_now()) {
-            return true;
+        if let Some(r) = rows.iter().find(|r| r.q.constant() && r.q.false_now()) {
+            let y: Vec<Rat> = (0..sys.len()).map(|i| r.y.get(&i).copied().unwrap_or(Rat::int(0))).collect();
+            return farkas_holds(sys, &y).then_some(y);
         }
-        sys.retain(|q| !q.constant());
-        let Some(x) = pick(&sys) else { return false };
-        let (lo, hi) = count(&sys, &x);
-        if lo * hi > CAP || sys.len() > CAP {
-            return false;
+        rows.retain(|r| !r.q.constant());
+        let x = pick(&rows)?;
+        let (lo, hi) = count(&rows, &x);
+        if lo * hi > CAP || rows.len() > CAP {
+            return None;
         }
-        sys = eliminate(sys, &x);
-        if sys.len() > CAP {
-            return false;
+        rows = eliminate(rows, &x, true)?;
+        if rows.len() > CAP {
+            return None;
         }
     }
+}
+
+/// A system and the multipliers that refute it, kept together so that whoever hands the
+/// refutation on can say what each inequality was.
+#[derive(Debug, Clone)]
+pub struct Refutation {
+    pub sys: Vec<Ineq>,
+    pub y: Vec<Rat>,
+}
+
+impl Refutation {
+    /// The refutation of `sys`, if elimination finds one.
+    pub fn of(sys: Vec<Ineq>) -> Option<Refutation> {
+        let y = refute(&sys)?;
+        Some(Refutation { sys, y })
+    }
+
+    /// Only the inequalities that took part, each with its multiplier. The others add
+    /// nothing to the sum and nothing a reader needs.
+    pub fn used(&self) -> Vec<(&Ineq, Rat)> {
+        self.sys.iter().zip(&self.y).filter(|(_, v)| v.num != 0).map(|(q, v)| (q, *v)).collect()
+    }
+}
+
+/// Whether the multipliers really refute the system, checked by the addition they claim and
+/// nothing else: every one is at least zero, the variables cancel, and what is left is false.
+pub fn farkas_holds(sys: &[Ineq], y: &[Rat]) -> bool {
+    let check = || -> Option<bool> {
+        if y.len() != sys.len() || y.iter().any(|v| v.num < 0) {
+            return Some(false);
+        }
+        let mut terms: BTreeMap<&str, Rat> = BTreeMap::new();
+        let mut k = Rat::int(0);
+        let mut strict = false;
+        for (q, v) in sys.iter().zip(y) {
+            if v.num == 0 {
+                continue;
+            }
+            for (n, c) in &q.terms {
+                let e = terms.entry(n.as_str()).or_insert(Rat::int(0));
+                *e = e.checked_add(c.checked_mul(*v)?)?;
+            }
+            k = k.checked_add(q.k.checked_mul(*v)?)?;
+            strict |= q.strict;
+        }
+        if terms.values().any(|c| c.num != 0) {
+            return Some(false);
+        }
+        Some(match k.checked_cmp(Rat::int(0))? {
+            std::cmp::Ordering::Greater => true,
+            std::cmp::Ordering::Equal => strict,
+            std::cmp::Ordering::Less => false,
+        })
+    };
+    check().unwrap_or(false)
+}
+
+/// An inequality in the middle of an elimination, with the multipliers that made it out of
+/// the system's own inequalities (by index).
+#[derive(Clone)]
+struct Row {
+    q: Ineq,
+    y: BTreeMap<usize, Rat>,
 }
 
 /// A point that satisfies the system, or `None` when there is none to find.
@@ -300,22 +445,23 @@ pub fn unsat(mut sys: Vec<Ineq>) -> bool {
 /// tool quantifies over is whole in its own unit (§2.1), and when the interval holds none
 /// the rational midpoint comes back and the caller decides what to do with it.
 ///
-/// Like `unsat`, this gives up rather than guesses: past the cap it returns `None`, which a
-/// caller has to read as "no point was found", not as "none exists".
+/// Like `unsat`, this gives up rather than guesses: past the cap, or where the arithmetic
+/// outgrows 128 bits, it returns `None`, which a caller has to read as "no point was found",
+/// not as "none exists".
 pub fn solve(sys: Vec<Ineq>) -> Option<BTreeMap<String, Rat>> {
-    let mut stack: Vec<(String, Vec<Ineq>)> = Vec::new();
-    let mut cur = sys;
+    let mut stack: Vec<(String, Vec<Row>)> = Vec::new();
+    let mut cur: Vec<Row> = sys.into_iter().map(|q| Row { q, y: BTreeMap::new() }).collect();
     loop {
-        if cur.iter().any(|q| q.constant() && q.false_now()) {
+        if cur.iter().any(|r| r.q.constant() && r.q.false_now()) {
             return None;
         }
-        cur.retain(|q| !q.constant());
+        cur.retain(|r| !r.q.constant());
         let Some(x) = pick(&cur) else { break };
         let (lo, hi) = count(&cur, &x);
         if lo * hi > CAP || cur.len() > CAP || stack.len() > CAP {
             return None;
         }
-        let next = eliminate(cur.clone(), &x);
+        let next = eliminate(cur.clone(), &x, false)?;
         stack.push((x, cur));
         cur = next;
         if cur.len() > CAP {
@@ -323,45 +469,42 @@ pub fn solve(sys: Vec<Ineq>) -> Option<BTreeMap<String, Rat>> {
         }
     }
     let mut at: BTreeMap<String, Rat> = BTreeMap::new();
-    while let Some((x, sys)) = stack.pop() {
+    while let Some((x, rows)) = stack.pop() {
         let mut lo: Option<(Rat, bool)> = None;
         let mut hi: Option<(Rat, bool)> = None;
-        for q in &sys {
+        for r in &rows {
+            let q = &r.q;
             let Some(cx) = q.terms.get(&x).copied().filter(|c| c.num != 0) else { continue };
-            // Everything but `x` already has a value, so the rest of the row is a number.
+            // Everything but `x` already has a value, so the rest of the row is a number. A
+            // variable eliminated later than `x` would have none, which cannot happen for a
+            // system taken apart in this order; refuse rather than invent one.
             let mut k = q.k;
-            let mut open = false;
             for (n, c) in &q.terms {
-                if n == &x {
-                    continue;
+                if n != &x {
+                    k = k.checked_add(c.checked_mul(*at.get(n)?)?)?;
                 }
-                match at.get(n) {
-                    Some(v) => k = k.add(c.mul(*v)),
-                    // A variable eliminated later than `x` has no value yet, which cannot
-                    // happen for a system taken apart in this order; refuse rather than
-                    // invent one.
-                    None => {
-                        open = true;
-                        break;
-                    }
-                }
-            }
-            if open {
-                return None;
             }
             // cx·x + k ≤ 0 (or < 0)
-            let bound = k.mul(Rat::int(-1)).div(cx);
+            let bound = k.checked_mul(Rat::int(-1))?.checked_div(cx)?;
+            // Two bounds at the same value keep the stricter of the two: `x <= 5` and `x < 5`
+            // together are `x < 5`.
+            let tighter = |old: Option<(Rat, bool)>, upper: bool| -> Option<(Rat, bool)> {
+                Some(match old {
+                    None => (bound, q.strict),
+                    Some((b, bs)) => match b.checked_cmp(bound)? {
+                        std::cmp::Ordering::Equal => (b, bs || q.strict),
+                        std::cmp::Ordering::Less if upper => (b, bs),
+                        std::cmp::Ordering::Greater if !upper => (b, bs),
+                        _ => (bound, q.strict),
+                    },
+                })
+            };
             if cx.num > 0 {
-                hi = Some(match hi {
-                    Some((h, hs)) if h.cmp_to(bound).is_le() => (h, hs),
-                    Some((h, _)) if h.cmp_to(bound) == std::cmp::Ordering::Equal => (h, true),
-                    _ => (bound, q.strict),
-                });
+                hi = tighter(hi, true);
+                hi.as_ref()?;
             } else {
-                lo = Some(match lo {
-                    Some((l, ls)) if l.cmp_to(bound).is_ge() => (l, ls),
-                    _ => (bound, q.strict),
-                });
+                lo = tighter(lo, false);
+                lo.as_ref()?;
             }
         }
         at.insert(x, between(lo, hi)?);
@@ -376,16 +519,22 @@ fn between(lo: Option<(Rat, bool)>, hi: Option<(Rat, bool)>) -> Option<Rat> {
     let floor = |r: Rat| Rat::int(r.num.div_euclid(r.den));
     let ceil = |r: Rat| Rat::int(-((-r.num).div_euclid(r.den)));
     // The first whole value at or after `lo`, and the last at or before `hi`.
-    let lo_i = lo.map(|(l, s)| {
-        let c = ceil(l);
-        if s && c.cmp_to(l) == std::cmp::Ordering::Equal { c.add(one) } else { c }
-    });
-    let hi_i = hi.map(|(h, s)| {
-        let fl = floor(h);
-        if s && fl.cmp_to(h) == std::cmp::Ordering::Equal { fl.sub(one) } else { fl }
-    });
+    let lo_i = match lo {
+        Some((l, s)) => {
+            let c = ceil(l);
+            Some(if s && c.checked_cmp(l)? == std::cmp::Ordering::Equal { c.checked_add(one)? } else { c })
+        }
+        None => None,
+    };
+    let hi_i = match hi {
+        Some((h, s)) => {
+            let fl = floor(h);
+            Some(if s && fl.checked_cmp(h)? == std::cmp::Ordering::Equal { fl.checked_sub(one)? } else { fl })
+        }
+        None => None,
+    };
     match (lo_i, hi_i) {
-        (Some(l), Some(h)) if l.cmp_to(h).is_le() => return Some(l),
+        (Some(l), Some(h)) if l.checked_cmp(h)?.is_le() => return Some(l),
         (Some(l), None) => return Some(l),
         (None, Some(h)) => return Some(h),
         (None, None) => return Some(Rat::int(0)),
@@ -394,35 +543,35 @@ fn between(lo: Option<(Rat, bool)>, hi: Option<(Rat, bool)>) -> Option<Rat> {
     // No whole value in it. The midpoint still satisfies the system, and a caller that needs
     // a whole one can see that this is not.
     match (lo, hi) {
-        (Some((l, _)), Some((h, _))) if l.cmp_to(h) == std::cmp::Ordering::Less => {
-            Some(l.add(h).div(Rat::int(2)))
+        (Some((l, _)), Some((h, _))) if l.checked_cmp(h)? == std::cmp::Ordering::Less => {
+            l.checked_add(h)?.checked_div(Rat::int(2))
         }
         _ => None,
     }
 }
 
 /// The variable to eliminate next: the one that pairs off smallest.
-fn pick(sys: &[Ineq]) -> Option<String> {
+fn pick(rows: &[Row]) -> Option<String> {
     let mut names: Vec<String> = Vec::new();
-    for q in sys {
-        for (n, c) in &q.terms {
+    for r in rows {
+        for (n, c) in &r.q.terms {
             if c.num != 0 && !names.contains(n) {
                 names.push(n.clone());
             }
         }
     }
     names.into_iter().min_by_key(|n| {
-        let (lo, hi) = count(sys, n);
+        let (lo, hi) = count(rows, n);
         lo * hi
     })
 }
 
 /// How many inequalities bound `x` from each side.
-fn count(sys: &[Ineq], x: &str) -> (usize, usize) {
+fn count(rows: &[Row], x: &str) -> (usize, usize) {
     let mut lo = 0;
     let mut hi = 0;
-    for q in sys {
-        match q.terms.get(x).map(|c| c.num.signum()) {
+    for r in rows {
+        match r.q.terms.get(x).map(|c| c.num.signum()) {
             Some(1) => hi += 1,
             Some(-1) => lo += 1,
             _ => {}
@@ -432,39 +581,107 @@ fn count(sys: &[Ineq], x: &str) -> (usize, usize) {
 }
 
 /// One variable out: every inequality that bounds it above, combined with every one that
-/// bounds it below, and the ones that do not mention it kept as they are.
-fn eliminate(sys: Vec<Ineq>, x: &str) -> Vec<Ineq> {
+/// bounds it below, and the ones that do not mention it kept as they are. `track` carries
+/// the multipliers along (a refutation needs them; a solution does not). `None` where the
+/// arithmetic outgrows 128 bits.
+fn eliminate(rows: Vec<Row>, x: &str, track: bool) -> Option<Vec<Row>> {
     let (mut pos, mut neg, mut rest) = (Vec::new(), Vec::new(), Vec::new());
-    for q in sys {
-        match q.terms.get(x).map(|c| c.num.signum()) {
-            Some(1) => pos.push(q),
-            Some(-1) => neg.push(q),
-            _ => rest.push(q),
+    for r in rows {
+        match r.q.terms.get(x).map(|c| c.num.signum()) {
+            Some(1) => pos.push(r),
+            Some(-1) => neg.push(r),
+            _ => rest.push(r),
         }
     }
     for p in &pos {
         for n in &neg {
-            let (a, b) = (*p.terms.get(x).unwrap(), n.terms.get(x).unwrap().mul(Rat::int(-1)));
+            let a = *p.q.terms.get(x)?;
+            let b = n.q.terms.get(x)?.checked_mul(Rat::int(-1))?;
             // b·p + a·n: the coefficient of x cancels, and both multipliers are positive so
             // the direction of each inequality is kept.
             let mut terms: BTreeMap<String, Rat> = BTreeMap::new();
-            for (name, c) in &p.terms {
+            for (name, c) in &p.q.terms {
                 let e = terms.entry(name.clone()).or_insert(Rat::int(0));
-                *e = e.add(c.mul(b));
+                *e = e.checked_add(c.checked_mul(b)?)?;
             }
-            for (name, c) in &n.terms {
+            for (name, c) in &n.q.terms {
                 let e = terms.entry(name.clone()).or_insert(Rat::int(0));
-                *e = e.add(c.mul(a));
+                *e = e.checked_add(c.checked_mul(a)?)?;
             }
             terms.remove(x);
             terms.retain(|_, c| c.num != 0);
-            rest.push(Ineq { terms, k: p.k.mul(b).add(n.k.mul(a)), strict: p.strict || n.strict });
+            let k = p.q.k.checked_mul(b)?.checked_add(n.q.k.checked_mul(a)?)?;
+            let mut y: BTreeMap<usize, Rat> = BTreeMap::new();
+            if track {
+                for (i, v) in &p.y {
+                    let e = y.entry(*i).or_insert(Rat::int(0));
+                    *e = e.checked_add(v.checked_mul(b)?)?;
+                }
+                for (i, v) in &n.y {
+                    let e = y.entry(*i).or_insert(Rat::int(0));
+                    *e = e.checked_add(v.checked_mul(a)?)?;
+                }
+            }
+            let mut row = Row { q: Ineq { terms, k, strict: p.q.strict || n.q.strict, origin: Origin::None }, y };
+            shrink(&mut row);
+            rest.push(row);
             if rest.len() > CAP {
-                return rest;
+                return Some(rest);
             }
         }
     }
-    rest
+    Some(rest)
+}
+
+/// Divide a row by the largest positive number that leaves its coefficients whole, and its
+/// multipliers with it. Scaling by a positive number changes neither what the row says nor
+/// that the multipliers make it, and without this the numbers grow with every step.
+fn shrink(r: &mut Row) {
+    let nums = r.q.terms.values().chain(std::iter::once(&r.q.k)).filter(|c| c.num != 0);
+    let mut g: i128 = 0;
+    let mut l: i128 = 1;
+    for c in nums {
+        g = gcd_i(g, c.num);
+        let Some(m) = lcm_i(l, c.den) else { return };
+        l = m;
+    }
+    if g <= 0 {
+        return;
+    }
+    let Some(f) = Rat::checked_new(l, g) else { return };
+    let scaled = || -> Option<Row> {
+        let mut q = r.q.clone();
+        for c in q.terms.values_mut() {
+            *c = c.checked_mul(f)?;
+        }
+        q.k = q.k.checked_mul(f)?;
+        let mut y = BTreeMap::new();
+        for (i, v) in &r.y {
+            y.insert(*i, v.checked_mul(f)?);
+        }
+        Some(Row { q, y })
+    };
+    if let Some(s) = scaled() {
+        *r = s;
+    }
+}
+
+fn gcd_i(a: i128, b: i128) -> i128 {
+    let (mut a, mut b) = (a.unsigned_abs(), b.unsigned_abs());
+    while b != 0 {
+        let t = a % b;
+        a = b;
+        b = t;
+    }
+    i128::try_from(a).unwrap_or(0)
+}
+
+fn lcm_i(a: i128, b: i128) -> Option<i128> {
+    let g = gcd_i(a, b);
+    if g == 0 {
+        return Some(0);
+    }
+    (a / g).checked_mul(b)
 }
 
 #[cfg(test)]
@@ -527,6 +744,66 @@ mod tests {
     }
 
     #[test]
+    fn 反駁の係数は足し算で確かめられる() {
+        // The same system as above: the multipliers that come back cancel every variable and
+        // leave a false constant, and every one of them is at least zero.
+        let eq = |name: &str, rhs: Lin| {
+            let d = v(name).plus(&rhs.clone().scale(Rat::int(-1)));
+            vec![d.clone().le(false), d.ge(false)]
+        };
+        let mut sys = eq("a", v("t").plus(&v("x").scale(Rat::int(-1))));
+        sys.extend(eq("b", v("t").plus(&v("x").scale(Rat::int(-1))).plus(&v("y").scale(Rat::int(-1)))));
+        sys.push(v("x").ge(false));
+        sys.push(v("y").ge(false));
+        sys.push(v("t").ge(false));
+        sys.push(v("a").plus(&Lin::con(Rat::int(-1000))).le(false));
+        sys.push(v("b").plus(&Lin::con(Rat::int(-3980))).ge(false));
+        let y = refute(&sys).expect("充足不能のはず");
+        assert!(farkas_holds(&sys, &y), "{y:?}");
+        assert!(y.iter().all(|v| v.num >= 0));
+        // Multipliers that do not add up are refused, whatever produced them.
+        let mut bad = y.clone();
+        let i = bad.iter().position(|v| v.num > 0).unwrap();
+        bad[i] = Rat::int(0);
+        assert!(!farkas_holds(&sys, &bad));
+        assert!(!farkas_holds(&sys, &vec![Rat::int(-1); sys.len()]));
+    }
+
+    #[test]
+    fn 厳密さも係数で運ばれる() {
+        // x < 1 and x > 1: the sum is 0 < 0, false only because a strict inequality took part.
+        let sys = vec![
+            v("x").plus(&Lin::con(Rat::int(-1))).le(true),
+            v("x").plus(&Lin::con(Rat::int(-1))).ge(true),
+        ];
+        let y = refute(&sys).expect("充足不能のはず");
+        assert!(farkas_holds(&sys, &y));
+        // The same multipliers over the non-strict pair prove nothing.
+        let loose = vec![
+            v("x").plus(&Lin::con(Rat::int(-1))).le(false),
+            v("x").plus(&Lin::con(Rat::int(-1))).ge(false),
+        ];
+        assert!(!farkas_holds(&loose, &y));
+    }
+
+    #[test]
+    fn 桁あふれは証明ではなく降参になる() {
+        // x >= 0 and p·x + 1 <= 0 is unsatisfiable, but eliminating x multiplies two numbers
+        // near 2^100. A wrapped product would be a wrong answer that looks like a right one;
+        // what comes back is either nothing or multipliers that really add up.
+        let p = Rat::int((1i128 << 100) + 7);
+        let q = Rat::int((1i128 << 100) - 3);
+        let sys = vec![
+            v("x").scale(p).plus(&v("y")).plus(&Lin::con(Rat::int(1))).le(false),
+            v("x").scale(q.mul(Rat::int(-1))).plus(&v("y").scale(Rat::int(-1))).le(false),
+        ];
+        if let Some(y) = refute(&sys) {
+            assert!(farkas_holds(&sys, &y), "{y:?}");
+        }
+        assert_eq!(Rat::int(i128::MAX).checked_mul(Rat::int(2)), None);
+    }
+
+    #[test]
     fn 消せない系は証明できないと答える() {
         // Nothing contradictory: not unsat, and it has to say so rather than guess.
         let sys = vec![v("a").plus(&v("b")).le(false), v("a").ge(false)];
@@ -580,6 +857,27 @@ mod solve_tests {
             v("x").plus(&Lin::con(Rat::int(-2))).ge(false),
         ];
         assert!(solve(sys).is_none());
+    }
+
+    #[test]
+    fn 同じ値の厳密な上限は厳密なまま解く() {
+        // x <= 5 and x < 5 together are x < 5; the point that comes back has to say so.
+        let sys = vec![
+            v("x").plus(&Lin::con(Rat::int(-5))).le(false),
+            v("x").plus(&Lin::con(Rat::int(-5))).le(true),
+            v("x").ge(false),
+        ];
+        let at = solve(sys.clone()).expect("解があるはず");
+        assert!(holds(&sys, &at), "{at:?}");
+        // And the same with the bounds the other way round, and from below.
+        let sys = vec![
+            v("x").plus(&Lin::con(Rat::int(-5))).le(true),
+            v("x").plus(&Lin::con(Rat::int(-5))).le(false),
+            v("x").plus(&Lin::con(Rat::int(-2))).ge(false),
+            v("x").plus(&Lin::con(Rat::int(-2))).ge(true),
+        ];
+        let at = solve(sys.clone()).expect("解があるはず");
+        assert!(holds(&sys, &at), "{at:?}");
     }
 
     /// Where the answer is decidable, the two agree: a system a point comes back for is one

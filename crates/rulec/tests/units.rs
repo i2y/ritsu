@@ -437,7 +437,7 @@ fn 式の中のリテラルはどの単位でも評価される() {
         ("duration[min]", "0min", "1000min", "500min"),
         ("duration[h]", "0h", "1000h", "500h"),
         ("number", "0", "1000", "500"),
-        ("rate", "0%", "100%", "50%"),
+        ("rate[step 1%]", "0%", "100%", "50%"),
     ];
     for (ty, lo, hi, lit) in cases {
         let src = format!(

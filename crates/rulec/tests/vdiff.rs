@@ -149,12 +149,13 @@ fn 並びを畳む規則は_歩く側が変わったら比べられないと言�
 ///    whose derived columns share an input, which is the blind spot W114 already has.
 #[test]
 fn 領域と記録の二つの答えが食い違わない() {
-    // Where the walk gives up, and why. `クーポン割引` has two derived columns sharing an
-    // input, so the sieve cannot rule out a combination no input reaches either (§6.2,
-    // the blind spot W114 already names). `預け荷物料金` has one cell whose answer is not
+    // Where the walk gives up, and why. `預け荷物料金` has one cell whose answer is not
     // constant on it — the free allowance is per passenger — where the two versions agree
     // at every point tried and that could not be turned into a proof over the whole cell.
-    let 決められない: &[&str] = &["クーポン割引", "預け荷物料金"];
+    // `クーポン割引` was here too: two derived columns share an input, the blind spot of
+    // the sieve (§6.2), and the elimination that sees through it gave up on the whole
+    // question because a rate column sat beside the money ones (§15.139).
+    let 決められない: &[&str] = &["預け荷物料金"];
     let (mut checked, mut withheld) = (0, Vec::new());
     for p in corpus() {
         let name = p.file_stem().unwrap().to_string_lossy().to_string();

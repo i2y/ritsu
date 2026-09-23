@@ -655,6 +655,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     )),
             );
         }
+        if let Some(d) = missing_step(&i.name, &i.ty, &ty, i.name.span.line, path) {
+            c.diags.push(d);
+        }
         c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
         c.syms.insert(
             i.name.text.clone(),
@@ -701,6 +704,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             ty
                         )),
                 );
+            }
+            if let Some(d) = missing_step(&i.name, &i.ty, &ty, i.name.span.line, path) {
+                c.diags.push(d);
             }
             c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
             c.syms.insert(
@@ -1474,6 +1480,41 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             continue;
         }
         c.check_same(&a.ty, &b.ty, &k.span, path, &tr!("制約", "constraint"));
+        // The door compares the stored integers, and those count steps: a rate in 1% steps and
+        // one in 0.1% steps hold 50% as 50 and as 500. The guard brings both to the step they
+        // share before comparing (§15.139), which is a multiplication, so its product has to
+        // fit in int64 like any other value the generated code computes (E108).
+        let (sa, sb) = (c.scales.get(&k.left).copied().unwrap_or(1).max(1), c.scales.get(&k.right).copied().unwrap_or(1).max(1));
+        if sa != sb {
+            let g = {
+                let (mut x, mut y) = (sa, sb);
+                while y != 0 {
+                    let t = x % y;
+                    x = y;
+                    y = t;
+                }
+                x.max(1)
+            };
+            let common = sa / g * sb;
+            for side in [&k.left, &k.right] {
+                let Some((Some(lo), Some(hi))) = c.ranges.get(side).cloned() else { continue };
+                let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
+                let mag = if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) };
+                let stored = mag.mul(Rat::int(common));
+                if stored.num / stored.den > i64::MAX as i128 {
+                    c.diags.push(
+                        Diag::error("E108", tr!("制約 `{} {} {}` の比較が int64 に収まることを証明できません", "Cannot prove that the comparison in the constraint `{} {} {}` fits in int64", k.left, k.op.word(), k.right))
+                            .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
+                            .mark(k.span.clone(), tr!("刻みの違う二つを、共通の刻み 1/{common} にそろえて比べます", "the two sides are compared on their common step of 1/{common}"))
+                            .note(tr!(
+                                "{side} は最大で {} になり、共通の刻みで数えると int64 を超えます。範囲を狭めるか、二つの刻みをそろえてください。",
+                                "{side} reaches {}, which on the common step exceeds int64. Narrow the range, or give the two the same step.",
+                                fmt_val(mag, &a.ty)
+                            )),
+                    );
+                }
+            }
+        }
         // An input that only ever appears in a constraint is still doing work: it narrows the
         // space the completeness proof walks. W111 is about a declaration nothing reads.
         c.used.insert(k.left.clone());
@@ -3129,6 +3170,35 @@ fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
         }
     }
     1
+}
+
+/// Whether the type declares a step at all (`rate[step 1%]`), readable or not.
+fn has_step(tr: &TypeRef) -> bool {
+    tr.args.iter().any(|a| matches!(a, TypeArg::Scaled(w, _) if w == crate::kw::STEP))
+}
+
+/// E103 for a rate that is passed in with no step (§15.139). What the caller hands over is one
+/// integer count of the step, so a rate input without one counted whole units: `10%` in its
+/// range became `1` in the generated guard, and 1000 passed as "at most 10%". The reference
+/// said the step would come from the literals, but for an input it cannot — the argument's
+/// meaning would then change whenever a row with a finer value was added.
+fn missing_step(name: &crate::ast::Name, tr: &TypeRef, ty: &Ty, line: usize, path: &str) -> Option<Diag> {
+    if !matches!(ty, Ty::Rate) || has_step(tr) {
+        return None;
+    }
+    Some(
+        Diag::error("E103", tr!("率の入力 `{}` に刻みがありません", "The rate input `{}` declares no step", name.text))
+            .at(format!("{path}:{line}"))
+            .mark(tr.span.clone(), tr!("`rate[step 1%]` のように刻みを書いてください", "write the step, as in `rate[step 1%]`"))
+            .note(tr!(
+                "生成したコードが受け取るのは、刻みを単位にした整数です（`rate[step 1%]` なら 12% は 12）。刻みが無いと、その整数は 100% を単位に数えることになり、範囲の `10%` も表の境界も表せません。",
+                "The generated code takes one integer count of the step (with `rate[step 1%]`, 12% is 12). With no step that integer counted whole units of 100%, so neither `10%` in the range nor any boundary in the table could be written in it."
+            ))
+            .note(tr!(
+                "刻みを表のリテラルから決めることはしません。行を一つ足すだけで、呼び出し側が渡す整数の意味が変わってしまうからです。",
+                "The step is not taken from the literals in the table: adding a single row would then change what the integer the caller passes means."
+            )),
+    )
 }
 
 /// The step, when it is written and cannot be read as a value of the type it steps. It fell

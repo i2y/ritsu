@@ -2395,39 +2395,47 @@ fn solved_point(
     scalars: &[(String, Expr)],
     inputs: &BTreeSet<String>,
 ) -> Option<HashMap<String, Val>> {
-    use crate::fourier::{ground, Lin};
+    use crate::fourier::{grounds, Lin};
     // Only a cell whose computed columns are correlated is worth solving; where they are
     // not, the walk already reached whatever there was.
     if !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
         return None;
     }
     let seed: Vec<String> = axes.iter().map(|a| a.col.clone()).collect();
-    let g = ground(&seed, f, c)?;
-    let mut sys = g.sys;
-    for (ai, a) in axes.iter().enumerate() {
-        if !g.vars.contains(&a.col) {
-            continue;
-        }
-        let Some(co) = a.coords.get(cell[ai]) else { continue };
-        let x = Lin::var(&a.col);
-        match co {
-            Coord::Point(p) => {
-                let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
-                sys.push(d.clone().le(false));
-                sys.push(d.ge(false));
-            }
-            Coord::Open(lo, hi) => {
-                if let Some(lo) = lo {
-                    sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
-                }
-                if let Some(hi) = hi {
-                    sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
-                }
-            }
-            Coord::Word(_) | Coord::OtherStr => {}
-        }
+    // One system per type of number. They share no name, so their solutions put together
+    // are a solution of the whole — and every value is held to the cell again below anyway.
+    let gs = grounds(&seed, f, c);
+    if gs.is_empty() {
+        return None;
     }
-    let at = crate::fourier::solve(sys)?;
+    let mut at: BTreeMap<String, Rat> = BTreeMap::new();
+    for g in gs {
+        let mut sys = g.sys;
+        for (ai, a) in axes.iter().enumerate() {
+            if !g.vars.contains(&a.col) {
+                continue;
+            }
+            let Some(co) = a.coords.get(cell[ai]) else { continue };
+            let x = Lin::var(&a.col);
+            match co {
+                Coord::Point(p) => {
+                    let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
+                    sys.push(d.clone().le(false));
+                    sys.push(d.ge(false));
+                }
+                Coord::Open(lo, hi) => {
+                    if let Some(lo) = lo {
+                        sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
+                    }
+                    if let Some(hi) = hi {
+                        sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
+                    }
+                }
+                Coord::Word(_) | Coord::OtherStr => {}
+            }
+        }
+        at.extend(crate::fourier::solve(sys)?);
+    }
     // Only the free inputs are taken from the solution; every computed column is recomputed
     // from them and checked, which is what makes an unsound point harmless.
     let mut out: HashMap<String, Val> = HashMap::new();
@@ -2465,7 +2473,7 @@ fn solved_point(
 /// dropped, which only relaxes the system, so a `true` really does settle the cell and a
 /// `false` leaves it exactly where it was.
 fn linearly_empty(axes: &[Axis], cell: &[usize], v: (&RuleFile, &Checked)) -> bool {
-    use crate::fourier::{ground, pinned, Lin};
+    use crate::fourier::{grounds, pinned, Lin};
     let (f, c) = v;
     // A boolean `define` the cell fixes: its body is a comparison that has to hold there.
     let body_of = |n: &str| -> Option<&Expr> {
@@ -2488,40 +2496,43 @@ fn linearly_empty(axes: &[Axis], cell: &[usize], v: (&RuleFile, &Checked)) -> bo
             _ => seed.push(a.col.clone()),
         }
     }
-    let Some(g) = ground(&seed, f, c) else { return false };
     // Nothing correlated: the walk already sees everything this would.
     let computed = |n: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == n));
-    if pins.is_empty() && !g.vars.iter().any(|n| computed(n)) {
-        return false;
-    }
-    let mut sys = g.sys;
-    for (ai, a) in axes.iter().enumerate() {
-        if !g.vars.contains(&a.col) {
-            continue;
+    // One system per type of number; any of them with no solution empties the cell, because
+    // each is the cell with some of its conditions left out.
+    grounds(&seed, f, c).into_iter().any(|g| {
+        if pins.is_empty() && !g.vars.iter().any(|n| computed(n)) {
+            return false;
         }
-        let Some(co) = a.coords.get(cell[ai]) else { continue };
-        let x = Lin::var(&a.col);
-        match co {
-            Coord::Point(p) => {
-                let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
-                sys.push(d.clone().le(false));
-                sys.push(d.ge(false));
+        let mut sys = g.sys;
+        for (ai, a) in axes.iter().enumerate() {
+            if !g.vars.contains(&a.col) {
+                continue;
             }
-            Coord::Open(lo, hi) => {
-                if let Some(lo) = lo {
-                    sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
+            let Some(co) = a.coords.get(cell[ai]) else { continue };
+            let x = Lin::var(&a.col);
+            match co {
+                Coord::Point(p) => {
+                    let d = x.plus(&Lin::con(p.mul(Rat::int(-1))));
+                    sys.push(d.clone().le(false));
+                    sys.push(d.ge(false));
                 }
-                if let Some(hi) = hi {
-                    sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
+                Coord::Open(lo, hi) => {
+                    if let Some(lo) = lo {
+                        sys.push(x.clone().plus(&Lin::con(lo.mul(Rat::int(-1)))).ge(true));
+                    }
+                    if let Some(hi) = hi {
+                        sys.push(x.plus(&Lin::con(hi.mul(Rat::int(-1)))).le(true));
+                    }
                 }
+                Coord::Word(_) | Coord::OtherStr => {}
             }
-            Coord::Word(_) | Coord::OtherStr => {}
         }
-    }
-    for (e, yes) in &pins {
-        sys.extend(pinned(e, *yes, &g.want, c));
-    }
-    crate::fourier::unsat(sys)
+        for (e, yes) in &pins {
+            sys.extend(pinned(e, *yes, &g.want, c));
+        }
+        crate::fourier::unsat(sys)
+    })
 }
 
 /// Every name an expression mentions, appended.

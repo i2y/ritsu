@@ -1518,17 +1518,25 @@ impl TableRegion {
     /// linear inequalities — the cells of both rows, every `derive`'s defining equation,
     /// every declared range, every `constraint` — and eliminated variable by variable.
     ///
-    /// **`true` means proved impossible; `false` means nothing.** Anything this cannot read
-    /// is dropped rather than guessed at, which is safe in exactly one direction: a relaxed
-    /// system that is still unsatisfiable proves the original one is, and one that is
-    /// satisfiable over the rationals proves nothing about the integers. So a `false` leaves
-    /// W114 standing exactly as it stood before.
-    fn linearly_impossible(&self, t: &Table, i: usize, j: usize, f: &RuleFile, c: &Checked) -> bool {
-        use crate::fourier::{ground, pinned, Lin};
+    /// **A refutation means proved impossible; `None` means nothing.** Anything this cannot
+    /// read is dropped rather than guessed at, which is safe in exactly one direction: a
+    /// relaxed system that is still unsatisfiable proves the original one is, and one that
+    /// is satisfiable over the rationals proves nothing about the integers. So `None` leaves
+    /// W114 standing exactly as it stood before. The refutation itself — the multipliers and
+    /// where each inequality came from — is what a certificate hands on (§15.139).
+    fn linearly_impossible(
+        &self,
+        t: &Table,
+        i: usize,
+        j: usize,
+        f: &RuleFile,
+        c: &Checked,
+    ) -> Option<crate::fourier::Refutation> {
+        use crate::fourier::{grounds, pinned, Lin, Origin, Refutation};
         // A boolean `define` the overlap pins to one truth value (§15.127). Its body is one
         // comparison, so there it is a linear condition — and the thresholds inside it, which
         // the per-axis sieve never looks at, come into the system with it.
-        let pins: Vec<(&Expr, bool)> = (0..self.axes.len())
+        let pins: Vec<(&str, &Expr, bool)> = (0..self.axes.len())
             .filter(|&ai| self.is_define[ai] && matches!(self.axes[ai], Axis::Bool))
             .filter_map(|ai| {
                 let both: Vec<usize> =
@@ -1536,50 +1544,61 @@ impl TableRegion {
                 // Pinned only when the overlap leaves it one value. Where both survive, the
                 // pair does not depend on the definition and there is nothing to add.
                 let [k] = both[..] else { return None };
-                Some((self.defines.get(&self.col_names[ai])?, k == 0))
+                let name = self.col_names[ai].as_str();
+                Some((name, self.defines.get(name)?, k == 0))
             })
             .collect();
         let mut seed: Vec<String> = self.col_names.clone();
-        for (e, _) in &pins {
+        for (_, e, _) in &pins {
             names_in(e, &mut seed);
         }
-        let Some(g) = ground(&seed, f, c) else { return false };
-        if pins.is_empty() && !g.vars.iter().any(|n| self.exprs.contains_key(n)) {
-            // Nothing correlated: the sieve already sees everything this would.
-            return false;
-        }
-        let mut sys = g.sys;
-        // The cells of both rows. A cell this cannot read is dropped, which only relaxes.
-        for row in [i, j] {
-            for (ai, name) in self.col_names.iter().enumerate() {
-                if !g.vars.contains(name) {
-                    continue;
-                }
-                let Some(cell) = t.rows[row].cells.get(self.display_of[ai]) else { continue };
-                let v = Lin::var(name);
-                match cell {
-                    Cell::Lit(l) => {
-                        let Some(r) = crate::fourier::lit_of(l, &g.want) else { continue };
-                        let d = v.plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
-                        sys.push(d.clone().le(false));
-                        sys.push(d.ge(false));
+        // One system for each type of number among the columns; any of them that has no
+        // solution settles the pair, because each is the question with some conditions left
+        // out.
+        for g in grounds(&seed, f, c) {
+            if pins.is_empty() && !g.vars.iter().any(|n| self.exprs.contains_key(n)) {
+                // Nothing correlated: the sieve already sees everything this would.
+                continue;
+            }
+            let mut sys = g.sys;
+            // The cells of both rows. A cell this cannot read is dropped, which only relaxes.
+            for row in [i, j] {
+                for (ai, name) in self.col_names.iter().enumerate() {
+                    if !g.vars.contains(name) {
+                        continue;
                     }
-                    Cell::Cmp(ops) => {
-                        for (op, l) in ops {
+                    let Some(cell) = t.rows[row].cells.get(self.display_of[ai]) else { continue };
+                    let v = Lin::var(name);
+                    let at = |part: usize| Origin::Cell { row, col: name.clone(), part };
+                    match cell {
+                        Cell::Lit(l) => {
                             let Some(r) = crate::fourier::lit_of(l, &g.want) else { continue };
-                            let d = v.clone().plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
-                            sys.push(crate::fourier::cmp(d, *op, false));
+                            let d = v.plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
+                            sys.push(d.clone().le(false).tag(at(0)));
+                            sys.push(d.ge(false).tag(at(1)));
                         }
+                        Cell::Cmp(ops) => {
+                            for (part, (op, l)) in ops.iter().enumerate() {
+                                let Some(r) = crate::fourier::lit_of(l, &g.want) else { continue };
+                                let d = v.clone().plus(&Lin::con(r.mul(crate::num::Rat::int(-1))));
+                                sys.push(crate::fourier::cmp(d, *op, false).tag(at(part)));
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
+            // And the definitions the overlap pinned, as the comparisons they are.
+            for (name, e, yes) in &pins {
+                for (part, q) in pinned(e, *yes, &g.want, c).into_iter().enumerate() {
+                    sys.push(q.tag(Origin::Pin { name: name.to_string(), yes: *yes, part }));
+                }
+            }
+            if let Some(r) = Refutation::of(sys) {
+                return Some(r);
+            }
         }
-        // And the definitions the overlap pinned, as the comparisons they are.
-        for (e, yes) in &pins {
-            sys.extend(pinned(e, *yes, &g.want, c));
-        }
-        crate::fourier::unsat(sys)
+        None
     }
 }
 
@@ -1776,7 +1795,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                         // it cannot read only relaxes the system, so a `true` here really
                         // does settle the pair, and a `false` leaves W114 where it was.
                         nodes += (reg.axes.len() * 32) as i64;
-                        ruled_out = reg.linearly_impossible(t, i, j, f, c);
+                        ruled_out = reg.linearly_impossible(t, i, j, f, c).is_some();
                         feas = Feasible::Unknown;
                     }
                 }

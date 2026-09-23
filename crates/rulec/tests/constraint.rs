@@ -192,3 +192,79 @@ fn 資料は起きない組み合わせを載せる() {
     assert!(out.contains("全条件一致数 <= 会社名一致数"), "{out}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Two rates of one type but different steps, related by a constraint. The door used to
+/// compare the stored integers as they stood — 50 for 50% in 1% steps, 100 for 10% in 0.1%
+/// steps — and let 50% ≤ 10% through (§15.139). Both sides are brought to the step they
+/// share now, and the door refuses exactly what the relation says does not happen.
+const STEPS: &str = r#"rule 割引上限(cap_of) v1
+description "割引率は上限率を超えない。刻みの違う二つの率を比べる"
+
+enum 判定(verdict) = 通常(plain) | 特別(special)
+
+inputs
+  割引率(rate) : rate[step 1%]    range >=0% <=100%
+  上限率(cap)  : rate[step 0.1%]  range >=0% <=100%
+
+constraint 割引率 <= 上限率
+
+outputs
+  結果(verdict) : 判定
+
+table 判定表(t)
+policy unique
+| 割引率 | -> 結果(verdict) : 判定 |
+| <=10%  | 通常                   |
+| >10%   | 特別                   |
+
+examples
+| 割引率 | 上限率 | -> 結果 |
+| 5%     | 20%    | 通常    |
+| 30%    | 30%    | 特別    |
+"#;
+
+#[test]
+fn 刻みの違う率どうしの制約を門が正しく比べる() {
+    if !have("python3") {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let d = dir("steps");
+    let p = write(&d, "r.rule", STEPS);
+    let out = d.join("out");
+    let (code, o, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{o}{e}");
+    // 50% in 1% steps is 50; 10% in 0.1% steps is 100. 50% ≤ 10% is false, so the door has to
+    // refuse it — and 5% against 20% (5 and 200) has to pass.
+    let script = "import sys; sys.path.insert(0, '.')\n\
+                  import cap_of as m\n\
+                  for a, b in [(50, 100), (5, 200), (30, 300)]:\n\
+                  \x20   try:\n\
+                  \x20       m.cap_of(a, b)\n\
+                  \x20       print(a, b, 'ok')\n\
+                  \x20   except m.RuleInputError as e:\n\
+                  \x20       print(a, b, 'refused')\n";
+    let o = Command::new("python3")
+        .current_dir(out.join("python"))
+        .args(["-B", "-c", script])
+        .output()
+        .expect("python3 を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(said.contains("50 100 refused"), "50% ≤ 10% を通している: {said}{}", String::from_utf8_lossy(&o.stderr));
+    assert!(said.contains("5 200 ok") && said.contains("30 300 ok"), "成り立つ組を断っている: {said}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A rate passed in with no step counted whole units of 100%, so `10%` in its range became
+/// `1` at the door (§15.139). It is refused now, with the step to write.
+#[test]
+fn 刻みの無い率の入力は止まる() {
+    let src = STEPS.replace("割引率(rate) : rate[step 1%]", "割引率(rate) : rate");
+    let d = dir("nostep");
+    let p = write(&d, "r.rule", &src);
+    let (code, o, _) = run(&["check", &p, "--format", "json"]);
+    assert_eq!(code, 1, "{o}");
+    assert!(o.contains("\"E103\""), "{o}");
+    assert!(o.contains("rate[step 1%]"), "刻みの書き方を言っていない: {o}");
+    let _ = std::fs::remove_dir_all(&d);
+}
