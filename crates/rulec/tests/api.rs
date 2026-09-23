@@ -875,3 +875,45 @@ fn 率の丸めの刻みは段で書く() {
         assert_eq!(o.get("range").and_then(|g| g.get("max")).and_then(|m| m.as_int()), Some(45), "{lang}: 範囲と同じ目盛り");
     }
 }
+
+
+/// A rate output travels at the step it declares, or with none declared at its rounding grid
+/// (§15.144). It used to be taken from what the rows write: here the answer 1% came out as
+/// `1` although the type says tenths of a percent, the row that names 特別率 made every other
+/// answer count hundredths, and a `result` fell back on whole percents and cut 12.3% to 12.
+#[test]
+fn 率の出力は宣言した刻みで渡る() {
+    let dir = std::env::temp_dir().join(format!("rulec-api-step-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rate = dir.join("rate.rule");
+    std::fs::write(&rate, "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction) | 特別(special)\n\ninputs\n  区分(kind)      : 区分\n  特別率(special) : rate[step 0.01%]  range >=0% <=5%\n\noutputs\n  料率(rate) : rate[step 0.1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 0.1%] |\n| 一般 | 1%                        |\n| 建設 | 2%                        |\n| 特別 | 特別率                    |\n").unwrap();
+    let j = api(rate.to_str().unwrap());
+    let o = &arr(j.get("python").unwrap(), "outputs")[0];
+    let int = |v: Option<&rulec::json::Json>| v.and_then(|x| x.as_int());
+    assert_eq!(int(o.get("range").and_then(|r| r.get("max"))), Some(50), "5% は 0.1% 刻みで 50");
+    assert_eq!(int(o.get("rounding").and_then(|r| r.get("grid"))), Some(10), "1% は 0.1% 刻みで 10");
+    let (c, vectors, e) = run(&["vectors", rate.to_str().unwrap()]);
+    assert_eq!(c, 0, "{e}");
+    let general: Vec<i128> = vectors
+        .lines()
+        .filter_map(|l| rulec::json::parse(l).ok())
+        .filter(|v| v.get("in").and_then(|i| i.get("区分")).and_then(|x| x.as_str()) == Some("一般"))
+        .filter_map(|v| v.get("out").and_then(|o| o.get("料率")).and_then(|x| x.as_int()))
+        .collect();
+    assert!(!general.is_empty() && general.iter().all(|&n| n == 10), "一般は 1% = 10: {general:?}");
+
+    let result = dir.join("result.rule");
+    std::fs::write(&result, "rule 率の結果(rate_result) v1\n\ninputs\n  基本率(base) : rate[step 0.1%]  range >=0% <=20%\n\noutputs\n  率(rate) : rate[step 0.1%]  round half_up(0.1%)\n\nresult 率 = 基本率\n\nexamples\n| 基本率 | -> 率  |\n| 12.3%  | 12.3% |\n").unwrap();
+    let (c, vectors, e) = run(&["vectors", result.to_str().unwrap()]);
+    assert_eq!(c, 0, "{e}");
+    assert!(vectors.contains(r#""in":{"基本率":123},"out":{"率":123}"#), "12.3% が切り捨てられている:\n{vectors}");
+
+    // A grid that is not a whole number of the step leaves answers the step cannot write.
+    let off = dir.join("off.rule");
+    std::fs::write(&off, "rule g(g) v1\n\nenum 区分(kind) = 甲(a) | 乙(b)\n\ninputs\n  区分(kind) : 区分\n\noutputs\n  率(rate) : rate[step 1%]  round down(0.5%)\n\ntable t(t)\npolicy unique\n| 区分 | -> 率 : rate[step 1%] |\n| 甲 | 1% |\n| 乙 | 2% |\n").unwrap();
+    let (c, out, _) = run(&["check", off.to_str().unwrap(), "--lang", "en"]);
+    assert_eq!(c, 1, "{out}");
+    assert!(out.contains("E114") && out.contains("does not sit on the output's step of 1%"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1352,14 +1352,14 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E114",
-            tr!("セルの値が列の刻みに載っていません", "A cell value does not sit on the column's step"),
+            tr!("値が宣言した刻みに載っていません", "A value does not sit on the declared step"),
             tr!(
-                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので（§2.1）、この値には表し方がありません。",
-                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation."
+                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので（§2.1）、この値には表し方がありません。率の出力の丸めの刻みが、出力の宣言した刻みの整数倍でないとき（`rate[step 1%]` に `round down(0.5%)`）も同じです。答えは丸めの刻みに載り、呼び出し側へは宣言した刻みの整数で渡すので、表せない答えが出ます（§15.144）。",
+                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written (§15.144)."
             ),
             tr!(
-                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。",
-                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code."
+                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。丸めの刻みなら、刻みを丸めに合わせるか、丸めの刻みを刻みの整数倍にしてください。",
+                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step."
             ),
             X_E114,
             &["E103", "E106"],

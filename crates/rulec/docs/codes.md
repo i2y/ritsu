@@ -68,7 +68,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E111](#e111) | error | The examples have no column for an output |
 | [E112](#e112) | error | The range of a derived value does not contain the values it can reach |
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
-| [E114](#e114) | error | A cell value does not sit on the column's step |
+| [E114](#e114) | error | A value does not sit on the declared step |
 | [E115](#e115) | error | Cannot divide by a variable |
 | [E116](#e116) | error | A row's amount is not in the copy it cites, or is under another heading there |
 | [E117](#e117) | error | A share without what a share needs |
@@ -2007,11 +2007,11 @@ Related codes: [E112](#e112), [E103](#e103)
 
 ## E114
 
-`error` — **A cell value does not sit on the column's step**
+`error` — **A value does not sit on the declared step**
 
-**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation.
+**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written (§15.144).
 
-**Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code.
+**Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step.
 
 **Smallest reproduction**:
 

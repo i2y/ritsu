@@ -114,12 +114,17 @@ pub fn to_val(j: &Json, ty: &Ty, c: &Checked, name: &str) -> Result<Val, String>
                 if lo.is_some_and(|l| v.cmp_to(l) == std::cmp::Ordering::Less)
                     || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater)
                 {
-                    let show = |b: &Option<Rat>| b.map(|x| x.to_string()).unwrap_or_else(|| "…".into());
+                    // The range is written the way the rule writes it, and so is what the
+                    // integer stands for: a rate's range used to come out as `0.01..0.03`
+                    // beside a count of steps, two scales in one sentence.
+                    let show = |b: &Option<Rat>| b.map(|x| crate::types::fmt_val(x, &inner)).unwrap_or_else(|| "…".into());
+                    let meant = crate::types::fmt_val(v, &inner);
+                    let n = if meant == n.to_string() { tr!("{n} ", "{n}") } else { tr!("{n}（{meant}）", "{n} ({meant})") };
                     return Err(tr!(
-                        "{n} は宣言範囲 {}..{} の外です",
+                        "{n}は宣言範囲 {}..{} の外です",
                         "{n} is outside the declared range {}..{}",
-                        show(&lo.map(|x| x)),
-                        show(&hi.map(|x| x))
+                        show(lo),
+                        show(hi)
                     ));
                 }
             }

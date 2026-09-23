@@ -417,6 +417,10 @@ pub struct Checked {
     /// Name → reciprocal of the step: the value is a multiple of 1/k. Under §7.1's
     /// "a single int64 plus a static rational scale", the stored integer is value×k.
     pub scales: HashMap<String, i128>,
+    /// A rate output → the reciprocal of the step it travels at: the step it declares, or
+    /// with none declared its rounding grid, which every answer sits on (§15.144). `scales`
+    /// holds the value inside the code, which may be finer; this is what a caller counts.
+    pub out_scales: HashMap<String, i128>,
     /// Enum name -> values, in declaration order (§6.3 picks the first as a witness).
     pub enums: HashMap<String, Vec<String>>,
     /// Group name -> the enum it belongs to and its members.
@@ -521,6 +525,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         out_values: HashMap::new(),
         at_most: HashSet::new(),
         scales: HashMap::new(),
+        out_scales: HashMap::new(),
         enums: HashMap::new(),
         groups: HashMap::new(),
         used: HashSet::new(),
@@ -1678,7 +1683,62 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     c.sets = sets;
     c.set_of = set_of;
     c.diags.extend(ds);
+    c.output_steps(f, path);
     c
+}
+
+impl Checked {
+    /// The step each rate output travels at (§15.144): the one its type declares, or with none
+    /// declared its rounding grid. It used to be taken from what the rows write, so a row
+    /// that names a finer value changed what every other row's answer counts in, and a
+    /// `result` fell back on whole percents and cut 12.3% to 12. The value inside the code
+    /// is held at a scale this divides, and brought down to it after the rounding.
+    fn output_steps(&mut self, f: &RuleFile, path: &str) {
+        for o in &f.outputs {
+            if !matches!(self.syms.get(&o.name.text).map(|s| &s.ty), Some(Ty::Rate)) {
+                continue;
+            }
+            let grid = self.roundings.get(&o.name.text).map(|(_, g)| *g);
+            let wire = if has_step(&o.ty) {
+                scale_of_type(&o.ty, &Ty::Rate)
+            } else if let Some(g) = grid {
+                g.den
+            } else {
+                continue;
+            };
+            // The answer sits on the rounding grid; the caller counts the declared step. A grid
+            // that is not a whole number of steps leaves answers the step cannot write.
+            if let (true, Some(g), Some(rd)) = (has_step(&o.ty), grid, &o.rounding) {
+                if !g.mul(Rat::int(wire)).is_int() {
+                    let step = fmt_val(Rat::new(1, wire), &Ty::Rate);
+                    self.diags.push(
+                        Diag::error(
+                            "E114",
+                            tr!(
+                                "丸めの刻み `{}` が、出力の刻み {step} に載っていません",
+                                "The rounding grid `{}` does not sit on the output's step of {step}",
+                                rd.grid.raw
+                            ),
+                        )
+                        .at(tr!("{path}:{} 出力 {}", "{path}:{} output {}", rd.span.line, o.name.text))
+                        .mark(rd.span.clone(), tr!("刻みは {step} です", "the step is {step}"))
+                        .note(tr!(
+                            "答えは丸めの刻みに載りますが、呼び出し側へは宣言した刻みの整数で渡すので、表せない答えが出ます。",
+                            "Every answer sits on the rounding grid, and it is handed to the caller as a whole number of the declared step, so some answers could not be written."
+                        ))
+                        .note(tr!(
+                            "刻みを丸めに合わせるか（`rate[step {}]`）、丸めの刻みを {step} の整数倍にしてください。",
+                            "Declare the step the rounding needs (`rate[step {}]`), or round to a whole number of {step}.",
+                            rd.grid.raw
+                        )),
+                    );
+                }
+            }
+            self.out_scales.insert(o.name.text.clone(), wire);
+            let sc = self.scales.get(&o.name.text).copied().unwrap_or(1);
+            self.scales.insert(o.name.text.clone(), lcm_i128(sc, wire));
+        }
+    }
 }
 
 impl Checked {
@@ -2860,6 +2920,9 @@ impl Checked {
     /// for one value is how a rate came to mean 1 on one side of the wire and 100 on the
     /// other.
     pub fn wire_scale(&self, name: &str) -> i128 {
+        if let Some(s) = self.out_scales.get(name) {
+            return *s;
+        }
         match self.ty_of(name) {
             Some(Ty::Rate) => *self.scales.get(name).unwrap_or(&100),
             _ => 1,
@@ -2954,7 +3017,8 @@ fn unit_one(ty: &Ty) -> String {
     }
 }
 
-fn fmt_val(v: Rat, ty: &Ty) -> String {
+/// A value the way the rule writes one of its type: `1000円`, `2kg`, `1%`.
+pub fn fmt_val(v: Rat, ty: &Ty) -> String {
     match ty {
         Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v)),
         Ty::Qty { unit, .. } => format!("{v}{unit}"),

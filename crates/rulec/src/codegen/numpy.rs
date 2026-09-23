@@ -396,6 +396,8 @@ impl<'a> Gen<'a> {
                 _ => (format!(r#"{{"k":"name","n":{}}}"#, quote(name)), self.scale(name)),
             };
             let os = self.out_scale(name);
+            let to = self.wire_target(scale, os, od);
+            let (expr, scale) = (rescale_node(&expr, scale, to), to);
             let mut o = Obj::new().str("name", name).str("kind", kind_of(&ty)).raw("expr", expr);
             if let Some(rd) = &od.rounding {
                 let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));

@@ -511,7 +511,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
-                (1, tr!("不一致がある（件数・差・入力例つきで出る）", "there are mismatches (reported with counts, differences and witnesses)")),
+                (1, tr!("不一致がある（件数・差・入力例つきで出る）、または一件も照合できなかった", "there are mismatches (reported with counts, differences and witnesses), or not one case was compared")),
                 (2, tr!("引数の誤り、アダプタを起動できない", "bad arguments, or the adapter could not be started")),
             ],
             examples: vec![
@@ -565,7 +565,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
-                (1, tr!("不一致がある", "there are mismatches")),
+                (1, tr!("不一致がある、または一件も照合できなかった（全件が形の誤りで外れたときなど）", "there are mismatches, or not one record was compared (every one excluded for its format, say)")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
@@ -646,7 +646,7 @@ fn commands() -> Vec<Cmd> {
                 ),
                 (
                     1,
-                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった", "there is an impact: inputs that answer differently, or a change in what the rule accepts"),
+                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった。--fixtures で一件も照合できなかったときも 1", "there is an impact: inputs that answer differently, or a change in what the rule accepts; with --fixtures, also when not one record was compared"),
                 ),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
@@ -1710,7 +1710,7 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     } else {
         print!("{}", rulec::report::render(&rep, &f, &c, terse));
     }
-    ExitCode::from(u8::from(!rep.mismatches.is_empty()))
+    ExitCode::from(u8::from(!rep.mismatches.is_empty() || rep.compared_nothing()))
 }
 
 /// §10.4: apply two versions to the same records and report how many change and by how much.
@@ -1824,7 +1824,7 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     } else {
         print!("{}", rulec::report::render(&rep, &nf, &nc, terse));
     }
-    ExitCode::from(u8::from(!rep.mismatches.is_empty()))
+    ExitCode::from(u8::from(!rep.mismatches.is_empty() || rep.compared_nothing()))
 }
 
 /// §9.2: decide whether the generated vectors meet the three coverage criteria. The
@@ -2015,7 +2015,7 @@ fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
                 } else {
                     print!("{}", rulec::report::render(&rep, &f, &c, false));
                 }
-                if !rep.mismatches.is_empty() {
+                if !rep.mismatches.is_empty() || rep.compared_nothing() {
                     worst = 1;
                 }
             }

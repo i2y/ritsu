@@ -165,6 +165,13 @@ impl Report {
         }
         self.agreed as f64 / n as f64
     }
+
+    /// Whether not one record was compared: every one excluded, left unanswered, or none
+    /// there. "No mismatches" over nothing used to end the run with exit 0, so a CI job fed
+    /// records the rule could no longer read stayed green (§15.144).
+    pub fn compared_nothing(&self) -> bool {
+        self.total <= self.errored && self.filled_total == 0
+    }
 }
 
 /// Thousands separators. An amount means nothing if the reader cannot count its digits.
@@ -423,7 +430,9 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
         o.push_str(&l);
         o.push('\n');
     }
-    if rep.mismatches.is_empty() {
+    if rep.compared_nothing() {
+        o.push_str(&tr!("照合できた記録はありません。\n", "Not one record was compared.\n"));
+    } else if rep.mismatches.is_empty() {
         o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
     } else {
         o.push_str(&format!("\n{}\n", impact(rep, c)));
@@ -497,7 +506,9 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
             o.push_str(&format!("- {}\n", esc(l)));
         }
     }
-    if rep.mismatches.is_empty() {
+    if rep.compared_nothing() {
+        o.push_str(&tr!("\n照合できた記録はありません。\n", "\nNot one record was compared.\n"));
+    } else if rep.mismatches.is_empty() {
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
     } else {
         o.push_str(&format!("\n**{}**\n", impact(rep, c)));

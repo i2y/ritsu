@@ -1058,11 +1058,36 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Storage scale of an output: a single integer in the declared unit (§7.1).
+    /// Storage scale of an output: a single integer in the declared unit (§7.1), and for a
+    /// rate the step it travels at (§15.144).
     fn out_scale(&self, name: &str) -> i128 {
         match self.ty_of(name) {
-            Ty::Rate => *self.c.scales.get(name).unwrap_or(&100),
+            Ty::Rate => self.c.wire_scale(name),
             _ => 1,
+        }
+    }
+
+    /// The scale an output's value is held at before its rounding: one that the step it
+    /// travels at and its rounding grid both divide, so the rounding lands on whole units and
+    /// the division down to the wire is exact (§15.144). A `result` comes at the scale of its
+    /// own operands, which know nothing of either: `result 率 = 基本率` over whole percents,
+    /// rounded to 0.1%, had a grid of no units at all.
+    fn wire_target(&self, scale: i128, os: i128, od: &crate::ast::OutDecl) -> i128 {
+        let ty = self.ty_of(&od.name.text);
+        let to = lcm(scale, os);
+        match od.rounding.as_ref().and_then(|rd| crate::types::lit_value_in_pub(&rd.grid, &ty)) {
+            Some(g) => lcm(to, g.den),
+            None => to,
+        }
+    }
+
+    /// [`Self::wire_target`] applied to the value itself.
+    fn onto_wire(&self, res: Expr2, os: i128, od: &crate::ast::OutDecl) -> Expr2 {
+        let to = self.wire_target(res.scale, os, od);
+        if to == res.scale {
+            res
+        } else {
+            Expr2 { text: rescale(&res, to), scale: to }
         }
     }
 
@@ -1456,6 +1481,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             finals.push(match &od.rounding {
                 Some(rd) => {
@@ -2357,6 +2383,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             finals.push(match &od.rounding {
                 Some(rd) => {
@@ -3681,6 +3708,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {
@@ -4548,6 +4576,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {
@@ -7155,6 +7184,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             finals.push(match &od.rounding {
                 Some(rd) => {
@@ -8330,6 +8360,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {

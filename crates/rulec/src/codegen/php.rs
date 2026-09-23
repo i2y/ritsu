@@ -767,6 +767,7 @@ impl<'a> Gen<'a> {
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
+            let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
             finals.push(match &od.rounding {
                 Some(rd) => {

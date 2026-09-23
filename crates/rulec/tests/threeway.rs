@@ -530,3 +530,25 @@ fn 数の集合は全言語で集合として読まれる() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+
+/// Rate outputs at the step they declare, generated and run in every language there is a
+/// toolchain for (§15.144): a table whose one row names a finer rate, and a `result` held in
+/// tenths of a percent. Each language holds the value finer inside and divides down once.
+#[test]
+fn 率の出力は全言語で宣言した刻みで返る() {
+    let dir = std::env::temp_dir().join(format!("rulec-threeway-step-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, src) in [("rate.rule", "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction) | 特別(special)\n\ninputs\n  区分(kind)      : 区分\n  特別率(special) : rate[step 0.01%]  range >=0% <=5%\n\noutputs\n  料率(rate) : rate[step 0.1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 0.1%] |\n| 一般 | 1%                        |\n| 建設 | 2%                        |\n| 特別 | 特別率                    |\n"), ("result.rule", "rule 率の結果(rate_result) v1\n\ninputs\n  基本率(base) : rate[step 0.1%]  range >=0% <=20%\n\noutputs\n  率(rate) : rate[step 0.1%]  round half_up(0.1%)\n\nresult 率 = 基本率\n\nexamples\n| 基本率 | -> 率  |\n| 12.3%  | 12.3% |\n")] {
+        let p = dir.join(name);
+        std::fs::write(&p, src).unwrap();
+        let out = dir.join(format!("gen-{name}"));
+        rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
+        let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+        assert!(o.status.success(), "{name}: {said}");
+        assert!(said.contains("matched"), "{name}: {said}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

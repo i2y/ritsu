@@ -207,7 +207,8 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         "`observed.運賃`: 決まった単位の整数 を期待しましたが 小数 でした",
         "規則が知らないフィールド",
         "列挙 都道府県 の値ではありません",
-        "宣言範囲 1..170 の外",
+        // The range is written the way the rule writes it, and so is what the integer means.
+        "900（900cm）は宣言範囲 1cm..170cm の外",
         "`observed.運賃` がありません",
     ] {
         assert!(out.contains(want), "`{want}` を言っていない:\n{out}");
@@ -480,4 +481,20 @@ fn which(cmd: &str) -> Option<()> {
         .iter()
         .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
         .then_some(())
+}
+
+
+/// A run that compares nothing is not a pass (§15.144). Records the rule can no longer read —
+/// here every observed amount is outside the declared range — are all excluded, and "no
+/// mismatches" over none of them used to end the run with exit 0.
+#[test]
+fn 一件も照合できなければ1で終わる() {
+    let dir = setup("none");
+    let p = dir.join("unreadable.jsonl");
+    let rec = r#"{"tag":"order:x","in":{"あて先":"東京都","三辺合計":900,"重量":1000},"observed":{"運賃":820}}"#;
+    std::fs::write(&p, format!("{rec}\n{rec}\n")).unwrap();
+    let (c, out, _) = rulec(&["replay", RULE, "--fixtures", p.to_str().unwrap(), "--lang", "en"]);
+    assert_eq!(c, 1, "照合 0 件で通ってしまった:\n{out}");
+    assert!(out.contains("Not one record was compared") && !out.contains("No mismatches"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
