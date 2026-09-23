@@ -1,6 +1,6 @@
 [package]
 name = "rulec"
-version = "0.17.0"
+version = "0.18.0"
 description = "A small language for table-shaped business rules, and a harness for the agent that turns them into code."
 license = "MIT OR Apache-2.0"
 edition = "2024"
