@@ -448,9 +448,13 @@ arrives as a string, and `bytes` or a message is nothing a `where` can compare (
 
 The contract is read on every `check`, resolved against the directory of the rule, and
 carries **no digest** — the same footing as `import proto` (§3.1): what holds the two together
-is the paths. A JSON Schema is read far enough to resolve a path: `properties`, `items`, and a
-`$ref` that stays inside the document. A `.proto` is read far enough for the same: messages
-and their fields, `repeated` included, with `map` and `oneof` skipped rather than guessed at.
+is the paths. A JSON Schema is read far enough to resolve a path: `properties` wherever an
+object may have them — directly, or under `allOf`, `anyOf`, `oneOf` and `if`/`then`/`else` —
+`items`, and a `$ref` that stays inside the document. The keywords written beside a `$ref`
+count as well from JSON Schema 2019-09 on, which OpenAPI 3.1 follows, and are ignored before,
+as draft-07 and OpenAPI 3.0 say. A `.proto` is read far enough for the same: messages and
+their fields, `repeated` included, with `map` skipped rather than guessed at; the members of a
+`oneof` are fields of the message, each with presence of its own like an `optional` field.
 A path that cannot be resolved is **E121**, which says how far it got and which names were
 there; a type that does not fit is **E120**; a `shape` no input projects from is **W122**.
 
@@ -463,13 +467,35 @@ compared with what the input takes — its `range`, the values of its enum, the 
 `count` — and a value that passes the contract but not the input is **E122**: the generated
 code would refuse, at the door, something the caller's own validation let through. A proto3
 number field with no rule lets 0 through, because that is what an unset field is; an input
-that does not take 0 stops there. A row whose cell on a projected input admits nothing the
-contract lets through is **W123**. Rules this does not read — a CEL expression, a predefined
-rule, a pattern — are read as not there, which reads the contract as wider than it is: a
-finding it did not need to make is possible, a missed one is not. `fix.text` of an E122 is the
-option or keywords to write in the contract (`narrow_contract`); whether the contract or the
-rule is the side to change is a person's decision. Still no check of the table moves: what is
-compared is the contract with the input's own declaration.
+that does not take 0 stops there. A schema that lets a value be null — `"type": ["integer",
+"null"]`, or OpenAPI 3.0's `nullable` — is E122 for an input that is not optional. A row whose
+cell on a projected input admits nothing the contract lets through is **W123**. Rules this does
+not read — a predefined rule, a pattern, the part of a CEL expression below — are read as not
+there, which reads the contract as wider than it is: a finding it did not need to make is
+possible, a missed one is not. `fix.text` of an E122 is the option or keywords to write in the
+contract (`narrow_contract`); whether the contract or the rule is the side to change is a
+person's decision. Still no check of the table moves: what is compared is the contract with
+the input's own declaration.
+
+**Conditions across fields are read too.** A contract relates fields to each other: a CEL
+expression on a `.proto` message (`(buf.validate.message).cel`, `cel_expression`) or on a field,
+a `oneof` or a `(buf.validate.message).oneof` that lets one of its fields be set, JSON Schema's
+`allOf`, `anyOf`, `oneOf`, `not` and `if`/`then`/`else`. Of CEL, the part that is a condition
+on whole numbers, strings and booleans is read: sums and differences of fields and constants,
+a product with a constant, the six comparisons, `in` against a list of literals, `size()` of a
+repeated field, `has()`, `!`, `&&`, `||` and `? :`, and a string-valued rule that passes when it
+returns `""`. What is not — division, `%`, string functions, macros such as `all`, a double — is
+taken as true once every negation has been pushed down to the conditions it applies to, so an
+unread part can only widen what the contract lets through. Three things follow. A condition
+on another field that narrows this one narrows what E122 compares (`this.w >= 1 && this.w <=
+100` on the message is a range). A `constraint` between two inputs of one contract that the
+contract does not keep — some request passes its validation, inside the inputs' ranges, and
+breaks the constraint — is **E123**, with that request as the example and, for a `.proto`, the
+`(buf.validate.message).cel` that would promise it as `fix.text`; JSON Schema has no way to
+compare two fields, so there it has no fix on the contract's side. A row whose cells, each a
+value the contract lets through, ask for a combination the contract's conditions never let
+through — express above 5 kg where the contract says `!this.express || this.weight_g <= 5000`,
+two members of one `oneof` both set — is **W124**.
 
 A field the contract lets an object leave out can only be taken by an optional input (`T?`),
 and the projection function reads a missing one — or a missing object on the way to it — as

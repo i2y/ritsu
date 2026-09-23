@@ -107,6 +107,57 @@ fn others_hold(
     })
 }
 
+/// Whether no input reaches `col = v` with every other numeric cell of the row holding, the
+/// declared ranges and the rule's `constraint`s kept (§15.140). Under `申告額 <= 補償額`, the
+/// row `<=5万円 | <=5万円` has no input at 申告額 = 50001: the outside point of that boundary is
+/// one the generated code refuses at the door, and no vector can stand on it. Proved by
+/// elimination over the rationals, so a side some input does reach is never dropped. A rule
+/// with no `constraint` has nothing here the ranges have not already said.
+fn unreachable_side(f: &RuleFile, c: &Checked, t: &Table, row: &Row, col: &str, v: Rat) -> bool {
+    if f.constraints.is_empty() {
+        return false;
+    }
+    let mut seed = vec![col.to_string()];
+    seed.extend(t.inputs.iter().map(|(n, _)| n.clone()).filter(|n| n != col && c.ty_of(n).is_some_and(|ty| is_numeric(&ty))));
+    for g in crate::fourier::grounds(&seed, f, c) {
+        if !g.vars.iter().any(|n| n == col) {
+            continue;
+        }
+        let mut sys = g.sys.clone();
+        let at = crate::fourier::Lin::var(col).plus(&crate::fourier::Lin::con(v.mul(Rat::int(-1))));
+        sys.push(at.clone().le(false));
+        sys.push(at.ge(false));
+        for (ci, (other, _)) in t.inputs.iter().enumerate() {
+            if other == col || !g.vars.contains(other) {
+                continue;
+            }
+            let x = crate::fourier::Lin::var(other);
+            let lit = |l: &Lit| crate::fourier::lit_of(l, &g.want);
+            match row.cells.get(ci) {
+                Some(Cell::Lit(l)) => {
+                    if let Some(k) = lit(l) {
+                        let d = x.clone().plus(&crate::fourier::Lin::con(k.mul(Rat::int(-1))));
+                        sys.push(d.clone().le(false));
+                        sys.push(d.ge(false));
+                    }
+                }
+                Some(Cell::Cmp(ops)) => {
+                    for (op, l) in ops {
+                        if let Some(k) = lit(l) {
+                            sys.push(crate::fourier::cmp(x.clone().plus(&crate::fourier::Lin::con(k.mul(Rat::int(-1)))), *op, false));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if crate::fourier::unsat(sys) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Whether two assignments differ in exactly one input (the "vector pair" of §9.2).
 fn differ_in_one(a: &BTreeMap<String, Val>, b: &BTreeMap<String, Val>, col: &str) -> bool {
     let mut diff = 0;
@@ -332,8 +383,13 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 let Some(cell) = row.cells.get(ci) else { continue };
                 let q = quantum(c, col, &ty);
                 for (b, inside, outside) in thresholds(cell, &ty, q) {
-                    // §9.1: an unrealizable side is not an obligation.
-                    if !in_range(c, col, inside) || !in_range(c, col, outside) {
+                    // §9.1: an unrealizable side is not an obligation. Nor is a side no input
+                    // satisfying the rule's `constraint`s reaches with the row's other cells held.
+                    if !in_range(c, col, inside)
+                        || !in_range(c, col, outside)
+                        || unreachable_side(f, c, t, row, col, inside)
+                        || unreachable_side(f, c, t, row, col, outside)
+                    {
                         pruned_bounds += 1;
                         continue;
                     }

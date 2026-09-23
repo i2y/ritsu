@@ -263,7 +263,7 @@ Every command that reports findings has `--format json` (all but `source` and `i
 </div>
 </div>
 
-**Twelve targets** · **83 diagnostics** · **47 rules checked, generated and run on every commit — 21 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **85 diagnostics** · **48 rules checked, generated and run on every commit — 21 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 

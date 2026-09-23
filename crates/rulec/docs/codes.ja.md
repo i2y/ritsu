@@ -78,6 +78,8 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W122](#w122) | warning | その `shape` を使っている入力がありません |
 | [E122](#e122) | error | 契約が通す値を、規則が断ります |
 | [W123](#w123) | warning | 行が、契約の通さない値でしか当たりません |
+| [E123](#e123) | error | 契約が、規則の `constraint` を破る組み合わせを通します |
+| [W124](#w124) | warning | 行が、契約の通さない組み合わせでしか当たりません |
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
@@ -2296,7 +2298,7 @@ policy unique
 
 `error` — **契約が通す値を、規則が断ります**
 
-**いつ出るか。** `from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、""、0 件）として届きます。`.proto` の文字列から読む日付は、"" を通すかどうかを見ます（§15.133）。CEL の式のように読まない規則は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。
+**いつ出るか。** `from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、""、0 件）として届きます。`.proto` の文字列から読む日付は、"" を通すかどうかを見ます（§15.133）。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます（§15.140）。JSON Schema の型に null があるのに、入力が省略できないときも、これです。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。
 
 **直し方。** どちらを直すかは人が決めます。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。無いときは none として読みます。
 
@@ -2325,7 +2327,7 @@ policy unique
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
 ```
 
-関係するコード: [W123](#w123), [E121](#e121), [E032](#e032)
+関係するコード: [W123](#w123), [E123](#e123), [E121](#e121), [E032](#e032)
 
 ## W123
 
@@ -2361,7 +2363,101 @@ policy unique
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
 ```
 
-関係するコード: [E122](#e122), [E102](#e102), [W111](#w111)
+関係するコード: [E122](#e122), [W124](#w124), [E102](#e102), [W111](#w111)
+
+## E123
+
+`error` — **契約が、規則の `constraint` を破る組み合わせを通します**
+
+**いつ出るか。** `constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通る要求のなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき（§15.140）。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめます。見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。
+
+**直し方。** どちらを直すかは人が決めます。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape 見積(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g
+  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g
+
+constraint 最小 <= 最大
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| 最小 | -> x |
+| -    | true |
+```
+
+隣に置く `quote.proto`:
+
+```proto
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {id: "express_cap", expression: "!this.express || this.weight_g <= 5000"};
+  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 4;
+}
+```
+
+関係するコード: [E122](#e122), [W124](#w124), [E018](#e018)
+
+## W124
+
+`warning` — **行が、契約の通さない組み合わせでしか当たりません**
+
+**いつ出るか。** 行のセルが、同じ `shape` から `from` で読む二つ以上の入力を試していて、セルを一つずつ見れば契約の通す値なのに、契約がフィールドのあいだに置く条件のもとでは、その組み合わせが一つも通らないとき（§15.140）。たとえば CEL の `this.min <= this.max` のもとで「最小が 20kg を超え、最大が 10kg 以下」を求める行や、一つの `oneof` の二つのメンバーをどちらも 0 でないとする行です。ほかの列のセルは見ないので、当たると言いすぎることはあっても、当たらないと言いすぎることはありません。
+
+**直し方。** 契約がこの先も変わらないなら、行を消してください。変わる予定があって残しているのなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape 見積(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g
+  急ぎ(express) : bool  from 見積.express
+
+outputs
+  料金(fee) : money[円]  round up(10円)
+
+table 料金表(fees)
+policy first
+| 急ぎ  | 重さ | -> 料金 |
+| true  | >5kg | 3000円  |
+| true  | -    | 1500円  |
+| false | -    | 800円   |
+```
+
+隣に置く `quote.proto`:
+
+```proto
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {id: "express_cap", expression: "!this.express || this.weight_g <= 5000"};
+  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 4;
+}
+```
+
+関係するコード: [W123](#w123), [E123](#e123), [E102](#e102)
 
 ## W105
 

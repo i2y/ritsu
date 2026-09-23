@@ -389,6 +389,10 @@ Three things follow.
   an order of 51 lines passes the contract, and `lines`, declared `range >=1 <=50`, refuses
   it. `fix.text` is the annotation or keyword to add to the contract. A row reached only by
   values the contract never lets through is W123.
+- **The contract's conditions across fields are held to the rule.** A CEL expression on the
+  message, a `oneof` and JSON Schema's combinators relate fields to each other. A
+  `constraint` the contract does not keep is E123, and a row asking for a combination the
+  contract never lets through is W124.
 
 No check of the table changes. What comes out of a projection is a scalar input like any
 other, and completeness and overlap are decided as they would be without `from`.

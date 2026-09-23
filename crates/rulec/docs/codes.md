@@ -78,6 +78,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W122](#w122) | warning | No input is projected from that shape |
 | [E122](#e122) | error | The contract lets through a value the rule refuses |
 | [W123](#w123) | warning | A row is reached only by values the contract does not let through |
+| [E123](#e123) | error | The contract lets through a combination the rule's `constraint` refuses |
+| [W124](#w124) | warning | A row is reached only by a combination the contract does not let through |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -2296,7 +2298,7 @@ Related codes: [E121](#e121), [W111](#w111)
 
 `error` — **The contract lets through a value the rule refuses**
 
-**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes (§15.133). A rule this does not read, such as a CEL expression, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
+**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes (§15.133). A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field (§15.140), and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
 
 **Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
 
@@ -2325,7 +2327,7 @@ With `order.json` beside it:
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
 ```
 
-Related codes: [W123](#w123), [E121](#e121), [E032](#e032)
+Related codes: [W123](#w123), [E123](#e123), [E121](#e121), [E032](#e032)
 
 ## W123
 
@@ -2361,7 +2363,101 @@ With `order.json` beside it:
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
 ```
 
-Related codes: [E122](#e122), [E102](#e102), [W111](#w111)
+Related codes: [E122](#e122), [W124](#w124), [E102](#e102), [W111](#w111)
+
+## E123
+
+`error` — **The contract lets through a combination the rule's `constraint` refuses**
+
+**When.** Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken (§15.140). The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed.
+
+**Fix.** Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape 見積(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g
+  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g
+
+constraint 最小 <= 最大
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| 最小 | -> x |
+| -    | true |
+```
+
+With `quote.proto` beside it:
+
+```proto
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {id: "express_cap", expression: "!this.express || this.weight_g <= 5000"};
+  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 4;
+}
+```
+
+Related codes: [E122](#e122), [W124](#w124), [E018](#e018)
+
+## W124
+
+`warning` — **A row is reached only by a combination the contract does not let through**
+
+**When.** A row's cells test two or more inputs read with `from` from the same `shape`, each cell alone asks for values the contract lets through, and under the conditions the contract places across its fields no combination of them passes (§15.140): a row asking for a minimum above 20kg and a maximum of at most 10kg under the CEL `this.min <= this.max`, or a row asking for two members of one `oneof` to be both non-zero. The cells on other columns are left out, so this may call a row reachable that is not, never the other way round.
+
+**Fix.** If the contract will not change, delete the row. If the row is kept for a change that is planned, leave it: `check --diff-base` in CI reports only the ones that are new.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape 見積(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g
+  急ぎ(express) : bool  from 見積.express
+
+outputs
+  料金(fee) : money[円]  round up(10円)
+
+table 料金表(fees)
+policy first
+| 急ぎ  | 重さ | -> 料金 |
+| true  | >5kg | 3000円  |
+| true  | -    | 1500円  |
+| false | -    | 800円   |
+```
+
+With `quote.proto` beside it:
+
+```proto
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {id: "express_cap", expression: "!this.express || this.weight_g <= 5000"};
+  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 4;
+}
+```
+
+Related codes: [W123](#w123), [E123](#e123), [E102](#e102)
 
 ## W105
 

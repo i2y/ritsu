@@ -26,6 +26,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
 }
 
 const CORPUS: &[&str] = &[
+    "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
     "tests/corpus/二つの区分.rule",

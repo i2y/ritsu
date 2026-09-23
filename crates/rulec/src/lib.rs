@@ -22,6 +22,7 @@ macro_rules! tr {
 pub mod ast;
 pub mod apply;
 pub mod backend;
+pub mod cel;
 pub mod cert;
 pub mod defset;
 pub mod diag;
@@ -49,6 +50,7 @@ pub mod parse;
 pub mod prelude;
 pub mod proto;
 pub mod region;
+pub mod relation;
 pub mod replay;
 pub mod projection;
 pub mod report;

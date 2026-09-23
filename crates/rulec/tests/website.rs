@@ -851,7 +851,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 26;
+    const WRITTEN: usize = 27;
     for (page, want) in [
         ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
         ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),

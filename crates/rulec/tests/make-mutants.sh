@@ -118,6 +118,15 @@ awk '/range >=1 <=50  from count/ { sub(/range >=1 <=50/, "range >=1 <=80") }
      /^\| >10 / { print "| >10 <=60 | 200円                           |"; print "| >60      | 300円                           |"; next }
      { print }' "$p" > "$M/m_w123.rule"
 
+# --- What a contract says across its fields (§15.140). The contract promises that express takes
+# up to 5 kg and that the declared value stays within the cover.
+q="$C/速達の見積.rule"
+# A constraint stricter than what the contract promises: it lets the declared value equal the cover
+awk '{ sub(/constraint 申告額 <= 補償額/, "constraint 申告額 < 補償額"); print }' "$q" > "$M/m_e123.rule"
+# A row for express above 5 kg, which the contract never sends
+awk '/^\| true  \| >2kg        \|/ { print "| true  | >2kg <=5kg  | 1800円                      |"; print "| true  | >5kg        | 2500円                      |"; next }
+     { print }' "$q" > "$M/m_w124.rule"
+
 # --- A rule applied by another (§15.69). The callee stays in the corpus, so the
 # mutants reach it by a relative path; the digest in the heading is the corpus caller's own.
 a="$C/非常勤退職手当.rule"

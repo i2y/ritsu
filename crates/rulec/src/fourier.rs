@@ -47,8 +47,9 @@ pub enum Origin {
     /// A boolean `define` the question pins to one truth value (§15.127), and which of the
     /// inequalities that truth value becomes.
     Pin { name: String, yes: bool, part: usize },
-    /// An atom of a contract, by its index in the list the caller keeps (§15.139).
-    Contract(usize),
+    /// An atom of a contract, by its index in the list the caller keeps, and which of the
+    /// inequalities it became: an equality is two (§15.140).
+    Contract { atom: usize, part: usize },
 }
 
 /// One inequality: `Σ c·x + k < 0` when `strict`, `<= 0` otherwise.
@@ -550,12 +551,81 @@ fn between(lo: Option<(Rat, bool)>, hi: Option<(Rat, bool)>) -> Option<Rat> {
     }
 }
 
+/// The bounds a system puts on one of its names once every other name is eliminated
+/// (§15.140): the least and the greatest value it can take, each with whether it is strict.
+///
+/// `Some(None)` is a system with no solution at all, and an open end is `None` inside. Like
+/// `solve`, this gives up rather than guesses, and `None` is what giving up looks like — a
+/// caller reads it as "nothing learned", never as "no values".
+#[allow(clippy::type_complexity)]
+pub fn bounds(sys: Vec<Ineq>, x: &str) -> Option<Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)>> {
+    let mut cur: Vec<Row> = sys.into_iter().map(|q| Row { q, y: BTreeMap::new() }).collect();
+    loop {
+        if cur.iter().any(|r| r.q.constant() && r.q.false_now()) {
+            return Some(None);
+        }
+        cur.retain(|r| !r.q.constant());
+        let Some(v) = pick_but(&cur, Some(x)) else { break };
+        let (lo, hi) = count(&cur, &v);
+        if lo * hi > CAP || cur.len() > CAP {
+            return None;
+        }
+        cur = eliminate(cur, &v, false)?;
+        if cur.len() > CAP {
+            return None;
+        }
+    }
+    let mut lo: Option<(Rat, bool)> = None;
+    let mut hi: Option<(Rat, bool)> = None;
+    for r in &cur {
+        let cx = *r.q.terms.get(x)?;
+        if cx.num == 0 {
+            continue;
+        }
+        // cx·x + k ≤ 0 (or < 0): x ≤ −k/cx when cx > 0, x ≥ −k/cx when cx < 0.
+        let b = r.q.k.checked_mul(Rat::int(-1))?.checked_div(cx)?;
+        let s = r.q.strict;
+        if cx.num > 0 {
+            hi = Some(match hi {
+                Some((h, hs)) => match h.checked_cmp(b)? {
+                    std::cmp::Ordering::Less => (h, hs),
+                    std::cmp::Ordering::Equal => (h, hs || s),
+                    std::cmp::Ordering::Greater => (b, s),
+                },
+                None => (b, s),
+            });
+        } else {
+            lo = Some(match lo {
+                Some((l, ls)) => match l.checked_cmp(b)? {
+                    std::cmp::Ordering::Greater => (l, ls),
+                    std::cmp::Ordering::Equal => (l, ls || s),
+                    std::cmp::Ordering::Less => (b, s),
+                },
+                None => (b, s),
+            });
+        }
+    }
+    if let (Some((l, ls)), Some((h, hs))) = (lo, hi) {
+        match l.checked_cmp(h)? {
+            std::cmp::Ordering::Greater => return Some(None),
+            std::cmp::Ordering::Equal if ls || hs => return Some(None),
+            _ => {}
+        }
+    }
+    Some(Some((lo, hi)))
+}
+
 /// The variable to eliminate next: the one that pairs off smallest.
 fn pick(rows: &[Row]) -> Option<String> {
+    pick_but(rows, None)
+}
+
+/// The same, never choosing `keep`.
+fn pick_but(rows: &[Row], keep: Option<&str>) -> Option<String> {
     let mut names: Vec<String> = Vec::new();
     for r in rows {
         for (n, c) in &r.q.terms {
-            if c.num != 0 && !names.contains(n) {
+            if c.num != 0 && !names.contains(n) && keep != Some(n.as_str()) {
                 names.push(n.clone());
             }
         }
@@ -878,6 +948,28 @@ mod solve_tests {
         ];
         let at = solve(sys.clone()).expect("解があるはず");
         assert!(holds(&sys, &at), "{at:?}");
+    }
+
+    #[test]
+    fn 一つの名前に残る上下限() {
+        // a <= b, b <= 10, a >= 3: a lies in [3, 10] and b in [3, 10].
+        let sys = vec![
+            v("a").plus(&v("b").scale(Rat::int(-1))).le(false),
+            v("b").plus(&Lin::con(Rat::int(-10))).le(false),
+            v("a").plus(&Lin::con(Rat::int(-3))).ge(false),
+        ];
+        let got = bounds(sys.clone(), "a").expect("決まるはず").expect("解があるはず");
+        assert_eq!(got, (Some((Rat::int(3), false)), Some((Rat::int(10), false))));
+        let got = bounds(sys.clone(), "b").expect("決まるはず").expect("解があるはず");
+        assert_eq!(got, (Some((Rat::int(3), false)), Some((Rat::int(10), false))));
+        // With a < 3 added there is none; with a strict end the bound says so.
+        let mut none = sys.clone();
+        none.push(v("a").plus(&Lin::con(Rat::int(-3))).le(true));
+        assert_eq!(bounds(none, "b"), Some(None));
+        let mut strict = sys;
+        strict.push(v("b").plus(&Lin::con(Rat::int(-10))).le(true));
+        let got = bounds(strict, "a").expect("決まるはず").expect("解があるはず");
+        assert_eq!(got.1, Some((Rat::int(10), true)));
     }
 
     /// Where the answer is decidable, the two agree: a system a point comes back for is one

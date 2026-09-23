@@ -95,6 +95,8 @@ golden!(e120_射影の型, "E120", "tests/mutants/m_e120.rule", "E120");
 golden!(e121_契約に無いパス, "E121", "tests/mutants/m_e121.rule", "E121");
 golden!(e122_契約が通すのに規則が断る, "E122", "tests/mutants/m_e122.rule", "E122");
 golden!(w123_契約が送らない値でしか当たらない行, "W123", "tests/mutants/m_w123.rule", "W123");
+golden!(e123_契約が制約を約束しない, "E123", "tests/mutants/m_e123.rule", "E123");
+golden!(w124_契約が送らない組み合わせでしか当たらない行, "W124", "tests/mutants/m_w124.rule", "W124");
 
 // A rule applied by another (§15.69).
 golden!(e040_呼び先が変わった, "E040", "tests/mutants/m_e040.rule", "E040");

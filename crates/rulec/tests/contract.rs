@@ -115,9 +115,14 @@ fn optionalのフィールドは無いとき既定値として読む() {
 }
 
 #[test]
-fn 読まない規則は名前を注に出す() {
+fn 読めるcelは範囲として読み_読めないものは名前を注に出す() {
+    // `this <= 100` is read (§15.140): with `gte: 1` the contract lets 1 to 100 through.
     let body = proto("message Order {\n  int32 points = 1 [(buf.validate.field).int32.gte = 1, (buf.validate.field).cel = {id: \"x\", expression: \"this <= 100\"}];\n}");
     let f = check("cel", &rule("a(a) : number  range >=1 <=100  from 注文.points"), "order.proto", &body);
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // A remainder is not: the upper end stays open, and the note names what was not read.
+    let body = proto("message Order {\n  int32 points = 1 [(buf.validate.field).int32.gte = 1, (buf.validate.field).cel = {id: \"x\", expression: \"this % 7 != 3\"}];\n}");
+    let f = check("cel-unread", &rule("a(a) : number  range >=1 <=100  from 注文.points"), "order.proto", &body);
     assert_eq!(codes(&f), vec!["E122"], "{f:?}");
     assert!(f[0].2.contains("読んでいない規則があります（cel）"), "{f:?}");
 }
@@ -267,4 +272,153 @@ fn 入力にならない型のフィールドはe120で名指す() {
     let f = check("bytes-leaf", &rule("a(a) : string  from 注文.blob"), "order.proto", &body);
     assert_eq!(codes(&f), vec!["E120"], "{f:?}");
     assert!(f[0].2.contains("契約では bytes"), "{f:?}");
+}
+
+// --- Across the fields (§15.140) ----------------------------------------------------------
+
+/// A rule reading two values from `order.proto`, with `between` after the inputs and `table`
+/// at the end.
+fn pair(decls: &str, between: &str, table: &str) -> String {
+    format!(
+        "rule t(t) v1\n\nshape 注文(order) = proto \"order.proto\" shop.v1.Order\n\ninputs\n{decls}\n{between}\noutputs\n  x(x) : bool\n\n{table}"
+    )
+}
+
+const WEIGHTS: &str = "  最小(min_g) : mass[g]  range >=1g <=30kg  from 注文.min_g\n  最大(max_g) : mass[g]  range >=1g <=30kg  from 注文.max_g\n";
+const ONE_ROW: &str = "table 表(t1)\npolicy unique\n| 最小 | -> x |\n| -    | true |\n";
+
+fn weights(rules: &str) -> String {
+    proto(&format!(
+        "message Order {{\n{rules}  int64 min_g = 1 [(buf.validate.field).int64 = {{gte: 1, lte: 30000}}];\n  int64 max_g = 2 [(buf.validate.field).int64 = {{gte: 1, lte: 30000}}];\n}}"
+    ))
+}
+
+#[test]
+fn 契約が約束しない制約はe123_約束すれば通る() {
+    let r = pair(WEIGHTS, "constraint 最小 <= 最大\n", ONE_ROW);
+    let f = check("e123", &r, "order.proto", &weights(""));
+    assert_eq!(codes(&f), vec!["E123"], "{f:?}");
+    let line = &f[0].2;
+    assert!(line.contains("option (buf.validate.message).cel = {id: \\\"min_g_le_max_g\\\", expression: \\\"this.min_g <= this.max_g\\\"};"), "{line}");
+    // The example breaks the constraint and passes the contract.
+    let num = |k: &str| -> i64 {
+        let key = format!("\"{k}\":");
+        let i = line.find(&key).unwrap() + key.len();
+        line[i..].split([',', '}']).next().unwrap().parse().unwrap()
+    };
+    assert!(num("最小") > num("最大"), "{line}");
+    // The contract that promises it is quiet.
+    let f = check("e123-ok", &r, "order.proto", &weights("  option (buf.validate.message).cel = {id: \"w\", expression: \"this.min_g <= this.max_g\"};\n"));
+    assert!(codes(&f).is_empty(), "{f:?}");
+}
+
+#[test]
+fn 契約が通さない組み合わせでしか当たらない行はw124() {
+    let table = "table 表(t1)\npolicy first\n| 最小  | 最大   | -> x  |\n| >20kg | <=10kg | true  |\n| -     | -      | false |\n";
+    let f = check("w124", &pair(WEIGHTS, "", table), "order.proto", &weights("  option (buf.validate.message).cel = {id: \"w\", expression: \"this.min_g <= this.max_g\"};\n"));
+    assert!(codes(&f).contains(&"W124"), "{f:?}");
+    let w = f.iter().find(|(c, _, _)| c == "W124").unwrap();
+    assert!(w.2.contains("\"row\":1"), "{w:?}");
+    // Without the relation, the row is reached.
+    let f = check("w124-none", &pair(WEIGHTS, "", table), "order.proto", &weights(""));
+    assert!(!codes(&f).contains(&"W124"), "{f:?}");
+}
+
+#[test]
+fn メッセージのcelは一つのフィールドの範囲も狭める() {
+    let body = proto("message Order {\n  option (buf.validate.message).cel_expression = \"this.w >= 1 && this.w <= 100\";\n  int64 w = 1;\n}");
+    let f = check("msg-cel", &rule("a(a) : number  range >=1 <=100  from 注文.w"), "order.proto", &body);
+    assert!(codes(&f).is_empty(), "{f:?}");
+}
+
+#[test]
+fn oneofの二つが同時に来る行はw124() {
+    let body = proto(
+        "message Order {\n  oneof pay {\n    int64 card_jpy = 1 [(buf.validate.field).int64 = {gte: 1, lte: 1000000}];\n    int64 bank_jpy = 2 [(buf.validate.field).int64 = {gte: 1, lte: 1000000}];\n  }\n}",
+    );
+    let decls = "  カード(card) : money[円]  range >=0円 <=100万円  from 注文.card_jpy\n  振込(bank)   : money[円]  range >=0円 <=100万円  from 注文.bank_jpy\n";
+    let table = "table 表(t1)\npolicy first\n| カード | 振込 | -> x  |\n| >0円   | >0円 | true  |\n| -      | -    | false |\n";
+    let f = check("oneof", &pair(decls, "", table), "order.proto", &body);
+    assert!(codes(&f).contains(&"W124"), "{f:?}");
+    // A member of a oneof has presence of its own: unset, it reads as 0 without its rules.
+    assert!(!codes(&f).contains(&"E122"), "{f:?}");
+}
+
+#[test]
+fn optionalに付いたrequiredは0を断らない() {
+    let body = proto("message Order {\n  optional int64 n = 1 [(buf.validate.field).required = true, (buf.validate.field).int64.lte = 100];\n}");
+    let f = check("opt-req", &rule("a(a) : number  range >=1 <=100  from 注文.n"), "order.proto", &body);
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("0 を通しますが"), "{f:?}");
+}
+
+/// A rule reading from `order.json`, the schema at `#/$defs/Order`.
+fn json_rule(decls: &str, between: &str, table: &str) -> String {
+    format!(
+        "rule t(t) v1\n\nshape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n{decls}\n{between}\noutputs\n  x(x) : bool\n\n{table}"
+    )
+}
+
+const EXPRESS: &str = r##"{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Base": {
+      "type": "object",
+      "properties": { "weight_g": { "type": "integer", "minimum": 1, "maximum": 30000 } },
+      "required": ["weight_g"]
+    },
+    "Order": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "properties": { "express": { "type": "boolean" } },
+      "required": ["express"],
+      "if": { "properties": { "express": { "const": true } } },
+      "then": { "properties": { "weight_g": { "maximum": 5000 } } }
+    }
+  }
+}
+"##;
+
+#[test]
+fn jsonschemaの組み合わせの中のパスを読み_ifとthenの関係でw124() {
+    let decls = "  重さ(weight) : mass[g]  range >=1g <=30kg  from 注文.weight_g\n  急ぎ(express) : bool  from 注文.express\n";
+    let table = "table 表(t1)\npolicy first\n| 急ぎ | 重さ | -> x  |\n| true | >5kg | true  |\n| -    | -    | false |\n";
+    let f = check("json-if", &json_rule(decls, "", table), "order.json", EXPRESS);
+    // `weight_g` is in `allOf`, `required` there too: no E121, no E122.
+    assert_eq!(codes(&f), vec!["W124"], "{f:?}");
+}
+
+#[test]
+fn nullを通すフィールドは省略できない入力ならe122() {
+    let schema = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"n\":{\"type\":[\"integer\",\"null\"],\"minimum\":0,\"maximum\":10}},\"required\":[\"n\"]}}}";
+    let one = "table 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+    let f = check("null", &json_rule("  a(a) : number  range >=0 <=10  from 注文.n\n", "", one), "order.json", schema);
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("null を通しますが"), "{f:?}");
+    assert!(f[0].2.contains("\\\"type\\\": \\\"integer\\\""), "{f:?}");
+    let f = check("null-opt", &json_rule("  a(a) : number?  from 注文.n\n", "", one), "order.json", schema);
+    assert!(codes(&f).is_empty(), "{f:?}");
+}
+
+#[test]
+fn jsonschemaでは関係を書けないのでe123に契約側の直しは無い() {
+    let schema = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"min_g\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":30000},\"max_g\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":30000}},\"required\":[\"min_g\",\"max_g\"]}}}";
+    let decls = "  最小(min_g) : mass[g]  range >=1g <=30kg  from 注文.min_g\n  最大(max_g) : mass[g]  range >=1g <=30kg  from 注文.max_g\n";
+    let f = check("json-e123", &json_rule(decls, "constraint 最小 <= 最大\n", ONE_ROW), "order.json", schema);
+    assert_eq!(codes(&f), vec!["E123"], "{f:?}");
+    assert!(f[0].2.contains("\"kind\":\"none\""), "{f:?}");
+}
+
+#[test]
+fn メッセージのcelが列挙の値を絞る() {
+    let body = proto(
+        "message Order {\n  Shipping shipping = 1;\n}\n\nmessage Shipping {\n  option (buf.validate.message).cel_expression = \"this.zone in ['honshu', 'okinawa']\";\n  string zone = 1;\n}",
+    );
+    let r = "rule t(t) v1\n\nshape 注文(order) = proto \"order.proto\" shop.v1.Order\n\nenum 地域(zone) = honshu(honshu) | okinawa(okinawa)\n\n\
+             inputs\n  a(a) : 地域  from 注文.shipping.zone\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+    let f = check("enum-cel", r, "order.proto", &body);
+    // The CEL names the values, so "any string" is not said; what is left is the "" an unset
+    // `shipping` arrives as, said once.
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("`注文.shipping` を省略でき"), "{f:?}");
 }

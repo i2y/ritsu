@@ -337,14 +337,28 @@ def span_of_name(t, name, path):
     return (None, None) if r is None else (num(r[0]), num(r[1]))
 
 
+def left_out(t, name, path):
+    """Whether the coordinate the box fixes for a name leaves its ends out: an interval does,
+    a single value does not, and a declared range (a name the box fixes nothing for) does
+    not either."""
+    col = [a["column"] for a in t["axes"]]
+    if name in col and col.index(name) < len(path):
+        a, b = bound_at(t, col.index(name), path[col.index(name)])
+        return not (a is not None and b is not None and a == b)
+    return False
+
+
 def constraint_rules_out(t, k, path):
-    """Whether one `constraint` is impossible over the whole of this box."""
+    """Whether one `constraint` is impossible over the whole of this box. Where the two ends
+    meet, the pair is out of reach when one of them is an end its coordinate leaves out
+    (§15.140)."""
     (ll, lh) = span_of_name(t, k["left"], path)
     (rl, rh) = span_of_name(t, k["right"], path)
+    shut = left_out(t, k["left"], path) or left_out(t, k["right"], path)
     return {
-        "<=": ll is not None and rh is not None and ll > rh,
+        "<=": ll is not None and rh is not None and (ll > rh or (ll == rh and shut)),
         "<": ll is not None and rh is not None and ll >= rh,
-        ">=": lh is not None and rl is not None and lh < rl,
+        ">=": lh is not None and rl is not None and (lh < rl or (lh == rl and shut)),
         ">": lh is not None and rl is not None and lh <= rl,
     }[k["op"]]
 

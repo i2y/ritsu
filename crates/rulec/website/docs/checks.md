@@ -59,6 +59,16 @@ that is the mismatch this finds most often. A message field that is not `require
 unset, and Protovalidate then validates nothing inside it: the value under it arrives as its
 default whatever its own rules say, so an input that refuses the default is E122 as well.
 
+A contract also relates **fields to each other** — a CEL expression on a `.proto` message such
+as `this.declared_jpy <= this.cover_jpy`, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`,
+`not` and `if`/`then` — and those conditions are read too. A `constraint` between two inputs of
+one contract that the contract does not keep is **E123**: some request passes the contract's
+validation and breaks the constraint, and the generated code refuses it at the door. The
+example is that request, and for a `.proto` `fix.text` is the `(buf.validate.message).cel` that
+would promise it. A row whose cells ask for a combination the contract never lets through —
+express above 5 kg where the contract caps express at 5 kg — is **W124**. What cannot be read of
+a condition (a remainder, a string function) is taken as true, so neither can miss.
+
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
 the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
@@ -146,7 +156,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 94 deliberately broken
+   and that implementation has not been proved correct. The evidence is 96 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

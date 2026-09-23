@@ -356,6 +356,23 @@ EXAMPLES = [
         ],
     ),
     (
+        "速達の見積.rule",
+        "契約がフィールドのあいだに置く条件（CEL）",
+        "見積の要求から運賃を決めます。要求を検証する `.proto` は、Protovalidate の CEL で二つのことを約束しています。速達は 5kg まで、申告額は補償額を超えない、の二つです。規則はその約束に乗って書いてあります。",
+        [
+            "**`constraint 申告額 <= 補償額` は、契約が約束しているから書けます。** 補償料の表には、申告額が補償額を超える行がありません。制約があるので、完全性の検査はその組み合わせに行を求めません。契約の CEL（`this.declared_jpy <= this.cover_jpy`）が同じことを約束しているので、`check` は通ります。制約を `<` にすると、契約は申告額と補償額が等しい要求を通すので E123 で止まり、その要求を例に出します。",
+            "**5kg を超える速達の行は書いていません。** 契約の `!this.express || this.weight_g <= 5000` が、その要求を通さないからです。書き足すと、その行は W124 になります。セルを一つずつ見れば契約の通す値なのに、組み合わせとしては通らない行だからです。",
+            "**CEL は、読める部分を読みます。** 整数の一次式の比較、`in`、`size()`、`has()`、`&&`・`||`・`!`・`? :` です。剰余や文字列の関数のように読めない部分は真として扱うので、見逃すことはありません。",
+        ],
+        "Conditions a contract places across its fields (CEL)",
+        "The fee, decided from a quote request. The `.proto` the request is validated against promises two things in Protovalidate's CEL: express takes a parcel of up to 5 kg, and the declared value never exceeds the cover. The rule is written on those promises.",
+        [
+            "**`constraint 申告額 <= 補償額` can be written because the contract promises it.** The insurance table has no row where the declared value exceeds the cover: with the constraint, the completeness check does not ask for one. The contract's CEL (`this.declared_jpy <= this.cover_jpy`) promises the same, so `check` passes. Make the constraint `<` and the contract lets through a request whose declared value equals the cover: the check stops at E123, with that request as the example.",
+            "**There is no row for express above 5 kg.** The contract's `!this.express || this.weight_g <= 5000` never lets such a request through. Add one and it is W124: each cell alone asks for values the contract lets through, and the combination never passes.",
+            "**Of CEL, what can be read is read.** Comparisons of whole-number sums, `in`, `size()`, `has()`, `&&`, `||`, `!` and `? :`. A part that cannot be read, such as a remainder or a string function, is taken as true, so nothing is missed.",
+        ],
+    ),
+    (
         "return_eligibility.rule",
         "返品できるかどうかを英語で書く",
         "金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。",
@@ -744,6 +761,7 @@ EXAMPLES = [
 CONTRACTS = {
     "注文の送料.rule": ("contracts/order.schema.json", "json"),
     "出荷の送料.rule": ("contracts/shipment.proto", "proto"),
+    "速達の見積.rule": ("contracts/quote.proto", "proto"),
 }
 
 JA_HEAD = """# 例で見る

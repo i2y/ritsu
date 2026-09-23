@@ -291,6 +291,13 @@ const X_W122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.js
 /// the two compare is what the contract lets through against what the input takes (§15.132).
 const LINES_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":10,\"items\":{\"type\":\"object\"}}},\"required\":[\"lines\"]}}}\n")];
 const X_E122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=5  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+/// A `.proto` whose message relates two of its fields, and leaves two others unrelated.
+const QUOTE_PROTO: &[(&str, &str)] = &[(
+    "quote.proto",
+    "syntax = \"proto3\";\npackage shop.v1;\n\nmessage Quote {\n  option (buf.validate.message).cel = {id: \"express_cap\", expression: \"!this.express || this.weight_g <= 5000\"};\n  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  bool express = 4;\n}\n",
+)];
+const X_E123: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g\n  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g\n\nconstraint 最小 <= 最大\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| 最小 | -> x |\n| -    | true |\n";
+const X_W124: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g\n  急ぎ(express) : bool  from 見積.express\n\noutputs\n  料金(fee) : money[円]  round up(10円)\n\ntable 料金表(fees)\npolicy first\n| 急ぎ  | 重さ | -> 料金 |\n| true  | >5kg | 3000円  |\n| true  | -    | 1500円  |\n| false | -    | 800円   |\n";
 const X_W123: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=20  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a    | -> x  |\n| <=10 | true  |\n| >10  | false |\n";
 const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
@@ -1462,15 +1469,15 @@ pub fn ledger() -> Vec<Entry> {
             "E122",
             tr!("契約が通す値を、規則が断ります", "The contract lets through a value the rule refuses"),
             tr!(
-                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます（§15.133）。CEL の式のように読まない規則は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。",
-                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes (§15.133). A rule this does not read, such as a CEL expression, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
+                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます（§15.133）。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます（§15.140）。JSON Schema の型に null があるのに、入力が省略できないときも、これです。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。",
+                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes (§15.133). A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field (§15.140), and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
             ),
             tr!(
                 "どちらを直すかは人が決めます。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。無いときは none として読みます。",
                 "Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none."
             ),
             X_E122,
-            &["W123", "E121", "E032"],
+            &["W123", "E123", "E121", "E032"],
         )
         .with_files(LINES_DOC),
         warn(
@@ -1485,9 +1492,39 @@ pub fn ledger() -> Vec<Entry> {
                 "If the contract will not widen, delete the row and bring the input's range in line with the contract. If the row is kept for a widening that is planned, leave it: `check --diff-base` in CI reports only the ones that are new."
             ),
             X_W123,
-            &["E122", "E102", "W111"],
+            &["E122", "W124", "E102", "W111"],
         )
         .with_files(LINES_DOC),
+        err(
+            "E123",
+            tr!("契約が、規則の `constraint` を破る組み合わせを通します", "The contract lets through a combination the rule's `constraint` refuses"),
+            tr!(
+                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通る要求のなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき（§15.140）。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめます。見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。",
+                "Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken (§15.140). The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed."
+            ),
+            tr!(
+                "どちらを直すかは人が決めます。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。",
+                "Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it."
+            ),
+            X_E123,
+            &["E122", "W124", "E018"],
+        )
+        .with_files(QUOTE_PROTO),
+        warn(
+            "W124",
+            tr!("行が、契約の通さない組み合わせでしか当たりません", "A row is reached only by a combination the contract does not let through"),
+            tr!(
+                "行のセルが、同じ `shape` から `from` で読む二つ以上の入力を試していて、セルを一つずつ見れば契約の通す値なのに、契約がフィールドのあいだに置く条件のもとでは、その組み合わせが一つも通らないとき（§15.140）。たとえば CEL の `this.min <= this.max` のもとで「最小が 20kg を超え、最大が 10kg 以下」を求める行や、一つの `oneof` の二つのメンバーをどちらも 0 でないとする行です。ほかの列のセルは見ないので、当たると言いすぎることはあっても、当たらないと言いすぎることはありません。",
+                "A row's cells test two or more inputs read with `from` from the same `shape`, each cell alone asks for values the contract lets through, and under the conditions the contract places across its fields no combination of them passes (§15.140): a row asking for a minimum above 20kg and a maximum of at most 10kg under the CEL `this.min <= this.max`, or a row asking for two members of one `oneof` to be both non-zero. The cells on other columns are left out, so this may call a row reachable that is not, never the other way round."
+            ),
+            tr!(
+                "契約がこの先も変わらないなら、行を消してください。変わる予定があって残しているのなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
+                "If the contract will not change, delete the row. If the row is kept for a change that is planned, leave it: `check --diff-base` in CI reports only the ones that are new."
+            ),
+            X_W124,
+            &["W123", "E123", "E102"],
+        )
+        .with_files(QUOTE_PROTO),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

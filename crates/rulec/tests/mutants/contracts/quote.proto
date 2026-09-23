@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+
+// A quote for one parcel, validated by Protovalidate before anything reads it. Two of its
+// rules relate one field to another: express takes a parcel of up to 5 kg, and the value
+// declared never exceeds the cover the caller chose.
+message QuoteRequest {
+  option (buf.validate.message).cel = {
+    id: "express_weight",
+    message: "express takes a parcel of up to 5 kg",
+    expression: "!this.express || this.weight_g <= 5000"
+  };
+  option (buf.validate.message).cel = {
+    id: "declared_within_cover",
+    message: "the declared value exceeds the cover",
+    expression: "this.declared_jpy <= this.cover_jpy"
+  };
+
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 2;
+  int64 declared_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 300000}];
+  int64 cover_jpy = 4 [(buf.validate.field).int64 = {gte: 0, lte: 300000}];
+}

@@ -47,6 +47,24 @@ def Coord.span : Coord → Ival
   | .exactly a => (some a, some a)
   | .between lo hi => (lo, hi)
 
+/-- Whether a coordinate leaves its ends out: an interval does, a single value does not.
+    Where two ends meet, this is what decides whether a pair can meet there (§15.140). -/
+def Coord.opn : Coord → Bool
+  | .exactly _ => false
+  | .between _ _ => true
+
+theorem Coord.holds_lo_lt {x : Coord} {v a : Rat} (h : x.holds v) (ho : x.opn = true)
+    (ha : x.span.1 = some a) : a < v := by
+  cases x with
+  | exactly _ => simp [Coord.opn] at ho
+  | between lo hi => exact h.1 a ha
+
+theorem Coord.holds_hi_lt {x : Coord} {v b : Rat} (h : x.holds v) (ho : x.opn = true)
+    (hb : x.span.2 = some b) : v < b := by
+  cases x with
+  | exactly _ => simp [Coord.opn] at ho
+  | between lo hi => exact h.2 b hb
+
 /-! Three steps of rational arithmetic that core states in other words. Everything below
 leans on these and on nothing else. -/
 
@@ -143,16 +161,21 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
 
 /-- Whether the two coordinates this point fixes leave the comparison no room. Both ends
     are read off the closed spans, so a `true` here is a fact about every value pair the
-    box allows. -/
+    box allows. Where the two ends of a `≤` or a `≥` meet, the pair is still out of reach
+    when one of the two coordinates leaves its end out (§15.140). -/
 def constraintRulesOut (s : Sieve) (k : Constraint) (p : Point) : Bool :=
   match p[k.left]?, p[k.right]? with
   | some cl, some cr =>
     match s.coordAt k.left cl, s.coordAt k.right cr with
     | some xl, some xr =>
       match k.op with
-      | .le => match xl.span.1, xr.span.2 with | some a, some b => decide (b < a) | _, _ => false
+      | .le => match xl.span.1, xr.span.2 with
+        | some a, some b => decide (b < a) || (decide (a = b) && (xl.opn || xr.opn))
+        | _, _ => false
       | .lt => match xl.span.1, xr.span.2 with | some a, some b => decide (b ≤ a) | _, _ => false
-      | .ge => match xl.span.2, xr.span.1 with | some a, some b => decide (a < b) | _, _ => false
+      | .ge => match xl.span.2, xr.span.1 with
+        | some a, some b => decide (a < b) || (decide (a = b) && (xl.opn || xr.opn))
+        | _, _ => false
       | .gt => match xl.span.2, xr.span.1 with | some a, some b => decide (a ≤ b) | _, _ => false
       | .eq => false
     | _, _ => false
@@ -196,16 +219,23 @@ theorem not_asked_of_constraint {s : Sieve} {k : Constraint} {p : Point}
   case _ cl cr hpl hpr =>
     split at h
     case _ xl xr hcl hcr =>
-      obtain ⟨wl, hwl, hbl⟩ := value_at hf hpl hcl
-      obtain ⟨wr, hwr, hbr⟩ := value_at hf hpr hcr
+      obtain ⟨wl, hwl, hl⟩ := hf _ _ xl hpl hcl
+      obtain ⟨wr, hwr, hr⟩ := hf _ _ xr hpr hcr
+      have hbl := Coord.holds_span hl
+      have hbr := Coord.holds_span hr
       rw [hx] at hwl; rw [hy] at hwr
       obtain rfl : x = wl := Option.some.inj hwl
       obtain rfl : y = wr := Option.some.inj hwr
       cases hop' : k.op <;> simp only [hop', Cmp.holds] at h hop
       · split at h
         case _ a b ha hb =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room (hbl.1 a ha) (Rat.le_trans hop (hbr.2 b hb)) h
+          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+          rcases h with h | ⟨rfl, ho | ho⟩
+          · exact no_room (hbl.1 a ha) (Rat.le_trans hop (hbr.2 b hb)) h
+          · -- a < x ≤ y ≤ a
+            exact Rat.lt_irrefl (ltle (Coord.holds_lo_lt hl ho ha) (Rat.le_trans hop (hbr.2 a hb)))
+          · -- a ≤ x ≤ y < a
+            exact Rat.lt_irrefl (lelt (Rat.le_trans (hbl.1 a ha) hop) (Coord.holds_hi_lt hr ho hb))
         case _ => exact absurd h (by simp)
       · split at h
         case _ a b ha hb =>
@@ -214,8 +244,13 @@ theorem not_asked_of_constraint {s : Sieve} {k : Constraint} {p : Point}
         case _ => exact absurd h (by simp)
       · split at h
         case _ a b ha hb =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room (Rat.le_trans (hbr.1 b hb) hop) (hbl.2 a ha) h
+          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+          rcases h with h | ⟨rfl, ho | ho⟩
+          · exact no_room (Rat.le_trans (hbr.1 b hb) hop) (hbl.2 a ha) h
+          · -- a ≤ y ≤ x < a
+            exact Rat.lt_irrefl (lelt (Rat.le_trans (hbr.1 a hb) hop) (Coord.holds_hi_lt hl ho ha))
+          · -- a < y ≤ x ≤ a
+            exact Rat.lt_irrefl (ltle (Coord.holds_lo_lt hr ho hb) (Rat.le_trans hop (hbl.2 a ha)))
         case _ => exact absurd h (by simp)
       · split at h
         case _ a b ha hb =>

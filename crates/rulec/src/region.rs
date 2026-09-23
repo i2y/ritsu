@@ -2579,22 +2579,6 @@ impl TableRegion {
         }
     }
 
-    /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
-    /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
-    /// more constrained derived values share an input, their dependency cannot be examined.
-    /// The interval a name can hold inside this box: the coordinate's own span when the name
-    /// is one of this table's axes, and its declared range otherwise.
-    fn span_of_name(&self, name: &str, path: &[usize]) -> Option<Ival> {
-        if let Some(ai) = self.col_names.iter().position(|n| n == name) {
-            if let Some(&ci) = path.get(ai) {
-                if let Some(sp) = self.coord_span(ai, ci) {
-                    return Some(sp);
-                }
-            }
-        }
-        self.spans.get(name).copied()
-    }
-
     /// A coordinate as a closed interval on the grid, for a name this table has an axis
     /// for; the declared range for one it does not. The witness needs the grid reading:
     /// an open end is not a value anything can take.
@@ -2720,23 +2704,49 @@ impl TableRegion {
     /// Whether a `constraint` can hold anywhere in this box. Interval arithmetic, the same
     /// shape the derived sieve uses: only a relation that is impossible for **every** pair of
     /// values the box allows takes the box out (§15.55).
+    ///
+    /// An interval coordinate leaves its ends out, and that decides the case where the two
+    /// ends meet: `>5万円` against `<=5万円` under `申告額 <= 補償額` has no pair, since the one
+    /// value both could share is one the left side never takes. Read with its ends included,
+    /// the box looked reachable and was reported as a gap (§15.140). The reading stays over
+    /// the rationals, which is what the certificate's checker holds it to.
     fn constraint_impossible(&self, k: &crate::ast::Constraint, path: &[usize]) -> bool {
-        let (Some((la, lb)), Some((ra, rb))) =
-            (self.span_of_name(&k.left, path), self.span_of_name(&k.right, path))
+        let (Some(((la, lo_l), (lb, hi_l))), Some(((ra, lo_r), (rb, hi_r)))) =
+            (self.ends_of_name(&k.left, path), self.ends_of_name(&k.right, path))
         else {
             return false;
         };
         use std::cmp::Ordering::*;
         match k.op {
             // left <= right is out of reach when the smallest left is already past the
-            // largest right.
-            CmpOp::Le => matches!((la, rb), (Some(x), Some(y)) if x.cmp_to(y) == Greater),
+            // largest right, or equal to it with one of the two left out.
+            CmpOp::Le => matches!((la, rb), (Some(x), Some(y)) if x.cmp_to(y) == Greater || (x.cmp_to(y) == Equal && (lo_l || hi_r))),
             CmpOp::Lt => matches!((la, rb), (Some(x), Some(y)) if x.cmp_to(y) != Less),
-            CmpOp::Ge => matches!((lb, ra), (Some(x), Some(y)) if x.cmp_to(y) == Less),
+            CmpOp::Ge => matches!((lb, ra), (Some(x), Some(y)) if x.cmp_to(y) == Less || (x.cmp_to(y) == Equal && (hi_l || lo_r))),
             CmpOp::Gt => matches!((lb, ra), (Some(x), Some(y)) if x.cmp_to(y) != Greater),
         }
     }
 
+    /// The two ends a name can reach inside this box, each with whether it is left out: an
+    /// interval coordinate leaves out both of its ends, a single value and a declared range
+    /// neither.
+    #[allow(clippy::type_complexity)]
+    fn ends_of_name(&self, name: &str, path: &[usize]) -> Option<((Option<Rat>, bool), (Option<Rat>, bool))> {
+        if let Some(ai) = self.col_names.iter().position(|n| n == name) {
+            if let (Some(&ci), Axis::Num { coords, .. }) = (path.get(ai), &self.axes[ai]) {
+                match coords.get(ci) {
+                    Some(Coord::Point(v)) => return Some(((Some(*v), false), (Some(*v), false))),
+                    Some(Coord::Open(a, b)) => return Some(((*a, true), (*b, true))),
+                    None => {}
+                }
+            }
+        }
+        self.spans.get(name).map(|(a, b)| ((*a, false), (*b, false)))
+    }
+
+    /// The sieve of §6.2. For each derived axis, check whether the reachable interval and the
+    /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
+    /// more constrained derived values share an input, their dependency cannot be examined.
     pub fn feasible(&self, path: &[usize]) -> Feasible {
         for k in &self.constraints {
             if self.constraint_impossible(k, path) {

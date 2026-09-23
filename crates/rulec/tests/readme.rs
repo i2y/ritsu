@@ -119,7 +119,7 @@ fn readmeが言う件数は実物と合っている() {
     // copied from. The rest are sketches and examples — some modelled on a real rule but not
     // copied from one — written to reach the words a transcription never does, so the
     // sentence counts them apart rather than calling them something they are not (§15.138).
-    const WRITTEN: usize = 26;
+    const WRITTEN: usize = 27;
     let want = format!(
         "{corpus} rules — {} transcribed from a published source, {WRITTEN} written to reach the rest of the language — are checked, generated and run on every commit, and all {codes} diagnostics are implemented.",
         corpus - WRITTEN

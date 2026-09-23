@@ -97,6 +97,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_w122.rule", &[("W122", 1)], "契約を宣言したまま、どの入力も射影していない"),
         ("m_e122.rule", &[("E122", 1)], "契約は 50 件まで通すのに、入力は 40 件までしか受け付けない"),
         ("m_w123.rule", &[("W123", 1)], "契約が 50 件までしか通さないのに、60 件を超える行を書いた"),
+        ("m_e123.rule", &[("E123", 1)], "契約は申告額が補償額と等しい要求を通すのに、制約を `<` にした"),
+        ("m_w124.rule", &[("W124", 1)], "契約が 5kg を超える速達を通さないのに、その行を書いた"),
         ("m_w114.rule", &[("W114", 1)], "境界が導出の取れる値のあいだに落ちている（整数であることまでは見ていない）"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
@@ -633,4 +635,23 @@ fn 変異はコーパスから作り直せる() {
         );
     }
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// The contracts beside the mutants are copies of the corpus's, so that a mutant reaches its
+/// contract by the relative path the corpus rule it was cut from uses. A copy that drifted
+/// would hold a mutant to a contract its rule never saw.
+#[test]
+fn 変異の隣の契約はコーパスの写しと同じ() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut compared = 0;
+    for e in std::fs::read_dir(root.join("tests/mutants/contracts")).unwrap().flatten() {
+        let corpus = root.join("tests/corpus/contracts").join(e.file_name());
+        if !corpus.exists() {
+            continue;
+        }
+        let (a, b) = (std::fs::read_to_string(e.path()).unwrap(), std::fs::read_to_string(&corpus).unwrap());
+        assert!(a == b, "{} がコーパスの写しと違う", e.path().display());
+        compared += 1;
+    }
+    assert!(compared >= 2, "比べた契約が {compared} 本しかない");
 }

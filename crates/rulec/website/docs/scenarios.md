@@ -627,6 +627,8 @@ Every `rulec check` reads the contract's file and holds it to the rule. What it 
 | a value that came through the contract has no row and no `default` | E033 |
 | a value the contract lets through is one the rule's input refuses | E122 |
 | a row is reached only by values the contract never lets through | W123 |
+| a `constraint` between two inputs is one the contract does not keep | E123 |
+| a row is reached only by a combination the contract never lets through | W124 |
 
 The one met most is E122. A contract that puts no cap on an order's lines, for example:
 

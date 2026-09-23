@@ -22,10 +22,14 @@
 //! contract never lets through is named (W123).
 
 use crate::ast::{Cell, CmpOp, EnumSource, Item, Lit, ProjKind, Projection, RuleFile, ShapeDecl, VarDecl};
+use crate::cel::Kind;
 use crate::diag::{Diag, FixKind, WVal};
+use crate::fourier;
 use crate::json::Json;
 use crate::num::Rat;
+use crate::relation::{Atom, Extra, Formula, Lin, Rel, Relation, Term};
 use crate::types::{Checked, Ty};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// What a contract says stands at a path.
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +98,8 @@ pub struct Contract {
     enums: Vec<crate::proto::Enum>,
     /// Where the root stands: a pointer into the schema, or a message name.
     at: String,
+    /// For a schema: whether the keywords beside a `$ref` apply too (§15.140).
+    siblings: bool,
 }
 
 /// Read the contract a `shape` names, or say why it cannot be read.
@@ -101,7 +107,8 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
     match d.source {
         EnumSource::JsonSchema => {
             let doc = crate::jsonschema::read(text, &d.file)?;
-            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone() })
+            let siblings = siblings_apply(&doc);
+            Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone(), siblings })
         }
         EnumSource::Proto => {
             let msgs = crate::proto::messages(text);
@@ -116,7 +123,7 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
                     )
                 });
             }
-            Ok(Contract { kind: d.source, doc: None, msgs, enums: crate::proto::enums(text), at: d.at.clone() })
+            Ok(Contract { kind: d.source, doc: None, msgs, enums: crate::proto::enums(text), at: d.at.clone(), siblings: false })
         }
     }
 }
@@ -137,22 +144,18 @@ impl Contract {
 
     fn schema_at(&self, path: &[String]) -> Result<At, Stuck> {
         let doc = self.doc.as_ref().expect("a schema contract carries its document");
-        let mut node = deref(doc, at_pointer(doc, &self.at).ok_or_else(|| Stuck { reached: self.at.clone(), had: keys(doc) })?);
+        let mut node = at_pointer(doc, &self.at).ok_or_else(|| Stuck { reached: self.at.clone(), had: keys(doc) })?;
         let mut reached = String::new();
         for step in path {
-            let props = node.and_then(|n| obj(n, "properties"));
-            let next = props.and_then(|p| get(p, step));
-            match next {
+            match self.property(node, step) {
                 Some(v) => {
-                    node = deref(doc, v);
+                    node = v;
                     reached = if reached.is_empty() { step.clone() } else { format!("{reached}.{step}") };
                 }
-                None => {
-                    return Err(Stuck { reached, had: props.map(keys).unwrap_or_default() });
-                }
+                None => return Err(Stuck { reached, had: self.property_names(node) }),
             }
         }
-        node.map(|n| kind_of_schema(doc, n)).ok_or(Stuck { reached, had: Vec::new() })
+        Ok(self.kind_at(node))
     }
 
     fn proto_at(&self, path: &[String]) -> Result<At, Stuck> {
@@ -228,43 +231,168 @@ fn at_pointer<'a>(doc: &'a Json, pointer: &str) -> Option<&'a Json> {
     Some(node)
 }
 
-/// Follow `$ref` as long as it points inside this document. A `$ref` that leaves the
-/// document is left as it is: nothing is fetched, and a path that runs into it gets stuck
-/// rather than being waved through.
-fn deref<'a>(doc: &'a Json, v: &'a Json) -> Option<&'a Json> {
-    let mut node = v;
-    for _ in 0..16 {
-        match get(node, "$ref") {
-            Some(Json::Str(p)) if p.starts_with('#') => node = at_pointer(doc, p)?,
-            _ => return Some(node),
-        }
-    }
-    None
+/// Whether the keywords beside a `$ref` apply as well as the ones it leads to (§15.140). They
+/// do from JSON Schema 2019-09 on, which OpenAPI 3.1 follows, and are ignored before that,
+/// which OpenAPI 3.0 and draft-07 are. A document that does not say is read the older way:
+/// ignoring keywords only reads the contract wider than it is.
+fn siblings_apply(doc: &Json) -> bool {
+    let schema = get(doc, "$schema").and_then(Json::as_str).unwrap_or("");
+    let openapi = get(doc, "openapi").and_then(Json::as_str).unwrap_or("");
+    schema.contains("2019-09") || schema.contains("2020-12") || openapi.starts_with("3.1")
 }
 
-fn kind_of_schema(doc: &Json, v: &Json) -> At {
-    let ty = match get(v, "type") {
-        Some(Json::Str(s)) => s.as_str(),
-        // A schema with no `type` but with `properties` is an object, and one with `enum`
-        // of strings travels as a string. Anything else is an object, which is the kind a
-        // path can go on through and the kind `fits` refuses for every scalar.
-        _ => {
-            if get(v, "enum").is_some() {
-                "string"
-            } else {
-                "object"
+/// How deep a walk through `$ref` and the combinators goes before it stops looking.
+const DEPTH: usize = 24;
+
+impl Contract {
+    /// The schema a `$ref` leads to, when it points inside this document.
+    fn target(&self, r: &Json) -> Option<&Json> {
+        match r {
+            Json::Str(p) if p.starts_with('#') => at_pointer(self.doc.as_ref()?, p),
+            _ => None,
+        }
+    }
+
+    /// Every schema that certainly applies to an instance of `v`: `v` itself, where its `$ref`
+    /// leads, and the branches of its `allOf`, as far as they go. In a document that ignores
+    /// the keywords beside a `$ref`, a schema with one is only where it leads.
+    fn applying<'a>(&'a self, v: &'a Json) -> Vec<&'a Json> {
+        let mut out: Vec<&Json> = Vec::new();
+        let mut stack = vec![v];
+        while let Some(x) = stack.pop() {
+            if out.len() > DEPTH || out.iter().any(|y| std::ptr::eq(*y, x)) {
+                continue;
+            }
+            if let Some(r) = get(x, "$ref") {
+                if let Some(t) = self.target(r) {
+                    stack.push(t);
+                }
+                if !self.siblings {
+                    continue;
+                }
+            }
+            out.push(x);
+            if let Some(Json::Arr(bs)) = get(x, "allOf") {
+                stack.extend(bs.iter().rev());
             }
         }
-    };
-    match ty {
-        "string" => At::Str,
-        "integer" => At::Int,
-        "number" => At::Frac,
-        "boolean" => At::Bool,
-        "array" => At::Array(Box::new(
-            get(v, "items").and_then(|i| deref(doc, i)).map(|i| kind_of_schema(doc, i)).unwrap_or(At::Object(Vec::new())),
-        )),
-        _ => At::Object(obj(v, "properties").map(keys).unwrap_or_default()),
+        out
+    }
+
+    /// The schema of the property `name` of an instance of `v`. Looked for where it certainly
+    /// applies first, then in the branches of `anyOf`, `oneOf` and `if`: a property only one
+    /// branch describes is still one an instance can have, and a path to it is no mistake.
+    fn property<'a>(&'a self, v: &'a Json, name: &str) -> Option<&'a Json> {
+        self.property_in(v, name, 0)
+    }
+
+    fn property_in<'a>(&'a self, v: &'a Json, name: &str, depth: usize) -> Option<&'a Json> {
+        if depth > DEPTH {
+            return None;
+        }
+        let all = self.applying(v);
+        if let Some(p) = all.iter().find_map(|x| obj(x, "properties").and_then(|ps| get(ps, name))) {
+            return Some(p);
+        }
+        all.iter().find_map(|x| self.branches(x).into_iter().find_map(|b| self.property_in(b, name, depth + 1)))
+    }
+
+    /// The branches an instance of `x` may take one of.
+    fn branches<'a>(&'a self, x: &'a Json) -> Vec<&'a Json> {
+        let mut out = Vec::new();
+        for k in ["anyOf", "oneOf"] {
+            if let Some(Json::Arr(bs)) = get(x, k) {
+                out.extend(bs.iter());
+            }
+        }
+        for k in ["then", "else"] {
+            out.extend(get(x, k));
+        }
+        out
+    }
+
+    /// The names of the properties an instance of `v` can have, found the same way.
+    fn property_names(&self, v: &Json) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut stack = vec![(v, 0usize)];
+        while let Some((x, depth)) = stack.pop() {
+            if depth > DEPTH {
+                continue;
+            }
+            for a in self.applying(x) {
+                for k in obj(a, "properties").map(keys).unwrap_or_default() {
+                    if !out.contains(&k) {
+                        out.push(k);
+                    }
+                }
+                stack.extend(self.branches(a).into_iter().map(|b| (b, depth + 1)));
+            }
+        }
+        out
+    }
+
+    /// The properties an instance of `v` certainly has: `required` wherever it certainly
+    /// applies.
+    fn required(&self, v: &Json) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for a in self.applying(v) {
+            for r in required_of(a) {
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+            }
+        }
+        out
+    }
+
+    /// The type an instance of `v` has, as far as the schema says, and whether it may be null
+    /// as well: `"type": ["integer", "null"]`, or OpenAPI 3.0's `nullable`.
+    fn schema_type(&self, v: &Json) -> (Option<String>, bool) {
+        let all = self.applying(v);
+        let nullable = all.iter().any(|x| matches!(get(x, "nullable"), Some(Json::Bool(true))));
+        for x in &all {
+            match get(x, "type") {
+                Some(Json::Str(t)) => return (Some(t.clone()), nullable || t == "null"),
+                Some(Json::Arr(ts)) => {
+                    let names: Vec<&str> = ts.iter().filter_map(Json::as_str).collect();
+                    let some: Vec<&str> = names.iter().copied().filter(|t| *t != "null").collect();
+                    let null = names.len() != some.len();
+                    return match some.as_slice() {
+                        [] => (Some("null".into()), true),
+                        [one] => (Some(one.to_string()), nullable || null),
+                        many => (Some(many.join("|")), nullable || null),
+                    };
+                }
+                _ => {}
+            }
+        }
+        // No `type`: an `enum` of strings travels as a string, and anything else is read as an
+        // object, the kind a path can go on through and the kind `fits` refuses for a scalar.
+        if all.iter().any(|x| get(x, "enum").is_some()) {
+            return (Some("string".into()), nullable);
+        }
+        (None, nullable)
+    }
+
+    /// What stands where `v` describes, in the words a path compares.
+    fn kind_at(&self, v: &Json) -> At {
+        match self.schema_type(v).0.as_deref() {
+            Some("string") => At::Str,
+            Some("integer") => At::Int,
+            Some("number") => At::Frac,
+            Some("boolean") => At::Bool,
+            Some("array") => At::Array(Box::new(match self.applying(v).into_iter().find_map(|x| get(x, "items")) {
+                Some(i) => self.kind_at(i),
+                None => At::Object(Vec::new()),
+            })),
+            Some("object") | None => At::Object(self.property_names(v)),
+            Some(other) => At::Other(other.to_string()),
+        }
+    }
+
+    /// The items of the collection `v` describes.
+    fn items<'a>(&'a self, v: &'a Json) -> Option<&'a Json> {
+        self.applying(v).into_iter().find_map(|x| get(x, "items"))
     }
 }
 
@@ -305,6 +433,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         }
     }
     let mut doms = Vec::new();
+    // What each contract says across the fields the rule reads from it (§15.140).
+    let across: Vec<(String, Across)> = read_ok.iter().map(|(d, con)| (d.name.text.clone(), con.across(f, c, &d.name.text))).collect();
     for i in &f.inputs {
         let Some(pr) = &i.from else { continue };
         let ty = c.ty_of(&i.name.text).unwrap_or(Ty::Unknown);
@@ -323,7 +453,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         // What the contract lets through is only asked of a path that reached a value of the
         // input's kind: past an E120 or an E121 there is nothing to compare.
         if fits && resolved.is_empty() {
-            let (found, dom) = holds(f, con, pr, i, c, rule_path);
+            let ac = across.iter().find(|(n, _)| *n == pr.root.text).map(|(_, a)| a);
+            let (found, dom) = holds(f, con, pr, i, c, rule_path, ac);
             out.extend(found);
             if let Some(d) = dom {
                 doms.push((i.name.text.clone(), d, pr));
@@ -331,7 +462,13 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         }
         out.extend(resolved);
     }
-    out.extend(dead_rows(f, c, &doms, rule_path));
+    let w123 = dead_rows(f, c, &doms, rule_path);
+    let dead: BTreeSet<(String, usize)> = w123.iter().filter_map(|d| Some((d.table.clone()?, d.row?))).collect();
+    out.extend(w123);
+    for ((d, con), (_, ac)) in read_ok.iter().zip(&across) {
+        out.extend(broken_constraints(f, c, con, ac, rule_path));
+        out.extend(unreachable_rows(f, c, ac, &d.name.text, &dead, rule_path));
+    }
     for d in &f.shapes {
         if f.inputs.iter().any(|i| i.from.as_ref().is_some_and(|p| p.root.text == d.name.text)) {
             continue;
@@ -521,13 +658,12 @@ impl Contract {
         match self.kind {
             EnumSource::JsonSchema => {
                 let doc = self.doc.as_ref()?;
-                let mut node = deref(doc, at_pointer(doc, &self.at)?)?;
+                let mut node = at_pointer(doc, &self.at)?;
                 for s in steps {
-                    node = deref(doc, get(obj(node, "properties")?, s)?)?;
+                    node = self.property(node, s)?;
                 }
-                let items = deref(doc, get(node, "items")?)?;
-                let f = deref(doc, get(obj(items, "properties")?, field)?)?;
-                Some(kind_of_schema(doc, f))
+                let f = self.property(self.items(node)?, field)?;
+                Some(self.kind_at(f))
             }
             EnumSource::Proto => {
                 let mut msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at))?;
@@ -693,10 +829,10 @@ impl Contract {
     /// The schema at the root and at each step of a path, `$ref` followed.
     fn schema_chain(&self, path: &[String]) -> Option<Vec<&Json>> {
         let doc = self.doc.as_ref()?;
-        let mut node = deref(doc, at_pointer(doc, &self.at)?)?;
+        let mut node = at_pointer(doc, &self.at)?;
         let mut out = vec![node];
         for s in path {
-            node = deref(doc, get(obj(node, "properties")?, s)?)?;
+            node = self.property(node, s)?;
             out.push(node);
         }
         Some(out)
@@ -797,13 +933,47 @@ fn schema_strs(n: &Json) -> Option<Vec<String>> {
     list
 }
 
-/// The keywords of a schema that narrow a value in a way this does not read.
+/// The keywords of a schema that narrow a value in a way this does not read. The combinators
+/// are read, as the condition across the fields (§15.140).
 fn schema_unread(n: &Json, strings: bool) -> Vec<String> {
-    let mut ks: Vec<&str> = vec!["allOf", "anyOf", "oneOf", "not", "if", "multipleOf"];
+    let mut ks: Vec<&str> = vec!["multipleOf"];
     if strings {
         ks.extend(["pattern", "format", "minLength", "maxLength"]);
     }
     ks.into_iter().filter(|k| get(n, k).is_some()).map(String::from).collect()
+}
+
+impl Contract {
+    /// `schema_ints` over every schema that certainly applies.
+    fn ints_at(&self, n: &Json) -> Ints {
+        self.applying(n).into_iter().fold(Ints::between(None, None), |s, x| s.intersect(&schema_ints(x)))
+    }
+
+    /// `schema_strs` over every schema that certainly applies.
+    fn strs_at(&self, n: &Json) -> Option<Vec<String>> {
+        self.applying(n).into_iter().fold(None, |acc: Option<Vec<String>>, x| match (acc, schema_strs(x)) {
+            (Some(a), Some(b)) => Some(a.into_iter().filter(|v| b.contains(v)).collect()),
+            (a, b) => a.or(b),
+        })
+    }
+
+    /// `schema_count` over every schema that certainly applies.
+    fn count_at(&self, n: &Json, filtered: bool) -> Ints {
+        self.applying(n).into_iter().fold(Ints::between(Some(0), None), |s, x| s.intersect(&schema_count(x, filtered)))
+    }
+
+    /// `schema_unread` over every schema that certainly applies.
+    fn unread_at(&self, n: &Json, strings: bool) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for x in self.applying(n) {
+            for k in schema_unread(x, strings) {
+                if !out.contains(&k) {
+                    out.push(k);
+                }
+            }
+        }
+        out
+    }
 }
 
 fn schema_count(n: &Json, filtered: bool) -> Ints {
@@ -849,7 +1019,9 @@ fn proto_ints(fd: &crate::proto::Field) -> Option<Ints> {
     for x in &i.not_in {
         s = s.without(*x);
     }
-    if r.required {
+    // `required` rules 0 out only where the field has no presence of its own; on an `optional`
+    // field it asks that the field be set, and a set 0 passes it (§15.140).
+    if r.required && !fd.optional {
         s = s.without(0);
     }
     if !fd.optional && ignores_zero(r) {
@@ -939,7 +1111,7 @@ fn unread_note(unread: &[String]) -> Option<String> {
 /// E122: what the contract lets through where an input is read, held against what the input
 /// takes. Returns the findings, and what passes when the contract names it — the set W123
 /// holds the rows to.
-fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str) -> (Vec<Diag>, Option<Dom>) {
+fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str, ac: Option<&Across>) -> (Vec<Diag>, Option<Dom>) {
     let mut out = Vec::new();
     let name = input.name.text.as_str();
     let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
@@ -958,10 +1130,10 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
     // Whether the value is there at all. JSON Schema says with `required` which fields an
     // object may leave out; the function that reads the inputs out indexes straight into the
     // object, so one it leaves out fails there. An optional input reads it as none.
-    if let (Some(chain), Some(doc)) = (&chain, con.doc.as_ref()) {
+    if let (Some(chain), Some(_)) = (&chain, con.doc.as_ref()) {
         if !(matches!(pr.kind, ProjKind::Field) && optional) {
             for (i, step) in steps.iter().enumerate() {
-                let req = required_of(chain[i]);
+                let req = con.required(chain[i]);
                 if req.iter().any(|r| r == step) {
                     continue;
                 }
@@ -994,8 +1166,8 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
             }
             // A `where` reads one field of every element.
             if let Some((field, _)) = pr.kind.test() {
-                if let Some(items) = chain.last().and_then(|n| get(n, "items")).and_then(|i| deref(doc, i)) {
-                    let req = required_of(items);
+                if let Some(items) = chain.last().and_then(|n| con.items(n)) {
+                    let req = con.required(items);
                     if !req.iter().any(|r| *r == field.text) {
                         let mut want = req.clone();
                         want.push(field.text.clone());
@@ -1027,6 +1199,13 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
     let leaf_schema = chain.as_ref().and_then(|ch| ch.last().copied());
     let leaf_proto = fields.as_ref().and_then(|fs| fs.last().copied());
     let mut dom = None;
+    // A value the schema lets be null is one the function that reads it out cannot take,
+    // unless the input may be missing (§15.140).
+    if let (Some(n), ProjKind::Field, false) = (leaf_schema, &pr.kind, optional) {
+        if con.schema_type(n).1 {
+            out.push(null_passes(&at, pr, con, n, &full, &inner));
+        }
+    }
     match &pr.kind {
         ProjKind::Field => match &inner {
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate => {
@@ -1037,7 +1216,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 // rule's number is a whole number (§10.2), and a fraction there is already the
                 // mismatch E120 is about.
                 let seen = match (leaf_schema, leaf_proto, con.doc.as_ref()) {
-                    (Some(n), _, Some(doc)) if kind_of_schema(doc, n) == At::Int => Some((schema_ints(n), schema_unread(n, false), None)),
+                    (Some(n), _, Some(_)) if con.kind_at(n) == At::Int => Some((con.ints_at(n), con.unread_at(n, false), None)),
                     (_, Some(fd), _) => proto_ints(fd).map(|s| (s, fd.rules.unread.clone(), Some(fd.ty.rsplit('.').next().unwrap_or(&fd.ty).to_string()))),
                     _ => None,
                 };
@@ -1046,10 +1225,18 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 // message, nor an unset `optional` field (§15.133).
                 let unset = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true));
                 let refused = unset.filter(|_| !(rl <= 0 && 0 <= rh)).map(|(si, _)| defaulted(&at, pr, &steps, si, &full, "0", WVal::Int(0), name, &inner));
-                let Some((seen, unread, kind)) = seen else {
+                let Some((seen, mut unread, kind)) = seen else {
                     out.extend(refused);
                     return (out, dom);
                 };
+                // What the rules across the fields leave of it (§15.140).
+                let seen = match ac.and_then(|a| a.ints(name)) {
+                    Some(s) => seen.intersect(&s),
+                    None => seen,
+                };
+                if leaf_proto.is_some_and(|fd| con.cel_unread(fd, &steps)) {
+                    unread.push("cel".into());
+                }
                 let below = seen.intersect(&Ints::between(None, Some(rl - 1)));
                 let above = seen.intersect(&Ints::between(Some(rh + 1), None));
                 if !below.is_empty() || !above.is_empty() {
@@ -1080,11 +1267,28 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
             Ty::Enum(e) => {
                 let vals = c.enums.get(e).cloned().unwrap_or_default();
                 let seen = match (leaf_schema, leaf_proto) {
-                    (Some(n), _) => Some((schema_strs(n), schema_unread(n, true), false)),
+                    (Some(n), _) => Some((con.strs_at(n), con.unread_at(n, true), false)),
                     (_, Some(fd)) => Some((proto_strs(fd), fd.rules.unread.clone(), true)),
                     _ => None,
                 };
-                let Some((list, unread, proto)) = seen else { return (out, dom) };
+                let Some((list, mut unread, proto)) = seen else { return (out, dom) };
+                // What the rules across the fields leave of it (§15.140). The "" an unset
+                // message on the way reads as is said by its own finding below, not here.
+                let unset_ahead = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true)).is_some();
+                let across = ac.and_then(|a| a.strs(name)).map(|mut r| {
+                    if unset_ahead {
+                        r.retain(|x| !x.is_empty());
+                    }
+                    r
+                });
+                let list = match (list, across) {
+                    (Some(l), Some(r)) => Some(l.into_iter().filter(|x| r.contains(x)).collect()),
+                    (None, Some(r)) => Some(r),
+                    (l, None) => l,
+                };
+                if leaf_proto.is_some_and(|fd| con.cel_unread(fd, &steps)) {
+                    unread.push("cel".into());
+                }
                 let keep: Vec<String> = match &list {
                     Some(l) => l.iter().filter(|x| vals.contains(x)).cloned().collect(),
                     None => vals.clone(),
@@ -1173,11 +1377,18 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
             let (rl, rh) = (crate::types::wire_int(lo, 1), crate::types::wire_int(hi, 1));
             let filtered = t.is_some();
             let seen = match (leaf_schema, leaf_proto) {
-                (Some(n), _) => Some((schema_count(n, filtered), schema_unread(n, false), false)),
+                (Some(n), _) => Some((con.count_at(n, filtered), con.unread_at(n, false), false)),
                 (_, Some(fd)) => Some((proto_count(fd, filtered), fd.rules.unread.clone(), true)),
                 _ => None,
             };
-            let Some((seen, unread, proto)) = seen else { return (out, dom) };
+            let Some((seen, mut unread, proto)) = seen else { return (out, dom) };
+            let seen = match ac.filter(|_| !filtered).and_then(|a| a.ints(name)) {
+                Some(s) => seen.intersect(&s),
+                None => seen,
+            };
+            if leaf_proto.is_some_and(|fd| con.cel_unread(fd, &steps)) {
+                unread.push("cel".into());
+            }
             let below = seen.intersect(&Ints::between(None, Some(rl - 1)));
             let above = seen.intersect(&Ints::between(Some(rh + 1), None));
             if !below.is_empty() || !above.is_empty() {
@@ -1327,6 +1538,37 @@ fn empty_date(at: &str, pr: &Projection, fd: &crate::proto::Field, full: &str, n
     })
 }
 
+/// E122 for null: the schema lets the value be null, and an input that is not optional does
+/// not take it (§15.140).
+fn null_passes(at: &str, pr: &Projection, con: &Contract, n: &Json, full: &str, inner: &Ty) -> Diag {
+    let ty = con.schema_type(n).0.unwrap_or_default();
+    let by_keyword = con.applying(n).iter().any(|x| matches!(get(x, "nullable"), Some(Json::Bool(true))));
+    let fix = if by_keyword { "\"nullable\": false".to_string() } else { format!("\"type\": \"{ty}\"") };
+    Diag::error("E122", tr!("契約は `{full}` に null を通しますが、規則はそれを断ります", "The contract lets `{full}` be null, which the rule refuses"))
+        .at(at.to_string())
+        .mark(
+            pr.span.clone(),
+            if by_keyword { tr!("`nullable` が付いています", "it is marked `nullable`") } else { tr!("型に \"null\" があります", "its type has \"null\" in it") },
+        )
+        .fix(FixKind::NarrowContract, fix.clone())
+        .note(tr!(
+            "生成した `…_from` の関数は、省略できない入力に null が来ると落ちます。",
+            "The generated `…_from` function fails when null comes for an input that is not optional."
+        ))
+        .note(tr!(
+            "ヒント: null が来ないはずなら、`{full}` を {fix} と書いてください。来るのなら、入力を `{inner}?` にしてください。null は none として読みます。",
+            "hint: if null cannot come, write {fix} on `{full}`. If it can, make the input `{inner}?`: null is then read as none."
+        ))
+}
+
+impl Contract {
+    /// Whether a CEL expression on the field at `path` has a part that could not be read.
+    fn cel_unread(&self, fd: &crate::proto::Field, path: &[String]) -> bool {
+        let kind = |p: &[String]| self.proto_kind(p);
+        fd.rules.cel.iter().any(|e| crate::cel::read_src(e, path, &kind).has_unknown())
+    }
+}
+
 fn refused_note() -> String {
     tr!(
         "契約の検証を通っても、この値では生成コードが入口で断ります。API なら要求が誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。",
@@ -1458,6 +1700,870 @@ fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, &Projection)], rul
                         )),
                 );
             }
+        }
+    }
+    out
+}
+
+// --- What the contract says across its fields (§15.140) ----------------------------------
+
+/// A contract's condition over the fields a rule reads, and the names its terms go by in the
+/// systems the rule's side is added to (§15.140).
+pub(crate) struct Across {
+    pub rel: Relation,
+    /// The term each input reads, by input name: an input that is not optional and that the
+    /// contract gives the kind the rule reads it as — a whole number, a string for an enum, a
+    /// boolean, or the number of elements of a collection.
+    terms: BTreeMap<String, Term>,
+    names: BTreeMap<Term, String>,
+    /// Whether some rule of the contract could not be read and was taken as true.
+    pub unread: bool,
+}
+
+impl Across {
+    /// The name a term goes by in a linear system: the input that reads it, or a name no input
+    /// can have.
+    fn name(&self, t: &Term) -> String {
+        self.names.get(t).cloned().unwrap_or_else(|| format!("\u{1}{}", t.word()))
+    }
+
+    fn term(&self, input: &str) -> Option<&Term> {
+        self.terms.get(input)
+    }
+
+    /// The whole values an input can take across the contract, when the condition narrows
+    /// them at all.
+    fn ints(&self, input: &str) -> Option<Ints> {
+        let t = self.term(input)?;
+        let spans = self.rel.span(t, &Extra::default(), &|t| self.name(t))?;
+        let mut out = Ints(Vec::new());
+        for (lo, hi, holes) in spans {
+            let mut s = Ints::between(lo, hi);
+            for h in holes {
+                s = s.without(h);
+            }
+            out = out.union(&s);
+        }
+        Some(out)
+    }
+
+    /// The strings an input can be across the contract, when every case lists them.
+    fn strs(&self, input: &str) -> Option<Vec<String>> {
+        self.rel.strings(self.term(input)?, &|t| self.name(t))
+    }
+}
+
+fn step(at: &[String], name: &str) -> Vec<String> {
+    let mut p = at.to_vec();
+    p.push(name.to_string());
+    p
+}
+
+/// A boolean schema: `true` lets everything through, `false` nothing. Anything else is not a
+/// schema this reads.
+fn schema_bool(v: &Json) -> Formula {
+    match v {
+        Json::Bool(true) => Formula::True,
+        Json::Bool(false) => Formula::False,
+        _ => Formula::unknown(),
+    }
+}
+
+/// Whether a `type` keyword lets a value of this JSON type through.
+fn type_allows(x: &Json, ty: &str) -> bool {
+    let ok = |t: &str| t == ty || (ty == "integer" && t == "number");
+    match x {
+        Json::Str(t) => ok(t),
+        Json::Arr(ts) => ts.iter().filter_map(Json::as_str).any(ok),
+        _ => true,
+    }
+}
+
+impl Contract {
+    /// The condition the contract of `shape` places on what the rule reads from it.
+    pub(crate) fn across(&self, f: &RuleFile, c: &Checked, shape: &str) -> Across {
+        let mut terms = BTreeMap::new();
+        let mut names = BTreeMap::new();
+        for i in &f.inputs {
+            let Some(pr) = &i.from else { continue };
+            if pr.root.text != shape {
+                continue;
+            }
+            let ty = c.ty_of(&i.name.text).unwrap_or(Ty::Unknown);
+            let path: Vec<String> = pr.path.iter().map(|n| n.text.clone()).collect();
+            let t = match (&pr.kind, &ty, self.kind_of(&path)) {
+                (ProjKind::Field, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate, Some(Kind::Int { .. })) => Term::Field(path),
+                (ProjKind::Field, Ty::Enum(_), Some(Kind::Str { .. })) => Term::Field(path),
+                (ProjKind::Field, Ty::Bool, Some(Kind::Bool { .. })) => Term::Field(path),
+                (ProjKind::Count(None), _, Some(Kind::List)) => Term::Size(path),
+                _ => continue,
+            };
+            if names.contains_key(&t) {
+                continue;
+            }
+            names.insert(t.clone(), i.name.text.clone());
+            terms.insert(i.name.text.clone(), t);
+        }
+        let reads: Vec<Term> = terms.values().cloned().collect();
+        let cond = match self.kind {
+            EnumSource::JsonSchema => self.schema_condition(&reads),
+            EnumSource::Proto => self.proto_condition(&reads),
+        };
+        Across { rel: Relation::of(&cond), terms, names, unread: cond.has_unknown() }
+    }
+
+    /// What a field is, for reading a condition about it.
+    fn kind_of(&self, path: &[String]) -> Option<Kind> {
+        match self.kind {
+            EnumSource::JsonSchema => self.schema_kind(path),
+            EnumSource::Proto => self.proto_kind(path),
+        }
+    }
+
+    fn root_message(&self) -> Option<&crate::proto::Message> {
+        self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &self.at))
+    }
+
+    fn proto_kind(&self, path: &[String]) -> Option<Kind> {
+        let mut msg = self.root_message()?;
+        for (i, s) in path.iter().enumerate() {
+            let fd = msg.fields.iter().find(|x| x.name == *s)?;
+            if i + 1 == path.len() {
+                return Some(self.field_kind(fd));
+            }
+            if fd.repeated {
+                return None;
+            }
+            msg = self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty))?;
+        }
+        Some(Kind::Msg)
+    }
+
+    fn field_kind(&self, fd: &crate::proto::Field) -> Kind {
+        if fd.repeated {
+            return Kind::List;
+        }
+        let presence = fd.optional;
+        match crate::proto::scalar(&fd.ty) {
+            Some(crate::proto::Scalar::Int) => Kind::Int { presence },
+            Some(crate::proto::Scalar::Str) => Kind::Str { presence },
+            Some(crate::proto::Scalar::Bool) => Kind::Bool { presence },
+            Some(crate::proto::Scalar::Frac) => Kind::Other,
+            // An enum is its number in CEL.
+            None if self.enum_of(&fd.ty).is_some() => Kind::Int { presence },
+            None if self.msgs.iter().any(|m| crate::proto::same_message(&m.name, &fd.ty)) => Kind::Msg,
+            None => Kind::Other,
+        }
+    }
+
+    fn proto_condition(&self, reads: &[Term]) -> Formula {
+        match self.root_message() {
+            Some(m) => self.proto_message(m, &[], reads, 0),
+            None => Formula::True,
+        }
+    }
+
+    /// What validation asks of the message `m` at `at`: its own CEL, every field's rules, and
+    /// that at most one member of each `oneof` is set.
+    fn proto_message(&self, m: &crate::proto::Message, at: &[String], reads: &[Term], depth: usize) -> Formula {
+        let kind = |p: &[String]| self.proto_kind(p);
+        let mut parts: Vec<Formula> = m.rules.cel.iter().map(|e| crate::cel::read_src(e, at, &kind)).collect();
+        for fd in &m.fields {
+            parts.push(self.proto_field(fd, &step(at, &fd.name), reads, depth));
+        }
+        let mut seen = BTreeSet::new();
+        for x in &parts {
+            x.terms(&mut seen);
+        }
+        seen.extend(reads.iter().cloned());
+        for o in &m.rules.oneofs {
+            parts.push(self.one_set(m, at, o, &seen));
+        }
+        Formula::and(parts)
+    }
+
+    /// What validation asks of the field at `p`, and what the wire itself guarantees of it.
+    fn proto_field(&self, fd: &crate::proto::Field, p: &[String], reads: &[Term], depth: usize) -> Formula {
+        let kind = |q: &[String]| self.proto_kind(q);
+        let r = &fd.rules;
+        let skip = r.ignore.as_deref() == Some("IGNORE_ALWAYS");
+        let k = |n: i128| Lin::con(Rat::int(n));
+        let mut always = Vec::new();
+        let mut rules = Vec::new();
+        let zero = match self.field_kind(fd) {
+            Kind::List => {
+                let n = Lin::term(Term::Size(p.to_vec()));
+                always.push(Formula::cmp(&k(0), Rel::Le, &n));
+                if let Some(m) = r.min_items {
+                    rules.push(Formula::cmp(&k(m), Rel::Le, &n));
+                }
+                if let Some(m) = r.max_items {
+                    rules.push(Formula::cmp(&n, Rel::Le, &k(m)));
+                }
+                if r.required {
+                    rules.push(Formula::cmp(&k(1), Rel::Le, &n));
+                }
+                Formula::cmp(&n, Rel::Eq, &k(0))
+            }
+            Kind::Int { .. } => {
+                let v = Lin::term(Term::Field(p.to_vec()));
+                if let Some((lo, hi)) = crate::proto::int_bounds(&fd.ty) {
+                    always.push(Formula::cmp(&k(lo), Rel::Le, &v));
+                    always.push(Formula::cmp(&v, Rel::Le, &k(hi)));
+                }
+                let i = &r.int;
+                let lower = i.gt.map(|g| g + 1).or(i.gte).map(|a| Formula::cmp(&k(a), Rel::Le, &v));
+                let upper = i.lt.map(|l| l - 1).or(i.lte).map(|b| Formula::cmp(&v, Rel::Le, &k(b)));
+                // A lower bound above the upper one is the two ends of a range left out.
+                let reversed = matches!((i.gt.or(i.gte), i.lt.or(i.lte)), (Some(a), Some(b)) if a > b);
+                match (lower, upper) {
+                    (Some(l), Some(h)) if reversed => rules.push(Formula::or(vec![l, h])),
+                    (l, h) => rules.extend(l.into_iter().chain(h)),
+                }
+                if let Some(c) = i.konst {
+                    rules.push(Formula::cmp(&v, Rel::Eq, &k(c)));
+                }
+                if !i.in_.is_empty() {
+                    rules.push(Formula::or(i.in_.iter().map(|x| Formula::cmp(&v, Rel::Eq, &k(*x))).collect()));
+                }
+                rules.extend(i.not_in.iter().map(|x| Formula::cmp(&v, Rel::Ne, &k(*x))));
+                let zero = Formula::cmp(&v, Rel::Eq, &k(0));
+                if r.required && !fd.optional {
+                    rules.push(zero.not());
+                }
+                zero
+            }
+            Kind::Str { .. } => {
+                let t = Term::Field(p.to_vec());
+                let set = |vs: Vec<String>, yes: bool| Formula::atom(Atom::Str(t.clone(), vs, yes));
+                if let Some(c) = &r.str_const {
+                    rules.push(set(vec![c.clone()], true));
+                }
+                if !r.str_in.is_empty() {
+                    rules.push(set(r.str_in.clone(), true));
+                }
+                if !r.str_not_in.is_empty() {
+                    rules.push(set(r.str_not_in.clone(), false));
+                }
+                if r.str_min_len.is_some_and(|n| n >= 1) {
+                    rules.push(set(vec![String::new()], false));
+                }
+                let zero = set(vec![String::new()], true);
+                if r.required && !fd.optional {
+                    rules.push(zero.not());
+                }
+                zero
+            }
+            Kind::Bool { .. } => {
+                let zero = Formula::atom(Atom::Bool(Term::Field(p.to_vec()), false));
+                if r.required && !fd.optional {
+                    rules.push(zero.not());
+                }
+                zero
+            }
+            Kind::Msg => {
+                if skip {
+                    return Formula::True;
+                }
+                // A message on the way to something read: what it asks of itself, when set.
+                let mut inner: Vec<Formula> = r.cel.iter().map(|e| crate::cel::read_src(e, p, &kind)).collect();
+                let on_path = reads.iter().any(|x| x.path().len() > p.len() && x.under(p));
+                if let (true, Some(m)) = (on_path && depth < DEPTH, self.msgs.iter().find(|m| crate::proto::same_message(&m.name, &fd.ty))) {
+                    inner.push(self.proto_message(m, p, reads, depth + 1));
+                }
+                let inner = Formula::and(inner);
+                if r.required {
+                    return inner;
+                }
+                // Unset, nothing under it is validated and every field there reads as its
+                // default.
+                let mut under = BTreeSet::new();
+                inner.terms(&mut under);
+                under.extend(reads.iter().cloned());
+                return Formula::or(vec![inner, self.defaults(&under, p)]);
+            }
+            Kind::Other => Formula::True,
+        };
+        rules.extend(r.cel.iter().map(|e| crate::cel::read_src(e, p, &kind)));
+        if skip {
+            return Formula::and(always);
+        }
+        let rules = Formula::and(rules);
+        // Where validation may skip the rules, the default gets through whatever they say.
+        let gated = if (fd.optional && !r.required) || (!fd.optional && ignores_zero(r)) { Formula::or(vec![rules, zero]) } else { rules };
+        Formula::and(vec![Formula::and(always), gated])
+    }
+
+    /// That every term under `p` holds its default, which is what an unset message reads as.
+    fn defaults(&self, terms: &BTreeSet<Term>, p: &[String]) -> Formula {
+        let zero = Lin::con(Rat::int(0));
+        Formula::and(
+            terms
+                .iter()
+                .filter(|t| t.path().len() > p.len() && t.under(p))
+                .filter_map(|t| match t {
+                    Term::Size(_) => Some(Formula::cmp(&Lin::term(t.clone()), Rel::Eq, &zero)),
+                    Term::Field(q) => match self.proto_kind(q)? {
+                        Kind::Int { .. } => Some(Formula::cmp(&Lin::term(t.clone()), Rel::Eq, &zero)),
+                        Kind::Str { .. } => Some(Formula::atom(Atom::Str(t.clone(), vec![String::new()], true))),
+                        Kind::Bool { .. } => Some(Formula::atom(Atom::Bool(t.clone(), false))),
+                        _ => None,
+                    },
+                })
+                .collect(),
+        )
+    }
+
+    /// That at most one of a group of fields is set, said of their values: all but one of them
+    /// hold their defaults. With `required`, and fields that have no presence of their own,
+    /// one of them also holds something else; a field that does have presence may be set to
+    /// its default, and then nothing more is said.
+    fn one_set(&self, m: &crate::proto::Message, at: &[String], o: &crate::proto::Oneof, seen: &BTreeSet<Term>) -> Formula {
+        let zero = Lin::con(Rat::int(0));
+        let mut unset = Vec::new();
+        let mut bare = true;
+        for name in &o.fields {
+            let Some(fd) = m.fields.iter().find(|x| x.name == *name) else { return Formula::True };
+            let p = step(at, name);
+            let kind = self.field_kind(fd);
+            unset.push(match kind {
+                Kind::Int { .. } => Formula::cmp(&Lin::term(Term::Field(p)), Rel::Eq, &zero),
+                Kind::Str { .. } => Formula::atom(Atom::Str(Term::Field(p), vec![String::new()], true)),
+                Kind::Bool { .. } => Formula::atom(Atom::Bool(Term::Field(p), false)),
+                Kind::List => Formula::cmp(&Lin::term(Term::Size(p)), Rel::Eq, &zero),
+                Kind::Msg => self.defaults(seen, &p),
+                Kind::Other => Formula::True,
+            });
+            bare &= !fd.optional && !matches!(kind, Kind::Msg | Kind::Other);
+        }
+        if unset.len() < 2 {
+            return Formula::True;
+        }
+        let mut parts = vec![Formula::or(
+            (0..unset.len())
+                .map(|i| Formula::and(unset.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, f)| f.clone()).collect()))
+                .collect(),
+        )];
+        if o.required && bare {
+            parts.push(Formula::or(unset.iter().map(Formula::not).collect()));
+        }
+        Formula::and(parts)
+    }
+
+    fn schema_root(&self) -> Option<&Json> {
+        at_pointer(self.doc.as_ref()?, &self.at)
+    }
+
+    fn schema_node(&self, path: &[String]) -> Option<&Json> {
+        let mut node = self.schema_root()?;
+        for s in path {
+            node = self.property(node, s)?;
+        }
+        Some(node)
+    }
+
+    /// Whether every instance has a value at `path`: each step `required` where it certainly
+    /// applies. A keyword about a property that may be absent says nothing for certain — it
+    /// holds of an absent one whatever it says — so only these are read as conditions.
+    fn present(&self, path: &[String]) -> bool {
+        let Some(mut node) = self.schema_root() else { return false };
+        for s in path {
+            if !self.required(node).contains(s) {
+                return false;
+            }
+            match self.property(node, s) {
+                Some(n) => node = n,
+                None => return false,
+            }
+        }
+        true
+    }
+
+    fn schema_kind(&self, path: &[String]) -> Option<Kind> {
+        let node = self.schema_node(path)?;
+        let (ty, nullable) = self.schema_type(node);
+        if nullable {
+            return None;
+        }
+        Some(match ty.as_deref() {
+            Some("integer") => Kind::Int { presence: false },
+            Some("string") => Kind::Str { presence: false },
+            Some("boolean") => Kind::Bool { presence: false },
+            Some("array") => Kind::List,
+            Some("object") => Kind::Msg,
+            None if path.is_empty() || !self.property_names(node).is_empty() => Kind::Msg,
+            _ => return None,
+        })
+    }
+
+    fn schema_condition(&self, reads: &[Term]) -> Formula {
+        match self.schema_root() {
+            Some(root) => self.schema_object(root, &[], reads, 0),
+            None => Formula::True,
+        }
+    }
+
+    /// What the schema `v` asks of the object at `at`: the root, or an object on the way to
+    /// something the rule reads.
+    fn schema_object(&self, v: &Json, at: &[String], reads: &[Term], depth: usize) -> Formula {
+        if depth > DEPTH {
+            return Formula::unknown();
+        }
+        let Json::Obj(kv) = v else { return schema_bool(v) };
+        let mut parts = Vec::new();
+        if let Some(r) = kv.get("$ref") {
+            let to = self.target(r).map_or_else(Formula::unknown, |t| self.schema_object(t, at, reads, depth + 1));
+            if !self.siblings {
+                return to;
+            }
+            parts.push(to);
+        }
+        let each = |xs: &Json| -> Vec<Formula> {
+            match xs {
+                Json::Arr(bs) => bs.iter().map(|b| self.schema_object(b, at, reads, depth + 1)).collect(),
+                _ => vec![Formula::unknown()],
+            }
+        };
+        for (key, x) in kv {
+            parts.push(match key.as_str() {
+                "properties" => {
+                    let Json::Obj(ps) = x else { continue };
+                    Formula::and(
+                        ps.iter()
+                            .map(|(name, sub)| {
+                                let q = step(at, name);
+                                if !self.present(&q) {
+                                    return Formula::unknown();
+                                }
+                                match self.schema_kind(&q) {
+                                    Some(Kind::Msg) if reads.iter().any(|t| t.path().len() > q.len() && t.under(&q)) => {
+                                        self.schema_object(sub, &q, reads, depth + 1)
+                                    }
+                                    Some(Kind::Msg | Kind::Other) | None => Formula::unknown(),
+                                    Some(k) => self.schema_value(sub, &q, k, depth + 1),
+                                }
+                            })
+                            .collect(),
+                    )
+                }
+                "required" => {
+                    let Json::Arr(ns) = x else { continue };
+                    Formula::and(
+                        ns.iter()
+                            .filter_map(Json::as_str)
+                            .map(|n| if self.present(&step(at, n)) { Formula::True } else { Formula::unknown() })
+                            .collect(),
+                    )
+                }
+                "allOf" => Formula::and(each(x)),
+                "anyOf" | "oneOf" => Formula::or(each(x)),
+                "not" => self.schema_object(x, at, reads, depth + 1).not(),
+                "if" => {
+                    let c = self.schema_object(x, at, reads, depth + 1);
+                    let then = kv.get("then").map_or(Formula::True, |y| self.schema_object(y, at, reads, depth + 1));
+                    let other = kv.get("else").map_or(Formula::True, |y| self.schema_object(y, at, reads, depth + 1));
+                    Formula::or(vec![Formula::and(vec![c.clone(), then]), Formula::and(vec![c.not(), other])])
+                }
+                "type" => {
+                    if type_allows(x, "object") {
+                        Formula::True
+                    } else {
+                        Formula::False
+                    }
+                }
+                "minProperties" | "maxProperties" | "dependentRequired" | "dependentSchemas" | "dependencies" | "additionalProperties"
+                | "patternProperties" | "propertyNames" | "unevaluatedProperties" | "const" | "enum" => Formula::unknown(),
+                // `then` and `else` go with `if`; the rest are annotations, or keywords about
+                // values of another type.
+                _ => continue,
+            });
+        }
+        Formula::and(parts)
+    }
+
+    /// What the schema `v` asks of the value at `q`, which every instance has and which is of
+    /// `kind`. A keyword about another type holds of it whatever it says.
+    fn schema_value(&self, v: &Json, q: &[String], kind: Kind, depth: usize) -> Formula {
+        if depth > DEPTH {
+            return Formula::unknown();
+        }
+        let Json::Obj(kv) = v else { return schema_bool(v) };
+        let t = Term::Field(q.to_vec());
+        let val = Lin::term(t.clone());
+        let n = Lin::term(Term::Size(q.to_vec()));
+        let con = |r: Rat| Lin::con(r);
+        let flag = |k: &str| matches!(kv.get(k), Some(Json::Bool(true)));
+        let mut parts = Vec::new();
+        if let Some(r) = kv.get("$ref") {
+            let to = self.target(r).map_or_else(Formula::unknown, |x| self.schema_value(x, q, kind, depth + 1));
+            if !self.siblings {
+                return to;
+            }
+            parts.push(to);
+        }
+        let each = |xs: &Json| -> Vec<Formula> {
+            match xs {
+                Json::Arr(bs) => bs.iter().map(|b| self.schema_value(b, q, kind, depth + 1)).collect(),
+                _ => vec![Formula::unknown()],
+            }
+        };
+        let word = match kind {
+            Kind::Int { .. } => "integer",
+            Kind::Str { .. } => "string",
+            Kind::Bool { .. } => "boolean",
+            Kind::List => "array",
+            Kind::Msg | Kind::Other => "object",
+        };
+        for (key, x) in kv {
+            parts.push(match (key.as_str(), kind) {
+                ("allOf", _) => Formula::and(each(x)),
+                ("anyOf" | "oneOf", _) => Formula::or(each(x)),
+                ("not", _) => self.schema_value(x, q, kind, depth + 1).not(),
+                ("if", _) => {
+                    let c = self.schema_value(x, q, kind, depth + 1);
+                    let then = kv.get("then").map_or(Formula::True, |y| self.schema_value(y, q, kind, depth + 1));
+                    let other = kv.get("else").map_or(Formula::True, |y| self.schema_value(y, q, kind, depth + 1));
+                    Formula::or(vec![Formula::and(vec![c.clone(), then]), Formula::and(vec![c.not(), other])])
+                }
+                ("type", _) => {
+                    if type_allows(x, word) {
+                        Formula::True
+                    } else {
+                        Formula::False
+                    }
+                }
+                ("minimum", Kind::Int { .. }) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&con(m), if flag("exclusiveMinimum") { Rel::Lt } else { Rel::Le }, &val),
+                    None => Formula::unknown(),
+                },
+                ("maximum", Kind::Int { .. }) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&val, if flag("exclusiveMaximum") { Rel::Lt } else { Rel::Le }, &con(m)),
+                    None => Formula::unknown(),
+                },
+                // The number form of 2019-09 on; the flag of draft-04 went with the bound above.
+                ("exclusiveMinimum", Kind::Int { .. }) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&con(m), Rel::Lt, &val),
+                    None => continue,
+                },
+                ("exclusiveMaximum", Kind::Int { .. }) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&val, Rel::Lt, &con(m)),
+                    None => continue,
+                },
+                ("const", Kind::Int { .. }) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&val, Rel::Eq, &con(m)),
+                    None => Formula::False,
+                },
+                ("enum", Kind::Int { .. }) => match x {
+                    Json::Arr(vs) => {
+                        Formula::or(vs.iter().filter_map(rat_of).filter(|m| m.is_int()).map(|m| Formula::cmp(&val, Rel::Eq, &con(m))).collect())
+                    }
+                    _ => Formula::unknown(),
+                },
+                ("multipleOf", Kind::Int { .. }) => Formula::unknown(),
+                ("const", Kind::Str { .. }) => match x {
+                    Json::Str(s) => Formula::atom(Atom::Str(t.clone(), vec![s.clone()], true)),
+                    _ => Formula::False,
+                },
+                ("enum", Kind::Str { .. }) => match x {
+                    Json::Arr(vs) => Formula::atom(Atom::Str(t.clone(), vs.iter().filter_map(Json::as_str).map(String::from).collect(), true)),
+                    _ => Formula::unknown(),
+                },
+                ("minLength", Kind::Str { .. }) => match rat_of(x) {
+                    Some(m) if m.cmp_to(Rat::int(1)).is_ge() => {
+                        let some = Formula::atom(Atom::Str(t.clone(), vec![String::new()], false));
+                        if m.cmp_to(Rat::int(1)).is_gt() { Formula::and(vec![some, Formula::unknown()]) } else { some }
+                    }
+                    _ => continue,
+                },
+                ("maxLength" | "pattern" | "format" | "contentEncoding" | "contentMediaType" | "contentSchema", Kind::Str { .. }) => Formula::unknown(),
+                ("const", Kind::Bool { .. }) => match x {
+                    Json::Bool(b) => Formula::atom(Atom::Bool(t.clone(), *b)),
+                    _ => Formula::False,
+                },
+                ("enum", Kind::Bool { .. }) => match x {
+                    Json::Arr(vs) => Formula::or(
+                        vs.iter()
+                            .filter_map(|v| if let Json::Bool(b) = v { Some(Formula::atom(Atom::Bool(t.clone(), *b))) } else { None })
+                            .collect(),
+                    ),
+                    _ => Formula::unknown(),
+                },
+                ("minItems", Kind::List) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&con(m), Rel::Le, &n),
+                    None => Formula::unknown(),
+                },
+                ("maxItems", Kind::List) => match rat_of(x) {
+                    Some(m) => Formula::cmp(&n, Rel::Le, &con(m)),
+                    None => Formula::unknown(),
+                },
+                ("items" | "prefixItems" | "additionalItems" | "contains" | "minContains" | "maxContains" | "uniqueItems" | "unevaluatedItems" | "const" | "enum", Kind::List) => {
+                    Formula::unknown()
+                }
+                _ => continue,
+            });
+        }
+        Formula::and(parts)
+    }
+}
+
+/// The declared ranges of the inputs a relation names, at the scale they travel at: what a
+/// value the generated code does not refuse at the door stays inside.
+fn wire_ranges(ac: &Across, c: &Checked) -> Vec<fourier::Ineq> {
+    let mut out = Vec::new();
+    for name in ac.terms.keys() {
+        let Some((lo, hi)) = c.ranges.get(name).copied() else { continue };
+        let sc = Rat::int(c.wire_scale(name));
+        let v = fourier::Lin::var(name);
+        if let Some(lo) = lo {
+            out.push(v.clone().plus(&fourier::Lin::con(lo.mul(sc).mul(Rat::int(-1)))).ge(false).tag(fourier::Origin::Range { name: name.clone(), hi: false }));
+        }
+        if let Some(hi) = hi {
+            out.push(v.plus(&fourier::Lin::con(hi.mul(sc).mul(Rat::int(-1)))).le(false).tag(fourier::Origin::Range { name: name.clone(), hi: true }));
+        }
+    }
+    out
+}
+
+/// A `constraint` between two inputs the relation names, at the scale they travel at; negated
+/// when `broken`.
+fn wire_constraint(k: &crate::ast::Constraint, i: usize, c: &Checked, broken: bool) -> fourier::Ineq {
+    let (sl, sr) = (c.wire_scale(&k.left), c.wire_scale(&k.right));
+    let d = fourier::Lin::var(&k.left).scale(Rat::new(1, sl)).plus(&fourier::Lin::var(&k.right).scale(Rat::new(-1, sr)));
+    fourier::cmp(d, k.op, broken).tag(fourier::Origin::Constraint(i))
+}
+
+/// A numeric cell as inequalities on the input at the scale it travels at.
+fn cell_ineqs(cell: &Cell, ty: &Ty, sc: i128, name: &str, row: usize) -> Option<Vec<fourier::Ineq>> {
+    let at = |l: &Lit| match l {
+        Lit::Num(n) => crate::types::lit_value_in_pub(n, ty).map(|v| v.mul(Rat::int(sc))),
+        _ => None,
+    };
+    let tag = |part| fourier::Origin::Cell { row, col: name.to_string(), part };
+    let d = |k: Rat| fourier::Lin::var(name).plus(&fourier::Lin::con(k.mul(Rat::int(-1))));
+    match cell {
+        Cell::DontCare => Some(Vec::new()),
+        Cell::Lit(l) => {
+            let k = at(l)?;
+            Some(vec![d(k).le(false).tag(tag(0)), d(k).ge(false).tag(tag(1))])
+        }
+        Cell::Cmp(ops) => {
+            let mut out = Vec::new();
+            for (i, (op, l)) in ops.iter().enumerate() {
+                out.push(fourier::cmp(d(at(l)?), *op, false).tag(tag(i)));
+            }
+            Some(out)
+        }
+        _ => None,
+    }
+}
+
+/// The path a projection reads, as a message writes it: `注文.shipping.zone`.
+fn full_path(pr: &Projection) -> String {
+    std::iter::once(pr.root.text.as_str()).chain(pr.path.iter().map(|n| n.text.as_str())).collect::<Vec<_>>().join(".")
+}
+
+/// E123: a `constraint` between two inputs of one contract that the contract does not keep. A
+/// message it lets through, with both values inside the rule's ranges, breaks the constraint,
+/// and the generated code refuses it at the door (§15.140).
+fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, rule_path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    let proj = |n: &str| f.inputs.iter().find(|i| i.name.text == n).and_then(|i| i.from.as_ref());
+    for (idx, k) in f.constraints.iter().enumerate() {
+        let (Some(lt), Some(rt)) = (ac.term(&k.left), ac.term(&k.right)) else { continue };
+        let (Some(lp), Some(rp)) = (proj(&k.left), proj(&k.right)) else { continue };
+        let mut ineqs = wire_ranges(ac, c);
+        ineqs.push(wire_constraint(k, idx, c, true));
+        let found = ac.rel.find(&Extra { ineqs, ..Extra::default() }, &|t| ac.name(t));
+        let point = match found {
+            crate::relation::Found::None(_) => continue,
+            crate::relation::Found::Point(at, ..) => at.get(&k.left).zip(at.get(&k.right)).map(|(a, b)| (a.num / a.den, b.num / b.den)),
+            crate::relation::Found::Unknown => None,
+        };
+        let (lw, rw) = (full_path(lp), full_path(rp));
+        let rel = format!("{} {} {}", k.left, k.op.word(), k.right);
+        let mut d = Diag::error(
+            "E123",
+            tr!(
+                "契約は `{lw}` と `{rw}` について、`constraint {rel}` を破る組み合わせも通します",
+                "The contract lets `{lw}` and `{rw}` through together where `constraint {rel}` does not hold"
+            ),
+        )
+        .at(tr!("{rule_path}:{} 制約", "{rule_path}:{} constraint", k.span.line))
+        .mark(k.span.clone(), tr!("契約はこの関係を約束していません", "the contract does not promise this"));
+        match point {
+            Some((a, b)) => {
+                d = d.win(&k.left, WVal::Int(a)).win(&k.right, WVal::Int(b)).note(tr!(
+                    "たとえば `{lw}` が {a}、`{rw}` が {b} の要求は、契約の検証を通り、`constraint` を満たしません。",
+                    "A request with `{lw}` at {a} and `{rw}` at {b}, for one, passes the contract's validation and breaks the `constraint`."
+                ));
+            }
+            None => {
+                d = d.note(tr!(
+                    "契約がこの組み合わせを断ることを示せませんでした（例は作れませんでした）。",
+                    "It could not be shown that the contract refuses such a combination, and no example could be built either."
+                ));
+            }
+        }
+        d = d.note(refused_note());
+        let fix = match con.kind {
+            EnumSource::Proto => {
+                let (sl, sr) = (c.wire_scale(&k.left), c.wire_scale(&k.right));
+                let common = crate::types::lcm_i128(sl, sr);
+                let side = |t: &Term, s: i128| {
+                    let base = format!("this.{}", t.path().join("."));
+                    let base = if let Term::Size(_) = t { format!("size({base})") } else { base };
+                    if common / s == 1 { base } else { format!("{base} * {}", common / s) }
+                };
+                let alias = |n: &str| f.inputs.iter().find(|i| i.name.text == n).and_then(|i| i.name.ascii.clone()).unwrap_or_else(|| n.to_string());
+                let op = match k.op {
+                    CmpOp::Le => "le",
+                    CmpOp::Lt => "lt",
+                    CmpOp::Ge => "ge",
+                    CmpOp::Gt => "gt",
+                };
+                Some(format!(
+                    "option (buf.validate.message).cel = {{id: \"{}_{op}_{}\", expression: \"{} {} {}\"}};",
+                    alias(&k.left),
+                    alias(&k.right),
+                    side(lt, sl),
+                    k.op.word(),
+                    side(rt, sr)
+                ))
+            }
+            EnumSource::JsonSchema => None,
+        };
+        let widen = tr!(
+            "`constraint` を外して、その組み合わせのときの答えを表で決めてください",
+            "take the `constraint` off and decide in the tables what the rule answers for that combination"
+        );
+        d = match &fix {
+            Some(x) => {
+                let msg = con.at.rsplit('.').next().unwrap_or(&con.at).to_string();
+                d.fix(FixKind::NarrowContract, x.clone()).note(tr!(
+                    "ヒント: その組み合わせが来ないはずなら、メッセージ `{msg}` に {x} と書いて、契約で約束してください。来るのなら、{widen}。どちらにするかは人が決めることです。",
+                    "hint: if that combination cannot occur, promise it in the contract: write {x} on the message `{msg}`. If it can, {widen}. Which of the two is a person's decision."
+                ))
+            }
+            None => d.fix_kind(FixKind::None).note(tr!(
+                "JSON Schema には、二つのフィールドの値を比べる書き方がありません。",
+                "JSON Schema has no way to compare the values of two fields."
+            ))
+            .note(two_ways(None, widen)),
+        };
+        if ac.unread {
+            d = d.note(tr!(
+                "契約には読めなかった規則があり、ここでは無いものとして扱っています。",
+                "The contract has rules that could not be read, and they are treated here as not there."
+            ));
+        }
+        out.push(d);
+    }
+    out
+}
+
+/// W124: a row whose cells on the inputs of one contract ask for a combination the contract
+/// never lets through, though each cell alone asks for values it does (§15.140). The cells on
+/// other columns are left out, which only makes the row look reachable from more places.
+fn unreachable_rows(f: &RuleFile, c: &Checked, ac: &Across, shape: &str, dead: &BTreeSet<(String, usize)>, rule_path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    if ac.rel.is_trivial() {
+        return out;
+    }
+    let name = |t: &Term| ac.name(t);
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        if t.applied.is_some() {
+            continue;
+        }
+        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        for (ri, row) in t.rows.iter().enumerate() {
+            if dead.contains(&(tname.clone(), row.index)) {
+                continue;
+            }
+            let mut x = Extra::default();
+            let mut cols: Vec<String> = Vec::new();
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                let (Some(term), Some(cell)) = (ac.term(col), row.cells.get(ci)) else { continue };
+                if matches!(cell, Cell::DontCare) {
+                    continue;
+                }
+                let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
+                let took = match &ty {
+                    Ty::Enum(e) => {
+                        let all = c.enums.get(e).cloned().unwrap_or_default();
+                        cell_values(cell, c, &all).map(|vs| x.strs.push((term.clone(), vs))).is_some()
+                    }
+                    Ty::Bool => match cell {
+                        Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE || w == crate::kw::FALSE => {
+                            x.bools.push((term.clone(), w == crate::kw::TRUE));
+                            true
+                        }
+                        _ => false,
+                    },
+                    _ => cell_ineqs(cell, &ty, c.wire_scale(col), col, ri).map(|qs| x.ineqs.extend(qs)).is_some(),
+                };
+                if took {
+                    cols.push(col.clone());
+                }
+            }
+            // One column alone is W123's to judge; across fields there have to be two.
+            if cols.len() < 2 {
+                continue;
+            }
+            x.ineqs.extend(wire_ranges(ac, c));
+            for (i, k) in f.constraints.iter().enumerate() {
+                if ac.term(&k.left).is_some() && ac.term(&k.right).is_some() {
+                    x.ineqs.push(wire_constraint(k, i, c, false));
+                }
+            }
+            // A row the rule's own ranges and constraints already rule out is not the
+            // contract's doing.
+            if Relation::any().refute(&x, &name).is_some() || ac.rel.refute(&x, &name).is_none() {
+                continue;
+            }
+            let (kind, rn) = if t.clause {
+                (tr!("節", "clause"), tr!("節 {tname}", "clause {tname}"))
+            } else {
+                let base = tr!("行{}", "row {}", row.index);
+                (
+                    tr!("表", "table"),
+                    match &row.label {
+                        Some(l) => tr!("{base}（{}）", "{base} ({})", l.text),
+                        None => base,
+                    },
+                )
+            };
+            let paths: Vec<String> = cols
+                .iter()
+                .filter_map(|col| f.inputs.iter().find(|i| i.name.text == *col).and_then(|i| i.from.as_ref()).map(|p| format!("`{}`", full_path(p))))
+                .collect();
+            let joined = paths.join(if crate::i18n::ja() { " と " } else { " and " });
+            let mut d = Diag::warning(
+                "W124",
+                tr!("{rn} は、契約が通さない組み合わせでしか当たりません", "{rn} is reached only by a combination the contract does not let through"),
+            )
+            .at(format!("{rule_path}:{} {kind} {tname}", row.span.line))
+            .table(tname.clone())
+            .row(row.index)
+            .rowref(tname.clone(), row.index)
+            .key(format!("W124\u{1}{tname}\u{1}{shape}\u{1}{}", crate::region::row_key(row)))
+            .fix_kind(FixKind::None)
+            .mark(row.span.clone(), tr!("契約は {joined} をこの組み合わせでは通しません", "the contract never lets {joined} through in this combination"))
+            .note(tr!(
+                "セルを一つずつ見れば契約の通す値ですが、契約はフィールドのあいだにも条件を置いていて、この行の求める組み合わせはそれを満たしません。この行に当たる要求やメッセージは来ません。",
+                "Each cell alone asks for values the contract lets through, but the contract also relates the fields, and the combination this row asks for does not satisfy it. No request or message reaches the row."
+            ))
+            .note(tr!(
+                "ヒント: 契約がこの先も変わらないなら、この行を消してください。変わる予定があって残しているのなら、このままで構いません。",
+                "hint: if the contract will not change, delete the row. If it is kept for a change that is planned, leave it."
+            ));
+            if ac.unread {
+                d = d.note(tr!(
+                    "契約には読めなかった規則もあります。それを無いものとしても、この行には当たりません。",
+                    "The contract also has rules that could not be read. Even with them taken as not there, nothing reaches this row."
+                ));
+            }
+            out.push(d);
         }
     }
     out

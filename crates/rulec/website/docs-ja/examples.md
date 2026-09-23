@@ -1149,6 +1149,95 @@ enum Handling {
 - **列挙のフィールドは、`where` で値の名前を比べます。** `handling` は `.proto` の列挙で、protojson は値の名前（`HANDLING_FRAGILE`）を運びます。番号 0 の値（`HANDLING_STANDARD`）のときはフィールドごと省かれますが、そのときも `HANDLING_STANDARD` として読みます。
 - **注釈と宣言がそろっているので、`check` は通ります。** `destination` から `required = true` を外すと、要求は `destination` を省けるようになり、そのとき `region` は `""` として届きます。`地域` は `""` を受け付けないので E122 で止まり、`fix.text` は `[(buf.validate.field).required = true]` です。
 
+## 契約がフィールドのあいだに置く条件（CEL）
+
+見積の要求から運賃を決めます。要求を検証する `.proto` は、Protovalidate の CEL で二つのことを約束しています。速達は 5kg まで、申告額は補償額を超えない、の二つです。規則はその約束に乗って書いてあります。
+
+```rule
+rule 速達の見積(express_quote) v1
+description "見積の要求（.proto）から運賃を決める。契約がフィールドのあいだに置く条件を、規則の制約と行に照らす例（§15.140）"
+
+# 呼び出し側の契約は、速達を 5kg までに限り、申告額が補償額を超えないことを CEL で約束している。
+# 規則はその約束を constraint に書き、補償料の表はそれに頼って、申告額が補償額を超える行を持たない。
+shape 見積(quote) = proto "contracts/quote.proto" shop.v1.QuoteRequest
+
+inputs
+  重さ(weight)     : mass[g]    range >=1g <=30kg      from 見積.weight_g
+  速達(express)    : bool                              from 見積.express
+  申告額(declared) : money[円]  range >=0円 <=30万円  from 見積.declared_jpy
+  補償額(cover)    : money[円]  range >=0円 <=30万円  from 見積.cover_jpy
+
+constraint 申告額 <= 補償額
+
+outputs
+  運賃(fee) : money[円]  round up(10円)
+
+# 速達は 2kg を境に二段。契約が 5kg を超える速達を通さないので、その先の行は書かない。
+table 重さ別(by_weight)
+policy unique
+| 速達  | 重さ        | -> 基本料(base) : money[円] |
+| false | <=2kg       | 700円                       |
+| false | >2kg <=10kg | 1100円                      |
+| false | >10kg       | 1600円                      |
+| true  | <=2kg       | 1200円                      |
+| true  | >2kg        | 1800円                      |
+
+table 補償(insurance)
+policy unique
+| 申告額  | 補償額  | -> 補償料(cover_charge) : money[円] |
+| <=5万円 | <=5万円 | 0円                                 |
+| <=5万円 | >5万円  | 300円                               |
+| >5万円  | >5万円  | 600円                               |
+
+define 合計(total) : money[円] = 基本料 + 補償料
+
+result 運賃 = 合計
+
+examples
+| 重さ | 速達  | 申告額 | 補償額 | -> 運賃 |
+| 1kg  | false | 0円    | 0円    | 700円   |
+| 3kg  | true  | 2万円  | 10万円 | 2100円  |
+| 12kg | false | 8万円  | 10万円 | 2200円  |
+| 2kg  | true  | 5万円  | 5万円  | 1200円  |
+```
+
+規則が読む契約（`contracts/quote.proto`）:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+
+// A quote for one parcel, validated by Protovalidate before anything reads it. Two of its
+// rules relate one field to another: express takes a parcel of up to 5 kg, and the value
+// declared never exceeds the cover the caller chose.
+message QuoteRequest {
+  option (buf.validate.message).cel = {
+    id: "express_weight",
+    message: "express takes a parcel of up to 5 kg",
+    expression: "!this.express || this.weight_g <= 5000"
+  };
+  option (buf.validate.message).cel = {
+    id: "declared_within_cover",
+    message: "the declared value exceeds the cover",
+    expression: "this.declared_jpy <= this.cover_jpy"
+  };
+
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];
+  bool express = 2;
+  int64 declared_jpy = 3 [(buf.validate.field).int64 = {gte: 0, lte: 300000}];
+  int64 cover_jpy = 4 [(buf.validate.field).int64 = {gte: 0, lte: 300000}];
+}
+```
+
+**この例が見せていること**
+
+- **`constraint 申告額 <= 補償額` は、契約が約束しているから書けます。** 補償料の表には、申告額が補償額を超える行がありません。制約があるので、完全性の検査はその組み合わせに行を求めません。契約の CEL（`this.declared_jpy <= this.cover_jpy`）が同じことを約束しているので、`check` は通ります。制約を `<` にすると、契約は申告額と補償額が等しい要求を通すので E123 で止まり、その要求を例に出します。
+- **5kg を超える速達の行は書いていません。** 契約の `!this.express || this.weight_g <= 5000` が、その要求を通さないからです。書き足すと、その行は W124 になります。セルを一つずつ見れば契約の通す値なのに、組み合わせとしては通らない行だからです。
+- **CEL は、読める部分を読みます。** 整数の一次式の比較、`in`、`size()`、`has()`、`&&`・`||`・`!`・`? :` です。剰余や文字列の関数のように読めない部分は真として扱うので、見逃すことはありません。
+
 ## 返品できるかどうかを英語で書く
 
 金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。

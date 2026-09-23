@@ -1,0 +1,9 @@
+error[E123]: 契約は `見積.declared_jpy` と `見積.cover_jpy` について、`constraint 申告額 < 補償額` を破る組み合わせも通します
+  --> tests/mutants/m_e123.rule:14 制約
+   |
+14 | constraint 申告額 < 補償額
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ 契約はこの関係を約束していません
+   |
+ たとえば `見積.declared_jpy` が 0、`見積.cover_jpy` が 0 の要求は、契約の検証を通り、`constraint` を満たしません。
+ 契約の検証を通っても、この値では生成コードが入口で断ります。API なら要求が誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。
+ ヒント: その組み合わせが来ないはずなら、メッセージ `QuoteRequest` に option (buf.validate.message).cel = {id: "declared_lt_cover", expression: "this.declared_jpy < this.cover_jpy"}; と書いて、契約で約束してください。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。どちらにするかは人が決めることです。

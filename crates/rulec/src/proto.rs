@@ -26,7 +26,9 @@
 //! wherever it sits, nested in a message or not. Two readers were added beside it later, each
 //! for one question a rule asks of the contract: the messages and their fields, as far as a
 //! `from` path needs them (§15.125), and on a field, the Protovalidate rules that bound which
-//! values pass (§15.132). Services, imports and every other option are skipped. The file is a
+//! values pass (§15.132). The rules that relate fields to each other — CEL on a message or a
+//! field, a `oneof` — are read as text here and made into a condition by `cel` and
+//! `projection` (§15.140). Services, imports and every other option are skipped. The file is a
 //! contract, not a program.
 
 
@@ -81,6 +83,9 @@ pub struct Field {
     pub rules: Rules,
     /// The `json_name` option, when the field sets one (§15.133).
     pub json_name: Option<String>,
+    /// The `oneof` it is a member of. A member has presence of its own, like an `optional`
+    /// field, and `optional` is set on it too (§15.140).
+    pub oneof: Option<String>,
 }
 
 impl Field {
@@ -114,9 +119,10 @@ pub fn json_name(field: &str) -> String {
 /// (§15.132).
 ///
 /// Only the rules that bound a value the way a rule's input is bounded are read: the integer
-/// comparisons, the element count of a collection, and the listed values of a string. Anything
-/// else that could narrow what passes — a CEL expression, a predefined rule, a pattern — is
-/// recorded by name in `unread` and not interpreted. Reading it as not there makes the field
+/// comparisons, the element count of a collection, the listed values of a string, and the CEL
+/// expressions, which are kept as text for `cel` to read (§15.140). Anything else that could
+/// narrow what passes — a predefined rule, a pattern — is recorded by name in `unread` and not
+/// interpreted. Reading it as not there makes the field
 /// look wider than it is, never narrower: the check that uses this may then speak where it
 /// did not need to, and never stays quiet where it should have spoken.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -133,6 +139,9 @@ pub struct Rules {
     /// The least length the string rules ask for (`min_len`, `len`, and the two in bytes):
     /// what a date needs to know of them, which is whether "" passes (§15.133).
     pub str_min_len: Option<i128>,
+    /// The CEL expressions on the field, from `cel` and `cel_expression`, `this` being the
+    /// field. They are read by `cel` where the rule is compared (§15.140).
+    pub cel: Vec<String>,
     pub unread: Vec<String>,
 }
 
@@ -170,6 +179,30 @@ pub fn int_bounds(ty: &str) -> Option<(i128, i128)> {
 pub struct Message {
     pub name: String,
     pub fields: Vec<Field>,
+    /// What Protovalidate asks of the message as a whole (§15.140).
+    pub rules: MsgRules,
+}
+
+/// The rules on a message rather than on one field: `(buf.validate.message)` in its options,
+/// and the `oneof`s it declares.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MsgRules {
+    /// The CEL expressions on the message, from `cel` and `cel_expression`, `this` being the
+    /// message.
+    pub cel: Vec<String>,
+    /// The groups of fields of which at most one may be set: every `oneof` the message
+    /// declares, and every `(buf.validate.message).oneof`. `required` asks for exactly one.
+    pub oneofs: Vec<Oneof>,
+    /// `(buf.validate.message).disabled`. Protovalidate has since removed it; where a release
+    /// that still reads it validates the message, it validates nothing, so every rule of the
+    /// message is dropped rather than trusted.
+    pub disabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Oneof {
+    pub fields: Vec<String>,
+    pub required: bool,
 }
 
 /// The kinds a proto scalar travels as. A rule's numbers are whole in their declared unit
@@ -209,9 +242,10 @@ pub fn same_message(declared: &str, wanted: &str) -> bool {
 /// Every message in the file, in the order they appear, nested ones included.
 ///
 /// Read far enough for a path and no further: a field is `[repeated] <type> <name> = <n>;`,
-/// and `oneof`, `map`, `option`, `reserved` and `extend` are skipped. A `map` field is
-/// skipped rather than guessed at, so a path into one gets stuck instead of being waved
-/// through.
+/// the members of a `oneof` are fields of the message it is in, and `map`, `reserved` and
+/// `extend` are skipped. A `map` field is skipped rather than guessed at, so a path into one
+/// gets stuck instead of being waved through. Of the options on a message, only Protovalidate's
+/// are read.
 pub fn messages(src: &str) -> Vec<Message> {
     let (text, strs) = lex_strings(src);
     let b: Vec<char> = text.chars().collect();
@@ -229,24 +263,43 @@ pub fn messages(src: &str) -> Vec<Message> {
             i += 1;
             continue;
         }
-        out.push(Message { name, fields: fields_of(&b, j + 1, &strs) });
+        let (fields, rules) = body_of(&b, j + 1, &strs);
+        out.push(Message { name, fields, rules });
         // A nested message is found by the same walk, so the cursor only steps past `{`.
         i = j + 1;
     }
     out
 }
 
-/// The fields between `{` and its `}`, the bodies of anything nested skipped over.
-fn fields_of(b: &[char], from: usize, strs: &[String]) -> Vec<Field> {
-    let mut out = Vec::new();
+/// The fields between `{` and its `}` and the rules on the message, the bodies of anything
+/// nested skipped over — except a `oneof`, whose members are fields of this message.
+fn body_of(b: &[char], from: usize, strs: &[String]) -> (Vec<Field>, MsgRules) {
+    let mut out: Vec<Field> = Vec::new();
+    let mut rules = MsgRules::default();
     let mut stmt = String::new();
     let mut opts = String::new();
     let mut i = from;
     let mut depth = 0usize;
+    // The `oneof` the walk is inside, with the members found so far.
+    let mut oneof: Option<(String, Oneof)> = None;
     while i < b.len() {
+        let here = depth == 0 || (depth == 1 && oneof.is_some());
+        // `option … ;` on the message or on a oneof: read whole, braces and all.
+        if here && stmt.trim().is_empty() && word_starts_at(b, i, "option") {
+            let (text, next) = statement(b, i + 6);
+            option_of(&text, strs, &mut rules, oneof.as_mut().map(|(_, o)| o));
+            stmt.clear();
+            opts.clear();
+            i = next;
+            continue;
+        }
         match b[i] {
             '{' => {
-                // A nested message, enum or oneof. Its own fields belong to it, not here.
+                // A nested message or enum, whose fields are its own; or a oneof, whose are not.
+                let w: Vec<&str> = stmt.split_whitespace().collect();
+                if depth == 0 && w.len() == 2 && w[0] == "oneof" {
+                    oneof = Some((w[1].to_string(), Oneof { fields: Vec::new(), required: false }));
+                }
                 depth += 1;
                 stmt.clear();
                 opts.clear();
@@ -257,25 +310,36 @@ fn fields_of(b: &[char], from: usize, strs: &[String]) -> Vec<Field> {
                     break;
                 }
                 depth -= 1;
+                if depth == 0 {
+                    if let Some((_, o)) = oneof.take() {
+                        rules.oneofs.push(o);
+                    }
+                }
+                stmt.clear();
                 i += 1;
             }
             '[' => {
                 // The field's options, which may hold lists of their own (`in: [1, 2]`): the
                 // `]` that closes them is the one that brings the nesting back to zero.
                 let (inner, next) = bracketed(b, i);
-                if depth == 0 {
+                if here {
                     opts = inner;
                 }
                 i = next;
             }
             ';' => {
-                if depth == 0 {
+                if here {
                     if let Some(mut f) = field_of(&stmt) {
                         f.rules = rules_of(&opts, strs);
                         f.json_name = option_list(&opts, strs).into_iter().find_map(|(n, v)| match v {
                             Tv::Str(s) if n == "json_name" => Some(s),
                             _ => None,
                         });
+                        if let Some((name, o)) = oneof.as_mut() {
+                            f.optional = true;
+                            f.oneof = Some(name.clone());
+                            o.fields.push(f.name.clone());
+                        }
                         out.push(f);
                     }
                 }
@@ -289,7 +353,89 @@ fn fields_of(b: &[char], from: usize, strs: &[String]) -> Vec<Field> {
             }
         }
     }
-    out
+    if rules.disabled {
+        for f in &mut out {
+            f.rules = Rules { unread: vec!["(buf.validate.message).disabled".into()], ..Rules::default() };
+        }
+        rules.cel.clear();
+        // A `oneof` of the file is the wire format's, and holds whatever validation says.
+        rules.oneofs.retain(|o| o.fields.iter().all(|n| out.iter().any(|f| f.name == *n && f.oneof.is_some())));
+        for o in &mut rules.oneofs {
+            o.required = false;
+        }
+    }
+    (out, rules)
+}
+
+/// The text of a statement from `from` to its `;`, braces and brackets inside it skipped
+/// over, and the position after the `;`.
+fn statement(b: &[char], from: usize) -> (String, usize) {
+    let mut depth = 0i32;
+    let mut i = from;
+    while i < b.len() {
+        match b[i] {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth -= 1,
+            ';' if depth <= 0 => return (b[from..i].iter().collect(), i + 1),
+            _ => {}
+        }
+        i += 1;
+    }
+    (b[from.min(b.len())..].iter().collect(), b.len())
+}
+
+/// One `option` of a message or a oneof: what Protovalidate asks of it, the rest skipped.
+fn option_of(text: &str, strs: &[String], rules: &mut MsgRules, oneof: Option<&mut Oneof>) {
+    const MSG: &str = "(buf.validate.message)";
+    const ONEOF: &str = "(buf.validate.oneof)";
+    let mut oneof = oneof;
+    for (name, v) in option_list(text, strs) {
+        if let Some(rest) = name.strip_prefix(MSG) {
+            let path: Vec<&str> = rest.split('.').filter(|s| !s.is_empty()).collect();
+            message_rule(&path, &v, rules);
+        } else if let Some(rest) = name.strip_prefix(ONEOF) {
+            let required = match (rest.trim_start_matches('.'), &v) {
+                ("required", Tv::Id(t)) => t == "true",
+                ("", Tv::Msg(kv)) => kv.iter().any(|(k, v)| k == "required" && matches!(v, Tv::Id(t) if t == "true")),
+                _ => false,
+            };
+            if let Some(o) = oneof.as_deref_mut() {
+                o.required |= required;
+            }
+        }
+    }
+}
+
+/// One part of `(buf.validate.message)`, in any of the ways text format lets it be written.
+fn message_rule(path: &[&str], v: &Tv, rules: &mut MsgRules) {
+    let expression = |kv: &[(String, Tv)]| {
+        kv.iter().find_map(|(k, v)| match v {
+            Tv::Str(s) if k == "expression" => Some(s.clone()),
+            _ => None,
+        })
+    };
+    match (path, v) {
+        ([], Tv::Msg(kv)) => {
+            for (k, v) in kv {
+                message_rule(&[k.as_str()], v, rules);
+            }
+        }
+        (["cel"], Tv::Msg(kv)) => rules.cel.extend(expression(kv)),
+        (["cel", "expression"], Tv::Str(s)) => rules.cel.push(s.clone()),
+        (["cel_expression"], Tv::Str(s)) => rules.cel.push(s.clone()),
+        (["cel" | "cel_expression" | "oneof"], Tv::List(xs)) => {
+            for x in xs {
+                message_rule(path, x, rules);
+            }
+        }
+        (["oneof"], Tv::Msg(kv)) => {
+            let fields = kv.iter().filter(|(k, _)| k == "fields").flat_map(|(_, v)| strs_of(v)).collect();
+            let required = kv.iter().any(|(k, v)| k == "required" && matches!(v, Tv::Id(t) if t == "true"));
+            rules.oneofs.push(Oneof { fields, required });
+        }
+        (["disabled"], Tv::Id(t)) => rules.disabled |= t == "true",
+        _ => {}
+    }
 }
 
 /// The text between the `[` at `open` and the `]` that matches it, and the position after
@@ -331,7 +477,7 @@ fn field_of(stmt: &str) -> Option<Field> {
         return None;
     }
     w[3].trim_end_matches(';').parse::<i64>().ok()?;
-    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated, optional, rules: Rules::default(), json_name: None })
+    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated, optional, rules: Rules::default(), json_name: None, oneof: None })
 }
 
 // --- Protovalidate, as far as a value's bounds go (§15.132) -------------------------------
@@ -611,11 +757,17 @@ fn rules_of(text: &str, strs: &[String]) -> Rules {
                 r.unread.push(path.join("."));
             }
             ["string", ..] => r.unread.push(path.join(".")),
-            ["cel", ..] | ["cel_expression", ..] => {
-                if !r.unread.iter().any(|u| u == "cel") {
-                    r.unread.push("cel".to_string());
+            ["cel", "expression"] | ["cel_expression"] => r.cel.extend(strs_of(&v)),
+            ["cel"] => {
+                if let Tv::List(xs) = &v {
+                    for x in xs {
+                        if let Tv::Msg(kv) = x {
+                            r.cel.extend(kv.iter().filter(|(k, _)| k == "expression").flat_map(|(_, v)| strs_of(v)));
+                        }
+                    }
                 }
             }
+            ["cel", ..] => {}
             _ if p.iter().any(|s| s.starts_with('[')) => r.unread.push(path.join(".")),
             // The rules of the other kinds (`double`, `timestamp`, `map`, `enum`, …) bound
             // nothing this reader compares.
@@ -893,8 +1045,83 @@ message Line {
         let r = &field(&ms, "Order", "tier").rules;
         assert!(r.required);
         assert_eq!(r.ignore.as_deref(), Some("IGNORE_IF_ZERO_VALUE"));
-        assert_eq!(r.unread, vec!["cel".to_string()]);
+        // CEL is kept as text for `cel` to read (§15.140), and is no longer an unread rule.
+        assert_eq!(r.cel, vec!["this > 0 && this != 7".to_string()]);
+        assert!(r.unread.is_empty());
         assert_eq!(field(&ms, "Order", "custom").rules.unread, vec!["int64.(my.rule)".to_string()]);
+    }
+
+    const RULES: &str = r#"
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {
+    id: "weight_order",
+    message: "min must not exceed max",
+    expression: "this.min_weight <= this.max_weight"
+  };
+  option (buf.validate.message).cel_expression = "this.max_weight <= 30000";
+  option (buf.validate.message).oneof = {fields: ["coupon", "points"], required: true};
+  option deprecated = true;
+
+  int64 min_weight = 1 [(buf.validate.field).cel_expression = "this >= 1"];
+  int64 max_weight = 2 [(buf.validate.field) = {cel: [{id: "a", expression: "this >= 1"}, {id: "b", expression: "this <= 50000"}]}];
+  int64 coupon = 3;
+  int64 points = 4;
+  oneof payment {
+    option (buf.validate.oneof).required = true;
+    Card card = 5;
+    string bank = 6 [(buf.validate.field).string.min_len = 1];
+  }
+  string memo = 7;
+}
+
+message Card {
+  string number = 1;
+}
+
+message Old {
+  option (buf.validate.message).disabled = true;
+  int64 n = 1 [(buf.validate.field).int64.gte = 1];
+  oneof pick {
+    int64 a = 2;
+    int64 b = 3;
+  }
+}
+"#;
+
+    #[test]
+    fn メッセージの規則とoneofを読む() {
+        let ms = messages(RULES);
+        let q = ms.iter().find(|m| m.name == "Quote").unwrap();
+        assert_eq!(q.rules.cel, vec!["this.min_weight <= this.max_weight".to_string(), "this.max_weight <= 30000".to_string()]);
+        assert_eq!(field(&ms, "Quote", "min_weight").rules.cel, vec!["this >= 1".to_string()]);
+        assert_eq!(field(&ms, "Quote", "max_weight").rules.cel, vec!["this >= 1".to_string(), "this <= 50000".to_string()]);
+        // The members of a oneof are fields of the message, with presence of their own.
+        let bank = field(&ms, "Quote", "bank");
+        assert!(bank.optional && bank.oneof.as_deref() == Some("payment"));
+        assert_eq!(bank.rules.str_min_len, Some(1));
+        assert!(field(&ms, "Quote", "card").oneof.is_some());
+        assert_eq!(field(&ms, "Quote", "memo").oneof, None);
+        assert_eq!(q.fields.len(), 7);
+        assert_eq!(
+            q.rules.oneofs,
+            vec![
+                Oneof { fields: vec!["coupon".into(), "points".into()], required: true },
+                Oneof { fields: vec!["card".into(), "bank".into()], required: true },
+            ]
+        );
+    }
+
+    #[test]
+    fn 検証を切ったメッセージの規則は信じない() {
+        let ms = messages(RULES);
+        let old = ms.iter().find(|m| m.name == "Old").unwrap();
+        assert!(old.rules.disabled);
+        assert_eq!(field(&ms, "Old", "n").rules.int.gte, None);
+        // The oneof itself is the wire's, and stays.
+        assert_eq!(old.rules.oneofs, vec![Oneof { fields: vec!["a".into(), "b".into()], required: false }]);
     }
 
     #[test]
