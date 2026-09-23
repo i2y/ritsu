@@ -703,6 +703,11 @@ because a type for it would be a domain object model and this tool makes none.
 A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
 the projection function, after the objects, and a sequence stays last.
 
+An optional input (`T?`) reads its field so that a missing one — or a missing object on the way
+to it — is none: `_dig(order, "coupon", "kind")` in the Python module, and the same in each of the
+other four. Every other input reads straight into the object, which is why `rulec check`
+requires a field a required input reads to be `required` in the contract (E122).
+
 **Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
 the caller's object as a type, and naming that type would mean generating it or following the
 caller's own; SQL takes a relation of flat columns, NumPy takes columns, and the Wasm ABI takes

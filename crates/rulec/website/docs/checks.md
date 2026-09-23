@@ -46,6 +46,15 @@ not fit the input is **E120**; a contract nothing projects from is **W122**. Non
 changes a check of the table — what comes out of a projection is a scalar input like any other
 — and what it stops is the glue between an application and a rule going stale in silence.
 
+The contract also says **which values** can come from there, and that is held to the input.
+Protovalidate's rules on a `.proto` field and a schema's `minimum`, `maxItems`, `enum` and
+`required` are compared with the input's `range`, its enum and the range of a `count`: a value
+the contract lets through and the input refuses is **E122** — a request the API itself
+accepted, refused at the door of the generated code. `fix.text` is the annotation to add to
+the contract. A row reached only by values the contract never lets through is **W123**. A
+proto3 number field with no rule lets 0 through, because that is what an unset field is, and
+that is the mismatch this finds most often.
+
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
 the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
@@ -133,8 +142,8 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 84 deliberately broken
-   rules (`tests/mutants/`) each producing the diagnostic it should, 28 rules transcribed from
+   and that implementation has not been proved correct. The evidence is 94 deliberately broken
+   rules (`tests/mutants/`) each producing the diagnostic it should, 36 rules transcribed from
    real published terms passing on every commit, and the reference evaluator agreeing with
    twelve languages. **Evidence, not proof**
 

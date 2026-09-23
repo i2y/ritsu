@@ -76,6 +76,8 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E121](#e121) | error | `from` のパスが契約にありません |
 | [E119](#e119) | error | 行の境界が、引いた写しと反対側です |
 | [W122](#w122) | warning | その `shape` を使っている入力がありません |
+| [E122](#e122) | error | 契約が通す値を、規則が断ります |
+| [W123](#w123) | warning | 行が、契約の通さない値でしか当たりません |
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
@@ -2289,6 +2291,77 @@ policy unique
 ```
 
 関係するコード: [E121](#e121), [W111](#w111)
+
+## E122
+
+`error` — **契約が通す値を、規則が断ります**
+
+**いつ出るか。** `from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。CEL の式のように読まない規則は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。
+
+**直し方。** どちらを直すかは人が決めます。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。無いときは none として読みます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=5  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
+```
+
+関係するコード: [W123](#w123), [E121](#e121), [E032](#e032)
+
+## W123
+
+`warning` — **行が、契約の通さない値でしか当たりません**
+
+**いつ出るか。** 行のセルが `from` で読む入力を試していて、そのセルが受け付ける値を、契約の検証が一つも通さないとき（§15.132）。契約を通ったものしか来ないので、その行に当たる要求やメッセージはありません。比べるのは入力そのものの列だけで、そこから導いた値の列は見ません。
+
+**直し方。** 契約がこの先も広がらないなら、行を消して、入力の範囲を契約に合わせてください。広がる予定があって残しているのなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=20  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a    | -> x  |
+| <=10 | true  |
+| >10  | false |
+```
+
+隣に置く `order.json`:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
+```
+
+関係するコード: [E122](#e122), [E102](#e102), [W111](#w111)
 
 ## W105
 

@@ -227,7 +227,7 @@ fn 日付の射影は五つの言語で同じ日を指す() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("o.json"),
-        "{\"$defs\":{\"O\":{\"type\":\"object\",\"properties\":{\"placed_at\":{\"type\":\"string\"}}}}}\n",
+        "{\"$defs\":{\"O\":{\"type\":\"object\",\"properties\":{\"placed_at\":{\"type\":\"string\"}},\"required\":[\"placed_at\"]}}}\n",
     )
     .unwrap();
     let rule = "rule d(d) v1\n\n\
@@ -351,4 +351,63 @@ fn piped(lang: &str, cmd: &mut Command, input: &str) -> String {
     let o = p.wait_with_output().unwrap();
     assert!(o.status.success(), "{lang}: 走らない:\n{}", String::from_utf8_lossy(&o.stderr));
     String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+/// An optional input takes a field the contract lets an object leave out, and a missing one is
+/// read as none — whether the field itself is missing or the object on the way to it is
+/// (§15.132). Before, all five indexed straight into the object and failed on a missing key,
+/// which left no way to take such a field: the check now refuses a required input read from
+/// one, and the answer it points to is `T?`.
+#[test]
+fn 省略できる入力は無いフィールドを_none_として読む() {
+    const RULE: &str = "rule 任意の割引(opt_discount) v1\n\n\
+        shape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+        enum 種別(kind) = percent(percent) | fixed(fixed)\n\n\
+        inputs\n  種別(kind) : 種別?  from 注文.coupon.kind\n\n\
+        outputs\n  割引(off) : money[円]  round down(1円)\n\n\
+        table 割引表(t)\npolicy unique\n| 種別    | -> 割引 |\n| none    | 0円     |\n| percent | 100円   |\n| fixed   | 200円   |\n";
+    const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"coupon\":{\"$ref\":\"#/$defs/Coupon\"}}},\
+        \"Coupon\":{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"percent\",\"fixed\"]}}}}}";
+    let dir = std::env::temp_dir().join(format!("rulec-projection-opt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("r.rule"), RULE).unwrap();
+    std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().expect("rulec を起動できない");
+    let o = rulec(&["check", "r.rule"]);
+    assert!(o.status.success(), "省略できる入力に `required` を求めてはいけない:\n{}", String::from_utf8_lossy(&o.stdout));
+    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    let g = dir.join("gen");
+    let cases = [("{}", "0"), ("{\"coupon\":{}}", "0"), ("{\"coupon\":{\"kind\":null}}", "0"), ("{\"coupon\":{\"kind\":\"fixed\"}}", "200")];
+    let want = |lang: &str, cmd: &mut Command, want: &str, case: &str| {
+        let o = cmd.output().unwrap_or_else(|e| panic!("{lang} を起動できない: {e}"));
+        let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        assert!(o.status.success(), "{lang}: {case} で落ちた:\n{out}\n{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(out, want, "{lang}: {case} の答えが違う");
+    };
+    for (case, w) in cases {
+        let py = format!("import json, opt_discount as m\nprint(m.opt_discount_from(json.loads({case:?})))\n");
+        want("Python", Command::new("python3").current_dir(g.join("python")).args(["-B", "-c", &py]), w, case);
+        if have("node") {
+            for (lang, sub, file, extra) in [("JavaScript", "javascript", "opt_discount.mjs", None), ("TypeScript", "typescript", "opt_discount.ts", Some("--no-warnings"))] {
+                let js = format!("import('./{file}').then(m => console.log(String(m.opt_discount_from(JSON.parse({case:?})))));");
+                let mut cmd = Command::new("node");
+                cmd.current_dir(g.join(sub));
+                if let Some(x) = extra {
+                    cmd.arg(x);
+                }
+                want(lang, cmd.args(["--input-type=module", "-e", &js]), w, case);
+            }
+        }
+        if have("ruby") {
+            let rb = format!("require 'json'\nrequire './opt_discount.rb'\nputs OptDiscount.opt_discount_from(JSON.parse({case:?}))\n");
+            want("Ruby", Command::new("ruby").current_dir(g.join("ruby")).args(["-e", &rb]), w, case);
+        }
+        if have("php") {
+            let php = format!("require './opt_discount.php'; echo \\OptDiscount\\opt_discount_from(json_decode({}, true));", php_str(case));
+            want("PHP", Command::new("php").current_dir(g.join("php")).args(["-r", &php]), w, case);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

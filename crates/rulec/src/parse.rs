@@ -558,17 +558,28 @@ impl P {
             self.err(shape());
             return None;
         };
+        let mut end = k + 4;
         let at = match line.get(k + 3).map(|t| t.kind.clone()) {
             Some(Kind::Str(s)) => s,
             _ => match line.get(k + 3).and_then(|t| t.ident()).map(|s| s.to_string()) {
-                Some(s) => s,
+                Some(mut s) => {
+                    // A message named with its package, `shop.v1.Order`, is one name: the
+                    // form the grammar shows, which read only as far as `shop` before.
+                    while line.get(end).is_some_and(|t| t.is(&Kind::Dot)) {
+                        let Some(w) = line.get(end + 1).and_then(|t| t.ident()) else { break };
+                        s.push('.');
+                        s.push_str(w);
+                        end += 2;
+                    }
+                    s
+                }
                 None => {
                     self.err(shape());
                     return None;
                 }
             },
         };
-        self.tail_junk(line, k + 4);
+        self.tail_junk(line, end);
         Some(ShapeDecl { name, source, file, at, span: span_of(line) })
     }
 

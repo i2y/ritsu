@@ -7,7 +7,7 @@
       "properties": {
         "id": { "type": "string" },
         "shipping": { "$ref": "#/$defs/Shipping" },
-        "lines": { "type": "array", "items": { "$ref": "#/$defs/Line" } }
+        "lines": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/$defs/Line" } }
       },
       "required": ["shipping", "lines"]
     },

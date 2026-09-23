@@ -95,6 +95,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_e120.rule", &[("E120", 1)], "件数を受ける入力を bool のままにした"),
         ("m_e121.rule", &[("E121", 1)], "契約が持っていないフィールドを射影した（フィールドの名前が変わったときの姿）"),
         ("m_w122.rule", &[("W122", 1)], "契約を宣言したまま、どの入力も射影していない"),
+        ("m_e122.rule", &[("E122", 1)], "契約は 50 件まで通すのに、入力は 40 件までしか受け付けない"),
+        ("m_w123.rule", &[("W123", 1)], "契約が 50 件までしか通さないのに、60 件を超える行を書いた"),
         ("m_w114.rule", &[("W114", 1)], "境界が導出の取れる値のあいだに落ちている（整数であることまでは見ていない）"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is

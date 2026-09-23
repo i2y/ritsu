@@ -76,6 +76,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E121](#e121) | error | The contract has no such path |
 | [E119](#e119) | error | A row's boundary falls on the other side from the copy it cites |
 | [W122](#w122) | warning | No input is projected from that shape |
+| [E122](#e122) | error | The contract lets through a value the rule refuses |
+| [W123](#w123) | warning | A row is reached only by values the contract does not let through |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -2289,6 +2291,77 @@ With `order.json` beside it:
 ```
 
 Related codes: [E121](#e121), [W111](#w111)
+
+## E122
+
+`error` — **The contract lets through a value the rule refuses**
+
+**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A rule this does not read, such as a CEL expression, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
+
+**Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=5  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
+```
+
+Related codes: [W123](#w123), [E121](#e121), [E032](#e032)
+
+## W123
+
+`warning` — **A row is reached only by values the contract does not let through**
+
+**When.** A cell of a row tests an input read with `from`, and nothing the cell accepts passes the contract's validation (§15.132). Only what passed the contract arrives, so no request or message reaches the row. Only a column of the input itself is compared; a column derived from it is not.
+
+**Fix.** If the contract will not widen, delete the row and bring the input's range in line with the contract. If the row is kept for a widening that is planned, leave it: `check --diff-base` in CI reports only the ones that are new.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=20  from count order.lines
+
+outputs
+  x(x) : bool
+
+table 表(t1)
+policy unique
+| a    | -> x  |
+| <=10 | true  |
+| >10  | false |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}},"required":["lines"]}}}
+```
+
+Related codes: [E122](#e122), [E102](#e102), [W111](#w111)
 
 ## W105
 

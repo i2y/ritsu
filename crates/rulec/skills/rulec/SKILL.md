@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E121, W105, W110, W111, W114-W122) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E048, E101-E122, W105, W110, W111, W114-W123) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -167,7 +167,8 @@ A few shapes are worth knowing before the first draft:
   "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
   `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
   where chilled = true`, `from count order.lines`. **It changes no check of the table**; what
-  it buys is the glue generated and a renamed field caught as E121 (§3.3 of the grammar).
+  it buys is the glue generated, a renamed field caught as E121, and a value the contract's
+  validation lets through but the input refuses caught as E122 (§3.3 of the grammar).
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
   "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)

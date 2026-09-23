@@ -128,7 +128,8 @@ A few shapes are worth knowing before the first draft:
   "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
   `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
   where chilled = true`, `from count order.lines`. **It changes no check of the table**; what
-  it buys is the glue generated and a renamed field caught as E121 (§3.3 of the grammar).
+  it buys is the glue generated, a renamed field caught as E121, and a value the contract's
+  validation lets through but the input refuses caught as E122 (§3.3 of the grammar).
 - **An enum may belong to somebody else.** When the values come from a service contract,
   `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
   "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)

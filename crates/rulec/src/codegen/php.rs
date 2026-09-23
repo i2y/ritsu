@@ -1188,6 +1188,8 @@ impl<'a> Gen<'a> {
             None => "true".into(),
         };
         match p.kind {
+            // `??` reads a missing key, at any depth, as null (§15.132).
+            crate::ast::ProjKind::Field if matches!(p.ty, crate::types::Ty::Opt(_)) => self.php_take(&p.ty, format!("({walk} ?? null)")),
             crate::ast::ProjKind::Field => self.php_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
             crate::ast::ProjKind::All(..) => {

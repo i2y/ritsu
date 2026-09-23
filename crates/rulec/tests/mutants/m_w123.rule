@@ -1,0 +1,48 @@
+rule 注文の送料(order_shipping) v1
+description "注文オブジェクトから送料を決める。呼び出し側の契約から入力を取り出す例（§15.125）"
+
+# 呼び出し側はもう JSON Schema で注文の形を決めている。それを借りて、入力がその形の
+# どこから来るかを書くと、平たくするコードは生成され、パスは毎回の check で契約に照らされる。
+shape 注文(order) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum 地域(zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+
+inputs
+  あて先(zone)   : 地域    from 注文.shipping.zone
+  冷蔵あり(cold) : bool    from any 注文.lines where chilled = true
+  明細数(lines)  : number  range >=1 <=80  from count 注文.lines
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 冷蔵は地域を問わず 500円 増し、明細が 10 件を超えると 200円 増し。
+table 地域別(by_zone)
+policy unique
+| あて先   | -> 地域料(zone_fee) : money[円] |
+| honshu   | 800円                           |
+| hokkaido | 1200円                          |
+| okinawa  | 1500円                          |
+
+table 冷蔵加算(cold_extra)
+policy unique
+| 冷蔵あり | -> 冷蔵料(cold_fee) : money[円] |
+| true     | 500円                           |
+| false    | 0円                             |
+
+table 件数加算(bulk_extra)
+policy unique
+| 明細数 | -> 件数料(bulk_fee) : money[円] |
+| >10 <=60 | 200円                           |
+| >60      | 300円                           |
+| <=10   | 0円                             |
+
+define 合計(total) : money[円] = 地域料 + 冷蔵料 + 件数料
+
+result 送料 = 合計
+
+examples
+| あて先   | 冷蔵あり | 明細数 | -> 送料 |
+| honshu   | false    | 1      | 800円   |
+| honshu   | true     | 1      | 1300円  |
+| okinawa  | true     | 11     | 2200円  |
+| hokkaido | false    | 10     | 1200円  |

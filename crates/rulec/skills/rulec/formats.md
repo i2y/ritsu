@@ -54,8 +54,10 @@ still means the same thing, and `v` says which version wrote the line.
 
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
 `add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
-`flip_bound`, `none`.
-`none` means no single mechanical edit is right; the reason is in `notes`.
+`flip_bound`, `narrow_contract`, `none`.
+`none` means no single mechanical edit is right; the reason is in `notes`. `narrow_contract` is
+the one edit that is not to the `.rule`: its `text` is what to write in the contract the input is
+read from — a Protovalidate option, or JSON Schema keywords — as they are written there (E122).
 
 **`fix.text` is a form, not a decision.** It parses and it removes the code, and that much is
 tested. It does not know the right amount, the right rounding direction or the right grid —

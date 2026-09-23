@@ -1499,7 +1499,7 @@ fn cell_text(c: &Cell) -> String {
     }
 }
 
-fn row_key(r: &Row) -> String {
+pub(crate) fn row_key(r: &Row) -> String {
     r.cells.iter().map(cell_key).collect::<Vec<_>>().join("|")
 }
 

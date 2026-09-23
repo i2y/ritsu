@@ -9468,6 +9468,12 @@ pub(crate) fn elem_cond(cell: &Cell, at: &str, y: &Syn) -> String {
 }
 
 impl<'a> Gen<'a> {
+    /// Whether some projected value lands in an optional input, which reads a field the
+    /// contract lets an object leave out: the Python side then needs `_dig` (§15.132).
+    pub(crate) fn proj_optional(&self) -> bool {
+        self.projections().iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Field) && matches!(p.ty, Ty::Opt(_)))
+    }
+
     /// Hinnant's days_from_civil, the inverse of the `civil_from_days` the record function
     /// already writes. Emitted only when a projected input is a date, because that is the
     /// only place a contract's `YYYY-MM-DD` has to become the day number the rule counts in.
@@ -9517,6 +9523,12 @@ impl<'a> Gen<'a> {
         };
         let walk = at(&p.path);
         match p.kind {
+            // An optional input takes a field the contract lets an object leave out, and a
+            // missing one — or a missing object on the way to it — is read as none (§15.132).
+            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => self.py_take(
+                &p.ty,
+                format!("_dig({root}, {})", p.path.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(", ")),
+            ),
             crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("any({} for _e in {walk})", cond(p.kind.test())),
             crate::ast::ProjKind::All(..) => format!("all({} for _e in {walk})", cond(p.kind.test())),
@@ -9539,6 +9551,16 @@ impl<'a> Gen<'a> {
             params.push(format!("{}: list[Element]", pub_name(&el.name)));
         }
         let mut o = String::new();
+        if self.proj_optional() {
+            o.push_str(
+                "def _dig(o: Any, *path: str) -> Any:\n    \
+                 for k in path:\n        \
+                 if o is None:\n            \
+                 return None\n        \
+                 o = o.get(k)\n    \
+                 return o\n\n\n",
+            );
+        }
         if self.proj_dates() {
             o.push_str(
                 "def _days(s: str) -> int:\n    \
@@ -9608,6 +9630,11 @@ impl<'a> Gen<'a> {
             None => "true".into(),
         };
         match p.kind {
+            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => {
+                let root = self.ident(&p.root);
+                let walk = p.path.iter().enumerate().fold(root, |o, (i, s)| if i == 0 { format!("{o}[{s:?}]") } else { format!("{o}?.[{s:?}]") });
+                self.ts_take(&p.ty, walk)
+            }
             crate::ast::ProjKind::Field => self.ts_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("({walk} as _Row[]).some((_e) => {})", cond()),
             crate::ast::ProjKind::All(..) => format!("({walk} as _Row[]).every((_e) => {})", cond()),
@@ -9693,6 +9720,10 @@ impl<'a> Gen<'a> {
             None => "true".into(),
         };
         match p.kind {
+            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => self.rb_take(
+                &p.ty,
+                format!("{}.dig({})", self.ident(&p.root), p.path.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(", ")),
+            ),
             crate::ast::ProjKind::Field => self.rb_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("{walk}.any? {{ |e| {} }}", cond()),
             crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),

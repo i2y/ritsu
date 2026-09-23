@@ -107,6 +107,12 @@ awk '/from any 注文.lines/ { sub(/any 注文.lines where chilled = true/, "cou
 awk '{ sub(/注文.shipping.zone/, "注文.shipping.region"); print }'  "$p" > "$M/m_e121.rule"
 # The contract declared and nothing projected from it
 awk '{ sub(/  from .*$/, ""); print }'                              "$p" > "$M/m_w122.rule"
+# The contract lets through 50 lines and the input takes 40: an order it validated is refused (§15.132)
+awk '{ sub(/range >=1 <=50  from count/, "range >=1 <=40  from count"); print }' "$p" > "$M/m_e122.rule"
+# The input widened to 80 lines and a row written for more than 60, which the contract never sends
+awk '/range >=1 <=50  from count/ { sub(/range >=1 <=50/, "range >=1 <=80") }
+     /^\| >10 / { print "| >10 <=60 | 200円                           |"; print "| >60      | 300円                           |"; next }
+     { print }' "$p" > "$M/m_w123.rule"
 
 # --- A rule applied by another (§15.69). The callee stays in the corpus, so the
 # mutants reach it by a relative path; the digest in the heading is the corpus caller's own.

@@ -102,6 +102,10 @@ pub enum FixKind {
     /// falls on the side the copy puts it on: `<60cm` becomes `<=60cm`, the direction left
     /// alone because it is the table's geometry and not the copy's to decide (§15.124).
     FlipBound,
+    /// The contract narrowed so that what it lets through is what the rule takes: the
+    /// Protovalidate option or JSON Schema keywords to write on the field, as they are written
+    /// there (§15.132).
+    NarrowContract,
     /// No single mechanical edit is right. The reason is in the notes.
     None,
 }
@@ -121,6 +125,7 @@ impl FixKind {
             FixKind::AddExpected => "add_expected",
             FixKind::PinSource => "pin_source",
             FixKind::FlipBound => "flip_bound",
+            FixKind::NarrowContract => "narrow_contract",
             FixKind::None => "none",
         }
     }

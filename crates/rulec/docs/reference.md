@@ -451,6 +451,27 @@ and their fields, `repeated` included, with `map` and `oneof` skipped rather tha
 A path that cannot be resolved is **E121**, which says how far it got and which names were
 there; a type that does not fit is **E120**; a `shape` no input projects from is **W122**.
 
+**The contract says which values can come, too, and that is held to the input.** A path says
+where a value comes from; the contract's validation says which values pass — Protovalidate's
+`(buf.validate.field)` rules on a field of a `.proto` (`gte`, `lte`, `in` and the rest, the count
+of a `repeated`, the listed values of a `string`), and a schema's `minimum`, `maximum`,
+`exclusiveMinimum`, `exclusiveMaximum`, `enum`, `minItems`, `maxItems` and `required`. Each is
+compared with what the input takes — its `range`, the values of its enum, the range of a
+`count` — and a value that passes the contract but not the input is **E122**: the generated
+code would refuse, at the door, something the caller's own validation let through. A proto3
+number field with no rule lets 0 through, because that is what an unset field is; an input
+that does not take 0 stops there. A row whose cell on a projected input admits nothing the
+contract lets through is **W123**. Rules this does not read — a CEL expression, a predefined
+rule, a pattern — are read as not there, which reads the contract as wider than it is: a
+finding it did not need to make is possible, a missed one is not. `fix.text` of an E122 is the
+option or keywords to write in the contract (`narrow_contract`); whether the contract or the
+rule is the side to change is a person's decision. Still no check of the table moves: what is
+compared is the contract with the input's own declaration.
+
+A field the contract lets an object leave out can only be taken by an optional input (`T?`),
+and the projection function reads a missing one — or a missing object on the way to it — as
+`none`. A required input read from such a field is E122, since the function could not read it.
+
 A contract says how a value **travels**, and the rule says what it **means**: an enum and a
 date arrive as strings, and money and a quantity as whole numbers in the unit the rule
 declares.
