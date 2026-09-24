@@ -552,29 +552,29 @@ body.boarded main { display: none; }
 /* A third of the window, but never more than a comfortable measure and never less than
    the form needs. A fixed width takes over half of a narrow window — an MCP host's panel,
    the playground's frame — and leaves the board nowhere to be. */
-.app .side { box-sizing: border-box; width: clamp(15rem, 34%, 26rem); flex: none; border-right: 1px solid #e0e0e0; background: #fafbfc; padding: 22px 24px; overflow-y: auto; }
-.app .split { flex: none; width: 6px; cursor: col-resize; background: #ececec; }
-.app .split:hover, .app .split.on { background: #c9d6e2; }
-.app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+.app .side { box-sizing: border-box; width: clamp(15rem, 34%, 26rem); flex: none; border-right: 1px solid var(--rc-edge); background: var(--rc-side); padding: 22px 24px; overflow-y: auto; }
+.app .split { flex: none; width: 6px; cursor: col-resize; background: var(--rc-split); }
+.app .split:hover, .app .split.on { background: var(--rc-split-on); }
+.app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--rc-bg); }
 .app .stage { flex: 1; min-height: 0; overflow: auto; padding: 30px 38px; }
-.app .cap { font-size: 0.9rem; line-height: 1.8; color: #555; margin: 0; padding: 14px 38px; border-top: 1px solid #eee; }
-.app .hsplit { flex: none; height: 6px; cursor: row-resize; background: #ececec; }
-.app .hsplit:hover, .app .hsplit.on { background: #c9d6e2; }
+.app .cap { font-size: 0.9rem; line-height: 1.8; color: var(--rc-dim); margin: 0; padding: 14px 38px; border-top: 1px solid var(--rc-edge-soft); }
+.app .hsplit { flex: none; height: 6px; cursor: row-resize; background: var(--rc-split); }
+.app .hsplit:hover, .app .hsplit.on { background: var(--rc-split-on); }
 .app .hsplit[hidden] { display: none; }
-.app .dock { border-top: 1px solid #dcdcdc; background: #fafbfc; padding: 16px 38px; height: 34vh; overflow-y: auto; }
-.app .dock .x { float: right; font-size: 0.85rem; color: #888; cursor: pointer; }
+.app .dock { border-top: 1px solid var(--rc-edge-strong); background: var(--rc-side); padding: 16px 38px; height: 34vh; overflow-y: auto; }
+.app .dock .x { float: right; font-size: 0.85rem; color: var(--rc-quiet); cursor: pointer; }
 #canvas { position: relative; display: flex; gap: 60px; align-items: flex-start; padding: 4px; }
-#wires { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+#wires { position: absolute; inset: 0; overflow: visible; pointer-events: none; color: var(--rc-wire); }
 .gcol { display: flex; flex-direction: column; gap: 34px; position: relative; z-index: 1; flex: none; }
-.gcard { border: 1px solid #bdbdbd; border-radius: 10px; background: #fff; padding: 12px 14px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-.gcard.out { border-color: #8a8a8a; border-width: 1.5px; }
-.gcard.sel { border-color: #c07800; border-width: 2px; background: #fffbf0; }
+.gcard { border: 1px solid var(--rc-card-line); border-radius: 10px; background: var(--rc-card); padding: 12px 14px; cursor: pointer; box-shadow: 0 1px 2px var(--rc-shadow); }
+.gcard.out { border-color: var(--rc-card-out); border-width: 1.5px; }
+.gcard.sel { border-color: var(--rc-mark); border-width: 2px; background: var(--rc-sel); }
 .gcard h3 { margin: 0; font-size: 1rem; display: flex; align-items: baseline; gap: 12px; }
 .gcard h3 .v { margin-left: auto; font-size: 1.1rem; }
-.gcard .by { font-size: 0.8rem; color: #888; margin: 3px 0 0; }
-.gcard .by .r { color: #c07800; font-weight: 600; }
-.gcard .rd { font-size: 0.8rem; color: #666; margin: 2px 0 0; }
-.gcard .ex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: #333; margin: 6px 0 0; padding: 5px 8px; background: #f6f7f8; border-radius: 5px; }
+.gcard .by { font-size: 0.8rem; color: var(--rc-quiet); margin: 3px 0 0; }
+.gcard .by .r { color: var(--rc-mark); font-weight: 600; }
+.gcard .rd { font-size: 0.8rem; color: var(--rc-soft); margin: 2px 0 0; }
+.gcard .ex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: var(--rc-ex); margin: 6px 0 0; padding: 5px 8px; background: var(--rc-ex-bg); border-radius: 5px; }
 .gcard table { margin: 10px 0 0; }
 .gcard th, .gcard td { padding: 3px 8px; white-space: nowrap; }
 .app .side table { width: 100%; }
@@ -660,7 +660,7 @@ pub const APP_JS: &str = r##"
     const b = canvas.getBoundingClientRect();
     wires.setAttribute("width", canvas.offsetWidth); wires.setAttribute("height", canvas.offsetHeight);
     wires.setAttribute("viewBox", "0 0 " + canvas.offsetWidth + " " + canvas.offsetHeight);
-    wires.innerHTML = '<defs><marker id="gw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#b0b0b0"/></marker></defs>';
+    wires.innerHTML = '<defs><marker id="gw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="currentColor"/></marker></defs>';
     for (const e of GRAPH.edges) {
       const A = el[e.from], B = el[e.to]; if (!A || !B) continue;
       const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
@@ -671,7 +671,7 @@ pub const APP_JS: &str = r##"
       const x1 = ra.right - b.left, x2 = rb.left - b.left, d = Math.max(18, (x2 - x1) / 2);
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", "M" + x1 + " " + y1 + " C" + (x1 + d) + " " + y1 + " " + (x2 - d) + " " + y2 + " " + (x2 - 4) + " " + y2);
-      p.setAttribute("fill", "none"); p.setAttribute("stroke", "#b0b0b0"); p.setAttribute("stroke-width", "1.4");
+      p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.4");
       p.setAttribute("marker-end", "url(#gw)"); wires.append(p);
     }
   }

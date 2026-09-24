@@ -1941,13 +1941,17 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
 }
 
 const CSS: &str = "\
-body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #222; background: #fff; }
+:root { color-scheme: light dark; --rc-bg: #fff; --rc-fg: #222; --rc-dim: #555; --rc-soft: #666; --rc-quiet: #888; --rc-line: #c8c8c8; --rc-head: #f2f2f2; --rc-hit: #ffe9a8; --rc-code: #f4f4f4; --rc-panel: #fafafa; --rc-side: #fafbfc; --rc-edge: #e0e0e0; --rc-edge-soft: #eee; --rc-edge-strong: #dcdcdc; --rc-split: #ececec; --rc-split-on: #c9d6e2; --rc-card: #fff; --rc-card-line: #bdbdbd; --rc-card-out: #8a8a8a; --rc-mark: #c07800; --rc-sel: #fffbf0; --rc-ex: #333; --rc-ex-bg: #f6f7f8; --rc-wire: #b0b0b0; --rc-shadow: rgba(0,0,0,.04); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=\"light\"]) { color-scheme: dark; --rc-bg: #15171b; --rc-fg: #e4e6ea; --rc-dim: #a3a8b0; --rc-soft: #9aa0a8; --rc-quiet: #8c929b; --rc-line: #3b3f47; --rc-head: #22252b; --rc-hit: #5c4712; --rc-code: #24272d; --rc-panel: #1b1e23; --rc-side: #1b1e23; --rc-edge: #2c3036; --rc-edge-soft: #2a2e34; --rc-edge-strong: #33373e; --rc-split: #2a2d33; --rc-split-on: #3e4c5c; --rc-card: #1c1f24; --rc-card-line: #464b53; --rc-card-out: #7a808a; --rc-mark: #e8a33d; --rc-sel: #2b2414; --rc-ex: #d2d5da; --rc-ex-bg: #25282e; --rc-wire: #626873; --rc-shadow: rgba(0,0,0,.35); } }
+:root[data-theme=\"dark\"] { color-scheme: dark; --rc-bg: #15171b; --rc-fg: #e4e6ea; --rc-dim: #a3a8b0; --rc-soft: #9aa0a8; --rc-quiet: #8c929b; --rc-line: #3b3f47; --rc-head: #22252b; --rc-hit: #5c4712; --rc-code: #24272d; --rc-panel: #1b1e23; --rc-side: #1b1e23; --rc-edge: #2c3036; --rc-edge-soft: #2a2e34; --rc-edge-strong: #33373e; --rc-split: #2a2d33; --rc-split-on: #3e4c5c; --rc-card: #1c1f24; --rc-card-line: #464b53; --rc-card-out: #7a808a; --rc-mark: #e8a33d; --rc-sel: #2b2414; --rc-ex: #d2d5da; --rc-ex-bg: #25282e; --rc-wire: #626873; --rc-shadow: rgba(0,0,0,.35); }
+:root[data-theme=\"light\"] { color-scheme: light; }
+body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: var(--rc-fg); background: var(--rc-bg); }
 table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
-th, td { border: 1px solid #c8c8c8; padding: 2px 10px; text-align: left; vertical-align: top; }
-th { background: #f2f2f2; }
-tr.hit td { background: #ffe9a8; }
-code { background: #f4f4f4; padding: 0 3px; }
-#try { border: 1px solid #c8c8c8; border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: #fafafa; }
+th, td { border: 1px solid var(--rc-line); padding: 2px 10px; text-align: left; vertical-align: top; }
+th { background: var(--rc-head); }
+tr.hit td { background: var(--rc-hit); }
+code { background: var(--rc-code); padding: 0 3px; }
+#try { border: 1px solid var(--rc-line); border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: var(--rc-panel); }
 #try h2 { margin-top: 0; }
 #try-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; max-width: 36rem; }
 #try-form label { display: contents; }
@@ -1958,9 +1962,8 @@ code { background: #f4f4f4; padding: 0 3px; }
 #try-buttons { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
 #try-buttons button { font: inherit; padding: 4px 12px; }
 #try-result { font-weight: 600; margin: 8px 0; min-height: 1.5em; }
-#try-record { font-family: ui-monospace, monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; color: #555; margin: 0; }
+#try-record { font-family: ui-monospace, monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; color: var(--rc-dim); margin: 0; }
 ";
-
 /// The panel's static part; the fields are built by the script from the rule's own
 /// description, so the page never carries a second copy of the inputs.
 fn try_panel() -> String {
@@ -2365,6 +2368,10 @@ function landOnHash() {
 // the same record line. Opened as a file it is the page it always was — nothing below runs.
 if (window.parent !== window) {
   const post = (m) => window.parent.postMessage(m, "*");
+  const theme = (ctx) => {
+    const t = ctx && ctx.theme;
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  };
   const open = (args) => {
     if (!args) return;
     fill(args);
@@ -2374,10 +2381,14 @@ if (window.parent !== window) {
     const m = e.data;
     if (!m || m.jsonrpc !== "2.0") return;
     if (m.id === 1 && (m.result || m.error)) {
-      // The handshake is answered; the host may send the call from here on.
+      // The handshake is answered; the host may send the call from here on. Its answer says
+      // whether it is light or dark, and the page takes that over the reader's own setting:
+      // it is drawn inside the host, so it goes with the host.
+      theme(m.result && m.result.hostContext);
       post({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
       return;
     }
+    if (m.method === "ui/notifications/host-context-changed") theme(m.params);
     if (m.method === "ui/notifications/tool-input") open(m.params && m.params.arguments);
     if (m.method === "ui/notifications/tool-result") {
       const rec = m.params && m.params.structuredContent;

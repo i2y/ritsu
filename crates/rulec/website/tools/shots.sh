@@ -20,8 +20,18 @@ shot() {  # lang query out
   page "$1"
   # The board fills the window, so one window is one picture — there is nothing below the
   # fold to scroll to, and nothing to crop out of a tall render.
-  "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
-    --window-size=1440,680 --virtual-time-budget=4000 --screenshot="$3" "file://$tmp/$1.html$2" >/dev/null 2>&1
+  #
+  # Twice: the page follows the reader's light or dark setting, and so does the site that
+  # shows these, so each picture has a twin ending in `-dark`. The scheme is asked for
+  # outright — left alone, headless Chrome takes the one this machine is set to, and the
+  # light pictures would come out dark on a dark desktop.
+  for scheme in light dark; do
+    out="$3"; pref=1
+    [ "$scheme" = dark ] && { out="${3%.png}-dark.png"; pref=0; }
+    "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
+      --blink-settings=preferredColorScheme=$pref \
+      --window-size=1440,680 --virtual-time-budget=4000 --screenshot="$out" "file://$tmp/$1.html$2" >/dev/null 2>&1
+  done
 }
 # Two pictures per language. The board on a case: the form on the left, one card per
 # decider, the row that fired lit inside the card it belongs to. Then the same board with

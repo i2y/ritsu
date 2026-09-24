@@ -943,6 +943,10 @@ decided it lit up — the same page a person opens from a file, running the same
 JavaScript. So the reader of a chat sees what the agent asked, what came back, and *which
 rows of which table* said so.
 
+The page is drawn in the host's theme. When the host's answer to `ui/initialize`, or a later
+`ui/notifications/host-context-changed`, carries `theme` as `light` or `dark`, the page takes
+it; opened as a file, it follows the reader's own light or dark setting.
+
 It is a view and not a client: it needs no network and declares no external origin, so the
 restrictive default CSP a host applies is enough for it.
 

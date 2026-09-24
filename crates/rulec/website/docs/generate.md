@@ -358,7 +358,8 @@ beside the server (`shipping_fee_page.html`, the page
 `rulec doc --format html` renders), and the host shows it opened on the
 case that was just asked — the fields filled in, the answer, and the
 rows that decided it lit up. The reader of the chat sees which rows of
-which table said so, not only the number.
+which table said so, not only the number. When the host says whether it
+is light or dark, the page is drawn to match.
 
 The tool speaks the wire: its `inputSchema` is the `in` object of
 `rulec schema`, with the unit of every integer and the step of every

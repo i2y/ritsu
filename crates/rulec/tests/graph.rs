@@ -383,6 +383,42 @@ fn ページのカードは_グラフそのものから組み立てられる() {
     }
 }
 
+/// The page is read in whatever the reader has around it: a browser set to dark, or an MCP
+/// host's frame that says which it is. Every colour comes from one set of variables with a
+/// dark twin, so nothing on the page — the board's wires included — keeps a light colour of
+/// its own; and inside a host, the host's word on the theme wins over the reader's setting.
+#[test]
+fn ページは暗い配色にも従う() {
+    let (c, html) = run(&["doc", "tests/corpus/二つの区分.rule", "--format", "html"]);
+    assert_eq!(c, 0);
+    for want in [
+        ":root { color-scheme: light dark;",
+        "@media (prefers-color-scheme: dark) { :root:not([data-theme=\"light\"])",
+        ":root[data-theme=\"dark\"]",
+        "--rc-hit: #5c4712",                     // the lit row has a dark twin
+        "stroke\", \"currentColor\"",          // and the wires take the page's colour
+        "m.result && m.result.hostContext",      // the host's theme, at the handshake
+        "ui/notifications/host-context-changed", // and when it changes
+    ] {
+        assert!(html.contains(want), "ページに `{want}` が無い");
+    }
+    // What is left of the old palette is only the light half of the variables.
+    let style = &html[html.find("<style>").unwrap()..html.find("</style>").unwrap()];
+    // A colour is a `#` and three, four, six or eight hex digits that end there; `#try-form`
+    // and `#canvas` are selectors.
+    let colour = |l: &str| {
+        l.match_indices('#').any(|(i, _)| {
+            let rest = &l[i + 1..];
+            let n = rest.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+            let after = rest[n..].chars().next();
+            [3, 4, 6, 8].contains(&n) && !after.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        })
+    };
+    for rule in style.lines().filter(|l| !l.trim_start().starts_with(":root") && !l.starts_with("@media")) {
+        assert!(!colour(rule), "変数を通さない色が残っている: {rule}");
+    }
+}
+
 /// The trace lights the board in the colour the rows light in, and the answer lands in the
 /// card that decides it. The page already knew which rows matched; what the board adds is
 /// *where* they are, and that has to come from the same list or it is a second opinion.
@@ -394,7 +430,7 @@ fn カードは当てはまった行と同じ色で光る() {
         "rulecBoardFill(trace, outs)",   // out of the very trace the rows come from
         "window.rulecBoardFill = function",
         ".gcard.sel",                     // the one card that carries colour
-        "tr.hit td { background: #ffe9a8; }", // and the rows, in the same colour
+        "tr.hit td { background: var(--rc-hit); }", // and the rows, in the same colour
         "mk(\"div\", \"split\")",   // both borders move
         "mk(\"div\", \"hsplit\")",
     ] {
