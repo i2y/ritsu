@@ -321,7 +321,7 @@ EXAMPLES = [
         "注文オブジェクトから送料を決めます。呼び出し側はもう JSON Schema で注文の形を決めているので、それを `shape` で借り、入力ごとにその中のどこから来るかを `from` で書きます。表そのものは、ほかの例と同じ平たい入力の表です。",
         [
             "**`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や入れ子の量化は書けません。",
-            "**`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。書くのは、呼び出し側がオブジェクトをただの連想配列として持っている五つの言語です。",
+            "**`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。この関数が出るのは、読み込んだ JSON を連想配列のまま使うことの多い Python・TypeScript・JavaScript・Ruby・PHP です。Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。",
             "**パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを名指しすれば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。",
             "**契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は断るので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`\"minItems\": 1, \"maxItems\": 50`）そのものです。",
             "**表の検査には触れません。** 射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。",
@@ -330,7 +330,7 @@ EXAMPLES = [
         "The shipping fee, decided from an order object. The caller already describes its orders with a JSON Schema, so the rule borrows it with `shape` and says, for each input, where in it the value stands, with `from`. The table itself is a table of flat inputs like any other.",
         [
             "**`from` comes in four shapes.** The value of a field (`from 注文.shipping.zone`), whether some element passes a test (`from any 注文.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count 注文.lines`). A join or a nested quantifier cannot be written.",
-            "**`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for the five targets whose caller holds the object as a plain map.",
+            "**`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for Python, TypeScript, JavaScript, Ruby and PHP, where parsed JSON is usually used as it comes, as a plain map; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
             "**Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.",
             "**The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `明細数`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`\"minItems\": 1, \"maxItems\": 50`).",
             "**No check of the table changes.** What comes out of a projection is a scalar input like any other, and completeness and overlap are decided as they would be without `from`.",

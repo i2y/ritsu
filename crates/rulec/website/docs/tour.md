@@ -373,13 +373,18 @@ A `.proto` is named by its file and message:
 | `from all order.lines where chilled = true` | `bool` — whether every element does |
 | `from count order.lines` | `number` — how many elements there are (with `where`, how many pass) |
 
-Three things follow.
+Four things follow.
 
 - **The code that reads the inputs out is generated.** Beside the rule's own function,
-  `rulec gen` writes `order_shipping_from(order)` in the five targets whose caller holds the
-  object as a plain map, and the caller hands it the object as it is. From a `.proto`, it reads the JSON
-  protojson writes: a field under its lowerCamelCase name or its `.proto` name, and one left
-  out as its proto default. How to call it is in [Generate and call](generate.md).
+  `rulec gen` writes a second one that takes the whole order object. If the rule's function
+  is `order_shipping`, this one is `order_shipping_from(order)`: it reads the inputs out as
+  the `from`s say, calls the rule's function and returns its answer, so the caller hands it
+  the order as it is. It is written for Python, TypeScript, JavaScript, Ruby and PHP. In
+  each of them, parsed JSON is usually used as it comes, as a plain map (a `dict` in Python,
+  a `Hash` in Ruby), so the function takes a plain map too. Go, Swift, Java, Rust, SQL,
+  NumPy and Wasm do not get it. From a `.proto`, it reads the JSON protojson writes: a field
+  under its lowerCamelCase name or its `.proto` name, and one left out as its proto default.
+  How to call it, and why the other seven do not get it, are in [Generate and call](generate.md).
 - **The paths are held to the contract.** Every `rulec check` reads the contract's file. A
   path it does not have is E121, which says how far the path got and which fields were
   there; a type that does not fit is E120; a `shape` no input reads from is W122. A field

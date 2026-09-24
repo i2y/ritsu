@@ -252,8 +252,10 @@ body = """{"destination": {"region": "okinawa"},
 print(shipment_fee_from(json.loads(body)))  # 5100
 ```
 
-Five of the twelve targets write it. Python, TypeScript, JavaScript, Ruby and PHP take the
-object as a plain map, so it needs no name. Go, Swift, Java and Rust hold it as a type, and
+It is written for five of the twelve targets. In Python, TypeScript, JavaScript, Ruby and
+PHP, parsed JSON is usually used as it comes, as a plain map (a `dict` in Python, a `Hash`
+in Ruby), so the function takes a plain map too, and never needs to know the caller's type.
+In Go, Swift, Java and Rust the caller holds the object as a type (a struct or a class), and
 the only ways to name that type would be to generate it or to follow the caller's own; this
 tool does neither. SQL and NumPy take columns, and the Wasm module takes one JSON object of
 the rule's own inputs, so there is no object to project from. The check that holds the paths

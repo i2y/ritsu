@@ -1040,7 +1040,7 @@ examples
 **この例が見せていること**
 
 - **`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や入れ子の量化は書けません。
-- **`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。書くのは、呼び出し側がオブジェクトをただの連想配列として持っている五つの言語です。
+- **`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。この関数が出るのは、読み込んだ JSON を連想配列のまま使うことの多い Python・TypeScript・JavaScript・Ruby・PHP です。Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。
 - **パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを名指しすれば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。
 - **契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は断るので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`"minItems": 1, "maxItems": 50`）そのものです。
 - **表の検査には触れません。** 射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。
