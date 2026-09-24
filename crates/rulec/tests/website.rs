@@ -825,7 +825,6 @@ fn kaniの件数はページと記録と実物で揃っている() {
 
     // ページが言う本数も同じか。
     for (page, want) in [
-        ("README.md", format!("{real} of them verify")),
         ("website/docs/generate.md", format!("{real} harnesses")),
         ("website/docs-ja/generate.md", format!("{real} 本が")),
         ("docs/generated-code.md", format!("corpus of {} rules", corpus_rules())),

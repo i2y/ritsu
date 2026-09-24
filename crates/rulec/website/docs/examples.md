@@ -2574,5 +2574,5 @@ examples
 
 ---
 
-[Write a table (.rule)](tour.md){ .md-button .md-button--primary }
+[Write a rule (.rule)](tour.md){ .md-button .md-button--primary }
 [Grammar](reference.md){ .md-button }

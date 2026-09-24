@@ -243,7 +243,7 @@
 .rc-row--flip > :first-child { order: 2; }
 
 @media screen and (max-width: 59.9375em) {
-  .rc-row, .rc-row--flip { grid-template-columns: 1fr; gap: .8rem; }
+  .rc-row, .rc-row--flip { grid-template-columns: minmax(0, 1fr); gap: .8rem; }
   .rc-row--flip > :first-child { order: 0; }
 }
 

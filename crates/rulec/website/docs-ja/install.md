@@ -165,7 +165,7 @@ replay:
 
 <div class="grid cards" markdown>
 
--   __[表(.rule)を書く](tour.md)__
+-   __[ルール(.rule)を書く](tour.md)__
 
     最初の一行から、検査を通る規則まで。
 

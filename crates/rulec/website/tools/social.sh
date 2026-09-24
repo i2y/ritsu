@@ -71,12 +71,11 @@ cat > "$tmp/social.html" <<'ENDHTML'
     </svg>
     <div class="name">rule<span class="c">c</span></div>
   </div>
-  <div class="tag">Write the table. Ship the proof.</div>
+  <div class="tag">Write rules. Prove them. Compile them.</div>
   <div class="lede">
-    A small language for table-shaped business rules, and a harness for the agent that
-    turns them into code.
+    A little language for business rules — tables, exceptions, provisos — small on purpose.
     <b>The proof happens before the code exists</b>: no gap, no contradiction, no dead row,
-    and no value the API contract lets through that the rule would refuse.
+    and no rounding left undeclared.
   </div>
   <div class="foot">
     <span class="langs">Python · NumPy · TypeScript · JavaScript · Rust · Ruby · PHP · Go · Swift · Java · SQL · Wasm</span>

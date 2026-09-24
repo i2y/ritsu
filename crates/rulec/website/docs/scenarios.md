@@ -46,7 +46,7 @@ policy unique
 r3       | true           | >=1万円 <=10万円 | 200円                        |
 ```
 
-The whole notation is in [Write a table](tour.md#where-it-was-transcribed-from-source-and-). A supplementary provision is cited as `@法 附則第3条`, an amending law's as `@法 附則（令和七年三月三一日法律第一三号）第3条`.
+The whole notation is in [Write a rule](tour.md#where-it-was-transcribed-from-source-and-). A supplementary provision is cited as `@法 附則第3条`, an amending law's as `@法 附則（令和七年三月三一日法律第一三号）第3条`.
 
 ### 1-2. Fetch the copy and pin it
 
@@ -609,7 +609,7 @@ inputs
 
 When the contract holds an enum, `import proto "<file>" <Enum> -> <enum of this rule>`
 (`import jsonschema` for a JSON Schema) ties the rule's enum to the contract's set of values.
-How to write both is in [Write a table](tour.md), under Imports and under Inputs taken from
+How to write both is in [Write a rule](tour.md), under Imports and under Inputs taken from
 the caller's object, and two worked rules with their contracts beside them are in
 [Examples](examples.md).
 
@@ -690,7 +690,7 @@ CI finds it before any message is sent.
 
 ## Where next
 
-[Write a table (.rule)](tour.md){ .md-button .md-button--primary }
+[Write a rule (.rule)](tour.md){ .md-button .md-button--primary }
 [What it proves](checks.md){ .md-button }
 [Generate and call](generate.md){ .md-button }
 [Compare and replay](compare.md){ .md-button }

@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/"
-site_description = "A small language for table-shaped business rules, and a harness for the agent that turns them into code. Gaps and contradictions are proved away first; out comes dependency-free code in twelve languages."
+site_description = "A little language for business rules — tariffs, coupon terms, eligibility, tax tables. Small on purpose, so every rule is proved to give each input exactly one answer before it compiles to dependency-free code in twelve languages."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
@@ -23,7 +23,7 @@ nav = [
   { "Try it in the browser" = "playground.md" },
   { Install = "install.md" },
   { "How to use it, by role" = "scenarios.md" },
-  { "Write a table (.rule)" = "tour.md" },
+  { "Write a rule (.rule)" = "tour.md" },
   { "What it proves" = "checks.md" },
   { "How it is checked" = "assurance.md" },
   { "Generate and call" = "generate.md" },

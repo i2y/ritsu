@@ -1,12 +1,17 @@
 # rulec
 
-**A small language for table-shaped business rules, and a harness for the agent that turns
-them into code.**
+**Write rules. Prove them. Compile them.**
 
-Write the table, and out come Python, NumPy, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
-Swift, Java, SQL and Wasm — ordinary functions with no runtime, no configuration and no
-dependencies. **The proof is finished before the code exists**: a rule that cannot be proved
-does not generate.
+rulec is a little language for business rules — a shipping tariff, a coupon policy, an
+eligibility test, a tax table with its reduced rates and provisos. Conditions are written as
+tables, and around them go calculations, exceptions that take precedence over a main rule,
+provisos, a rule applied to another case, and lists whose length is not fixed.
+
+It is little on purpose. There is no recursion and no state, and a cell looks at its own column
+and nothing else. That is what lets `rulec check` prove that every input in the declared domain
+gets exactly one answer — shown over all of them, not sampled by tests. Only a rule that passes
+compiles, into ordinary functions in Python, NumPy, TypeScript, JavaScript, Rust, Ruby, PHP, Go,
+Swift, Java, SQL and Wasm, with no runtime and no dependencies.
 
 ```rule
 rule fee_demo v1
@@ -48,17 +53,28 @@ examples
 | overseas | 40in  | 12lb   | 38USD  |
 ```
 
-**The keywords are English; the names and the cell values stay in the language of the
-business** — English here, and Japanese in the rules transcribed from Japanese terms and
-statutes, which are on the [examples page](https://i2y.github.io/rulec/examples/) with the
-rest. This example passes `rulec check` as it stands — the repository's tests run it on
-every commit. `examples` is an executable specification, and a row that does not hold is
-reported with the rows that fired. A cell tests **its own column and nothing else**, which is
-what makes a row a box and the completeness and overlap checks exact; complicated rules are
-written by **stacking tables**, as above, where what one table produces is a column of the
-next.
+This example passes `rulec check` as it stands; the repository's tests run it on every commit.
+What one table produces is a column of the next, and `examples` is an executable specification.
+The keywords are English, and the names and cell values stay in the language of the business —
+Japanese, in the rules transcribed from Japanese terms and statutes on the
+[examples page](https://i2y.github.io/rulec/examples/).
 
-Out of `rulec gen`, in Python:
+Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
+falls through it:
+
+```
+error[E101]: Completeness gap: some input matches no row
+  --> rules/parcel.rule:30 table base_rate
+   |
+30 | table base_rate
+   |       ^^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
+ hint: add a row that matches this input.
+ The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+```
+
+Once the rule passes, out of `rulec gen`, in Python:
 
 ```python
 def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
@@ -91,15 +107,10 @@ def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax,
     return USDInclTax(_round_up(fee, 1)), trace
 ```
 
-One row of the table becomes one branch, with the cells it came from beside it as a comment,
-and **no cell is dropped** — a condition an earlier branch already settled is still written
-out (`elif True:`), because reading the output against the table is the only way it is meant
-to be read. The function you call is `fee_demo`, and its signature does not change; beside it
-`fee_demo_traced` returns **the rows that matched** — one per table, as the table's name and
-its row number — which is what a log line or an answer to "why this fee" needs. Beside those
-come a record writer for the fixtures format, the rule as one MCP tool over stdio and
-Streamable HTTP, the rule as a Connect service with the `.proto` it is called through, and a
-page an approver can try a case on.
+One row of the table becomes one branch, with the cells it came from beside it as a comment.
+The function you call is `fee_demo`; beside it, `fee_demo_traced` returns **the rows that
+matched** — one per table, as the table's name and its row number — which is what a log line or
+an answer to "why this fee" needs.
 
 > **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**
 > All of this at length, in English and Japanese: the whole language, what is proved and how,
@@ -112,6 +123,16 @@ page an approver can try a case on.
 > comes back with the input that falls through it. Nothing is sent anywhere, and nothing is
 > installed.
 
+## Who writes it
+
+An agent can. [`AGENTS.md`](AGENTS.md) is its procedure — write, check, fix, generate, show a
+person what changed — and every step runs from `--help`, the diagnostics and their JSON. What
+the agent hands back is a rule a person can read, not code. Two roles stay with people:
+**someone approves the rule** — amounts, rounding directions and which of two readings is right
+are business decisions, and the checks turn what they cannot decide into a question with a
+concrete case in it — and **someone owns the application** the generated function is called
+from.
+
 ## What is proved, and what is not
 
 Seven things are settled before anything is generated. **Five are proved statically** — every
@@ -121,44 +142,21 @@ how fractions are settled, because which way is right is a business decision and
 not make it. **One is run** — every worked example holds. If any of the seven cannot be shown,
 nothing is generated.
 
-None of that is type checking. A type says a value **has the right shape** — a member of the
-enum, an integer, the unit it claims — and a right shape says nothing about a right answer.
-What is proved here is a property of the table, shown exhaustively over the declared input
-space rather than sampled.
-
 What is **not** proved matters just as much.
 
-1. **That the table matches reality.** What is proved is only what can be said about the table
-   as written. Cite the document a table was transcribed from (`@source table1`) and an amount
-   that disagrees with the copy does fail (E116, W120), as does a boundary the copy puts on the
-   other side of itself (E119) — but even then what is shown is agreement with the copy, not
+1. **That the table matches reality.** Cite the document a table was transcribed from
+   (`@source table1`) and an amount that disagrees with the copy fails, as does a boundary the
+   copy puts on the other side of itself — but what is shown is agreement with the copy, not
    with the world. With no citation, transcribe the tariff wrong and everything stays green.
-2. **That the generated code answers like the table.** That is a *test*, not a proof: test
-   cases built from the boundaries are run through the reference evaluator and every generated
-   language, and compared byte for byte. Strong evidence, not an equivalence proof.
-3. **Row pairs the overlap proof could not reach.** When neither an input matching both rows
-   nor its impossibility could be constructed, **W114 names the pair and moves the check into a
-   runtime guard** — the one place with no static proof. It returns an error rather than
-   silently picking a side. Derived values that share an input and the thresholds inside a
-   boolean definition used to land here and no longer do: Fourier–Motzkin elimination decides
-   both. What is left is what it cannot decide because it works over the rationals.
-4. **That the checker itself is right.** The proofs above come out of rulec's own
-   implementation, which has not itself been proved correct.
-
-Three things are built against (4), and none of them shares code with the checker. `gen`
-writes proof harnesses for [Kani](https://model-checking.github.io/kani/) beside the Rust,
-behind `#[cfg(kani)]`, which decide over **every** input in the declared domain rather than
-over the test cases; on the corpus, 114 of them verify in 175 seconds. `rulec certificate`
-prints what all five proofs rest on — the boxes that tile the input space, the axis each pair
-of rows parts on (or, where only the derives and constraints together part it, multipliers
-that add up to a contradiction), the interval every computed value is forced into, and where
-each cell stands in your file, down to the byte — along with why what an API's contract lets
-through is what the rule takes, and `tools/recheck.py`, one dependency-free file, holds it to
-those claims in milliseconds without asking the reader to search. And `proofs/` is a Lean 4
-development proving that the checks a certificate has to pass imply the claims; writing it,
-and reading it back adversarially, found a soundness bug in the completeness check, a witness
-that could break the rule's own `constraint`, and eleven ways a forged certificate got past a
-re-checker.
+2. **That the generated code answers like the table.** That is a *test*: cases built from the
+   boundaries are run through the reference evaluator and every generated language, and
+   compared byte for byte. Strong evidence, not an equivalence proof.
+3. **Row pairs the overlap proof could not reach.** W114 names the pair and moves the check into
+   a runtime guard, which returns an error rather than silently picking a side.
+4. **That the checker itself is right.** Against that stand three things that share no code
+   with the checker: a model checker over the generated Rust, a certificate of what the proofs
+   rest on with a dependency-free re-checker, and a Lean development proving that the checks a
+   certificate has to pass imply the claims.
 
 **What each layer reaches, and where it stops, is laid out in
 [How it is checked](https://i2y.github.io/rulec/assurance/).**
@@ -202,26 +200,11 @@ $ rulec import xlsx tariff.xlsx --sheet standard   # a first draft from the work
 $ rulec mcp                                        # the same commands as MCP tools, for an agent with no shell
 ```
 
-Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
-falls through it:
-
-```
-error[E101]: Completeness gap: some input matches no row
-  --> rules/parcel.rule:30 table base_rate
-   |
-30 | table base_rate
-   |       ^^^^^^^^^ the input space is not fully covered
-   |
- An input that matches no row: dest = overseas, size = small, weight = 1lb
- hint: add a row that matches this input.
- The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
-```
-
-**No legacy implementation and no past data are needed for that.** Every command that reports
-findings carries `--format json` (all but `source` and `import`), where a finding is data —
-`where`, `witness`, `rows`, `fix` — with the keys fixed in English whatever language `--lang`
-puts the prose in. An unknown flag is refused with exit 2 rather than ignored. Every diagnostic is defined once, in `src/codes.rs`, and
-[`docs/codes.md`](docs/codes.md) is literally the `rulec explain --all` output.
+**No legacy implementation and no past data are needed to start** — `check` needs only the
+rule. With `--format json` a finding is data — `where`, `witness`, `rows`, `fix` — with the
+keys fixed in English whatever language `--lang` puts the prose in. Every diagnostic is defined
+once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
+`rulec explain --all` output.
 
 ## In CI
 
@@ -249,37 +232,14 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
                   generated-code.md, backends.md (targeting another language),
                   codes.md / codes.ja.md (every diagnostic, generated)
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
-skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/;
-                  `rulec mcp` serves the same commands as MCP tools where there is no shell
+skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
-                  built from those very functions
-src/              48 modules, and 6 more under codegen/: kw, i18n, lex, parse, types, defset
-                  (the tables that define one output, as one set), region, eval, fmt, json,
-                  codegen, backend, vectors, coverage, verify, fixtures, replay, report, doc,
-                  cert (the certificate), graph (the rule as one graph of what decides
-                  what), vdiff (two versions compared over the whole input space),
-                  import and xlsx (a draft from a sheet: ZIP, deflate,
-                  the number formats), proto and jsonschema (the enums whose values are
-                  declared outside the rule), cel and relation (the conditions a contract
-                  places across its fields), enums, mcp (the command table as MCP tools),
-                  codegen/tool (the rule as an MCP tool and its view), codegen/connect (the
-                  rule as a Connect service: the .proto and what stands behind it),
-                  codegen/sql (one query,
-                  and the same query as a function), sources (a law on e-Gov, cited and
-                  pinned), apply (a rule applied to another case), vfs (reading at a git
-                  revision), sha256, wasm (the checker as the site's playground)
+src/              48 modules, and 6 more under codegen/
 tests/corpus/     48 rules, and the copies of the documents they cite
 tests/mutants/    97 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 47 in Japanese, 36 in English
-tests/oracle/     two premium tables transcribed grade by grade from their published PDFs,
-                  which tests/library.rs replays the rules over
-tests/            and the properties: threeway (every language agrees), readme, docs,
-                  website, skill, codes, json_v2, formats, api, coverage, m3, budget, library,
-                  mcp, import, xlsx, proto and jsonschema (an enum held to the file it is
-                  declared in), tool (the rule as an MCP tool), connect (the rule as a
-                  Connect service), sql, wasm (the site's
-                  playground answers what the binary answers)
+tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
 48 rules — 21 transcribed from a published source, 27 written to reach the rest of the language — are checked, generated and run on every commit, and all 86 diagnostics are implemented.
@@ -290,8 +250,7 @@ e-Gov publishes them, the premium tables of 協会けんぽ and 日本年金機�
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
 Regulations as the eCFR publishes them, and PayPal's own merchant fees — or are sketches
 written to reach the corners of the language, three of them in English. None of it is private
-data. The two premium tables are also held,
-grade by grade, to the amounts printed in them.
+data.
 
 ```console
 $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present
@@ -303,6 +262,7 @@ $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and p
 |---|---|
 | **[The documentation site](https://i2y.github.io/rulec/)** | all of this at length, in English and [日本語](https://i2y.github.io/rulec/ja/) |
 | [Where to start, by what you have](https://i2y.github.io/rulec/#where-to-start-by-what-you-have) | a spreadsheet, an implementation that runs today, or past records — the first move for each |
+| [Does your rule fit](https://i2y.github.io/rulec/fit/) | five questions, and what else is out there |
 | [`AGENTS.md`](AGENTS.md) | the procedure for an agent: write → check → fix → generate → integrate → show the impact → ask a person |
 | [`docs/reference.md`](docs/reference.md) | the complete grammar |
 | [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | every diagnostic code, as `rulec explain --all` prints it |
@@ -316,14 +276,15 @@ twice is how one of the copies goes stale.
 
 ## About the design
 
-The decision-table semantics and the hit-policy vocabulary are borrowed from DMN, and the
-detection of overlap and gaps follows the formulation of Calvanese et al. Not borrowed: the
-XML interchange format, the runtime engine, the GUI modeller.
+The language has two parents. The decision-table semantics and the hit-policy vocabulary are
+borrowed from DMN, and the detection of overlap and gaps follows the formulation of Calvanese
+et al.; a main rule with its exceptions and provisos follows Catala's definitions and their
+priorities. Not borrowed: DMN's XML interchange format, its runtime engine and its GUI modeller.
 
 Proving a table free of gaps and overlaps is older than DMN — SCR and PVS did it in the 1990s
 — and today most rules engines, Catala's proof plugin and LF-ET check it too; the neighbours
 are laid out, with where each one stops, on
-[the site](https://i2y.github.io/rulec/#what-else-is-out-there). What this tool adds is
+[the site](https://i2y.github.io/rulec/fit/#what-else-is-out-there). What this tool adds is
 narrower. The checks hand over evidence that another program re-checks, with the checks
 proved in Lean to imply the claims, and an API's contract is held to the rule's inputs, so a
 change that is compatible on the wire and breaks the decision fails in CI. Units and rounding

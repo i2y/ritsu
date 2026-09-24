@@ -143,7 +143,7 @@ def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rat
 
 ## 呼び出し側のオブジェクトのまま呼ぶ
 
-入力に `from` を書いた規則（[表(.rule)を書く](tour.md)の「入力を、呼び出し側のオブジェクトから取る」）には、規則の関数のほかに、呼び出し側のオブジェクトを受け取る関数が一つ出ます。名前は、規則の関数の名前に `_from` を付けたものです。
+入力に `from` を書いた規則（[ルール(.rule)を書く](tour.md)の「入力を、呼び出し側のオブジェクトから取る」）には、規則の関数のほかに、呼び出し側のオブジェクトを受け取る関数が一つ出ます。名前は、規則の関数の名前に `_from` を付けたものです。
 
 ```python
 from order_shipping import order_shipping_from

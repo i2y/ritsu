@@ -16,7 +16,7 @@ trap 'rm -rf "$tmp"' EXIT
 page() {  # lang
   [ -f "$tmp/$1.html" ] || "$rulec" doc --lang "$1" --format html ../tests/corpus/送料.rule > "$tmp/$1.html"
 }
-shot() {  # lang query out
+shot() {  # lang query out [width,height]
   page "$1"
   # The board fills the window, so one window is one picture — there is nothing below the
   # fold to scroll to, and nothing to crop out of a tall render.
@@ -30,15 +30,19 @@ shot() {  # lang query out
     [ "$scheme" = dark ] && { out="${3%.png}-dark.png"; pref=0; }
     "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
       --blink-settings=preferredColorScheme=$pref \
-      --window-size=1440,680 --virtual-time-budget=4000 --screenshot="$out" "file://$tmp/$1.html$2" >/dev/null 2>&1
+      --window-size="${4:-1440,680}" --virtual-time-budget=4000 --screenshot="$out" "file://$tmp/$1.html$2" >/dev/null 2>&1
   done
 }
 # Two pictures per language. The board on a case: the form on the left, one card per
 # decider, the row that fired lit inside the card it belongs to. Then the same board with
 # 基本送料 selected, which is what the address `#t-基本送料` opens on — the card in colour
 # and the dock below it holding what `rulec check` verified about that table.
+# The front page holds the first one in half a row, where a whole board would be too small to
+# read. A narrower window keeps the form, the lit rows and the answer at a size that reads there;
+# the result card on the right is what falls off, and the form states the answer anyway.
 for lang in ja en; do
   shot "$lang" "?example=2" "docs/images/try-$lang.png"
   shot "$lang" "?example=2#t-基本送料" "docs/images/try-dock-$lang.png"
+  shot "$lang" "?example=2" "docs/images/try-top-$lang.png" 1100,620
 done
 ls -la docs/images/try-*.png

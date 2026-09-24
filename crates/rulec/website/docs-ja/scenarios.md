@@ -46,7 +46,7 @@ policy unique
 r3       | true           | >=1万円 <=10万円 | 200円                        |
 ```
 
-書き方の一覧は[表(.rule)を書く](tour.md#どこから写したかを書くsource-と-)にあります。附則を引用するなら `@法 附則第3条`、改正法の附則なら `@法 附則（令和七年三月三一日法律第一三号）第3条` と書きます。
+書き方の一覧は[ルール(.rule)を書く](tour.md#どこから写したかを書くsource-と-)にあります。附則を引用するなら `@法 附則第3条`、改正法の附則なら `@法 附則（令和七年三月三一日法律第一三号）第3条` と書きます。
 
 ### 1-2. 条文の写しを取って、ハッシュを書き込む
 
@@ -626,7 +626,7 @@ inputs
   個数(parcels)       : number  range >=1 <=20  from count 出荷.parcels
 ```
 
-契約が列挙を持っているなら、`import proto "<ファイル>" <列挙> -> <この規則の列挙>`（JSON Schema なら `import jsonschema`）で、規則の列挙を契約の列挙と対応づけます。書き方は[表(.rule)を書く](tour.md)の「取り込み」と「入力を、呼び出し側のオブジェクトから取る」に、契約と並べた例は[例で見る](examples.md)にあります。
+契約が列挙を持っているなら、`import proto "<ファイル>" <列挙> -> <この規則の列挙>`（JSON Schema なら `import jsonschema`）で、規則の列挙を契約の列挙と対応づけます。書き方は[ルール(.rule)を書く](tour.md)の「取り込み」と「入力を、呼び出し側のオブジェクトから取る」に、契約と並べた例は[例で見る](examples.md)にあります。
 
 ### 5-2. 突き合わせる
 
@@ -691,7 +691,7 @@ Kafka のようなメッセージの契約でも同じです。契約の検証�
 
 ## 次に読むもの
 
-[表(.rule)を書く](tour.md){ .md-button .md-button--primary }
+[ルール(.rule)を書く](tour.md){ .md-button .md-button--primary }
 [何を証明するか](checks.md){ .md-button }
 [生成して呼ぶ](generate.md){ .md-button }
 [突き合わせと再生](compare.md){ .md-button }

@@ -228,7 +228,7 @@ per rule.
 
 <div class="grid cards" markdown>
 
--   __[Write a table (.rule)](tour.md)__
+-   __[Write a rule (.rule)](tour.md)__
 
     The language, from the first line to a rule that checks clean.
 

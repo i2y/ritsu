@@ -61,5 +61,5 @@ input falls through, and gives the shape of the row that closes it.
 
 `verify` (against an implementation that runs today), `replay` and `diff` (against past
 records) need a process and files, so they are not in this page — they are the
-[command](install.md). The grammar is in [Write a table (.rule)](tour.md), and what each
+[command](install.md). The grammar is in [Write a rule (.rule)](tour.md), and what each
 finding means is in [What it proves](checks.md).

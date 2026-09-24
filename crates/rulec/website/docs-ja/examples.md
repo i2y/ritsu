@@ -2560,5 +2560,5 @@ examples
 
 ---
 
-[表(.rule)を書く](tour.md){ .md-button .md-button--primary }
+[ルール(.rule)を書く](tour.md){ .md-button .md-button--primary }
 [文法](reference.md){ .md-button }

@@ -1,7 +1,7 @@
 [project]
 site_name = "rulec"
 site_url = "https://i2y.github.io/rulec/ja/"
-site_description = "表で書ける業務ルールのための小さな言語と、それをエージェントがコードにするためのハーネス。抜けも矛盾も証明してから、依存ゼロのコードを 12 の言語に出す。"
+site_description = "業務ルールのための小さな言語。運賃表、クーポンの規約、適用の可否、税額表。小さいのはわざとで、どの入力にも答えがちょうど一つ決まることを証明してから、依存ゼロのコードを 12 の言語に出す。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
@@ -23,7 +23,7 @@ nav = [
   { "ブラウザで試す" = "playground.md" },
   { "インストール" = "install.md" },
   { "立場ごとの使い方" = "scenarios.md" },
-  { "表(.rule)を書く" = "tour.md" },
+  { "ルール(.rule)を書く" = "tour.md" },
   { "何を証明するか" = "checks.md" },
   { "どうやって確かめているか" = "assurance.md" },
   { "生成して呼ぶ" = "generate.md" },

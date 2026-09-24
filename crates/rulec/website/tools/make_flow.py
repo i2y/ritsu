@@ -56,15 +56,15 @@ LANGS = [("Python", "python"), ("TypeScript", "typescript"), ("JavaScript", "jav
          ("Java", "java"), ("SQL", "sql"), ("Wasm", "wasm"), ("NumPy", "numpy")]
 
 JA = dict(
-    alt="エージェントが資料を読んで表（.rule）を書き、rulec check にかける。"
+    alt="エージェントが資料を読んでルール（.rule）を書き、rulec check にかける。"
         "rulec は診断（どこが・どう直すか・それを起こす入力）を返し、エージェントが直して、"
-        "表が通るまで繰り返す。道具では決められないことだけが具体例つきの質問として人に渡り、"
-        "人は金額と丸めの向きを答える。表が通ると、証明済みの表から rulec gen が Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm を出す。",
-    agent=("エージェント", ["資料を読む", "表を書く", "診断のとおりに直す", "決められないことは人へ"]),
+        "ルールが通るまで繰り返す。道具では決められないことだけが具体例つきの質問として人に渡り、"
+        "人は金額と丸めの向きを答える。ルールが通ると、証明済みのルールから rulec gen が Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm を出す。",
+    agent=("エージェント", ["資料を読む", "ルールを書く", "診断のとおりに直す", "決められないことは人へ"]),
     rulec=("rulec", ["7 つを証明する：", "完全性・重なり", "当てはまらない行", "単位・丸め", "オーバーフロー・例"]),
-    person=("人", ["金額を決める", "丸めの向きを決める", "表を承認する", "コードは書かない"]),
+    person=("人", ["金額を決める", "丸めの向きを決める", "ルールを承認する", "コードは書かない"]),
     sources=("元の資料", ["規約の文書", "Excel", "いまのコード"]),
-    table=("表", ["1 規則 = 1 表"], ".rule"),
+    table=("ルール", ["表とただし書"], ".rule"),
     diagnosis=("診断", ["どこが", "どう直すか", "それを起こす入力"], "JSON"),
     question=("具体例つきの質問", ["「山梨県あての S60 の", "運賃はいくらですか」"]),
     answer=("答え", ["金額", "丸めの向き"]),
@@ -75,21 +75,21 @@ JA = dict(
 )
 
 EN = dict(
-    alt="The agent reads the sources and writes the table (.rule), then runs rulec check. "
+    alt="The agent reads the sources and writes the rule (.rule), then runs rulec check. "
         "rulec returns a diagnosis - where, how to fix it, and an input that shows the "
-        "problem - and the agent fixes the table until it passes. Only what the tool cannot "
+        "problem - and the agent fixes the rule until it passes. Only what the tool cannot "
         "decide reaches a person, as a question with a concrete case; the person answers "
-        "with an amount or a rounding direction. Once the table passes, rulec gen emits "
-        "Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm from the proved table.",
-    agent=("Agent", ["reads the sources", "writes the table", "fixes what rulec finds", "asks a person the rest"]),
+        "with an amount or a rounding direction. Once the rule passes, rulec gen emits "
+        "Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm from the proved rule.",
+    agent=("Agent", ["reads the sources", "writes the rule", "fixes what rulec finds", "asks a person the rest"]),
     rulec=("rulec", ["proves seven things:", "completeness, overlap,", "dead rows, units,", "rounding, overflow,", "the worked examples"]),
-    person=("Person", ["decides amounts", "and which way to round", "approves the table", "never writes code"]),
+    person=("Person", ["decides amounts", "and which way to round", "approves the rule", "never writes code"]),
     sources=("Sources", ["policy documents", "spreadsheets", "legacy code"]),
-    table=("Table", ["1 rule = 1 table"], ".rule"),
+    table=("Rule", ["tables, provisos"], ".rule"),
     diagnosis=("Diagnosis", ["where", "how to fix it", "an input that shows it"], "JSON"),
     question=("A concrete question", ["“What is the fee to 山梨県", "at size S60?”"]),
     answer=("Answer", ["an amount,", "which way to round"]),
-    code=("Generated code", ["Python, TypeScript, JavaScript,", "Rust, Ruby, PHP, Go, Swift, Java,", "SQL, Wasm, NumPy — from a proved", "table, no runtime, one answer"]),
+    code=("Generated code", ["Python, TypeScript, JavaScript,", "Rust, Ruby, PHP, Go, Swift, Java,", "SQL, Wasm, NumPy — from a proved", "rule, no runtime, one answer"]),
     check="rulec check", gen="rulec gen",
     loop="until it passes", passed="once it passes",
     only="only what it cannot decide", back="back into the loop",

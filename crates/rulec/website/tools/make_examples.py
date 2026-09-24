@@ -796,13 +796,13 @@ to show is the shape of the rule rather than the words in its cells.
 
 JA_TAIL = """---
 
-[表(.rule)を書く](tour.md){ .md-button .md-button--primary }
+[ルール(.rule)を書く](tour.md){ .md-button .md-button--primary }
 [文法](reference.md){ .md-button }
 """
 
 EN_TAIL = """---
 
-[Write a table (.rule)](tour.md){ .md-button .md-button--primary }
+[Write a rule (.rule)](tour.md){ .md-button .md-button--primary }
 [Grammar](reference.md){ .md-button }
 """
 
