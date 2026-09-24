@@ -4,10 +4,13 @@
 $ rulec gen rules/ --out generated/
 ```
 
-Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift and Java, a plan for NumPy, one query in SQL,
-one Wasm module, and an ordinary Go package. No runtime to install, no configuration, and no
+Out comes an ordinary module in Python, TypeScript, JavaScript, Rust, Ruby, PHP and Swift, a class in Java, an ordinary Go package, a query and a function in SQL,
+one Wasm module, and a plan for NumPy. No runtime to install, no configuration, and no
 dependency beyond the standard library — that last one is a **checked**
-property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`.
+property, not a claim: `rulec test` runs the Go side with `GOPROXY=off`. There are two
+exceptions. The NumPy plan is not code but the rule itself, read by one fixed evaluator that
+needs `numpy`, which a host deciding whole columns at once already has; and the Connect
+service needs `connectrpc` (below).
 
 A rule that does not pass `check` generates nothing.
 
@@ -38,9 +41,11 @@ One rule governs all of them: **a language that cannot join the
 byte-for-byte agreement check does not go in.** Generated code that
 cannot be held against the reference evaluator sits outside the claim
 this tool makes. Adding the third, TypeScript, cost about 700 lines in
-the generator, and the fifth, Ruby, cost the same. So did the sixth, Swift —
-but Ruby also took twenty-odd files edited by hand, where Swift took one row
-in the registry the tool now keeps of its own targets, and nothing else.
+the generator, and the fifth, Ruby, cost the same. So did the sixth, Swift. What differed was
+everything outside the generator: Ruby took twenty-odd files edited by hand — seven lists of
+the languages in the code and the tests, two diagram generators and nine documents — where
+Swift, once those lists had become the one registry the tool now keeps of its own targets,
+took one row in it and nothing else in the code.
 
 ### A target that is not on the list
 
@@ -429,8 +434,9 @@ $ uvicorn shipping_fee_service:app --port 8080      # ASGI
 $ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
 ```
 
-`connectrpc` is the one dependency anything `gen` writes has, and it is
-confined to the service file: the module it calls still imports nothing.
+Apart from the `numpy` the NumPy plan's evaluator needs, `connectrpc` is the one dependency
+anything `gen` writes has, and it is confined to the service file: the module it calls still
+imports nothing.
 `rulec test` puts every vector through the service four times — each
 application, asked by POST and by GET — and holds all four to the
 reference evaluator.
