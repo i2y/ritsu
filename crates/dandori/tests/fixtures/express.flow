@@ -1,0 +1,18 @@
+workflow quick v1
+kind express
+
+record 結果
+  id : string
+
+task charge(amount: int) -> 結果
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:charge"
+
+task approval(id: string) -> 結果
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approval"
+  callback
+  idempotent
+
+flow
+  let r = charge(amount: 100)
+  wait 10 minutes
+  let a = approval(id: r.id)

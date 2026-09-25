@@ -1,0 +1,34 @@
+workflow mistakes v1
+description "変数の値の有無、match の漏れと通らない行き先、やり直しの誤り"
+
+use rule 与信 from "../../examples/hotel/rules/宿泊の与信額.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
+
+record 予約
+  客室 : 与信.客室
+  泊数 : int
+
+record 通知
+  id : string
+
+inputs
+  予約 : 予約
+
+task notify(text: string) -> 通知
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
+  retry 3 times
+
+flow
+  match 見積.扱い
+    自動 => pass
+    確認 => pass
+  let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
+  match 見積.扱い
+    自動 => let n = notify(text: "自動")
+    確認 => pass
+  let m = notify(text: n.id)
+  match 見積.扱い
+    自動 => pass
+  match 見積.扱い
+    自動 => pass
+    確認 => pass

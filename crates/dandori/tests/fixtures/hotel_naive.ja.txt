@@ -1,0 +1,49 @@
+警告[W101]: tests/fixtures/hotel_naive.flow:85:1: `confirm_intent` が失敗すると、案件 `pi` が requires_payment_method, requires_confirmation, requires_action, requires_capture のままワークフローが失敗します。そうなる呼び出しは 4 か所です。呼び出しでエラーを受けるか、`on failure` を足して案件を片付けてください
+    85 |   pi <- confirm_intent(id: pi.id)
+  そうなる例:
+      81  見積 = 与信(…)
+      84  match 見積.扱い: 自動
+      84  create_intent: pi が requires_confirmation で始まる
+      85  confirm_intent: pi が requires_confirmation → requires_payment_method
+      85  confirm_intent が失敗する（timeout・failure）
+エラー[E010]: tests/fixtures/hotel_naive.flow:87:1: `match` に requires_confirmation の行き先がありません。ここで `pi.status` はその値を取りえます
+    87 |   match pi.status
+  そうなる例:
+      81  見積 = 与信(…)
+      84  match 見積.扱い: 自動
+      84  create_intent: pi が requires_confirmation で始まる
+      86  confirm_intent が失敗する: on card_declined
+      86  get_intent: pi は requires_confirmation
+エラー[E020]: tests/fixtures/hotel_naive.flow:91:1: 案件 `pi` が requires_payment_method のまま、ここでワークフローが失敗することがあります（終わりの状態は succeeded, canceled）。先に片付けるか、そのまま引き渡すなら `leaving pi` と書いてください
+    91 |     requires_payment_method => fail CardDeclined "カードが通りませんでした"
+  そうなる例:
+      81  見積 = 与信(…)
+      84  match 見積.扱い: 自動
+      84  create_intent: pi が requires_confirmation で始まる
+      85  confirm_intent: pi が requires_confirmation → requires_payment_method
+      91  match pi.status: requires_payment_method
+      91  fail CardDeclined
+エラー[E020]: tests/fixtures/hotel_naive.flow:94:1: 案件 `pi` が requires_payment_method, requires_action, requires_capture のまま、ここでワークフローが失敗することがあります（終わりの状態は succeeded, canceled）。先に片付けるか、そのまま引き渡すなら `leaving pi` と書いてください
+    94 |     on unexpected_state => fail HoldExpired "与信の期限が切れていました"
+  そうなる例:
+      81  見積 = 与信(…)
+      84  match 見積.扱い: 自動
+      84  create_intent: pi が requires_confirmation で始まる
+      85  confirm_intent: pi が requires_confirmation → requires_action
+      88  match pi.status: requires_action
+          相手の側で `authenticate` が起きる: pi requires_action → requires_payment_method
+      89  wait_for_customer: pi は requires_payment_method
+      93  capture_intent: capture が断られる（unexpected_state）
+      94  fail HoldExpired
+エラー[E020]: tests/fixtures/hotel_naive.flow:95:1: 案件 `pi` が requires_payment_method, processing のまま、ここでワークフローが終わることがあります（終わりの状態は succeeded, canceled）
+    95 |   succeed 結果 = 宿泊済
+  そうなる例:
+      81  見積 = 与信(…)
+      84  match 見積.扱い: 自動
+      84  create_intent: pi が requires_confirmation で始まる
+      85  confirm_intent: pi が requires_confirmation → requires_capture
+      90  match pi.status: requires_capture
+      90  予約.チェックアウト まで待つ
+      93  capture_intent: pi が requires_capture → processing
+          相手の側で `settle` が起きる: pi processing → requires_payment_method
+      95  succeed

@@ -1,0 +1,2 @@
+エラー[E001]: tests/fixtures/syntax.flow:4:10: `weeks` は時間の単位ではありません。seconds・minutes・hours・days のどれかを書きます
+     4 |   wait 3 weeks

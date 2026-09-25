@@ -1,0 +1,10 @@
+{
+  "name": "dandori-tools",
+  "private": true,
+  "type": "module",
+  "description": "Runners that execute what dandori generates, for the comparison with the reference interpreter",
+  "dependencies": {
+    "jsonata": "2.0.6",
+    "asl-validator": "4.0.0"
+  }
+}

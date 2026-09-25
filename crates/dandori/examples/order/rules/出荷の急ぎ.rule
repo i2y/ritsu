@@ -1,0 +1,25 @@
+rule 出荷の急ぎ(urgency) v1
+description "注文を急ぎで出すかどうかと、使う便。会員はいつも急ぎ、それ以外は三万円以上なら急ぎ。書き下ろしの例"
+
+enum 便(carrier) = 通常便(standard) | 翌日便(next_day)
+
+inputs
+  会員(member) : bool
+  金額(amount) : money[円, incl_tax]  range >=0円 <=100万円
+
+outputs
+  急ぎ(urgent) : bool
+  便(carrier)  : 便
+
+table 急ぎの判定(decide)
+policy unique
+| 会員  | 金額      | -> 急ぎ | 便     |
+| true  | -         | true    | 翌日便 |
+| false | >=30000円 | true    | 翌日便 |
+| false | <30000円  | false   | 通常便 |
+
+examples
+| 会員  | 金額    | -> 急ぎ | 便     |
+| true  | 1000円  | true    | 翌日便 |
+| false | 5000円  | false   | 通常便 |
+| false | 30000円 | true    | 翌日便 |

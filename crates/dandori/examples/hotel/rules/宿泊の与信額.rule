@@ -1,0 +1,33 @@
+rule 宿泊の与信額(hold_amount) v1
+description "予約のときにカードで押さえる額と、フロントの確認に回すかどうか。客室の一泊の額に泊数を掛ける。15 泊以上は確認に回す。書き下ろしの例"
+
+enum 客室(room) = standard | deluxe | suite
+enum 扱い(handling) = 自動(auto) | 確認(review)
+
+inputs
+  客室(room)   : 客室
+  泊数(nights) : number  range >=1 <=30
+
+outputs
+  与信額(amount) : money[円, incl_tax]  round down(1円)
+  扱い(handling) : 扱い
+
+table 一泊の額(rate)
+policy unique
+| 客室     | -> 一泊(per_night) : money[円, incl_tax] |
+| standard | 12000円                                  |
+| deluxe   | 18000円                                  |
+| suite    | 40000円                                  |
+
+table 扱いの判定(decide)
+policy unique
+| 泊数 | -> 扱い |
+| <=14 | 自動    |
+| >=15 | 確認    |
+
+define 与信額(amount) : money[円, incl_tax] = 一泊 × 泊数
+
+examples
+| 客室     | 泊数 | -> 与信額 | 扱い |
+| standard | 2    | 24000円   | 自動 |
+| suite    | 15   | 600000円  | 確認 |

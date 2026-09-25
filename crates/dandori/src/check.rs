@@ -1,0 +1,194 @@
+//! `check`: parse, lower, walk the runs, and the checks that look at the whole program —
+//! retries that may repeat a change, what an Express workflow cannot do, and how long the
+//! execution history can grow on each platform.
+
+use crate::diag::Diag;
+use crate::model::*;
+use crate::syntax::{self, Kind};
+use std::path::Path;
+
+pub struct Checked {
+    pub model: Option<Model>,
+    pub diags: Vec<Diag>,
+}
+
+pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
+    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let checked = check_source(&src, path);
+    Ok((src, checked))
+}
+
+pub fn check_source(src: &str, path: &Path) -> Checked {
+    let prog = match syntax::parse(src) {
+        Ok(p) => p,
+        Err(d) => return Checked { model: None, diags: vec![d] },
+    };
+    let (model, mut diags) = crate::lower::lower(&prog, path);
+    let mut model = match model {
+        Some(m) => m,
+        None => return Checked { model: None, diags },
+    };
+    let fr = crate::flow::analyze(&model);
+    diags.extend(fr.diags);
+    model.monitors = fr.monitors;
+    diags.extend(whole(&model));
+    diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
+    let ok = !crate::diag::has_errors(&diags);
+    Checked { model: if ok { Some(model) } else { None }, diags }
+}
+
+fn whole(m: &Model) -> Vec<Diag> {
+    let mut out = Vec::new();
+    for t in &m.tasks {
+        if let Some(r) = &t.retry {
+            let repeats_change = t.changes_things() && !t.key;
+            let retries_failures = r.on.is_empty() || r.on.iter().any(|x| x == "failure" || x == "timeout");
+            if repeats_change && retries_failures {
+                let starts_or_sends = matches!(t.machine, Some(TaskMachine::Starts { .. }) | Some(TaskMachine::Sends { .. }));
+                let (en, ja) = (
+                    format!("`{}` is retried after a failure or a timeout, when the first try may have gone through on the other side; give it `key` so the other side can tell a retry from a new request, or mark it `idempotent` if doing it twice is the same as once", t.name),
+                    format!("`{}` は失敗やタイムアウトのあとにやり直されますが、最初の一回が相手の側で通っていることがあります。相手がやり直しを見分けられるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
+                );
+                if starts_or_sends {
+                    out.push(Diag::error("E030", t.line, 1, en, ja));
+                } else {
+                    out.push(Diag::warning("W030", t.line, 1, en, ja));
+                }
+            }
+        }
+    }
+    if m.kind == Kind::Express {
+        for t in &m.tasks {
+            if t.callback {
+                out.push(Diag::error("E031", t.line, 1, format!("an Express workflow cannot wait for a callback (`{}`)", t.name), format!("Express のワークフローはコールバックを待てません（`{}`）", t.name)));
+            }
+            if t.changes_things() && !t.key {
+                out.push(Diag::error(
+                    "E031",
+                    t.line,
+                    1,
+                    format!("an asynchronous Express workflow may run twice, and `{}` changes things without `key`", t.name),
+                    format!("非同期の Express のワークフローは二度走ることがあり、`{}` は `key` を持たずに相手の側を変えます", t.name),
+                ));
+            }
+        }
+        let longest = max_wait(&m.flow).saturating_add(m.on_failure.as_ref().map(|f| max_wait(f)).unwrap_or(0));
+        if longest > 300 {
+            out.push(Diag::error(
+                "E031",
+                1,
+                1,
+                "an Express workflow runs for at most five minutes, and this one can wait longer",
+                "Express のワークフローは五分までしか動けませんが、これはそれより長く待つことがあります",
+            ));
+        }
+    }
+    let limits: [(&str, &str, u64, u64); 2] = [
+        ("Step Functions", "Step Functions", 25_000, bound(m, &ASL_COST)),
+        ("Temporal", "Temporal", 51_200, bound(m, &TEMPORAL_COST)),
+    ];
+    for (en, ja, limit, n) in limits {
+        if m.kind == Kind::Express && en == "Step Functions" {
+            continue;
+        }
+        if n > limit {
+            out.push(Diag::error(
+                "E040",
+                1,
+                1,
+                format!("on {en}, an execution of this workflow can write up to about {n} history events, past the limit of {limit}; lower the loop counts, or start a new execution to continue"),
+                format!("{ja} では、このワークフローの一回の実行が実行履歴を最大でおよそ {n} 件書きます。上限の {limit} 件を超えます。ループの回数を減らすか、続きを新しい実行で始めてください"),
+            ));
+        }
+    }
+    let n = bound(m, &DURABLE_COST);
+    if n > DURABLE_LIMIT {
+        out.push(Diag::error(
+            "E040",
+            1,
+            1,
+            format!("on Lambda durable functions, an execution of this workflow can take up to about {n} durable operations, past the limit of {DURABLE_LIMIT}; lower the loop counts, or start a new execution to continue"),
+            format!("Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ {n} 回使います。上限の {DURABLE_LIMIT} 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください"),
+        ));
+    }
+    out
+}
+
+fn max_wait(ss: &[TStmt]) -> u64 {
+    let mut total: u64 = 0;
+    for s in ss {
+        total = total.saturating_add(match &s.kind {
+            TK::Wait { seconds } => *seconds,
+            TK::WaitUntil { .. } => u64::MAX / 4,
+            TK::Match { arms, .. } => arms.iter().map(|a| max_wait(&a.body)).max().unwrap_or(0),
+            TK::Repeat { times, body } => (*times as u64).saturating_mul(max_wait(body)),
+            TK::Call { handlers, .. } => handlers.iter().map(|h| max_wait(&h.body)).max().unwrap_or(0),
+            _ => 0,
+        });
+    }
+    total
+}
+
+/// What each thing costs in history events on a platform. These are estimates on the
+/// high side, so the check errs toward saying too much rather than too little.
+pub struct Cost {
+    pub start: u64,
+    pub call: u64,
+    pub retry: u64,
+    pub check: u64,
+    pub choice: u64,
+    pub wait: u64,
+    pub loop_iter: u64,
+    pub end: u64,
+}
+
+/// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
+/// failed try adds scheduled, started, failed (3); a Choice, Pass or Wait is entered and
+/// exited (2); the execution starts and ends.
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3 };
+
+/// Temporal: an activity is scheduled, started, completed, and a workflow task follows
+/// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
+/// timer and another activity (11); a timer is started and fired, and a workflow task
+/// follows (5); a match costs nothing.
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4 };
+
+/// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
+/// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
+/// wait until reads the clock in a step first (2). The limit is 3,000 operations an
+/// execution and cannot be raised.
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0 };
+pub const DURABLE_LIMIT: u64 = 3_000;
+
+pub fn bound(m: &Model, c: &Cost) -> u64 {
+    let body = cost(m, &m.flow, c);
+    let cleanup = m.on_failure.as_ref().map(|f| cost(m, f, c)).unwrap_or(0);
+    c.start + body + cleanup + c.end
+}
+
+fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
+    let mut total: u64 = 0;
+    for s in ss {
+        let here = match &s.kind {
+            TK::Call { callee, handlers, .. } => {
+                let retries = match callee {
+                    Callee::Task(t) => m.tasks[*t].retry.as_ref().map(|r| r.times as u64).unwrap_or(0),
+                    Callee::Rule(_) => RULE_RETRIES as u64,
+                };
+                let after = handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0).max(c.check);
+                c.call + retries * c.retry + after
+            }
+            TK::Match { arms, .. } => c.choice + arms.iter().map(|a| cost(m, &a.body, c)).max().unwrap_or(0),
+            TK::Wait { .. } | TK::WaitUntil { .. } => c.wait,
+            TK::Repeat { times, body } => c.choice + *times as u64 * (cost(m, body, c) + c.loop_iter),
+            TK::Break | TK::Pass => 0,
+            TK::Succeed { .. } | TK::Fail { .. } => c.choice,
+        };
+        total = total.saturating_add(here);
+    }
+    total
+}
+
+/// A rule is a pure function, so repeating a call of it is harmless: every target retries
+/// a failed call of a rule twice, one second apart and then two.
+pub const RULE_RETRIES: u32 = 2;

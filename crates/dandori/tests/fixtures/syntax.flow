@@ -1,0 +1,4 @@
+workflow syntax v1
+
+flow
+  wait 3 weeks

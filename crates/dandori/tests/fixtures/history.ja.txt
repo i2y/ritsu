@@ -1,0 +1,6 @@
+エラー[E040]: tests/fixtures/history.flow:1:1: Step Functions では、このワークフローの一回の実行が実行履歴を最大でおよそ 80010 件書きます。上限の 25000 件を超えます。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow poll_forever v1
+エラー[E040]: tests/fixtures/history.flow:1:1: Temporal では、このワークフローの一回の実行が実行履歴を最大でおよそ 55008 件書きます。上限の 51200 件を超えます。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow poll_forever v1
+エラー[E040]: tests/fixtures/history.flow:1:1: Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ 20000 回使います。上限の 3000 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow poll_forever v1

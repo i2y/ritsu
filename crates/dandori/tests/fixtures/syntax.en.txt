@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/syntax.flow:4:10: `weeks` is not a unit of time; write seconds, minutes, hours or days
+     4 |   wait 3 weeks

@@ -1,0 +1,26 @@
+警告[W030]: tests/fixtures/mistakes.flow:17:1: `notify` は失敗やタイムアウトのあとにやり直されますが、最初の一回が相手の側で通っていることがあります。相手がやり直しを見分けられるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください
+    17 | task notify(text: string) -> 通知
+エラー[E012]: tests/fixtures/mistakes.flow:22:1: ここでは `見積` はまだ値を持っていません
+    22 |   match 見積.扱い
+エラー[E012]: tests/fixtures/mistakes.flow:29:1: ここでは、`n` が値を持っていないことがあります
+    29 |   let m = notify(text: n.id)
+  そうなる例:
+      23  match 見積.扱い: 自動
+      25  見積 = 与信(…)
+      28  match 見積.扱い: 確認
+エラー[E010]: tests/fixtures/mistakes.flow:30:1: `match` に 確認 の行き先がありません。ここで `見積.扱い` はその値を取りえます
+    30 |   match 見積.扱い
+  そうなる例:
+      23  match 見積.扱い: 自動
+      25  見積 = 与信(…)
+      28  match 見積.扱い: 確認
+      29  m = notify(…)
+エラー[E011]: tests/fixtures/mistakes.flow:34:1: 行き先 `確認` は通りません。ここで `見積.扱い` は 自動 のどれかです
+    34 |     確認 => pass
+  そうなる例:
+      23  match 見積.扱い: 自動
+      25  見積 = 与信(…)
+      27  match 見積.扱い: 自動
+      27  n = notify(…)
+      29  m = notify(…)
+      31  match 見積.扱い: 自動
