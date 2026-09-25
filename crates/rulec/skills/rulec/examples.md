@@ -1322,6 +1322,152 @@ examples
 - **The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.
 - **A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.
 
+## A Stripe PaymentIntent's status (machine)
+
+Transcribed from Stripe's documentation: where a PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. A company's API written down as a rule; the seven statuses are Stripe's own.
+
+```rule
+rule payment_intent v1
+description "Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. Transcribed from Stripe's documentation"
+
+# Read on 25 September 2026. The comments name the pages as follows:
+#   lifecycle  https://docs.stripe.com/payments/paymentintents/lifecycle
+#   status     https://docs.stripe.com/payments/payment-intents/verifying-status
+#   confirm    https://docs.stripe.com/api/payment_intents/confirm
+#   cancel     https://docs.stripe.com/api/payment_intents/cancel
+#   capture    https://docs.stripe.com/api/payment_intents/capture
+#   hold       https://docs.stripe.com/payments/place-a-hold-on-a-payment-method
+#   3ds        https://docs.stripe.com/payments/3d-secure/authentication-flow
+#   errors     https://docs.stripe.com/error-codes (payment_intent_unexpected_state)
+# A row the pages do not settle says so at its end, with what was assumed.
+
+enum status = requires_payment_method | requires_confirmation | requires_action | processing | requires_capture | succeeded | canceled
+enum event = attach | confirm | authenticate | settle | capture | cancel | expire
+# The two methods are Stripe's own enums, and both have `automatic` and `manual`. The hold
+# page also describes `automatic_delayed`, in private preview and not in the object's enum.
+enum capture_method = automatic | automatic_async | manual
+enum confirmation_method = automatic | manual
+enum funds = untouched | held | captured | released
+
+group unconfirmed = requires_payment_method, requires_confirmation
+
+inputs
+  status              : status
+  event               : event                # attach: a payment method is attached without confirming
+  limit_reached       : bool                 # this confirmation is past the limit Stripe puts on one PaymentIntent, which varies
+  needs_action        : bool                 # the payment method asks for a further step, such as 3D Secure
+  approved            : bool                 # the issuer or the bank lets the attempt through; for a cancel, Stripe accepts it
+  delayed             : bool                 # the payment method confirms success only days later, as a bank debit does
+  capture_method      : capture_method
+  confirmation_method : confirmation_method
+
+outputs
+  next_status : status
+  funds       : funds
+  refused     : bool                         # the status does not take this event: an API call gets payment_intent_unexpected_state
+
+# The 3ds page tells the step after authentication differently: Stripe attempts the charge and
+# the PaymentIntent moves to processing, card or not. The lifecycle and status pages keep
+# processing for payment methods that confirm later, and the rows below follow them.
+table transition  # lifecycle, status, and the API reference for each call
+policy unique
+| status           | event                                          | limit_reached | needs_action | approved | delayed | capture_method             | confirmation_method | -> next_status          | funds     | refused |
+| unconfirmed      | attach                                         | -             | -            | -        | -       | -                          | -                   | requires_confirmation   | untouched | false   |  # lifecycle; from requires_confirmation, assumed the same
+| unconfirmed      | confirm                                        | true          | -            | -        | -       | -                          | -                   | canceled                | untouched | false   |  # confirm
+| unconfirmed      | confirm                                        | false         | true         | -        | -       | -                          | -                   | requires_action         | untouched | false   |  # confirm
+| unconfirmed      | confirm                                        | false         | false        | false    | -       | -                          | -                   | requires_payment_method | untouched | false   |  # confirm
+| unconfirmed      | confirm                                        | false         | false        | true     | -       | manual                     | -                   | requires_capture        | held      | false   |  # confirm
+| unconfirmed      | confirm                                        | false         | false        | true     | true    | automatic, automatic_async | -                   | processing              | untouched | false   |  # lifecycle
+| unconfirmed      | confirm                                        | false         | false        | true     | false   | automatic, automatic_async | -                   | succeeded               | captured  | false   |  # confirm
+| unconfirmed      | cancel                                         | -             | -            | -        | -       | -                          | -                   | canceled                | untouched | false   |  # cancel
+| unconfirmed      | authenticate, settle, capture, expire          | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # capture, errors
+| requires_action  | authenticate                                   | -             | -            | false    | -       | -                          | -                   | requires_payment_method | untouched | false   |  # 3ds
+| requires_action  | authenticate                                   | -             | -            | true     | -       | -                          | manual              | requires_confirmation   | untouched | false   |  # confirm
+| requires_action  | authenticate                                   | -             | -            | true     | -       | manual                     | automatic           | requires_capture        | held      | false   |  # 3ds
+| requires_action  | authenticate                                   | -             | -            | true     | true    | automatic, automatic_async | automatic           | processing              | untouched | false   |  # lifecycle
+| requires_action  | authenticate                                   | -             | -            | true     | false   | automatic, automatic_async | automatic           | succeeded               | captured  | false   |  # 3ds, lifecycle
+| requires_action  | cancel                                         | -             | -            | -        | -       | -                          | -                   | canceled                | untouched | false   |  # cancel
+| requires_action  | attach, confirm, settle, capture, expire       | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # errors; for attach and confirm the pages say nothing, assumed refused
+| processing       | settle                                         | -             | -            | true     | -       | -                          | -                   | succeeded               | captured  | false   |  # lifecycle, status
+| processing       | settle                                         | -             | -            | false    | -       | -                          | -                   | requires_payment_method | untouched | false   |  # lifecycle
+| processing       | cancel                                         | -             | -            | true     | -       | -                          | -                   | canceled                | untouched | false   |  # lifecycle: ACH, ACSS, AU BECS, BACS, NZ BECS and SEPA, inside a window
+| processing       | cancel                                         | -             | -            | false    | -       | -                          | -                   | status                  | untouched | true    |  # lifecycle; cancel says "in rare cases"
+| processing       | attach, confirm, authenticate, capture, expire | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # errors
+| requires_capture | capture                                        | -             | -            | -        | false   | -                          | -                   | succeeded               | captured  | false   |  # capture, lifecycle
+| requires_capture | capture                                        | -             | -            | -        | true    | -                          | -                   | processing              | untouched | false   |  # lifecycle names no method; hold says bank debits cannot be held
+| requires_capture | cancel                                         | -             | -            | -        | -       | -                          | -                   | canceled                | released  | false   |  # cancel
+| requires_capture | expire                                         | -             | -            | -        | -       | -                          | -                   | canceled                | released  | false   |  # hold, capture
+| requires_capture | attach, confirm, authenticate, settle          | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # errors
+| succeeded        | -                                              | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # lifecycle, status: refunds go through the Refunds API
+| canceled         | -                                              | -             | -            | -        | -       | -                          | -                   | status                  | untouched | true    |  # cancel, lifecycle
+
+# A case keeps the two methods it was created with, and may change payment method between
+# attempts. Whether a retry uses a card or a bank debit is `delayed`, passed on every call.
+machine payment over transition
+  carry   status -> next_status
+  held    capture_method, confirmation_method
+  initial requires_payment_method
+  final   succeeded, canceled
+  never   succeeded after canceled
+  once    funds captured
+
+# 3ds: a card that asks for 3D Secure, and a customer who passes it.
+scenario card_with_3ds
+| event        | limit_reached | needs_action | approved | delayed | capture_method  | confirmation_method | -> next_status  | funds     | refused |
+| confirm      | false         | true         | false    | false   | automatic_async | automatic           | requires_action | untouched | false   |
+| authenticate | false         | false        | true     | false   | automatic_async | automatic           | succeeded       | captured  | false   |
+
+# hold: a hotel authorizes at booking and captures at check-out.
+scenario authorize_then_capture
+| event   | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status   | funds    | refused |
+| confirm | false         | false        | true     | false   | manual         | automatic           | requires_capture | held     | false   |
+| capture | false         | false        | true     | false   | manual         | automatic           | succeeded        | captured | false   |
+
+# hold, capture: nobody captures, and the authorization runs out.
+scenario hold_expires
+| event   | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status   | funds     | refused |
+| confirm | false         | false        | true     | false   | manual         | automatic           | requires_capture | held      | false   |
+| expire  | false         | false        | false    | false   | manual         | automatic           | canceled         | released  | false   |
+| capture | false         | false        | true     | false   | manual         | automatic           | canceled         | untouched | true    |
+
+# lifecycle: a bank debit that fails days later, and a card that goes through on the retry.
+scenario debit_fails_card_retries
+| event   | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status          | funds     | refused |
+| confirm | false         | false        | true     | true    | automatic      | automatic           | processing              | untouched | false   |
+| cancel  | false         | false        | false    | true    | automatic      | automatic           | processing              | untouched | true    |
+| settle  | false         | false        | false    | true    | automatic      | automatic           | requires_payment_method | untouched | false   |
+| confirm | false         | false        | true     | false   | automatic      | automatic           | succeeded               | captured  | false   |
+
+# confirm: with manual confirmation, the server confirms again after the customer's step.
+scenario manual_confirmation
+| event        | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status        | funds     | refused |
+| attach       | false         | false        | false    | false   | automatic      | manual              | requires_confirmation | untouched | false   |
+| confirm      | false         | true         | false    | false   | automatic      | manual              | requires_action       | untouched | false   |
+| authenticate | false         | false        | true     | false   | automatic      | manual              | requires_confirmation | untouched | false   |
+| confirm      | false         | false        | true     | false   | automatic      | manual              | succeeded             | captured  | false   |
+
+# confirm: declines until Stripe's limit on confirmations is reached.
+scenario too_many_confirmations
+| event   | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status          | funds     | refused |
+| confirm | false         | false        | false    | false   | automatic      | automatic           | requires_payment_method | untouched | false   |
+| confirm | true          | false        | false    | false   | automatic      | automatic           | canceled                | untouched | false   |
+| confirm | false         | false        | true     | false   | automatic      | automatic           | canceled                | untouched | true    |
+
+examples
+| status           | event  | limit_reached | needs_action | approved | delayed | capture_method | confirmation_method | -> next_status | funds     | refused |
+| requires_capture | cancel | false         | false        | false    | false   | manual         | automatic           | canceled       | released  | false   |
+| succeeded        | cancel | false         | false        | false    | false   | automatic      | automatic           | succeeded      | untouched | true    |
+| processing       | cancel | false         | false        | true     | true    | automatic      | automatic           | canceled       | untouched | false   |
+```
+
+**What this one shows**
+
+- **The combinations the documentation leaves open come out as rows.** Completeness asks for every status and every event. Where no page says — a payment method attached again in `requires_action`, for one — the row is a guess, marked `assumed` at its end. Those are the rows to ask Stripe about.
+- **Where two pages read differently, the note above the table says so.** The 3D Secure page has a PaymentIntent move to `processing` after authentication, card or not; the lifecycle page keeps `processing` for payment methods that confirm later. The table follows the second.
+- **Two enums have values of the same name.** `capture_method` and `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the column it is written in.
+- **A value may be spelled like a reserved word.** The `held` of `funds` — money an authorization holds — is spelled like the `held` line of the `machine` section. A value never starts a line, so the two are never confused.
+- **Four claims, and all of them hold**: a case ends in `succeeded` or `canceled`, never reaches `succeeded` after `canceled`, captures funds at most once, and can finish from every state it reaches. The scenarios are six flows the documentation describes: 3D Secure, an authorization and its capture, an authorization that runs out, a bank debit that fails, and more.
+
 ## Whether a return is accepted, in English
 
 A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.

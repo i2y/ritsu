@@ -215,6 +215,14 @@ pub const RESERVED: &[&str] = &[
     EXHAUSTED, HELD, OVER, MACHINE, SCENARIO, CARRY, INITIAL, FINAL, NEVER, AFTER, ONCE,
 ];
 
+/// The reserved words an enum **value** still cannot be (E009), §15.150. A value never starts
+/// a line — it sits in a cell, after `=` in its `enum` line, or in a line under `machine` or
+/// `fold` — so the line-oriented reading that makes every other reserved word unusable as a
+/// name does not reach it. These are the ones a value's own position reads as something else:
+/// the words of a cell, the mark after a value in its `enum` line, the word that divides a
+/// `never` line, the two arms a `fold` line starts with, and the words that divide an arm.
+pub const VALUE_RESERVED: &[&str] = &[NOT, NONE, TRUE, FALSE, STARTS_WITH, DEFAULT, AFTER, EMPTY, EXHAUSTED, BY, WITH];
+
 /// Lists the words that may follow `policy`, for use in diagnostic text.
 pub fn policies() -> String {
     tr!("{UNIQUE} と {FIRST}", "{UNIQUE} or {FIRST}")

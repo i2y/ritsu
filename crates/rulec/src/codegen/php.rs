@@ -266,8 +266,8 @@ impl<'a> Gen<'a> {
     }
 
     /// An enum value as the case the file declares for it.
-    fn php_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn php_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{}::{}", php_name(ty), php_name(&alias.to_uppercase())),
             None => php_str(v),
         }
@@ -288,7 +288,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.php_value(w),
+                Lit::Word(w) => self.php_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => php_str(s),
@@ -301,7 +301,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.php_value(m)));
+                        out.extend(ms.iter().map(|m| self.php_value(m, ty)));
                         continue;
                     }
                 }
@@ -364,7 +364,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("/** {jp} */\nenum {}: string\n{{\n", php_name(ascii)));
             for v in vals {
                 let name = php_name(
-                    &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
                 );
                 o.push_str(&format!("    case {name} = {};\n", php_str(v)));
             }
@@ -379,9 +379,9 @@ impl<'a> Gen<'a> {
                 "/** {} */\nconst INITIAL = {};\n\n/** {} */\nconst FINAL_STATES = [{}];\n\n\
                  /** {} */\nfunction is_final({cls} $state): bool\n{{\n    return in_array($state, FINAL_STATES, true);\n}}\n\n",
                 tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
-                self.php_value(&init),
+                self.php_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.php_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.php_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -407,7 +407,7 @@ impl<'a> Gen<'a> {
         ));
 
         for g in &self.f.groups {
-            let ms: Vec<String> = g.members.iter().map(|m| self.php_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.php_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!(
                 "/** {} */\nconst {} = [{}];\n\n",
                 g.name.text,
@@ -502,7 +502,7 @@ impl<'a> Gen<'a> {
         body.push_str(&self.php_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            let val = self.php_value(&name.text);
+            let val = self.php_value(&name.text, &self.ty_of(&fold.verdict));
             body.push_str(&format!("    if ({v} === {val}) {{  // {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("        // next\n"),
@@ -596,7 +596,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let test = match self.count_member(d) {
-                Some(w) => format!("{v} === {}", self.php_value(&w.text)),
+                Some(w) => format!("{v} === {}", self.php_value(&w.text, &self.ty_of(&d.column.text))),
                 None if self.count_negated(d) => format!("!{v}"),
                 None => v,
             };
@@ -838,7 +838,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.php_value(w),
+                        Lit::Word(w) => self.php_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => super::str_lit(x),
                         _ => "0".into(),
@@ -848,8 +848,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.php_value(w)
+                        } else if self.is_value(w) {
+                            self.php_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             php_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }

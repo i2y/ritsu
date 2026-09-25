@@ -194,7 +194,7 @@ fn undecided(e: &crate::ast::EnumDecl, c: &Checked, im: &EnumImport, rule_path: 
         .iter()
         .enumerate()
         .filter(|(i, v)| {
-            !c.used_values.contains(&v.text) && !e.default_marks.get(*i).copied().unwrap_or(false)
+            !c.used_values.contains(&(e.name.text.clone(), v.text.clone())) && !e.default_marks.get(*i).copied().unwrap_or(false)
         })
         .map(|(_, v)| v.text.clone())
         .collect();

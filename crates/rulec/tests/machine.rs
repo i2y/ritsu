@@ -278,6 +278,56 @@ fn 網羅の基準にステートマシンの遷移が入る() {
     assert_eq!(int(&m, "satisfied"), int(&m, "total"), "{out}");
 }
 
+/// A decline happens in every world, and the hold that may follow it only when the case holds
+/// `hold`. The pair is made in that world, even though the decline is first found in the
+/// other one — the traces have to look for it there, as the coverage counts it there.
+#[test]
+fn 片方の世界でしか続かない遷移の対も手順に入る() {
+    let d = scratch("pair-world");
+    let rule = write(
+        &d,
+        "hold_flow.rule",
+        "rule hold_flow v1
+
+enum state = open | authorized | done | void
+enum event = decline | confirm | capture | cancel
+enum mode = auto | hold
+
+inputs
+  state : state
+  event : event
+  mode  : mode
+
+outputs
+  next_state : state
+
+table step
+policy unique
+| state      | event            | mode | -> next_state |
+| open       | decline, capture | -    | state         |
+| open       | confirm          | auto | done          |
+| open       | confirm          | hold | authorized    |
+| open       | cancel           | -    | void          |
+| authorized | capture          | -    | done          |
+| authorized | cancel           | -    | void          |
+| authorized | decline, confirm | -    | state         |
+| done, void | -                | -    | state         |
+
+machine flow over step
+  carry   state -> next_state
+  held    mode
+  initial open
+  final   done, void
+",
+    );
+    let (c, out) = rulec(&["coverage", &rule, "--format", "json"]);
+    assert_eq!(c, 0, "{out}");
+    let j = &objects(&out)[0];
+    let m = arr(j, "criteria").iter().find(|x| s(x, "name") == "machine_transition").cloned().expect("machine_transition が無い");
+    assert_eq!(int(&m, "satisfied"), int(&m, "total"), "{out}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn 予算が尽きたら_成り立つとは言わない() {
     let (c, out) = rulec(&["check", RULE, "--budget", "60", "--format", "json"]);

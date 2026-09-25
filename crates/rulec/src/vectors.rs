@@ -1912,33 +1912,47 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
                 None => format!("{} -> {}", k.0, k.2),
             }
         };
+        // Every world a transition is made in, with its first edge there. A pair is one case's
+        // two calls, so both are made in one world — which need not be the world the first
+        // transition was found in first: a decline happens in every world, and the hold that
+        // may follow it only in a `manual` one.
+        let mut in_world: BTreeMap<(TransitionKey, Vec<usize>), usize> = BTreeMap::new();
+        for (i, e) in a.edges.iter().enumerate() {
+            if !a.mixed.contains(&i) {
+                in_world.entry(((e.from.clone(), e.row.clone(), e.to.clone()), e.world.clone())).or_insert(i);
+            }
+        }
         let mut paths: Vec<(Vec<usize>, String)> = Vec::new();
-        let mut paired: BTreeSet<usize> = BTreeSet::new();
+        let mut paired: BTreeSet<TransitionKey> = BTreeSet::new();
         const CAP: usize = 4000;
         for (k1, e1) in &rep {
-            let w = a.edges[*e1].world.clone();
+            let first = a.edges[*e1].world.clone();
+            let worlds = std::iter::once(first.clone())
+                .chain(in_world.keys().filter(|(k, w)| k == k1 && *w != first).map(|(_, w)| w.clone()));
+            let worlds: Vec<Vec<usize>> = worlds.collect();
             for (k2, _) in &rep {
                 if k1.2 != k2.0 || paths.len() >= CAP {
                     continue;
                 }
-                // The second call of the pair in the first one's world, when the case can
-                // make it there.
-                let Some(e2) = (0..a.edges.len()).find(|&j| {
-                    let e = &a.edges[j];
-                    e.world == w && (e.from.clone(), e.row.clone(), e.to.clone()) == *k2 && !a.mixed.contains(&j)
+                // The first world, the first transition's own before the others, in which a
+                // case reaches the first call and can go on with the second.
+                let Some((i1, i2, w)) = worlds.iter().find_map(|w| {
+                    let i1 = *in_world.get(&(k1.clone(), w.clone()))?;
+                    let i2 = *in_world.get(&(k2.clone(), w.clone()))?;
+                    a.reaches(&k1.0, w).then(|| (i1, i2, w.clone()))
                 }) else {
                     continue;
                 };
-                let Some(mut p) = a.trace_to_node(&(k1.0.clone(), w.clone())) else { continue };
-                p.push(*e1);
-                p.push(e2);
-                paired.insert(*e1);
-                paired.insert(e2);
+                let Some(mut p) = a.trace_to_node(&(k1.0.clone(), w)) else { continue };
+                p.push(i1);
+                p.push(i2);
+                paired.insert(k1.clone());
+                paired.insert(k2.clone());
                 paths.push((p, tr!("遷移の対: {} → {}", "transition pair: {} then {}", name(k1), name(k2))));
             }
         }
         for (k, e) in &rep {
-            if paired.contains(e) {
+            if paired.contains(k) {
                 continue;
             }
             let Some(mut p) = a.trace_to_node(&(k.0.clone(), a.edges[*e].world.clone())) else { continue };

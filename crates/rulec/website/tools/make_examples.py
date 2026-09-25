@@ -396,6 +396,27 @@ EXAMPLES = [
         ],
     ),
     (
+        "payment_intent.rule",
+        "Stripe の PaymentIntent の状態（machine）",
+        "Stripe のドキュメントから、PaymentIntent の状態が confirm・認証・capture・cancel と、あとで届く支払いの結果でどう移るかを書き写したものです。事業者の API の仕様を写した例で、状態は Stripe の七つをそのまま使っています。",
+        [
+            "**ドキュメントが決めていない組み合わせが、行として出てきます。** 表の完全性が、状態と出来事の組み合わせを全部埋めさせるからです。`requires_action` で支払い方法を付け直したときなど、どのページにも書いていないものは仮に決め、行末に assumed と書いてあります。人が Stripe に確かめるのは、その行です。",
+            "**ページどうしの読みの違いは、表の上の注記にあります。** 3D セキュアのページは、認証のあとカードでも `processing` に移ると書きます。ライフサイクルのページは、`processing` をあとで結果が分かる支払い方法のときだけの状態としています。表は後者に従っています。",
+            "**二つの列挙が同じ名前の値を持っています。** `capture_method` と `confirmation_method` は、どちらも `automatic` と `manual` を持ちます。値は、書かれた列の列挙で読みます。",
+            "**値は予約語と同じ綴りでも書けます。** 資金の状態の `held`（与信で押さえた資金）は、`machine` の節の `held` と同じ綴りです。値は行の頭に来ないので、取り違えられることがありません。",
+            "**主張は四つで、どれも成り立ちます。** `succeeded` と `canceled` で終わる、`canceled` のあとに `succeeded` に着かない、`funds captured` は一回まで、どの状態からでも終われる。例は、ドキュメントに書かれている六つの流れ（3D セキュア、与信と確定、与信の期限切れ、口座振替の失敗など）です。",
+        ],
+        "A Stripe PaymentIntent's status (machine)",
+        "Transcribed from Stripe's documentation: where a PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. A company's API written down as a rule; the seven statuses are Stripe's own.",
+        [
+            "**The combinations the documentation leaves open come out as rows.** Completeness asks for every status and every event. Where no page says — a payment method attached again in `requires_action`, for one — the row is a guess, marked `assumed` at its end. Those are the rows to ask Stripe about.",
+            "**Where two pages read differently, the note above the table says so.** The 3D Secure page has a PaymentIntent move to `processing` after authentication, card or not; the lifecycle page keeps `processing` for payment methods that confirm later. The table follows the second.",
+            "**Two enums have values of the same name.** `capture_method` and `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the column it is written in.",
+            "**A value may be spelled like a reserved word.** The `held` of `funds` — money an authorization holds — is spelled like the `held` line of the `machine` section. A value never starts a line, so the two are never confused.",
+            "**Four claims, and all of them hold**: a case ends in `succeeded` or `canceled`, never reaches `succeeded` after `canceled`, captures funds at most once, and can finish from every state it reaches. The scenarios are six flows the documentation describes: 3D Secure, an authorization and its capture, an authorization that runs out, a bank debit that fails, and more.",
+        ],
+    ),
+    (
         "return_eligibility.rule",
         "返品できるかどうかを英語で書く",
         "金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。",

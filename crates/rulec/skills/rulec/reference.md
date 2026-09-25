@@ -221,6 +221,13 @@ enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) | �
 which declares "this value needs no row of its own; being caught by a `-` row is correct" and
 silences W111 for it.
 
+Two enums may have values of the same name — Stripe's `capture_method` and
+`confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the
+place it is written: the column of a cell, the output of an output cell, the carried enum in
+the lines under `machine`. A value of one enum written where another is expected is E103,
+in an output cell as in any other. A value may be spelled like one of the reserved words
+(§12), except the eleven its own position would read as something else.
+
 ### Declaring a group
 
 ```rule
@@ -229,6 +236,9 @@ group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 
 
 A group is a named subset of an enum and may be used in a cell wherever a value may. Groups
 are always expanded before checking, so a hole in a table written with groups is still found.
+Its members are values of one enum (E103 when they mix two); when two enums both have every
+member, the group belongs to the enum of the first column it is written in, and a column of
+the other enum is E103.
 
 ## 3.1 import
 
@@ -1276,6 +1286,11 @@ These cannot be used as a name (E009). A declaration whose name is one of them w
 by the line-oriented parser as the start of a section and silently dropped, which is why it is
 caught at parse time. An ASCII alias is not read by that parser, so it may be one; W121 says
 when a target language takes it badly.
+
+An enum **value** never starts a line, so it may be any of them but eleven: `not` `none`
+`true` `false` `starts_with` (the words of a cell), `default` (the mark after a value in its
+`enum` line), `after` (which divides a `never` line), and `empty` `exhausted` `by` `with`
+(the words of a `fold` arm). A state may be called `initial`, `held` or `final`.
 
 <!-- RESERVED -->
 | | |

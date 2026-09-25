@@ -87,6 +87,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/paypal_fee.rule", "paypal_fee"),
     ("tests/corpus/二つの区分.rule", "two_bands"),
     ("tests/corpus/注文の状態.rule", "order_state"),
+    ("tests/corpus/payment_intent.rule", "payment_intent"),
 ];
 
 #[test]

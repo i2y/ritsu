@@ -614,8 +614,8 @@ pub fn ledger() -> Vec<Entry> {
             "E009",
             tr!("宣言の名前が予約語と衝突しています", "A declared name collides with a reserved word"),
             tr!(
-                "宣言した名前（や別名）が語彙の語と同じとき。行指向のパーサがその行をセクションの始まりと読んで、宣言を黙って捨てる事故を防ぎます。",
-                "A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently."
+                "宣言した名前（や別名）が語彙の語と同じとき。行指向のパーサがその行をセクションの始まりと読んで、宣言を黙って捨てる事故を防ぎます。列挙の値は行の頭に来ないので、値の位置で別の意味に読まれる 11 語（`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`）のときだけです（§15.150）。",
+                "A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`) (§15.150)."
             ),
             tr!(
                 "名前を変えてください（`enum range(kind)` なら `enum 範囲区分(range_kind)`）。予約語は `src/kw.rs` の表ひとつで決まっています。",
@@ -1331,8 +1331,8 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます（§15.150）。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
             ),
             tr!(
                 "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。",

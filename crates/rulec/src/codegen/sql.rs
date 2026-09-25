@@ -213,7 +213,7 @@ fn out_value(g: &Gen, oc_name: &str, out: Option<&OutCell>, local: &dyn Fn(&str)
                 "TRUE".into()
             } else if w == crate::kw::FALSE {
                 "FALSE".into()
-            } else if g.value_names.contains_key(w) {
+            } else if g.is_value(w) {
                 lit(w)
             } else {
                 sql.translate(&g.rescaled(w, oc_name, local(w)))

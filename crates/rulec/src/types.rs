@@ -423,12 +423,17 @@ pub struct Checked {
     pub out_scales: HashMap<String, i128>,
     /// Enum name -> values, in declaration order (§6.3 picks the first as a witness).
     pub enums: HashMap<String, Vec<String>>,
+    /// The enums in the order they were declared, the imported ones first. Two enums may
+    /// share a value's name (§15.150); where nothing says which one is meant, the first wins,
+    /// the same one every run.
+    pub enum_order: Vec<String>,
     /// Group name -> the enum it belongs to and its members.
     pub groups: HashMap<String, (String, Vec<String>)>,
     pub used: HashSet<String>,
-    /// Enum values named in a cell or expression. W111 uses it to report "values that appear
-    /// in no row".
-    pub used_values: HashSet<String>,
+    /// Enum values named in a cell or expression, as `(enum, value)`: `automatic` named in a
+    /// column of one enum leaves another enum's `automatic` unnamed. W111 uses it to report
+    /// "values that appear in no row".
+    pub used_values: HashSet<(String, String)>,
     pub diags: Vec<Diag>,
     /// The definition sets: one per table, or one per output that several tables define
     /// (§15.66). Everything downstream — the region checks, the evaluator, the
@@ -530,6 +535,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         groups: HashMap::new(),
         used: HashSet::new(),
         used_values: HashSet::new(),
+        enum_order: Vec::new(),
         diags: Vec::new(),
         sets: Vec::new(),
         set_of: HashMap::new(),
@@ -572,6 +578,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for (p, sp) in &f.imports {
         match crate::prelude::lookup(p) {
             Some((name, values)) => {
+                c.enum_order.push(name.clone());
                 c.enums.insert(name, values);
             }
             None => c.diags.push(
@@ -584,6 +591,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
 
     for e in &f.enums {
+        c.enum_order.push(e.name.text.clone());
         c.enums.insert(
             e.name.text.clone(),
             e.values.iter().map(|v| v.text.clone()).collect(),
@@ -606,16 +614,36 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
         }
-        // The group's enum is whichever enumeration holds its first member.
-        let owner = g
-            .members
+        // The group's enum is one that holds every member. Two enums may share values
+        // (§15.150): the group then takes the first one declared until a column of the other
+        // is the first to use it (`cell`). Members of no single enum are a mistake, and were
+        // read as the first member's enum in silence.
+        let holders: Vec<String> = c
+            .enum_order
+            .iter()
+            .filter(|e| g.members.iter().all(|m| c.enums.get(*e).is_some_and(|vs| vs.contains(&m.text))))
+            .cloned()
+            .collect();
+        let known = g.members.iter().all(|m| c.enums.values().any(|vs| vs.contains(&m.text)));
+        if holders.is_empty() && known && !g.members.is_empty() {
+            let of = |m: &Name| c.enum_order.iter().find(|e| c.enums.get(*e).is_some_and(|vs| vs.contains(&m.text))).cloned().unwrap_or_default();
+            let first = of(&g.members[0]);
+            if let Some(other) = g.members.iter().find(|m| !c.enums.get(&first).is_some_and(|vs| vs.contains(&m.text))) {
+                c.diags.push(
+                    Diag::error("E103", tr!("群 {} に、列挙 {} の値と列挙 {} の値が混ざっています", "Group {} mixes values of enum {} and enum {}", g.name.text, first, of(other)))
+                        .at(at(other.span.line))
+                        .mark(other.span.clone(), tr!("{} の値です", "a value of {}", of(other)))
+                        .note(tr!(
+                            "群は一つの列挙の値の部分集合です。列には一つの列挙の値しか来ないので、ほかの列挙の値は当たりません。",
+                            "A group is a subset of one enum's values. A column holds values of one enum, so the other enum's value never matches."
+                        )),
+                );
+            }
+        }
+        let owner = holders
             .first()
-            .and_then(|m| {
-                c.enums
-                    .iter()
-                    .find(|(_, vs)| vs.iter().any(|v| v == &m.text))
-                    .map(|(n, _)| n.clone())
-            })
+            .cloned()
+            .or_else(|| g.members.first().and_then(|m| c.enum_order.iter().find(|e| c.enums.get(*e).is_some_and(|vs| vs.contains(&m.text))).cloned()))
             .unwrap_or_else(|| "都道府県".to_string());
         c.groups.insert(
             g.name.text.clone(),
@@ -789,10 +817,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     for o in &f.outputs {
         named.push((o.name.text.as_str(), &o.name.span));
     }
+    // A value is held to fewer words than a name: it never starts a line (§15.150).
+    let mut values: Vec<(&str, &Span)> = Vec::new();
     for e in &f.enums {
         named.push((e.name.text.as_str(), &e.name.span));
         for v in &e.values {
-            named.push((v.text.as_str(), &v.span));
+            values.push((v.text.as_str(), &v.span));
         }
     }
     for g in &f.groups {
@@ -825,6 +855,22 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at(sp.line))
                     .mark(sp.clone(), "")
                     .note(tr!("行指向の構文なので、キーワードと同じ名前は宣言を黙って捨ててしまいます。", "The syntax is line-oriented, so a declaration named like a keyword is silently dropped."))
+                    .note(tr!("別の名前を付けてください。", "Choose a different name.")),
+            );
+        }
+    }
+    for (n, sp) in values {
+        if crate::kw::VALUE_RESERVED.contains(&n) {
+            c.diags.push(
+                Diag::error("E009", tr!("`{n}` はキーワードなので、列挙の値にできません", "`{n}` is a keyword and cannot be an enum value"))
+                    .at(at(sp.line))
+                    .mark(sp.clone(), "")
+                    .note(tr!(
+                        "値はセル・`enum` の行・`machine` と `fold` の行に書かれ、この語はそこで別の意味に読まれます。値にできないキーワードは {} の {} 語だけです。",
+                        "A value is written in cells, in its `enum` line and in the lines under `machine` and `fold`, where this word is read as something else. These {1} are the only keywords a value cannot be: {0}.",
+                        crate::kw::VALUE_RESERVED.join(" "),
+                        crate::kw::VALUE_RESERVED.len()
+                    ))
                     .note(tr!("別の名前を付けてください。", "Choose a different name.")),
             );
         }
@@ -1654,7 +1700,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             .values
             .iter()
             .enumerate()
-            .filter(|(i, v)| !c.used_values.contains(&v.text) && !e.default_marks.get(*i).copied().unwrap_or(false))
+            .filter(|(i, v)| {
+                !c.used_values.contains(&(e.name.text.clone(), v.text.clone())) && !e.default_marks.get(*i).copied().unwrap_or(false)
+            })
             .map(|(_, v)| v)
             .collect();
         // An enum bound to a `.proto` is reported by the pass that read the file (E033): the
@@ -2208,11 +2256,44 @@ impl Checked {
         );
     }
 
+    /// The first enum, in declaration order, that has a value of this name. Where the place
+    /// a value is written says which enum it is, `enum_of_value_in` reads it there instead.
     fn enum_of_value(&self, v: &str) -> Option<String> {
-        self.enums
-            .iter()
-            .find(|(_, vs)| vs.iter().any(|x| x == v))
-            .map(|(n, _)| n.clone())
+        self.enum_order.iter().find(|e| self.enum_has(e, v)).cloned()
+    }
+
+    fn enum_has(&self, e: &str, v: &str) -> bool {
+        self.enums.get(e).is_some_and(|vs| vs.iter().any(|x| x == v))
+    }
+
+    /// An output cell that names a value of another enum than its column's. It passed in
+    /// silence, and the generated code returned a value of the wrong type (§15.150).
+    fn value_of_other_enum(&mut self, w: &str, e: &str, want: &Ty, at: &str, sp: &Span) {
+        let col = match want {
+            Ty::Opt(t) => t.as_ref(),
+            t => t,
+        };
+        if matches!(col, Ty::Unknown) || matches!(col, Ty::Enum(c) if c == e) {
+            return;
+        }
+        self.diags.push(
+            Diag::error("E103", tr!("この列は {want} ですが `{w}`（{e} の値）が書かれています", "This column is {want}, but `{w}` (a value of {e}) is written here"))
+                .at(at.to_string())
+                .mark(sp.clone(), ""),
+        );
+    }
+
+    /// The enum a value is read in: the enum of the column it is written under when that one
+    /// has it, since two enums may both have `automatic` (§15.150); else the first that has it.
+    fn enum_of_value_in(&self, v: &str, want: &Ty) -> Option<String> {
+        let want = match want {
+            Ty::Opt(t) => t.as_ref(),
+            t => t,
+        };
+        match want {
+            Ty::Enum(e) if self.enum_has(e, v) => Some(e.clone()),
+            _ => self.enum_of_value(v),
+        }
     }
 
     /// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` (§15.58).
@@ -2333,7 +2414,7 @@ impl Checked {
                                 tr!("その列挙の値を一つ書いてください。", "Name one of that enum's values."),
                             );
                         } else {
-                            self.used_values.insert(v.text.clone());
+                            self.used_values.insert((en.clone(), v.text.clone()));
                         }
                     }
                     _ => {}
@@ -2597,7 +2678,6 @@ impl Checked {
                     },
                     OutCell::Name(w) => {
                         // An enum value, or (§3.2) the name of an input / derived / define.
-                        self.used_values.insert(w.clone());
                         if let Some(s) = self.syms.get(w).cloned() {
                             self.used.insert(w.clone());
                             if !s.ty.unifies(want) {
@@ -2607,7 +2687,10 @@ impl Checked {
                                         .mark(osp.clone(), ""),
                                 );
                             }
-                        } else if self.enum_of_value(w).is_none() && w != crate::kw::TRUE && w != crate::kw::FALSE {
+                        } else if let Some(e) = self.enum_of_value_in(w, want) {
+                            self.used_values.insert((e.clone(), w.clone()));
+                            self.value_of_other_enum(w, &e, want, &at(row.span.line), &osp);
+                        } else if w != crate::kw::TRUE && w != crate::kw::FALSE {
                             self.diags.push(
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
@@ -2740,10 +2823,9 @@ impl Checked {
                                         .mark(osp, ""),
                                 );
                             }
-                        } else if self.enum_of_value(w).is_none()
-                            && w != crate::kw::TRUE
-                            && w != crate::kw::FALSE
-                        {
+                        } else if let Some(e) = self.enum_of_value_in(w, &want) {
+                            self.value_of_other_enum(w, &e, &want, &at(row.span.line), &osp);
+                        } else if w != crate::kw::TRUE && w != crate::kw::FALSE {
                             self.diags.push(
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
@@ -3141,15 +3223,40 @@ impl Checked {
                     }
                     return;
                 }
-                if let Some((_, members)) = s.groups.get(w).cloned() {
+                let col = match want {
+                    Ty::Opt(t) => t.as_ref(),
+                    t => t,
+                };
+                if let Some((mut owner, members)) = s.groups.get(w).cloned() {
+                    if let Ty::Enum(ce) = col {
+                        if *ce != owner {
+                            if members.iter().all(|m| s.enum_has(ce, m)) && !s.used.contains(w) {
+                                // A group of values two enums share belongs to the enum of the
+                                // first column it is written in (§15.150).
+                                if let Some(g) = s.groups.get_mut(w) {
+                                    g.0 = ce.clone();
+                                }
+                                owner = ce.clone();
+                            } else {
+                                s.diags.push(
+                                    Diag::error("E103", tr!("この列は {want} ですが、群 `{w}`（{owner} の値）が書かれています", "This column is {want}, but group `{w}` (values of {owner}) is written here"))
+                                        .at(at.to_string())
+                                        .mark(span.clone(), ""),
+                                );
+                            }
+                        }
+                    }
                     s.used.insert(w.clone());
                     for m in members {
-                        s.used_values.insert(m);
+                        s.used_values.insert((owner.clone(), m));
                     }
                     return;
                 }
-                s.used_values.insert(w.clone());
-                match (&s.enum_of_value(w), want) {
+                let of = s.enum_of_value_in(w, want);
+                if let Some(e) = &of {
+                    s.used_values.insert((e.clone(), w.clone()));
+                }
+                match (&of, col) {
                     (Some(e), Ty::Enum(w2)) if e == w2 => {}
                     (_, Ty::Unknown) => {}
                     (None, _) => s.diags.push(

@@ -278,7 +278,7 @@ impl<'a> Gen<'a> {
                             // A cell that names a value of the column's enum is that value; a
                             // cell that names a declaration is read at its own scale and
                             // widened to the column's, the way `rescaled` does for text.
-                            Some(OutCell::Name(w)) if self.value_names.contains_key(w) => quote(w),
+                            Some(OutCell::Name(w)) if self.is_value(w) => quote(w),
                             Some(OutCell::Name(w)) => {
                                 let (a, b) = (self.scale(w), scale);
                                 let n = format!(r#"{{"k":"name","n":{}}}"#, quote(w));

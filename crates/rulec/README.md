@@ -239,21 +239,21 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
 src/              49 modules, and 6 more under codegen/
-tests/corpus/     49 rules, and the copies of the documents they cite
+tests/corpus/     50 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 53 in Japanese, 42 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-49 rules — 21 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 102 diagnostics are implemented.
+50 rules — 22 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 102 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as
 e-Gov publishes them, the premium tables of 協会けんぽ and 日本年金機構, GOV.UK's minimum wage,
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
-Regulations as the eCFR publishes them, and PayPal's own merchant fees — or are sketches
-written to reach the corners of the language, three of them in English. None of it is private
-data.
+Regulations as the eCFR publishes them, PayPal's own merchant fees, and the lifecycle of a
+PaymentIntent as Stripe's documentation describes it — or are sketches written to reach the
+corners of the language, three of them in English. None of it is private data.
 
 ```console
 $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present

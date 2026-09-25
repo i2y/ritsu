@@ -136,7 +136,9 @@ pub struct Gen<'a> {
     /// Type name → the ASCII alias of that enum (PascalCase).
     enum_names: BTreeMap<String, String>,
     /// Enum value → (type name, ASCII alias).
-    value_names: BTreeMap<String, (String, String)>,
+    /// `(enum, value)` -> the class and member it is generated as. Keyed by the enum as well,
+    /// since two enums may both have `automatic` (§15.150).
+    value_names: BTreeMap<(String, String), (String, String)>,
     src_hash: String,
     /// The source itself and where it was read from, for the approver's page the MCP server
     /// serves (§15.52). The page is rendered from the rule, not from the generated code.
@@ -353,13 +355,13 @@ impl<'a> Gen<'a> {
             let ty = pascal(&pub_name(&e.name));
             enum_names.insert(e.name.text.clone(), ty.clone());
             for v in &e.values {
-                value_names.insert(v.text.clone(), (ty.clone(), pascal(&pub_name(v))));
+                value_names.insert((e.name.text.clone(), v.text.clone()), (ty.clone(), pascal(&pub_name(v))));
             }
         }
         if f.imports.iter().any(|(p, _)| p.ends_with("都道府県")) {
             enum_names.insert("都道府県".into(), "Prefecture".into());
             for (j, r) in crate::prelude::PREFECTURES {
-                value_names.insert((*j).into(), ("Prefecture".into(), (*r).into()));
+                value_names.insert(("都道府県".into(), (*j).into()), ("Prefecture".into(), (*r).into()));
             }
         }
         let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
@@ -850,8 +852,34 @@ fn lcm(a: i128, b: i128) -> i128 {
 // ---------------------------------------------------------------------------
 
 impl<'a> Gen<'a> {
-    fn py_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    /// The class and member a value is generated as, read in the enum of the place it is
+    /// written: two enums may both have `automatic` (§15.150). With no enum there to read it
+    /// in, the first enum that has it.
+    pub(crate) fn value_name(&self, v: &str, ty: &Ty) -> Option<&(String, String)> {
+        let inner = match ty {
+            Ty::Opt(t) => t.as_ref(),
+            t => t,
+        };
+        if let Ty::Enum(e) = inner {
+            if let Some(x) = self.value_names.get(&(e.clone(), v.to_string())) {
+                return Some(x);
+            }
+        }
+        self.c.enum_order.iter().find_map(|e| self.value_names.get(&(e.clone(), v.to_string())))
+    }
+
+    /// Whether a word is a value of some enum.
+    pub(crate) fn is_value(&self, v: &str) -> bool {
+        self.c.enums.values().any(|vs| vs.iter().any(|x| x == v))
+    }
+
+    /// A group's enum, as a type: what its members are read in.
+    pub(crate) fn group_ty(&self, g: &str) -> Ty {
+        self.c.groups.get(g).map(|(e, _)| Ty::Enum(e.clone())).unwrap_or(Ty::Unknown)
+    }
+
+    fn py_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{ty}.{}", alias.to_uppercase()),
             None => format!("{v:?}"),
         }
@@ -867,7 +895,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "True".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "False".into(),
-                Lit::Word(w) => self.py_value(w),
+                Lit::Word(w) => self.py_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -878,7 +906,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.py_value(m)));
+                        out.extend(ms.iter().map(|m| self.py_value(m, ty)));
                         continue;
                     }
                 }
@@ -959,7 +987,7 @@ impl<'a> Gen<'a> {
             let Some(vals) = self.c.enums.get(jp) else { continue };
             o.push_str(&format!("class {ascii}(enum.Enum):\n"));
             for v in vals {
-                let name = self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
+                let name = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
                 o.push_str(&format!("    {name} = \"{v}\"\n"));
             }
             o.push('\n');
@@ -972,11 +1000,11 @@ impl<'a> Gen<'a> {
             let set = if fins.is_empty() {
                 "frozenset()".to_string()
             } else {
-                format!("frozenset({{{}}})", fins.iter().map(|v| self.py_value(v)).collect::<Vec<_>>().join(", "))
+                format!("frozenset({{{}}})", fins.iter().map(|v| self.py_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "))
             };
             o.push_str(&format!(
                 "INITIAL: {cls} = {}\nFINAL: frozenset[{cls}] = {set}\n\n\ndef is_final(state: {cls}) -> bool:\n    \"\"\"{}\"\"\"\n    return state in FINAL\n\n\n",
-                self.py_value(&init),
+                self.py_value(&init, &Ty::Enum(en.clone())),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -1011,7 +1039,7 @@ impl<'a> Gen<'a> {
 
         // Groups
         for g in &self.f.groups {
-            let ms: Vec<String> = g.members.iter().map(|m| self.py_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.py_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!("_{} = frozenset({{{}}})\n", self.ident(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
@@ -1241,7 +1269,7 @@ impl<'a> Gen<'a> {
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.py_ty(&self.ty_of(&fold.verdict));
-            let member = self.value_names.get(&name.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
+            let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
             body.push_str(&format!("    if {v} is {cls}.{member}:  # {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("        pass\n"),
@@ -1339,8 +1367,7 @@ impl<'a> Gen<'a> {
                 Some(w) => {
                     let cls = self.py_ty(&self.ty_of(&d.column.text));
                     let member = self
-                        .value_names
-                        .get(&w.text)
+                        .value_name(&w.text, &self.ty_of(&d.column.text))
                         .map(|(_, a)| a.to_uppercase())
                         .unwrap_or_else(|| w.text.clone());
                     format!("{v} is {cls}.{member}")
@@ -1617,7 +1644,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "True".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "False".into(),
-                        Lit::Word(w) => self.py_value(w),
+                        Lit::Word(w) => self.py_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
@@ -1627,8 +1654,8 @@ impl<'a> Gen<'a> {
                             "True".into()
                         } else if w == crate::kw::FALSE {
                             "False".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.py_value(w)
+                        } else if self.is_value(w) {
+                            self.py_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             self.rescaled(w, &oc.name.text, local(w))
                         }
@@ -1824,8 +1851,8 @@ fn lit_src(l: &Lit) -> String {
 // ---------------------------------------------------------------------------
 
 impl<'a> Gen<'a> {
-    fn go_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn go_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{ty}{alias}"),
             None => format!("{v:?}"),
         }
@@ -1899,7 +1926,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.go_value(w),
+                Lit::Word(w) => self.go_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -1910,7 +1937,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.go_value(m)));
+                        out.extend(ms.iter().map(|m| self.go_value(m, ty)));
                         continue;
                     }
                 }
@@ -1993,7 +2020,7 @@ impl<'a> Gen<'a> {
             let Some(vals) = self.c.enums.get(jp) else { continue };
             o.push_str(&format!("type {ascii} int\n\nconst (\n"));
             for (i, v) in vals.iter().enumerate() {
-                let n = self.go_value(v);
+                let n = self.go_value(v, &Ty::Enum(jp.clone()));
                 if i == 0 {
                     o.push_str(&format!("\t{n}{CELL}{ascii} = iota{CELL}// {v}\n"));
                 } else {
@@ -2007,13 +2034,13 @@ impl<'a> Gen<'a> {
             ));
             o.push_str(&format!("func (v {ascii}) String() string {{\n\tswitch v {{\n"));
             for v in vals {
-                o.push_str(&format!("\tcase {}:\n\t\treturn {:?}\n", self.go_value(v), v));
+                o.push_str(&format!("\tcase {}:\n\t\treturn {:?}\n", self.go_value(v, &Ty::Enum(jp.clone())), v));
             }
             o.push_str("\t}\n\treturn \"?\"\n}\n\n");
             // The wire format of §10 uses the Japanese names, so provide a way back from them.
             o.push_str(&format!("func Parse{ascii}(s string) ({ascii}, bool) {{\n\tswitch s {{\n"));
             for v in vals {
-                o.push_str(&format!("\tcase {:?}:\n\t\treturn {}, true\n", v, self.go_value(v)));
+                o.push_str(&format!("\tcase {:?}:\n\t\treturn {}, true\n", v, self.go_value(v, &Ty::Enum(jp.clone()))));
             }
             o.push_str(&format!("\t}}\n\treturn {}(0), false\n}}\n\n", ascii));
         }
@@ -2025,9 +2052,9 @@ impl<'a> Gen<'a> {
                 "// Initial {}\nconst Initial = {}\n\n// Final {}\nvar Final = []{cls}{{{}}}\n\n\
                  // IsFinal {}\nfunc IsFinal(s {cls}) bool {{\n\tfor _, f := range Final {{\n\t\tif f == s {{\n\t\t\treturn true\n\t\t}}\n\t}}\n\treturn false\n}}\n\n",
                 tr!("は案件が始まる状態（§15.148）。", "is the state a case starts in (§15.148)."),
-                self.go_value(&init),
+                self.go_value(&init, &Ty::Enum(en.clone())),
                 tr!("は案件が終わる状態。", "is the set of states a case ends in."),
-                fins.iter().map(|v| self.go_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.go_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("はこの状態で案件が終わっているかを返す。", "reports whether a case in this state has ended.")
             ));
         }
@@ -2044,7 +2071,7 @@ impl<'a> Gen<'a> {
                 "func is{}(v {ty}) bool {{\n\tswitch v {{\n\tcase ",
                 pascal(&self.ident(&g.name.text))
             ));
-            let ms: Vec<String> = g.members.iter().map(|m| self.go_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.go_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&ms.join(", "));
             o.push_str(":\n\t\treturn true\n\t}\n\treturn false\n}\n\n");
         }
@@ -2151,7 +2178,7 @@ impl<'a> Gen<'a> {
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            body.push_str(&format!("\tif {} == {} {{ // {}\n", v, self.go_value(&name.text), name.text));
+            body.push_str(&format!("\tif {} == {} {{ // {}\n", v, self.go_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
                 Arm::Next => body.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
                 Arm::Stop(None) => body.push_str("\t\tbreak\n"),
@@ -2256,7 +2283,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.go_value(&w.text)),
+                Some(w) => format!("{v} == {}", self.go_value(&w.text, &self.ty_of(&d.column.text))),
                 None if self.count_negated(d) => format!("!{v}"),
                 None => v,
             };
@@ -2538,7 +2565,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.go_value(w),
+                        Lit::Word(w) => self.go_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
@@ -2548,8 +2575,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.go_value(w)
+                        } else if self.is_value(w) {
+                            self.go_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             self.rescaled(w, &oc.name.text, local(w))
                         }
@@ -3064,7 +3091,7 @@ impl<'a> Gen<'a> {
         );
         if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
-            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r.{}", self.go_value(v))).collect();
+            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r.{}", self.go_value(v, &Ty::Enum(en.clone())))).collect();
             head = "\tstate := r.Initial\n".to_string();
             read = format!(
                 "\t\tvar top map[string]any\n\t\t\
@@ -3340,8 +3367,8 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn ts_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn ts_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{ty}.{}", alias.to_uppercase()),
             None => format!("{v:?}"),
         }
@@ -3358,7 +3385,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.ts_value(w),
+                Lit::Word(w) => self.ts_value(w, ty),
                 Lit::Num(n) => format!("{}n", self.int_lit(n, inner, col_scale)),
                 Lit::Date(y, m, d) => format!("{}n", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -3369,7 +3396,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.ts_value(m)));
+                        out.extend(ms.iter().map(|m| self.ts_value(m, ty)));
                         continue;
                     }
                 }
@@ -3453,7 +3480,7 @@ impl<'a> Gen<'a> {
             let Some(vals) = self.c.enums.get(jp) else { continue };
             o.push_str(&format!("export const {ascii} = {{\n"));
             for v in vals {
-                let name = self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
+                let name = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
                 o.push_str(&format!("  {name}: {v:?},\n"));
             }
             o.push_str("} as const;\n");
@@ -3478,14 +3505,14 @@ impl<'a> Gen<'a> {
                  export const FINAL: ReadonlySet<{cls}> = new Set([{}]);\n\n\
                  /** {} */\n\
                  export function isFinal(state: {cls}): boolean {{\n  return FINAL.has(state);\n}}\n\n",
-                self.ts_value(&init),
-                fins.iter().map(|v| self.ts_value(v)).collect::<Vec<_>>().join(", "),
+                self.ts_value(&init, &Ty::Enum(en.clone())),
+                fins.iter().map(|v| self.ts_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
 
         for g in &self.f.groups {
-            let ms: Vec<String> = g.members.iter().map(|m| self.ts_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.ts_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!(
                 "const _{}: ReadonlySet<string> = new Set([{}]);\n",
                 self.ident(&g.name.text),
@@ -3547,7 +3574,7 @@ impl<'a> Gen<'a> {
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.ts_ty(&self.ty_of(&fold.verdict));
-            let member = self.value_names.get(&name.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
+            let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
             body.push_str(&format!("  if ({v} === {cls}.{member}) {{ // {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("    // next\n"),
@@ -3628,7 +3655,7 @@ impl<'a> Gen<'a> {
             let test = match self.count_member(d) {
                 Some(w) => {
                     let cls = self.ts_ty(&self.ty_of(&d.column.text));
-                    let member = self.value_names.get(&w.text).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
+                    let member = self.value_name(&w.text, &self.ty_of(&d.column.text)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
                     format!("{v} === {cls}.{member}")
                 }
                 None if self.count_negated(d) => format!("!{v}"),
@@ -3926,7 +3953,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.ts_value(w),
+                        Lit::Word(w) => self.ts_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}n", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0n".into(),
@@ -3936,8 +3963,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.ts_value(w)
+                        } else if self.is_value(w) {
+                            self.ts_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             ts_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }
@@ -4219,8 +4246,8 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn rs_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn rs_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{ty}::{}", pascal(alias)),
             None => format!("{v:?}"),
         }
@@ -4265,7 +4292,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.rs_value(w),
+                Lit::Word(w) => self.rs_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -4276,7 +4303,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.rs_value(m)));
+                        out.extend(ms.iter().map(|m| self.rs_value(m, ty)));
                         continue;
                     }
                 }
@@ -4361,7 +4388,7 @@ impl<'a> Gen<'a> {
             let Some(vals) = self.c.enums.get(jp) else { continue };
             let members: Vec<String> = vals
                 .iter()
-                .map(|v| self.value_names.get(v).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
+                .map(|v| self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
                 .collect();
             o.push_str(&format!(
                 "#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub enum {ascii} {{\n{}}}\n\n",
@@ -4386,9 +4413,9 @@ impl<'a> Gen<'a> {
                 "/// {}\npub const INITIAL: {cls} = {};\n/// {}\npub const FINAL: &[{cls}] = &[{}];\n\n\
                  /// {}\npub fn is_final(state: {cls}) -> bool {{\n    FINAL.contains(&state)\n}}\n\n",
                 tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
-                self.rs_value(&init),
+                self.rs_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.rs_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.rs_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -4403,7 +4430,7 @@ impl<'a> Gen<'a> {
                 .get(&g.name.text)
                 .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
                 .unwrap_or_else(|| "i64".into());
-            let ms: Vec<String> = g.members.iter().map(|m| self.rs_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.rs_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!(
                 "pub(crate) fn is_{}(v: {ty}) -> bool {{\n    matches!(v, {})\n}}\n\n",
                 self.ident(&g.name.text),
@@ -4494,7 +4521,7 @@ impl<'a> Gen<'a> {
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.rs_ty(&self.ty_of(&fold.verdict));
-            let member = self.value_names.get(&name.text).map(|(_, a)| a.clone()).unwrap_or_else(|| name.text.clone());
+            let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.clone()).unwrap_or_else(|| name.text.clone());
             body.push_str(&format!("    if {v} == {cls}::{member} {{ // {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("        // next\n"),
@@ -4582,7 +4609,7 @@ impl<'a> Gen<'a> {
             let test = match self.count_member(d) {
                 Some(w) => {
                     let cls = self.rs_ty(&self.ty_of(&d.column.text));
-                    let member = self.value_names.get(&w.text).map(|(_, a)| a.clone()).unwrap_or_else(|| w.text.clone());
+                    let member = self.value_name(&w.text, &self.ty_of(&d.column.text)).map(|(_, a)| a.clone()).unwrap_or_else(|| w.text.clone());
                     format!("{v} == {cls}::{member}")
                 }
                 None if self.count_negated(d) => format!("!{v}"),
@@ -4838,7 +4865,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.rs_value(w),
+                        Lit::Word(w) => self.rs_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         // Rust's string output is a `String`, so the literal is owned here
                         // rather than at every use.
@@ -4850,8 +4877,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.rs_value(w)
+                        } else if self.is_value(w) {
+                            self.rs_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             rs_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }
@@ -5096,10 +5123,10 @@ impl<'a> Gen<'a> {
     /// The members of an enum, as the paths the generated Rust writes.
     fn enum_members(&self, n: &str) -> Vec<String> {
         if let Some(e) = self.f.enums.iter().find(|e| e.name.text == n) {
-            return e.values.iter().map(|v| self.rs_value(&v.text)).collect();
+            return e.values.iter().map(|v| self.rs_value(&v.text, &Ty::Enum(n.to_string()))).collect();
         }
         if n == "都道府県" {
-            return crate::prelude::PREFECTURES.iter().map(|(j, _)| self.rs_value(j)).collect();
+            return crate::prelude::PREFECTURES.iter().map(|(j, _)| self.rs_value(j, &Ty::Enum(n.to_string()))).collect();
         }
         Vec::new()
     }
@@ -5349,7 +5376,7 @@ impl<'a> Gen<'a> {
         let (mut head, mut meta, mut tail, mut binds) = (String::new(), String::new(), String::new(), binds);
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
-            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r::{}", self.rs_value(v))).collect();
+            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r::{}", self.rs_value(v, &Ty::Enum(en.clone())))).collect();
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 binds = args
                     .iter()
@@ -6254,7 +6281,7 @@ impl Gen<'_> {
             let members: Vec<String> = vals
                 .iter()
                 .map(|v| {
-                    let a = self.value_names.get(v).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone());
+                    let a = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone());
                     crate::json::Obj::new()
                         .str("name", v)
                         .str("alias", member(ascii, &a))
@@ -7052,8 +7079,8 @@ fn round_rb() -> String {
 
 impl<'a> Gen<'a> {
     /// An enum value, written as the constant the module declares for it.
-    fn rb_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn rb_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{}::{}", rb_const(ty), rb_const(&alias.to_uppercase())),
             None => format!("{v:?}"),
         }
@@ -7069,7 +7096,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.rb_value(w),
+                Lit::Word(w) => self.rb_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -7082,7 +7109,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.rb_value(m)));
+                        out.extend(ms.iter().map(|m| self.rb_value(m, ty)));
                         continue;
                     }
                 }
@@ -7168,7 +7195,7 @@ impl<'a> Gen<'a> {
             let mut names: Vec<String> = Vec::new();
             for v in vals {
                 let name = rb_const(
-                    &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
                 );
                 o.push_str(&format!("    {name} = {v:?}\n"));
                 names.push(name);
@@ -7177,13 +7204,13 @@ impl<'a> Gen<'a> {
         }
 
         // The machine this function is one step of (§15.148).
-        if let Some((_, init, fins)) = self.machine_consts() {
+        if let Some((en, init, fins)) = self.machine_consts() {
             o.push_str(&format!(
                 "  # {}\n  INITIAL = {}\n  # {}\n  FINAL = [{}].freeze\n\n  # {}\n  def self.final?(state)\n    FINAL.include?(state)\n  end\n\n",
                 tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
-                self.rb_value(&init),
+                self.rb_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.rb_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.rb_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -7214,7 +7241,7 @@ impl<'a> Gen<'a> {
         // Groups. A Ruby constant has to begin with an uppercase ASCII letter, so a
         // Japanese group name cannot be one on its own; the prefix is what makes it legal.
         for g in &self.f.groups {
-            let ms: Vec<String> = g.members.iter().map(|m| self.rb_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.rb_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!("  GROUP_{} = [{}].freeze\n", self.rb_group(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
@@ -7303,7 +7330,7 @@ impl<'a> Gen<'a> {
         body.push_str(&self.rb_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            let val = self.rb_value(&name.text);
+            let val = self.rb_value(&name.text, &self.ty_of(&fold.verdict));
             body.push_str(&format!("    if {v} == {val}  # {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("      # next\n"),
@@ -7377,7 +7404,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.rb_value(&w.text)),
+                Some(w) => format!("{v} == {}", self.rb_value(&w.text, &self.ty_of(&d.column.text))),
                 None if self.count_negated(d) => format!("!{v}"),
                 None => v,
             };
@@ -7585,7 +7612,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.rb_value(w),
+                        Lit::Word(w) => self.rb_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
@@ -7595,8 +7622,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.rb_value(w)
+                        } else if self.is_value(w) {
+                            self.rb_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             rb_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }
@@ -7814,7 +7841,7 @@ impl<'a> Gen<'a> {
             let mut names: Vec<String> = Vec::new();
             for v in vals {
                 let name = rb_const(
-                    &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
                 );
                 o.push_str(&format!("    {name}: {v:?}\n"));
                 names.push(name);
@@ -8196,8 +8223,8 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn sw_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn sw_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{ty}.{}", sw_name(alias)),
             None => format!("{v:?}"),
         }
@@ -8213,7 +8240,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.sw_value(w),
+                Lit::Word(w) => self.sw_value(w, ty),
                 Lit::Num(n) => self.int_lit(n, inner, col_scale),
                 Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => format!("{s:?}"),
@@ -8224,7 +8251,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.sw_value(m)));
+                        out.extend(ms.iter().map(|m| self.sw_value(m, ty)));
                         continue;
                     }
                 }
@@ -8313,7 +8340,7 @@ impl<'a> Gen<'a> {
             for v in vals {
                 let name = self
                     .value_names
-                    .get(v)
+                    .get(&(jp.clone(), v.clone()))
                     .map(|(_, a)| sw_name(a))
                     .unwrap_or_else(|| sw_name(v));
                 o.push_str(&format!("    case {name} = {v:?}\n"));
@@ -8328,9 +8355,9 @@ impl<'a> Gen<'a> {
                 "/// {}\npublic let initialState: {cls} = {}\n/// {}\npublic let finalStates: Set<{cls}> = [{}]\n\n\
                  /// {}\npublic func isFinal(_ state: {cls}) -> Bool {{\n    finalStates.contains(state)\n}}\n\n",
                 tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
-                self.sw_value(&init),
+                self.sw_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.sw_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.sw_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -8346,7 +8373,7 @@ impl<'a> Gen<'a> {
                 .get(&g.name.text)
                 .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
                 .unwrap_or_else(|| "Int64".into());
-            let ms: Vec<String> = g.members.iter().map(|m| self.sw_value(&m.text)).collect();
+            let ms: Vec<String> = g.members.iter().map(|m| self.sw_value(&m.text, &self.group_ty(&g.name.text))).collect();
             o.push_str(&format!(
                 "private let {}: Set<{ty}> = [{}]\n",
                 self.sw_group(&g.name.text),
@@ -8451,7 +8478,7 @@ impl<'a> Gen<'a> {
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            body.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text), name.text));
+            body.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
                 Arm::Next => body.push_str(&format!("        // {}\n", crate::kw::NEXT)),
                 Arm::Stop(None) => body.push_str("        break\n"),
@@ -8552,7 +8579,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.sw_value(&w.text)),
+                Some(w) => format!("{v} == {}", self.sw_value(&w.text, &self.ty_of(&d.column.text))),
                 None if self.count_negated(d) => format!("!{v}"),
                 None => v,
             };
@@ -8821,7 +8848,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.sw_value(w),
+                        Lit::Word(w) => self.sw_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
@@ -8831,8 +8858,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.sw_value(w)
+                        } else if self.is_value(w) {
+                            self.sw_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             sw_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }

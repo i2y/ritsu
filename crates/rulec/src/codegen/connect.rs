@@ -237,7 +237,7 @@ impl<'a> Gen<'a> {
             // the module refuses anything else outside the declared domain.
             o.push_str(&format!("  {prefix}_UNSPECIFIED = 0;\n"));
             for (i, v) in self.c.enums.get(&ty).cloned().unwrap_or_default().iter().enumerate() {
-                let al = self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
                 let note = if v.eq_ignore_ascii_case(&al) { String::new() } else { format!("  // {v}") };
                 o.push_str(&format!("  {prefix}_{al} = {};{note}\n", i + 1));
             }
@@ -368,7 +368,7 @@ impl<'a> Gen<'a> {
             let pairs: Vec<String> = values
                 .iter()
                 .map(|v| {
-                    let al = self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                    let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
                     format!("    {qual}.{al}: m.{cls}.{al},\n")
                 })
                 .collect();

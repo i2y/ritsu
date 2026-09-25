@@ -400,8 +400,8 @@ impl<'a> Gen<'a> {
     }
 
     /// An enum value as the constant the class declares for it.
-    fn java_value(&self, v: &str) -> String {
-        match self.value_names.get(v) {
+    fn java_value(&self, v: &str, ty: &Ty) -> String {
+        match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{}.{}", java_class(ty), java_id(&alias.to_uppercase())),
             None => java_str(v),
         }
@@ -423,7 +423,7 @@ impl<'a> Gen<'a> {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                 Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                Lit::Word(w) => self.java_value(w),
+                Lit::Word(w) => self.java_value(w, ty),
                 Lit::Num(n) => format!("{}L", self.int_lit(n, inner, col_scale)),
                 Lit::Date(y, m, d) => format!("{}L", crate::types::date_ord(*y, *m, *d).num),
                 Lit::Str(s) => java_str(s),
@@ -444,7 +444,7 @@ impl<'a> Gen<'a> {
             for l in ls {
                 if let Lit::Word(w) = l {
                     if let Some((_, ms)) = self.c.groups.get(w) {
-                        out.extend(ms.iter().map(|m| self.java_value(m)));
+                        out.extend(ms.iter().map(|m| self.java_value(m, ty)));
                         continue;
                     }
                 }
@@ -513,7 +513,7 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|v| {
                     let name = java_id(
-                        &self.value_names.get(v).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
+                        &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
                     );
                     format!("        {name}({})", java_str(v))
                 })
@@ -544,9 +544,9 @@ impl<'a> Gen<'a> {
                  /** {} */\n    public static final List<{ety}> FINAL = List.of({});\n\n    \
                  /** {} */\n    public static boolean isFinal({ety} state) {{\n        return FINAL.contains(state);\n    }}\n\n",
                 tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
-                self.java_value(&init),
+                self.java_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.java_value(v)).collect::<Vec<_>>().join(", "),
+                fins.iter().map(|v| self.java_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -586,8 +586,9 @@ impl<'a> Gen<'a> {
         ));
 
         for g in &self.f.groups {
-            let ms: Vec<String> = g.members.iter().map(|m| self.java_value(&m.text)).collect();
-            let ety = match g.members.first().and_then(|m| self.value_names.get(&m.text)) {
+            let gty = self.group_ty(&g.name.text);
+            let ms: Vec<String> = g.members.iter().map(|m| self.java_value(&m.text, &gty)).collect();
+            let ety = match g.members.first().and_then(|m| self.value_name(&m.text, &gty)) {
                 Some((ty, _)) => java_class(ty),
                 None => "String".into(),
             };
@@ -688,7 +689,7 @@ impl<'a> Gen<'a> {
         body.push_str(&self.java_items(&local, trace, Phase::All));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            let val = self.java_value(&name.text);
+            let val = self.java_value(&name.text, &self.ty_of(&fold.verdict));
             body.push_str(&format!("        if ({v} == {val}) {{  // {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("            // next\n"),
@@ -785,7 +786,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.java_value(&w.text)),
+                Some(w) => format!("{v} == {}", self.java_value(&w.text, &self.ty_of(&d.column.text))),
                 None if self.count_negated(d) => format!("!{v}"),
                 None => v,
             };
@@ -1022,7 +1023,7 @@ impl<'a> Gen<'a> {
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.java_value(w),
+                        Lit::Word(w) => self.java_value(w, &self.ty_of(&oc.name.text)),
                         Lit::Date(y, m, d) => format!("{}L", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => super::str_lit(x),
                         _ => "0L".into(),
@@ -1032,8 +1033,8 @@ impl<'a> Gen<'a> {
                             "true".into()
                         } else if w == crate::kw::FALSE {
                             "false".into()
-                        } else if self.value_names.contains_key(w) {
-                            self.java_value(w)
+                        } else if self.is_value(w) {
+                            self.java_value(w, &self.ty_of(&oc.name.text))
                         } else {
                             java_expr(&self.rescaled(w, &oc.name.text, local(w)))
                         }
