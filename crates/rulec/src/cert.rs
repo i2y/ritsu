@@ -234,7 +234,436 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
         .raw("contracts", arr(&contracts))
+        .raw("machine", machine_json(f, c, src))
         .finish()
+}
+
+/// A machine's section (§15.148): the claims about every sequence of calls, laid on the
+/// certificate of the table that decides the carried state.
+///
+/// The transitions are read off that table's **rows**, not its cover: a row that answers a
+/// call from a state takes that state on the state's axis, so "from `s`, this row goes to
+/// `next(r, s)`" for every row whose box takes `s` includes every transition there is — more
+/// than there is, when a row's box takes a state no call from that state reaches it with.
+/// Over that relation the claims that nothing bad is reached (`final`, `never`, `once`) are a
+/// closed set containing the start and nothing bad, which a re-checker confirms by stepping
+/// once from each member. That a final state can still be reached is the other direction —
+/// a transition has to really happen — so each step of those paths comes with a call: a point
+/// in the row's box, at that state, with the values behind it, as a reach point does.
+///
+/// Where the rows alone cannot carry a claim that `check` proved over the cells — a row whose
+/// box takes a state it is never reached from — the claim is listed as not certified here,
+/// with why, rather than stated.
+fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
+    use crate::ast::{Cell, OutCell, Policy};
+    let Some(m) = &f.machine else { return "null".into() };
+    let Some((cin, cout)) = m.carried() else { return "null".into() };
+    let Some(crate::types::Ty::Enum(en)) = c.ty_of(cin) else { return "null".into() };
+    let states: Vec<String> = c.enums.get(&en).cloned().unwrap_or_default();
+    let idx = |v: &str| states.iter().position(|x| x == v);
+    let (Some(init), finals) = (m.initial.as_ref().and_then(|(v, _)| idx(&v.text)), m.finals.iter().filter_map(|v| idx(&v.text)).collect::<Vec<_>>()) else {
+        return "null".into();
+    };
+    let not = |why: String| Obj::new().str("table", "").str("why", &why).finish();
+    let Some(set) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == cout)) else {
+        return not(tr!("持ち越す出力を決める表がありません", "no table decides the carried output"));
+    };
+    if set.merged() {
+        return not(tr!(
+            "持ち越す出力を二つ以上の表が決めているので、行き先を一つの表の行から読めません",
+            "several tables decide the carried output, so the transitions cannot be read off one table's rows"
+        ));
+    }
+    let (Some(ct), Some(reg)) = (certificate_of(set, c, f), crate::region::region_of(set, c, f)) else {
+        return not(tr!("遷移を決める表に証明書がありません", "the table that decides the transitions has no certificate"));
+    };
+    let t = &set.table;
+    let unique = t.policy == Policy::Unique;
+    let axis = ct.axes.iter().position(|a| a.name == cin);
+    if let Some(k) = axis {
+        if ct.axes[k].coords != states {
+            return not(tr!("状態の軸が列挙の値の並びと違います", "the state's axis is not the enum's values in order"));
+        }
+    }
+    let n = states.len();
+    let jout = t.outputs.iter().position(|o| o.name.text == cout).unwrap_or(0);
+    // Each row's move, and its box on the state's axis.
+    enum Move {
+        To(usize),
+        Stay,
+    }
+    let mut moves: Vec<(usize, Move, Vec<usize>)> = Vec::new();
+    let mut rows_json: Vec<String> = Vec::new();
+    for (ri, r) in t.rows.iter().enumerate() {
+        let on: Vec<usize> = match axis {
+            Some(k) => ct.rows.get(ri).and_then(|cr| cr.accepts.get(k).cloned()).unwrap_or_default(),
+            None => (0..n).collect(),
+        };
+        let span = r.out_spans.get(jout).map(|sp| (sp.line, sp.col, sp.len));
+        // A value of the state's enum is written as a word, which the parser keeps as a name.
+        let word = match r.outs.get(jout) {
+            Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) => Some(w.as_str()),
+            _ => None,
+        };
+        let (mv, o) = match word {
+            Some(w) if w == cin => (Move::Stay, Obj::new().int("row", r.index as i128).bool("stay", true)),
+            Some(w) if idx(w).is_some() => {
+                let to = idx(w).unwrap_or(0);
+                (Move::To(to), Obj::new().int("row", r.index as i128).int("to", to as i128))
+            }
+            _ => {
+                return not(tr!(
+                    "表 {} 行{} は次の状態を計算で決めているので、行から行き先を読めません",
+                    "table {} row {} computes the next state, so its move cannot be read off the row",
+                    t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                    r.index
+                ))
+            }
+        };
+        let o = match span {
+            Some((l, col, len)) => o.raw(
+                "source",
+                Obj::new().int("line", l as i128).int("col", col as i128).int("len", len as i128).str("text", &at_span(src, l, col, len)).finish(),
+            ),
+            None => o,
+        };
+        rows_json.push(o.finish());
+        moves.push((r.index, mv, on));
+    }
+    let target = |mv: &Move, st: usize| match mv {
+        Move::To(x) => *x,
+        Move::Stay => st,
+    };
+    // The worlds (§15.149). A case holds its `held` inputs, so where the table reads one as a
+    // column, a case only ever takes the rows that take its coordinate there. Every claim is
+    // laid on the rows once per world: a combination of coordinates of those columns.
+    let fixed_axes: Vec<usize> = m.held.iter().filter_map(|x| ct.axes.iter().position(|a| a.name == x.text)).collect();
+    let mut worlds: Vec<Vec<usize>> = vec![Vec::new()];
+    for &k in &fixed_axes {
+        let nk = ct.axes[k].coords.len();
+        worlds = worlds.into_iter().flat_map(|w| (0..nk).map(move |ck| [w.clone(), vec![ck]].concat())).collect();
+    }
+    let takes = |w: &[usize], ri: usize| -> bool {
+        fixed_axes.iter().zip(w).all(|(&k, &ck)| ct.rows.get(ri).and_then(|cr| cr.accepts.get(k)).is_some_and(|acc| acc.contains(&ck)))
+    };
+    let in_world = |w: &[usize]| -> String {
+        if w.is_empty() {
+            return String::new();
+        }
+        let parts: Vec<String> = fixed_axes.iter().zip(w).map(|(&k, &ck)| format!("{} = {}", ct.axes[k].name, ct.axes[k].coords[ck])).collect();
+        tr!("、{} のとき", ", where {}", parts.join(", "))
+    };
+    // A fixed input that something else computes with, or that a constraint names: one value of
+    // it may allow calls another value of the same coordinate does not, so a path of calls is
+    // not shown to be one case's.
+    let coupled = coupled_fixed(f, m, &ct);
+    let mut uncertified: Vec<String> = Vec::new();
+
+    // What each `never` and `once` line says, the same in every world.
+    let never_defs: Vec<(Vec<usize>, Vec<usize>)> = m
+        .nevers
+        .iter()
+        .map(|nv| (nv.states.iter().filter_map(|x| idx(&x.text)).collect(), nv.after.iter().filter_map(|x| idx(&x.text)).collect()))
+        .collect();
+    let mut once_defs: Vec<String> = Vec::new();
+    let mut once_counts: Vec<Option<Vec<(usize, bool)>>> = Vec::new();
+    for on in &m.onces {
+        let Some(jo) = t.outputs.iter().position(|o| o.name.text == on.output.text) else {
+            uncertified.push(tr!(
+                "`once {}` の行（{} 行目。その出力は遷移を決める表の外で決まる）",
+                "the `once {}` line (line {}: the output is decided outside the table that decides the transitions)",
+                on.output.text,
+                on.span.line
+            ));
+            once_defs.push(Obj::new().str("output", &on.output.text).finish());
+            once_counts.push(None);
+            continue;
+        };
+        let oty = c.ty_of(&on.output.text).unwrap_or(crate::types::Ty::Unknown);
+        let scale = c.wire_scale(&on.output.text);
+        // The test in the wire's own words: an integer interval, or a set of words.
+        let test = match &on.cell {
+            Cell::Cmp(ops) => {
+                let (mut lo, mut hi): (Option<i128>, Option<i128>) = (None, None);
+                for (op, l) in ops {
+                    let Lit::Num(nm) = l else { continue };
+                    let Some(v) = crate::types::lit_value_in_pub(nm, &oty) else { continue };
+                    let w = crate::types::wire_int(v, scale);
+                    match op {
+                        crate::ast::CmpOp::Ge => lo = Some(lo.map_or(w, |x| x.max(w))),
+                        crate::ast::CmpOp::Gt => lo = Some(lo.map_or(w + 1, |x| x.max(w + 1))),
+                        crate::ast::CmpOp::Le => hi = Some(hi.map_or(w, |x| x.min(w))),
+                        crate::ast::CmpOp::Lt => hi = Some(hi.map_or(w - 1, |x| x.min(w - 1))),
+                    }
+                }
+                Obj::new()
+                    .raw("lo", lo.map(|x| x.to_string()).unwrap_or_else(|| "null".into()))
+                    .raw("hi", hi.map(|x| x.to_string()).unwrap_or_else(|| "null".into()))
+                    .finish()
+            }
+            other => {
+                let words: Vec<String> = match other {
+                    Cell::Lit(Lit::Word(w)) => vec![w.clone()],
+                    Cell::Set(ls) => ls.iter().filter_map(|l| if let Lit::Word(w) = l { Some(w.clone()) } else { None }).collect(),
+                    _ => Vec::new(),
+                };
+                Obj::new().raw("words", crate::json::strs(&words)).finish()
+            }
+        };
+        let mut flags: Vec<(usize, bool)> = Vec::new();
+        let mut rows_o: Vec<String> = Vec::new();
+        for r in &t.rows {
+            let lit = match r.outs.get(jo) {
+                Some(OutCell::Lit(l)) => Some(l.clone()),
+                // A value word (an enum's value, `true`) is kept as a name by the parser.
+                Some(OutCell::Name(w))
+                    if matches!(oty, crate::types::Ty::Enum(_) | crate::types::Ty::Bool)
+                        && crate::eval::lit_to_val(&Lit::Word(w.clone()), &oty).is_some() =>
+                {
+                    Some(Lit::Word(w.clone()))
+                }
+                _ => None,
+            };
+            let (value, counts) = match lit.as_ref() {
+                Some(l) => match crate::eval::lit_to_val(l, &oty) {
+                    Some(v) => {
+                        let wv = crate::eval::wval(c, &on.output.text, &v);
+                        (Some(wv.json()), crate::eval::cell_matches(c, &on.cell, &v, &oty))
+                    }
+                    None => (None, true),
+                },
+                // A value computed from the call is counted wherever it might count.
+                _ => (None, true),
+            };
+            flags.push((r.index, counts));
+            let mut o = Obj::new().int("row", r.index as i128).raw("value", value.unwrap_or_else(|| "null".into()));
+            if let Some(sp) = r.out_spans.get(jo) {
+                o = o.raw(
+                    "source",
+                    Obj::new()
+                        .int("line", sp.line as i128)
+                        .int("col", sp.col as i128)
+                        .int("len", sp.len as i128)
+                        .str("text", &at_span(src, sp.line, sp.col, sp.len))
+                        .finish(),
+                );
+            }
+            rows_o.push(o.finish());
+        }
+        once_defs.push(Obj::new().str("output", &on.output.text).raw("test", test).raw("rows", arr(&rows_o)).finish());
+        once_counts.push(Some(flags));
+    }
+
+    let mut worlds_json: Vec<String> = Vec::new();
+    let mut finish_coupled_said = false;
+    for w in &worlds {
+        // One step from a state, over every row of this world whose box takes it.
+        let step = |st: usize| -> Vec<(usize, usize)> {
+            moves
+                .iter()
+                .enumerate()
+                .filter(|(ri, (_, _, on))| on.contains(&st) && takes(w, *ri))
+                .map(|(_, (rindex, mv, _))| (*rindex, target(mv, st)))
+                .collect()
+        };
+        let closure = |start: Vec<(usize, u8)>, next: &dyn Fn(usize, u8, usize, usize) -> u8| -> Vec<(usize, u8)> {
+            let mut seen = start.clone();
+            let mut q = std::collections::VecDeque::from(start);
+            while let Some((st, b)) = q.pop_front() {
+                for (ri, to) in step(st) {
+                    let nb = next(st, b, ri, to);
+                    if !seen.contains(&(to, nb)) {
+                        seen.push((to, nb));
+                        q.push_back((to, nb));
+                    }
+                }
+            }
+            seen
+        };
+        let reach: Vec<usize> = {
+            let mut r: Vec<usize> = closure(vec![(init, 0)], &|_, _, _, _| 0).into_iter().map(|(x, _)| x).collect();
+            r.sort_unstable();
+            r
+        };
+        // `final`: nothing leads out of a final state a case reaches in this world.
+        let mut final_ok = !finals.is_empty();
+        for &fs in finals.iter().filter(|fs| reach.contains(fs)) {
+            if step(fs).iter().any(|(_, to)| *to != fs) {
+                final_ok = false;
+                uncertified.push(tr!(
+                    "終わりの状態 {} から出る行がある{}（その状態からは当たらないことを、行だけでは示せない）",
+                    "a row leads out of the final state {}{} (that no call from it reaches the row cannot be shown from the rows alone)",
+                    states[fs],
+                    in_world(w)
+                ));
+            }
+        }
+        // `never A after B`.
+        let mut nevers: Vec<String> = Vec::new();
+        for (nv, (a, b)) in m.nevers.iter().zip(&never_defs) {
+            let start = (init, u8::from(b.contains(&init)));
+            let set = closure(vec![start], &|_, seen, _, to| u8::from(seen == 1 || b.contains(&to)));
+            if set.iter().any(|(st, seen)| *seen == 1 && a.contains(st)) {
+                uncertified.push(tr!("`never` の行（{} 行目{}）", "the `never` line (line {}{})", nv.span.line, in_world(w)));
+                nevers.push("null".into());
+            } else {
+                nevers.push(arr(&set.iter().map(|(st, sn)| format!("[{st},{}]", *sn == 1)).collect::<Vec<_>>()));
+            }
+        }
+        // `once`.
+        let mut onces: Vec<String> = Vec::new();
+        for (on, fl) in m.onces.iter().zip(&once_counts) {
+            let Some(flags) = fl else {
+                onces.push("null".into());
+                continue;
+            };
+            let counts = |ri: usize| flags.iter().any(|(x, y)| *x == ri && *y);
+            let set = closure(vec![(init, 0)], &|_, n, ri, _| (n + u8::from(counts(ri))).min(2));
+            if set.iter().any(|(_, k)| *k >= 2) {
+                uncertified.push(tr!("`once {}` の行（{} 行目{}）", "the `once {}` line (line {}{})", on.output.text, on.span.line, in_world(w)));
+                onces.push("null".into());
+            } else {
+                onces.push(arr(&set.iter().map(|(st, k)| format!("[{st},{k}]")).collect::<Vec<_>>()));
+            }
+        }
+        // A final state can still be reached: paths of calls that really happen, each made
+        // with this world's coordinates.
+        let mut finish: Vec<String> = Vec::new();
+        if !finals.is_empty() && !coupled.is_empty() {
+            if !finish_coupled_said {
+                finish_coupled_said = true;
+                uncertified.push(tr!(
+                    "終わりの状態へ行く呼び出しの並び（遷移を決める表が入力でない値を読んでいるか、制約が {} を名指ししていて、一つの値のまま通れるかを行から示せない）",
+                    "the sequences of calls to a final state (the table that decides the transitions reads a value that is not an input, or a constraint names {}, so that one value carries a case through is not shown from the rows)",
+                    coupled.join(", ")
+                ));
+            }
+        } else if !finals.is_empty() {
+            // Which (state, row) steps a call really makes, with the call.
+            let mut witnessed: Vec<(usize, usize, usize, String)> = Vec::new();
+            for (ri, (rindex, mv, on)) in moves.iter().enumerate() {
+                if !takes(w, ri) {
+                    continue;
+                }
+                for &st in on {
+                    let mut fix: Vec<(usize, usize)> = fixed_axes.iter().copied().zip(w.iter().copied()).collect();
+                    let point = match axis {
+                        Some(k) => {
+                            fix.push((k, st));
+                            reg.point_at_all(ri, unique, &fix)
+                        }
+                        None if fix.is_empty() => ct.reach.iter().find(|x| x.0 == *rindex).map(|x| (x.1.clone(), x.2.clone(), x.3.clone(), x.4.clone())),
+                        None => reg.point_at_all(ri, unique, &fix),
+                    };
+                    let Some((at, input, nums, extra)) = point else { continue };
+                    let mut ins = Obj::new();
+                    for (k2, v) in &input {
+                        ins = ins.raw(k2, v.json());
+                    }
+                    let q = |v: &Vec<Option<Rat>>| arr(&v.iter().map(|x| x.map(|y| crate::json::quote(&rat(&y))).unwrap_or_else(|| "null".into())).collect::<Vec<_>>());
+                    let o = Obj::new()
+                        .int("state", st as i128)
+                        .int("row", *rindex as i128)
+                        .raw("at", arr(&at.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                        .raw("values", ins.finish())
+                        .raw("at_values", q(&nums))
+                        .raw("extra_values", q(&extra))
+                        .finish();
+                    witnessed.push((st, *rindex, target(mv, st), o));
+                }
+            }
+            // Backward from the final states over the witnessed steps.
+            let mut via: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+            let mut done: Vec<usize> = finals.clone();
+            loop {
+                let before = done.len();
+                for (i, (st, _, to, _)) in witnessed.iter().enumerate() {
+                    if done.contains(to) && !done.contains(st) {
+                        done.push(*st);
+                        via.insert(*st, i);
+                    }
+                }
+                if done.len() == before {
+                    break;
+                }
+            }
+            for &st in &reach {
+                if finals.contains(&st) {
+                    continue;
+                }
+                if !done.contains(&st) {
+                    uncertified.push(tr!(
+                        "{} から終わりの状態へ行く呼び出しの並び{}",
+                        "a sequence of calls from {} to a final state{}",
+                        states[st],
+                        in_world(w)
+                    ));
+                    continue;
+                }
+                let mut path: Vec<String> = Vec::new();
+                let mut at = st;
+                while !finals.contains(&at) {
+                    let Some(&i) = via.get(&at) else { break };
+                    path.push(witnessed[i].3.clone());
+                    at = witnessed[i].2;
+                }
+                finish.push(Obj::new().int("state", st as i128).raw("path", arr(&path)).finish());
+            }
+        }
+        worlds_json.push(
+            Obj::new()
+                .raw("at", arr(&w.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                .raw("reach", arr(&reach.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                // Whether "nothing leads out of a final state" is laid on the rows here.
+                .bool("final_certified", final_ok)
+                .raw("never", arr(&nevers))
+                .raw("once", arr(&onces))
+                .raw("finish", arr(&finish))
+                .finish(),
+        );
+    }
+    Obj::new()
+        .str("table", t.name.as_ref().map(|n| n.text.as_str()).unwrap_or(""))
+        .raw("carry", Obj::new().str("input", cin).str("output", cout).finish())
+        .raw("axis", axis.map(|k| k.to_string()).unwrap_or_else(|| "null".into()))
+        .raw("states", crate::json::strs(&states))
+        .int("initial", init as i128)
+        .raw("finals", arr(&finals.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+        .raw("rows", arr(&rows_json))
+        // The inputs a case keeps (§15.149), and the ones of them this table reads as a column.
+        .raw("held_inputs", crate::json::strs(&m.held.iter().map(|x| x.text.clone()).collect::<Vec<_>>()))
+        .raw("held", arr(&fixed_axes.iter().map(|k| k.to_string()).collect::<Vec<_>>()))
+        .raw(
+            "never",
+            arr(&never_defs
+                .iter()
+                .map(|(a, b)| {
+                    Obj::new()
+                        .raw("states", arr(&a.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                        .raw("after", arr(&b.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                        .finish()
+                })
+                .collect::<Vec<_>>()),
+        )
+        .raw("once", arr(&once_defs))
+        .raw("worlds", arr(&worlds_json))
+        .raw("uncertified", crate::json::strs(&uncertified))
+        .finish()
+}
+
+/// The `held` inputs of a machine whose value the certificate cannot follow through the
+/// table that decides the transitions (§15.149): every one of them, when the table reads a
+/// column that is not an input (a derived value, another table's answer, a count), and the
+/// ones a `constraint` names. There one value of the input may allow calls another value of
+/// the same coordinate does not, and a path of calls is not laid on the rows as one case's.
+/// Drawn from nothing but the table's axes and the constraints, so that a re-checker draws the
+/// same line from the certificate alone.
+fn coupled_fixed(f: &RuleFile, m: &crate::ast::MachineDecl, ct: &CertTable) -> Vec<String> {
+    let fixed: Vec<String> = m.held.iter().map(|n| n.text.clone()).collect();
+    if ct.axes.iter().any(|a| a.kind != "input") {
+        return fixed;
+    }
+    fixed.into_iter().filter(|x| f.constraints.iter().any(|k| &k.left == x || &k.right == x)).collect()
 }
 
 /// One contract's section (§15.142): the condition it places on what the rule reads, as

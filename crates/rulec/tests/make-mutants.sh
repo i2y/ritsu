@@ -265,6 +265,9 @@ awk '/^table / && !done { print "constraint 重量 <= 基本送料"; print ""; d
 awk '/^table / && !done { print "constraint 商品合計 <= 値引"; print ""; done=1 } { print }' "$C/会員特典.rule" > "$M/m_e019.rule"
 # An `elements` line with no name
 awk '{ sub(/^elements 運賃行\(freight_rows\)$/, "elements"); print }'       "$f" > "$M/m_e020.rule"
+# An input whose type was lost. The line used to be dropped, and the rule passed with one
+# input fewer than it was written with (§15.149).
+awk '{ sub(/^  会員\(member\)    : 会員区分$/, "  会員(member)"); print }'        "$s" > "$M/m_e057.rule"
 
 # A column of a type the region IR cannot hold. It takes two edits — the type and the cells
 # that read it — because either alone is a different error; §11 calls E110 the internal
@@ -282,6 +285,34 @@ awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1�
 # An alias that the target language will not take. `type` is a Rust keyword, and the
 # generated Rust reads `pub fn … (type: i64, …)` — measured, it does not compile (§15.103).
 awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付与.rule" > "$M/m_w121.rule"
+
+# --- A rule that is one step of a state machine (§15.148). The section's own shape errors
+# first, then the claims about every sequence of calls, each broken the way a revision of the
+# table would break it.
+o="$C/注文の状態.rule"
+# A machine that does not say which table its transitions are
+awk '{ sub(/^machine 注文\(order\) over 遷移$/, "machine 注文(order)"); print }'     "$o" > "$M/m_e050.rule"
+# The carried state taken from an output that is not a state at all
+awk '{ sub(/^  carry   状態 -> 次の状態$/, "  carry   状態 -> 返金額"); print }'       "$o" > "$M/m_e051.rule"
+# An initial state that is not a value of the enum
+awk '{ sub(/^  initial 受付$/, "  initial 未着"); print }'                          "$o" > "$M/m_e052.rule"
+# A `once` over an output the rule does not have
+awk '{ sub(/^  once    返金額 >0円$/, "  once    返金 >0円"); print }'                "$o" > "$M/m_e053.rule"
+# Scenarios left behind when the machine section is taken out
+awk '/^machine /,/^$/ { next } { print }'                                           "$o" > "$M/m_e055.rule"
+# A cancel request after delivery cancels: an ended case is set going again
+awk '/^\| 配達済 \| - / { print "| 配達済 | 取消依頼 | 取消 | 0円 | true |"; print "| 配達済 | 入金, 出荷, 配達 | 状態 | 0円 | false |"; next } { print }' "$o" > "$M/m_e124.rule"
+# 取消 no longer final: a cancelled order has nowhere left to go
+awk '{ sub(/^  final   配達済, 取消$/, "  final   配達済"); print }'                 "$o" > "$M/m_e125.rule"
+# A payment that arrives after cancellation puts the order back. Every row reads as reasonable
+# on its own; three claims break at once, and the scenario that pinned the answer with them.
+awk '/^\| 取消   \| - / { print "| 取消 | 入金 | 入金済 | 0円 | true |"; print "| 取消 | 出荷, 配達, 取消依頼 | 状態 | 0円 | false |"; next } { print }' "$o" > "$M/m_e126.rule"
+# A cancel request after shipment refunds without moving the order, so a second one refunds again
+awk '/^\| 出荷済 \| 入金, 出荷, 取消依頼 / { print "| 出荷済 | 取消依頼 | 状態 | 支払額 | true |"; print "| 出荷済 | 入金, 出荷 | 状態 | 0円 | false |"; next } { print }' "$o" > "$M/m_e127.rule"
+# `held` naming an output: what a case holds is an input it passes
+awk '{ sub(/^  held    支払額$/, "  held    返金額"); print }'                         "$o" > "$M/m_e056.rule"
+# A state added to the enum, with its row, that no event ever moves an order into
+awk '{ sub(/ \| 取消\(cancelled\)$/, " | 取消(cancelled) | 保留(on_hold)"); print } /^\| 取消   \| - / { print "| 保留 | - | 状態 | 0円 | false |" }' "$o" > "$M/m_w125.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

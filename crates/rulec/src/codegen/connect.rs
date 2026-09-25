@@ -866,6 +866,33 @@ impl<'a> Gen<'a> {
                     .join(", ")
             )
         };
+        // A machine's traces (§15.148): the carried input is the state the service answered
+        // to the call before, read back out of the response as the module's own value.
+        let (mut mhead, mut mline, mut mtail) = (String::new(), "            d = json.loads(line)[\"in\"]\n".to_string(), String::new());
+        if let (Some((en, _, _)), Some((cin, _)), Some(oa)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                args[k] = format!("(state if \"step\" in v else {})", args[k]);
+            }
+            mhead = "        state: m.".to_string() + &cls + " = m.INITIAL\n";
+            mline = format!(
+                "            v = json.loads(line)\n            \
+                 if \"machine\" in v:\n                \
+                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]}}, ensure_ascii=False, separators=(\",\", \":\")))\n                \
+                     continue\n            \
+                 d = dict(v[\"in\"])\n            \
+                 if v.get(\"step\") == \"start\":\n                \
+                     state = m.{cls}(v[\"state\"])\n            \
+                 if \"step\" in v:\n                \
+                     d[{cin:?}] = state.value\n"
+            );
+            // Read back out of the response the way the record above reads it.
+            let o = self.f.outputs.iter().find(|o| pub_name(&o.name) == oa).expect("the carried output");
+            mtail = format!(
+                "            if \"step\" in v:\n                state = {}\n",
+                self.from_response(&oa, &self.ty_of(&o.name.text))
+            );
+        }
         let tables: Vec<String> = self
             .wire_enums()
             .iter()
@@ -918,6 +945,9 @@ impl<'a> Gen<'a> {
             // One argument keeps the comma a tuple of one needs; two or more must not have it.
             .replace("@ARGS@", &if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") })
             .replace("@OUT@", &out)
+            .replace("@MHEAD@", &mhead)
+            .replace("@MLINE@", &mline)
+            .replace("@MTAIL@", &mtail)
             .replace("@D_REQUEST@", &tr!("ベクタ一行を、要求のメッセージにする。", "One line of the vectors as the request message."))
             .replace("@D_SERVE@", &tr!("WSGI の側を、標準ライブラリのサーバで、この同じプロセスの空いている番号に立てる。", "The WSGI side, on a free port in this same process, served by the standard library."))
             .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known."))
@@ -986,16 +1016,15 @@ def main(argv: list[str]) -> None:
     argv = [a for a in argv if a not in ("--get", "--wsgi", "--asgi")]
     at = argv[argv.index("--at") + 1] if "--at" in argv else (_serve_wsgi() if wsgi else _serve_asgi())
     with @SVC@ClientSync(at) as client:
-        for line in sys.stdin:
+@MHEAD@        for line in sys.stdin:
             line = line.strip()
             if not line:
                 continue
-            d = json.loads(line)["in"]
-@PRELUDE@            args = (@ARGS@)
+@MLINE@@PRELUDE@            args = (@ARGS@)
             res = client.decide(_request(d), use_get=use_get)
             trace = [m.Fired(f.table, f.row, f.label) for f in res.trace]
             print(m.@ALIAS@_record(*args, @OUT@, trace))
-
+@MTAIL@
 
 if __name__ == "__main__":
     main(sys.argv[1:])

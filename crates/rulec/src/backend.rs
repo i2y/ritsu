@@ -70,6 +70,28 @@ mod words {
         "clone", "dup", "format", "freeze", "hash", "inspect", "lambda", "loop", "method",
         "object_id", "print", "proc", "puts", "raise", "require", "send", "tap", "to_s",
     ];
+    /// The classes and modules Ruby defines at the top level, with the two libraries the
+    /// generated code requires (`date` and `json`). The rule's module is its alias in
+    /// PascalCase, and `module Time` stops with "Time is not a module".
+    pub const RB_CORE: &[&str] = &[
+        "ArgumentError", "Array", "BasicObject", "Binding", "Class", "ClosedQueueError",
+        "Comparable", "Complex", "ConditionVariable", "Data", "Date", "DateTime", "DidYouMean",
+        "Dir", "EOFError", "Encoding", "EncodingError", "Enumerable", "Enumerator", "Errno",
+        "ErrorHighlight", "Exception", "FalseClass", "Fiber", "FiberError", "File", "FileTest",
+        "Float", "FloatDomainError", "FrozenError", "GC", "Gem", "Hash", "IO", "IOError",
+        "IndexError", "Integer", "Interrupt", "JSON", "Kernel", "KeyError", "LoadError",
+        "LocalJumpError", "Marshal", "MatchData", "Math", "Method", "Module", "Monitor",
+        "MonitorMixin", "Mutex", "NameError", "NilClass", "NoMatchingPatternError",
+        "NoMatchingPatternKeyError", "NoMemoryError", "NoMethodError", "NotImplementedError",
+        "Numeric", "Object", "ObjectSpace", "Pathname", "Proc", "Process", "Queue", "Ractor",
+        "Random", "Range", "RangeError", "Rational", "RbConfig", "Refinement", "Regexp",
+        "RegexpError", "Ruby", "RubyVM", "RuntimeError", "ScriptError", "SecurityError", "Set",
+        "Signal", "SignalException", "SizedQueue", "StandardError", "StopIteration", "String",
+        "Struct", "Symbol", "SyntaxError", "SyntaxSuggest", "SystemCallError", "SystemExit",
+        "SystemStackError", "Thread", "ThreadError", "ThreadGroup", "Time", "TracePoint",
+        "TrueClass", "TypeError", "UnboundMethod", "UncaughtThrowError", "UnicodeNormalize",
+        "Warning", "ZeroDivisionError",
+    ];
 
     /// PHP writes a variable with a `$`, so a keyword is only a problem where a bare name
     /// goes: the function this rule becomes.
@@ -118,9 +140,62 @@ mod words {
         "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "false",
         "null",
     ];
+    /// The classes of `java.lang` the generated code names, and the ones its files import: the
+    /// rule's class is its alias in PascalCase, and a class `List` beside `import java.util.List`
+    /// does not compile.
     pub const JAVA_GLOBAL: &[&str] = &[
-        "Boolean", "Character", "Double", "Error", "Exception", "Integer", "Long", "Math",
-        "Number", "Object", "Record", "String", "System", "Thread",
+        "ArrayList", "Boolean", "BufferedReader", "Character", "Double", "Error", "Exception",
+        "IOException", "IllegalArgumentException", "InputStreamReader", "Integer", "LinkedHashMap",
+        "List", "Long", "Map", "Math", "Number", "NumberFormatException", "Object", "PrintStream",
+        "Record", "RuntimeException", "StandardCharsets", "String", "StringBuilder", "System",
+        "Thread",
+    ];
+
+    /// Python's standard library, as `sys.stdlib_module_names` lists it (3.14, without the
+    /// private modules), and the modules 3.12 and 3.13 removed. The rule's module is a file
+    /// named after its alias, so `time.py` is what `import time` finds from beside it.
+    pub const PY_STDLIB: &[&str] = &[
+        "abc", "aifc", "annotationlib", "antigravity", "argparse", "array", "ast", "asynchat",
+        "asyncio", "asyncore", "atexit", "audioop", "base64", "bdb", "binascii", "bisect",
+        "builtins", "bz2", "calendar", "cgi", "cgitb", "chunk", "cmath", "cmd", "code",
+        "codecs", "codeop", "collections", "colorsys", "compileall", "compression",
+        "concurrent", "configparser", "contextlib", "contextvars", "copy", "copyreg",
+        "cProfile", "crypt", "csv", "ctypes", "curses", "dataclasses", "datetime", "dbm",
+        "decimal", "difflib", "dis", "distutils", "doctest", "email", "encodings", "ensurepip",
+        "enum", "errno", "faulthandler", "fcntl", "filecmp", "fileinput", "fnmatch",
+        "fractions", "ftplib", "functools", "gc", "genericpath", "getopt", "getpass",
+        "gettext", "glob", "graphlib", "grp", "gzip", "hashlib", "heapq", "hmac", "html",
+        "http", "idlelib", "imaplib", "imghdr", "imp", "importlib", "inspect", "io",
+        "ipaddress", "itertools", "json", "keyword", "lib2to3", "linecache", "locale",
+        "logging", "lzma", "mailbox", "mailcap", "marshal", "math", "mimetypes", "mmap",
+        "modulefinder", "msilib", "msvcrt", "multiprocessing", "netrc", "nis", "nntplib", "nt",
+        "ntpath", "nturl2path", "numbers", "opcode", "operator", "optparse", "os",
+        "ossaudiodev", "pathlib", "pdb", "pickle", "pickletools", "pipes", "pkgutil",
+        "platform", "plistlib", "poplib", "posix", "posixpath", "pprint", "profile", "pstats",
+        "pty", "pwd", "py_compile", "pyclbr", "pydoc", "pydoc_data", "pyexpat", "queue",
+        "quopri", "random", "re", "readline", "reprlib", "resource", "rlcompleter", "runpy",
+        "sched", "secrets", "select", "selectors", "shelve", "shlex", "shutil", "signal",
+        "site", "smtpd", "smtplib", "sndhdr", "socket", "socketserver", "spwd", "sqlite3",
+        "sre_compile", "sre_constants", "sre_parse", "ssl", "stat", "statistics", "string",
+        "stringprep", "struct", "subprocess", "sunau", "symtable", "sys", "sysconfig",
+        "syslog", "tabnanny", "tarfile", "telnetlib", "tempfile", "termios", "textwrap",
+        "this", "threading", "time", "timeit", "tkinter", "token", "tokenize", "tomllib",
+        "trace", "traceback", "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing",
+        "unicodedata", "unittest", "urllib", "uu", "uuid", "venv", "warnings", "wave",
+        "weakref", "webbrowser", "winreg", "winsound", "wsgiref", "xdrlib", "xml", "xmlrpc",
+        "zipapp", "zipfile", "zipimport", "zlib", "zoneinfo",
+    ];
+
+    /// The first element of every standard package's import path (`go list std`). The rule's
+    /// module is named after its alias, and a module `time` makes every `import "time"` —
+    /// the standard library's own included — ambiguous.
+    pub const GO_STD: &[&str] = &[
+        "archive", "bufio", "builtin", "bytes", "cmp", "compress", "container", "context",
+        "crypto", "database", "debug", "embed", "encoding", "errors", "expvar", "flag", "fmt",
+        "go", "hash", "html", "image", "index", "internal", "io", "iter", "log", "maps",
+        "math", "mime", "net", "os", "path", "plugin", "reflect", "regexp", "runtime",
+        "slices", "sort", "strconv", "strings", "structs", "sync", "syscall", "testing",
+        "text", "time", "unicode", "unique", "unsafe", "weak",
     ];
 
     /// SQL is the one target with nothing to list. The query quotes every identifier it
@@ -222,6 +297,22 @@ pub struct Backend {
     /// enum's, which is a type's. A parameter or a local of the same name shadows nothing
     /// outside its own body, which is why `min` and `list` in the corpus are silent.
     pub globals: &'static [&'static str],
+    /// The names the rule's own alias cannot take here, because the module or package named
+    /// after it would collide with one of the standard library's (§15.149). Held to
+    /// `module_of(alias)`, the name that module actually gets. Only the rule's alias names a
+    /// module; an enum's becomes a type inside it.
+    pub modules: &'static [&'static str],
+    /// The name the rule's module or package gets from its alias here.
+    pub module_of: fn(&str) -> String,
+}
+
+/// The name of the rule's Go package: its alias with the underscores taken out.
+pub fn go_package(alias: &str) -> String {
+    alias.replace('_', "").to_lowercase()
+}
+
+fn same_name(alias: &str) -> String {
+    alias.to_string()
 }
 
 /// Whether a command answers `--version` or `version`.
@@ -402,6 +493,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::PY_KW,
         globals: words::PY_GLOBAL,
+        modules: words::PY_STDLIB,
+        module_of: same_name,
     },
     // The twelfth target is the one that is not a language: the rule travels as data and a
     // fixed evaluator reads it. It is here rather than in a package of its own because the
@@ -448,6 +541,8 @@ pub const ALL: &[Backend] = &[
         // The plan is JSON: a name here is data the runtime reads, never an identifier.
         reserved: words::NONE,
         globals: words::NONE,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "typescript",
@@ -478,6 +573,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::JS_KW,
         globals: words::JS_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "javascript",
@@ -508,6 +605,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::JS_KW,
         globals: words::JS_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "rust",
@@ -555,6 +654,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::RS_KW,
         globals: words::RS_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "ruby",
@@ -583,6 +684,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::RB_KW,
         globals: words::RB_GLOBAL,
+        modules: words::RB_CORE,
+        module_of: crate::codegen::ruby_module,
     },
     Backend {
         id: "php",
@@ -612,6 +715,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::PHP_KW,
         globals: words::PHP_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "go",
@@ -643,6 +748,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::GO_KW,
         globals: words::GO_GLOBAL,
+        modules: words::GO_STD,
+        module_of: go_package,
     },
     Backend {
         id: "swift",
@@ -681,6 +788,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::SWIFT_KW,
         globals: words::SWIFT_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "java",
@@ -736,6 +845,8 @@ pub const ALL: &[Backend] = &[
         }),
         reserved: words::JAVA_KW,
         globals: words::JAVA_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "sql",
@@ -767,6 +878,8 @@ pub const ALL: &[Backend] = &[
         ready: None,
         reserved: words::NONE,
         globals: words::NONE,
+        modules: words::NONE,
+        module_of: same_name,
     },
     Backend {
         id: "wasm",
@@ -781,7 +894,7 @@ pub const ALL: &[Backend] = &[
                 (format!("wasm/{alias}.rs"), g.rust()),
                 (format!("wasm/{alias}_wasm.rs"), g.rs_wasm()),
                 (format!("wasm/{alias}.wit"), g.wit()),
-                (format!("wasm/{alias}_runner.mjs"), crate::codegen::wasm_runner_js(alias)),
+                (format!("wasm/{alias}_runner.mjs"), g.wasm_runner()),
                 ("wasm/_round.rs".into(), crate::codegen::round_wasm_rust()),
                 ("wasm/_round_test.mjs".into(), crate::codegen::round_tests_wasm_js()),
             ]
@@ -818,6 +931,8 @@ pub const ALL: &[Backend] = &[
         }),
         reserved: words::RS_KW,
         globals: words::RS_GLOBAL,
+        modules: words::NONE,
+        module_of: same_name,
     },
 ];
 

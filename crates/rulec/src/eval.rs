@@ -26,7 +26,7 @@ pub enum Val {
 }
 
 impl Val {
-    fn show(&self, ty: &Ty) -> String {
+    pub fn show(&self, ty: &Ty) -> String {
         match self {
             Val::Enum(s) | Val::Str(s) => s.clone(),
             Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
@@ -731,8 +731,12 @@ pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row)
 }
 
 pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
+    // Every section runs, each held to its own header (§15.149).
+    f.examples.iter().flat_map(|ex| check_example_table(f, c, path, ex)).collect()
+}
+
+fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec<Diag> {
     let mut out = Vec::new();
-    let Some(ex) = &f.examples else { return out };
     if f.outputs.is_empty() {
         return out;
     }
@@ -836,7 +840,11 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
         // silently skipped columns whose type could not be resolved).
         for (oi, od) in f.outputs.iter().enumerate() {
             let oty = c.ty_of(&od.name.text).unwrap_or(Ty::Unknown);
-            let want = row.outs.get(oi).and_then(|o| match o {
+            // The expected value sits under the output's own heading, wherever the header put
+            // it. Reading it by the output's place in the declaration held `-> y | x` to the
+            // wrong column and reported two examples that were right as wrong (§15.148).
+            let Some(hi) = ex.outputs.iter().position(|o| o.name.text == od.name.text) else { continue };
+            let want = row.outs.get(hi).and_then(|o| match o {
                 OutCell::Lit(l) => lit_to_val(l, &oty),
                 OutCell::Name(w) => lit_to_val(&Lit::Word(w.clone()), &oty),
             });
@@ -859,6 +867,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         inputs: wit_in.clone(),
                         outputs: vec![(od.name.text.clone(), wval(c, &od.name.text, g))],
                         expected: vec![(od.name.text.clone(), wval(c, &od.name.text, w))],
+                        ..Default::default()
                     })
                     .mark(row.span.clone(), "")
                     .note(tr!("当てはまった行: {}", "Fired rows: {}", fired.join(" / ")))
@@ -874,6 +883,7 @@ pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         inputs: wit_in.clone(),
                         outputs: Vec::new(),
                         expected: vec![(od.name.text.clone(), wval(c, &od.name.text, w))],
+                        ..Default::default()
                     })
                     .mark(row.span.clone(), "")
                     .note(if fired.is_empty() {

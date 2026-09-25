@@ -977,9 +977,8 @@ pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
 /// (E111 demands the outputs, not the inputs), and a vector missing one would hand the runner a
 /// key that is not there.
 fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
-    let Some(ex) = &f.examples else { return Vec::new() };
     let mut out = Vec::new();
-    for row in &ex.rows {
+    for (ex, row) in f.examples.iter().flat_map(|ex| ex.rows.iter().map(move |r| (ex, r))) {
         let a: BTreeMap<String, Val> = eval::example_env(f, c, ex, row).into_iter().collect();
         // The sequence counts as an input of the case: a walk with none is not the example
         // that was written (§15.56).
@@ -1824,4 +1823,208 @@ pub fn pair_witness(
         }
     }
     hold(&a).then_some(a)
+}
+
+// ── The machine's traces (§15.148) ─────────────────────────────────────────
+
+/// One sequence of calls from the machine's initial state: what each call is passed, the
+/// carried input left out — it is what the call before answered, and the runner that plays
+/// the trace takes it from the answer its own language gave.
+#[derive(Clone)]
+pub struct Trace {
+    pub why: String,
+    pub steps: Vec<BTreeMap<String, Val>>,
+}
+
+/// The traces of a machine and what the reference evaluator answers to them.
+pub struct Traces {
+    pub initial: String,
+    pub finals: Vec<String>,
+    pub traces: Vec<Trace>,
+}
+
+/// What a transition is called in the suite: from, the row that decided it, to. Two calls
+/// that go the same way by the same row are the same transition.
+pub type TransitionKey = (String, Option<(String, usize)>, String);
+
+/// The transition one call makes, read off the answer.
+pub fn transition_of(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<(TransitionKey, BTreeMap<String, Val>)> {
+    let m = f.machine.as_ref()?;
+    let (cin, cout) = m.carried()?;
+    let from = match input.get(cin) {
+        Some(Val::Enum(s)) => s.clone(),
+        _ => return None,
+    };
+    let env: std::collections::HashMap<String, Val> = input.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let (outs, _, rows, _) = eval::run_all_traced(f, c, env);
+    let to = match outs.iter().find(|(k, _)| k == cout).and_then(|(_, v)| v.clone()) {
+        Some(Val::Enum(s)) => s,
+        _ => return None,
+    };
+    let deciders: BTreeSet<String> = f
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Table(t) if t.outputs.iter().any(|o| o.name.text == cout) => t.name.as_ref().map(|n| n.text.clone()),
+            _ => None,
+        })
+        .collect();
+    let row = rows.iter().find(|(t, _)| deciders.contains(t)).cloned();
+    let _ = c;
+    Some(((from, row, to), input.clone()))
+}
+
+/// The traces the suite plays (§15.148): for every transition a case can make, and for every
+/// two transitions that can follow one another, the shortest sequence of calls from the
+/// initial state that ends with them; and every `scenario`, as written. A trace that is the
+/// beginning of another is left out — the longer one plays it.
+///
+/// The obligation is on **pairs** because what a trace adds to the single calls is the
+/// hand-over: the state one call answers is the state the next one is passed, in the
+/// language under test, as that language holds it. A pair is the smallest place that shows.
+pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
+    let m = f.machine.as_ref()?;
+    let (cin, _) = m.carried()?;
+    let a = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize)?;
+    // The final states in the enum's order, as every language lists them: the order of the
+    // `final` line is how the rule happens to be written, not a fact about it.
+    let finals: Vec<String> = a.states.iter().filter(|s| a.finals.contains(s)).cloned().collect();
+    let mut out = Traces { initial: a.initial.clone(), finals, traces: Vec::new() };
+    let step_of = |e: &crate::machine::Edge| -> BTreeMap<String, Val> {
+        e.inputs.iter().filter(|(k, _)| k.as_str() != cin).map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
+    if a.blocked.is_none() && !a.over_budget {
+        // One edge per transition, from the states a case reaches in the world the edge is in
+        // (§15.149): a trace is one case, so it holds its `held` inputs.
+        let mut rep: Vec<(TransitionKey, usize)> = Vec::new();
+        for (i, e) in a.edges.iter().enumerate() {
+            if !a.reaches(&e.from, &e.world) || a.mixed.contains(&i) {
+                continue;
+            }
+            let k = (e.from.clone(), e.row.clone(), e.to.clone());
+            if !rep.iter().any(|(x, _)| *x == k) {
+                rep.push((k, i));
+            }
+        }
+        let name = |k: &TransitionKey| -> String {
+            match &k.1 {
+                Some((t, r)) => format!("{} -[{}]-> {}", k.0, eval::row_tag(t, *r), k.2),
+                None => format!("{} -> {}", k.0, k.2),
+            }
+        };
+        let mut paths: Vec<(Vec<usize>, String)> = Vec::new();
+        let mut paired: BTreeSet<usize> = BTreeSet::new();
+        const CAP: usize = 4000;
+        for (k1, e1) in &rep {
+            let w = a.edges[*e1].world.clone();
+            for (k2, _) in &rep {
+                if k1.2 != k2.0 || paths.len() >= CAP {
+                    continue;
+                }
+                // The second call of the pair in the first one's world, when the case can
+                // make it there.
+                let Some(e2) = (0..a.edges.len()).find(|&j| {
+                    let e = &a.edges[j];
+                    e.world == w && (e.from.clone(), e.row.clone(), e.to.clone()) == *k2 && !a.mixed.contains(&j)
+                }) else {
+                    continue;
+                };
+                let Some(mut p) = a.trace_to_node(&(k1.0.clone(), w.clone())) else { continue };
+                p.push(*e1);
+                p.push(e2);
+                paired.insert(*e1);
+                paired.insert(e2);
+                paths.push((p, tr!("遷移の対: {} → {}", "transition pair: {} then {}", name(k1), name(k2))));
+            }
+        }
+        for (k, e) in &rep {
+            if paired.contains(e) {
+                continue;
+            }
+            let Some(mut p) = a.trace_to_node(&(k.0.clone(), a.edges[*e].world.clone())) else { continue };
+            p.push(*e);
+            paths.push((p, tr!("遷移: {}", "transition: {}", name(k))));
+        }
+        // A trace that begins another one is played by the longer one.
+        let all: Vec<Vec<usize>> = paths.iter().map(|(p, _)| p.clone()).collect();
+        let mut kept: Vec<(Vec<usize>, String)> = Vec::new();
+        for (i, (p, why)) in paths.into_iter().enumerate() {
+            let prefix = all.iter().enumerate().any(|(j, q)| j != i && q.len() > p.len() && q.starts_with(&p));
+            let same_before = all[..i].iter().any(|q| *q == p);
+            if !prefix && !same_before {
+                kept.push((p, why));
+            }
+        }
+        for (p, why) in kept {
+            out.traces.push(Trace { why, steps: p.iter().map(|&e| step_of(&a.edges[e])).collect() });
+        }
+    }
+    for sc in &f.scenarios {
+        let mut steps = Vec::new();
+        for row in &sc.table.rows {
+            let env = eval::example_env(f, c, &sc.table, row);
+            let s: BTreeMap<String, Val> = env.into_iter().filter(|(k, _)| k != cin).collect();
+            if f.inputs.iter().filter(|i| i.name.text != cin).any(|i| !s.contains_key(&i.name.text)) {
+                steps.clear();
+                break;
+            }
+            steps.push(s);
+        }
+        if !steps.is_empty() {
+            out.traces.push(Trace { why: tr!("手順の例 {}", "scenario {}", sc.name.text), steps });
+        }
+    }
+    Some(out)
+}
+
+/// The traces file: the line that asks a runner for its constants, then one line per call.
+pub fn traces_json(f: &RuleFile, c: &Checked, t: &Traces) -> String {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let (cin, cout) = f.machine.as_ref().and_then(|m| m.carried()).unwrap_or(("", ""));
+    let mut lines = vec![format!("{{\"machine\":\"meta\",\"carry\":{{\"in\":\"{}\",\"out\":\"{}\"}}}}", esc(cin), esc(cout))];
+    for tr in &t.traces {
+        for (k, s) in tr.steps.iter().enumerate() {
+            let v = Vector { input: s.clone(), outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
+            if k == 0 {
+                lines.push(format!(
+                    "{{\"in\":{},\"step\":\"start\",\"state\":\"{}\",\"why\":\"{}\"}}",
+                    in_object(f, c, &v),
+                    esc(&t.initial),
+                    esc(&tr.why)
+                ));
+            } else {
+                lines.push(format!("{{\"in\":{},\"step\":\"next\"}}", in_object(f, c, &v)));
+            }
+        }
+    }
+    lines.join("\n") + "\n"
+}
+
+/// What the runner has to print for the traces file: its constants, then the record of every
+/// call, each call passed the state the reference evaluator answered to the call before.
+pub fn traces_expected_json(f: &RuleFile, c: &Checked, t: &Traces) -> String {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let (cin, cout) = f.machine.as_ref().and_then(|m| m.carried()).unwrap_or(("", ""));
+    let mut lines = vec![format!(
+        "{{\"initial\":\"{}\",\"final\":[{}]}}",
+        esc(&t.initial),
+        t.finals.iter().map(|s| format!("\"{}\"", esc(s))).collect::<Vec<_>>().join(",")
+    )];
+    for tr in &t.traces {
+        let mut state = Val::Enum(t.initial.clone());
+        for s in &tr.steps {
+            let mut input = s.clone();
+            input.insert(cin.to_string(), state.clone());
+            let env: std::collections::HashMap<String, Val> = input.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let (outs, _, rows, _) = eval::run_all_traced(f, c, env);
+            let next = outs.iter().find(|(k, _)| k == cout).and_then(|(_, v)| v.clone());
+            let v = Vector { input, outputs: outs, trace: Vec::new(), fired: rows, why: String::new() };
+            lines.push(expected_json(f, c, &v));
+            match next {
+                Some(n) => state = n,
+                None => break,
+            }
+        }
+    }
+    lines.join("\n") + "\n"
 }

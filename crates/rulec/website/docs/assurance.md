@@ -24,10 +24,10 @@ down, and nothing here can check that reading.
 | **2. The two declarations** | rounding is written down, not guessed; an overlap the proof could not settle becomes a runtime guard that refuses rather than picks | `rulec check` |
 | **3. The examples** | the cases a person wrote by hand still hold | `rulec check` |
 | **4. The vectors** | the generated code answers like the reference evaluator, in twelve languages, byte for byte | `rulec test` |
-| **5. The five coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every rounding tie and every fold transition | `rulec coverage` |
+| **5. The six coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 97 deliberately broken rules each produce the diagnostic they should; 48 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 109 deliberately broken rules each produce the diagnostic they should; 49 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -39,6 +39,13 @@ decided over **the whole declared input space**, not over samples of it. What ma
 finite is the compression of §6.2: a column is cut at the boundaries its own cells name, and
 everything between two boundaries behaves alike, so a space of 10<sup>18</sup> combinations
 becomes a few hundred boxes that can be walked.
+
+A rule that is one step of a state machine gets its claims about **every sequence of calls**
+decided the same way: that no call leaves a final state (E124), that every state a case can
+reach can still finish (E125), and what its `never` and `once` lines say (E126, E127). The
+states are a finite enum and every other input is cut at the table's own boundaries, so the
+sequences are walks on a finite graph, and a claim that fails comes back as the shortest
+sequence of calls that breaks it.
 
 **Where it stops:** at the table as written. A tariff transcribed wrong passes every one of
 the five. That is what layer 9 is for, and even that only ties the table to a copy.
@@ -77,20 +84,22 @@ Twelve languages, and more doors than languages: the module itself, the MCP serv
 server over HTTP, the Rust runner compiled to WASI, the Wasm component, the SQL query and the
 same query as a PostgreSQL function. Each door is a separate run. A rule that refuses an
 input has a suite for that too — the refusals are cases, and a door that answers where it
-should refuse fails.
+should refuse fails. A rule that carries a state has sequences of calls as well, and each
+language hands the state it answered to its own next call, so the hand-over is compared too.
 
 **Where it stops:** this is a test, not a proof of equivalence. It is strong evidence over
 a suite designed to be adversarial, which is a different thing from a theorem.
 
 [Generate and call](generate.md){ .md-button }
 
-## 5. The five coverage criteria
+## 5. The six coverage criteria
 
 A suite that runs is not a suite that reaches. `rulec coverage` states the obligations the
 rule itself implies and says which are met: every **row** wins somewhere, every **boundary
 pair** has the two cases on either side of it, every **shadowed pair** under `policy first`
-is exercised, every **rounding tie** lands on the exact half, and every **fold transition**
-is taken. The obligations come from the rule, never from the suite — an auditor that says
+is exercised, every **rounding tie** lands on the exact half, every **fold transition** is
+taken, and, for a state machine, every **transition** a case can make and every two that can
+follow one another are played from the initial state. The obligations come from the rule, never from the suite — an auditor that says
 "all satisfied" of an empty set says nothing, and a test in the repository holds it to that.
 
 ## 6. The model checker
@@ -121,7 +130,10 @@ together, it prints the multipliers that add those up to a contradiction; a re-c
 the addition. For a contract the rule reads its inputs from, it prints the contract's
 condition opened into cases, and for each case why it keeps what the rule's door asks — each
 declared range, each `constraint` between two inputs, each enum's values — so that a request
-the caller's own validation lets through is one the rule takes.
+the caller's own validation lets through is one the rule takes. For a state machine, it prints
+the claims laid on the rows: a set of states closed under a call that holds every state a case
+can reach, the pairs a `never` or `once` line is read over, and, from every one of those
+states, a sequence of calls that reaches a final state.
 
 Two programs read it, and neither shares code with rulec:
 
@@ -154,15 +166,15 @@ the contract's text by a digest, and neither re-checker reads CEL or a schema.
 The five proofs come out of rulec's implementation, and **that implementation has not been
 proved correct**. What stands in for a proof is evidence, and it is kept deliberately:
 
-- **97 deliberately broken rules**, each producing the diagnostic it should — and the
+- **109 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
-- **48 rules** — 21 transcribed from a published source, 27 written to reach the corners of
+- **49 rules** — 21 transcribed from a published source, 28 written to reach the corners of
   the language — checked, generated and run on every commit, in every language that takes
   them.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
   held to the corpus files they came from. A page that drifts is a failing test.
-- **Every diagnostic is in the ledger**: 86 codes, each with a smallest reproduction that is
+- **Every diagnostic is in the ledger**: 102 codes, each with a smallest reproduction that is
   run on every commit to check it still produces that code.
 
 ## 9. The source a rule was transcribed from

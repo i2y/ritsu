@@ -74,6 +74,8 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
             rep.moved.push(Mismatch { line: r.line, tag: r.tag.clone(), input: r.input.clone(), outs: pairs, err: None, fired: key });
         }
     }
+    // A machine's records as cases (§15.148): what was recorded is what came before.
+    rep.cases = cases((f, c), l, &|r, _| f.outputs.iter().map(|o| (o.name.text.clone(), wire(c, &o.name.text, r.observed.get(&o.name.text)))).collect());
     rep
 }
 
@@ -141,6 +143,13 @@ pub fn diff(
             });
         }
     }
+    // A machine's records as cases (§15.148), played by the new version with the old one's
+    // answer as what came before. Until the two part they carry the same state, so the first
+    // call where they part is found exactly.
+    rep.cases = cases(new, l, &|_, ins| {
+        let (outs, _, _, _) = eval::run_all_traced(old.0, old.1, ins.clone());
+        outs.iter().map(|(n, v)| (n.clone(), wire(new.1, n, v.as_ref()))).collect()
+    });
     rep
 }
 
@@ -193,4 +202,115 @@ fn same_rows(rec: &[(String, usize)], labels: &[Option<String>], fired: &[(Strin
                     _ => ra == rb,
                 }
         })
+}
+
+
+/// A machine's records as cases (§15.148). The records that share a `tag` are one case's
+/// calls in the order they came in. The case is played again from its first record — its
+/// recorded state — and each later call is passed the state `now` answered to the call before,
+/// not the state the record says; `before` gives, per record, what the call answered before
+/// (the record's own `observed` for `replay`, the old version's answer for `diff`).
+pub fn cases(
+    now: (&RuleFile, &Checked),
+    l: &Load,
+    before: &dyn Fn(&crate::fixtures::Record, &std::collections::HashMap<String, crate::eval::Val>) -> Vec<(String, Option<String>)>,
+) -> Option<crate::report::Cases> {
+    let (f, c) = now;
+    let m = f.machine.as_ref()?;
+    let (cin, cout) = m.carried()?;
+    let a = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize)?;
+    // Whether a case can still finish depends on the world it is in: the coordinates of its
+    // `held` inputs (§15.149).
+    let can_finish = a.can_finish();
+    // The cases, in the order their first record came in.
+    let mut order: Vec<String> = Vec::new();
+    let mut by: std::collections::BTreeMap<String, Vec<&crate::fixtures::Record>> = std::collections::BTreeMap::new();
+    for r in &l.records {
+        if r.tag.is_empty() {
+            continue;
+        }
+        if !by.contains_key(&r.tag) {
+            order.push(r.tag.clone());
+        }
+        by.entry(r.tag.clone()).or_default().push(r);
+    }
+    // A record the version cannot read at all refuses its case at that line.
+    let mut refused_at: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for pb in &l.problems {
+        if !pb.tag.is_empty() {
+            let e = refused_at.entry(pb.tag.clone()).or_insert(pb.line);
+            *e = (*e).min(pb.line);
+            if !by.contains_key(&pb.tag) && !order.contains(&pb.tag) {
+                order.push(pb.tag.clone());
+            }
+        }
+    }
+    if order.is_empty() {
+        return None;
+    }
+    let mut cs = crate::report::Cases { total: order.len(), ..Default::default() };
+    for tag in &order {
+        // A case is told by what happens to it first: a call answered differently before the
+        // record the version refuses is a case that diverged, and one after it is never made.
+        let refused = refused_at.get(tag).copied();
+        let recs: &[&crate::fixtures::Record] = by.get(tag).map(|v| v.as_slice()).unwrap_or(&[]);
+        let mut state: Option<crate::eval::Val> = None;
+        let mut parted: Option<usize> = None;
+        let mut refused = refused;
+        let mut kept: Option<Vec<Option<crate::eval::Val>>> = None;
+        for r in recs {
+            if refused.is_some_and(|rl| rl < r.line) {
+                break;
+            }
+            // A case holds its `held` inputs (§15.149); a record that changes one is not a
+            // call of the same case, and the version refuses the case there.
+            let now: Vec<Option<crate::eval::Val>> = m.held.iter().map(|n| r.input.get(&n.text).cloned()).collect();
+            match &kept {
+                None => kept = Some(now),
+                Some(was) if *was != now => {
+                    refused = Some(refused.map_or(r.line, |rl| rl.min(r.line)));
+                    break;
+                }
+                Some(_) => {}
+            }
+            let mut ins: std::collections::HashMap<String, crate::eval::Val> = r.input.clone().into_iter().collect();
+            if let Some(st) = &state {
+                // The call is passed what this version answered to the one before.
+                if ins.get(cin) != Some(st) && parted.is_none() {
+                    parted = Some(r.line);
+                }
+                ins.insert(cin.to_string(), st.clone());
+            }
+            let (outs, _, _, _) = eval::run_all_traced(f, c, ins.clone());
+            let mine: Vec<(String, Option<String>)> = outs.iter().map(|(n, v)| (n.clone(), wire(c, n, v.as_ref()))).collect();
+            if parted.is_none() && mine != before(r, &ins) {
+                parted = Some(r.line);
+            }
+            state = outs.iter().find(|(n, _)| n == cout).and_then(|(_, v)| v.clone());
+            if state.is_none() {
+                break;
+            }
+        }
+        match (parted, refused) {
+            (Some(line), _) => cs.diverged.push((tag.clone(), line)),
+            (None, Some(line)) => {
+                cs.refused.push((tag.clone(), line));
+                continue;
+            }
+            (None, None) => cs.followed += 1,
+        }
+        if refused.is_some() {
+            continue;
+        }
+        if let Some(crate::eval::Val::Enum(last)) = &state {
+            let first = recs.first().map(|r| &r.input);
+            let world = first.and_then(|i| a.world_of(|n| i.get(n)));
+            if a.finals.contains(last) {
+                cs.ended += 1;
+            } else if !a.finals.is_empty() && world.is_some_and(|w| !can_finish.contains(&(last.clone(), w))) {
+                cs.stranded.push((tag.clone(), last.clone()));
+            }
+        }
+    }
+    Some(cs)
 }

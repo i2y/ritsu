@@ -171,6 +171,37 @@ fn clause_body(line: &str) -> String {
     o
 }
 
+/// A line under `machine` (§15.148): two spaces in, the keyword padded to the width of the
+/// longest one so the values start in one column, and the rest one space apart as a clause's
+/// body is.
+fn machine_body(line: &str) -> String {
+    let b = clause_body(line);
+    let t = b.trim_start();
+    let (word, rest) = match t.find(' ') {
+        Some(p) => (&t[..p], t[p + 1..].trim_start()),
+        None => (t, ""),
+    };
+    let w = MACHINE_LINES.iter().map(|k| k.len()).max().unwrap_or(0);
+    // A list is written `配達済, 取消`: the comma against the word before it.
+    let (words, comment) = match rest.find('#') {
+        Some(h) => (rest[..h].trim_end().replace(" ,", ","), format!("  {}", &rest[h..])),
+        None => (rest.replace(" ,", ","), String::new()),
+    };
+    let rest = format!("{words}{comment}");
+    let rest = rest.trim_start();
+    if rest.is_empty() {
+        format!("  {word}")
+    } else if rest.starts_with('#') {
+        format!("  {word}  {rest}")
+    } else {
+        format!("  {word:<w$} {rest}")
+    }
+}
+
+/// The words that start a line under `machine`.
+const MACHINE_LINES: &[&str] =
+    &[crate::kw::CARRY, crate::kw::HELD, crate::kw::INITIAL, crate::kw::FINAL, crate::kw::NEVER, crate::kw::ONCE];
+
 fn first_word(line: &str) -> &str {
     line.trim_start().split(|c: char| c.is_whitespace()).next().unwrap_or("")
 }
@@ -183,9 +214,17 @@ pub fn format(src: &str) -> String {
     // The body of an `apply` — bindings, `except`, output names — is indented like a clause's,
     // up to the next blank line or line head.
     let mut in_apply = false;
+    // The lines under a `machine`, up to the next blank line or line head.
+    let mut in_machine = false;
     while i < lines.len() {
         if !is_row(&lines[i]) {
             let w = first_word(&lines[i]);
+            if in_machine && MACHINE_LINES.contains(&w) {
+                out.push(machine_body(&lines[i]));
+                i += 1;
+                continue;
+            }
+            in_machine = w == crate::kw::MACHINE;
             if in_apply && !lines[i].trim().is_empty() && (w == crate::kw::EXCEPT || !crate::kw::LINE_HEAD.contains(&w)) && !w.starts_with('#') {
                 out.push(clause_body(&lines[i]));
                 i += 1;
@@ -227,6 +266,7 @@ pub fn format(src: &str) -> String {
         }
         in_clause = false;
         in_apply = false;
+        in_machine = false;
         // A run of consecutive `|` lines is one table. Widths are decided within this block only.
         let start = i;
         while i < lines.len() && is_row(&lines[i]) {

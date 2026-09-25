@@ -195,6 +195,9 @@ class Rule:
         self.sha256 = plan["sha256"]
         self.inputs = [i["name"] for i in plan["inputs"]]
         self.outputs = [o["name"] for o in plan["outputs"]]
+        # The machine this rule is one step of (§15.148), when it is one: the carried
+        # column, where a case starts, and the states it ends in.
+        self.machine = plan.get("machine")
 
     def __repr__(self) -> str:
         return f"<rulec.Rule {self.name} v{self.version} {self.sha256[:12]}>"

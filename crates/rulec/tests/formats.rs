@@ -130,7 +130,7 @@ fn genは古い生成物と欠けた生成物を分ける() {
 }
 
 #[test]
-fn coverageは五基準を名前つきで出す() {
+fn coverageは六基準を名前つきで出す() {
     let (c, out) = run(&["coverage", "tests/corpus/送料.rule", "--format", "json"]);
     assert_eq!(c, 0);
     let js = objects(&out);
@@ -138,7 +138,11 @@ fn coverageは五基準を名前つきで出す() {
     keys(&js[0], &["file", "vectors", "criteria"], "coverage");
     let rulec::json::Json::Arr(cs) = js[0].get("criteria").unwrap() else { panic!() };
     let names: Vec<&str> = cs.iter().map(|c| c.get("name").unwrap().as_str().unwrap()).collect();
-    assert_eq!(names, ["row", "boundary_pair", "shadow_pair", "rounding_tie", "fold_transition"], "基準の名前は英語固定");
+    assert_eq!(
+        names,
+        ["row", "boundary_pair", "shadow_pair", "rounding_tie", "fold_transition", "machine_transition"],
+        "基準の名前は英語固定"
+    );
     for c in cs {
         keys(c, &["name", "satisfied", "total", "missing"], "criterion");
     }

@@ -67,13 +67,20 @@ pub const ELEMENTS: &str = "elements";
 pub const SEQUENCE: &str = "sequence";
 /// Declares how the verdicts of a per-element table reduce to one answer (§15.56).
 pub const FOLD: &str = "fold";
+/// `machine 注文(order) over 遷移` — the rule is one step of a state machine: one output comes
+/// back as one input on the next call, and the claims under it are about every sequence of
+/// calls (§15.148). The generated code stays a pure function; the host keeps the state.
+pub const MACHINE: &str = "machine";
+/// A named sequence of steps from the machine's initial state, with what each step answers:
+/// the `examples` of a machine (§15.148).
+pub const SCENARIO: &str = "scenario";
 
 /// The line-head keywords. `rule` is header-only, so it is not included.
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE,
+    SHAPE, MACHINE, SCENARIO,
 ];
 
 // --- Declaration modifiers
@@ -107,10 +114,25 @@ pub const BY: &str = "by";
 pub const EMPTY: &str = "empty";
 /// The answer when the walk reached the end without stopping. Declaring it is not optional.
 pub const EXHAUSTED: &str = "exhausted";
-/// Inside `exhausted`, the value `keep_max` or a `take` is holding.
+/// Inside `exhausted`, the value `keep_max` or a `take` is holding. Under `machine`, the line
+/// naming the inputs a case holds from its first call to its last: `held 支払額` (§15.149).
 pub const HELD: &str = "held";
 /// `fold <column> over <sequence>`, and `count <name> over <sequence>`.
 pub const OVER: &str = "over";
+
+// --- The lines under `machine` (§15.148)
+/// `carry 状態 -> 次の状態` — the output that is the next call's input.
+pub const CARRY: &str = "carry";
+/// The state a case starts in.
+pub const INITIAL: &str = "initial";
+/// The states a case ends in. Nothing leads out of one, and every state a case can reach has
+/// a way to one.
+pub const FINAL: &str = "final";
+/// `never 出荷済 after 取消` — no sequence of calls reaches the first states after the second.
+pub const NEVER: &str = "never";
+pub const AFTER: &str = "after";
+/// `once 返金額 >0円` — at most one call in a case answers an output the cell accepts.
+pub const ONCE: &str = "once";
 
 // --- Counting the walk (§15.58)
 /// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements satisfy a test.
@@ -190,7 +212,7 @@ pub const RESERVED: &[&str] = &[
     EXCEPT, RESULT,
     EXAMPLES, RANGE, ROUND, CONTRACT_ONLY, DEFAULT, NOT, NONE, TRUE, FALSE, MIN, MAX, UP, DOWN,
     HALF_UP, HALF_EVEN, HALF_DOWN, ALLOCATE, NEXT, STOP, WITH, TAKE_UNIQUE, TAKE_FIRST, KEEP_MAX, BY, EMPTY,
-    EXHAUSTED, HELD, OVER,
+    EXHAUSTED, HELD, OVER, MACHINE, SCENARIO, CARRY, INITIAL, FINAL, NEVER, AFTER, ONCE,
 ];
 
 /// Lists the words that may follow `policy`, for use in diagnostic text.

@@ -15,7 +15,7 @@ If all five are **yes**, it fits. Whether money is involved is not one of them.
 2. Is the **number of them fixed** — or, where it is not, are they **elements of one
    shape**, one after another (`elements` and `fold`; see [Writing a rule](tour.md))?
 3. Is it **one decision** (ordering, and any repetition across decisions, can live in the
-   caller)?
+   caller — a state one decision leaves for the next is handed back in, with `machine`)?
 4. Does the **same input always give the same answer** ("today" and the stock level are
    arguments too)?
 5. Does **a person approve** the answer, or is the rule **revised on a date**?
@@ -130,7 +130,11 @@ sets of lines; here it is a theorem in `proofs/`.
 
 ## What it is not for
 
-- **Workflows** — several steps, carrying state
+- **Running a workflow** — the steps themselves, the waiting between them and what they do
+  outside. **One step of a process with state is writable** (`machine`: an order's status as a
+  table of state and event, with `check` proving what no sequence of calls may do, and the
+  caller keeping the state). Several machines at once, a number carried from call to call, and
+  the time between steps are not
 - **An average over a collection** — it divides by how many there are, which is dividing by
   a variable; compute it before the call and pass it in. **The total and the count are
   writable** (`sum`: "the lines total more than 10,000 yen" becomes a row of a table;

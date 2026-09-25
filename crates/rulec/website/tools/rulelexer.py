@@ -35,16 +35,20 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "shape", "apply")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "shape", "apply", "machine", "scenario")
 HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint")
 
 MODIFIERS = ("range", "round", "contract_only", "default", "step")
 CLAUSE = ("when", "then", "always")
 # The body of an `apply`: what the callee's definitions it leaves out are introduced with.
 APPLY = ("except",)
-# What starts a line inside a clause or an apply body: the two clause lines, the apply's
-# exception, and `overrides`, which a clause carries as a table does.
-INDENTED = ("when", "then", "except", "overrides")
+# The body of a `machine` (§15.148): its lines, and the word a `never` line is split by. Its
+# `held` line is the fold's word, listed with the arms.
+MACHINE = ("carry", "initial", "final", "never", "once", "after")
+# What starts a line inside a clause, an apply or a machine body: the two clause lines, the
+# apply's exception, `overrides`, which a clause carries as a table does, and the machine's
+# lines.
+INDENTED = ("when", "then", "except", "overrides", "carry", "held", "initial", "final", "never", "once")
 SOURCE = ("law", "file", "asof")
 TYPES = ("money", "mass", "length", "area", "volume", "duration", "temperature", "sound",
          "rate", "number", "bool", "string", "date")
@@ -97,7 +101,7 @@ class RuleLexer(RegexLexer):
             (r"(\()([A-Za-z_][A-Za-z0-9_]*)(\))",
              bygroups(Punctuation, Name.Attribute, Punctuation)),
             (words(MODIFIERS, suffix=r"\b"), Keyword),
-            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS + CLAUSE + APPLY + SOURCE, suffix=r"\b"),
+            (words(TYPES + TAX + POLICIES + ROUNDING + CONSTANTS + ARMS + CLAUSE + APPLY + MACHINE + SOURCE, suffix=r"\b"),
              Name.Builtin),
             (words(FUNCTIONS, suffix=r"\b"), Name.Function),
             (r"\bnot\b", Operator.Word),

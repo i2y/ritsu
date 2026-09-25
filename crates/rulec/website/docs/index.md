@@ -17,8 +17,8 @@ hide:
 <strong>A little language for business rules</strong> — a shipping tariff, a coupon
 policy, an eligibility test, a tax table with its reduced rates and provisos. Conditions
 are written as tables, and around them go calculations, exceptions that take precedence
-over a main rule, provisos, a rule applied to another case, and lists whose length is not
-fixed.
+over a main rule, provisos, a rule applied to another case, lists whose length is not
+fixed, and one step of a process whose state the caller keeps.
 </p>
 
 <p class="rc-hero__lede">
@@ -196,6 +196,42 @@ A rule is rarely one table. GOV.UK gives a minimum wage for each age band, then 
 <div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
+```rule
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+```
+
+```console
+error[E126]: A sequence of calls reaches 出荷済 after 取消
+  --> 注文の状態.rule:37 machine 注文
+   |
+37 |   never   出荷済 after 取消
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
+   2. at 取消, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 10)
+   3. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+```
+
+</div>
+<div markdown>
+
+### State machines too, checked over every sequence of calls
+
+An order is paid, shipped and delivered, or cancelled. A rule that is one step of such a process is an ordinary table of state and event, and a `machine` section saying which output comes back as the next call's state, where a case starts and ends, and what must never happen — here, that a cancelled order is shipped. The generated function still keeps nothing: the caller keeps the state. `rulec check` walks every sequence of calls a case can make, and a claim that breaks comes back as **the shortest sequence that breaks it** — here, a payment that arrives after the cancellation and puts the order back, which no single row of the table shows.
+
+</div>
+</div>
+
+<div class="rc-row" markdown>
+<div markdown>
+
 ```console
 $ rulec certificate fee.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule fee.rule cert.json
@@ -220,7 +256,7 @@ ok    fee (Rust, proof) 2 harnesses
 </div>
 </div>
 
-<div class="rc-row" markdown>
+<div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
 ```rule
@@ -248,7 +284,7 @@ Declare the document a rule was transcribed from with `source`, and cite the tab
 </div>
 </div>
 
-<div class="rc-row rc-row--flip" markdown>
+<div class="rc-row" markdown>
 <div markdown>
 
 ![The approver's page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the answer reads 送料 = 400円, with the line the generated code would log under it; to the right, row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) are lit](images/try-top-en-dark.png#only-dark)
@@ -264,7 +300,7 @@ Declare the document a rule was transcribed from with `source`, and cite the tab
 </div>
 </div>
 
-<div class="rc-row" markdown>
+<div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
 ```python
@@ -287,7 +323,7 @@ Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and
 </div>
 </div>
 
-**Twelve targets** · **86 diagnostics** · **48 rules checked, generated and run on every commit — 21 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **102 diagnostics** · **49 rules checked, generated and run on every commit — 21 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 

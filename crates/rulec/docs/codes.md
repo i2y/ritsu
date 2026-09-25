@@ -55,6 +55,14 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E047](#e047) | error | Extra token after the declaration |
 | [E049](#e049) | error | A thousands separator cannot be written |
 | [E048](#e048) | error | This type has no arithmetic |
+| [E050](#e050) | error | The `machine` section is not shaped right |
+| [E051](#e051) | error | `carry` or `over` does not fit the declarations |
+| [E052](#e052) | error | A state the machine names does not fit |
+| [E053](#e053) | error | The `once` line does not fit the declarations |
+| [E054](#e054) | error | A rule that folds a sequence cannot be the step of a machine |
+| [E055](#e055) | error | A `scenario` is not shaped right |
+| [E056](#e056) | error | The `held` line does not fit the declarations |
+| [E057](#e057) | error | The declaration has no type |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -81,6 +89,14 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W123](#w123) | warning | A row is reached only by values the contract does not let through |
 | [E123](#e123) | error | The contract lets through a combination the rule's `constraint` refuses |
 | [W124](#w124) | warning | A row is reached only by a combination the contract does not let through |
+| [E124](#e124) | error | A final state has a way out |
+| [E125](#e125) | error | A case can reach a state it can never finish from |
+| [E126](#e126) | error | A `never` line is broken |
+| [E127](#e127) | error | A `once` line is broken |
+| [E128](#e128) | error | The machine's claims could not be checked |
+| [W125](#w125) | warning | No sequence of calls reaches a state |
+| [W126](#w126) | warning | A transition is never taken from a state a case can reach |
+| [W127](#w127) | warning | A claim of the machine could not be settled |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -152,7 +168,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -170,7 +186,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -1614,6 +1630,314 @@ policy unique
 
 Related codes: [E103](#e103), [E112](#e112), [E115](#e115)
 
+## E050
+
+`error` — **The `machine` section is not shaped right**
+
+**When.** The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections (§15.148).
+
+**Fix.** The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+```
+
+Related codes: [E051](#e051), [E052](#e052), [E053](#e053)
+
+## E051
+
+`error` — **`carry` or `over` does not fit the declarations**
+
+**When.** The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable.
+
+**Fix.** Declare the state as an input and an output of one enum, write `carry <input> -> <output>`, and name after `over` the table that has the carried output as an output column.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   zz -> nx
+  initial a
+```
+
+Related codes: [E050](#e050), [E052](#e052)
+
+## E052
+
+`error` — **A state the machine names does not fit**
+
+**When.** An `initial`, `final` or `never` line names a value the enum of the carried state does not have, or `never` names one state on both sides — which the first call that stays in it breaks, so it cannot be what anyone means.
+
+**Fix.** Spell the value as the enum does. Write different states on the two sides of `never`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   d
+```
+
+Related codes: [E050](#e050), [E126](#e126)
+
+## E053
+
+`error` — **The `once` line does not fit the declarations**
+
+**When.** The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest).
+
+**Fix.** Name an output other than the carried state (`once 返金額 >0円`). Say it about states with `never … after …`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  once    nx c
+```
+
+Related codes: [E127](#e127), [E103](#e103)
+
+## E054
+
+`error` — **A rule that folds a sequence cannot be the step of a machine**
+
+**When.** A rule with a `fold` has a `machine`. Its answer depends on the whole sequence, so the inputs do not cut into finitely many columns and the transitions of one call cannot be counted — the reason `diff` refuses the same rule.
+
+**Fix.** Read the sequence on the calling side and pass what it found (a count, a total) as an input. A rule that counts with `count` or `sum` can be the step of a machine.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+
+elements xs(xs)
+  w(w) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+  nx(nx) : s
+
+table j(j)
+policy unique
+| w     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
+
+table m(m)
+policy unique
+| st | -> nx(nx) : s |
+| p  | q             |
+| q  | q             |
+
+fold d over xs
+  a -> next
+  b -> take_first w
+  empty -> 0円
+  exhausted -> held
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+```
+
+Related codes: [E050](#e050), [E028](#e028)
+
+## E055
+
+`error` — **A `scenario` is not shaped right**
+
+**When.** A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column.
+
+**Fix.** Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x     | -> r(r) : bool |
+| true  | false          |
+| false | true           |
+
+scenario s(s)
+| x    | -> r  |
+| true | false |
+```
+
+Related codes: [E107](#e107), [E111](#e111), [E050](#e050)
+
+## E056
+
+`error` — **The `held` line does not fit the declarations**
+
+**When.** `held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples.
+
+**Fix.** Name inputs. The carried input is replaced by the answer of the call before on every call, so it cannot be `held`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+  x(x)   : bool
+
+outputs
+  nx(nx) : s
+  r(r)   : bool
+
+table m(m)
+policy unique
+| st | x     | -> nx(nx) : s | r(r) : bool |
+| p  | true  | q             | true        |
+| p  | false | p             | false       |
+| q  | -     | q             | false       |
+
+machine k(k) over m
+  carry   st -> nx
+  held    r
+  initial p
+  final   q
+```
+
+Related codes: [E050](#e050), [E051](#e051), [W126](#w126)
+
+## E057
+
+`error` — **The declaration has no type**
+
+**When.** A line under `inputs`, `outputs` or `elements` has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared.
+
+**Fix.** Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+  b(b)
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a     | -> r(r) : bool |
+| true  | false          |
+| false | true           |
+```
+
+Related codes: [E011](#e011), [E047](#e047), [E012](#e012)
+
 ## E101
 
 `error` — **Completeness gap: some input matches no row**
@@ -2488,6 +2812,332 @@ message Quote {
 
 Related codes: [W123](#w123), [E123](#e123), [E102](#e102)
 
+## E124
+
+`error` — **A final state has a way out**
+
+**When.** A call moves a case out of a state the `final` line names (§15.148): a case that had ended is set going again. The shortest sequence of calls to that state, and the call that leaves it, come with it as `witness.trace`.
+
+**Fix.** Keep the state where it is on that row, or take it off the `final` line. Which of the two is right is the business's to say.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   b, c
+```
+
+Related codes: [E125](#e125), [E126](#e126)
+
+## E125
+
+`error` — **A case can reach a state it can never finish from**
+
+**When.** A state a case can reach from `initial` is not final, and no final state can be reached from it: the "option to complete" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it.
+
+**Fix.** Add a row that moves on to a final state, or, if a case rightly ends there, add the state to `final`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | d             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+Related codes: [E124](#e124), [W125](#w125)
+
+## E126
+
+`error` — **A `never` line is broken**
+
+**When.** For `never A after B`, some sequence of calls from `initial` reaches A after it has been in B. The shortest one comes with it, and every call in it is an input the rule takes and answers.
+
+**Fix.** Correct the rows that decide where a case goes, or drop the `never` line if the claim is wrong as business.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+  never   c after b
+```
+
+Related codes: [E052](#e052), [E124](#e124)
+
+## E127
+
+`error` — **A `once` line is broken**
+
+**When.** For `once <output> <cell>`, one case has two calls whose output the cell accepts: a refund paid twice, a point granted twice. The shortest such sequence comes with it.
+
+**Fix.** Add the row that cuts the sequence short before the second call (a case that has been refunded does not go back, say), or drop the `once` line if it is wrong.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+  f(f) : bool
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s | f(f) : bool |
+| a  | fwd | b             | false       |
+| a  | rev | a             | false       |
+| b  | fwd | c             | false       |
+| b  | rev | a             | true        |
+| c  | -   | c             | false       |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+  once    f true
+```
+
+Related codes: [E053](#e053), [E126](#e126)
+
+## E128
+
+`error` — **The machine's claims could not be checked**
+
+**When.** The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning.
+
+**Fix.** Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one (§5.1).
+
+**Smallest reproduction** (with `--budget 100`):
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+Related codes: [E109](#e109), [W127](#w127)
+
+## W125
+
+`warning` — **No sequence of calls reaches a state**
+
+**When.** The enum of the carried state has a value that no sequence of calls from `initial` reaches.
+
+**Fix.** Add the transition into it, or drop it from the enum. If it is kept for cases moved over from another version, leave it: `diff` looks at the move.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+Related codes: [W126](#w126), [E125](#e125)
+
+## W126
+
+`warning` — **A transition is never taken from a state a case can reach**
+
+**When.** A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125.
+
+**Fix.** Add the transition into the state it needs, or drop the row.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+Related codes: [W125](#w125), [E102](#e102)
+
+## W127
+
+`warning` — **A claim of the machine could not be settled**
+
+**When.** A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold.
+
+**Fix.** If no input really falls in the cell, write the condition over whole numbers (`a >= 3円` for `倍 >= 5円`). If one does, write it down as an example or a scenario.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+  a(a) : money[円]  range >=0円 <=10万円
+
+outputs
+  nx(nx) : s
+
+derive 倍(d) : money[円] = a + a  range >=0円 <=20万円
+
+define 上(up) : bool = 倍 >= 5円
+define 下(dn) : bool = 倍 <= 5円
+
+table m(m)
+policy first
+| st | 上   | 下   | -> nx(nx) : s |
+| p  | true | true | q             |
+| -  | -    | -    | st            |
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+```
+
+Related codes: [W114](#w114), [E128](#e128)
+
 ## W105
 
 `warning` — **Shadowing that needs review: an earlier row hides part of a later one**
@@ -2789,9 +3439,9 @@ Related codes: [E035](#e035), [E105](#e105)
 
 `warning` — **An alias collides with a word in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there.
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there (§15.149).
 
-**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it.
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it.
 
 **Smallest reproduction**:
 

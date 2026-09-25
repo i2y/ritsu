@@ -52,7 +52,9 @@ These are all the words that may start a line.
 | `shape` | the shape of the caller's object, borrowed from the contract it already has (`jsonschema "<file>" "<pointer>"` or `proto "<file>" <Message>`). An input then says `from <shape>.<field>` at the end of its line |
 | `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
+| `machine` | reads a table as one step of a case that goes on: which output comes back as which input on the next call, where a case starts and ends, and what no sequence of calls may do |
 | `examples` | an executable specification |
+| `scenario` | an example that runs for several calls, each starting where the one before ended |
 
 ## A complete rule
 
@@ -900,6 +902,83 @@ stop partway.
 A rule that runs is in [Examples](examples.md), under "Counting a sequence, and
 deciding from the count".
 
+## A state carried from call to call: machine
+
+Some rules are one step of something that goes on: an order is paid,
+shipped and delivered, or cancelled. The state lives with the caller — in
+the order's row of a database — and every call is passed the state and
+answers the next one. The table is written as always, with the state as a
+column and the next state as an output; `状態` in an output cell hands the
+state back as it was.
+
+```rule
+table 遷移(step)
+policy unique
+| 状態   | 出来事   | -> 次の状態 | 返金額 | 受理  |
+| 受付   | 入金     | 入金済      | 0円    | true  |
+| 受付   | 取消依頼 | 取消        | 0円    | true  |
+| 入金済 | 取消依頼 | 取消        | 支払額 | true  |
+| …
+| 取消   | -        | 状態        | 0円    | false |
+
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+```
+
+`carry` is the one line with new meaning: the output a call answers is
+passed back as that input on the next call. **The generated function does
+not change** — it keeps nothing, and the caller keeps the state. What the
+section adds is claims about **every sequence of calls**, and `check`
+proves them:
+
+| line | the claim | broken |
+|---|---|---|
+| `final` | no call moves a case out of these states | E124 |
+| (always) | from every state a case can reach, one of the `final` states can still be reached | E125 |
+| `never 出荷済 after 取消` | no sequence of calls reaches `出荷済` once the case has been `取消` | E126 |
+| `once 返金額 >0円` | in one case, at most one call answers a refund | E127 |
+
+`held 支払額` says that one case passes the same paid amount on every call,
+so the claims are about the sequences that keep it, and a sequence that
+changes it halfway is never offered as a counterexample.
+
+A claim that fails comes back with **the shortest sequence of calls that
+breaks it**, each call an input the rule takes. The rest is the table's own
+checks: a state and an event with no row is E101 as it always was, so what
+happens when a cancel request arrives after shipment is asked before
+anybody runs the code.
+
+A `scenario` is an example that runs for several calls. It has no column
+for the carried input: the first call starts in `initial`, and each later
+one where the call before it ended.
+
+```rule
+scenario 取消のあとの入金(late_pay)
+| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 入金     | 3000円 | 入金済      | 0円    | true  |
+| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
+| 入金     | 3000円 | 取消        | 0円    | false |
+```
+
+Beside the function, each language gets the initial state and a test for a
+final one. The vector suite gets sequences of calls, and `rulec test` has
+every language play them, handing the state it answered to its own next
+call. Between two versions, `rulec diff` gives the shortest sequence of
+calls the two answer differently, and the states from which a case in
+progress could no longer finish.
+
+The claims stay decidable because the state is a finite enum and nothing
+else is carried. A total so far — refunds paid, a balance — is kept by the
+caller and passed in, as it always was.
+
+A rule that runs is in [Examples](examples.md), under "One event in an
+order that goes on".
+
 ## Examples
 
 ```rule
@@ -931,6 +1010,9 @@ wrote.
 - An average over the elements — it divides by how many there are, which is
   dividing by a variable. Compute it before the call and pass it in (**the
   count and the total are written with `count` and `sum`**).
+- A number carried from one call to the next — a balance, how many times
+  so far. The state a `machine` carries is an enum; a running total is
+  kept by the caller and passed in.
 - Date arithmetic — comparison and range only.
 
 Allowing these would stop the completeness and overlap checks from

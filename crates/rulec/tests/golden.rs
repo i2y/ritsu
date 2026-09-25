@@ -106,3 +106,12 @@ golden!(e042_列挙の対応の欠け, "E042", "tests/mutants/m_e042.rule", "E04
 golden!(e043_範囲の外, "E043", "tests/mutants/m_e043.rule", "E043");
 golden!(e044_呼び出せない, "E044", "tests/mutants/m_e044.rule", "E044");
 golden!(w118_使われない表, "W118", "tests/mutants/m_w118.rule", "W118");
+
+// A rule that is one step of a state machine (§15.148): each claim broken, with the shortest
+// sequence of calls that breaks it, and a scenario that no longer holds.
+golden!(e124_終わった案件が動く, "E124", "tests/mutants/m_e124.rule", "E124");
+golden!(e125_終われない状態, "E125", "tests/mutants/m_e125.rule", "E125");
+golden!(e126_取消のあとの出荷, "E126", "tests/mutants/m_e126.rule", "E126");
+golden!(e127_二度目の返金, "E127", "tests/mutants/m_e127.rule", "E127");
+golden!(e107_手順の例, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
+golden!(w125_届かない状態, "W125", "tests/mutants/m_w125.rule", "W125");

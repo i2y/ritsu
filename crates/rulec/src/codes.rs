@@ -469,6 +469,26 @@ const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  r
                       | true  | true           |\n| false | false          |\n";
 const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  r(r) : bool\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable j(j)\npolicy unique\n| 上    | 下    | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
 
+// A state machine (§15.148): three states, two events, one table of transitions.
+const X_E050: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n";
+const X_E051: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   zz -> nx\n  initial a\n";
+const X_E052: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   d\n";
+const X_E053: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  once    nx c\n";
+const X_E054: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n\nelements xs(xs)\n  w(w) : money[円, incl_tax]  range >=0円 <=10円\n\noutputs\n  r(r) : money[円, incl_tax]  round down(1円)\n  nx(nx) : s\n\ntable j(j)\npolicy unique\n| w     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\ntable m(m)\npolicy unique\n| st | -> nx(nx) : s |\n| p  | q             |\n| q  | q             |\n\nfold d over xs\n  a -> next\n  b -> take_first w\n  empty -> 0円\n  exhausted -> held\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
+/// E056: a `held` line naming an output.
+const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  x(x)   : bool\n\noutputs\n  nx(nx) : s\n  r(r)   : bool\n\ntable m(m)\npolicy unique\n| st | x     | -> nx(nx) : s | r(r) : bool |\n| p  | true  | q             | true        |\n| p  | false | p             | false       |\n| q  | -     | q             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  held    r\n  initial p\n  final   q\n";
+/// E057: an input with a name and nothing after it.
+const X_E057: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n  b(b)\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
+const X_E124: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   b, c\n";
+const X_E125: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c) | d(d)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | d             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n| d  | -   | d             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_E126: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n  never   c after b\n";
+const X_E127: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n  f(f) : bool\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s | f(f) : bool |\n| a  | fwd | b             | false       |\n| a  | rev | a             | false       |\n| b  | fwd | c             | false       |\n| b  | rev | a             | true        |\n| c  | -   | c             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n  once    f true\n";
+const X_E128: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_W125: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c) | d(d)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n| d  | -   | d             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_W126: &str = X_W125;
+const X_W127: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  nx(nx) : s\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable m(m)\npolicy first\n| st | 上   | 下   | -> nx(nx) : s |\n| p  | true | true | q             |\n| -  | -    | -    | st            |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+
 // ── The ledger ───────────────────────────────────────────────────────────
 
 /// Every code, in ledger order: syntax and names first (E001–E013), then the table checks
@@ -1168,6 +1188,118 @@ pub fn ledger() -> Vec<Entry> {
             &["E103", "E112", "E115"],
         ),
         err(
+            "E050",
+            tr!("`machine` の節の形が違います", "The `machine` section is not shaped right"),
+            tr!(
+                "`machine` の見出しに名前か `over <表>` が無いとき、`carry` か `initial` の行が無いか二行あるとき、`machine` の中に `carry`・`initial`・`final`・`never`・`once` のほかの行があるとき、規則に `machine` が二つあるとき（§15.148）。",
+                "The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections (§15.148)."
+            ),
+            tr!(
+                "形は `machine <名前>(<ascii>) over <表>` と、その下の `carry <入力> -> <出力>` と `initial <状態>`（どちらも必須）、`final <状態>, …`、`never <状態>, … after <状態>, …`、`once <出力> <セル>`（どれも任意）です。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。",
+                "The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum."
+            ),
+            X_E050,
+            &["E051", "E052", "E053"],
+        ),
+        err(
+            "E051",
+            tr!("`carry` か `over` が宣言と噛み合いません", "`carry` or `over` does not fit the declarations"),
+            tr!(
+                "`carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙だから、呼び出しの並びについての主張が決まります。",
+                "The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable."
+            ),
+            tr!(
+                "状態の入力と状態の出力を同じ列挙で宣言して `carry <入力> -> <出力>` と書き、`over` には、持ち越す出力を出力の列に持つ表の名前を書いてください。",
+                "Declare the state as an input and an output of one enum, write `carry <input> -> <output>`, and name after `over` the table that has the carried output as an output column."
+            ),
+            X_E051,
+            &["E050", "E052"],
+        ),
+        err(
+            "E052",
+            tr!("ステートマシンが名指しした状態が噛み合いません", "A state the machine names does not fit"),
+            tr!(
+                "`initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その状態に留まる一回の呼び出しで破れるので、言いたいことになりません。",
+                "An `initial`, `final` or `never` line names a value the enum of the carried state does not have, or `never` names one state on both sides — which the first call that stays in it breaks, so it cannot be what anyone means."
+            ),
+            tr!(
+                "列挙の値の綴りで書いてください。`never` の両側には、別の状態を書きます。",
+                "Spell the value as the enum does. Write different states on the two sides of `never`."
+            ),
+            X_E052,
+            &["E050", "E126"],
+        ),
+        err(
+            "E053",
+            tr!("`once` の行が宣言と噛み合いません", "The `once` line does not fit the declarations"),
+            tr!(
+                "`once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
+                "The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest)."
+            ),
+            tr!(
+                "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書きます（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
+                "Name an output other than the carried state (`once 返金額 >0円`). Say it about states with `never … after …`."
+            ),
+            X_E053,
+            &["E127", "E103"],
+        ),
+        err(
+            "E054",
+            tr!("並びを畳む規則は、ステートマシンの一歩になれません", "A rule that folds a sequence cannot be the step of a machine"),
+            tr!(
+                "`fold` のある規則に `machine` を書いたとき。答えが並び全体で決まるので、入力を決まった数の列の区画に分けられず、一回の呼び出しの行き先を数え上げられません。`diff` が同じ規則を断るのと同じ理由です。",
+                "A rule with a `fold` has a `machine`. Its answer depends on the whole sequence, so the inputs do not cut into finitely many columns and the transitions of one call cannot be counted — the reason `diff` refuses the same rule."
+            ),
+            tr!(
+                "並びは呼び出す側で読み、見つけたもの（件数や合計）を入力として渡してください。`count` と `sum` で数える規則は、ステートマシンの一歩になれます。",
+                "Read the sequence on the calling side and pass what it found (a count, a total) as an input. A rule that counts with `count` or `sum` can be the step of a machine."
+            ),
+            X_E054,
+            &["E050", "E028"],
+        ),
+        err(
+            "E055",
+            tr!("`scenario` の形が違います", "A `scenario` is not shaped right"),
+            tr!(
+                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の状態から、二行目からは一つ前の呼び出しが返した状態から始まるので、持ち越す入力には列がありません。",
+                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column."
+            ),
+            tr!(
+                "`scenario <名前>(<ascii>)` の直下に表を書きます。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",
+                "Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`."
+            ),
+            X_E055,
+            &["E107", "E111", "E050"],
+        ),
+        err(
+            "E056",
+            tr!("`held` の行が宣言と噛み合いません", "The `held` line does not fit the declarations"),
+            tr!(
+                "`held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。検査は、そういう入力を呼び出しごとに変えた並びを反例にしなくなります。",
+                "`held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples."
+            ),
+            tr!(
+                "入力の名前を書いてください。持ち越す入力は呼び出しのたびに一つ前の答えで入れ替わるので、`held` にはなりません。",
+                "Name inputs. The carried input is replaced by the answer of the call before on every call, so it cannot be `held`."
+            ),
+            X_E056,
+            &["E050", "E051", "W126"],
+        ),
+        err(
+            "E057",
+            tr!("宣言に型がありません", "The declaration has no type"),
+            tr!(
+                "`inputs`・`outputs`・`elements` の行に、名前だけがあって型が無いとき。この行は、いままで黙って捨てられていました。規則は書いた人の思うより入力が一つ少ないまま検査を通り、例やベクタがその名前を渡すと、知らない名前として断られていました。",
+                "A line under `inputs`, `outputs` or `elements` has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared."
+            ),
+            tr!(
+                "`<名前>(<別名>) : <型>` の形で型を書いてください（`: money[円, incl_tax]`、`: 都道府県`、`: bool`）。数の型なら `range` も要ります。",
+                "Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too."
+            ),
+            X_E057,
+            &["E011", "E047", "E012"],
+        ),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -1541,6 +1673,119 @@ pub fn ledger() -> Vec<Entry> {
             &["W123", "E123", "E102"],
         )
         .with_files(QUOTE_PROTO),
+        err(
+            "E124",
+            tr!("終わりの状態から出る遷移があります", "A final state has a way out"),
+            tr!(
+                "`final` に書いた状態から、別の状態へ移る呼び出しがあるとき（§15.148）。終わったはずの案件がまた動くことになります。その状態に着くまでの最短の呼び出しと、出ていく一回が `witness.trace` に付きます。",
+                "A call moves a case out of a state the `final` line names (§15.148): a case that had ended is set going again. The shortest sequence of calls to that state, and the call that leaves it, come with it as `witness.trace`."
+            ),
+            tr!(
+                "その行で状態を留めるか、その状態を `final` から外してください。どちらが正しいかは業務の判断です。",
+                "Keep the state where it is on that row, or take it off the `final` line. Which of the two is right is the business's to say."
+            ),
+            X_E124,
+            &["E125", "E126"],
+        ),
+        err(
+            "E125",
+            tr!("着いたら終われない状態があります", "A case can reach a state it can never finish from"),
+            tr!(
+                "`initial` から着ける状態のうち、終わりの状態でなく、そこからどの終わりの状態にも着けないものがあるとき。ワークフローネットの健全性でいう「必ず終われる」が破れている形です。そこに着くまでの最短の呼び出しが付きます。",
+                "A state a case can reach from `initial` is not final, and no final state can be reached from it: the \"option to complete\" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it."
+            ),
+            tr!(
+                "終わりの状態へ移る行を足すか、そこで終わるのが正しいなら、その状態を `final` に加えてください。",
+                "Add a row that moves on to a final state, or, if a case rightly ends there, add the state to `final`."
+            ),
+            X_E125,
+            &["E124", "W125"],
+        ),
+        err(
+            "E126",
+            tr!("`never` の主張が破れています", "A `never` line is broken"),
+            tr!(
+                "`never A after B` について、`initial` から B を通ったあとで A に着く呼び出しの並びがあるとき。いちばん短いものが付き、そのどの呼び出しも、規則が受け付けて答えを返す入力です。",
+                "For `never A after B`, some sequence of calls from `initial` reaches A after it has been in B. The shortest one comes with it, and every call in it is an input the rule takes and answers."
+            ),
+            tr!(
+                "行き先を決める行を直すか、主張が業務として誤りなら `never` の行を消してください。",
+                "Correct the rows that decide where a case goes, or drop the `never` line if the claim is wrong as business."
+            ),
+            X_E126,
+            &["E052", "E124"],
+        ),
+        err(
+            "E127",
+            tr!("`once` の主張が破れています", "A `once` line is broken"),
+            tr!(
+                "`once <出力> <セル>` について、一件の案件の中で、出力がセルに当てはまる呼び出しが二回ある並びがあるとき。二重の返金、二重の付与の形です。いちばん短いものが付きます。",
+                "For `once <output> <cell>`, one case has two calls whose output the cell accepts: a refund paid twice, a point granted twice. The shortest such sequence comes with it."
+            ),
+            tr!(
+                "二回目に至る並びを断つ行を足すか（返金を済ませた状態から前へ戻らない、など）、宣言が誤りなら `once` の行を消してください。",
+                "Add the row that cuts the sequence short before the second call (a case that has been refunded does not go back, say), or drop the `once` line if it is wrong."
+            ),
+            X_E127,
+            &["E053", "E126"],
+        ),
+        err(
+            "E128",
+            tr!("ステートマシンの主張を検査できませんでした", "The machine's claims could not be checked"),
+            tr!(
+                "入力の区画の数が予算（`--budget` を 50 で割った数）を超えたとき、または規則の答えが決まった数の列で区切れないとき。証明できなかった主張を緑にはしないので、警告ではなくエラーです。",
+                "The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning."
+            ),
+            tr!(
+                "`--budget` を上げるか、遷移を決める表の列を減らしてください。列の積が効くので、表を一列につないでいくほうが安く済みます（§5.1）。",
+                "Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one (§5.1)."
+            ),
+            X_E128,
+            &["E109", "W127"],
+        )
+        .with_budget(100),
+        warn(
+            "W125",
+            tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),
+            tr!(
+                "持ち越す状態の列挙に、`initial` から始まる呼び出しの並びでは着かない値があるとき。",
+                "The enum of the carried state has a value that no sequence of calls from `initial` reaches."
+            ),
+            tr!(
+                "その状態へ移る遷移を足すか、要らなければ列挙から消してください。ほかの版から移ってくる案件のために残しているのなら、このままで構いません（移行は `diff` が見ます）。",
+                "Add the transition into it, or drop it from the enum. If it is kept for cases moved over from another version, leave it: `diff` looks at the move."
+            ),
+            X_W125,
+            &["W126", "E125"],
+        ),
+        warn(
+            "W126",
+            tr!("案件が着ける状態からは使われない遷移があります", "A transition is never taken from a state a case can reach"),
+            tr!(
+                "遷移を決める表の行が、`initial` から着けない状態のときにしか当てはまらないとき。W125 と一緒に出ます。",
+                "A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125."
+            ),
+            tr!(
+                "着けない状態へ移る遷移を足すか、行を消してください。",
+                "Add the transition into the state it needs, or drop the row."
+            ),
+            X_W126,
+            &["W125", "E102"],
+        ),
+        warn(
+            "W127",
+            tr!("ステートマシンの主張を決めきれませんでした", "A claim of the machine could not be settled"),
+            tr!(
+                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。決めきれなかったことを、成り立つとは言いません。",
+                "A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold."
+            ),
+            tr!(
+                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。",
+                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3円` for `倍 >= 5円`). If one does, write it down as an example or a scenario."
+            ),
+            X_W127,
+            &["W114", "E128"],
+        ),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
@@ -1658,12 +1903,12 @@ pub fn ledger() -> Vec<Entry> {
             "W121",
             tr!("別名が生成先の言葉とぶつかります", "An alias collides with a word in a target language"),
             tr!(
-                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。",
-                "An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there."
+                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります（§15.149）。",
+                "An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there (§15.149)."
             ),
             tr!(
-                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。",
-                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記が言います。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
             ),
             X_W121,
             &["E009", "E011"],

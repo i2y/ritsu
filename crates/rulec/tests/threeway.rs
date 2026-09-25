@@ -86,6 +86,7 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/osha_excavation.rule", "osha_excavation"),
     ("tests/corpus/paypal_fee.rule", "paypal_fee"),
     ("tests/corpus/二つの区分.rule", "two_bands"),
+    ("tests/corpus/注文の状態.rule", "order_state"),
 ];
 
 #[test]
@@ -188,6 +189,21 @@ fn 評価器と生成コードが全言語で一致する() {
                 String::from_utf8_lossy(&o.stderr)
             );
             assert_eq!(got, exp, "{alias}: 評価器と生成 {} が食い違う", b.name);
+            // A machine's traces (§15.148): the same runner, handed the state its own
+            // language answered to the call before.
+            let traces = dir.join("vectors").join(format!("{alias}.traces.jsonl"));
+            if traces.exists() {
+                let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.traces.expected.jsonl")))
+                    .expect("手順の期待値が無い");
+                let o = Command::new(&plan.cmd)
+                    .current_dir(&cwd)
+                    .args(&plan.args)
+                    .stdin(std::fs::File::open(&traces).unwrap())
+                    .output()
+                    .unwrap_or_else(|e| panic!("{}: 起動できない: {e}", b.name));
+                assert!(o.status.success(), "{alias}: {} が手順で落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
+                assert_eq!(String::from_utf8_lossy(&o.stdout), want, "{alias}: 手順で評価器と生成 {} が食い違う", b.name);
+            }
         }
     }
     eprintln!(

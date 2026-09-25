@@ -5,7 +5,8 @@
 rulec is a little language for business rules — a shipping tariff, a coupon policy, an
 eligibility test, a tax table with its reduced rates and provisos. Conditions are written as
 tables, and around them go calculations, exceptions that take precedence over a main rule,
-provisos, a rule applied to another case, and lists whose length is not fixed.
+provisos, a rule applied to another case, lists whose length is not fixed, and one step of a
+process whose state the caller keeps.
 
 It is little on purpose. There is no recursion and no state, and a cell looks at its own column
 and nothing else. That is what lets `rulec check` prove that every input in the declared domain
@@ -140,7 +141,9 @@ input matches some row, no input matches two rows, no row matches nothing, units
 confused, and every intermediate fits in int64. **One is a declaration that has to be there** —
 how fractions are settled, because which way is right is a business decision and the tool does
 not make it. **One is run** — every worked example holds. If any of the seven cannot be shown,
-nothing is generated.
+nothing is generated. A rule that is one step of a state machine has its claims about every
+sequence of calls proved as well: a case never leaves a final state, can always still finish,
+and never does what its `never` and `once` lines forbid.
 
 What is **not** proved matters just as much.
 
@@ -235,14 +238,14 @@ website/          the documentation site (Zensical): docs/ English, docs-ja/ Jap
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
-src/              48 modules, and 6 more under codegen/
-tests/corpus/     48 rules, and the copies of the documents they cite
-tests/mutants/    97 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 47 in Japanese, 36 in English
+src/              49 modules, and 6 more under codegen/
+tests/corpus/     49 rules, and the copies of the documents they cite
+tests/mutants/    109 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 53 in Japanese, 42 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-48 rules — 21 transcribed from a published source, 27 written to reach the rest of the language — are checked, generated and run on every commit, and all 86 diagnostics are implemented.
+49 rules — 21 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 102 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

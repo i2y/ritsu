@@ -47,7 +47,7 @@ still means the same thing, and `v` says which version wrote the line.
 | `title`, `notes` | **prose** |
 | `where` | `file`, `line`, `column`, and `table` / `row` when the finding is about a table row. `row` is 1-based |
 | `spans` | every underlined range: `line`, `column`, `length` (bytes), `label` (**prose**) |
-| `witness` | an assignment of values that exhibits the finding. `inputs`, `outputs` (what the rule really produces), `expected` (what an example said; E107 only). Absent keys mean there is nothing to say, never "empty" |
+| `witness` | an assignment of values that exhibits the finding. `inputs`, `outputs` (what the rule really produces), `expected` (what an example said; E107 only). A finding about a state machine (E107 on a `scenario`, E124–E127) adds `trace`: the calls from the initial state, in order, each `{"inputs":{…},"outputs":{…},"rows":[{"table":…,"row":…}]}` — every one an input the rule takes — and `inputs` and `outputs` are then the last call's. Absent keys mean there is nothing to say, never "empty" |
 | `rows` | every row that takes part: `{"table":…,"row":…}` |
 | `fix` | `kind` from the closed set below, and `text`: the rewritten form, ready to paste. Language independent, no prose |
 | `key` | the identity `--diff-base` compares on. Two runs that name the same finding use the same key |
@@ -111,10 +111,15 @@ One object per rule file.
              {"name":"boundary_pair","satisfied":4,"total":4,"missing":[]},
              {"name":"shadow_pair","satisfied":3,"total":3,"missing":[]},
              {"name":"rounding_tie","satisfied":0,"total":0,"missing":[]},
-             {"name":"fold_transition","satisfied":0,"total":0,"missing":[]}]}
+             {"name":"fold_transition","satisfied":0,"total":0,"missing":[]},
+             {"name":"machine_transition","satisfied":0,"total":0,"missing":[]}]}
 ```
 
-`name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`, `fold_transition` — the last one has obligations only for a rule that walks a sequence (§15.56). An entry of `missing` is
+`name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`, `fold_transition`,
+`machine_transition`. `fold_transition` has obligations only for a rule that walks a sequence
+(§15.56); `machine_transition` only for a rule with a `machine` (§15.148): every transition a
+case can make, and every two that can follow one another, each met by a trace of the suite that
+makes it. An entry of `missing` is
 `{"what": …, "hint": …}`, both **prose**. `refused` counts the cases in the suite that the
 reference evaluator has **no answer** for; they discharge obligations like any other case, and
 what is asked of the generated code there is that it refuse them too (below).
@@ -139,6 +144,7 @@ One object for the run.
 | `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`, one call per vector through the generated Connect service — the ASGI application and the WSGI one, each by POST and by GET ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
 | `vectors` | how many vectors were put to it — or, when `via` is `proof`, how many harnesses the checker read |
 | `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
+| `calls` | how many calls a machine's traces made (§15.148): each one passed the state the language under test answered to the call before. 0 for a rule without a `machine` |
 | `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
@@ -179,6 +185,7 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
 | `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format` |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
+| `cases` | `replay` and `diff` of a rule with a `machine` (§15.148), when the records carry a `tag`; `null` otherwise. The records that share a tag are **one case's calls**, in the order they came in, and each case is played again from its first record with the version carrying its own answer from one call to the next: `total`, `followed` (every call answered as before — the record's answer for `replay`, the old version's for `diff`), `diverged` and `refused` (`[{"tag":…,"line":…}]`, the first call where the answer parts, or that the version refuses — a state it no longer has, or a record that changes a `held` input, which one case does not do), `stranded` (`[{"tag":…,"state":…}]`, left where the version reaches no final state), `ended` (how many end in a final state) |
 
 A cluster's `rows` entry is `{"table":…,"row":…}` for `verify` and for `replay` over records
 without a `trace`; for `diff` it is `{"table":…,"from":…,"to":…}`, the transition of the row
@@ -237,6 +244,7 @@ answer, and is there anything outside them" (DESIGN §15.122).
 | `changes` | the regions where the two answer differently |
 | `unknown` | the regions that could not be settled, each with `why` |
 | `blocked` | present only when the two cannot be compared cell by cell at all, with the reason. A rule that folds a sequence is the case that exists today: its answer depends on the whole sequence, so it is not a function of finitely many columns |
+| `machine` | when both versions are one step of a state machine carrying the same input back as the same output (§15.148), what the change does to **sequences of calls**; `null` otherwise. `carry` (`input`, `output`); `initial` (`old`, `new`); `shortest`, the shortest sequence of calls the two answer differently — every call but the last answered alike, each `{"inputs":{…},"old":{…},"new":{…}}` in the wire form, the `held` inputs the same on every call, empty when no case can meet the change; `unreached`, how many regions of `changes` lie in states no case reaches under the old version; `migration`, what the new version does to a case **in progress**, `[{"state":…,"kind":…}]` for a state the old version can reach, `kind` one of `removed` (the new version has no such state, and refuses it at the door), `stranded` (no final state can be reached from it any more), `no_longer_final`, `now_final` |
 
 A region is a **box over the rule's columns**, one entry per column that says anything; a
 column the region leaves alone is absent. `kind` is `input`, `derived` or `walk` — a point
@@ -444,6 +452,32 @@ calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `ru
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
 
+A rule that is one step of a state machine (§15.148) carries `machine` at the top level, and
+`null` there otherwise:
+
+```json
+"machine":{"name":"注文","alias":"order","over":"遷移",
+           "carry":{"input":"状態","output":"次の状態","enum":"状態"},
+           "held":["支払額"],
+           "states":["受付","入金済","出荷済","配達済","取消"],
+           "initial":"受付","final":["配達済","取消"],
+           "never":[{"states":["出荷済"],"after":["取消"]}],
+           "once":[{"output":"返金額","cell":">0円"}],
+           "constants":{"python":{"initial":"INITIAL","final":"FINAL","is_final":"is_final"},
+                        "php":{"initial":"INITIAL","final":"FINAL_STATES","is_final":"is_final"},
+                        "swift":{"initial":"initialState","final":"finalStates","is_final":"isFinal"},…}}
+```
+
+`carry` names the input a caller hands back and the output it takes it from, both of the enum
+`enum`; `held`, the inputs a case passes with the same value on every call (§15.149);
+`states` are that enum's values in declaration order, in the wire form. `never` and
+`once` are the claims as declared, so a caller can show them; `check` has already held the
+table to them. `constants` gives, for each language with a module of its own, the names of the
+three things the module adds beside the function — the initial state, the set of final states,
+and the test for one ([generated-code.md](generated-code.md#a-machine)). The NumPy plan carries
+the same as data (`carry`, `initial`, `final`); a target with one door and no module has no
+place for a constant, and no entry.
+
 ## `graph`
 
 One object: the rule as a graph of **what decides each value and which values it reads**.
@@ -474,7 +508,8 @@ the crossings carry their guards and `preconditions` comes along.
  "edges":[{"from":"金額","to":"合計","kind":"walk"},
           {"from":"合計","to":"送料","kind":"reads","via":"送料表"},
           {"from":"区分","to":"送料","kind":"reads","via":"送料表"}],
- "preconditions":[{"kind":"sum","name":"合計","over":"明細","of":"金額","max":1000000}]}
+ "preconditions":[{"kind":"sum","name":"合計","over":"明細","of":"金額","max":1000000}],
+ "carry":null}
 ```
 
 **A node is a value, not an item.** A table is not a node: it is how one or more values are
@@ -499,6 +534,11 @@ by a table has no `expr`: the table is the expression.
 An edge is `{"from":…,"to":…,"kind":…}` with `via` naming the decider that reads it, where
 one is named. `kind` is `reads`, or `walk` for the edge that crosses the element frame —
 many elements in, one value out.
+
+`carry` is a state machine's carried pair (§15.148), `{"output":…,"input":…}`: the output the
+caller passes back as that input on the next call. It is not an edge, because it crosses from
+one call to the next and the caller is the one who carries it. `null` for a rule with no
+`machine`.
 
 **`graph` asks less than `check`.** Which value is read while which other is decided is
 settled once the names and the types resolve, so a table with a gap in it has the same
@@ -569,6 +609,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `above` | what the tables above rule out, written on this table's own axes (§15.115). `never` is a list of `{"axis":i,"coord":c}`: no row of the table that decides that column writes that value at all. `apart` is a list of pairs that cannot stand together — `a` and `b` as coordinates, `input` the column the two decided columns share, and `spans` the span each of them leaves it, as two ends for a number or a list of values otherwise. A re-checker earns both back from the rows of the deciding tables and rests its verdict on what it recomputed; the written spans have to **contain** those, so a narrower one cannot make two things that meet look apart |
 | `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside its declared range, `{"farkas":[…]}`, a box the linear model leaves no values in, with the multipliers that say so exactly as under `refuted` — the box being the coordinates the path to the leaf has fixed, and every coordinate of the axes it has not (§15.141) — or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"upstream":…}` is a box the tables above cannot produce, and rests on this table's `above` facts: a re-checker settles it by finding a fact the box's coordinates trigger, and the fact itself by recomputing it from the rows of the table that decides the column. `null` when the walk ran past the budget |
 | `constraints` | the `constraint` lines a cover leaf points at |
+| `machine` | a rule that is one step of a state machine (§15.148) carries the claims its `machine` section makes, laid on the rows of the table named by `over`: `{"table":"","why":…}` when they cannot be (the state not an axis of that table, say), and otherwise the following. `axis` is the state's axis of that table, `states` the enum's values, and `initial` and `finals` indices into them. `rows` says what each row does to the state — `{"row":n,"to":i}`, or `{"row":n,"stay":true}` for a row that hands the carried input back — with `source`, where that answer is written. A re-checker reads **where a call can go** off the rows themselves: from `s`, every row whose box takes `s` on `axis`, to where that row sends it. That over-approximates the calls that really happen, which is the safe direction for the closures below. `never` and `once` say what each line claims — `{"states":[…],"after":[…]}`; the output, the test its cell resolves to (`lo`/`hi` in the column's integer, or `words`) and the value each row writes (`null` for one computed, which then counts). `held_inputs` are the inputs a case holds (§15.149), and `held` the axes of this table among them. **The claims are laid on the rows once per world**, each world an element of `worlds` with `at`, a coordinate for each axis of `held` — every combination of them, once each, and a single world with `at: []` when `held` is empty. In a world a call only takes the rows whose box holds its coordinates there, and: `reach` is a set of states holding `initial` and closed under a call; `final_certified` claims that no call leaves a final state of `reach`; `never` gives, per line, the pairs (state, has the case been in `after` yet) closed under a call from `(initial, …)` with none in `states` with the flag set, or `null`; `once` gives, per line, the pairs (state, how many counted calls so far, up to two) closed under a call, none with two, or `null`; `finish` is the other direction: for every state of `reach` that is not final, a `path` of calls to a final state, each a point handed over the way `reach` under `tables` is — in the row's box, at the state, with the world's coordinates, asked about, and under `first` outside every row above — so a case really can finish from there. A path is taken as one case's only while nothing but its own column reads a held input: when the table reads a column that is not an input, or a `constraint` names a held input, the certificate gives no paths and a re-checker says the claim is not laid on the rows. `uncertified` names the claims this document does not carry, and a re-checker lists them rather than passing them |
 
 **What "proved" means here.** `proofs/RulecCert/Semantics.lean` says what a table claims:
 under `unique`, every point the rule is **asked about** is taken by exactly one row; every
@@ -588,6 +629,19 @@ every value in it satisfies the cell, **provided** no value a cell compares agai
 strictly inside a coordinate — §6.2's construction, which the checkers verify rather than
 assume. `mem_boxOf_in_iff` and `mem_boxOf_notIn_iff` say the same of a set of numbers: in the
 box exactly when the value is one of the set's, or none of them.
+
+A machine's claims are `proofs/RulecCert/Machine.lean`. There a case is what the rows allow —
+it starts at `initial`, and each call goes wherever a row that takes the state sends it — and
+each check is a theorem about every sequence of calls at once: `reaches_mem` (every state a
+case can reach is in `reach`), `final_stays` (no call leaves a final state), `never_after`
+(once a case has been in a state of `after`, it is never in one of `states`),
+`once_below_two` (no case makes two of the counted calls), and `reachable_finishes` (from
+every state a case can reach, calls that really happen lead to a final state). The first four
+hold of the over-approximation, so they hold of the rule; the last is built from points the
+certificate hands over, so it holds of the rule too. A world is `Machine.world`, the machine
+with the rows that do not take its coordinates left out, and `stepIn_world` and
+`reachesIn_world` say that every call and every state of a case of the world is one of that
+machine's — so the theorems above, applied to it, speak for the cases of the world.
 
 **Where it stops.** The file is tied to the document by its digest and, cell by cell, by the
 byte spans above. Everything else the certificate says about the rule is **its own word**,
@@ -768,6 +822,29 @@ the run is green only if every language stops without an answer. A generated MCP
 asked the same thing and has to answer `isError`. `rulec verify` does not use this file: it
 asks an implementation for answers, and here there is none to compare.
 
+A rule that is one step of a state machine (§15.148) gets two more files, `<alias>.traces.jsonl`
+and `<alias>.traces.expected.jsonl`: sequences of calls, where the single vectors are single
+calls. `rulec vectors --out` writes the first beside its own file; on stdout it prints the single
+calls only.
+
+```json
+{"machine":"meta","carry":{"in":"状態","out":"次の状態"}}
+{"in":{"出来事":"出荷","支払額":0},"step":"start","state":"受付",
+ "why":"transition pair: 受付 -[table 遷移 row 3]-> 受付 then 受付 -[table 遷移 row 1]-> 入金済"}
+{"in":{"出来事":"入金","支払額":0},"step":"next"}
+```
+
+The first line asks the runner for its constants. Every other line is one call and carries
+every input but the carried one: `"step":"start"` begins a sequence in `state`, and `"step":"next"`
+makes the next call **from the state the call before it answered**, as the language holds that
+value — the runner does not read it back out of JSON. There is a sequence for every transition
+a case can make and every two that can follow one another, each the shortest from the initial
+state that ends with them and each passing the `held` inputs the same value on every call, and
+one for each `scenario`; `why` says which. The expected file
+starts with `{"initial":…,"final":[…]}`, what the runner has to print for the first line, and
+then has one fixtures record per call, the carried input filled in, so a runner that hands the
+state over wrongly shows up as a record whose `in` differs.
+
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 
 JSON Lines, one past record per line. Extracting them from production logs is the user's job;
@@ -784,7 +861,7 @@ rulec only validates types and ranges (§10.2).
 |---|---|---|
 | `in` | yes | the inputs as they were at the time |
 | `observed` | yes | the values that actually came out. **Every output is required** |
-| `tag` | no | a label for the record, shown in witnesses |
+| `tag` | no | a label for the record, shown in witnesses. For a rule that is one step of a state machine, it also says **which case** the record belongs to: the records that share a `tag` are one case's calls, in the order the file has them, and `replay` and `diff` count cases as well as records (`cases` in their JSON) |
 | `ts` | no | when it happened |
 | `by` | no | where an input came from, when it was not read as it stood ([below](#where-a-value-came-from-by)). **rulec does not read it** |
 | `trace` | no | the rows that matched when the record was made, `{"table":…,"row":…}` each, in table order, with `"label"` added for a row that carries one; a `clause` is the one row of a table named after it. The generated code's record function writes it ([generated-code.md](generated-code.md#a-record-of-one-call)); `lint` checks that every table exists and every row is one the table has |

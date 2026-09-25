@@ -67,6 +67,9 @@ pub struct Outcome {
     /// How many inputs the reference evaluator refuses were put to it. The expected answer
     /// there is a refusal, so they are counted apart from the vectors (§15.56).
     pub refused: usize,
+    /// How many calls the machine's traces made, each passed the state its own language
+    /// answered to the call before (§15.148).
+    pub calls: usize,
     /// Why it failed. None when everything matched.
     pub diff: Option<Failure>,
 }
@@ -137,7 +140,8 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         if let Some(a) = name.strip_suffix(".jsonl") {
             // `<alias>.expected.jsonl` holds the answers and `<alias>.refused.jsonl` the
             // inputs with none; neither is a rule of its own.
-            if !a.ends_with(".expected") && !a.ends_with(".refused") {
+            // `<alias>.traces.jsonl` holds a machine's sequences of calls (§15.148).
+            if !a.ends_with(".expected") && !a.ends_with(".refused") && !a.ends_with(".traces") {
                 aliases.push(a.to_string());
             }
         }
@@ -318,6 +322,12 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         let refused: Vec<String> = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.refused.jsonl")))
             .map(|s| s.lines().filter(|l| !l.trim().is_empty()).map(|l| l.to_string()).collect())
             .unwrap_or_default();
+        // A machine's traces, and what each call should answer (§15.148).
+        let traces_path = dir.join("vectors").join(format!("{alias}.traces.jsonl"));
+        let traces_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.traces.expected.jsonl"))).ok();
+        let calls = std::fs::read_to_string(&traces_path)
+            .map(|s| s.lines().filter(|l| l.contains("\"step\":")).count())
+            .unwrap_or(0);
         let pkg = alias.replace('_', "");
         for b in &present {
             // Not every rule is generated for every backend: a rule that walks a sequence is
@@ -362,14 +372,24 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                         }
                     }
                 }
+                // The traces: one call after another, each passed the state the runner's own
+                // language answered to the one before, and the constants printed first.
+                if diff.is_none() {
+                    if let Some(tw) = &traces_want {
+                        diff = match exec(plan, Some(&traces_path)) {
+                            Err(f) => Some(f),
+                            Ok(got) => (got != *tw).then(|| first_diff(&got, tw)),
+                        };
+                    }
+                }
                 diff
             };
             let diff = held(&(b.run)(alias, &pkg));
-            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), diff });
+            out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), calls, diff });
             // The same runner as a WASI module, held to the same records (§15.63).
             if let (Some(w), true) = (b.wasi, wasi_host) {
                 let diff = held(&w(alias, &pkg));
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), diff });
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "wasi", vectors: n, refused: refused.len(), calls, diff });
             }
             // The same rule as a function on a real PostgreSQL, held to the same records
             // (§15.80). What it proves that the query's runner cannot: the signature, the
@@ -377,23 +397,35 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             // instead of coming back with a number beside a column nobody read.
             if let (Some(f), true) = (b.pg, pg_host) {
                 let diff = held(&f(alias));
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), diff });
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), calls, diff });
             }
             // The proofs of the same rule (§15.95): what every input in the declared domain
             // does, rather than what the vectors do.
             if let (Some(f), true) = (b.proof, proof_host) {
                 let plan = f(alias);
                 let (h, diff) = via_proof(&dir.join(&plan.cwd), &plan);
-                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "proof", vectors: h, refused: 0, diff });
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "proof", vectors: h, refused: 0, calls: 0, diff });
             }
             // The rule as an MCP tool answers the same vectors through `tools/call`, and its
             // answer is held to the same expected records (§15.44).
             if let Some(mcp) = b.mcp {
                 for (via, http) in [("mcp", false), ("mcp-http", true)] {
                     let cwd = dir.join(&mcp(alias).cwd);
-                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, &refused, http) {
+                    let traces = traces_want.as_ref().and_then(|_| std::fs::read_to_string(&traces_path).ok());
+                    let diff = match via_mcp(&cwd, &mcp(alias), alias, &want, &refused, http, traces.as_deref()) {
                         Err(f) => Some(f),
-                        Ok(got) => (got != want).then(|| first_diff(&got, &want)),
+                        Ok((got, got_traces)) => {
+                            if got != want {
+                                Some(first_diff(&got, &want))
+                            } else {
+                                // The records of the calls, without the constants' line.
+                                let tw: String = traces_want
+                                    .as_deref()
+                                    .map(|t| t.lines().skip(1).map(|l| format!("{l}\n")).collect())
+                                    .unwrap_or_default();
+                                (got_traces != tw).then(|| first_diff(&got_traces, &tw))
+                            }
+                        }
                     };
                     out.results.push(Outcome {
                         rule: alias.clone(),
@@ -401,6 +433,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                         via,
                         vectors: n,
                         refused: refused.len(),
+                        calls,
                         diff,
                     });
                 }
@@ -432,6 +465,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                             via,
                             vectors: n,
                             refused: refused.len(),
+                            calls,
                             diff,
                         });
                     }
@@ -448,7 +482,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             continue;
         }
         let diff = exec(&(b.round)(&pkg0), None).err();
-        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, refused: 0, diff });
+        out.results.push(Outcome { rule: ROUND_HELPER.into(), lang: b.name, via: "runner", vectors: 0, refused: 0, calls: 0, diff });
     }
 
     Ok(out)
@@ -469,7 +503,8 @@ fn via_mcp(
     want: &str,
     refused: &[String],
     http: bool,
-) -> Result<String, Failure> {
+    traces: Option<&str>,
+) -> Result<(String, String), Failure> {
     let mut cmd = Command::new(&plan.cmd);
     cmd.current_dir(cwd)
         .args(&plan.args)
@@ -563,12 +598,66 @@ fn via_mcp(
             )));
         }
     }
+    // A machine's traces (§15.148). The tool carries no constants, so the line that asks for
+    // them is passed over; each call is passed the state the tool answered to the one before.
+    let mut got_traces = String::new();
+    if let Some(tr) = traces {
+        let mut carry: Option<(String, String)> = None;
+        let mut state: Option<crate::json::Json> = None;
+        let base = want.lines().count() + refused.len() + 2;
+        for (k, line) in tr.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let v = crate::json::parse(line).map_err(broken)?;
+            if v.get("machine").is_some() {
+                let c = v.get("carry");
+                let name = |w: &str| c.and_then(|c| c.get(w)).and_then(|x| x.as_str()).map(|x| x.to_string());
+                carry = name("in").zip(name("out"));
+                continue;
+            }
+            let (Some((cin, cout)), Some(inp)) = (carry.as_ref(), v.get("in")) else {
+                return Err(broken(tr!("手順の行の形が違います", "a line of the traces is not shaped right")));
+            };
+            if v.get("step").and_then(|x| x.as_str()) == Some("start") {
+                state = v.get("state").cloned();
+            }
+            let Some(st) = state.clone() else {
+                return Err(broken(tr!("手順が状態なしで始まりました", "a trace began with no state")));
+            };
+            let mut args = match inp {
+                crate::json::Json::Obj(o) => o.clone(),
+                _ => return Err(broken(tr!("手順の in がオブジェクトではありません", "a trace's in is not an object"))),
+            };
+            args.insert(cin.clone(), st);
+            let r = wire.ask(&format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
+                base + k,
+                crate::json::quote(alias),
+                crate::json::unparse(&crate::json::Json::Obj(args))
+            ))?;
+            let text = r
+                .get("content")
+                .and_then(|c| match c {
+                    crate::json::Json::Arr(a) => a.first(),
+                    _ => None,
+                })
+                .and_then(|c| c.get("text"))
+                .and_then(|t| t.as_str())
+                .ok_or_else(|| broken(tr!("tools/call の答えに本文がありません", "the tools/call answer has no text")))?
+                .to_string();
+            let rec = crate::json::parse(&text).map_err(broken)?;
+            state = rec.get("observed").and_then(|o| o.get(cout)).cloned();
+            got_traces.push_str(&text);
+            got_traces.push('\n');
+        }
+    }
     drop(wire);
     // Closing stdin is what ends the stdio server; the HTTP one waits for connections until
     // it is told to stop.
     let _ = child.kill();
     let _ = child.wait();
-    Ok(got)
+    Ok((got, got_traces))
 }
 
 /// The `.proto` of one rule, as a path under `proto/`.
@@ -762,6 +851,9 @@ pub fn render(r: &Run) -> String {
                 if x.refused > 0 {
                     n.push_str(&tr!("、断る入力 {} 件", ", {} refused", x.refused));
                 }
+                if x.calls > 0 {
+                    n.push_str(&tr!("、手順の呼び出し {} 回", ", {} calls in traces", x.calls));
+                }
                 o.push_str(&format!("ok    {} ({}{}) {n}\n", shown(&x.rule), x.lang, via(x)));
             }
             Some(d) => {
@@ -882,6 +974,7 @@ pub fn render_json(r: &Run) -> String {
                 .str("via", x.via)
                 .int("vectors", x.vectors as i128)
                 .int("refused", x.refused as i128)
+                .int("calls", x.calls as i128)
                 .bool("ok", x.diff.is_none())
                 // Whether the generated code ran at all. `ok:false` with `ran:false` is a
                 // machine that could not build or start it, not a rule that answered wrongly.

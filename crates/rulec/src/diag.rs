@@ -60,6 +60,11 @@ impl WVal {
 /// assignment and stays in the prose (and, where it is actionable, in `fix.text`), so that a
 /// witness always has one shape: something a caller can hand straight back as a vector or a
 /// fixture (§10.2).
+///
+/// A finding about a state machine (§15.148) is about a **sequence** of calls, so it also
+/// carries `trace`: the calls from the initial state, each one an assignment of the same kind
+/// — what it was passed, what it answered, which rows fired. `inputs` and `outputs` are then
+/// the last call's, the one the finding is about.
 #[derive(Debug, Clone, Default)]
 pub struct Witness {
     pub inputs: Vec<(String, WVal)>,
@@ -67,11 +72,35 @@ pub struct Witness {
     pub outputs: Vec<(String, WVal)>,
     /// What the source said it should produce. Only E107 has one.
     pub expected: Vec<(String, WVal)>,
+    /// The calls from the machine's initial state, in order (§15.148).
+    pub trace: Vec<Step>,
+    /// The carried input and output, when there is a trace: what a reader follows from one
+    /// call to the next.
+    pub carry: Option<(String, String)>,
+}
+
+/// One call of a trace (§15.148).
+#[derive(Debug, Clone, Default)]
+pub struct Step {
+    pub inputs: Vec<(String, WVal)>,
+    pub outputs: Vec<(String, WVal)>,
+    pub rows: Vec<RowRef>,
 }
 
 impl Witness {
     pub fn is_empty(&self) -> bool {
-        self.inputs.is_empty() && self.outputs.is_empty() && self.expected.is_empty()
+        self.inputs.is_empty() && self.outputs.is_empty() && self.expected.is_empty() && self.trace.is_empty()
+    }
+
+    /// The states a trace passes through, first to last: `受付 → 取消 → 入金済`.
+    pub fn path(&self) -> Option<String> {
+        let (i, o) = self.carry.as_ref()?;
+        let first = self.trace.first()?.inputs.iter().find(|(n, _)| n == i)?.1.text();
+        let mut s = vec![first];
+        for st in &self.trace {
+            s.push(st.outputs.iter().find(|(n, _)| n == o).map(|(_, v)| v.text()).unwrap_or_else(|| "?".into()));
+        }
+        Some(s.join(" → "))
     }
 }
 
@@ -306,6 +335,10 @@ impl Diag {
         if self.witness.is_empty() {
             return None;
         }
+        // A trace is shown by the states it passes through; the calls are in the JSON.
+        if let Some(p) = self.witness.path() {
+            return Some(p);
+        }
         let show = |ps: &[(String, WVal)]| {
             ps.iter().map(|(n, v)| format!("{n} = {}", v.text())).collect::<Vec<_>>().join(", ")
         };
@@ -464,6 +497,26 @@ pub fn render_json(d: &Diag, path: &str) -> String {
     }
     if !d.witness.expected.is_empty() {
         witness = witness.raw("expected", pairs(&d.witness.expected));
+    }
+    if !d.witness.trace.is_empty() {
+        let steps: Vec<String> = d
+            .witness
+            .trace
+            .iter()
+            .map(|st| {
+                let rows: Vec<String> = st
+                    .rows
+                    .iter()
+                    .map(|r| crate::json::Obj::new().str("table", &r.table).int("row", r.row as i128).finish())
+                    .collect();
+                crate::json::Obj::new()
+                    .raw("inputs", pairs(&st.inputs))
+                    .raw("outputs", pairs(&st.outputs))
+                    .raw("rows", crate::json::arr(&rows))
+                    .finish()
+            })
+            .collect();
+        witness = witness.raw("trace", crate::json::arr(&steps));
     }
 
     let rows: Vec<String> = d

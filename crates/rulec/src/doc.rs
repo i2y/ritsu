@@ -556,10 +556,19 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         }
     }
 
-    // --- Examples
-    if let Some(ex) = &f.examples {
+    // --- The machine the rule is one step of (§15.148)
+    if f.machine.is_some() {
+        o.push_str(&machine_section(f, c, &lines));
+    }
+
+    // --- Examples: each section as the source wrote it, one table after another.
+    if !f.examples.is_empty() {
         o.push_str(&tr!("\n## 例（検証済み）\n\n", "\n## Examples (verified)\n\n"));
-        if let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) {
+        for (k, ex) in f.examples.iter().enumerate() {
+            let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) else { continue };
+            if k > 0 {
+                o.push('\n');
+            }
             // The source spells the output marker `->`; the rendering shows it as `→`, like
             // every other arrow in this document.
             let mut head: Vec<String> = source_cells(&lines, h).into_iter().map(|c| c.replacen("->", "→", 1)).collect();
@@ -571,10 +580,384 @@ pub fn render(f: &RuleFile, c: &Checked, src: &str, path: &str) -> String {
         o.push_str(&tr!(
             "\nこの {} 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。\n",
             "\n`rulec check` ran these {} examples through the reference evaluator, and every one produced the declared values (E107). The examples are an **executable specification**.\n",
-            ex.rows.len()
+            f.examples.iter().map(|ex| ex.rows.len()).sum::<usize>()
         ));
     }
 
+    o
+}
+
+/// What a row of the table that decides the carried state tests, besides the state: the
+/// words a reader puts on the arrow. Verbatim from the source, as every cell here is.
+fn transition_label(f: &RuleFile, lines: &[&str], table: &str, row: usize, carried: &str) -> String {
+    let Some(t) = f.items.iter().find_map(|it| match it {
+        Item::Table(t) if t.name.as_ref().is_some_and(|n| n.text == table) => Some(t),
+        _ => None,
+    }) else {
+        return String::new();
+    };
+    let Some(r) = t.rows.iter().find(|r| r.index == row) else { return String::new() };
+    let cells = source_cells(lines, r.span.line);
+    let cols: Vec<(usize, &String)> = t.inputs.iter().enumerate().filter(|(_, (n, _))| n != carried).map(|(i, (n, _))| (i, n)).collect();
+    let parts: Vec<String> = cols
+        .iter()
+        .filter_map(|(i, n)| {
+            let c = cells.get(*i)?;
+            if c == "-" {
+                return None;
+            }
+            Some(if cols.len() == 1 { c.clone() } else { format!("{n} {c}") })
+        })
+        .collect();
+    if parts.is_empty() {
+        tr!("どの呼び出しでも", "any call")
+    } else {
+        parts.join(&tr!("、", ", "))
+    }
+}
+
+/// The states and the moves between them, as Mermaid draws them: a diagram GitHub renders in
+/// the pull request the page is pasted into. A call that leaves the state where it is draws
+/// no arrow — the table of moves below lists those.
+pub fn machine_mermaid(f: &RuleFile, a: &crate::machine::Analysis, lines: &[&str]) -> String {
+    let id = |s: &str| format!("s{}", a.states.iter().position(|x| x == s).unwrap_or(0));
+    let mut o = String::from("```mermaid\nstateDiagram-v2\n");
+    for s in &a.states {
+        o.push_str(&format!("  state \"{}\" as {}\n", s.replace('"', "'"), id(s)));
+    }
+    o.push_str(&format!("  [*] --> {}\n", id(&a.initial)));
+    let mut arrows: Vec<(String, String, Vec<String>)> = Vec::new();
+    for (from, row, to) in a.transitions() {
+        if from == to {
+            continue;
+        }
+        let label = match &row {
+            Some((t, r)) => transition_label(f, lines, t, *r, &a.carry.0),
+            None => String::new(),
+        };
+        match arrows.iter_mut().find(|(x, y, _)| *x == from && *y == to) {
+            Some((_, _, ls)) => {
+                if !ls.contains(&label) {
+                    ls.push(label)
+                }
+            }
+            None => arrows.push((from, to, vec![label])),
+        }
+    }
+    for (from, to, ls) in &arrows {
+        let label: String = ls.join(" / ").replace(':', "：");
+        if label.is_empty() {
+            o.push_str(&format!("  {} --> {}\n", id(from), id(to)));
+        } else {
+            o.push_str(&format!("  {} --> {}: {}\n", id(from), id(to), label));
+        }
+    }
+    for s in &a.finals {
+        o.push_str(&format!("  {} --> [*]\n", id(s)));
+    }
+    o.push_str("```\n");
+    o
+}
+
+/// The machine as a picture for the HTML page (§15.148): the states top to bottom by how
+/// many calls it takes to reach them from the initial one, an arrow for every move between
+/// two states with the words the row tests on it, and an arrow that goes back up drawn down
+/// the right-hand side. A call that stays draws nothing; the table of moves below lists
+/// those. Top to bottom because the page's text column is narrow and tall. Colours are the
+/// page's own variables, so the picture follows the reader's theme.
+pub fn machine_svg(f: &RuleFile, a: &crate::machine::Analysis, lines: &[&str]) -> String {
+    let esc = |s: &str| html_esc(s);
+    // Rows: breadth-first depth over the moves that change the state.
+    let mut depth: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    depth.insert(a.initial.clone(), 0);
+    let mut q = std::collections::VecDeque::from([a.initial.clone()]);
+    let moves: Vec<(String, Option<(String, usize)>, String)> = a.transitions().into_iter().filter(|(x, _, y)| x != y).collect();
+    while let Some(s) = q.pop_front() {
+        let d = depth[&s];
+        for (from, _, to) in &moves {
+            if from == &s && !depth.contains_key(to) {
+                depth.insert(to.clone(), d + 1);
+                q.push_back(to.clone());
+            }
+        }
+    }
+    let last = depth.values().copied().max().unwrap_or(0);
+    for s in &a.states {
+        if !depth.contains_key(s) {
+            depth.insert(s.clone(), last + 1);
+        }
+    }
+    let nrows = depth.values().copied().max().unwrap_or(0) + 1;
+    let wide = |s: &str| (crate::diag::width(s) * 7 + 28).max(64) as i64;
+    let node_w = a.states.iter().map(|s| wide(s)).max().unwrap_or(64);
+    let (node_h, gap_x, row_h, top, left) = (34i64, 64i64, 96i64, 34i64, 24i64);
+    let mut pos: std::collections::BTreeMap<String, (i64, i64, i64)> = std::collections::BTreeMap::new();
+    let mut per_row = vec![0i64; nrows];
+    for s in &a.states {
+        let r = depth[s];
+        let x = left + per_row[r] * (node_w + gap_x);
+        let y = top + r as i64 * row_h;
+        per_row[r] += 1;
+        pos.insert(s.clone(), (x, y, node_w));
+    }
+    let cols = per_row.iter().copied().max().unwrap_or(1);
+    let right = left + cols * (node_w + gap_x) - gap_x;
+    // Arrows, one per pair of states, the rows' words joined.
+    let mut arrows: Vec<(String, String, Vec<String>)> = Vec::new();
+    for (from, row, to) in &moves {
+        let label = match row {
+            Some((t, r)) => transition_label(f, lines, t, *r, &a.carry.0),
+            None => String::new(),
+        };
+        match arrows.iter_mut().find(|(x, y, _)| x == from && y == to) {
+            Some((_, _, ls)) => {
+                if !ls.contains(&label) {
+                    ls.push(label)
+                }
+            }
+            None => arrows.push((from.clone(), to.clone(), vec![label])),
+        }
+    }
+    let mut back = 0i64;
+    let mut body = String::new();
+    for (from, to, ls) in &arrows {
+        let (xf, yf, wf) = pos[from];
+        let (xt, yt, wt) = pos[to];
+        let label = esc(&ls.join(" / "));
+        let (df, dt) = (depth[from], depth[to]);
+        if dt > df {
+            let (x1, y1, x2, y2) = (xf + wf / 2, yf + node_h, xt + wt / 2, yt);
+            body.push_str(&format!(
+                "<g class=\"mv\"><line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" marker-end=\"url(#rc-arrow)\"/><text x=\"{}\" y=\"{}\">{label}</text></g>\n",
+                (x1 + x2) / 2 + 6,
+                (y1 + y2) / 2 + 4
+            ));
+        } else if dt == df {
+            let (x1, x2) = if xt > xf { (xf + wf, xt) } else { (xf, xt + wt) };
+            let y = yf + node_h / 2;
+            body.push_str(&format!(
+                "<g class=\"mv\"><line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" marker-end=\"url(#rc-arrow)\"/><text x=\"{}\" y=\"{}\" text-anchor=\"middle\">{label}</text></g>\n",
+                (x1 + x2) / 2,
+                y - 6
+            ));
+        } else {
+            back += 1;
+            let bend = right + 30 + 16 * back;
+            let (x1, y1, x2, y2) = (xf + wf, yf + node_h / 2, xt + wt, yt + node_h / 2);
+            body.push_str(&format!(
+                "<g class=\"mv\"><path d=\"M{x1},{y1} C{bend},{y1} {bend},{y2} {x2},{y2}\" marker-end=\"url(#rc-arrow)\"/><text x=\"{}\" y=\"{}\">{label}</text></g>\n",
+                bend - 8,
+                (y1 + y2) / 2
+            ));
+        }
+    }
+    for s in &a.states {
+        let (x, y, w) = pos[s];
+        let fin = a.finals.contains(s);
+        body.push_str(&format!(
+            "<g class=\"st\" data-state=\"{}\"><rect class=\"box\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{node_h}\" rx=\"8\"/>{}<text x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text></g>\n",
+            esc(s),
+            if fin { format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"6\" style=\"fill: none\"/>", x + 3, y + 3, w - 6, node_h - 6) } else { String::new() },
+            x + w / 2,
+            y + node_h / 2 + 5,
+            esc(s)
+        ));
+    }
+    let (xi, yi, wi) = pos[&a.initial];
+    let start = format!(
+        "<circle class=\"start\" cx=\"{}\" cy=\"{}\" r=\"5\"/><g class=\"mv\"><line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{yi}\" marker-end=\"url(#rc-arrow)\"/></g>\n",
+        xi + wi / 2,
+        yi - 26,
+        xi + wi / 2,
+        yi - 21,
+        xi + wi / 2
+    );
+    let width = right + 60 + 16 * back + 80;
+    let height = top + nrows as i64 * row_h;
+    let title = tr!("{} の状態遷移", "The states of {}", a.name);
+    format!(
+        "<figure class=\"machine\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{}\"><title>{}</title>\n\
+         <defs><marker id=\"rc-arrow\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path d=\"M0,0 L10,5 L0,10 z\"/></marker></defs>\n\
+         {start}{body}</svg><figcaption>{}</figcaption></figure>",
+        esc(&title),
+        esc(&title),
+        esc(&tr!(
+            "二重の枠が終わりの状態、黒丸からの矢印が始まりの状態です。留まる呼び出しは描いていません。",
+            "A double border is a final state; the arrow from the dot is the initial one. Calls that stay are not drawn."
+        ))
+    )
+}
+
+/// The section a machine gets on the approver's page (§15.148): what is carried, where a case
+/// starts and ends, the moves, what `check` proved about every sequence of calls, and the
+/// scenarios with the state each call started in.
+fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
+    let Some(m) = &f.machine else { return String::new() };
+    let Some(a) = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize) else { return String::new() };
+    let (cin, cout) = (a.carry.0.clone(), a.carry.1.clone());
+    let mut o = tr!(
+        "\n## ステートマシン: {}\n\nこの規則はステートマシンの一歩です。呼び出しのたびに状態（入力 {cin}）を受け取り、次の状態（出力 {cout}）を返します。**状態を覚えておくのは呼び出す側で、生成コードは何も覚えません。**行き先を決めるのは表 {} です。\n\n",
+        "\n## State machine: {}\n\nThis rule is one step of a state machine. Every call is passed the state (input {cin}) and answers the next one (output {cout}). **The caller keeps the state; the generated code keeps nothing.** Where a case goes is decided by table {}.\n\n",
+        m.name.text,
+        a.over
+    );
+    o.push_str(&tr!(
+        "| 始まりの状態 | 終わりの状態 |\n|---|---|\n| {} | {} |\n\n",
+        "| Initial state | Final states |\n|---|---|\n| {} | {} |\n\n",
+        md_esc(&a.initial),
+        md_esc(&if a.finals.is_empty() { tr!("（宣言なし）", "(none declared)") } else { a.finals.join(&tr!("、", ", ")) })
+    ));
+    if !m.held.is_empty() {
+        let names: Vec<String> = m.held.iter().map(|n| md_esc(&n.text)).collect();
+        o.push_str(&tr!(
+            "一つの案件は、{} を最初の呼び出しから最後の呼び出しまで同じ値で渡します（`held`）。下の主張は、それを変えない呼び出しの並びについてのものです。\n\n",
+            "One case passes {} with the same value from its first call to its last (`held`). The claims below are about the sequences of calls that keep it.\n\n",
+            names.join(&tr!("、", ", "))
+        ));
+    }
+    if a.blocked.is_some() || a.over_budget {
+        o.push_str(&tr!(
+            "入力の区画を歩ききれなかったので、遷移と主張は描いていません（E128）。\n",
+            "The inputs' cells could not all be walked, so the moves and the claims are not drawn (E128).\n"
+        ));
+        return o;
+    }
+    o.push_str(&machine_mermaid(f, &a, lines));
+
+    // The moves, state by state.
+    o.push_str(&tr!(
+        "\n### 状態ごとの行き先\n\n| 状態 | 行き先（表 {} の行） |\n|---|---|\n",
+        "\n### Where each state goes\n\n| State | Goes to (row of table {}) |\n|---|---|\n",
+        a.over
+    ));
+    for s in &a.states {
+        let mut moves: Vec<String> = Vec::new();
+        let mut ts: Vec<(String, Option<(String, usize)>, String)> = a.transitions().into_iter().filter(|(from, _, _)| from == s).collect();
+        ts.sort_by(|x, y| x.1.cmp(&y.1));
+        for (_, row, to) in ts {
+            let label = match &row {
+                Some((t, r)) => format!("{}（{}）", transition_label(f, lines, t, *r, &cin), tr!("行{}", "row {}", r)),
+                None => String::new(),
+            };
+            let target = if to == *s { tr!("留まる", "stays") } else { to.clone() };
+            let one = format!("{label} → {target}");
+            if !moves.contains(&one) {
+                moves.push(one);
+            }
+        }
+        let mark = if a.reachable.contains(s) { String::new() } else { tr!("（着かない）", " (never reached)") };
+        o.push_str(&format!("| {}{} | {} |\n", md_esc(s), mark, md_esc(&moves.join(" / "))));
+    }
+
+    // What the check proved.
+    o.push_str(&tr!(
+        "\n### `rulec check` が呼び出しの並び全体について確かめたこと\n\n",
+        "\n### What `rulec check` proved about every sequence of calls\n\n"
+    ));
+    let unreachable: Vec<String> = a.states.iter().filter(|s| !a.reachable.contains(s)).cloned().collect();
+    if a.exact {
+        o.push_str(&tr!(
+            "- {} から着ける状態は {} です。",
+            "- From {} a case can reach {}.",
+            a.initial,
+            a.states.iter().filter(|s| a.reachable.contains(s)).cloned().collect::<Vec<_>>().join(&tr!("・", ", "))
+        ));
+        if unreachable.is_empty() {
+            o.push_str(&tr!("すべての状態に着けます。\n", " Every state is reached.\n"));
+        } else {
+            o.push_str(&tr!(
+                "{} には、どの手順でも着きません（W125）。\n",
+                " No sequence of calls reaches {} (W125).\n",
+                unreachable.join(&tr!("・", ", "))
+            ));
+        }
+    } else {
+        o.push_str(&tr!(
+            "- どの状態に着けるかは、決めきれませんでした（W127）。\n",
+            "- Which states a case can reach could not be settled (W127).\n"
+        ));
+    }
+    let verdict = |v: &crate::machine::Verdict, yes: String, no: String| -> String {
+        match v {
+            crate::machine::Verdict::Holds => yes,
+            crate::machine::Verdict::Broken(_) => no,
+            crate::machine::Verdict::Undecided(_) => tr!("決めきれませんでした（W127）", "could not be settled (W127)"),
+        }
+    };
+    if !a.finals.is_empty() {
+        let all_final = a.final_claims.iter().all(|(_, v)| v.holds());
+        o.push_str(&format!(
+            "- {}\n",
+            if all_final {
+                tr!("終わりの状態 {} からは、ほかの状態へ移る呼び出しがありません。", "No call moves a case out of the final states {}.", a.finals.join(&tr!("・", ", ")))
+            } else {
+                tr!("終わりの状態から出る呼び出しがあります（E124）。", "A call moves a case out of a final state (E124).")
+            }
+        ));
+        let all_finish = a.finish_claims.iter().all(|(_, v)| v.holds());
+        o.push_str(&format!(
+            "- {}\n",
+            if all_finish {
+                tr!("どの状態に着いても、終わりの状態へ行く手順が残っています。", "Whatever state a case reaches, a way to a final state remains.")
+            } else {
+                tr!("終わりの状態に着けなくなる状態があります（E125）。", "A case can reach a state it can never finish from (E125).")
+            }
+        ));
+    }
+    for (nv, v) in m.nevers.iter().zip(&a.never_claims) {
+        let aw = nv.states.iter().map(|n| n.text.clone()).collect::<Vec<_>>().join(&tr!("・", ", "));
+        let bw = nv.after.iter().map(|n| n.text.clone()).collect::<Vec<_>>().join(&tr!("・", ", "));
+        o.push_str(&format!(
+            "- `{} {aw} {} {bw}`: {}\n",
+            crate::kw::NEVER,
+            crate::kw::AFTER,
+            verdict(v, tr!("{bw} のあとに {aw} に着く手順はありません。", "no sequence of calls reaches {aw} after {bw}."), tr!("破れています（E126）。", "broken (E126)."))
+        ));
+    }
+    for (on, v) in m.onces.iter().zip(&a.once_claims) {
+        let cell = crate::machine::cell_text(&on.cell);
+        o.push_str(&format!(
+            "- `{} {} {cell}`: {}\n",
+            crate::kw::ONCE,
+            on.output.text,
+            verdict(
+                v,
+                tr!("{} が {cell} になる呼び出しは、一件の案件で一回までです。", "{} is answered {cell} at most once in a case.", on.output.text),
+                tr!("破れています（E127）。", "broken (E127).")
+            )
+        ));
+    }
+
+    // The scenarios, with the state each call started in.
+    if !f.scenarios.is_empty() {
+        o.push_str(&tr!("\n### 手順の例（検証済み）\n\n", "\n### Scenarios (verified)\n\n"));
+        for sc in &f.scenarios {
+            o.push_str(&format!("**{}**\n\n", md_esc(&sc.name.text)));
+            let Some(first) = sc.table.rows.first() else { continue };
+            let Some(h) = header_line(lines, first.span.line.saturating_sub(1)) else { continue };
+            let mut head: Vec<String> = vec![cin.clone()];
+            head.extend(source_cells(lines, h).into_iter().map(|c| c.replacen("->", "→", 1)));
+            let run = crate::machine::run_scenario(f, c, sc);
+            let mut rows: Vec<Vec<String>> = Vec::new();
+            for (k, r) in sc.table.rows.iter().enumerate() {
+                let state = run
+                    .as_ref()
+                    .and_then(|x| x.calls.get(k))
+                    .and_then(|(env, _, _)| env.get(&cin).map(crate::vectors::show))
+                    .unwrap_or_default();
+                let mut row = vec![state];
+                row.extend(source_cells(lines, r.span.line));
+                rows.push(row);
+            }
+            o.push_str(&md_table(&head, &rows, true));
+            o.push('\n');
+        }
+        o.push_str(&tr!(
+            "一行目は {} から始まり、二行目からは一つ前の呼び出しが返した状態から始まります（左の列）。`rulec check` が参照評価器で順に実行し、すべて宣言どおりの値になりました（E107）。\n",
+            "The first call starts in {}, and every later one in the state the call before it answered (the left column). `rulec check` ran them in order through the reference evaluator, and every one produced the declared values (E107).\n",
+            a.initial
+        ));
+    }
     o
 }
 
@@ -1496,6 +1879,37 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         o.push_str(&tr!("\n## 最後に行う計算\n\n`{}`\n", "\n## The final step\n\n`{}`\n", md_esc(&expr_src(&lines, r.span.line))));
     }
 
+    // --- A machine (§15.148): where a case starts, what moves it on from each state, and
+    // where it ends — what a customer asks as "what can I still do with my order".
+    if f.machine.is_some() {
+        if let Some(a) = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize).filter(|a| a.blocked.is_none() && !a.over_budget) {
+            o.push_str(&tr!(
+                "\n## 状態の移り方\n\n始まりは **{}** です。{}\n\n| 状態 | 次のときに移ります |\n|---|---|\n",
+                "\n## How it moves on\n\nIt starts as **{}**. {}\n\n| State | Moves on when |\n|---|---|\n",
+                md_esc(&a.initial),
+                if a.finals.is_empty() {
+                    String::new()
+                } else {
+                    tr!("**{}** になったら、それ以上は変わりません。", "Once it is **{}**, nothing changes it any more.", md_esc(&a.finals.join(&tr!("・", " or "))))
+                }
+            ));
+            for st in a.states.iter().filter(|x| a.reachable.contains(x)) {
+                let mut moves: Vec<(Option<(String, usize)>, String)> =
+                    a.transitions().into_iter().filter(|(x, _, y)| x == st && y != st).map(|(_, r, y)| (r, y)).collect();
+                moves.sort();
+                let text: Vec<String> = moves
+                    .iter()
+                    .map(|(r, to)| {
+                        let label = r.as_ref().map(|(t, n)| transition_label(f, &lines, t, *n, &a.carry.0)).unwrap_or_default();
+                        tr!("{label} → {to}", "{label} → {to}")
+                    })
+                    .collect();
+                let cell = if text.is_empty() { tr!("（変わりません）", "(it does not change)") } else { text.join(" / ") };
+                o.push_str(&format!("| {} | {} |\n", md_esc(st), md_esc(&cell)));
+            }
+        }
+    }
+
     // --- Either side of every threshold. These are the vectors the boundary-pair criterion
     // built (§9.2): the same input moved one step across a boundary, everything else held.
     let vs = crate::vectors::generate(f, c);
@@ -1559,9 +1973,13 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     }
 
     // --- The worked examples, as written.
-    if let Some(ex) = &f.examples {
+    if !f.examples.is_empty() {
         o.push_str(&tr!("\n## 例\n\n", "\n## Examples\n\n"));
-        if let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) {
+        for (k, ex) in f.examples.iter().enumerate() {
+            let Some(h) = header_line(&lines, ex.rows.first().map(|r| r.span.line).unwrap_or(1).saturating_sub(1)) else { continue };
+            if k > 0 {
+                o.push('\n');
+            }
             let head: Vec<String> =
                 source_cells(&lines, h).into_iter().map(|c| strip_alias(&c.replacen("->", "→", 1))).collect();
             let rows: Vec<Vec<String>> = ex.rows.iter().map(|r| source_cells(&lines, r.span.line)).collect();
@@ -1922,7 +2340,15 @@ pub fn render_html(f: &RuleFile, c: &Checked, src: &str, path: &str, js: &str) -
         html_esc(&title),
         crate::graph::APP_CSS
     ));
-    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", ""));
+    let machine = if f.machine.is_some() {
+        crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize)
+            .filter(|a| a.blocked.is_none() && !a.over_budget)
+            .map(|a| machine_svg(f, &a, &src.lines().collect::<Vec<_>>()))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", "").replace("<!--MACHINE-->", &machine));
     o.push_str("</main>\n<script type=\"module\">\n");
     o.push_str(js);
     o.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
@@ -1963,6 +2389,16 @@ code { background: var(--rc-code); padding: 0 3px; }
 #try-buttons button { font: inherit; padding: 4px 12px; }
 #try-result { font-weight: 600; margin: 8px 0; min-height: 1.5em; }
 #try-record { font-family: ui-monospace, monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; color: var(--rc-dim); margin: 0; }
+figure.machine { margin: 1rem 0; overflow-x: auto; }
+figure.machine svg { display: block; max-width: none; }
+figure.machine .st rect { fill: var(--rc-card); stroke: var(--rc-card-line); stroke-width: 1.2; }
+figure.machine .st text { fill: var(--rc-fg); font-size: 13px; }
+figure.machine .st.now rect.box { stroke: var(--rc-mark); stroke-width: 2.5; }
+figure.machine .st.next rect.box { fill: var(--rc-hit); }
+figure.machine .mv path, figure.machine .mv line { stroke: var(--rc-wire); stroke-width: 1.3; fill: none; }
+figure.machine .mv text { fill: var(--rc-dim); font-size: 11px; paint-order: stroke; stroke: var(--rc-bg); stroke-width: 3px; }
+figure.machine .start { fill: var(--rc-fg); }
+figure.machine marker path { fill: var(--rc-wire); }
 ";
 /// The panel's static part; the fields are built by the script from the rule's own
 /// description, so the page never carries a second copy of the inputs.
@@ -2025,7 +2461,7 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
     let outs: Vec<String> = f.outputs.iter().map(|o| one(&o.name.text, &crate::codegen::pub_name_of(&o.name))).collect();
     // The examples, as the wire values the script puts into the fields.
     let mut exs: Vec<String> = Vec::new();
-    if let Some(t) = &f.examples {
+    for t in &f.examples {
         for row in &t.rows {
             let mut o = Obj::new();
             let mut complete = true;
@@ -2083,10 +2519,19 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
                 .str("example", &tr!("例", "Example"))
                 .str("add", &tr!("行を足す", "Add a row"))
                 .str("remove", &tr!("この行を消す", "Remove this row"))
+                .str("carry", &tr!("この答えの状態から続ける", "Continue from this state"))
                 .finish(),
         );
     if let Some(e) = elements {
         o = o.raw("elements", e);
+    }
+    // The machine (§15.148): which field the answer's state goes back into.
+    if let Some((cin, cout)) = f.machine.as_ref().and_then(|m| m.carried()) {
+        let alias = |n: &str, list: &[crate::ast::VarDecl]| list.iter().find(|d| d.name.text == n).map(|d| crate::codegen::pub_name_of(&d.name));
+        let out_alias = f.outputs.iter().find(|d| d.name.text == cout).map(|d| crate::codegen::pub_name_of(&d.name));
+        if let (Some(i), Some(o2)) = (alias(cin, &f.inputs), out_alias) {
+            o = o.raw("machine", Obj::new().str("in", &i).str("out", &o2).finish());
+        }
     }
     o.finish()
 }
@@ -2296,6 +2741,7 @@ function run() {
     RULE.outputs.forEach((o, i) => { outs[o.name] = shown(o, vals[i]); });
     lastRun = { trace, outs };
     if (window.rulecBoardFill) rulecBoardFill(trace, outs);
+    if (RULE.machine) machineStep(out);
     $("#try-record").textContent = FN.record(...args, out, trace, "");
     try {
       // The sequence is not put in the address: a link carries the scalar inputs.
@@ -2319,6 +2765,31 @@ go.type = "button";
 go.textContent = RULE.text.run;
 go.addEventListener("click", run);
 buttons.appendChild(go);
+// A machine (§15.148): the state the call answered can be put back into the field it came
+// from, and the call made again — one event after another, as the host would. The picture
+// marks the state the call started in and the one it answered.
+let carried = null;
+function machineStep(out) {
+  const now = form.elements[RULE.machine.in].value;
+  carried = RULE.outputs.length === 1 ? out : out[RULE.machine.out];
+  for (const g of document.querySelectorAll("figure.machine .st")) {
+    g.classList.toggle("now", g.dataset.state === now);
+    g.classList.toggle("next", g.dataset.state === carried);
+  }
+  next.disabled = false;
+}
+const next = document.createElement("button");
+next.type = "button";
+next.disabled = true;
+if (RULE.machine) {
+  next.textContent = RULE.text.carry;
+  next.addEventListener("click", () => {
+    if (carried === null) return;
+    form.elements[RULE.machine.in].value = carried;
+    run();
+  });
+  buttons.appendChild(next);
+}
 function fill(ex) {
   for (const inp of RULE.inputs) {
     if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
@@ -2594,8 +3065,34 @@ fn md_to_html(md: &str) -> String {
     // one `##`, and the trace names them `{apply}:{table}` (§15.69) — so without this the
     // rows of a borrowed table would carry the bare name, or no name at all.
     let mut applied: Option<String> = None;
+    // A fenced block. The one the page writes is the machine's Mermaid diagram (§15.148),
+    // which the HTML draws itself: a marker stands where it was.
+    let mut fence: Option<(String, Vec<String>)> = None;
     for line in md.lines() {
         let t = line.trim_end();
+        if let Some(info) = t.strip_prefix("```") {
+            match fence.take() {
+                None => {
+                    flush_para(&mut o, &mut para);
+                    flush_list(&mut o, &mut list);
+                    flush_table(&mut o, &mut rows, &table_name);
+                    flush_quote(&mut o, &mut quote);
+                    fence = Some((info.trim().to_string(), Vec::new()));
+                }
+                Some((kind, body)) => {
+                    if kind == "mermaid" {
+                        o.push_str("<!--MACHINE-->\n");
+                    } else {
+                        o.push_str(&format!("<pre><code>{}</code></pre>\n", html_esc(&body.join("\n"))));
+                    }
+                }
+            }
+            continue;
+        }
+        if let Some((_, body)) = fence.as_mut() {
+            body.push(t.to_string());
+            continue;
+        }
         if let Some(q) = t.strip_prefix("> ") {
             flush_para(&mut o, &mut para);
             flush_list(&mut o, &mut list);

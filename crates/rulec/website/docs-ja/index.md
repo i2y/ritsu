@@ -14,7 +14,7 @@ hide:
 <p class="rc-hero__tag">ルールを書く。証明する。コードにする。</p>
 
 <p class="rc-hero__lede">
-<strong>業務ルールのための小さな言語</strong>です。運賃表、クーポンの規約、返品の可否、軽減税率やただし書のついた税額表。条件は表に書き、そのまわりに計算、本則に優先する特例、ただし書、ほかの規則の準用、件数の決まらない明細の並びを書きます。
+<strong>業務ルールのための小さな言語</strong>です。運賃表、クーポンの規約、返品の可否、軽減税率やただし書のついた税額表。条件は表に書き、そのまわりに計算、本則に優先する特例、ただし書、ほかの規則の準用、件数の決まらない明細の並び、状態が移っていく手続きの一歩を書きます。
 </p>
 
 <p class="rc-hero__lede">
@@ -189,6 +189,42 @@ clause 無料(free) -> 送料
 <div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
+```rule
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+```
+
+```console
+error[E126]: 取消 のあとに 出荷済 に着く手順があります
+  --> 注文の状態.rule:37 ステートマシン 注文
+   |
+37 |   never   出荷済 after 取消
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ 手順（受付 から）:
+   1. 受付 のとき 出来事 = 取消依頼, 支払額 = 0円 → 取消（表 遷移 行2）
+   2. 取消 のとき 出来事 = 入金, 支払額 = 0円 → 入金済（表 遷移 行10）
+   3. 入金済 のとき 出来事 = 出荷, 支払額 = 0円 → 出荷済（表 遷移 行4）
+```
+
+</div>
+<div markdown>
+
+### ステートマシンも書けます。呼び出しの並びまで検査します
+
+注文は入金され、出荷され、配達されるか、取り消されます。こうした手続きの一歩ぶんの規則は、状態と出来事のふつうの表に、`machine` の節を足して書きます。どの出力が次の呼び出しの状態になるか、案件がどこで始まりどこで終わるか、何が起きてはいけないか（ここでは、取り消した注文が出荷されること）を言う節です。生成する関数は何も覚えず、状態は呼び出す側が持ちます。`rulec check` は案件がたどれる呼び出しの並びをすべて調べ、崩れた主張を**崩す最短の並び**で返します。ここで返ってきたのは、取消のあとに届いた入金が注文を入金済に戻してしまう欠陥で、表を一行ずつ読んでも見えません。
+
+</div>
+</div>
+
+<div class="rc-row" markdown>
+<div markdown>
+
 ```console
 $ rulec certificate 運賃.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule 運賃.rule cert.json
@@ -213,7 +249,7 @@ ok    fee (Rust, proof) ハーネス 2 本
 </div>
 </div>
 
-<div class="rc-row" markdown>
+<div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
 ```rule
@@ -239,7 +275,7 @@ policy unique
 </div>
 </div>
 
-<div class="rc-row rc-row--flip" markdown>
+<div class="rc-row" markdown>
 <div markdown>
 
 ![承認する人のページ。左の入力欄に例 2（東京都、1999g、12000円、プラチナ）が入り、送料 = 400円 と、生成コードがログに書く一行が出ている。右では、基本送料の行 3（遠隔地以外、2000g 以下）と 負担判定の行 2（プラチナ）に色が付いている](images/try-top-ja-dark.png#only-dark)
@@ -255,7 +291,7 @@ policy unique
 </div>
 </div>
 
-<div class="rc-row" markdown>
+<div class="rc-row rc-row--flip" markdown>
 <div markdown>
 
 ```python
@@ -278,7 +314,7 @@ Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL�
 </div>
 </div>
 
-生成できる言語は **12**、診断は **86 種類**。規則 **48 本**（うち 21 本は、公開されている規約や法令などからの転記）を、毎コミットで検査し、生成し、実行しています。依存ゼロ、ランタイム無し、バイナリは 1 本、検査はオフライン。
+生成できる言語は **12**、診断は **102 種類**。規則 **49 本**（うち 21 本は、公開されている規約や法令などからの転記）を、毎コミットで検査し、生成し、実行しています。依存ゼロ、ランタイム無し、バイナリは 1 本、検査はオフライン。
 
 ---
 

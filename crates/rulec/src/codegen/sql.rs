@@ -1027,9 +1027,31 @@ impl<'a> Gen<'a> {
 
     /// `sql/<alias>_runner.py`: the vectors through the query on an in-memory SQLite, and
     /// the same record per line the other runners print.
+    /// What the SQL runners print first for a machine's traces, and which input comes back as
+    /// which output (§15.148). The query and the function keep no constants — a host reads
+    /// them off `rulec api` — so the runner is handed them by the generator, and the line is
+    /// the rule's own rather than something the SQL could get wrong.
+    fn sql_machine_literals(&self) -> (String, String) {
+        let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+        match (self.machine_consts(), self.carried()) {
+            (Some((_, init, fins)), Some((cin, cout))) => {
+                let meta = format!(
+                    "{{\"initial\":{},\"final\":[{}]}}",
+                    crate::json::quote(&init),
+                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(",")
+                );
+                (py(&meta), format!("({}, {})", py(&cin), py(&cout)))
+            }
+            _ => ("None".into(), "None".into()),
+        }
+    }
+
     pub fn sql_runner(&self) -> String {
         let (ins, outs, tables, labels, any_w114) = self.sql_runner_lists();
+        let (meta, carry) = self.sql_machine_literals();
         SQL_RUNNER
+            .replace("@MACHINE@", &meta)
+            .replace("@CARRY@", &carry)
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@INPUTS@", &ins)
@@ -1054,7 +1076,10 @@ impl<'a> Gen<'a> {
                 self.sql_ty(&ty).to_string()
             })
             .collect();
+        let (meta, carry) = self.sql_machine_literals();
         SQL_FUNCTION_RUNNER
+            .replace("@MACHINE@", &meta)
+            .replace("@CARRY@", &carry)
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@ARGTYPES@", &types.join(", "))
@@ -1073,6 +1098,8 @@ import sys
 from pathlib import Path
 
 SQL = Path(__file__).with_name("@ALIAS@.sql").read_text(encoding="utf-8")
+MACHINE = @MACHINE@
+CARRY = @CARRY@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
 OUTPUTS = [@OUTPUTS@]
@@ -1127,33 +1154,61 @@ db.row_factory = sqlite3.Row
 db.create_function("LEAST", 2, min, deterministic=True)
 db.create_function("GREATEST", 2, max, deterministic=True)
 db.execute('CREATE TABLE "%s" ("_id" INTEGER PRIMARY KEY, %s)' % (INPUT, ", ".join('"%s"' % a for _, a, _ in INPUTS)))
-cases = []
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    d = json.loads(line)["in"]
-    db.execute(
-        'INSERT INTO "%s" VALUES (?%s)' % (INPUT, ", ?" * len(INPUTS)),
-        (len(cases), *[_to_sql(k, d[jp]) for jp, _, k in INPUTS]),
-    )
-    cases.append(d)
-for r in db.execute(SQL):
-    d = cases[r["_id"]]
-    if r["_input_error"] is not None:
-        raise ValueError(r["_input_error"])
-    if CONTRADICTION is not None and r[CONTRADICTION] is not None:
-        raise AssertionError(r[CONTRADICTION])
-    ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
-    obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
-    rows = ",".join(
-        '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
-        + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
-        + "}"
-        for t, c in TABLES
-        if r[c] is not None
-    )
-    print('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}")
+
+
+def _decide(cases):
+    """One pass of the query over these cases: each case's record, and its answer."""
+    db.execute('DELETE FROM "%s"' % INPUT)
+    for n, d in enumerate(cases):
+        db.execute(
+            'INSERT INTO "%s" VALUES (?%s)' % (INPUT, ", ?" * len(INPUTS)),
+            (n, *[_to_sql(k, d[jp]) for jp, _, k in INPUTS]),
+        )
+    got = {}
+    for r in db.execute(SQL):
+        d = cases[r["_id"]]
+        if r["_input_error"] is not None:
+            raise ValueError(r["_input_error"])
+        if CONTRADICTION is not None and r[CONTRADICTION] is not None:
+            raise AssertionError(r[CONTRADICTION])
+        ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
+        obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
+        rows = ",".join(
+            '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
+            + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
+            + "}"
+            for t, c in TABLES
+            if r[c] is not None
+        )
+        got[r["_id"]] = ('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}", {jp: r[a] for jp, a, _ in OUTPUTS})
+    return [got[n] for n in range(len(cases))]
+
+
+lines = [json.loads(l) for l in sys.stdin if l.strip()]
+if lines and "machine" in lines[0] and MACHINE is not None:
+    # A machine's traces (§15.148): every trace's k-th call in one pass of the query, each
+    # passed the state the query answered to the call before.
+    print(MACHINE)
+    cin, cout = CARRY
+    traces = []
+    for x in lines[1:]:
+        if x["step"] == "start":
+            traces.append([x["state"], []])
+        traces[-1][1].append(x["in"])
+    done = [[] for _ in traces]
+    k = 0
+    while any(k < len(t[1]) for t in traces):
+        live = [n for n, t in enumerate(traces) if k < len(t[1])]
+        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}) for n in live])):
+            done[n].append(rec)
+            traces[n][0] = obs[cout]
+        k += 1
+    for recs in done:
+        for rec in recs:
+            print(rec)
+else:
+    for rec, _ in _decide([x["in"] for x in lines]):
+        print(rec)
 "#;
 
 const SQL_FUNCTION_RUNNER: &str = r#"@HEADER@
@@ -1164,6 +1219,8 @@ import sys
 from pathlib import Path
 
 SQL = Path(__file__).with_name("@ALIAS@_function.sql").read_text(encoding="utf-8")
+MACHINE = @MACHINE@
+CARRY = @CARRY@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
@@ -1223,46 +1280,70 @@ def _psql(script: str) -> "subprocess.CompletedProcess[str]":
     return subprocess.run(PSQL, input=script, capture_output=True, text=True)
 
 
-cases = []
-script = [SQL]
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    d = json.loads(line)["in"]
-    cases.append(d)
-    # Called the way PostgREST calls it — by argument name — and with every argument cast to
-    # the type it was declared with. Both matter: a rule whose alias is also the name of a
-    # built-in function (`rank`) cannot be called positionally without ambiguity, and a named
-    # argument is the one form a variadic built-in cannot answer to.
-    args = ", ".join('"%s" => %s::%s' % (a, _lit(k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
-    # Through a subquery, so that the answer is a row however many columns it has: a function
-    # that returns one column — one output and no table to name a row of — is that column's
-    # type in FROM, and row_to_json has no form for a bare bigint.
-    script.append('SELECT row_to_json(t) FROM (SELECT * FROM "%s"(%s)) AS t;' % (FN, args))
+def _decide(cases):
+    """One psql session over these cases: each case's record, and its answer."""
+    script = [SQL]
+    for d in cases:
+        # Called the way PostgREST calls it — by argument name — and with every argument cast
+        # to the type it was declared with. Both matter: a rule whose alias is also the name of
+        # a built-in function (`rank`) cannot be called positionally without ambiguity, and a
+        # named argument is the one form a variadic built-in cannot answer to.
+        args = ", ".join('"%s" => %s::%s' % (a, _lit(k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
+        # Through a subquery, so that the answer is a row however many columns it has: a
+        # function that returns one column — one output and no table to name a row of — is that
+        # column's type in FROM, and row_to_json has no form for a bare bigint.
+        script.append('SELECT row_to_json(t) FROM (SELECT * FROM "%s"(%s)) AS t;' % (FN, args))
+    p = _psql("\n".join(script))
+    # However it went, the function does not stay behind in somebody's database.
+    _psql('DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES)))
+    if p.returncode != 0:
+        sys.stderr.write(p.stderr)
+        sys.exit(1)
+    answers = [l for l in p.stdout.splitlines() if l.startswith("{")]
+    if len(answers) != len(cases):
+        sys.stderr.write("psql answered %d of %d cases\n%s" % (len(answers), len(cases), p.stderr))
+        sys.exit(1)
+    out = []
+    for d, answer in zip(cases, answers):
+        r = json.loads(answer)
+        ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
+        obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
+        rows = ",".join(
+            '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
+            + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
+            + "}"
+            for t, c in TABLES
+            if r[c] is not None
+        )
+        out.append(('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}", {jp: r[a] for jp, a, _ in OUTPUTS}))
+    return out
 
-p = _psql("\n".join(script))
-# However it went, the function does not stay behind in somebody's database.
-_psql('DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES)))
-if p.returncode != 0:
-    sys.stderr.write(p.stderr)
-    sys.exit(1)
-answers = [l for l in p.stdout.splitlines() if l.startswith("{")]
-if len(answers) != len(cases):
-    sys.stderr.write("psql answered %d of %d cases\n%s" % (len(answers), len(cases), p.stderr))
-    sys.exit(1)
-for d, answer in zip(cases, answers):
-    r = json.loads(answer)
-    ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
-    obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
-    rows = ",".join(
-        '{"table":' + json.dumps(t, ensure_ascii=False) + ',"row":' + str(r[c])
-        + (',"label":' + json.dumps(LABELS[(t, r[c])], ensure_ascii=False) if (t, r[c]) in LABELS else "")
-        + "}"
-        for t, c in TABLES
-        if r[c] is not None
-    )
-    print('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}")
+
+lines = [json.loads(l) for l in sys.stdin if l.strip()]
+if lines and "machine" in lines[0] and MACHINE is not None:
+    # A machine's traces (§15.148): every trace's k-th call in one session, each passed the
+    # state the function answered to the call before.
+    print(MACHINE)
+    cin, cout = CARRY
+    traces = []
+    for x in lines[1:]:
+        if x["step"] == "start":
+            traces.append([x["state"], []])
+        traces[-1][1].append(x["in"])
+    done = [[] for _ in traces]
+    k = 0
+    while any(k < len(t[1]) for t in traces):
+        live = [n for n, t in enumerate(traces) if k < len(t[1])]
+        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}) for n in live])):
+            done[n].append(rec)
+            traces[n][0] = obs[cout]
+        k += 1
+    for recs in done:
+        for rec in recs:
+            print(rec)
+else:
+    for rec, _ in _decide([x["in"] for x in lines]):
+        print(rec)
 "#;
 
 /// `sql/_round_test.py`: the five rounding expressions, evaluated by SQLite over the same

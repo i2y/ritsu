@@ -3366,10 +3366,64 @@ impl TableRegion {
     /// points, and the tool sat there (§15.99).
     fn reach_point(&self, ri: usize, unique: bool, budget: &mut i64) -> Option<Vec<usize>> {
         let mut p: Vec<usize> = Vec::new();
-        self.reach_rec(ri, unique, &mut p, budget)
+        self.reach_rec(ri, unique, &mut p, budget, &[])
     }
 
-    fn reach_rec(&self, ri: usize, unique: bool, p: &mut Vec<usize>, budget: &mut i64) -> Option<Vec<usize>> {
+    /// A point that reaches a row **with one axis held at one coordinate** (§15.148): a call
+    /// from one given state that the row answers, which is what a machine's certificate needs
+    /// to show a final state can still be reached from that state. The values behind it are
+    /// worked out as a reach point's are.
+    #[allow(clippy::type_complexity)]
+    pub fn point_at(
+        &self,
+        ri: usize,
+        unique: bool,
+        axis: usize,
+        coord: usize,
+    ) -> Option<(Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>, Vec<Option<Rat>>)> {
+        self.point_at_all(ri, unique, &[(axis, coord)])
+    }
+
+    /// `point_at`, with a coordinate fixed on each of several axes: the state's, and those of
+    /// the inputs a case keeps (§15.149).
+    pub fn point_at_all(
+        &self,
+        ri: usize,
+        unique: bool,
+        fix: &[(usize, usize)],
+    ) -> Option<(Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>, Vec<Option<Rat>>)> {
+        let mut left = DEFAULT_BUDGET;
+        let mut path = Vec::new();
+        let p = self.reach_rec(ri, unique, &mut path, &mut left, fix)?;
+        let model_extra = self.model_extra_names();
+        let (nums, extra, input) = match self.model_values(&p, &model_extra) {
+            Some((nums, extra)) => {
+                let input = self.witness_pairs_with(&p, Some(nums.clone()));
+                (nums, extra, input)
+            }
+            None if self.model.is_empty() => {
+                (self.witness_values(&p).unwrap_or_else(|| vec![None; self.axes.len()]), Vec::new(), self.witness_pairs(&p))
+            }
+            None => (vec![None; self.axes.len()], vec![None; model_extra.len()], self.witness_pairs(&p)),
+        };
+        Some((p, input, nums, extra))
+    }
+
+    /// The names the linear model reads that are not a numeric axis of the table: the
+    /// `extra_values` of a reach point, in this order.
+    fn model_extra_names(&self) -> Vec<String> {
+        let mut model_extra: Vec<String> = self
+            .model
+            .iter()
+            .flat_map(|g| g.vars.iter().cloned())
+            .filter(|n| !self.col_names.iter().zip(&self.axes).any(|(c, a)| c == n && matches!(a, Axis::Num { .. })))
+            .collect();
+        model_extra.sort();
+        model_extra.dedup();
+        model_extra
+    }
+
+    fn reach_rec(&self, ri: usize, unique: bool, p: &mut Vec<usize>, budget: &mut i64, fix: &[(usize, usize)]) -> Option<Vec<usize>> {
         *budget -= 1;
         if *budget < 0 {
             return None;
@@ -3385,12 +3439,12 @@ impl TableRegion {
         }
         let ai = p.len();
         for c in 0..self.axes[ai].len() {
-            if !self.masks[ri][ai][c] {
+            if !self.masks[ri][ai][c] || fix.iter().any(|&(fa, fc)| fa == ai && fc != c) {
                 continue;
             }
             p.push(c);
             let keep = self.feasible(p) != Feasible::No;
-            let got = if keep { self.reach_rec(ri, unique, p, budget) } else { None };
+            let got = if keep { self.reach_rec(ri, unique, p, budget, fix) } else { None };
             p.pop();
             if got.is_some() {
                 return got;
@@ -3540,3 +3594,14 @@ impl TableRegion {
     }
 }
 
+
+
+/// The region of one definition set, for a certificate section that needs points of its own
+/// (§15.148).
+pub fn region_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) -> Option<TableRegion> {
+    let reg = TableRegion::build(&set.table, c, f)?;
+    if reg.axes.is_empty() || set.table.rows.is_empty() || reg.unanalyzable.is_some() {
+        return None;
+    }
+    Some(reg)
+}

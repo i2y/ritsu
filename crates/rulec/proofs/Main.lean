@@ -725,6 +725,217 @@ def checkContracts (cert : Json) (r : Report) : Report := Id.run do
       r := r.state s!"contract {name}: some of its rules could not be read and were taken as true"
   return r
 
+/-- **A machine, held to the rows of the table it is laid on** (§15.148). The moves are read
+    back against what the table says each row writes; the transitions are rebuilt from the
+    rows' boxes; and each claim is one of the checks in `RulecCert.Machine`, whose theorems say
+    what a pass settles: `reaches_mem`, `final_stays`, `never_after`, `once_below_two`, and
+    `reachable_finishes`. -/
+def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report := Id.run do
+  let mut r := r
+  let some mj := field cert "machine" | return r
+  if mj.isNull then return r
+  let tname := fieldStr mj "table"
+  if tname.isEmpty then
+    r := r.state s!"the machine is not laid on a table's certificate: {fieldStr mj "why"}"
+    r := r.say s!"  machine: not certified here — {fieldStr mj "why"}"
+    return r
+  let some t := tables.find? (fun t => t.name == tname)
+    | return r.fail s!"machine: the table {tname} has no certificate this program read"
+  let some tj := (fieldArr cert "tables").find? (fun x => fieldStr x "table" == tname)
+    | return r.fail s!"machine: the table {tname} is not in the certificate"
+  let C := t.cert
+  let states := (fieldArr mj "states").toList.filterMap str
+  let carry := (field mj "carry").getD Json.null
+  let axis : Option Nat := field mj "axis" >>= nat
+  match axis with
+  | some k =>
+    if t.columns[k]? != some (fieldStr carry "input") then
+      return r.fail s!"machine: axis {k} of {tname} is not the carried input {fieldStr carry "input"}"
+    if t.labels[k]? != some states then
+      return r.fail "machine: the state's axis is not the states in order"
+  | none => pure ()
+  let decides := (fieldArr tj "decides").toList.filterMap str
+  let some jout := decides.findIdx? (· == fieldStr carry "output")
+    | return r.fail s!"machine: {tname} does not decide {fieldStr carry "output"}"
+  -- Each row's move, read back against what the table says the row writes.
+  let mut moves : List (Nat × Move) := []
+  for e in fieldArr mj "rows" do
+    let some i := fieldNat e "row" | return r.fail "machine: a move names no row"
+    let produced : Option String := ((fieldArr tj "rows").find? (fun x => fieldNat x "row" == some i)) >>=
+      (fun x => (arr ((field x "produces").getD Json.null)) >>= (fun a => a[jout]?) >>= str)
+    match fieldNat e "to", (field e "stay" >>= boolOf) with
+    | some to, _ =>
+      if produced != states[to]? then
+        return r.fail s!"machine: row {i} is said to go to {to}, and the table says it writes something else"
+      moves := moves ++ [(i, Move.goTo to)]
+    | none, some true =>
+      if produced.isSome then
+        return r.fail s!"machine: row {i} is said to leave the state, and the table says it writes a value"
+      moves := moves ++ [(i, Move.stay)]
+    | _, _ => return r.fail s!"machine: row {i} has no move"
+  let move : Nat → Option Move := fun i => (moves.find? (fun x => x.1 == i)).map (·.2)
+  if !C.rows.all (fun row => (move row.index).isSome) then
+    return r.fail "machine: a row of the table has no move"
+  let M : Machine := { table := C.table, axis := axis, move := move }
+  let init := (fieldNat mj "initial").getD 0
+  let finals := (fieldArr mj "finals").toList.filterMap nat
+  -- The worlds (§15.149): every combination of the held columns' coordinates, once each.
+  let fixedInputs := (fieldArr mj "held_inputs").toList.filterMap str
+  let fixed := (fieldArr mj "held").toList.filterMap nat
+  let axesJ := fieldArr tj "axes"
+  for fk in fixed do
+    let ax := axesJ[fk]?.getD Json.null
+    if fieldStr ax "kind" != "input" || !fixedInputs.contains (fieldStr ax "column") then
+      return r.fail s!"machine: axis {fk} is not a held input's column"
+  for fi in fixedInputs do
+    if t.columns.contains fi && !(fixed.any (fun fk => t.columns[fk]? == some fi)) then
+      return r.fail s!"machine: {fi} is held and a column of {tname}, and no world is cut by it"
+  let want : List (List Nat) := fixed.foldl (fun acc fk =>
+    acc.flatMap (fun w => (List.range (t.labels[fk]?.getD []).length).map (fun c => w ++ [c]))) [[]]
+  let worldsJ := fieldArr mj "worlds"
+  let got : List (List Nat) := worldsJ.toList.map (fun wj => (fieldArr wj "at").toList.filterMap nat)
+  if got.length != want.length || !want.all (fun w => got.contains w) then
+    return r.fail "machine: the worlds are not every combination of the held columns' coordinates, once each"
+  -- A held input read by more than its own column: a path of calls at the world's coordinates
+  -- is then not shown to be one case's, and none is taken as proof.
+  let coupled := !fixedInputs.isEmpty &&
+    (axesJ.any (fun ax => fieldStr ax "kind" != "input") ||
+     (fieldArr cert "constraints").any (fun kc => fixedInputs.contains (fieldStr kc "left") || fixedInputs.contains (fieldStr kc "right")))
+  let neverDefs := (fieldArr mj "never").toList
+  let onceDefs := (fieldArr mj "once").toList
+  let mut claims : Array String := #[]
+  let mut reached : List Nat := []
+  let add : Array String → String → Array String := fun cs c => if cs.contains c then cs else cs.push c
+  for wj in worldsJ do
+    let w := (fieldArr wj "at").toList.filterMap nat
+    let Mw := M.world fixed w
+    let reach := (fieldArr wj "reach").toList.filterMap nat
+    if Mw.reachOk init reach then
+      reached := reached ++ reach.filter (fun x => !reached.contains x)
+    else r := r.fail "machine: a reach set does not hold the start, or is not closed under a call"
+    let finalsHere := finals.filter (fun x => reach.contains x)
+    if (field wj "final_certified" >>= boolOf) == some true then
+      if Mw.finalOk finalsHere then claims := add claims "no call leaves a final state"
+      else r := r.fail "machine: a row leads out of a final state"
+    else if !finalsHere.isEmpty then
+      r := r.state "that no call leaves a final state is not laid on the rows"
+    for (nv, cj) in neverDefs.zip (fieldArr wj "never").toList do
+      if cj.isNull then
+        r := r.state "a `never` line of the machine is not laid on the rows"
+      else
+        let a := (fieldArr nv "states").toList.filterMap nat
+        let b := (fieldArr nv "after").toList.filterMap nat
+        let P : List (Nat × Bool) := ((arr cj).getD #[]).toList.filterMap (fun x => do
+          let xs ← arr x
+          let st ← xs[0]? >>= nat
+          let bb ← xs[1]? >>= boolOf
+          some (st, bb))
+        if Mw.neverOk init a b P then claims := add claims "a `never` line"
+        else r := r.fail "machine: a `never` set is not closed, or holds a state it is never to reach"
+    for (on, cj) in onceDefs.zip (fieldArr wj "once").toList do
+      if cj.isNull || (field on "test").isNone then
+        r := r.state s!"`once {fieldStr on "output"}` is not laid on the rows"
+      else
+        let test := (field on "test").getD Json.null
+        let lo : Option Int := field test "lo" >>= (fun j => (j.getInt?).toOption)
+        let hi : Option Int := field test "hi" >>= (fun j => (j.getInt?).toOption)
+        let words := (fieldArr test "words").toList.filterMap str
+        let isWords := (field test "words").isSome
+        let flagOf : Json → Bool := fun v =>
+          if v.isNull then true
+          else if isWords then
+            match boolOf v with
+            | some bv => words.contains (if bv then "true" else "false")
+            | none => words.contains ((str v).getD "")
+          else
+            match (v.getInt?).toOption with
+            | some n => (lo.map (fun l => decide (l ≤ n))).getD true && (hi.map (fun h => decide (n ≤ h))).getD true
+            | none => true
+        let flags : List (Nat × Bool) := (fieldArr on "rows").toList.filterMap (fun x => do
+          let i ← fieldNat x "row"
+          some (i, flagOf ((field x "value").getD Json.null)))
+        let counts : Nat → Bool := fun i => (flags.find? (fun x => x.1 == i)).map (·.2) |>.getD true
+        let P : List (Nat × Nat) := ((arr cj).getD #[]).toList.filterMap (fun x => do
+          let xs ← arr x
+          let st ← xs[0]? >>= nat
+          let n ← xs[1]? >>= nat
+          some (st, n))
+        if Mw.onceOk init counts P then claims := add claims s!"`once {fieldStr on "output"}`"
+        else r := r.fail s!"machine: the `once {fieldStr on "output"}` set is not closed, or counts two"
+    if !finals.isEmpty then
+      let pathsJ := fieldArr wj "finish"
+      if coupled then
+        if pathsJ.size > 0 then
+          r := r.fail "machine: paths to a final state are given, and a held input is read by more than its own column"
+        else
+          r := r.state "that a case can still finish is not laid on the rows (a held input is read by more than its own column)"
+      else
+        let callOf : Json → Option Machine.Call := fun x => do
+          let st ← fieldNat x "state"
+          let row ← fieldNat x "row"
+          let at_ := (fieldArr x "at").toList.filterMap nat
+          let vs := (fieldArr x "at_values").toList.map (fun v => (optRat v).getD 0)
+          let xs := (fieldArr x "extra_values").toList.map (fun v => (optRat v).getD 0)
+          some { state := st, row := row, point := at_, values := vs ++ xs }
+        let paths : Nat → List Machine.Call := fun s =>
+          match pathsJ.find? (fun x => fieldNat x "state" == some s) with
+          | some x => (fieldArr x "path").toList.filterMap callOf
+          | none => []
+        -- Every call of a path is made with the world's coordinates on the held columns.
+        let atWorld : Json → Bool := fun c =>
+          let at_ := (fieldArr c "at").toList.filterMap nat
+          (fixed.zip w).all (fun kc => at_[kc.1]? == some kc.2)
+        if !(pathsJ.all (fun x => (fieldArr x "path").all atWorld)) then
+          r := r.fail "machine: a call on a path is not made with the world's held coordinates"
+        else
+          -- The values behind each call, where the axis is one of numbers: without them the call
+          -- is held to the weaker reading and the program says so, as it does for reach points.
+          let stated := pathsJ.all (fun x => (fieldArr x "path").all (fun c =>
+            let vs := fieldArr c "at_values"
+            vs.size == t.columns.length &&
+              (List.range t.columns.length).all (fun ai =>
+                match t.spans[ai]? with
+                | some cs => cs.all (·.isNone) || !(vs[ai]!).isNull
+                | none => true)))
+          if stated then
+            if Mw.finishOk (witnessOk C.sieve) reach finals paths then
+              claims := add claims "every state reached can still finish"
+            else r := r.fail "machine: a state reached has no path of calls to a final state"
+          else if Mw.finishOk (fun p _ => !pointRuledOut C.sieve p) reach finals paths then
+            r := r.state "the machine's paths come with no values behind their calls"
+            claims := add claims "every state reached can still finish (the calls are not shown to be asked about)"
+          else r := r.fail "machine: a state reached has no path of calls to a final state"
+  let inWorlds := if fixed.isEmpty then "" else s!" in {worldsJ.size} worlds"
+  claims := #[s!"{reached.length} of {states.length} states reached{inWorlds}"] ++ claims
+  r := r.say s!"  machine over {tname}: {", ".intercalate claims.toList}"
+  return r
+
+/-- The machine's moves say the same as the file (§15.148): a row said to leave the state
+    writes the carried input's own name there, and a row said to go to a state writes that
+    state. Returns how many cells were read back. -/
+def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report) : Report × Nat := Id.run do
+  let mut r := r
+  let mut read := 0
+  let some mj := field cert "machine" | return (r, 0)
+  if mj.isNull || (fieldStr mj "table").isEmpty then return (r, 0)
+  let states := (fieldArr mj "states").toList.filterMap str
+  let cin := fieldStr ((field mj "carry").getD Json.null) "input"
+  for e in fieldArr mj "rows" do
+    let some src := field e "source"
+      | r := r.fail s!"machine: row {(fieldNat e "row").getD 0}'s move has no place in the file"
+    let ln := (fieldNat src "line").getD 0
+    let col := (fieldNat src "col").getD 0
+    let len := (fieldNat src "len").getD 0
+    let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+    let got := if col + len ≤ line.size then String.fromUTF8? (line.extract col (col + len)) else none
+    let want : Option String := match fieldNat e "to" with
+      | some to => states[to]?
+      | none => some cin
+    if got != want then
+      r := r.fail s!"machine: row {(fieldNat e "row").getD 0}'s move is not what the file has there"
+    else read := read + 1
+  return (r, read)
+
 /-- The file a certificate is about, split into lines the way a span counts them. -/
 def readLines (bs : ByteArray) : Array ByteArray := Id.run do
   let mut out : Array ByteArray := #[]
@@ -804,6 +1015,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         r := checkTable t r
         tables := tables.push t
     r := checkContracts cert r
+    r := checkMachine cert tables r
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"
@@ -818,6 +1030,8 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         for t in tables do
           let (r', n, a) := checkSpans t lines r
           r := r'; read := read + n; apart := apart + a
+        let (r', mread) := checkMachineSpans cert lines r
+        r := r'; read := read + mread
         let rest := if apart > 0 then s!", {apart} rows written in an applied rule" else ""
         if apart > 0 then
           r := r.state s!"{apart} rows written in an applied rule, and read back in its own certificate"

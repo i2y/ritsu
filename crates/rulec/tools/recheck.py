@@ -1686,6 +1686,239 @@ def literal_agrees(where, axis, text, value):
 STATED = []
 
 
+def check_machine(cert):
+    """Re-check a machine's section (§15.148, §15.149). Returns a one-line summary; raises Bad.
+
+    The transitions are rebuilt from the table's own rows: from a state, every row whose box
+    takes that state on the state's axis moves the case to the row's target — or leaves it
+    where it is. That includes every transition a call can make, so a set that holds the
+    initial state and is closed under it holds every state a case can reach, and the claims
+    that nothing bad is reached are closures of that kind. That a final state can still be
+    reached needs transitions that really happen, so each step of those paths is a point in
+    the row's box, at that state, the rule is asked about — checked as a reach point is.
+
+    A case holds its `held` inputs, so where the table reads one as a column a case only takes
+    the rows whose box holds its coordinate there. Every claim is checked once per world — each
+    combination of those columns' coordinates, every one of them present — with the other rows
+    left out. A path to a final state keeps the world's coordinates, which makes it one case's
+    when nothing but the input's own column reads it: the table reads no column that is not
+    an input, and no constraint names it. Otherwise the paths are not taken as proof.
+    """
+    m = cert.get("machine")
+    if not m.get("table"):
+        STATED.append(f"machine: not laid on a table's certificate — {m.get('why', '')}")
+        return "machine: not certified here — " + m.get("why", "")
+    t = next((x for x in cert["tables"] if x["table"] == m["table"]), None)
+    if t is None:
+        raise Bad(f"machine: the table {m['table']} has no certificate")
+    states, k = m["states"], m["axis"]
+    n = len(states)
+    axes = t["axes"]
+    if k is not None:
+        if not 0 <= k < len(axes) or axes[k]["column"] != m["carry"]["input"]:
+            raise Bad(f"machine: axis {k} of {m['table']} is not the carried input {m['carry']['input']}")
+        if axes[k]["coords"] != states:
+            raise Bad("machine: the state's axis is not the states in order")
+    rows = {r["row"]: r for r in t["rows"]}
+    j = t["decides"].index(m["carry"]["output"]) if m["carry"]["output"] in t["decides"] else None
+    if j is None:
+        raise Bad(f"machine: {m['table']} does not decide {m['carry']['output']}")
+    moves = {}
+    for r in m["rows"]:
+        row = r["row"]
+        if row not in rows:
+            raise Bad(f"machine: row {row} is not in {m['table']}")
+        produced = rows[row]["produces"][j]
+        if "to" in r:
+            if not 0 <= r["to"] < n or produced != states[r["to"]]:
+                raise Bad(f"machine: row {row} is said to go to {r['to']}, and the table says it writes {produced}")
+            moves[row] = r["to"]
+        elif r.get("stay"):
+            if produced is not None:
+                raise Bad(f"machine: row {row} is said to leave the state, and the table says it writes {produced}")
+            moves[row] = None
+        else:
+            raise Bad(f"machine: row {row} has no move")
+    if set(moves) != set(rows):
+        raise Bad(f"machine: rows {sorted(set(rows) - set(moves))} have no move")
+    on = {row: (rows[row]["accepts"][k] if k is not None else list(range(n))) for row in rows}
+
+    # The worlds: every combination of the held columns' coordinates, each once.
+    fixed_inputs = m.get("held_inputs", [])
+    fixed = m.get("held", [])
+    for fk in fixed:
+        if not 0 <= fk < len(axes) or axes[fk]["kind"] != "input" or axes[fk]["column"] not in fixed_inputs:
+            raise Bad(f"machine: axis {fk} is not a held input's column")
+    for fi in fixed_inputs:
+        if any(a["column"] == fi for a in axes) and not any(axes[fk]["column"] == fi for fk in fixed):
+            raise Bad(f"machine: {fi} is held and a column of {m['table']}, and no world is cut by it")
+    want = [[]]
+    for fk in fixed:
+        want = [w + [c] for w in want for c in range(len(axes[fk]["coords"]))]
+    got = [w["at"] for w in m["worlds"]]
+    if sorted(got) != sorted(want) or len(got) != len(want):
+        raise Bad("machine: the worlds are not every combination of the held columns' coordinates, once each")
+    coupled = bool(fixed_inputs) and (
+        any(a["kind"] != "input" for a in axes)
+        or any(kc["left"] in fixed_inputs or kc["right"] in fixed_inputs for kc in cert.get("constraints", []))
+    )
+
+    init, finals = m["initial"], set(m["finals"])
+    claims = set()
+    reached = set()
+    weak = 0
+    for world in m["worlds"]:
+        at_w = world["at"]
+        label = "" if not at_w else " where " + ", ".join(f"{axes[fk]['column']} = {axes[fk]['coords'][c]}" for fk, c in zip(fixed, at_w))
+
+        def takes(row):
+            return all(c in rows[row]["accepts"][fk] for fk, c in zip(fixed, at_w))
+
+        def step(s):
+            return [(row, s if to is None else to) for row, to in moves.items() if s in on[row] and takes(row)]
+
+        reach = set(world["reach"])
+        if init not in reach:
+            raise Bad(f"machine: the reach set{label} leaves out the initial state")
+        for s in reach:
+            for row, to in step(s):
+                if to not in reach:
+                    raise Bad(f"machine: from {states[s]}{label}, row {row} leads to {states[to]}, outside the reach set")
+        reached |= reach
+        claims.add("reach")
+        if world.get("final_certified"):
+            for f in finals & reach:
+                for row, to in step(f):
+                    if to != f:
+                        raise Bad(f"machine: row {row} leads out of the final state {states[f]}{label}")
+            claims.add("final")
+        elif finals & reach:
+            STATED.append(f"machine: that no call leaves a final state{label} is not laid on the rows")
+        for li, (nv, closed) in enumerate(zip(m["never"], world["never"])):
+            if closed is None:
+                STATED.append(f"machine: a `never` line{label} is not laid on the rows")
+                continue
+            a, b = set(nv["states"]), set(nv["after"])
+            cl = {(s, bool(x)) for s, x in closed}
+            if (init, init in b) not in cl:
+                raise Bad(f"machine: a `never` set{label} leaves out where a case starts")
+            for s, seen in cl:
+                if seen and s in a:
+                    raise Bad(f"machine: a `never` set{label} holds {states[s]} after the states it is to come after")
+                for row, to in step(s):
+                    if (to, seen or to in b) not in cl:
+                        raise Bad(f"machine: a `never` set{label} is not closed at {states[s]}, row {row}")
+            claims.add(f"never {li}")
+        for li, (on_, closed) in enumerate(zip(m["once"], world["once"])):
+            if closed is None or "test" not in on_:
+                STATED.append(f"machine: `once {on_['output']}`{label} is not laid on the rows")
+                continue
+            test = on_["test"]
+
+            def counts(v):
+                if v is None:
+                    return True
+                if "words" in test:
+                    w = ("true" if v else "false") if isinstance(v, bool) else str(v)
+                    return w in test["words"]
+                lo, hi = test.get("lo"), test.get("hi")
+                return (lo is None or v >= lo) and (hi is None or v <= hi)
+
+            flag = {r["row"]: counts(r["value"]) for r in on_["rows"]}
+            if set(flag) != set(rows):
+                raise Bad(f"machine: `once {on_['output']}` does not say what every row writes")
+            cl = {(s, x) for s, x in closed}
+            if (init, 0) not in cl:
+                raise Bad(f"machine: the `once {on_['output']}` set{label} leaves out where a case starts")
+            for s, cnt in cl:
+                if cnt >= 2:
+                    raise Bad(f"machine: the `once {on_['output']}` set{label} counts two")
+                for row, to in step(s):
+                    if (to, min(2, cnt + int(flag[row]))) not in cl:
+                        raise Bad(f"machine: the `once {on_['output']}` set{label} is not closed at {states[s]}, row {row}")
+            claims.add(f"once {li}")
+        # A final state can still be reached, from every state in the reach set.
+        if not finals:
+            continue
+        if coupled:
+            if world["finish"]:
+                raise Bad(f"machine: paths to a final state are given{label}, and a held input is read by more than its own column")
+            STATED.append(f"machine: that a case{label} can still finish is not laid on the rows (a held input is read by more than its own column)")
+            continue
+        paths = {p["state"]: p["path"] for p in world["finish"]}
+        for s in sorted(reach - finals):
+            if s not in paths:
+                STATED.append(f"machine: no path to a final state is given from {states[s]}{label}")
+                continue
+            at_state = s
+            for st in paths[s]:
+                row, at = st["row"], st["at"]
+                if st["state"] != at_state or row not in rows:
+                    raise Bad(f"machine: the path from {states[s]}{label} does not follow on at row {row}")
+                if not takes(row):
+                    raise Bad(f"machine: the path from {states[s]}{label} takes row {row}, which another world's calls make")
+                if len(at) != len(axes) or any(c not in rows[row]["accepts"][ai] for ai, c in enumerate(at)):
+                    raise Bad(f"machine: the call for row {row} is not in that row's box")
+                if any(at[fk] != c for fk, c in zip(fixed, at_w)):
+                    raise Bad(f"machine: the call for row {row} is not made with the world's held coordinates{label}")
+                if k is not None and at[k] != at_state:
+                    raise Bad(f"machine: the call for row {row} is not made from {states[at_state]}")
+                why = sieve_admits(t, st.get("at_values"), at)
+                if why is None:
+                    why = facts_hold(t, t["_cert"], st.get("at_values"), st.get("extra_values"))
+                if why is not None:
+                    if st.get("at_values") is None or "no value is given" in why or "states no values" in why:
+                        weak += 1
+                    else:
+                        raise Bad(f"machine: the call for row {row} is one no input makes — {why}")
+                if t["policy"] == "first":
+                    for earlier in sorted(x for x in rows if x < row):
+                        if all(c in rows[earlier]["accepts"][ai] for ai, c in enumerate(at)):
+                            raise Bad(f"machine: the call for row {row} is taken by row {earlier} first")
+                at_state = at_state if moves[row] is None else moves[row]
+            if at_state not in finals:
+                raise Bad(f"machine: the path from {states[s]}{label} ends at {states[at_state]}, which is not final")
+        claims.add("finish")
+    if weak:
+        STATED.append(f"machine: {weak} calls on the paths come with no values behind them")
+    worlds = "" if not fixed else f" in {len(m['worlds'])} worlds"
+    return (f"machine over {m['table']}: {len(reached)} of {n} states reached from {states[init]}{worlds}, "
+            f"{len(claims)} claims laid on the rows")
+
+
+def check_machine_cells(cert, path):
+    """The moves a machine's section states are the cells the file has (§15.148): a row said
+    to leave the state where it is writes the carried input's own name, a row said to go to a
+    state writes that state, and the value a `once` line counts is read at its place."""
+    with open(path, "rb") as fh:
+        lines = fh.read().split(b"\n")
+    m = cert["machine"]
+
+    def text(src):
+        ln = lines[src["line"] - 1] if 0 < src["line"] <= len(lines) else b""
+        return ln[src["col"]:src["col"] + src["len"]].decode("utf-8", "replace")
+
+    read = 0
+    for r in m["rows"]:
+        src = r.get("source")
+        if src is None:
+            raise Bad(f"machine: row {r['row']}'s move has no place in the file")
+        got = text(src)
+        want = m["carry"]["input"] if r.get("stay") else m["states"][r["to"]]
+        if got != want or got != src.get("text"):
+            raise Bad(f"machine: row {r['row']} is said to write `{want}`, and the file has `{got}` there")
+        read += 1
+    for on in m["once"]:
+        for r in on.get("rows", []):
+            src = r.get("source")
+            if src is None:
+                continue
+            if text(src) != src.get("text"):
+                raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} is not what the file has there")
+            read += 1
+    return f"the machine's moves say the same as the file: {read} cells read back"
+
+
 def check(cert):
     """Re-check one rule's certificate. Returns (lines, ok)."""
     out = [f"{cert['rule']} ({cert['alias']} v{cert['version']}, sha256:{cert['source_sha256'][:12]}) "
@@ -1741,6 +1974,12 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    if cert.get("machine"):
+        try:
+            out.append("  " + check_machine(cert))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
     return out, ok
 
 
@@ -1775,6 +2014,12 @@ def main(argv):
                     digest = hashlib.sha256(fh.read()).hexdigest()
                 if digest == cert["source_sha256"]:
                     lines.append(f"  the digest is {rule}'s")
+                    if cert.get("machine") and cert["machine"].get("table"):
+                        try:
+                            lines.append("  " + check_machine_cells(cert, rule))
+                        except Bad as e:
+                            lines.append(f"  FAILED {e}")
+                            ok = False
                     try:
                         read, loose, apart = check_cells(cert, rule)
                         rest = f", {loose} literals not pinned to a boundary" if loose else ""

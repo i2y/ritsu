@@ -127,6 +127,15 @@ stops as E105 when none is. A row the rows taking precedence cover entirely is E
 `overrides` line whose rows meet none of its target's is W117. The approver's page says in one
 sentence which table is the exception to which.
 
+A rule that is one step of a state machine (`machine`) is checked for what **every sequence
+of calls** can do as well. A call that moves a case out of a `final` state is **E124**; a state
+a case can reach and never finish from is **E125**; a sequence that reaches a `never` state
+after its `after` state is **E126**; two calls in one case that answer what a `once` cell
+accepts is **E127**. The case each of them carries is a sequence of calls from the initial
+state — the shortest that breaks the claim, each call an input the rule takes. A state no
+sequence reaches is **W125**, and a row that applies only in such states **W126**. A
+`scenario`, an example several calls long, runs as the examples do.
+
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.

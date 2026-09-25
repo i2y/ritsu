@@ -87,6 +87,12 @@ A few shapes are worth knowing before the first draft:
   as the share up to it minus the share up to the line before: the parts then add up to the
   amount exactly, odd yen included. Three names with declared ranges, nothing negative, a
   positive whole, and a `constraint` that the running total never passes it — else E117.
+- **A process that goes on is decided one call at a time.** `machine <name>(<alias>) over
+  <table>` says which output the caller passes back as which input (`carry`), which inputs a
+  case holds (`held`), where it starts and ends, and what no sequence of calls may do; `check`
+  proves that over every sequence (E124–E127) with the shortest breaking one in
+  `witness.trace`, and `scenario` is an example several calls long (§6.4). With two versions,
+  `diff` names the states a case in progress would be stranded in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
   takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`
@@ -396,13 +402,13 @@ not overlap, fix the rows.
 
 ## 4. What rulec will not do, and why that is the point
 
-It has no loops in an expression, no recursion, no state, no nested objects in a cell, and no
-date arithmetic. A sequence is walked once, by a `fold`, and that is the whole of the
-iteration there is: nothing accumulates across elements, so a total or a count is computed
-before the call and passed in. Do not look for a way around these. They are the price of the
-checks terminating: because a cell is a unary test on its own column, a row is a box, and
-completeness and overlap are exactly decidable. Flatten nested data at the boundary; keep
-the rest of the iteration in the caller.
+It has no loops in an expression, no recursion, no state of its own (a `machine`'s is kept by
+the caller), no nested objects in a cell, and no date arithmetic. A sequence is walked once,
+by a `fold`, and that is the whole of the iteration there is: nothing accumulates across
+elements, so a total or a count is computed before the call and passed in. Do not look for a
+way around these. They are the price of the checks terminating: because a cell is a unary test
+on its own column, a row is a box, and completeness and overlap are exactly decidable. Flatten
+nested data at the boundary; keep the rest of the iteration in the caller.
 
 It will not print a green result it cannot prove. When a check runs out of budget (E109) or
 cannot decide an overlap (W114), it says so rather than approximating.
@@ -435,6 +441,7 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | E104 on output `送料`, notes saying the spread is 9 yen | 「送料の端数はどちら向きに丸めますか。切り上げと切り捨てで最大 9 円変わります。規約に記載はありますか」 |
 | E105 between rows 3 and 7 with different outputs | 「この入力は 1,200 円と 800 円のどちらですか。両方の条件に当てはまります」 |
 | W114 | 「この二つの条件を同時に満たす注文は実在しますか」 |
+| E126, `witness.trace` = 取消依頼 → 入金 → 出荷 | 「取消のあとに入金の通知が届いたら、注文はどうなりますか。いまの表では入金済に戻り、出荷まで進みます」 |
 | A rounding you assumed | 「この丸めは規約に根拠がありません。仮に切り捨てにしています。出典はありますか」 |
 
 Three things make such a question answerable: **a concrete case** (the witness), **what turns

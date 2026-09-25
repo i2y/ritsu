@@ -44,6 +44,7 @@ pub mod json;
 pub mod jsonschema;
 pub mod kw;
 pub mod lex;
+pub mod machine;
 pub mod num;
 pub mod ooxml;
 pub mod parse;
@@ -132,6 +133,15 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
         nodes += r.nodes;
     }
     diags.extend(eval::check_examples(f, &t, path));
+    // The machine the rule is one step of (§15.148). Its claims are about sequences of calls,
+    // and a step with a hole or two answers is not a step yet: they wait for the tables.
+    let tables_hold = !diags.iter().any(|d| d.severity == Severity::Error && d.code.starts_with("E1") && d.code != "E107");
+    if f.machine.is_some() {
+        diags.extend(machine::check_scenarios(f, &t, path));
+        if tables_hold {
+            diags.extend(machine::check(f, &t, path, budget.max(0) as usize));
+        }
+    }
     Report { diags, quiet, shadow, nodes }
 }
 

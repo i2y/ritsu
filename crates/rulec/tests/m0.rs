@@ -123,6 +123,21 @@ fn 変異は決めたコードだけを出す() {
         ("m_e029.rule", &[("E029", 1), ("W111", 1)], "`where` が要素の持たないフィールドを名指している"),
         ("m_e030.rule", &[("E030", 1)], "`count` に範囲が無い（完全性の全体集合と並びの上限を兼ねる）"),
         ("m_e031.rule", &[("E031", 1)], "同じ並びを畳みも数えもしている"),
+        // §15.148. A rule that is one step of a state machine: the section's shape, and the
+        // claims about every sequence of calls, broken the way a revision of the table would.
+        ("m_e050.rule", &[("E050", 1)], "`machine` の見出しから `over <表>` を落とした"),
+        ("m_e051.rule", &[("E051", 1)], "持ち越す状態を、状態でない出力から取った"),
+        ("m_e052.rule", &[("E052", 1)], "`initial` に列挙に無い状態を書いた"),
+        ("m_e053.rule", &[("E053", 1)], "`once` に規則の持たない出力を書いた"),
+        ("m_e055.rule", &[("E055", 2)], "`machine` の節を消して、手順の例だけが残った"),
+        ("m_e124.rule", &[("E124", 1)], "配達のあとの取消依頼で取消にした（終わった案件がまた動く）"),
+        ("m_e125.rule", &[("E125", 1)], "取消を `final` から外した（取り消した注文に行き場が無い）"),
+        ("m_e126.rule", &[("E107", 2), ("E124", 1), ("E126", 1), ("E127", 1)], "取消のあとに届いた入金で注文を戻した（一行ずつはもっともらしく、主張が三つ崩れる）"),
+        ("m_e127.rule", &[("E107", 2), ("E127", 1)], "出荷のあとの取消依頼で、状態を変えずに返金した（二度目の依頼でまた返金する）"),
+        ("m_w125.rule", &[("W125", 1), ("W126", 1)], "どの出来事でも入らない状態を、行ごと足した"),
+        ("m_e056.rule", &[("E056", 1)], "`held` に出力を書いた（案件が変えずに渡すのは入力）"),
+        // §15.149: a declaration with no type used to be dropped in silence.
+        ("m_e057.rule", &[("E057", 1)], "入力の行から型が落ちた（黙って捨てられ、入力が一つ減っていた）"),
         ("m_e014.rule", &[("E014", 1)], "出力のセルに式を書いた"),
         ("m_e016.rule", &[("E016", 1)], "`result` の行が二つある"),
         // This one used to **panic** `rulec check`: the interval of the derived value was
@@ -239,6 +254,25 @@ fn 例は実行される仕様である() {
     for f in CORPUS {
         assert!(!codes(f).iter().any(|c| c == "E107"), "{f} の例が外れた");
     }
+}
+
+/// An example's expected value is read under the output's own heading, wherever the header
+/// puts it. Read by the output's place in the declaration, `-> y | x` held each value to the
+/// other output, and two examples that were right came back as E107 (§15.148).
+#[test]
+fn 例の期待値は見出しの順で読む() {
+    let src = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
+               table u(u)\npolicy unique\n| a     | -> x(x) : bool | y(y) : bool |\n\
+               | true  | true           | false       |\n| false | false          | true        |\n\n\
+               examples\n| a     | -> y  | x     |\n| true  | false | true  |\n| false | true  | false |\n";
+    let ds = rulec::check_source(src, "t.rule");
+    assert!(!ds.iter().any(|d| d.code == "E107"), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    // And a value that is really wrong is still caught under its own heading.
+    let wrong = src.replace("| true  | false | true  |", "| true  | true  | true  |");
+    let ds = rulec::check_source(&wrong, "t.rule");
+    let e107: Vec<_> = ds.iter().filter(|d| d.code == "E107").collect();
+    assert_eq!(e107.len(), 1, "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    assert!(e107[0].title.contains('y'), "{}", e107[0].title);
 }
 
 #[test]
@@ -655,4 +689,40 @@ fn 変異の隣の契約はコーパスの写しと同じ() {
         compared += 1;
     }
     assert!(compared >= 2, "比べた契約が {compared} 本しかない");
+}
+
+/// A second `examples` section used to replace the first without a word, and the example
+/// that did not hold in it was never reported (§15.149). Every section runs now.
+#[test]
+fn 例の節は二つ以上書けて_どれも走る() {
+    let src = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+               table u(u)\npolicy unique\n| a     | -> x(x) : bool |\n| true  | true           |\n| false | false          |\n\n\
+               examples\n| a    | -> x  |\n| true | false |\n\n\
+               examples\n| a     | -> x  |\n| false | false |\n";
+    let ds = rulec::check_source(src, "t.rule");
+    let e107: Vec<_> = ds.iter().filter(|d| d.code == "E107").collect();
+    assert_eq!(e107.len(), 1, "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    assert!(e107[0].where_.contains(":17"), "一つ目の節の行を指すはず: {}", e107[0].where_);
+    let (f, _) = rulec::prepare(&src.replace("| true | false |", "| true | true  |"), "t.rule").unwrap_or_else(|_| panic!("通るはず"));
+    assert_eq!(f.examples.len(), 2);
+}
+
+/// A declaration line with a name and no type used to be dropped in silence: the rule passed
+/// with one input fewer than its author wrote (§15.149).
+#[test]
+fn 型の無い宣言は黙って捨てない() {
+    let base = "rule t(t) v1\n\ninputs\n  a(a) : bool\nIN\n\noutputs\n  x(x) : bool\nOUT\n\n\
+                table u(u)\npolicy unique\n| a     | -> x(x) : bool |\n| true  | true           |\n| false | false          |\n";
+    for (what, src) in [
+        ("inputs", base.replace("IN\n", "  b(b)\n").replace("OUT\n", "")),
+        ("inputs, a colon and nothing", base.replace("IN\n", "  b(b) :\n").replace("OUT\n", "")),
+        ("outputs", base.replace("IN\n", "").replace("OUT\n", "  y(y)\n")),
+    ] {
+        let codes: Vec<&str> = rulec::check_source(&src, "t.rule").iter().map(|d| d.code).collect();
+        assert!(codes.contains(&"E057"), "{what}: {codes:?}");
+    }
+    // A line that does not start with a name is E004, as at the top of the file.
+    let src = base.replace("IN\n", "  | b |\n").replace("OUT\n", "");
+    let codes: Vec<&str> = rulec::check_source(&src, "t.rule").iter().map(|d| d.code).collect();
+    assert!(codes.contains(&"E004"), "{codes:?}");
 }

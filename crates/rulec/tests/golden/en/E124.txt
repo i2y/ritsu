@@ -1,0 +1,13 @@
+error[E124]: A final state, 配達済, has a way out
+  --> tests/mutants/m_e124.rule:36 machine 注文
+   |
+36 |   final   配達済, 取消
+   |   ^^^^^^^^^^^^^^^^^^^^ 配達済 is final
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 1)
+   2. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+   3. at 出荷済, 出来事 = 配達, 支払額 = 0円 → 配達済 (table 遷移 row 7)
+   4. at 配達済, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 9)
+ `final` is where a case ends. A row that moves it on to 取消 sets an ended case going again.
+ Keep the state at 配達済 on that row, or take 配達済 off the `final` line. Which is right is the business's to say.

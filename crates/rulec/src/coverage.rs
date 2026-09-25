@@ -1,6 +1,6 @@
 //! Completeness audit of the vector suite (§9.2).
 //!
-//! The five coverage criteria are derived **from the rule first**, not from the generated
+//! The six coverage criteria are derived **from the rule first**, not from the generated
 //! vector set. The list of obligations is built independently of the generator, so that an
 //! obligation the candidate population failed to reach cannot be written off as "never
 //! needed in the first place". The point of the separation is the one-way relation: when the
@@ -21,6 +21,11 @@ pub const TIE: &str = "丸めの同着カバー";
 /// ordered pair of verdicts. The length of a sequence is not what has to be covered — the
 /// walk is an automaton, and what it can do is decided by which verdict follows which.
 pub const FOLD: &str = "畳み込みの遷移カバー";
+/// The transitions of a `machine` (§15.148): every transition a case can make, and every two
+/// that can follow one another, played from the initial state. The pair is the obligation
+/// because what a trace adds to the single calls is the hand-over of the state from one call
+/// to the next, in the language under test.
+pub const MACHINE: &str = "ステートマシンの遷移カバー";
 
 /// The name of a criterion in the output language. The constants above stay Japanese: they
 /// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
@@ -34,6 +39,7 @@ fn label(k: &'static str) -> &'static str {
             SHADOW => "shadow-pair coverage",
             TIE => "rounding-tie coverage",
             FOLD => "fold-transition coverage",
+            MACHINE => "machine-transition coverage",
             other => other,
         }
     }
@@ -247,7 +253,7 @@ pub fn show_rat(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// Judge whether a vector set satisfies the five criteria of §9.2.
+/// Judge whether a vector set satisfies the six criteria of §9.2.
 /// `refused` are the cases the reference evaluator has no answer for (`vectors::Suite`). They
 /// are part of the suite — `rulec test` holds the generated code to refusing them — so an
 /// obligation only such a case can reach is met, not missing (§15.56).
@@ -263,10 +269,10 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         .collect();
     let fired: Vec<BTreeSet<String>> = vs.iter().map(|v| v.trace.iter().cloned().collect()).collect();
 
-    // All five criteria are always reported. If a criterion with no obligations were left
+    // All six criteria are always reported. If a criterion with no obligations were left
     // out, the tallying side could not tell that apart from "the criterion was not checked".
     let mut tally: BTreeMap<&'static str, (usize, usize)> =
-        [ROW, BOUND, SHADOW, TIE, FOLD].into_iter().map(|k| (k, (0, 0))).collect();
+        [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE].into_iter().map(|k| (k, (0, 0))).collect();
     let mut missing: Vec<Missing> = Vec::new();
     let mut witness: BTreeSet<usize> = BTreeSet::new();
     let mut pruned_bounds = 0usize;
@@ -346,6 +352,13 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 }
             }
         }
+    }
+
+    // --- the machine's transitions (§15.148). The obligations are read off the rule's own
+    // walk; whether one is met is read off the suite's traces, replayed call by call through
+    // the reference evaluator — not off the list the generator worked from.
+    if f.machine.is_some() {
+        machine_obligations(f, c, &mut tally, &mut missing, &bump);
     }
 
     for (ti, t) in tables.iter().enumerate() {
@@ -532,8 +545,8 @@ pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
     }
     // Padded to display width, not character count: a Japanese label is drawn twice as wide
     // as an ASCII one, so counting characters leaves the column ragged on a terminal.
-    let w: usize = if crate::i18n::ja() { 22 } else { 24 };
-    for k in [ROW, BOUND, SHADOW, TIE, FOLD] {
+    let w: usize = [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE].iter().map(|k| crate::diag::width(label(k))).max().unwrap_or(0);
+    for k in [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE] {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
         let k = label(k);
@@ -564,7 +577,7 @@ pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>,
 
 /// `--format json` (docs/formats.md). One object per rule file.
 pub fn render_json(a: &Audit, vs: &[Vector], refused: &[Vector], path: &str) -> String {
-    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE, FOLD]
+    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE]
         .iter()
         .map(|k| {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
@@ -597,6 +610,105 @@ fn json_name(k: &str) -> &'static str {
         BOUND => "boundary_pair",
         TIE => "rounding_tie",
         FOLD => "fold_transition",
+        MACHINE => "machine_transition",
         _ => "shadow_pair",
+    }
+}
+
+
+/// The machine's obligations and which of them the suite's traces meet (§15.148).
+fn machine_obligations(
+    f: &RuleFile,
+    c: &Checked,
+    tally: &mut BTreeMap<&'static str, (usize, usize)>,
+    missing: &mut Vec<Missing>,
+    bump: &dyn Fn(&'static str, bool, &mut BTreeMap<&'static str, (usize, usize)>),
+) {
+    let Some(m) = &f.machine else { return };
+    let Some((cin, _)) = m.carried() else { return };
+    let Some(a) = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize) else { return };
+    if a.blocked.is_some() || a.over_budget {
+        bump(MACHINE, false, tally);
+        missing.push(Missing {
+            kind: MACHINE,
+            what: tr!("ステートマシンの遷移", "the machine's transitions"),
+            hint: tr!(
+                "入力の区画を歩ききれなかったので、遷移の一覧を立てられませんでした（E128）。",
+                "The inputs' cells could not all be walked, so the transitions could not be listed (E128)."
+            ),
+        });
+        return;
+    }
+    // The transitions a case can make, and the pairs one case can make in a row: both calls
+    // in the same world, since a case holds its `held` inputs (§15.149).
+    let key = |e: &crate::machine::Edge| -> vectors::TransitionKey { (e.from.clone(), e.row.clone(), e.to.clone()) };
+    let mut ts: Vec<vectors::TransitionKey> = Vec::new();
+    let mut pairs: Vec<(vectors::TransitionKey, vectors::TransitionKey)> = Vec::new();
+    for (i, e1) in a.edges.iter().enumerate() {
+        if !a.reaches(&e1.from, &e1.world) || a.mixed.contains(&i) {
+            continue;
+        }
+        if !ts.contains(&key(e1)) {
+            ts.push(key(e1));
+        }
+        for (j, e2) in a.edges.iter().enumerate() {
+            let p = (key(e1), key(e2));
+            if e2.world == e1.world && e2.from == e1.to && !a.mixed.contains(&j) && !pairs.contains(&p) {
+                pairs.push(p);
+            }
+        }
+    }
+    let name = |k: &vectors::TransitionKey| -> String {
+        match &k.1 {
+            Some((t, r)) => format!("{} -[{}]-> {}", k.0, eval::row_tag(t, *r), k.2),
+            None => format!("{} -> {}", k.0, k.2),
+        }
+    };
+    // Replay the traces.
+    let mut seen: BTreeSet<vectors::TransitionKey> = BTreeSet::new();
+    let mut seen_pairs: BTreeSet<(vectors::TransitionKey, vectors::TransitionKey)> = BTreeSet::new();
+    if let Some(traces) = vectors::machine_traces(f, c) {
+        for tr in &traces.traces {
+            let mut state = Val::Enum(traces.initial.clone());
+            let mut prev: Option<vectors::TransitionKey> = None;
+            for s in &tr.steps {
+                let mut input = s.clone();
+                input.insert(cin.to_string(), state.clone());
+                let Some((k, _)) = vectors::transition_of(f, c, &input) else { break };
+                seen.insert(k.clone());
+                if let Some(p) = prev.take() {
+                    seen_pairs.insert((p, k.clone()));
+                }
+                state = Val::Enum(k.2.clone());
+                prev = Some(k);
+            }
+        }
+    }
+    for t in &ts {
+        let met = seen.contains(t);
+        bump(MACHINE, met, tally);
+        if !met {
+            missing.push(Missing {
+                kind: MACHINE,
+                what: tr!("遷移 {}", "transition {}", name(t)),
+                hint: tr!("この遷移を通る手順がありません。", "No trace makes this transition."),
+            });
+        }
+    }
+    for (t1, t2) in &pairs {
+        {
+            let met = seen_pairs.contains(&(t1.clone(), t2.clone()));
+            bump(MACHINE, met, tally);
+            if !met {
+                missing.push(Missing {
+                    kind: MACHINE,
+                    what: tr!("{} のあと {}", "{} then {}", name(t1), name(t2)),
+                    hint: tr!(
+                        "この二つを続けて通る手順がありません。手順が確かめるのは、一回の答えを次の呼び出しに渡すところです。",
+                        "No trace makes these two in a row. What a trace holds is the answer of one call handed to the next."
+                    ),
+                });
+            }
+        }
     }
 }

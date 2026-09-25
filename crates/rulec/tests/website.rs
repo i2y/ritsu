@@ -477,6 +477,7 @@ fn 色づけの語彙はkwと同じ() {
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX, kw::ALLOCATE])),
         ("CLAUSE", sorted(&[kw::WHEN, kw::THEN, kw::ALWAYS])),
         ("APPLY", sorted(&[kw::EXCEPT])),
+        ("MACHINE", sorted(&[kw::CARRY, kw::INITIAL, kw::FINAL, kw::NEVER, kw::ONCE, kw::AFTER])),
     ] {
         let mut got = list(name);
         got.sort();
@@ -492,7 +493,7 @@ fn 色づけの語彙はkwと同じ() {
     // `half_down` was added to the language and to neither, and simply stopped being
     // coloured. This one cannot be satisfied by forgetting.
     let known: BTreeSet<String> = ["HEAD_NAMED", "HEAD_PLAIN", "MODIFIERS", "TYPES", "TAX",
-        "POLICIES", "ROUNDING", "CONSTANTS", "ARMS", "FUNCTIONS", "CLAUSE", "APPLY"]
+        "POLICIES", "ROUNDING", "CONSTANTS", "ARMS", "FUNCTIONS", "CLAUSE", "APPLY", "MACHINE"]
         .iter()
         .flat_map(|n| list(n))
         .collect();
@@ -850,7 +851,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 27;
+    const WRITTEN: usize = 28;
     for (page, want) in [
         ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
         ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),

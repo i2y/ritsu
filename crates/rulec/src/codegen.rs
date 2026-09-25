@@ -157,6 +157,43 @@ mod connect;
 pub use connect::template as connect_template;
 
 impl<'a> Gen<'a> {
+    /// The machine the rule is one step of (§15.148): the enum of the carried state, the
+    /// state a case starts in, and the ones it ends in, in the order the enum declares them.
+    pub(crate) fn machine_consts(&self) -> Option<(String, String, Vec<String>)> {
+        let m = self.f.machine.as_ref()?;
+        let (cin, _) = m.carried()?;
+        let Some(Ty::Enum(en)) = self.c.ty_of(cin) else { return None };
+        let init = m.initial.as_ref()?.0.text.clone();
+        let vals = self.c.enums.get(&en)?;
+        let fins: Vec<String> = vals.iter().filter(|v| m.finals.iter().any(|f| &f.text == *v)).cloned().collect();
+        Some((en, init, fins))
+    }
+
+    /// The carried input and output, by their names in the rule.
+    pub(crate) fn carried(&self) -> Option<(String, String)> {
+        let (i, o) = self.f.machine.as_ref()?.carried()?;
+        Some((i.to_string(), o.to_string()))
+    }
+
+    /// The carried output's name as a language spells a field of its answer: the rule's alias
+    /// for the output, which each generator then cases its own way.
+    pub(crate) fn carried_out_alias(&self) -> Option<String> {
+        let (_, o) = self.carried()?;
+        self.f.outputs.iter().find(|d| d.name.text == o).map(|d| pub_name(&d.name))
+    }
+
+    /// How a runner reads the next state off an answer (§15.148): `field` is the accessor as
+    /// the language writes it (`.next_state`, `->next_state`, `.nextState()`). When the
+    /// carried output is the rule's only output, the function returns that value itself rather
+    /// than a record of one field, and the answer is the state.
+    pub(crate) fn next_state_of(&self, answer: &str, field: &str) -> String {
+        if self.f.outputs.len() == 1 {
+            answer.to_string()
+        } else {
+            format!("{answer}{field}")
+        }
+    }
+
     /// The counts this rule declares, in source order (§15.58).
     fn counts(&self) -> Vec<&crate::ast::AggDecl> {
         self.f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect()
@@ -926,6 +963,22 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("    {name} = \"{v}\"\n"));
             }
             o.push('\n');
+        }
+
+        // The machine this function is one step of (§15.148). The host keeps the state; what
+        // it needs from the rule is where a case starts and where one has ended.
+        if let Some((en, init, fins)) = self.machine_consts() {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            let set = if fins.is_empty() {
+                "frozenset()".to_string()
+            } else {
+                format!("frozenset({{{}}})", fins.iter().map(|v| self.py_value(v)).collect::<Vec<_>>().join(", "))
+            };
+            o.push_str(&format!(
+                "INITIAL: {cls} = {}\nFINAL: frozenset[{cls}] = {set}\n\n\ndef is_final(state: {cls}) -> bool:\n    \"\"\"{}\"\"\"\n    return state in FINAL\n\n\n",
+                self.py_value(&init),
+                tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
+            ));
         }
 
         // The sentence and the value travel apart (§15.95): nothing is formatted until the
@@ -1910,7 +1963,7 @@ impl<'a> Gen<'a> {
 
     pub fn go(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let pkg = alias.replace('_', "").to_lowercase();
+        let pkg = crate::backend::go_package(&alias);
         let mut o = self.header("//");
         o.push_str(&format!("\npackage {pkg}\n\n{IMPORT_MARK}"));
 
@@ -1963,6 +2016,20 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("\tcase {:?}:\n\t\treturn {}, true\n", v, self.go_value(v)));
             }
             o.push_str(&format!("\t}}\n\treturn {}(0), false\n}}\n\n", ascii));
+        }
+
+        // The machine this function is one step of (§15.148).
+        if let Some((en, init, fins)) = self.machine_consts() {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            o.push_str(&format!(
+                "// Initial {}\nconst Initial = {}\n\n// Final {}\nvar Final = []{cls}{{{}}}\n\n\
+                 // IsFinal {}\nfunc IsFinal(s {cls}) bool {{\n\tfor _, f := range Final {{\n\t\tif f == s {{\n\t\t\treturn true\n\t\t}}\n\t}}\n\treturn false\n}}\n\n",
+                tr!("は案件が始まる状態（§15.148）。", "is the state a case starts in (§15.148)."),
+                self.go_value(&init),
+                tr!("は案件が終わる状態。", "is the set of states a case ends in."),
+                fins.iter().map(|v| self.go_value(v)).collect::<Vec<_>>().join(", "),
+                tr!("はこの状態で案件が終わっているかを返す。", "reports whether a case in this state has ended.")
+            ));
         }
 
         // Groups. They are unexported, so the Japanese identifiers can stay (§8.1).
@@ -2870,6 +2937,26 @@ impl<'a> Gen<'a> {
             prelude = format!("    rows = [m.Element({}) for e in d[{jp:?}]]\n", fields.join(", "));
             args.push("rows".to_string());
         }
+        // A machine's traces (§15.148): the carried input is the state this language answered
+        // to the call before, handed over as the value it is, not read back off the wire.
+        let machine = self.machine_consts().zip(self.carried()).zip(self.carried_out_alias());
+        let (mut head, mut tail, mut meta) = (String::new(), String::new(), String::new());
+        if let Some((((en, _, _), (cin, _)), out)) = machine {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                args[k] = format!("(state if \"step\" in v else {})", args[k]);
+            }
+            head = format!("state: m.{cls} = m.INITIAL\n");
+            meta = format!(
+                "    if \"machine\" in v:\n        \
+                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]}}, ensure_ascii=False, separators=(\",\", \":\")))\n        \
+                     continue\n    \
+                 d = v[\"in\"]\n    \
+                 if v.get(\"step\") == \"start\":\n        \
+                     state = m.{cls}(v[\"state\"])\n"
+            );
+            tail = format!("    if \"step\" in v:\n        state = {}\n", self.next_state_of("r", &format!(".{out}")));
+        }
         // The runner prints the record the module itself writes, so the agreement test
         // holds the record function — the wire form of every input, dates included — to
         // the reference evaluator in every language (§15.35).
@@ -2882,16 +2969,19 @@ impl<'a> Gen<'a> {
              def _ord(s: str) -> int:\n    \
                  y, mo, d = (int(x) for x in s.split(\"-\"))\n    \
                  return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days\n\n\
+             {head}\
              for line in sys.stdin:\n    \
                  line = line.strip()\n    \
                  if not line:\n        \
-                     continue\n    \
-                 d = json.loads(line)[\"in\"]\n\
+                     continue\n\
+                 {}\
                  {}    \
                  args = ({})\n    \
                  r, trace = m.{alias}_traced(*args)\n    \
-                 print(m.{alias}_record(*args, r, trace))\n",
+                 print(m.{alias}_record(*args, r, trace))\n\
+                 {tail}",
             env!("CARGO_PKG_VERSION"),
+            if meta.is_empty() { "    d = json.loads(line)[\"in\"]\n".to_string() } else { format!("    v = json.loads(line)\n{meta}") },
             prelude,
             if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") }
         )
@@ -2900,7 +2990,7 @@ impl<'a> Gen<'a> {
     /// A Go runner that does the same. encoding/json is in the standard library.
     pub fn go_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let pkg = alias.replace('_', "").to_lowercase();
+        let pkg = crate::backend::go_package(&alias);
         let fname = pascal(&alias);
         // One field of a JSON object into one field of a struct. The element loop below reads
         // the same shapes out of its own object, so the two stay one piece of code.
@@ -2941,8 +3031,17 @@ impl<'a> Gen<'a> {
             }
         };
         let mut fields: Vec<String> = Vec::new();
+        let carried = self.carried().map(|(i, _)| i);
         for i in &self.f.inputs {
-            fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t"));
+            let one = field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t");
+            // A machine's traces (§15.148): the carried input is the state this language
+            // answered to the call before, handed over as the value it is.
+            if carried.as_deref() == Some(i.name.text.as_str()) {
+                let g = pascal(&pub_name(&i.name));
+                fields.push(format!("\t\tif stepping {{\n\t\t\tin.{g} = state\n\t\t}} else {{\n{one}\t\t}}\n"));
+            } else {
+                fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t"));
+            }
         }
         // The sequence arrives as an array of objects (§10.2), one per element.
         if let Some(el) = &self.f.elements {
@@ -2954,6 +3053,34 @@ impl<'a> Gen<'a> {
             }
             body.push_str(&format!("\t\t\tin.{g} = append(in.{g}, el)\n\t\t}}\n"));
             fields.push(body);
+        }
+        let (mut head, mut read, mut tail) = (
+            String::new(),
+            "\t\tvar rec struct {\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}\n\t\t\
+             if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {\n\t\t\tpanic(err)\n\t\t}\n\t\t\
+             d := rec.In\n"
+                .to_string(),
+            String::new(),
+        );
+        if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r.{}", self.go_value(v))).collect();
+            head = "\tstate := r.Initial\n".to_string();
+            read = format!(
+                "\t\tvar top map[string]any\n\t\t\
+                 if err := json.Unmarshal(sc.Bytes(), &top); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
+                 if _, ok := top[\"machine\"]; ok {{\n\t\t\t\
+                     fin := []string{{}}\n\t\t\t\
+                     for _, s := range []r.{cls}{{{}}} {{\n\t\t\t\tif r.IsFinal(s) {{\n\t\t\t\t\tfin = append(fin, s.String())\n\t\t\t\t}}\n\t\t\t}}\n\t\t\t\
+                     meta, _ := json.Marshal(struct {{\n\t\t\t\tInitial string   `json:\"initial\"`\n\t\t\t\tFinal   []string `json:\"final\"`\n\t\t\t}}{{r.Initial.String(), fin}})\n\t\t\t\
+                     fmt.Println(string(meta))\n\t\t\t\
+                     continue\n\t\t}}\n\t\t\
+                 d := obj(top[\"in\"])\n\t\t\
+                 step, stepping := top[\"step\"].(string)\n\t\t\
+                 if step == \"start\" {{\n\t\t\tstate, _ = r.Parse{cls}(str(top[\"state\"]))\n\t\t}}\n",
+                all.join(", ")
+            );
+            tail = format!("\t\tif stepping {{\n\t\t\tstate = {}\n\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
         }
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -2968,16 +3095,16 @@ impl<'a> Gen<'a> {
                  return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)\n}}\n\n\
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
-                 sc.Buffer(make([]byte, 1<<20), 1<<20)\n\t\
+                 sc.Buffer(make([]byte, 1<<20), 1<<20)\n\
+                 {head}\t\
                  for sc.Scan() {{\n\t\t\
-                     if len(sc.Bytes()) == 0 {{\n\t\t\tcontinue\n\t\t}}\n\t\t\
-                     var rec struct {{\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
-                     if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     d := rec.In\n\t\t\
+                     if len(sc.Bytes()) == 0 {{\n\t\t\tcontinue\n\t\t}}\n\
+                 {read}\t\t\
                      var in r.Input\n{}\t\t\
                      got, trace, err := r.{fname}Traced(in)\n\t\t\
                      if err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     fmt.Println(r.{fname}Record(in, got, trace, \"\"))\n\t}}\n}}\n",
+                     fmt.Println(r.{fname}Record(in, got, trace, \"\"))\n\
+                 {tail}\t}}\n}}\n",
             env!("CARGO_PKG_VERSION"),
             fields.join("")
         )
@@ -3340,6 +3467,20 @@ impl<'a> Gen<'a> {
                  throw new RuleInputError(`{}`);\n  }}\n  \
                  return v;\n}}\n\n",
                 tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
+            ));
+        }
+
+        // The machine this function is one step of (§15.148).
+        if let Some((en, init, fins)) = self.machine_consts() {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            o.push_str(&format!(
+                "export const INITIAL: {cls} = {};\n\
+                 export const FINAL: ReadonlySet<{cls}> = new Set([{}]);\n\n\
+                 /** {} */\n\
+                 export function isFinal(state: {cls}): boolean {{\n  return FINAL.has(state);\n}}\n\n",
+                self.ts_value(&init),
+                fins.iter().map(|v| self.ts_value(v)).collect::<Vec<_>>().join(", "),
+                tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
 
@@ -3903,6 +4044,35 @@ impl<'a> Gen<'a> {
             );
             args.push(rows);
         }
+        // A machine's traces (§15.148): the carried input is the state this language answered
+        // to the call before, handed over as the value it is.
+        let v = runner_local("v", &alias);
+        let state = runner_local("state", &alias);
+        let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
+        let mut body = format!("  const {d} = JSON.parse({line}).in as Record<string, unknown>;\n");
+        if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            for w in ["INITIAL".to_string(), "isFinal".to_string(), cls.clone(), format!("parse{cls}")] {
+                if !imports.contains(&w) {
+                    imports.push(w);
+                }
+            }
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                args[k] = format!("(\"step\" in {v} ? {state} : {})", args[k]);
+            }
+            head = format!("let {state}: {cls} = INITIAL;\n");
+            body = format!(
+                "  const {v} = JSON.parse({line}) as Record<string, unknown>;\n  \
+                 if (\"machine\" in {v}) {{\n    \
+                   console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)) }}));\n    \
+                   continue;\n  }}\n  \
+                 const {d} = {v}.in as Record<string, unknown>;\n  \
+                 if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n  }}\n"
+            );
+            tail = format!("  if (\"step\" in {v}) {{\n    {state} = {};\n  }}\n", self.next_state_of(&r, &format!(".{out}")));
+            meta = String::new();
+        }
+        let _ = &meta;
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              import {{ readFileSync }} from \"node:fs\";\n\
@@ -3911,13 +4081,15 @@ impl<'a> Gen<'a> {
                  const [y, m, d] = s.split(\"-\").map(Number);\n  \
                  return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));\n}}\n\n\
              const {lines} = readFileSync(0, \"utf8\").split(\"\\n\");\n\
+             {head}\
              for (const {line} of {lines}) {{\n  \
-                 if ({line}.trim() === \"\") {{\n    continue;\n  }}\n  \
-                 const {d} = JSON.parse({line}).in as Record<string, unknown>;\n\
+                 if ({line}.trim() === \"\") {{\n    continue;\n  }}\n\
+                 {body}\
                  {}  \
                  const {a} = [{}] as const;\n  \
                  const [{r}, {trace}] = {alias}_traced(...{a});\n  \
-                 console.log({alias}_record(...{a}, {r}, {trace}));\n}}\n",
+                 console.log({alias}_record(...{a}, {r}, {trace}));\n\
+                 {tail}}}\n",
             env!("CARGO_PKG_VERSION"),
             imports.join(", "),
             if type_imports.is_empty() {
@@ -4205,6 +4377,20 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("            {v:?} => Some({ascii}::{m}),\n"));
             }
             o.push_str("            _ => None,\n        }\n    }\n}\n\n");
+        }
+
+        // The machine this function is one step of (§15.148).
+        if let Some((en, init, fins)) = self.machine_consts() {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            o.push_str(&format!(
+                "/// {}\npub const INITIAL: {cls} = {};\n/// {}\npub const FINAL: &[{cls}] = &[{}];\n\n\
+                 /// {}\npub fn is_final(state: {cls}) -> bool {{\n    FINAL.contains(&state)\n}}\n\n",
+                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                self.rs_value(&init),
+                tr!("案件が終わる状態。", "The states a case ends in."),
+                fins.iter().map(|v| self.rs_value(v)).collect::<Vec<_>>().join(", "),
+                tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
+            ));
         }
 
         o.push_str(round_rs().trim_start_matches('\n'));
@@ -5158,6 +5344,39 @@ impl<'a> Gen<'a> {
             v.join(", ")
         };
         let (first, second) = (pass(true), pass(false));
+        // A machine's traces (§15.148): the carried input is the state this language answered
+        // to the call before, handed over as the value it is.
+        let (mut head, mut meta, mut tail, mut binds) = (String::new(), String::new(), String::new(), binds);
+        if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r::{}", self.rs_value(v))).collect();
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                binds = args
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| if i == k { format!("        let a{i} = if stepping {{ state }} else {{ {a} }};\n") } else { format!("        let a{i} = {a};\n") })
+                    .collect();
+            }
+            head = "    let mut state = r::INITIAL;\n".to_string();
+            meta = format!(
+                "        let top = pairs_from(&line.chars().collect::<Vec<char>>(), 0).0;\n        \
+                 let get = |k: &str| top.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone());\n        \
+                 if get(\"machine\").is_some() {{\n            \
+                     let fin: Vec<String> = [{}].iter().filter(|s| r::is_final(**s)).map(|s| format!(\"\\\"{{}}\\\"\", s.as_str())).collect();\n            \
+                     println!(\"{{{{\\\"initial\\\":\\\"{{}}\\\",\\\"final\\\":[{{}}]}}}}\", r::INITIAL.as_str(), fin.join(\",\"));\n            \
+                     continue;\n        }}\n        \
+                 let stepping = get(\"step\").is_some();\n        \
+                 if get(\"step\").as_deref() == Some(\"start\") {{\n            \
+                     state = r::{cls}::parse(&get(\"state\").unwrap_or_default()).expect(\"state\");\n        }}\n",
+                all.join(", ")
+            );
+            tail = format!("        if stepping {{\n            state = next;\n        }}\n");
+            let _ = &out;
+        }
+        let keep = match self.carried_out_alias() {
+            Some(out) if self.f.machine.is_some() => format!("        let next = {};\n", self.next_state_of("got", &format!(".{out}"))),
+            _ => String::new(),
+        };
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
 #![allow(non_snake_case, uncommon_codepoints, unused_parens)]
@@ -5170,14 +5389,14 @@ use std::io::Read;
 {helpers}fn main() {{
     let mut src = String::new();
     std::io::stdin().read_to_string(&mut src).unwrap();
-    for line in src.lines() {{
+{head}    for line in src.lines() {{
         if line.trim().is_empty() {{
             continue;
         }}
-        let d = fields(line);
+{meta}        let d = fields(line);
 {binds}        let (got, trace) = r::{alias}_traced({first}).unwrap();
-        println!("{{}}", r::{alias}_record({second}, got, &trace, ""));
-    }}
+{keep}        println!("{{}}", r::{alias}_record({second}, got, &trace, ""));
+{tail}    }}
 }}
 "#,
             ver = env!("CARGO_PKG_VERSION"),
@@ -5592,7 +5811,35 @@ fn wit_version(v: &str) -> String {
 /// The Node runner `rulec test` drives: the module built from `<alias>_wasm.rs`, one vector per
 /// line of stdin through `call`, the record line out.
 pub fn wasm_runner_js(alias: &str) -> String {
-    format!("// Code generated by rulec {}. DO NOT EDIT.\n{}", env!("CARGO_PKG_VERSION"), WASM_RUNNER_JS.replace("ALIAS", alias))
+    wasm_runner_with(alias, "null", "null")
+}
+
+/// The runner with the machine's constants handed to it (§15.148). The module's one door is
+/// `call`, so it keeps no constants of its own; the line the traces begin with is the rule's.
+fn wasm_runner_with(alias: &str, machine: &str, carry: &str) -> String {
+    format!(
+        "// Code generated by rulec {}. DO NOT EDIT.\n{}",
+        env!("CARGO_PKG_VERSION"),
+        WASM_RUNNER_JS.replace("ALIAS", alias).replace("@MACHINE@", machine).replace("@CARRY@", carry)
+    )
+}
+
+impl<'a> Gen<'a> {
+    /// `wasm/<alias>_runner.mjs`, with the machine's constants when there is a machine.
+    pub fn wasm_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        match (self.machine_consts(), self.carried()) {
+            (Some((_, init, fins)), Some((cin, cout))) => {
+                let meta = format!(
+                    "{{\"initial\":{},\"final\":[{}]}}",
+                    crate::json::quote(&init),
+                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(",")
+                );
+                wasm_runner_with(&alias, &crate::json::quote(&meta), &format!("[{}, {}]", crate::json::quote(&cin), crate::json::quote(&cout)))
+            }
+            _ => wasm_runner_js(&alias),
+        }
+    }
 }
 
 const WASM_RUNNER_JS: &str = r#"import { readFileSync } from "node:fs";
@@ -5618,14 +5865,33 @@ function call(text) {
   return out;
 }
 
+// A machine's constants, and which input the answer carries back as which (§15.148).
+const MACHINE = @MACHINE@;
+const CARRY = @CARRY@;
+let state = null;
+
 for (const line of readFileSync(0, "utf8").split("\n")) {
   if (!line.trim()) continue;
-  const out = call(line);
+  const v = JSON.parse(line);
+  if (MACHINE !== null && "machine" in v) {
+    console.log(MACHINE);
+    continue;
+  }
+  let text = line;
+  if (CARRY !== null && "step" in v) {
+    // A trace's call is passed the state the module answered to the call before.
+    if (v.step === "start") state = v.state;
+    text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state } });
+  }
+  const out = call(text);
   if (out.startsWith('{"error":')) {
     console.error(out);
     process.exit(1);
   }
   console.log(out);
+  if (CARRY !== null && "step" in v) {
+    state = JSON.parse(out).observed[CARRY[1]];
+  }
 }
 "#;
 
@@ -6008,9 +6274,68 @@ impl Gen<'_> {
 
     /// `rulec api <file.rule> --format json`. Language independent throughout: every field is
     /// a name or a number that the generated code really uses.
+    /// `machine` in `rulec api` (§15.148), or `null`.
+    fn machine_json(&self) -> String {
+        let (Some(m), Some((en, init, fins)), Some((cin, cout))) = (self.f.machine.as_ref(), self.machine_consts(), self.carried()) else {
+            return "null".into();
+        };
+        let states = self.c.enums.get(&en).cloned().unwrap_or_default();
+        let names = |initial: &str, fin: &str, is: &str| {
+            crate::json::Obj::new().str("initial", initial).str("final", fin).str("is_final", is).finish()
+        };
+        let constants = crate::json::Obj::new()
+            .raw("python", names("INITIAL", "FINAL", "is_final"))
+            .raw("typescript", names("INITIAL", "FINAL", "isFinal"))
+            .raw("javascript", names("INITIAL", "FINAL", "isFinal"))
+            .raw("rust", names("INITIAL", "FINAL", "is_final"))
+            .raw("ruby", names("INITIAL", "FINAL", "final?"))
+            // `final` is a keyword in PHP whatever its case.
+            .raw("php", names("INITIAL", "FINAL_STATES", "is_final"))
+            .raw("go", names("Initial", "Final", "IsFinal"))
+            // …and in Swift.
+            .raw("swift", names("initialState", "finalStates", "isFinal"))
+            .raw("java", names("INITIAL", "FINAL", "isFinal"))
+            .finish();
+        crate::json::Obj::new()
+            .str("name", &m.name.text)
+            .opt_str("alias", m.name.ascii.as_deref())
+            .str("over", m.over.as_ref().map(|n| n.text.as_str()).unwrap_or(""))
+            .raw("carry", crate::json::Obj::new().str("input", &cin).str("output", &cout).str("enum", &en).finish())
+            // The inputs a case passes unchanged from its first call to its last (§15.149).
+            .raw("held", crate::json::strs(&m.held.iter().map(|n| n.text.clone()).collect::<Vec<_>>()))
+            .raw("states", crate::json::strs(&states))
+            .str("initial", &init)
+            .raw("final", crate::json::strs(&fins))
+            .raw(
+                "never",
+                crate::json::arr(
+                    &m.nevers
+                        .iter()
+                        .map(|nv| {
+                            crate::json::Obj::new()
+                                .raw("states", crate::json::strs(&nv.states.iter().map(|n| n.text.clone()).collect::<Vec<_>>()))
+                                .raw("after", crate::json::strs(&nv.after.iter().map(|n| n.text.clone()).collect::<Vec<_>>()))
+                                .finish()
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .raw(
+                "once",
+                crate::json::arr(
+                    &m.onces
+                        .iter()
+                        .map(|on| crate::json::Obj::new().str("output", &on.output.text).str("cell", &crate::machine::cell_text(&on.cell)).finish())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .raw("constants", constants)
+            .finish()
+    }
+
     pub fn api(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let pkg = alias.replace('_', "").to_lowercase();
+        let pkg = crate::backend::go_package(&alias);
         let outs = &self.f.outputs;
 
         // The record function's own parameter names (§15.35): a temporary that no declared
@@ -6595,6 +6920,9 @@ impl Gen<'_> {
             // Where the caller's object holds each input, and the one function per language
             // that reads it (§15.125). Absent when the rule takes its inputs as they come.
             .raw("projection", self.projection_json())
+            // The machine the function is one step of (§15.148), and what each language calls
+            // the constants a host needs to keep the state: where a case starts, where it ends.
+            .raw("machine", self.machine_json())
             // The documents transcribed, as the header names them (§15.71).
             .raw("sources", crate::json::arr(&self.f.sources.iter().map(|s| {
                 let o = crate::json::Obj::new().str("name", &s.name.text);
@@ -6643,6 +6971,11 @@ impl Gen<'_> {
 // ASCII letter, so a Japanese name cannot be one and groups take a prefix.
 
 /// Turn a name into something Ruby will accept as a constant.
+/// The name of the rule's Ruby module, from its alias.
+pub(crate) fn ruby_module(alias: &str) -> String {
+    rb_const(&pascal(alias))
+}
+
 fn rb_const(n: &str) -> String {
     if n.starts_with(|c: char| c.is_ascii_uppercase()) {
         n.to_string()
@@ -6841,6 +7174,18 @@ impl<'a> Gen<'a> {
                 names.push(name);
             }
             o.push_str(&format!("    ALL = [{}].freeze\n  end\n\n", names.join(", ")));
+        }
+
+        // The machine this function is one step of (§15.148).
+        if let Some((_, init, fins)) = self.machine_consts() {
+            o.push_str(&format!(
+                "  # {}\n  INITIAL = {}\n  # {}\n  FINAL = [{}].freeze\n\n  # {}\n  def self.final?(state)\n    FINAL.include?(state)\n  end\n\n",
+                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                self.rb_value(&init),
+                tr!("案件が終わる状態。", "The states a case ends in."),
+                fins.iter().map(|v| self.rb_value(v)).collect::<Vec<_>>().join(", "),
+                tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
+            ));
         }
 
         o.push_str(&format!(
@@ -7324,6 +7669,26 @@ impl<'a> Gen<'a> {
                 fields.join(", ")
             ));
         }
+        // A machine's traces (§15.148): the carried input is the state this language answered
+        // to the call before, handed over as the value it is.
+        let (mut head, mut body, mut tail) = (String::new(), "d = JSON.parse(line)[\"in\"]\n  ".to_string(), String::new());
+        if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
+            let cls = rb_const(&self.enum_names.get(&en).cloned().unwrap_or_default());
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                args[k] = format!("(v.key?(\"step\") ? state : {})", args[k]);
+            }
+            head = format!("state = {m}::INITIAL\n");
+            body = format!(
+                "v = JSON.parse(line)\n  \
+                 if v.key?(\"machine\")\n    \
+                   puts JSON.generate({{ \"initial\" => {m}::INITIAL, \"final\" => {m}::{cls}::ALL.select {{ |s| {m}.final?(s) }} }})\n    \
+                   next\n  \
+                 end\n  \
+                 d = v[\"in\"]\n  \
+                 state = v[\"state\"] if v[\"step\"] == \"start\"\n  "
+            );
+            tail = format!("  state = {} if v.key?(\"step\")\n", self.next_state_of("r", &format!(".{out}")));
+        }
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
              # frozen_string_literal: true\n\n\
@@ -7333,13 +7698,15 @@ impl<'a> Gen<'a> {
              def _ord(s)\n  \
                Date.iso8601(s).jd - Date.new(1970, 1, 1).jd\n\
              end\n\n\
+             {head}\
              STDIN.each_line do |line|\n  \
                line = line.strip\n  \
                next if line.empty?\n  \
-               d = JSON.parse(line)[\"in\"]\n  \
+               {body}\
                args = [{}]\n  \
                r, trace = {m}.{alias}_traced(*args)\n  \
                puts {m}.{alias}_record(*args, r, trace)\n\
+             {tail}\
              end\n",
             env!("CARGO_PKG_VERSION"),
             args.join(", ")
@@ -7453,6 +7820,11 @@ impl<'a> Gen<'a> {
                 names.push(name);
             }
             o.push_str(&format!("    ALL: Array[{}]\n  end\n\n", snake(ascii)));
+        }
+
+        if let Some((en, _, _)) = self.machine_consts() {
+            let t = snake(&self.enum_names.get(&en).cloned().unwrap_or_default());
+            o.push_str(&format!("  INITIAL: {t}\n  FINAL: Array[{t}]\n  def self.final?: ({t}) -> bool\n\n"));
         }
 
         o.push_str(
@@ -7947,6 +8319,20 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("    case {name} = {v:?}\n"));
             }
             o.push_str("}\n\n");
+        }
+
+        // The machine this function is one step of (§15.148). `final` is a keyword here.
+        if let Some((en, init, fins)) = self.machine_consts() {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            o.push_str(&format!(
+                "/// {}\npublic let initialState: {cls} = {}\n/// {}\npublic let finalStates: Set<{cls}> = [{}]\n\n\
+                 /// {}\npublic func isFinal(_ state: {cls}) -> Bool {{\n    finalStates.contains(state)\n}}\n\n",
+                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                self.sw_value(&init),
+                tr!("案件が終わる状態。", "The states a case ends in."),
+                fins.iter().map(|v| self.sw_value(v)).collect::<Vec<_>>().join(", "),
+                tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
+            ));
         }
 
         o.push_str(round_sw().trim_start_matches('\n'));
@@ -8496,6 +8882,7 @@ impl<'a> Gen<'a> {
         let line = runner_local("line", &fname);
         let root = runner_local("root", &fname);
         let trace = runner_local("trace", &fname);
+        let (state, stepping) = (runner_local("state", &fname), runner_local("stepping", &fname));
         let mut args: Vec<String> = Vec::new();
         let mut binds: Vec<String> = Vec::new();
         for i in &self.f.inputs {
@@ -8530,6 +8917,13 @@ impl<'a> Gen<'a> {
                 _ => format!("{}(_n({d}, {jp:?}))", self.sw_ty(&ty)),
             };
             let local = runner_local(&format!("a{}", args.len()), &fname);
+            // A machine's traces (§15.148): the carried input is the state this language
+            // answered to the call before, handed over as the value it is.
+            let v = if self.carried().map(|(c, _)| c) == Some(i.name.text.clone()) {
+                format!("{stepping} ? {state} : {v}")
+            } else {
+                v
+            };
             binds.push(format!("            let {local} = {v}\n"));
             args.push(format!("{label}: {local}"));
         }
@@ -8567,6 +8961,23 @@ impl<'a> Gen<'a> {
         }
         // The record function's own parameter names, which are the call's labels.
         let (p_out, p_trace) = (sw_name(&self.temp("out")), sw_name(&self.temp("trace")));
+        let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
+        if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            head = format!("        var {state}: {cls} = initialState\n");
+            meta = format!(
+                "            if {root}[\"machine\"] != nil {{\n                \
+                 let fin = {cls}.allCases.filter {{ isFinal($0) }}.map {{ \"\\\"\\($0.rawValue)\\\"\" }}.joined(separator: \",\")\n                \
+                 print(\"{{\\\"initial\\\":\\\"\\(initialState.rawValue)\\\",\\\"final\\\":[\\(fin)]}}\")\n                \
+                 continue\n            }}\n"
+            );
+            let _ = &meta;
+            tail = format!("            if {stepping} {{\n                {state} = {}\n            }}\n", self.next_state_of(&got, &format!(".{}", sw_name(&out))));
+            meta.push_str(&format!(
+                "            let {stepping} = {root}[\"step\"] != nil\n            \
+                 if ({root}[\"step\"] as? String) == \"start\" {{\n                {state} = {cls}(rawValue: {root}[\"state\"] as! String)!\n            }}\n"
+            ));
+        }
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
 import Foundation
@@ -8574,15 +8985,15 @@ import Foundation
 @main
 enum Runner {{
     static func main() throws {{
-        while let {line} = readLine(strippingNewline: true) {{
+{head}        while let {line} = readLine(strippingNewline: true) {{
             if {line}.trimmingCharacters(in: .whitespaces).isEmpty {{
                 continue
             }}
             let {root} = try JSONSerialization.jsonObject(with: Data({line}.utf8)) as! [String: Any]
-            let {d} = {root}["in"] as! [String: Any]
+{meta}            let {d} = {root}["in"] as! [String: Any]
 {binds}            let ({got}, {trace}) = try {fname}Traced({args})
             print({fname}Record({args}, {p_out}: {got}, {p_trace}: {trace}))
-        }}
+{tail}        }}
     }}
 
     /// A number, as NSNumber on both Darwin and the corelibs Foundation on Linux.
@@ -9295,12 +9706,18 @@ fn split_params(list: &str) -> Vec<&str> {
 }
 
 fn strip_declaration(l: &str) -> String {
-    let t = l.trim_start();
-    let indent = &l[..l.len() - t.len()];
+    let t0 = l.trim_start();
+    let indent = &l[..l.len() - t0.len()];
+    // `export const INITIAL: State = …` (§15.148) is a declaration like any other.
+    let (export, t) = match t0.strip_prefix("export ") {
+        Some(r) => ("export ", r),
+        None => ("", t0),
+    };
     let Some(rest) = t.strip_prefix("let ").or_else(|| t.strip_prefix("const ")) else {
         return l.to_string();
     };
     let kw = if t.starts_with("let ") { "let " } else { "const " };
+    let kw = format!("{export}{kw}");
     let name_end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$')).unwrap_or(rest.len());
     if name_end == 0 {
         return l.to_string();

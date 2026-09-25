@@ -76,7 +76,7 @@ pub struct Axis {
 }
 
 impl Axis {
-    fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.coords.len()
     }
 }
@@ -136,6 +136,36 @@ pub struct VDiff {
     pub over_budget: bool,
     /// Set when the two versions are not comparable cell by cell at all.
     pub blocked: Option<String>,
+    /// When both versions are one step of a state machine (§15.148): the calls, not the
+    /// single call, that the change reaches.
+    pub machine: Option<MachineDiff>,
+}
+
+/// What a change to a machine does to sequences of calls (§15.148).
+#[derive(Debug, Clone)]
+pub struct MachineDiff {
+    /// The carried input and output.
+    pub carry: (String, String),
+    /// The initial state, old and new.
+    pub initial: (String, String),
+    /// The shortest sequence of calls the two versions answer differently. Every call but the
+    /// last is answered alike by both — the shortest one cannot have parted earlier — and the
+    /// last is where they part. Empty when the change touches no state a case reaches.
+    pub shortest: Vec<MStep>,
+    /// How many of the regions where the answers differ lie wholly in states no case reaches
+    /// from the initial state under the old version: no new case will meet them.
+    pub unreached: usize,
+    /// What becomes of a case in progress: a state the old version can reach, and what the
+    /// new version does to a case sitting in it.
+    pub migration: Vec<(String, &'static str)>,
+}
+
+/// One call of a trace across two versions.
+#[derive(Debug, Clone)]
+pub struct MStep {
+    pub inputs: BTreeMap<String, Val>,
+    pub old: Vec<(String, Option<Val>)>,
+    pub new: Vec<(String, Option<Val>)>,
 }
 
 impl VDiff {
@@ -217,8 +247,14 @@ fn expr_cuts(e: &Expr, c: &Checked, out: &mut Vec<(String, Rat)>) {
 /// every value but one is an input no caller can send. A declared output never: it is the
 /// answer, not a coordinate.
 fn columns(f: &RuleFile, also: &RuleFile) -> Vec<(String, Kind)> {
+    columns_with(f, also, &BTreeSet::new())
+}
+
+/// `columns`, with `more` counted as tested: the names a question about the rule tests that no
+/// table does (§15.148).
+pub(crate) fn columns_with(f: &RuleFile, also: &RuleFile, more: &BTreeSet<String>) -> Vec<(String, Kind)> {
     let outs: BTreeSet<&str> = f.outputs.iter().map(|o| o.name.text.as_str()).collect();
-    let mut tested: BTreeSet<&str> = BTreeSet::new();
+    let mut tested: BTreeSet<&str> = more.iter().map(|s| s.as_str()).collect();
     for g in [f, also] {
         for it in &g.items {
             if let Item::Table(t) = it {
@@ -244,19 +280,26 @@ fn columns(f: &RuleFile, also: &RuleFile) -> Vec<(String, Kind)> {
 }
 
 /// Build one axis over the union of what both versions cut the column at.
-#[allow(clippy::too_many_arguments)]
-fn axis_for(
+fn axis_for(col: &str, kind: Kind, ty: &Ty, versions: &[(&RuleFile, &Checked)]) -> Option<Axis> {
+    axis_with(col, kind, ty, versions, &[])
+}
+
+/// `axis_for`, cut also at `extra`: boundaries that no cell of the rule names but that a
+/// question about the rule does — a `once` line's cell, tested on the value an output takes
+/// from this column (§15.148).
+pub(crate) fn axis_with(
     col: &str,
     kind: Kind,
     ty: &Ty,
     versions: &[(&RuleFile, &Checked)],
+    extra: &[(String, Rat)],
 ) -> Option<Axis> {
     let c0 = versions[0].1;
     match ty {
         Ty::Opt(inner) => {
             // §6.2: an optional column has one coordinate more than the enum it wraps —
             // the absent value, which `none` in a cell is the test for.
-            let mut ax = axis_for(col, kind, inner, versions)?;
+            let mut ax = axis_with(col, kind, inner, versions, extra)?;
             ax.coords.insert(0, Coord::Word(crate::kw::NONE.into()));
             ax.ty = ty.clone();
             Some(ax)
@@ -381,6 +424,11 @@ fn axis_for(
                     }
                 }
             }
+            for (n, v) in extra {
+                if n == col {
+                    bounds.insert((v.num, v.den));
+                }
+            }
             if let Some(l) = lo {
                 bounds.insert((l.num, l.den));
             }
@@ -441,7 +489,7 @@ fn axis_for(
 /// The closed interval a numeric coordinate stands for, with the open ends already moved one
 /// grid step in. A coordinate that holds no value at all cannot occur: `num_coords` only
 /// makes an open interval where two boundaries are more than one step apart.
-fn ival(co: &Coord, step: Rat) -> (Option<Rat>, Option<Rat>) {
+pub(crate) fn ival(co: &Coord, step: Rat) -> (Option<Rat>, Option<Rat>) {
     match co {
         Coord::Point(v) => (Some(*v), Some(*v)),
         Coord::Open(lo, hi) => (lo.map(|x| x.add(step)), hi.map(|x| x.sub(step))),
@@ -451,7 +499,7 @@ fn ival(co: &Coord, step: Rat) -> (Option<Rat>, Option<Rat>) {
 
 /// The value to try first for a coordinate: the point itself, or one grid step inside the
 /// closed end. §11 principle 2 — the value most likely to show an off-by-one.
-fn primary(co: &Coord, step: Rat) -> Option<Rat> {
+pub(crate) fn primary(co: &Coord, step: Rat) -> Option<Rat> {
     match co {
         Coord::Point(v) => Some(*v),
         Coord::Open(Some(lo), _) => Some(lo.add(step)),
@@ -461,7 +509,7 @@ fn primary(co: &Coord, step: Rat) -> Option<Rat> {
     }
 }
 
-fn val_of(ax: &Axis, r: Rat) -> Val {
+pub(crate) fn val_of(ax: &Axis, r: Rat) -> Val {
     if ax.date {
         let (y, m, d) = crate::types::ord_to_date(r);
         Val::Date(y, m, d)
@@ -473,7 +521,7 @@ fn val_of(ax: &Axis, r: Rat) -> Val {
 /// Whether the coordinate holds the value. Coordinates are cut at every boundary either
 /// version names, so a coordinate is wholly inside or wholly outside every test — which is
 /// what lets one point stand for the whole of it.
-fn holds(ax: &Axis, ci: usize, v: &Val) -> bool {
+pub(crate) fn holds(ax: &Axis, ci: usize, v: &Val) -> bool {
     match (&ax.coords[ci], v) {
         (Coord::Word(w), Val::Enum(s) | Val::Str(s)) => w == s,
         (Coord::Word(w), Val::Bool(b)) => (w == crate::kw::TRUE) == *b,
@@ -528,7 +576,7 @@ fn element_menu(f: &RuleFile, c: &Checked, cap: usize) -> Vec<BTreeMap<String, V
 }
 
 /// The value that stands for a coordinate.
-fn coord_val(ax: &Axis, ci: usize) -> Option<Val> {
+pub(crate) fn coord_val(ax: &Axis, ci: usize) -> Option<Val> {
     match &ax.coords[ci] {
         Coord::Word(w) => Some(match ax.ty {
             Ty::Bool => Val::Bool(w == crate::kw::TRUE),
@@ -558,13 +606,13 @@ fn other_string(ax: &Axis) -> String {
 }
 
 /// Everything one run of a version says about one input.
-struct Answer {
-    outs: Vec<(String, Option<Val>)>,
-    rows: Vec<(String, usize)>,
-    binds: HashMap<String, Val>,
+pub(crate) struct Answer {
+    pub(crate) outs: Vec<(String, Option<Val>)>,
+    pub(crate) rows: Vec<(String, usize)>,
+    pub(crate) binds: HashMap<String, Val>,
 }
 
-fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Answer {
+pub(crate) fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Answer {
     let (outs, _, rows, binds) = crate::eval::run_all_traced(f, c, inputs);
     Answer { outs, rows, binds }
 }
@@ -1334,14 +1382,21 @@ fn identical_run(ao: &Answer, an: &Answer, om: &RowMap, nm: &RowMap, machinery: 
 /// Whether every output is one value over the whole cell. A column with an open coordinate
 /// takes more than one, so an answer that reads it is not settled by comparing one point;
 /// one that does not is.
-fn constant_here(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], ans: &Answer) -> bool {
+pub(crate) fn constant_here(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], ans: &Answer) -> bool {
+    let names: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).collect();
+    names_constant(f, c, axes, cell, &ans.rows, &names)
+}
+
+/// Whether each of `names` is one value over the whole cell, given the rows that fired there
+/// (§15.148 asks this of the carried output and of the outputs a `once` line counts).
+pub(crate) fn names_constant(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], rows: &[(String, usize)], names: &[String]) -> bool {
     let open: BTreeSet<&str> = axes
         .iter()
         .enumerate()
         .filter(|(i, a)| matches!(a.coords[cell[*i]], Coord::Open(_, _)))
         .map(|(_, a)| a.col.as_str())
         .collect();
-    let fired: HashMap<&str, usize> = ans.rows.iter().map(|(t, r)| (t.as_str(), *r)).collect();
+    let fired: HashMap<&str, usize> = rows.iter().map(|(t, r)| (t.as_str(), *r)).collect();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     fn walk_expr(e: &Expr, f: &RuleFile, c: &Checked, open: &BTreeSet<&str>, fired: &HashMap<&str, usize>, seen: &mut BTreeSet<String>) -> bool {
         match e {
@@ -1384,10 +1439,6 @@ fn constant_here(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[usize], ans: 
         // An input with a point coordinate reached here only if it is not open.
         true
     }
-    let names: Vec<String> = match &f.result {
-        Some(_) => f.outputs.iter().map(|o| o.name.text.clone()).collect(),
-        None => f.outputs.iter().map(|o| o.name.text.clone()).collect(),
-    };
     names.iter().all(|n| {
         let mut s = seen.clone();
         let r = match &f.result {
@@ -1498,8 +1549,177 @@ fn rows_text(rows: &[(String, usize)]) -> String {
     rows.iter().map(|(t, r)| tr!("表 {} 行{}", "table {} row {}", t, r)).collect::<Vec<_>>().join(", ")
 }
 
-/// The whole answer: what the two versions do differently, over the whole input space.
+/// The whole answer: what the two versions do differently, over the whole input space, and,
+/// when both are the step of a state machine, over sequences of calls (§15.148).
 pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -> VDiff {
+    let mut d = diff_cells(o, n, budget);
+    d.machine = machine_diff(o, n, &d, budget);
+    d
+}
+
+/// The machine's half of a diff (§15.148). `None` unless both versions carry the same input
+/// back as the same output.
+/// The values of the `held` inputs one world's calls are made with (§15.149).
+fn world_values(a: &crate::machine::Analysis, w: &[usize]) -> Option<BTreeMap<String, Val>> {
+    let (_, e) = a.edges.iter().enumerate().find(|(i, e)| e.world.as_slice() == w && !a.mixed.contains(i))?;
+    Some(a.held.iter().filter_map(|n| e.inputs.get(n).map(|v| (n.clone(), v.clone()))).collect())
+}
+
+fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, budget: usize) -> Option<MachineDiff> {
+    let (om, nm) = (o.0.machine.as_ref()?, n.0.machine.as_ref()?);
+    let (ocarry, ncarry) = (om.carried()?, nm.carried()?);
+    if ocarry != ncarry {
+        return None;
+    }
+    let (cin, cout) = ocarry;
+    let nodes = budget.saturating_mul(crate::machine::NODES_PER_CELL);
+    let oa = crate::machine::analyze(o.0, o.1, nodes)?;
+    let na = crate::machine::analyze(n.0, n.1, nodes)?;
+    let mut md = MachineDiff {
+        carry: (cin.to_string(), cout.to_string()),
+        initial: (oa.initial.clone(), na.initial.clone()),
+        shortest: Vec::new(),
+        unreached: 0,
+        migration: Vec::new(),
+    };
+    // The calls that part the two, shortest first. Before the first difference both run the
+    // same calls to the same states, so a path the old version takes to a state is one the new
+    // version takes too — up to the call where they part.
+    if oa.blocked.is_none() && !oa.over_budget && oa.initial == na.initial {
+        let carry_ax = d.axes.iter().position(|a| a.col == cin);
+        let mut best: Option<Vec<MStep>> = None;
+        for ch in &d.changes {
+            let states: Vec<String> = match carry_ax {
+                Some(ci) => ch.region[ci]
+                    .iter()
+                    .filter_map(|&k| match &d.axes[ci].coords[k] {
+                        Coord::Word(w) => Some(w.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                None => Vec::new(),
+            };
+            let reached: Vec<&String> = states.iter().filter(|st| oa.reachable.contains(st)).collect();
+            if reached.is_empty() {
+                md.unreached += 1;
+                continue;
+            }
+            // One case holds its `held` inputs (§15.149), so the path runs in one world and
+            // the call where the two part is made with that world's values.
+            for node in oa.nodes.iter().filter(|nd| reached.contains(&&nd.0)) {
+                let st = &node.0;
+                let Some(path) = oa.trace_to_node(node) else { continue };
+                if path.iter().any(|e| oa.mixed.contains(e)) {
+                    continue;
+                }
+                if best.as_ref().is_some_and(|b| b.len() <= path.len() + 1) {
+                    continue;
+                }
+                let mut last = ch.witness.clone();
+                last.insert(cin.to_string(), Val::Enum(st.clone()));
+                if let Some(vals) = world_values(&oa, &node.1) {
+                    last.extend(vals);
+                }
+                let env: HashMap<String, Val> = last.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let (ao, an) = (run(o.0, o.1, env.clone()), run(n.0, n.1, env));
+                let wire = |f: &Checked, outs: &[(String, Option<Val>)]| -> Vec<String> { outs.iter().map(|(k, v)| wire_of(f, k, v)).collect() };
+                if wire(o.1, &ao.outs) == wire(n.1, &an.outs) {
+                    continue;
+                }
+                let mut steps: Vec<MStep> = path
+                    .iter()
+                    .map(|&e| {
+                        let edge = &oa.edges[e];
+                        MStep { inputs: edge.inputs.clone(), old: edge.outputs.clone(), new: edge.outputs.clone() }
+                    })
+                    .collect();
+                steps.push(MStep { inputs: last, old: ao.outs, new: an.outs });
+                best = Some(steps);
+            }
+        }
+        md.shortest = best.unwrap_or_default();
+    }
+    // Cases in progress: where the old version can take a case, and what the new one does
+    // with a case that is already there — in the world the case is in, which the new version
+    // reads off the case's `held` inputs (§15.149).
+    let can_finish = na.can_finish();
+    let new_worlds: BTreeSet<Vec<usize>> = na.nodes.iter().map(|nd| nd.1.clone()).chain(na.edges.iter().map(|e| e.world.clone())).collect();
+    let stranded = |st: &String| -> bool {
+        oa.nodes.iter().filter(|nd| &nd.0 == st).any(|nd| {
+            let vals = world_values(&oa, &nd.1).unwrap_or_default();
+            match na.world_of(|n| vals.get(n)) {
+                Some(w) => !can_finish.contains(&(st.clone(), w)),
+                None => new_worlds.iter().any(|w| !can_finish.contains(&(st.clone(), w.clone()))),
+            }
+        })
+    };
+    for st in &oa.reachable {
+        let kind = if !na.states.contains(st) {
+            "removed"
+        } else if !na.finals.is_empty() && stranded(st) && na.blocked.is_none() && !na.over_budget && !na.unknown.contains_key(st) {
+            "stranded"
+        } else if oa.finals.contains(st) && !na.finals.contains(st) {
+            "no_longer_final"
+        } else if !oa.finals.contains(st) && na.finals.contains(st) {
+            "now_final"
+        } else {
+            continue;
+        };
+        md.migration.push((st.clone(), kind));
+    }
+    let _ = cout;
+    Some(md)
+}
+
+/// What a migration kind says, in prose.
+fn migration_text(state: &str, kind: &str) -> String {
+    match kind {
+        "removed" => tr!(
+            "{state}: 新しい版にこの状態はありません。この状態にいる案件は、新しい版の入口で断られます",
+            "{state}: the new version has no such state; a case in it is refused at the door"
+        ),
+        "stranded" => tr!(
+            "{state}: 新しい版では、この状態から終わりの状態に着けません。この状態にいる案件は終われなくなります",
+            "{state}: under the new version no final state can be reached from here; a case in it can no longer finish"
+        ),
+        "no_longer_final" => tr!(
+            "{state}: 古い版では終わりの状態でしたが、新しい版ではそうではありません。終わっていた案件がまた動きえます",
+            "{state}: final under the old version and not under the new; a case that had ended can move again"
+        ),
+        "now_final" => tr!(
+            "{state}: 新しい版では終わりの状態です。この状態にいる案件は、そこで終わります",
+            "{state}: final under the new version; a case in it ends there"
+        ),
+        other => format!("{state}: {other}"),
+    }
+}
+
+/// One call of a machine diff's trace, as a line.
+fn mstep_text(c: &Checked, st: &MStep, cin: &str, cout: &str, k: usize) -> String {
+    let from = st.inputs.get(cin).map(crate::vectors::show).unwrap_or_default();
+    let human = |n: &str, v: &Val| v.show(&c.ty_of(n).unwrap_or(Ty::Unknown));
+    let args: Vec<String> = st
+        .inputs
+        .iter()
+        .filter(|(n, _)| n.as_str() != cin)
+        .map(|(n, v)| format!("{n} = {}", human(n, v)))
+        .collect();
+    let show = |outs: &[(String, Option<Val>)]| -> String {
+        outs.iter()
+            .map(|(n, v)| format!("{n} = {}", v.as_ref().map(|v| human(n, v)).unwrap_or_else(|| "-".into())))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let (o, n) = (show(&st.old), show(&st.new));
+    let _ = cout;
+    if o == n {
+        tr!("  {}. {} のとき {} → {}", "  {}. at {}, {} → {}", k, from, args.join(", "), o)
+    } else {
+        tr!("  {}. {} のとき {} → 古い版 {} / 新しい版 {}", "  {}. at {}, {} → old: {} / new: {}", k, from, args.join(", "), o, n)
+    }
+}
+
+fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -> VDiff {
     let mut out = VDiff {
         rule: n.0.name.text.clone(),
         old_version: o.0.version.clone(),
@@ -1516,6 +1736,7 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
         unrealized: 0,
         over_budget: false,
         blocked: None,
+        machine: None,
     };
     // A rule that folds a sequence is not a function of finitely many columns: the answer
     // depends on the whole sequence, and a region over the summaries would not say what it
@@ -2072,6 +2293,51 @@ fn domain_text(d: &VDiff) -> String {
     s
 }
 
+/// The machine's half of a diff as text (§15.148).
+fn machine_block(d: &VDiff, m: &MachineDiff, c: &Checked) -> String {
+    let _ = d;
+    let mut s = String::new();
+    s.push_str(&format!("\n{}\n", tr!("ステートマシンとして:", "as a state machine:")));
+    if m.initial.0 != m.initial.1 {
+        s.push_str(&tr!(
+            "  始まりの状態が {} から {} に変わりました。どの案件も、最初の呼び出しから違います。\n",
+            "  the initial state moved from {} to {}: every case differs from its first call.\n",
+            m.initial.0,
+            m.initial.1
+        ));
+    } else if m.shortest.is_empty() {
+        s.push_str(&tr!(
+            "  始まりの状態から着ける呼び出しの並びで、答えが変わるものはありません。\n",
+            "  no sequence of calls from the initial state gets a different answer.\n"
+        ));
+    } else {
+        let (cin, cout) = (&m.carry.0, &m.carry.1);
+        s.push_str(&tr!(
+            "  答えが変わる呼び出しの並びのうち、いちばん短いもの（{} 回）:\n",
+            "  the shortest sequence of calls the two answer differently ({} calls):\n",
+            m.shortest.len()
+        ));
+        for (k, st) in m.shortest.iter().enumerate() {
+            s.push_str(&mstep_text(c, st, cin, cout, k + 1));
+            s.push('\n');
+        }
+    }
+    if m.unreached > 0 {
+        s.push_str(&tr!(
+            "  上の範囲のうち {} 件は、古い版ではどの案件も着かない状態のものです。\n",
+            "  {} of the regions above lie in states no case reaches under the old version.\n",
+            m.unreached
+        ));
+    }
+    if !m.migration.is_empty() {
+        s.push_str(&tr!("  処理中の案件:\n", "  cases in progress:\n"));
+        for (st, kind) in &m.migration {
+            s.push_str(&format!("    - {}\n", migration_text(st, kind)));
+        }
+    }
+    s
+}
+
 pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
     let mut s = String::new();
     s.push_str(&format!(
@@ -2183,6 +2449,9 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
             )
         ));
     }
+    if let Some(m) = &d.machine {
+        s.push_str(&machine_block(d, m, c));
+    }
     s
 }
 
@@ -2289,6 +2558,40 @@ pub fn render_json(d: &VDiff, c: &Checked, old: &str, new: &str) -> String {
         .raw("domain", format!("[{}]", domain.join(",")))
         .raw("changes", format!("[{}]", changes.join(",")))
         .raw("unknown", format!("[{}]", unknown.join(",")))
+        .raw("machine", match &d.machine {
+            None => "null".into(),
+            Some(m) => {
+                let outs = |x: &[(String, Option<Val>)]| -> String {
+                    let mut o = Obj::new();
+                    for (k, v) in x {
+                        o = o.raw(k, match v {
+                            Some(v) => crate::diag::WVal::json(&crate::eval::wval(c, k, v)),
+                            None => "null".into(),
+                        });
+                    }
+                    o.finish()
+                };
+                let steps: Vec<String> = m
+                    .shortest
+                    .iter()
+                    .map(|st| {
+                        let mut ins = Obj::new();
+                        for (k, v) in &st.inputs {
+                            ins = ins.raw(k, crate::diag::WVal::json(&crate::eval::wval(c, k, v)));
+                        }
+                        Obj::new().raw("inputs", ins.finish()).raw("old", outs(&st.old)).raw("new", outs(&st.new)).finish()
+                    })
+                    .collect();
+                let mig: Vec<String> = m.migration.iter().map(|(st, k)| Obj::new().str("state", st).str("kind", k).finish()).collect();
+                Obj::new()
+                    .raw("carry", Obj::new().str("input", &m.carry.0).str("output", &m.carry.1).finish())
+                    .raw("initial", Obj::new().str("old", &m.initial.0).str("new", &m.initial.1).finish())
+                    .raw("shortest", format!("[{}]", steps.join(",")))
+                    .int("unreached", m.unreached as i128)
+                    .raw("migration", format!("[{}]", mig.join(",")))
+                    .finish()
+            }
+        })
         .finish()
 }
 
@@ -2375,6 +2678,23 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
             tr!("ここに挙げたほかの入力について、同じだとは言えていません。", "Nothing is claimed about what lies outside the region.")
         }
     ));
+    if let Some(m) = &d.machine {
+        s.push_str(&format!("\n#### {}\n\n", tr!("ステートマシンとして", "As a state machine")));
+        for line in machine_block(d, m, c).lines().skip(2) {
+            let t = line.trim_start();
+            if t.is_empty() {
+                continue;
+            }
+            // The lines of the text form, as a list: the calls numbered, the rest bulleted.
+            if t.chars().next().is_some_and(|ch| ch.is_ascii_digit()) {
+                s.push_str(&format!("   {t}\n"));
+            } else if let Some(x) = t.strip_prefix("- ") {
+                s.push_str(&format!("   - {x}\n"));
+            } else {
+                s.push_str(&format!("- {t}\n"));
+            }
+        }
+    }
     s
 }
 
@@ -2637,4 +2957,119 @@ fn true_if_crosses(
     let (Some(lo), Some(hi)) = (lo, hi) else { return false };
     let (tlo, thi) = ival(&ax.coords[ci], ax.step);
     tlo.is_none_or(|t| t.cmp_to(hi) != Ordering::Greater) && thi.is_none_or(|t| t.cmp_to(lo) != Ordering::Less)
+}
+
+
+// ---------------------------------------------------------------------------------------
+// One rule's space, a cell at a time (§15.148)
+// ---------------------------------------------------------------------------------------
+
+/// What one cell of one rule's space turned out to be.
+pub(crate) enum Settled {
+    /// An input the cell stands for, and what the rule answers for it.
+    Realized(HashMap<String, Val>, Answer),
+    /// No input realizes the cell: its coordinates contradict each other, or linear
+    /// arithmetic proves the system empty. It is nobody's case.
+    Empty,
+    /// No input was built, and none was shown impossible either.
+    Unknown,
+}
+
+/// The walk `diff` makes over two versions, made over one: the axes of the rule's columns,
+/// and a cell settled on request. What a state machine's checks need is exactly this — every
+/// class of input the rule tells apart, each with an input that shows what the rule does with
+/// it — and the three-valued answer is the same one: what could not be settled is said to be
+/// unsettled, never folded into either side (§15.99).
+pub(crate) struct Walker<'a> {
+    pub(crate) axes: Vec<Axis>,
+    f: &'a RuleFile,
+    c: &'a Checked,
+    menu: Vec<BTreeMap<String, Val>>,
+    scalars: Vec<(String, Expr)>,
+    cone: Vec<usize>,
+    memo: HashMap<Vec<usize>, Solved>,
+    shape_memo: HashMap<Vec<usize>, bool>,
+}
+
+impl<'a> Walker<'a> {
+    /// The axes of `f`, with `extra` boundaries and `more` columns (see `axis_with` and
+    /// `columns_with`). `Err` says why the space does not cut into cells.
+    pub(crate) fn new(
+        f: &'a RuleFile,
+        c: &'a Checked,
+        extra: &[(String, Rat)],
+        more: &BTreeSet<String>,
+    ) -> Result<Self, String> {
+        if f.fold.is_some() {
+            return Err(tr!(
+                "この規則は並び全体を見て答えを出すので、入力を決まった数の項目の組み合わせに分けられません",
+                "this rule folds a sequence: the answer depends on the whole of it, so the space of columns does not cut into cells"
+            ));
+        }
+        let mut axes = Vec::new();
+        for (col, kind) in columns_with(f, f, more) {
+            let Some(ty) = c.ty_of(&col) else {
+                return Err(tr!("列 {} の型が分かりません", "the type of column {} is not known", col));
+            };
+            let Some(ax) = axis_with(&col, kind, &ty, &[(f, c)], extra) else {
+                return Err(tr!("列 {} の型 {} では、値を区切れません", "column {} has type {}, which does not cut into coordinates", col, ty));
+            };
+            if ax.coords.is_empty() {
+                return Err(tr!("列 {} の値を区切れません", "column {} does not cut into coordinates", col));
+            }
+            axes.push(ax);
+        }
+        let input_names: BTreeSet<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
+        let scalars = scalar_derives(f, &input_names);
+        let cone = cone_of(&axes, f, c, &scalars);
+        Ok(Walker {
+            menu: element_menu(f, c, 24),
+            axes,
+            f,
+            c,
+            scalars,
+            cone,
+            memo: HashMap::new(),
+            shape_memo: HashMap::new(),
+        })
+    }
+
+    /// How many cells the space has.
+    pub(crate) fn size(&self) -> u128 {
+        self.axes.iter().map(|a| a.len() as u128).product::<u128>().max(1)
+    }
+
+    /// Settle one cell.
+    pub(crate) fn settle(&mut self, cell: &[usize]) -> Settled {
+        if let Some((inputs, a)) = realize(&self.axes, cell, self.f, self.c, &self.menu, &self.scalars, &self.cone, &mut self.memo, None) {
+            return Settled::Realized(inputs, a);
+        }
+        let k: Vec<usize> = self.cone.iter().map(|&i| cell[i]).collect();
+        let shaped = match self.shape_memo.get(&k) {
+            Some(v) => *v,
+            None => {
+                let v = feasible_shape(&self.axes, cell, self.f, self.c, &self.scalars);
+                self.shape_memo.insert(k, v);
+                v
+            }
+        };
+        if !shaped || linearly_empty(&self.axes, cell, (self.f, self.c)) {
+            Settled::Empty
+        } else {
+            Settled::Unknown
+        }
+    }
+
+    /// Other inputs of the same cell, each held to the cell's coordinates again, with what
+    /// the rule answers for them. The first input of a cell is one step inside its closed end;
+    /// these are its far ends, which is where an answer that reads an open column moves.
+    pub(crate) fn others(&mut self, cell: &[usize], first: &HashMap<String, Val>) -> Vec<(HashMap<String, Val>, Answer)> {
+        let mut out = Vec::new();
+        for seed in other_points(&self.axes, cell, first, 6) {
+            if let Some(got) = realize(&self.axes, cell, self.f, self.c, &self.menu, &self.scalars, &self.cone, &mut self.memo, Some(&seed)) {
+                out.push(got);
+            }
+        }
+        out
+    }
 }

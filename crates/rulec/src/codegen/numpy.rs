@@ -414,6 +414,18 @@ impl<'a> Gen<'a> {
             outputs.push(o.finish());
         }
 
+        // The machine this rule is one step of (§15.148): which column comes back as which,
+        // where a case starts, and where one has ended.
+        let machine = match (self.machine_consts(), self.carried()) {
+            (Some((_, init, fins)), Some((cin, cout))) => Some(
+                Obj::new()
+                    .raw("carry", Obj::new().str("in", &cin).str("out", &cout).finish())
+                    .str("initial", &init)
+                    .raw("final", crate::json::strs(&fins))
+                    .finish(),
+            ),
+            _ => None,
+        };
         Obj::new()
             .str("rule", &self.f.name.text)
             .str("alias", pub_name(&self.f.name))
@@ -422,6 +434,7 @@ impl<'a> Gen<'a> {
             .raw("inputs", format!("[{}]", inputs.join(",")))
             .raw("outputs", format!("[{}]", outputs.join(",")))
             .raw("steps", format!("[{}]", steps.join(",")))
+            .opt_raw("machine", machine)
             .finish()
     }
 
@@ -430,6 +443,9 @@ impl<'a> Gen<'a> {
     /// that called the rule per line would answer correctly and prove nothing.
     pub fn np_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
+        if self.f.machine.is_some() {
+            return format!("{}{}", self.header("#"), np_machine_runner(&alias));
+        }
         let body = format!(
             r#"import json
 import sys
@@ -559,4 +575,78 @@ pub fn round_tests_numpy() -> String {
     );
     o.push_str(&format!("print(f\"{}\")\n", tr!("ok {{len(CASES)}} 件", "ok {{len(CASES)}} cases")));
     o
+}
+
+
+/// The runner for a machine (§15.148). The vectors are decided in one pass as always. The
+/// traces cannot be — a call is passed what the call before it answered — so they are
+/// decided a step at a time, **every trace's k-th call in one pass**: the way a host that
+/// holds many cases advances them all by one event at once. The constants come from the
+/// plan, which is where this target keeps them.
+fn np_machine_runner(alias: &str) -> String {
+    format!(
+        r#"import json
+import sys
+
+import numpy as np
+import rulec_np
+
+rule = rulec_np.load("{alias}.json")
+lines = [json.loads(l) for l in sys.stdin if l.strip()]
+
+
+def _wire(v):
+    if isinstance(v, np.bool_):
+        return bool(v)
+    if isinstance(v, np.integer):
+        return int(v)
+    return str(v)
+
+
+def _decide(ins):
+    cols = {{i: [x[i] for x in ins] for i in rule.inputs}}
+    try:
+        out, fired = rule.traced(**cols)
+    except rulec_np.RuleInputError as e:
+        print(f"error: {{e}}", file=sys.stderr)
+        sys.exit(1)
+    recs = []
+    for n, x in enumerate(ins):
+        trace = []
+        for picked, rows_ in fired:
+            trace.append(rows_[int(picked[n])])
+        recs.append({{"in": x, "observed": {{k: _wire(v[n]) for k, v in out.items()}}, "trace": trace}})
+    return recs
+
+
+def _line(rec):
+    print(json.dumps(rec, ensure_ascii=False, separators=(",", ":")))
+
+
+if lines and "machine" in lines[0]:
+    m = rule.machine
+    print(json.dumps({{"initial": m["initial"], "final": m["final"]}}, ensure_ascii=False, separators=(",", ":")))
+    cin, cout = m["carry"]["in"], m["carry"]["out"]
+    traces = []
+    for x in lines[1:]:
+        if x["step"] == "start":
+            traces.append([x["state"], []])
+        traces[-1][1].append(x["in"])
+    done = [[] for _ in traces]
+    k = 0
+    while any(k < len(t[1]) for t in traces):
+        live = [n for n, t in enumerate(traces) if k < len(t[1])]
+        ins = [dict(traces[n][1][k], **{{cin: traces[n][0]}}) for n in live]
+        for n, rec in zip(live, _decide(ins)):
+            done[n].append({{"in": {{i: rec["in"][i] for i in rule.inputs}}, "observed": rec["observed"], "trace": rec["trace"]}})
+            traces[n][0] = rec["observed"][cout]
+        k += 1
+    for recs in done:
+        for rec in recs:
+            _line(rec)
+else:
+    for rec in _decide([x["in"] for x in lines]):
+        _line(rec)
+"#
+    )
 }

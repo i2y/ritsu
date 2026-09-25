@@ -918,17 +918,24 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
             }
         }
+        let rule_alias = f.name.ascii.as_deref();
         for (alias, sp, what, top) in aliases {
             let mut kw: Vec<&str> = Vec::new();
             let mut hides: Vec<&str> = Vec::new();
+            // The rule's alias also names a module or a package, which the standard library
+            // may already have (§15.149): the generated `time.py` is what `import time` finds.
+            let module = top && std::ptr::eq(sp, &f.name.span) && rule_alias == Some(alias);
+            let mut collides: Vec<&str> = Vec::new();
             for b in crate::backend::ALL {
                 if b.reserved.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
                     kw.push(b.name);
                 } else if top && b.globals.iter().any(|w| w.eq_ignore_ascii_case(alias)) {
                     hides.push(b.name);
+                } else if module && b.modules.iter().any(|w| w.eq_ignore_ascii_case(&(b.module_of)(alias))) {
+                    collides.push(b.name);
                 }
             }
-            if kw.is_empty() && hides.is_empty() {
+            if kw.is_empty() && hides.is_empty() && collides.is_empty() {
                 continue;
             }
             let mut d = Diag::warning(
@@ -949,6 +956,13 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     "{}: その名前はすでに使われています。この別名はファイルの一番外側に出るので、それを隠してしまいます。",
                     "{}: the name is already taken there, and this alias, which reaches the top level of the file, hides it.",
                     hides.join(", ")
+                ));
+            }
+            if !collides.is_empty() {
+                d = d.note(tr!(
+                    "{}: 言語の側に同じ名前のモジュールかクラスがあり、この規則のために生成するモジュールとぶつかります。生成したものがそちらの代わりに読まれるか、二つを同時には定義できないか、`import` がどちらを指すか決まらなくなります。",
+                    "{}: the language already has a module or a class of that name, and the one generated for this rule collides with it: the generated one is read in its place, the two cannot both be defined, or an import cannot tell which is meant.",
+                    collides.join(", ")
                 ));
             }
             c.diags.push(d.note(tr!(
@@ -1086,8 +1100,13 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
 
     // After the items, so that a column naming a table's output or a `define` resolves.
-    if let Some(ex) = &f.examples {
+    for ex in &f.examples {
         c.example_cells(ex, f, path);
+    }
+    for sc in &f.scenarios {
+        let name = sc.name.text.clone();
+        let at = move |line: usize| tr!("{path}:{line} 手順の例 {}", "{path}:{line} scenario {}", name);
+        c.value_cells(&sc.table, f, &at);
     }
 
     // §5.3 E113: the atoms of a boolean definition are limited to unary tests on an input or
@@ -1268,7 +1287,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
         // An example of a walk has to say which sequence it walks. A row of cells has no room
         // for one, so the cell names a `sequence` block instead (§15.56).
-        if let (Some(ex), Some(el)) = (&f.examples, &f.elements) {
+        for (ex, el) in f.examples.iter().filter_map(|ex| f.elements.as_ref().map(|el| (ex, el))) {
             if !ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
                 let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| fold.span.clone());
                 c.diags.push(
@@ -1385,7 +1404,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // makes possible, and it is caught here rather than at the first run.
     {
         let mut named: Vec<String> = Vec::new();
-        if let Some((ex, ci)) = f.examples.as_ref().zip(f.elements.as_ref()).and_then(|(ex, el)| {
+        for (ex, ci) in f.examples.iter().filter_map(|ex| {
+            let el = f.elements.as_ref()?;
             ex.inputs.iter().position(|(n, _)| n == &el.name.text).map(|ci| (ex, ci))
         }) {
             for row in &ex.rows {
@@ -1568,6 +1588,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
         }
     }
+
+    // `machine` and `scenario` (§15.148): do the names fit what they are said to be.
+    c.machine_decl(f, path);
 
     // §11 W111: declarations nothing names. `contract_only` silences a range-guard-only input.
     for i in &f.inputs {
@@ -2620,6 +2643,12 @@ impl Checked {
     /// is checked as one by E025 and E027, so it is stepped over here.
     fn example_cells(&mut self, t: &Table, f: &RuleFile, path: &str) {
         let at = |line: usize| tr!("{path}:{line} 例", "{path}:{line} examples");
+        self.value_cells(t, f, &at);
+    }
+
+    /// The cells of a table of values — `examples`, or a `scenario` (§15.148) — held to the
+    /// types of the columns they sit under, with `at` naming where they are.
+    fn value_cells(&mut self, t: &Table, f: &RuleFile, at: &dyn Fn(usize) -> String) {
         let seq = f.elements.as_ref().map(|el| el.name.text.clone());
 
         // W111 asks whether a **table** uses a declaration, and an example is not a table:
@@ -2729,6 +2758,285 @@ impl Checked {
 
         self.used = used;
         self.used_values = used_values;
+    }
+
+    /// `machine` and `scenario` (§15.148): the names they use exist and fit.
+    ///
+    /// The shape of the lines is the parser's (E050). Here: the carried pair is an input and
+    /// an output of one enum, and the table it is `over` decides that output (E051); every
+    /// state named is a value of that enum, and `never` does not name one state on both sides
+    /// (E052); `once` names an output other than the carried one, with a cell that fits it
+    /// (E053); the rule does not fold a sequence (E054); and a `scenario` has a machine to
+    /// start, names every input but the carried one, and has a name of its own (E055).
+    fn machine_decl(&mut self, f: &RuleFile, path: &str) {
+        let Some(m) = &f.machine else {
+            for sc in &f.scenarios {
+                self.diags.push(
+                    Diag::error("E055", tr!("`machine` の無い規則に `scenario` は書けません", "A `scenario` needs a `machine`"))
+                        .at(tr!("{path}:{} 手順の例 {}", "{path}:{} scenario {}", sc.span.line, sc.name.text))
+                        .mark(sc.span.clone(), tr!("`machine` がありません", "there is no `machine`"))
+                        .note(tr!(
+                            "手順の例は、`initial` の状態から呼び出しを順に重ねたものです。持ち越す状態が無ければ、一行ずつの `examples` で書けます。",
+                            "A scenario is a sequence of calls from the `initial` state. With no state carried from one call to the next, each row is an `examples` row."
+                        )),
+                );
+            }
+            return;
+        };
+        let at_m = |line: usize| tr!("{path}:{line} ステートマシン {}", "{path}:{line} machine {}", m.name.text);
+        if let Some(fd) = &f.fold {
+            self.diags.push(
+                Diag::error("E054", tr!("並びを畳む規則は、ステートマシンの一歩になれません", "A rule that folds a sequence cannot be the step of a machine"))
+                    .at(at_m(m.span.line))
+                    .mark(m.span.clone(), "")
+                    .note(tr!(
+                        "`fold` のある規則の答えは並び全体で決まり、入力を決まった数の列で区切れません（{} 行目）。ステートマシンの検査は、その区切りの上で一歩ずつの行き先を数えます。",
+                        "The answer of a rule with a `fold` depends on the whole sequence, which does not cut into finitely many columns (line {}). The machine's checks count the transitions over exactly that cut."
+                    , fd.span.line))
+                    .note(tr!(
+                        "並びを一件ずつ読むのは呼び出す側に任せ、その結果（件数や合計）を入力として渡すか、`count`・`sum` で数えてください。",
+                        "Leave the walk to the caller and pass what it found (a count, a total) as an input, or count it with `count` or `sum`."
+                    )),
+            );
+        }
+        // The carried pair.
+        let mut state_enum: Option<String> = None;
+        if let Some((i, o, sp)) = &m.carry {
+            let ity = self.syms.get(&i.text).filter(|s| s.kind == SymKind::Input).map(|s| s.ty.clone());
+            let declared_out = f.outputs.iter().any(|d| d.name.text == o.text);
+            let oty = if declared_out { self.syms.get(&o.text).map(|s| s.ty.clone()) } else { None };
+            let mut bad = |what: String, span: &Span, note: String| {
+                self.diags.push(
+                    Diag::error("E051", tr!("`carry` の行が宣言と噛み合いません: {}", "The `carry` line does not fit the declarations: {}", what))
+                        .at(at_m(sp.line))
+                        .mark(span.clone(), "")
+                        .note(note),
+                );
+            };
+            match (&ity, &oty) {
+                (None, _) => bad(
+                    tr!("{} は入力ではありません", "{} is not an input", i.text),
+                    &i.span,
+                    tr!("左は、呼び出しのたびに渡される入力の名前です。", "The left side is the name of an input, passed on every call."),
+                ),
+                (_, None) => bad(
+                    tr!("{} は出力ではありません", "{} is not an output", o.text),
+                    &o.span,
+                    tr!("右は、呼び出しが返す出力の名前です。次の呼び出しでは、その値が左の入力になります。", "The right side is the name of an output the call returns; on the next call its value is the input on the left."),
+                ),
+                (Some(Ty::Enum(a)), Some(Ty::Enum(b))) if a == b => state_enum = Some(a.clone()),
+                (Some(a), Some(b)) => bad(
+                    tr!("{} は {a}、{} は {b} です", "{} is {a} and {} is {b}", i.text, o.text),
+                    sp,
+                    tr!(
+                        "持ち越す状態は、同じ列挙の入力と出力です。状態が有限個だから、呼び出しの並びについての主張が決まります。",
+                        "The carried state is an input and an output of the same enum. That the states are finitely many is what makes the claims about sequences of calls decidable."
+                    ),
+                ),
+            }
+            if let Some(ov) = &m.over {
+                let table = f.items.iter().find_map(|it| match it {
+                    Item::Table(t) if !t.clause && t.name.as_ref().is_some_and(|n| n.text == ov.text) => Some(t),
+                    _ => None,
+                });
+                match table {
+                    None => self.diags.push(
+                        Diag::error("E051", tr!("`{}` という表はありません", "There is no table called `{}`", ov.text))
+                            .at(at_m(m.span.line))
+                            .mark(ov.span.clone(), "")
+                            .note(tr!("`over` の右は、持ち越す出力を決める表の名前です。", "What follows `over` is the name of the table that decides the carried output.")),
+                    ),
+                    Some(t) if !t.outputs.iter().any(|oc| oc.name.text == o.text) => self.diags.push(
+                        Diag::error("E051", tr!("表 {} は {} を決めていません", "Table {} does not decide {}", ov.text, o.text))
+                            .at(at_m(m.span.line))
+                            .mark(ov.span.clone(), "")
+                            .note(tr!(
+                                "`over` の表の行が、状態の行き先そのものです。{} を出力の列に持つ表を名指ししてください。",
+                                "The rows of the `over` table are the transitions. Name a table that has {} as an output column.",
+                                o.text
+                            )),
+                    ),
+                    Some(_) => {}
+                }
+            }
+        }
+        // The states named.
+        if let Some(en) = &state_enum {
+            let values = self.enums.get(en).cloned().unwrap_or_default();
+            let mut named: Vec<(&Name, String)> = Vec::new();
+            if let Some((v, _)) = &m.initial {
+                named.push((v, crate::kw::INITIAL.to_string()));
+            }
+            for v in &m.finals {
+                named.push((v, crate::kw::FINAL.to_string()));
+            }
+            for nv in &m.nevers {
+                for v in nv.states.iter().chain(nv.after.iter()) {
+                    named.push((v, crate::kw::NEVER.to_string()));
+                }
+            }
+            for (v, line_kw) in named {
+                if !values.contains(&v.text) {
+                    self.diags.push(
+                        Diag::error("E052", tr!("`{}` は {en} の値ではありません", "`{}` is not a value of {en}", v.text))
+                            .at(at_m(v.span.line))
+                            .mark(v.span.clone(), tr!("`{line_kw}` の行", "on the `{line_kw}` line"))
+                            .note(tr!("{en} の値は {} です。", "The values of {en} are {}.", values.join(" / "))),
+                    );
+                }
+            }
+            for nv in &m.nevers {
+                for v in &nv.states {
+                    if nv.after.iter().any(|a| a.text == v.text) {
+                        self.diags.push(
+                            Diag::error("E052", tr!("`never` の両側に同じ状態 {} があります", "The same state {} is on both sides of `never`", v.text))
+                                .at(at_m(nv.span.line))
+                                .mark(v.span.clone(), "")
+                                .note(tr!(
+                                    "`never A after B` は、B を通ったあとに A に着く手順が無いことを言います。同じ状態が両側にあると、そこに留まる一歩で破れてしまい、言いたいことになりません。",
+                                    "`never A after B` says no sequence of calls reaches A once it has been in B. A state on both sides is broken by the first call that stays in it, which is not what anyone means."
+                                )),
+                        );
+                    }
+                }
+            }
+        }
+        // `held`: inputs a case holds from its first call to its last (§15.149).
+        {
+            let carried_in = m.carried().map(|(i, _)| i.to_string());
+            let mut seen: Vec<&str> = Vec::new();
+            for n in &m.held {
+                let bad = |what: String, note: String| {
+                    Diag::error("E056", tr!("`held` の行が宣言と噛み合いません: {}", "The `held` line does not fit the declarations: {}", what))
+                        .at(at_m(n.span.line))
+                        .mark(n.span.clone(), "")
+                        .note(note)
+                };
+                if seen.contains(&n.text.as_str()) {
+                    self.diags.push(bad(
+                        tr!("{} が二度あります", "{} is named twice", n.text),
+                        tr!("一度書けば足ります。", "Once is enough."),
+                    ));
+                    continue;
+                }
+                seen.push(n.text.as_str());
+                let is_input = self.syms.get(&n.text).is_some_and(|s| s.kind == SymKind::Input);
+                if !is_input {
+                    self.diags.push(bad(
+                        tr!("{} は入力ではありません", "{} is not an input", n.text),
+                        tr!(
+                            "`held` に書くのは、一つの案件の最初の呼び出しから最後の呼び出しまで同じ値で渡される入力です（注文の金額、申し込んだ人の区分）。",
+                            "`held` names the inputs one case passes with the same value on every call, from its first to its last: the amount of an order, the class of the person who applied."
+                        ),
+                    ));
+                    continue;
+                }
+                if carried_in.as_deref() == Some(n.text.as_str()) {
+                    self.diags.push(bad(
+                        tr!("{} は持ち越す状態です", "{} is the carried state", n.text),
+                        tr!(
+                            "持ち越す入力は、呼び出しのたびに一つ前の答えで入れ替わります。変わらない入力とは両立しません。",
+                            "The carried input is replaced by the answer of the call before on every call, so it cannot be one that never changes."
+                        ),
+                    ));
+                }
+            }
+        }
+        // `once`. What follows reads the carried pair, and says nothing more once the `carry`
+        // line itself has been refused: a second error about the same line is noise.
+        let carried_out = m.carried().map(|(_, o)| o.to_string()).filter(|_| state_enum.is_some());
+        for on in &m.onces {
+            let declared = f.outputs.iter().any(|d| d.name.text == on.output.text);
+            let bad = |what: String, note: String| {
+                Diag::error("E053", tr!("`once` の行が宣言と噛み合いません: {}", "The `once` line does not fit the declarations: {}", what))
+                    .at(at_m(on.span.line))
+                    .mark(on.output.span.clone(), "")
+                    .note(note)
+            };
+            if !declared {
+                self.diags.push(bad(
+                    tr!("{} は出力ではありません", "{} is not an output", on.output.text),
+                    tr!("`once` が数えるのは、一回の呼び出しが返す出力の値です。", "What `once` counts is a value one call returns: an output."),
+                ));
+                continue;
+            }
+            if carried_out.as_deref() == Some(on.output.text.as_str()) {
+                self.diags.push(bad(
+                    tr!("{} は持ち越す状態です", "{} is the carried state", on.output.text),
+                    tr!(
+                        "状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。状態について言うなら `never … after …` を使ってください。",
+                        "A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. Say it about states with `never … after …`."
+                    ),
+                ));
+                continue;
+            }
+            if matches!(on.cell, Cell::DontCare) {
+                self.diags.push(bad(
+                    tr!("`-` はどの値も数えます", "`-` counts every value"),
+                    tr!("数える値をセルで書いてください（`>0円`、`true` など）。", "Write the values to count as a cell (`>0円`, `true`, …)."),
+                ));
+                continue;
+            }
+            if let Some(ty) = self.syms.get(&on.output.text).map(|s| s.ty.clone()) {
+                let sc = *self.scales.get(&on.output.text).unwrap_or(&1);
+                // The cell is a test on the output, read exactly as a table's cell on a column of
+                // that type would be; what it names is not a row, so W111 is left as it was.
+                let (used, used_values) = (self.used.clone(), self.used_values.clone());
+                self.cell(&on.cell, &ty, sc, &on.cell_span, &at_m(on.span.line), true);
+                self.used = used;
+                self.used_values = used_values;
+            }
+        }
+        // `scenario`.
+        let mut names: Vec<&str> = Vec::new();
+        let carried_in = m.carried().map(|(i, _)| i.to_string());
+        let seq_col = f.elements.as_ref().map(|el| el.name.text.clone());
+        for sc in &f.scenarios {
+            let at_s = tr!("{path}:{} 手順の例 {}", "{path}:{} scenario {}", sc.span.line, sc.name.text);
+            if names.contains(&sc.name.text.as_str()) {
+                self.diags.push(
+                    Diag::error("E055", tr!("`{}` という `scenario` が二つあります", "There are two scenarios called `{}`", sc.name.text))
+                        .at(at_s.clone())
+                        .mark(sc.name.span.clone(), tr!("二つ目です", "this is a second one")),
+                );
+            }
+            names.push(sc.name.text.as_str());
+            if state_enum.is_none() {
+                continue;
+            }
+            for (n, sp) in &sc.table.inputs {
+                if carried_in.as_deref() == Some(n.as_str()) {
+                    self.diags.push(
+                        Diag::error("E055", tr!("手順の例に、持ち越す入力 {n} の列があります", "The scenario has a column for the carried input {n}"))
+                            .at(at_s.clone())
+                            .mark(sp.clone(), "")
+                            .note(tr!(
+                                "一行目は `initial` の状態から、二行目からは一つ前の呼び出しが返した状態から始まります。列に書くと、その二つのどちらを信じるかが決まりません。",
+                                "The first row starts from the `initial` state and every later row from the state the call before it answered. A column for it would leave two answers to that question."
+                            )),
+                    );
+                }
+            }
+            let missing: Vec<String> = f
+                .inputs
+                .iter()
+                .map(|i| i.name.text.clone())
+                .chain(seq_col.clone())
+                .filter(|n| carried_in.as_deref() != Some(n.as_str()))
+                .filter(|n| !sc.table.inputs.iter().any(|(c, _)| c == n))
+                .collect();
+            if !missing.is_empty() {
+                self.diags.push(
+                    Diag::error("E055", tr!("手順の例に入力 {} の列がありません", "The scenario has no column for input {}", missing.join(", ")))
+                        .at(at_s.clone())
+                        .mark(sc.span.clone(), "")
+                        .note(tr!(
+                            "呼び出し一回に渡すものを全部書きます。持ち越す入力のほかは、どの入力も一行ごとに値が要ります。",
+                            "Write everything one call is passed: every input but the carried one takes a value in every row."
+                        )),
+                );
+            }
+        }
     }
 
     /// A literal written as an output value, held to the type of the thing it is written

@@ -125,7 +125,7 @@ pub extern "C" fn rulec_gen(src: *const u8, ja: u32) -> *mut u8 {
     let Some((f, c)) = passing(src) else { return out(&refused(src)) };
     let g = Gen::new(&f, &c, src).at(PATH);
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-    let pkg = alias.replace('_', "").to_lowercase();
+    let pkg = crate::backend::go_package(&alias);
     let mut files: Vec<String> = Vec::new();
     for b in backend::ALL {
         for (rel, body) in (b.files)(&g, &alias, &pkg) {

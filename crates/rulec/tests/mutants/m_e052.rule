@@ -1,0 +1,54 @@
+rule 注文の状態(order_state) v1
+description "通販の注文が、入金・出荷・配達・取消依頼の出来事でどの状態に移り、いくら返金するか。状態は呼び出す側が持ち、規則は一回の出来事だけを判定する。書き下ろしの例"
+
+enum 状態(state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)
+enum 出来事(event) = 入金(pay) | 出荷(ship) | 配達(deliver) | 取消依頼(cancel)
+
+inputs
+  状態(state)   : 状態
+  出来事(event) : 出来事
+  支払額(paid)  : money[円, incl_tax]  range >=0円 <=100万円
+
+outputs
+  次の状態(next_state) : 状態
+  返金額(refund)       : money[円, incl_tax]  round down(1円)
+  受理(accepted)       : bool
+
+table 遷移(step)
+policy unique
+| 状態   | 出来事               | -> 次の状態 | 返金額 | 受理  |
+| 受付   | 入金                 | 入金済      | 0円    | true  |
+| 受付   | 取消依頼             | 取消        | 0円    | true  |
+| 受付   | 出荷, 配達           | 状態        | 0円    | false |
+| 入金済 | 出荷                 | 出荷済      | 0円    | true  |
+| 入金済 | 取消依頼             | 取消        | 支払額 | true  |
+| 入金済 | 入金, 配達           | 状態        | 0円    | false |
+| 出荷済 | 配達                 | 配達済      | 0円    | true  |
+| 出荷済 | 入金, 出荷, 取消依頼 | 状態        | 0円    | false |  # 出荷のあとの取消は、返品の手続きで受ける
+| 配達済 | -                    | 状態        | 0円    | false |
+| 取消   | -                    | 状態        | 0円    | false |  # 取消のあとに届いた入金の通知では、注文を戻さない
+
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 未着
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+
+scenario 配達まで(delivered)
+| 出来事 | 支払額 | -> 次の状態 | 返金額 | 受理 |
+| 入金   | 3000円 | 入金済      | 0円    | true |
+| 出荷   | 3000円 | 出荷済      | 0円    | true |
+| 配達   | 3000円 | 配達済      | 0円    | true |
+
+scenario 取消のあとの入金(late_pay)
+| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 入金     | 3000円 | 入金済      | 0円    | true  |
+| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
+| 入金     | 3000円 | 取消        | 0円    | false |
+
+examples
+| 状態   | 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 受付   | 取消依頼 | 0円    | 取消        | 0円    | true  |
+| 出荷済 | 取消依頼 | 3000円 | 出荷済      | 0円    | false |

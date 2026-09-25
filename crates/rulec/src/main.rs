@@ -268,14 +268,14 @@ fn commands() -> Vec<Cmd> {
             args: "<file.rule>...",
             purpose: tr!(
                 "作ったテストケースの側を検査する。行・境界の両側・隠れ対・丸めの同着・畳み込みの遷移の五つ",
-                "check the vector suite itself against five criteria: rows, both sides of a boundary, shadow pairs, rounding ties, fold transitions"
+                "check the vector suite itself against six criteria: rows, both sides of a boundary, shadow pairs, rounding ties, fold transitions, machine transitions"
             ),
             params: vec![rule_files()],
             flags: vec![
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
-                (0, tr!("五基準すべてを満たす", "all five criteria are met")),
+                (0, tr!("六基準すべてを満たす", "all six criteria are met")),
                 (1, tr!("欠けている義務がある（名指しされる）、または規則が検査を通らない", "an obligation is missing (it is named), or the rule does not pass check")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
@@ -1348,7 +1348,7 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         };
         let g = rulec::codegen::Gen::new(&f, &c, &src).at(path);
         let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-        let pkg = alias.replace('_', "").to_lowercase();
+        let pkg = rulec::backend::go_package(&alias);
         // Also emit the vectors and the expected values. Of the three uses in §9.3, the
         // cross-language agreement test and the golden files run on these.
         let suite = rulec::vectors::suite(&f, &c);
@@ -1425,6 +1425,16 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
                 .join("\n")
                 + "\n";
             targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), body));
+        }
+        // The sequences of calls a machine is played through (§15.148): each runner passes
+        // the state its own language answered to the next call, and prints its constants
+        // first, so the traces hold the hand-over and `INITIAL` / the final states as well.
+        if let Some(t) = rulec::vectors::machine_traces(&f, &c) {
+            targets.push((format!("{out_dir}/vectors/{alias}.traces.jsonl"), rulec::vectors::traces_json(&f, &c, &t)));
+            targets.push((
+                format!("{out_dir}/vectors/{alias}.traces.expected.jsonl"),
+                rulec::vectors::traces_expected_json(&f, &c, &t),
+            ));
         }
         for (p, body) in targets {
             let existing = std::fs::read_to_string(&p).ok();
@@ -1928,6 +1938,16 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
                     return ExitCode::from(2);
                 }
                 println!("{}", tr!("ベクタ {} 件: {p}", "{} vectors: {p}", vs.len()));
+                // A machine's sequences of calls go beside it, as `gen` writes them (§15.148);
+                // on stdout they would be mixed into a stream of single calls.
+                if let Some(t) = rulec::vectors::machine_traces(&f, &c) {
+                    let p = format!("{d}/{alias}.traces.jsonl");
+                    if std::fs::write(&p, rulec::vectors::traces_json(&f, &c, &t)).is_err() {
+                        eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
+                        return ExitCode::from(2);
+                    }
+                    println!("{}", tr!("手順 {} 本: {p}", "{} sequences of calls: {p}", t.traces.len()));
+                }
             }
             None => print!("{body}"),
         }

@@ -218,7 +218,7 @@ Beside the module, `coupon_step_proof.rs` holds proof harnesses for the [Kani Ru
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani coupon_step_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 48 rules it
+a flag because it is the one pass whose cost is noticeable: on the corpus of 49 rules it
 adds about 210 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
@@ -666,6 +666,48 @@ element's fields under `elements`, and the record written for one call carries t
 an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from
 row to row, and a walk is not a column operation.
+
+## A machine
+
+A rule with a `machine` section ([reference §6.4](reference.md#64-machine-and-scenario)) is
+generated as the function every rule gets: it takes the state as an argument, answers the next
+one, and keeps nothing. Beside it, the module says where a case starts and whether one has
+ended:
+
+```python
+INITIAL: State = State.RECEIVED
+
+FINAL: frozenset[State] = frozenset({State.DELIVERED, State.CANCELLED})
+
+
+def is_final(state: State) -> bool:
+    """Whether a case in this state has ended."""
+    return state in FINAL
+```
+
+The state lives with the caller — in the order's row of a database, say. A new case starts at
+`INITIAL`; every call is passed the stored state, and what it answers is stored in its place:
+
+```python
+out = order_state(order.state, event, paid)
+order.state = out.next_state
+```
+
+What `check` proved about the machine is a claim about exactly this: every sequence of calls a
+caller can make this way, from `INITIAL`. `is_final` is where one ends: an event that arrives
+after that still has a row, which completeness sees to, and the row keeps the state where it
+is, which E124 sees to. Each language's
+spelling of the three is in the grammar's table and under `machine.constants` in `rulec api`.
+The NumPy plan carries them as data, and a target with one door and no module carries none.
+
+The vector suite has **traces** besides the single calls: sequences from the initial state that
+take every transition a case can make and every two that can follow one another, and every
+`scenario`. `rulec test` has each language's runner play them, handing the state one call
+answered to the next call **as that language holds it** — an enum member, not the string it
+is written as on the wire — so what is compared is the hand-over a caller does, as well as the
+answers. The MCP tool, the Connect service and the PostgreSQL function are one call each, like
+the function, and are played the same way. On the approver's page the machine is drawn beside
+the form, and a button puts the state the call answered back into the form for the next event.
 
 ## A rule whose inputs are projected from the caller's object
 

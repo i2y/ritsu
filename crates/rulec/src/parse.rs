@@ -126,12 +126,14 @@ impl P {
             outputs: Vec::new(),
             items: Vec::new(),
             result: None,
-            examples: None,
+            examples: Vec::new(),
             constraints: Vec::new(),
             shapes: Vec::new(),
             elements: None,
             sequences: Vec::new(),
             fold: None,
+            machine: None,
+            scenarios: Vec::new(),
         };
 
         loop {
@@ -188,7 +190,7 @@ impl P {
                 }
                 crate::kw::INPUTS => {
                     self.i += 1;
-                    f.inputs.extend(self.var_block());
+                    f.inputs.extend(self.var_block(crate::kw::INPUTS));
                 }
                 crate::kw::OUTPUTS => {
                     self.i += 1;
@@ -239,7 +241,7 @@ impl P {
                     let name = self.name_at(&line, 1).map(|(n, _)| n);
                     let span = span_of(&line);
                     self.i += 1;
-                    let fields = self.var_block();
+                    let fields = self.var_block(crate::kw::ELEMENTS);
                     match name {
                         Some(name) if f.elements.is_none() => {
                             f.elements = Some(ElementsDecl { name, fields, span })
@@ -347,8 +349,72 @@ impl P {
                     }
                 }
                 crate::kw::EXAMPLES => {
+                    // Each section is kept with its own header; the span is the `examples`
+                    // line, so a finding about the section points at the right one.
                     self.i += 1;
-                    f.examples = self.example_table();
+                    if let Some(mut t) = self.example_table() {
+                        t.span = span_of(&line);
+                        f.examples.push(t);
+                    }
+                }
+                crate::kw::MACHINE => {
+                    if let Some(d) = self.machine(&line) {
+                        match f.machine {
+                            None => f.machine = Some(d),
+                            Some(_) => self.err(
+                                Diag::error("E050", tr!("`machine` は一つしか書けません", "There can be only one `machine`"))
+                                    .at(self.at(d.span.line))
+                                    .mark(d.span.clone(), tr!("二つ目です", "this is a second one"))
+                                    .note(tr!(
+                                        "規則が一歩になるステートマシンは一つです。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。",
+                                        "A rule is one step of one machine. To carry two states together, make the pair one enum."
+                                    )),
+                            ),
+                        }
+                    }
+                }
+                crate::kw::SCENARIO => {
+                    let named = self.name_at(&line, 1).map(|(n, _)| n);
+                    let span = span_of(&line);
+                    self.i += 1;
+                    self.ctx = match &named {
+                        Some(n) => tr!("手順の例 {}", "scenario {}", n.text),
+                        None => tr!("手順の例", "a scenario"),
+                    };
+                    let grid = self.grid(false);
+                    self.ctx.clear();
+                    match (named, grid) {
+                        (Some(name), Some((inputs, outputs, rows))) => f.scenarios.push(ScenarioDecl {
+                            name,
+                            table: Table {
+                                name: None,
+                                policy: Policy::Unique,
+                                inputs,
+                                outputs,
+                                rows,
+                                span: span.clone(),
+                                overrides: Vec::new(),
+                                clause: false,
+                                cite: None,
+                                applied: None,
+                            },
+                            span,
+                        }),
+                        (None, _) => self.err(
+                            Diag::error("E055", tr!("`scenario` に名前がありません", "The `scenario` line has no name"))
+                                .at(self.at(span.line))
+                                .mark(span, tr!("`scenario 取消のあとの入金(late_pay)` の形です", "the shape is `scenario late_pay(late_pay)`")),
+                        ),
+                        (Some(name), None) => self.err(
+                            Diag::error("E055", tr!("手順の例 {} に行がありません", "Scenario {} has no rows", name.text))
+                                .at(self.at(span.line))
+                                .mark(span, tr!("見出しの直後に、呼び出し一回を一行で書きます", "write one call per row, right under the heading"))
+                                .note(tr!(
+                                    "見出しの行は、持ち越す入力のほかの入力、`->`、すべての出力です。一行目の呼び出しは `initial` の状態から始まります。",
+                                    "The header names every input but the carried one, then `->`, then every output. The first row's call starts from the `initial` state."
+                                )),
+                        ),
+                    }
                 }
                 other => {
                     self.err(
@@ -524,11 +590,40 @@ impl P {
         out
     }
 
-    fn var_block(&mut self) -> Vec<VarDecl> {
+    /// The head every declaration line of `inputs`, `outputs` and `elements` starts with: a
+    /// name and a type. A line without one of them used to be passed over in silence, and the
+    /// rule then had one input fewer than its author wrote (§15.149).
+    fn decl_head(&mut self, line: &[Token], section: &str) -> Option<(Name, TypeRef, usize)> {
+        let shape = tr!("形は `<名前>(<別名>) : <型>` です。", "The shape is `<name>(<alias>) : <type>`.");
+        let Some((name, k)) = self.name_at(line, 0) else {
+            self.err(
+                Diag::error("E004", tr!("行の先頭に語がありません", "The line does not start with a word"))
+                    .at(self.at(span_of(line).line))
+                    .mark(span_of(line), tr!("`{section}` の宣言として読めません", "this cannot be read as a declaration under `{section}`"))
+                    .note(shape.clone()),
+            );
+            return None;
+        };
+        let Some((ty, k)) = self.type_ref(line, k) else {
+            self.err(
+                Diag::error("E057", tr!("宣言に型がありません", "The declaration has no type"))
+                    .at(self.at(name.span.line))
+                    .mark(name.span.clone(), tr!("{} の型が書かれていません", "{} is not given a type", name.text))
+                    .note(shape)
+                    .note(tr!(
+                        "型は、範囲と丸めと単位の読み方と、生成する関数の引数を決めます。型の無い行は、宣言として数えられません。",
+                        "The type decides how the range, the rounding and the unit are read, and what the generated function takes. A line with none is not a declaration."
+                    )),
+            );
+            return None;
+        };
+        Some((name, ty, k))
+    }
+
+    fn var_block(&mut self, section: &str) -> Vec<VarDecl> {
         let mut v = Vec::new();
         for line in self.block_lines() {
-            let Some((name, k)) = self.name_at(&line, 0) else { continue };
-            let Some((ty, k)) = self.type_ref(&line, k) else { continue };
+            let Some((name, ty, k)) = self.decl_head(&line, section) else { continue };
             // `from …` runs to the end of the line, so everything before it is the tail the
             // range and the markers are read from (§15.125).
             let cut = line.iter().position(|t| t.ident() == Some(crate::kw::FROM)).unwrap_or(line.len());
@@ -669,8 +764,7 @@ impl P {
     fn out_block(&mut self) -> Vec<OutDecl> {
         let mut v = Vec::new();
         for line in self.block_lines() {
-            let Some((name, k)) = self.name_at(&line, 0) else { continue };
-            let Some((ty, k)) = self.type_ref(&line, k) else { continue };
+            let Some((name, ty, k)) = self.decl_head(&line, crate::kw::OUTPUTS) else { continue };
             let rounding = self.tail_rounding(&line, k);
             self.tail_junk(&line, k);
             v.push(OutDecl { name, ty, rounding, span: span_of(&line) });
@@ -1031,6 +1125,205 @@ impl P {
             }
         }
         Some(FoldDecl { verdict, over, arms, empty, exhausted, span })
+    }
+
+    /// `machine 注文(order) over 遷移` and the lines under it (§15.148).
+    ///
+    /// ```text
+    /// machine 注文(order) over 遷移
+    ///   carry   状態 -> 次の状態
+    ///   initial 受付
+    ///   final   配達済, 取消
+    ///   never   出荷済 after 取消
+    ///   once    返金額 >0円
+    /// ```
+    ///
+    /// Only the shape is read here. Whether the names exist and fit is the type check's
+    /// question, which has the declarations to answer it (E051–E053).
+    fn machine(&mut self, line: &[Token]) -> Option<MachineDecl> {
+        let span = span_of(line);
+        // The heading and the block under it are consumed whatever else goes wrong, so the
+        // lines under a broken heading are not read again as top-level declarations.
+        self.i += 1;
+        let block = self.block_lines();
+        let shape_note = || {
+            tr!(
+                "形は `machine <名前>(<ascii>) over <表>` です。表は、持ち越す出力を決める表です。",
+                "The shape is `machine <name>(<ascii>) over <table>`: the table is the one that decides the carried output."
+            )
+        };
+        let Some((name, k)) = self.name_at(line, 1) else {
+            self.err(
+                Diag::error("E050", tr!("`machine` に名前がありません", "The `machine` line has no name"))
+                    .at(self.at(span.line))
+                    .mark(span.clone(), "")
+                    .note(shape_note()),
+            );
+            return None;
+        };
+        let over = if line.get(k).and_then(|t| t.ident()) == Some(crate::kw::OVER) {
+            line.get(k + 1).and_then(|t| t.ident()).map(|w| Name { text: w.to_string(), ascii: None, span: line[k + 1].span.clone() })
+        } else {
+            None
+        };
+        if over.is_none() || line.len() > k + 2 {
+            self.err(
+                Diag::error("E050", tr!("`machine` の見出しの形が違います", "A `machine` heading is not shaped like this"))
+                    .at(self.at(span.line))
+                    .mark(span.clone(), if over.is_none() { tr!("`over <表>` がありません", "`over <table>` is missing") } else { tr!("余分な語があります", "there are words left over") })
+                    .note(shape_note()),
+            );
+        }
+        let mut m = MachineDecl {
+            name,
+            over,
+            carry: None,
+            initial: None,
+            finals: Vec::new(),
+            final_span: None,
+            nevers: Vec::new(),
+            onces: Vec::new(),
+            held: Vec::new(),
+            held_span: None,
+            span: span.clone(),
+        };
+        let words = |ts: &[Token]| -> Vec<Name> {
+            ts.iter()
+                .filter_map(|t| t.ident().map(|w| Name { text: w.to_string(), ascii: None, span: t.span.clone() }))
+                .collect()
+        };
+        for l in block {
+            let sp = span_of(&l);
+            let word = l.first().and_then(|t| t.ident()).unwrap_or("").to_string();
+            let bad = |p: &mut Self, shape: String| {
+                p.err(
+                    Diag::error("E050", tr!("`machine` の中の `{}` の行の形が違います", "A `{}` line under `machine` is not shaped like this", word))
+                        .at(p.at(sp.line))
+                        .mark(sp.clone(), "")
+                        .note(tr!("形は `{}` です。", "The shape is `{}`.", shape)),
+                );
+            };
+            let twice = |p: &mut Self| {
+                p.err(
+                    Diag::error("E050", tr!("`machine` の中に `{}` が二行あります", "There are two `{}` lines under `machine`", word))
+                        .at(p.at(sp.line))
+                        .mark(sp.clone(), tr!("二行目です", "this is the second"))
+                        .note(tr!("この行は一つの `machine` に一行だけ書きます。", "A `machine` has one line of this kind.")),
+                );
+            };
+            match word.as_str() {
+                crate::kw::CARRY => {
+                    let arrow = l.iter().position(|t| t.is(&Kind::Arrow));
+                    match (arrow, l.get(1).and_then(|t| t.ident()), l.get(3).and_then(|t| t.ident())) {
+                        (Some(2), Some(i), Some(o)) if l.len() == 4 => {
+                            if m.carry.is_some() {
+                                twice(self);
+                            } else {
+                                let n = |t: &Token, w: &str| Name { text: w.to_string(), ascii: None, span: t.span.clone() };
+                                m.carry = Some((n(&l[1], i), n(&l[3], o), sp.clone()));
+                            }
+                        }
+                        _ => bad(self, format!("{} <{}> -> <{}>", crate::kw::CARRY, tr!("入力", "input"), tr!("出力", "output"))),
+                    }
+                }
+                crate::kw::INITIAL => match (l.len(), l.get(1).and_then(|t| t.ident())) {
+                    (2, Some(v)) => {
+                        if m.initial.is_some() {
+                            twice(self);
+                        } else {
+                            m.initial = Some((Name { text: v.to_string(), ascii: None, span: l[1].span.clone() }, sp.clone()));
+                        }
+                    }
+                    _ => bad(self, format!("{} <{}>", crate::kw::INITIAL, tr!("状態", "state"))),
+                },
+                crate::kw::FINAL => {
+                    let vs = words(&l[1..]);
+                    if vs.is_empty() || l[1..].iter().any(|t| t.ident().is_none() && !t.is(&Kind::Comma)) {
+                        bad(self, format!("{} <{}>, …", crate::kw::FINAL, tr!("状態", "state")));
+                    } else if m.final_span.is_some() {
+                        twice(self);
+                    } else {
+                        m.finals = vs;
+                        m.final_span = Some(sp.clone());
+                    }
+                }
+                crate::kw::HELD => {
+                    let vs = words(&l[1..]);
+                    if vs.is_empty() || l[1..].iter().any(|t| t.ident().is_none() && !t.is(&Kind::Comma)) {
+                        bad(self, format!("{} <{}>, …", crate::kw::HELD, tr!("入力", "input")));
+                    } else if m.held_span.is_some() {
+                        twice(self);
+                    } else {
+                        m.held = vs;
+                        m.held_span = Some(sp.clone());
+                    }
+                }
+                crate::kw::NEVER => {
+                    let after = l.iter().position(|t| t.ident() == Some(crate::kw::AFTER));
+                    let ok_list = |ts: &[Token]| !ts.is_empty() && ts.iter().all(|t| t.ident().is_some() || t.is(&Kind::Comma)) && ts.iter().any(|t| t.ident().is_some());
+                    match after {
+                        Some(a) if ok_list(&l[1..a]) && ok_list(&l[a + 1..]) => {
+                            m.nevers.push(NeverDecl { states: words(&l[1..a]), after: words(&l[a + 1..]), span: sp.clone() })
+                        }
+                        _ => bad(
+                            self,
+                            format!(
+                                "{} <{}>, … {} <{}>, …",
+                                crate::kw::NEVER,
+                                tr!("状態", "state"),
+                                crate::kw::AFTER,
+                                tr!("状態", "state")
+                            ),
+                        ),
+                    }
+                }
+                crate::kw::ONCE => {
+                    let out = l.get(1).and_then(|t| t.ident());
+                    match out {
+                        Some(o) if l.len() > 2 => {
+                            let cell_ts = &l[2..];
+                            if let Some(cell) = self.cell(cell_ts) {
+                                m.onces.push(OnceDecl {
+                                    output: Name { text: o.to_string(), ascii: None, span: l[1].span.clone() },
+                                    cell,
+                                    cell_span: span_of(cell_ts),
+                                    span: sp.clone(),
+                                });
+                            }
+                        }
+                        _ => bad(self, format!("{} <{}> <{}>", crate::kw::ONCE, tr!("出力", "output"), tr!("セル", "cell"))),
+                    }
+                }
+                other => {
+                    self.err(
+                        Diag::error("E050", tr!("`{other}` は `machine` の中に書けません", "`{other}` cannot appear under `machine`"))
+                            .at(self.at(sp.line))
+                            .mark(sp.clone(), "")
+                            .note(tr!(
+                                "`machine` の中に書けるのは `carry`・`held`・`initial`・`final`・`never`・`once` の行です。",
+                                "The lines under `machine` are `carry`, `held`, `initial`, `final`, `never` and `once`."
+                            )),
+                    );
+                }
+            }
+        }
+        if m.carry.is_none() || m.initial.is_none() {
+            let missing: Vec<&str> = [(m.carry.is_none(), crate::kw::CARRY), (m.initial.is_none(), crate::kw::INITIAL)]
+                .iter()
+                .filter(|(b, _)| *b)
+                .map(|(_, w)| *w)
+                .collect();
+            self.err(
+                Diag::error("E050", tr!("`machine` に `{}` の行がありません", "The `machine` has no `{}` line", missing.join("` / `")))
+                    .at(self.at(span.line))
+                    .mark(span.clone(), "")
+                    .note(tr!(
+                        "`carry` は次の呼び出しの入力になる出力を、`initial` は案件が始まる状態を言います。どちらも無いと、呼び出しの並びが決まりません。",
+                        "`carry` names the output that is the next call's input, and `initial` the state a case starts in. Without both there is no sequence of calls to speak of."
+                    )),
+            );
+        }
+        Some(m)
     }
 
     /// `constraint <input> <= <input>` — one relation per line, and several lines all hold.

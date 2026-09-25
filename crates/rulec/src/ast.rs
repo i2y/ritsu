@@ -660,6 +660,72 @@ pub struct SeqDecl {
     pub span: Span,
 }
 
+/// `never 出荷済, 配達済 after 取消` (§15.148): no sequence of calls reaches one of the first
+/// states once the case has been in one of the second.
+#[derive(Debug, Clone)]
+pub struct NeverDecl {
+    pub states: Vec<Name>,
+    pub after: Vec<Name>,
+    pub span: Span,
+}
+
+/// `once 返金額 >0円` (§15.148): in any sequence of calls, at most one call answers an output
+/// the cell accepts.
+#[derive(Debug, Clone)]
+pub struct OnceDecl {
+    pub output: Name,
+    pub cell: Cell,
+    /// Where the cell was written.
+    pub cell_span: Span,
+    pub span: Span,
+}
+
+/// `machine 注文(order) over 遷移` and the lines under it (§15.148).
+///
+/// The rule is one step of a state machine. `carry` names the output that comes back as an
+/// input on the next call, and that is the whole of what is new about the meaning: the
+/// generated function still takes everything as an argument and keeps nothing, and the state
+/// lives where it always did, with the host (§5.4). What the section adds is claims about
+/// every sequence of calls, and those are decidable for the same reason a table is: the state
+/// is a finite enum, and the tables cut every other input into finitely many classes.
+#[derive(Debug, Clone)]
+pub struct MachineDecl {
+    pub name: Name,
+    /// The table that decides the carried output: its rows are the transitions.
+    pub over: Option<Name>,
+    /// `carry <input> -> <output>`, with where the line is.
+    pub carry: Option<(Name, Name, Span)>,
+    pub initial: Option<(Name, Span)>,
+    pub finals: Vec<Name>,
+    /// Where the `final` line is, when there is one.
+    pub final_span: Option<Span>,
+    pub nevers: Vec<NeverDecl>,
+    pub onces: Vec<OnceDecl>,
+    /// `held <input>, …`: the inputs a case holds from its first call to its last, and where
+    /// the line is (§15.149).
+    pub held: Vec<Name>,
+    pub held_span: Option<Span>,
+    pub span: Span,
+}
+
+impl MachineDecl {
+    /// The carried input and output, when the `carry` line was read.
+    pub fn carried(&self) -> Option<(&str, &str)> {
+        self.carry.as_ref().map(|(i, o, _)| (i.text.as_str(), o.text.as_str()))
+    }
+}
+
+/// `scenario 取消のあとの入金(late_pay)` and its table (§15.148): a sequence of calls from the
+/// machine's initial state, one row per call, with what each call answers. Shaped like
+/// `examples`, except that the carried input has no column: it is what the call before
+/// answered.
+#[derive(Debug, Clone)]
+pub struct ScenarioDecl {
+    pub name: Name,
+    pub table: Table,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleFile {
     pub name: Name,
@@ -679,8 +745,10 @@ pub struct RuleFile {
     /// derive / define / table in source order — §5.1's define-before-use pipeline.
     pub items: Vec<Item>,
     pub result: Option<ResultDecl>,
-    /// `examples` — an executable specification (§1.2), shaped like a table.
-    pub examples: Option<Table>,
+    /// `examples` — an executable specification (§1.2), shaped like a table. A rule may
+    /// have more than one section, each with a header of its own, and every one runs: a
+    /// second section used to replace the first without a word (§15.149).
+    pub examples: Vec<Table>,
     /// The relations between inputs that always hold (§15.55).
     pub constraints: Vec<Constraint>,
     /// The shapes of the caller's objects that inputs are projected from (§15.125).
@@ -692,4 +760,8 @@ pub struct RuleFile {
     pub sequences: Vec<SeqDecl>,
     /// How the verdicts of the per-element table reduce to one answer (§15.56).
     pub fold: Option<FoldDecl>,
+    /// The state machine the rule is one step of (§15.148).
+    pub machine: Option<MachineDecl>,
+    /// Sequences of calls with what each one answers (§15.148).
+    pub scenarios: Vec<ScenarioDecl>,
 }

@@ -1252,6 +1252,76 @@ message QuoteRequest {
 - **There is no row for express above 5 kg.** The contract's `!this.express || this.weight_g <= 5000` never lets such a request through. Add one and it is W124: each cell alone asks for values the contract lets through, and the combination never passes.
 - **Of CEL, what can be read is read.** Comparisons of whole-number sums, `in`, `size()`, `has()`, `&&`, `||`, `!` and `? :`. A part that cannot be read, such as a remainder or a string function, is taken as true, so nothing is missed.
 
+## One event in an order that goes on (machine)
+
+Where an online order moves on an event — payment, shipment, delivery, a cancel request — and how much is refunded. The state lives with the caller, in the order's row of a database. The rule stays a pure function that takes the state and one event and answers the next state; the `machine` section says that calling it again and again cannot break.
+
+```rule
+rule 注文の状態(order_state) v1
+description "通販の注文が、入金・出荷・配達・取消依頼の出来事でどの状態に移り、いくら返金するか。状態は呼び出す側が持ち、規則は一回の出来事だけを判定する。書き下ろしの例"
+
+enum 状態(state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)
+enum 出来事(event) = 入金(pay) | 出荷(ship) | 配達(deliver) | 取消依頼(cancel)
+
+inputs
+  状態(state)   : 状態
+  出来事(event) : 出来事
+  支払額(paid)  : money[円, incl_tax]  range >=0円 <=100万円
+
+outputs
+  次の状態(next_state) : 状態
+  返金額(refund)       : money[円, incl_tax]  round down(1円)
+  受理(accepted)       : bool
+
+table 遷移(step)
+policy unique
+| 状態   | 出来事               | -> 次の状態 | 返金額 | 受理  |
+| 受付   | 入金                 | 入金済      | 0円    | true  |
+| 受付   | 取消依頼             | 取消        | 0円    | true  |
+| 受付   | 出荷, 配達           | 状態        | 0円    | false |
+| 入金済 | 出荷                 | 出荷済      | 0円    | true  |
+| 入金済 | 取消依頼             | 取消        | 支払額 | true  |
+| 入金済 | 入金, 配達           | 状態        | 0円    | false |
+| 出荷済 | 配達                 | 配達済      | 0円    | true  |
+| 出荷済 | 入金, 出荷, 取消依頼 | 状態        | 0円    | false |  # 出荷のあとの取消は、返品の手続きで受ける
+| 配達済 | -                    | 状態        | 0円    | false |
+| 取消   | -                    | 状態        | 0円    | false |  # 取消のあとに届いた入金の通知では、注文を戻さない
+
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+
+scenario 配達まで(delivered)
+| 出来事 | 支払額 | -> 次の状態 | 返金額 | 受理 |
+| 入金   | 3000円 | 入金済      | 0円    | true |
+| 出荷   | 3000円 | 出荷済      | 0円    | true |
+| 配達   | 3000円 | 配達済      | 0円    | true |
+
+scenario 取消のあとの入金(late_pay)
+| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 入金     | 3000円 | 入金済      | 0円    | true  |
+| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
+| 入金     | 3000円 | 取消        | 0円    | false |
+
+examples
+| 状態   | 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 受付   | 取消依頼 | 0円    | 取消        | 0円    | true  |
+| 出荷済 | 取消依頼 | 3000円 | 出荷済      | 0円    | false |
+```
+
+**What this one shows**
+
+- **`carry 状態 -> 次の状態` is the one line with new meaning.** It declares that the `次の状態` a call answers is passed as `状態` to the next one. The table is an ordinary table, and completeness asks for the row about a cancel request that arrives after shipment. `状態` in an output cell hands the state back as it was.
+- **`held 支払額` is a promise the caller keeps.** One order passes the same paid amount on every call. As `constraint` says which combinations do not happen, the claims are then about the sequences of calls that keep the promise, and one that changes the amount halfway is never offered as a counterexample.
+- **`final`, `never` and `once` are claims about every sequence of calls.** Rewrite the last row so that a payment arriving after cancellation puts the order back to `入金済`, and `check` stops with three errors: the ended `取消` has a way out (E124), a cancel request, a payment and a shipment reach `出荷済` after `取消` (E126), and four calls refund twice (E127) — each with the shortest sequence of calls that breaks it. Read one row at a time, every row looks reasonable.
+- **A `scenario` is an example that runs for several calls.** It has no column for the carried `状態`: the first call starts in `initial`, `受付`, and each later one where the call before it ended.
+- **The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.
+- **A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.
+
 ## Whether a return is accepted, in English
 
 A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.

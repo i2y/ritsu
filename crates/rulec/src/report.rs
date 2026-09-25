@@ -136,6 +136,29 @@ pub struct Report {
     /// Only a record that carries a `trace` can land here. They count as matched — the amount
     /// is right — and are reported apart, clustered by the move.
     pub moved: Vec<Mismatch>,
+    /// A machine's records read as cases (§15.148). `None` for a rule that is not a machine,
+    /// or records that carry no tag.
+    pub cases: Option<Cases>,
+}
+
+/// A machine's records read as cases (§15.148): the records that share a `tag`, in the order
+/// they came in, are one case's calls. Each case is played again from its first record, the
+/// version carrying its own answer from one call to the next.
+#[derive(Default, Debug, Clone)]
+pub struct Cases {
+    pub total: usize,
+    /// Played through with every call answered as it was before (the record's answer for
+    /// `replay`, the old version's for `diff`).
+    pub followed: usize,
+    /// (tag, line): the first call where the answer parts from before.
+    pub diverged: Vec<(String, usize)>,
+    /// (tag, line): a call the version refuses — a state it no longer has, a value it does not
+    /// take.
+    pub refused: Vec<(String, usize)>,
+    /// (tag, state): the state a case is left in, from which the version reaches no final state.
+    pub stranded: Vec<(String, String)>,
+    /// How many cases end in a final state.
+    pub ended: usize,
 }
 
 impl Report {
@@ -154,6 +177,7 @@ impl Report {
             filled_agreed: 0,
             excluded: Vec::new(),
             moved: Vec::new(),
+            cases: None,
         }
     }
     /// The headline match rate is computed from observed records only (§10.3).
@@ -468,6 +492,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
             }
         }
     }
+    if let Some(cs) = &rep.cases {
+        o.push('\n');
+        o.push_str(&cases_text(cs));
+    }
     // §15.35: the amount agreed, the row did not. Reported apart from the mismatches, so the
     // headline stays about values, and clustered by the move so a renumbering reads as one line.
     if !rep.moved.is_empty() {
@@ -483,6 +511,35 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
             }
         }
     }
+    o
+}
+
+/// The cases, as lines (§15.148).
+pub fn cases_text(cs: &Cases) -> String {
+    let first = |v: &Vec<(String, usize)>| -> String {
+        v.first().map(|(t, l)| tr!("（例: {t} の {l} 行目）", " (e.g. {t}, line {l})")).unwrap_or_default()
+    };
+    let mut o = tr!(
+        "案件（同じ tag の記録を、一つの案件の呼び出しの並びとして）: {} 件\n",
+        "Cases (the records that share a tag, as one case's calls): {}\n",
+        cs.total
+    );
+    o.push_str(&tr!("  前と同じに進んだ: {} 件\n", "  played as before: {}\n", cs.followed));
+    if !cs.diverged.is_empty() {
+        o.push_str(&tr!("  途中で答えが変わる: {} 件{}\n", "  answered differently partway: {}{}\n", cs.diverged.len(), first(&cs.diverged)));
+    }
+    if !cs.refused.is_empty() {
+        o.push_str(&tr!("  途中で断られる: {} 件{}\n", "  refused partway: {}{}\n", cs.refused.len(), first(&cs.refused)));
+    }
+    if !cs.stranded.is_empty() {
+        let (t, st) = &cs.stranded[0];
+        o.push_str(&tr!(
+            "  終わりの状態に着けなくなる: {} 件（例: {t} は {st} で止まる）\n",
+            "  left where no final state can be reached: {} (e.g. {t} stops at {st})\n",
+            cs.stranded.len()
+        ));
+    }
+    o.push_str(&tr!("  終わりの状態で終わる: {} 件\n", "  ending in a final state: {}\n", cs.ended));
     o
 }
 
@@ -570,6 +627,12 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
         .as_str());
         for cl in moved_clusters(rep, f, c) {
             o.push_str(&format!("| {} | {} |{}\n", esc(&cl.label), cl.count, ex(cl.example)));
+        }
+    }
+    if let Some(cs) = &rep.cases {
+        o.push('\n');
+        for (k, line) in cases_text(cs).lines().enumerate() {
+            o.push_str(&if k == 0 { format!("**{}**\n\n", line.trim()) } else { format!("- {}\n", line.trim()) });
         }
     }
     o
@@ -669,6 +732,25 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         .raw("moved", crate::json::arr(&moved))
         .raw("excluded", excluded.finish())
         .raw("filled", filled)
+        .raw("cases", match &rep.cases {
+            None => "null".into(),
+            Some(cs) => {
+                let at = |v: &Vec<(String, usize)>| -> String {
+                    crate::json::arr(&v.iter().map(|(t, l)| crate::json::Obj::new().str("tag", t).int("line", *l as i128).finish()).collect::<Vec<_>>())
+                };
+                crate::json::Obj::new()
+                    .int("total", cs.total as i128)
+                    .int("followed", cs.followed as i128)
+                    .raw("diverged", at(&cs.diverged))
+                    .raw("refused", at(&cs.refused))
+                    .raw(
+                        "stranded",
+                        crate::json::arr(&cs.stranded.iter().map(|(t, st)| crate::json::Obj::new().str("tag", t).str("state", st).finish()).collect::<Vec<_>>()),
+                    )
+                    .int("ended", cs.ended as i128)
+                    .finish()
+            }
+        })
         .finish()
 }
 

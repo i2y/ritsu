@@ -397,6 +397,16 @@ pub fn json(f: &RuleFile, c: &Checked, src: &str, src_hash: &str) -> String {
         // The crossings carry their guards in the nodes; what a shape cannot say about them
         // is here, in the same form `rulec api` gives it (§15.116).
         .raw("preconditions", crate::verify::preconditions_json(f, c))
+        // A machine's carried pair (§15.148). It is not an edge: an edge is read within one
+        // call, and this one crosses from a call to the next, which the caller makes.
+        .raw(
+            "carry",
+            f.machine
+                .as_ref()
+                .and_then(|m| m.carried())
+                .map(|(i, o)| Obj::new().str("output", o).str("input", i).finish())
+                .unwrap_or_else(|| "null".into()),
+        )
         .finish()
         + "\n"
 }

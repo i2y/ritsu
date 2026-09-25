@@ -55,6 +55,14 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E047](#e047) | error | 宣言の後ろに余分な語があります |
 | [E049](#e049) | error | 桁区切りのカンマは書けません |
 | [E048](#e048) | error | この型には足し算も掛け算もありません |
+| [E050](#e050) | error | `machine` の節の形が違います |
+| [E051](#e051) | error | `carry` か `over` が宣言と噛み合いません |
+| [E052](#e052) | error | ステートマシンが名指しした状態が噛み合いません |
+| [E053](#e053) | error | `once` の行が宣言と噛み合いません |
+| [E054](#e054) | error | 並びを畳む規則は、ステートマシンの一歩になれません |
+| [E055](#e055) | error | `scenario` の形が違います |
+| [E056](#e056) | error | `held` の行が宣言と噛み合いません |
+| [E057](#e057) | error | 宣言に型がありません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -81,6 +89,14 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [W123](#w123) | warning | 行が、契約の通さない値でしか当たりません |
 | [E123](#e123) | error | 契約が、規則の `constraint` を破る組み合わせを通します |
 | [W124](#w124) | warning | 行が、契約の通さない組み合わせでしか当たりません |
+| [E124](#e124) | error | 終わりの状態から出る遷移があります |
+| [E125](#e125) | error | 着いたら終われない状態があります |
+| [E126](#e126) | error | `never` の主張が破れています |
+| [E127](#e127) | error | `once` の主張が破れています |
+| [E128](#e128) | error | ステートマシンの主張を検査できませんでした |
+| [W125](#w125) | warning | どの手順でも着かない状態があります |
+| [W126](#w126) | warning | 案件が着ける状態からは使われない遷移があります |
+| [W127](#w127) | warning | ステートマシンの主張を決めきれませんでした |
 | [W105](#w105) | warning | 要確認の隠れ: 先の行が後の行の一部を隠しています |
 | [W110](#w110) | warning | 重なりのない `first` です |
 | [W111](#w111) | warning | 使われていない宣言があります |
@@ -152,7 +168,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape`）。表の行なら `|` で始めます。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`）。表の行なら `|` で始めます。
 
 **最小の再現**:
 
@@ -170,7 +186,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。
 
 **最小の再現**:
 
@@ -1614,6 +1630,314 @@ policy unique
 
 関係するコード: [E103](#e103), [E112](#e112), [E115](#e115)
 
+## E050
+
+`error` — **`machine` の節の形が違います**
+
+**いつ出るか。** `machine` の見出しに名前か `over <表>` が無いとき、`carry` か `initial` の行が無いか二行あるとき、`machine` の中に `carry`・`initial`・`final`・`never`・`once` のほかの行があるとき、規則に `machine` が二つあるとき（§15.148）。
+
+**直し方。** 形は `machine <名前>(<ascii>) over <表>` と、その下の `carry <入力> -> <出力>` と `initial <状態>`（どちらも必須）、`final <状態>, …`、`never <状態>, … after <状態>, …`、`once <出力> <セル>`（どれも任意）です。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+```
+
+関係するコード: [E051](#e051), [E052](#e052), [E053](#e053)
+
+## E051
+
+`error` — **`carry` か `over` が宣言と噛み合いません**
+
+**いつ出るか。** `carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙だから、呼び出しの並びについての主張が決まります。
+
+**直し方。** 状態の入力と状態の出力を同じ列挙で宣言して `carry <入力> -> <出力>` と書き、`over` には、持ち越す出力を出力の列に持つ表の名前を書いてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   zz -> nx
+  initial a
+```
+
+関係するコード: [E050](#e050), [E052](#e052)
+
+## E052
+
+`error` — **ステートマシンが名指しした状態が噛み合いません**
+
+**いつ出るか。** `initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その状態に留まる一回の呼び出しで破れるので、言いたいことになりません。
+
+**直し方。** 列挙の値の綴りで書いてください。`never` の両側には、別の状態を書きます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   d
+```
+
+関係するコード: [E050](#e050), [E126](#e126)
+
+## E053
+
+`error` — **`once` の行が宣言と噛み合いません**
+
+**いつ出るか。** `once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。
+
+**直し方。** `once <出力> <セル>` の出力には、持ち越す状態ではない出力を書きます（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  once    nx c
+```
+
+関係するコード: [E127](#e127), [E103](#e103)
+
+## E054
+
+`error` — **並びを畳む規則は、ステートマシンの一歩になれません**
+
+**いつ出るか。** `fold` のある規則に `machine` を書いたとき。答えが並び全体で決まるので、入力を決まった数の列の区画に分けられず、一回の呼び出しの行き先を数え上げられません。`diff` が同じ規則を断るのと同じ理由です。
+
+**直し方。** 並びは呼び出す側で読み、見つけたもの（件数や合計）を入力として渡してください。`count` と `sum` で数える規則は、ステートマシンの一歩になれます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+
+elements xs(xs)
+  w(w) : money[円, incl_tax]  range >=0円 <=10円
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+  nx(nx) : s
+
+table j(j)
+policy unique
+| w     | -> d(d) : v |
+| <=5円 | a           |
+| >5円  | b           |
+
+table m(m)
+policy unique
+| st | -> nx(nx) : s |
+| p  | q             |
+| q  | q             |
+
+fold d over xs
+  a -> next
+  b -> take_first w
+  empty -> 0円
+  exhausted -> held
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+```
+
+関係するコード: [E050](#e050), [E028](#e028)
+
+## E055
+
+`error` — **`scenario` の形が違います**
+
+**いつ出るか。** `machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の状態から、二行目からは一つ前の呼び出しが返した状態から始まるので、持ち越す入力には列がありません。
+
+**直し方。** `scenario <名前>(<ascii>)` の直下に表を書きます。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x     | -> r(r) : bool |
+| true  | false          |
+| false | true           |
+
+scenario s(s)
+| x    | -> r  |
+| true | false |
+```
+
+関係するコード: [E107](#e107), [E111](#e111), [E050](#e050)
+
+## E056
+
+`error` — **`held` の行が宣言と噛み合いません**
+
+**いつ出るか。** `held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。検査は、そういう入力を呼び出しごとに変えた並びを反例にしなくなります。
+
+**直し方。** 入力の名前を書いてください。持ち越す入力は呼び出しのたびに一つ前の答えで入れ替わるので、`held` にはなりません。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+  x(x)   : bool
+
+outputs
+  nx(nx) : s
+  r(r)   : bool
+
+table m(m)
+policy unique
+| st | x     | -> nx(nx) : s | r(r) : bool |
+| p  | true  | q             | true        |
+| p  | false | p             | false       |
+| q  | -     | q             | false       |
+
+machine k(k) over m
+  carry   st -> nx
+  held    r
+  initial p
+  final   q
+```
+
+関係するコード: [E050](#e050), [E051](#e051), [W126](#w126)
+
+## E057
+
+`error` — **宣言に型がありません**
+
+**いつ出るか。** `inputs`・`outputs`・`elements` の行に、名前だけがあって型が無いとき。この行は、いままで黙って捨てられていました。規則は書いた人の思うより入力が一つ少ないまま検査を通り、例やベクタがその名前を渡すと、知らない名前として断られていました。
+
+**直し方。** `<名前>(<別名>) : <型>` の形で型を書いてください（`: money[円, incl_tax]`、`: 都道府県`、`: bool`）。数の型なら `range` も要ります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+  b(b)
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a     | -> r(r) : bool |
+| true  | false          |
+| false | true           |
+```
+
+関係するコード: [E011](#e011), [E047](#e047), [E012](#e012)
+
 ## E101
 
 `error` — **完全性の欠落: どの行にも当てはまらない入力があります**
@@ -2488,6 +2812,332 @@ message Quote {
 
 関係するコード: [W123](#w123), [E123](#e123), [E102](#e102)
 
+## E124
+
+`error` — **終わりの状態から出る遷移があります**
+
+**いつ出るか。** `final` に書いた状態から、別の状態へ移る呼び出しがあるとき（§15.148）。終わったはずの案件がまた動くことになります。その状態に着くまでの最短の呼び出しと、出ていく一回が `witness.trace` に付きます。
+
+**直し方。** その行で状態を留めるか、その状態を `final` から外してください。どちらが正しいかは業務の判断です。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   b, c
+```
+
+関係するコード: [E125](#e125), [E126](#e126)
+
+## E125
+
+`error` — **着いたら終われない状態があります**
+
+**いつ出るか。** `initial` から着ける状態のうち、終わりの状態でなく、そこからどの終わりの状態にも着けないものがあるとき。ワークフローネットの健全性でいう「必ず終われる」が破れている形です。そこに着くまでの最短の呼び出しが付きます。
+
+**直し方。** 終わりの状態へ移る行を足すか、そこで終わるのが正しいなら、その状態を `final` に加えてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | d             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+関係するコード: [E124](#e124), [W125](#w125)
+
+## E126
+
+`error` — **`never` の主張が破れています**
+
+**いつ出るか。** `never A after B` について、`initial` から B を通ったあとで A に着く呼び出しの並びがあるとき。いちばん短いものが付き、そのどの呼び出しも、規則が受け付けて答えを返す入力です。
+
+**直し方。** 行き先を決める行を直すか、主張が業務として誤りなら `never` の行を消してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+  never   c after b
+```
+
+関係するコード: [E052](#e052), [E124](#e124)
+
+## E127
+
+`error` — **`once` の主張が破れています**
+
+**いつ出るか。** `once <出力> <セル>` について、一件の案件の中で、出力がセルに当てはまる呼び出しが二回ある並びがあるとき。二重の返金、二重の付与の形です。いちばん短いものが付きます。
+
+**直し方。** 二回目に至る並びを断つ行を足すか（返金を済ませた状態から前へ戻らない、など）、宣言が誤りなら `once` の行を消してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+  f(f) : bool
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s | f(f) : bool |
+| a  | fwd | b             | false       |
+| a  | rev | a             | false       |
+| b  | fwd | c             | false       |
+| b  | rev | a             | true        |
+| c  | -   | c             | false       |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+  once    f true
+```
+
+関係するコード: [E053](#e053), [E126](#e126)
+
+## E128
+
+`error` — **ステートマシンの主張を検査できませんでした**
+
+**いつ出るか。** 入力の区画の数が予算（`--budget` を 50 で割った数）を超えたとき、または規則の答えが決まった数の列で区切れないとき。証明できなかった主張を緑にはしないので、警告ではなくエラーです。
+
+**直し方。** `--budget` を上げるか、遷移を決める表の列を減らしてください。列の積が効くので、表を一列につないでいくほうが安く済みます（§5.1）。
+
+**最小の再現**（`--budget 100` で）:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+関係するコード: [E109](#e109), [W127](#w127)
+
+## W125
+
+`warning` — **どの手順でも着かない状態があります**
+
+**いつ出るか。** 持ち越す状態の列挙に、`initial` から始まる呼び出しの並びでは着かない値があるとき。
+
+**直し方。** その状態へ移る遷移を足すか、要らなければ列挙から消してください。ほかの版から移ってくる案件のために残しているのなら、このままで構いません（移行は `diff` が見ます）。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+関係するコード: [W126](#w126), [E125](#e125)
+
+## W126
+
+`warning` — **案件が着ける状態からは使われない遷移があります**
+
+**いつ出るか。** 遷移を決める表の行が、`initial` から着けない状態のときにしか当てはまらないとき。W125 と一緒に出ます。
+
+**直し方。** 着けない状態へ移る遷移を足すか、行を消してください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = a(a) | b(b) | c(c) | d(d)
+enum e(e) = fwd(fwd) | rev(rev)
+
+inputs
+  st(st) : s
+  ev(ev) : e
+
+outputs
+  nx(nx) : s
+
+table m(m)
+policy unique
+| st | ev  | -> nx(nx) : s |
+| a  | fwd | b             |
+| a  | rev | a             |
+| b  | fwd | c             |
+| b  | rev | a             |
+| c  | -   | c             |
+| d  | -   | d             |
+
+machine k(k) over m
+  carry   st -> nx
+  initial a
+  final   c
+```
+
+関係するコード: [W125](#w125), [E102](#e102)
+
+## W127
+
+`warning` — **ステートマシンの主張を決めきれませんでした**
+
+**いつ出るか。** 主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。決めきれなかったことを、成り立つとは言いません。
+
+**直し方。** その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+  a(a) : money[円]  range >=0円 <=10万円
+
+outputs
+  nx(nx) : s
+
+derive 倍(d) : money[円] = a + a  range >=0円 <=20万円
+
+define 上(up) : bool = 倍 >= 5円
+define 下(dn) : bool = 倍 <= 5円
+
+table m(m)
+policy first
+| st | 上   | 下   | -> nx(nx) : s |
+| p  | true | true | q             |
+| -  | -    | -    | st            |
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+```
+
+関係するコード: [W114](#w114), [E128](#e128)
+
 ## W105
 
 `warning` — **要確認の隠れ: 先の行が後の行の一部を隠しています**
@@ -2789,9 +3439,9 @@ overrides 甲:r1, 甲:r2
 
 `warning` — **別名が生成先の言葉とぶつかります**
 
-**いつ出るか。** ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。
+**いつ出るか。** ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります（§15.149）。
 
-**直し方。** 予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。
+**直し方。** 予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記が言います。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。
 
 **最小の再現**:
 

@@ -48,6 +48,14 @@ apply  …          (another rule, applied with its inputs bound; interleaves to
   except <definition>, …
   <callee output> -> <name>
 result …
+machine <name>(<alias>) over <table>   (the rule is one step of a state machine, §6.4)
+  carry   <input> -> <output>
+  initial <state>
+  final   <state>, …
+  never   <state>, … after <state>, …
+  once    <output> <cell>
+scenario <name>(<alias>)               (a sequence of calls from the initial state, §6.4)
+  | … |
 examples
   …
 ```
@@ -62,7 +70,8 @@ examples
 - `apply` is an item like `derive`, `define` and `table`: another rule file, applied with
   every one of its inputs bound to a value of this rule (§7, "Applying another rule"). The
   lines under it are indented by two spaces.
-- `examples` comes last.
+- `machine` names the table that decides the state it carries; `scenario` blocks follow it.
+- `examples` comes last. There may be more than one section of them (§9).
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
 comments may appear anywhere, including at the end of a table row and on a line of their own
@@ -849,6 +858,147 @@ A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two e
 the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
 walk undecided. Every target but SQL generates them, for the reason SQL gets no walk at all.
 
+## 6.4 machine and scenario
+
+A rule decides one call. Some rules are one **step** of something that goes on: an order that
+is paid, shipped and delivered, an application that is filed, reviewed and decided, a
+membership that moves up a tier each year. The state lives with the caller — in the order's row
+of a database — and every call is passed the state and answers the next one. `machine` says so:
+
+```rule
+machine 注文(order) over 遷移
+  carry   状態 -> 次の状態
+  held    支払額
+  initial 受付
+  final   配達済, 取消
+  never   出荷済 after 取消
+  once    返金額 >0円
+```
+
+| line | what it says |
+|---|---|
+| `machine <name>(<alias>) over <table>` | the table whose rows decide the carried output: its rows are the transitions |
+| `carry <input> -> <output>` | the output the caller passes back as that input on the next call. Both are one enum. **Required** |
+| `held <input>, …` | inputs one case passes with the same value on every call, from its first to its last: the amount of an order, the class of the person who applied (E056 when one is not an input, or is the carried one) |
+| `initial <state>` | the state a case starts in. **Required** |
+| `final <state>, …` | the states a case ends in |
+| `never <state>, … after <state>, …` | no sequence of calls reaches the first states once the case has been in one of the second |
+| `once <output> <cell>` | in one case, at most one call answers an output the cell accepts: a refund paid, a point granted |
+
+`carry` is the whole of what is new about the meaning. **The generated function does not
+change** — it takes the state as an argument and answers the next one, and keeps nothing — so
+a rule with a `machine` is still a pure function (DESIGN P3). What the section adds is claims
+about every **sequence** of calls the caller can make, and `rulec check` proves them:
+
+| check | what it finds | code |
+|---|---|---|
+| completeness of the table | a state and an event with no answer — *what happens when a cancel request arrives after shipment?* — including the calls that leave the state where it is | E101 |
+| overlap | a state and an event with two answers | E105 |
+| final states | a call that moves a case out of a `final` state | E124 |
+| finishing | a state a case can reach from which no `final` state can be reached | E125 |
+| `never` | a sequence of calls that reaches the first states after the second | E126 |
+| `once` | a sequence of calls in which two calls answer what the cell accepts | E127 |
+| reach | a state no sequence of calls reaches, and a row that applies only in such states | W125, W126 |
+
+Without `held`, every input may take any value on every call, and a sequence that changes the
+amount of an order halfway can come back as a counterexample nobody could send. With it, a
+case keeps those inputs' values from its first call to its last, and the claims are about the
+sequences that keep them: the check walks each **world** — each class the rule's own
+boundaries cut the held inputs into — on its own. A row that applies only with a value a case reaching its state never has is
+W126 then, with a note saying so.
+
+A broken claim comes back with the **shortest sequence of calls that breaks it**, every call an
+input the rule takes (`witness.trace` in the JSON, one line per call in the text):
+
+```console
+error[E126]: A sequence of calls reaches 出荷済 after 取消
+  --> rules/注文の状態.rule:36 machine 注文
+ Calls (from 受付):
+   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
+   2. at 取消, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 10)
+   3. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+```
+
+### Why the claims stay decidable
+
+The state is a finite enum, and every other input is cut by the rule's own boundaries into
+finitely many classes — the cells `rulec diff` walks (§15.122). Each class is settled by an
+input that realizes it, and what the rule answers there is a transition from the state the
+class has to the state the rule answers. The claims are then searches over a finite graph.
+The price is the lines this language does not have, and they are left out on purpose:
+
+- **no number is carried from one call to the next.** A total so far — refunds paid, a balance
+  — is kept by the caller and passed in, as it always was. Adding one up in the state would
+  make it a counter, and whether a counter reaches a value is not decidable in general.
+- **one machine per rule, one carried state.** Two machines running side by side is where
+  message order and races live; that is what TLA+ and P are for.
+- **no calendar.** "Within 14 days" is an input — the days elapsed, counted by the caller —
+  compared with a constant, as every date comparison is.
+
+`once` counts a call whose output the cell accepts. Where the output is read off an input or
+a computed value, the value's own boundaries are cut at the cell's, so that one input stands
+for its whole class; a claim that turns on a class no input was built for and none shown
+impossible is reported as undecided (W127), never as holding. A space larger than the budget
+is E128: `--budget` counts fifty region nodes per cell.
+
+A `held` input is followed by the class its own column cuts it into. Every value of a class
+allows the same calls as long as nothing else reads the input; when a computed column or a
+`constraint` reads it too, one value may allow a call another value of its class does not. The
+claims that nothing bad is reached still hold then, since the walk of a class takes in every
+value's calls, but whether a case can always still reach a final state is reported as
+undecided (W127), and so is a counterexample that could only be followed by changing the value
+partway.
+
+### scenario
+
+A `scenario` is the `examples` of a machine: a sequence of calls from the initial state, one
+row per call, with what each call answers.
+
+```rule
+scenario 取消のあとの入金(late_pay)
+| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
+| 入金     | 3000円 | 入金済      | 0円    | true  |
+| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
+| 入金     | 3000円 | 取消        | 0円    | false |
+```
+
+The carried input has **no column**: the first call starts in the `initial` state, and every
+later one in the state the call before it answered. Every other input and every output has a
+column (E055, E111). `rulec check` runs the calls in order through the reference evaluator; a
+call that does not answer what its row says is E107, reported with the calls that led to it.
+
+### What a machine generates
+
+The function is the one every rule gets. Beside it, each language with a module of its own
+gets the constants a caller needs to keep the state: where a case starts, and whether it has
+ended.
+
+| language | initial | final states | has it ended |
+|---|---|---|---|
+| Python | `INITIAL` | `FINAL` | `is_final(state)` |
+| NumPy | `rule.machine["initial"]` | `rule.machine["final"]` | — |
+| TypeScript, JavaScript | `INITIAL` | `FINAL` | `isFinal(state)` |
+| Rust | `INITIAL` | `FINAL` | `is_final(state)` |
+| Ruby | `INITIAL` | `FINAL` | `final?(state)` |
+| PHP | `INITIAL` | `FINAL_STATES` | `is_final($state)` |
+| Go | `Initial` | `Final` | `IsFinal(s)` |
+| Swift | `initialState` | `finalStates` | `isFinal(_:)` |
+| Java | `INITIAL` | `FINAL` | `isFinal(state)` |
+| SQL, Wasm | — | — | — |
+
+`final` is a keyword in PHP whatever its case, and in Swift, hence the two other spellings.
+
+The NumPy plan is data, so the state names are the wire form. A target with one door and no
+module has no place for a constant; its caller reads the two off `rulec api`, which lists every
+language's spelling under `machine.constants`.
+
+The vector suite gets **traces** as well as single calls: for every transition a case can make
+and every two that can follow one another, the shortest sequence of calls from the initial
+state that ends with them, and every scenario. `rulec test` has each language's runner play
+them — **the state one call answers is handed to the next call as that language holds it** —
+and prints its constants first, so the traces hold the hand-over and the constants as well as
+the answers (docs/formats.md).
+
 ## 7. Tables
 
 ```rule
@@ -1080,6 +1230,9 @@ reference evaluator, and a row that does not hold is E107, reported with the row
 **Every output must have a column** (E111). With two or more outputs, writing `->` before the
 later output columns is optional; `rulec fmt` folds it to the canonical form.
 
+A rule may have **more than one `examples` section** — the published worked examples in one,
+the cases a person added in another. Each has a header of its own, and every one runs.
+
 Its cells are held to the types of the columns they sit under, exactly as a table's are: a
 heading that names nothing is E012, a value that is not one of the column's is E012, and a
 literal the column cannot hold — `1lb` under `mass[g]`, a bare number where a unit is
@@ -1095,8 +1248,12 @@ names.
 - Collections and iteration. A rule is one decision; the order and the repetition belong to
   the caller.
 - Date arithmetic. Comparison and range only.
+- State kept between calls. A `machine` makes claims about the calls a caller makes one after
+  another, and the state stays with the caller: the function is passed it and answers the next
+  one (§6.4).
 
-Allowing any of the three would make the completeness and overlap checks unable to terminate.
+Allowing any of the first three would make the completeness and overlap checks unable to
+terminate; the fourth would take the replay of past records with it.
 
 ## 11. The canonical form
 
@@ -1107,6 +1264,7 @@ Allowing any of the three would make the completeness and overlap checks unable 
   Japanese twice as wide as Latin,
 - rewrites `→ ・ 、 ， ≦ ≧` and fullwidth digits to their ASCII forms,
 - folds the `->` of the second and later output columns of `examples`,
+- indents the lines under `machine` by two spaces and lines their values up in one column,
 - leaves the inside of a comment alone.
 
 `rulec fmt --check` names the files that are not in canonical form and exits 1, which is how
@@ -1114,14 +1272,15 @@ it belongs in CI.
 
 ## 12. Reserved words
 
-These cannot be used as a name or an alias (E009). A declaration whose name is one of them
-would be read by the line-oriented parser as the start of a section and silently dropped,
-which is why it is caught at parse time.
+These cannot be used as a name (E009). A declaration whose name is one of them would be read
+by the line-oriented parser as the start of a section and silently dropped, which is why it is
+caught at parse time. An ASCII alias is not read by that parser, so it may be one; W121 says
+when a target language takes it badly.
 
 <!-- RESERVED -->
 | | |
 |---|---|
-| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sum` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `examples` |
+| line heads | `rule` `description` `import` `enum` `group` `inputs` `elements` `outputs` `derive` `define` `constraint` `table` `fold` `count` `sum` `sequence` `policy` `overrides` `clause` `source` `apply` `result` `machine` `scenario` `examples` |
 | modifiers | `range` `round` `contract_only` `default` |
 | cells | `not` `none` `starts_with` `true` `false` |
 | rounding | `up` `down` `half_up` `half_down` `half_even` |
@@ -1130,6 +1289,7 @@ which is why it is caught at parse time.
 | count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |
 | apply body | `except` (and `with`, above) |
+| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

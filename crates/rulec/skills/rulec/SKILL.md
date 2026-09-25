@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E049, E101-E123, W105, W110, W111, W114-W124) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E057, E101-E128, W105, W110, W111, W114-W127) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `rulec` binary on PATH (https://github.com/i2y/rulec).
 license: MIT
 ---
@@ -14,26 +14,19 @@ applies, whether a return is accepted, which period a date falls in, what rank a
 earns. The source of truth may be a spreadsheet, a published policy, a wiki page, a legacy
 implementation, or a person, and the job is to turn it into code someone can approve.
 
-It does **not** apply to workflows with several steps and state, to judgements about a
-collection ("any line is refrigerated", "three or more items"), to pattern matching on
-strings, or to scoring and optimisation. Flatten collection facts at the boundary and pass
-the scalar in; keep iteration in the caller.
+A process with state applies one call at a time: the table decides a step, and the caller
+keeps the state. It does **not** apply to running a workflow, to judgements about a collection
+("any line is refrigerated", "three or more items"), to pattern matching on strings, or to
+scoring and optimisation. Flatten collection facts at the boundary and pass the scalar in;
+keep iteration in the caller.
 
 `rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
 A language only goes in once its output can be held against the reference evaluator byte for
 byte, so whatever `rulec gen` writes is covered by `rulec test`.
 
-Bundled with this skill, read on demand — do not read them all up front:
-
-| | |
-|---|---|
-| [reference.md](reference.md) | the complete grammar |
-| [examples.md](examples.md) | every worked rule in full, smallest first, each with what it demonstrates |
-| [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
-| [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
-
-Every diagnostic is `rulec explain <CODE>`, which is always current, so none of them are
-bundled here.
+The files bundled with this skill are listed under §7 at the end: read them on demand, not
+all up front. Every diagnostic is `rulec explain <CODE>`, which is always current, so none of
+them are bundled here.
 
 ---
 
@@ -126,6 +119,12 @@ A few shapes are worth knowing before the first draft:
   as the share up to it minus the share up to the line before: the parts then add up to the
   amount exactly, odd yen included. Three names with declared ranges, nothing negative, a
   positive whole, and a `constraint` that the running total never passes it — else E117.
+- **A process that goes on is decided one call at a time.** `machine <name>(<alias>) over
+  <table>` says which output the caller passes back as which input (`carry`), which inputs a
+  case holds (`held`), where it starts and ends, and what no sequence of calls may do; `check`
+  proves that over every sequence (E124–E127) with the shortest breaking one in
+  `witness.trace`, and `scenario` is an example several calls long (§6.4). With two versions,
+  `diff` names the states a case in progress would be stranded in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
   takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`
@@ -435,13 +434,13 @@ not overlap, fix the rows.
 
 ## 4. What rulec will not do, and why that is the point
 
-It has no loops in an expression, no recursion, no state, no nested objects in a cell, and no
-date arithmetic. A sequence is walked once, by a `fold`, and that is the whole of the
-iteration there is: nothing accumulates across elements, so a total or a count is computed
-before the call and passed in. Do not look for a way around these. They are the price of the
-checks terminating: because a cell is a unary test on its own column, a row is a box, and
-completeness and overlap are exactly decidable. Flatten nested data at the boundary; keep
-the rest of the iteration in the caller.
+It has no loops in an expression, no recursion, no state of its own (a `machine`'s is kept by
+the caller), no nested objects in a cell, and no date arithmetic. A sequence is walked once,
+by a `fold`, and that is the whole of the iteration there is: nothing accumulates across
+elements, so a total or a count is computed before the call and passed in. Do not look for a
+way around these. They are the price of the checks terminating: because a cell is a unary test
+on its own column, a row is a box, and completeness and overlap are exactly decidable. Flatten
+nested data at the boundary; keep the rest of the iteration in the caller.
 
 It will not print a green result it cannot prove. When a check runs out of budget (E109) or
 cannot decide an overlap (W114), it says so rather than approximating.
@@ -474,6 +473,7 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | E104 on output `送料`, notes saying the spread is 9 yen | 「送料の端数はどちら向きに丸めますか。切り上げと切り捨てで最大 9 円変わります。規約に記載はありますか」 |
 | E105 between rows 3 and 7 with different outputs | 「この入力は 1,200 円と 800 円のどちらですか。両方の条件に当てはまります」 |
 | W114 | 「この二つの条件を同時に満たす注文は実在しますか」 |
+| E126, `witness.trace` = 取消依頼 → 入金 → 出荷 | 「取消のあとに入金の通知が届いたら、注文はどうなりますか。いまの表では入金済に戻り、出荷まで進みます」 |
 | A rounding you assumed | 「この丸めは規約に根拠がありません。仮に切り捨てにしています。出典はありますか」 |
 
 Three things make such a question answerable: **a concrete case** (the witness), **what turns
