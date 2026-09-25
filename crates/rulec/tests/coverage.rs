@@ -838,3 +838,41 @@ policy first
     assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
     assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
 }
+
+/// A boolean definition a table tests is a range of the number it compares (§15.154): the row
+/// for orders that are not bulk — under 11 cents — never ends in half a cent at 3.49%, and
+/// always rounds to 0. Read that way under `unique` and, as the row before it, under `first`.
+/// Where the line sits at 6,000 cents, 5,000 is left to the rate and the tie is owed and met.
+#[test]
+fn 真偽の定義の条件は比べている数の範囲として読む() {
+    let src = |policy: &str, second: &str, cut: &str| {
+        format!(
+            "\
+rule 真偽の定義(bool_define) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=0USDc <=1000000USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 大口(bulk) : bool = 金額 >= {cut}USDc
+define 料率分(pct) : money[USDc] = 金額 × 3.49%
+
+table 手数料表(fees)
+policy {policy}
+| 大口 | -> 手数料 |
+| true | 0USDc     |
+| {second} | 料率分    |
+"
+        )
+    };
+    for (policy, second) in [("unique", "false"), ("first", "-")] {
+        let (a, vs) = audit_src("bool_define.rule", &src(policy, second, "11"));
+        assert!(a.ok(), "{policy}\n{}", coverage::render(&a, &vs, &[]));
+        assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)), "{policy}");
+        let (a, vs) = audit_src("bool_define.rule", &src(policy, second, "6000"));
+        assert!(a.ok(), "{policy}\n{}", coverage::render(&a, &vs, &[]));
+        assert_eq!((a.tally[VALUE], a.tally[TIE]), ((1, 1), (1, 1)), "{policy}");
+    }
+}

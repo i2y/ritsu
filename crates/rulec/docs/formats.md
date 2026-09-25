@@ -125,9 +125,10 @@ whatever comes in) — and for each output a `define` or a `result` line compute
 the row, one input apart, with the value moved as `test` and `verify` compare it (an output
 after rounding) (§15.151, §15.152). `rounding_tie` has one for each output that declares a
 rounding, unless the rule shows that no input takes the output half a step off its grid. Both
-are shown by the rule's arithmetic, where each row wins — its own cells, the rows before it
-under `policy first`, the derived columns it tests, the `constraint`s — and, where that cannot
-say and few enough inputs are involved, by evaluating every one of them (§15.153).
+are shown by the rule's arithmetic, where each row wins — its own cells, including those on
+derived columns and on boolean definitions that compare a number, the rows before it under
+`policy first`, the `constraint`s — and, where that cannot say and few enough inputs are
+involved, by evaluating every one of them (§15.153, §15.154).
 `fold_transition` has obligations only for a rule that walks a sequence
 (§15.56); `machine_transition` only for a rule with a `machine` (§15.148): every transition a
 case can make, and every two that can follow one another, each met by a trace of the suite that

@@ -253,11 +253,24 @@ struct Derived {
     range: (Rat, Rat),
 }
 
+/// A boolean `define` a table tests, when it compares one number with a constant
+/// (§15.154): `大口 = 金額 >= 3万円`. A row's cell on it is a range of that number — `true`
+/// the comparison, `false` its negation — and is read as one.
+///
+/// The other shape the language allows compares two values whose difference cannot be derived,
+/// such as two dates. No amount is computed from a date, so it is left out.
+struct Atom {
+    name: String,
+    op: BinOp,
+    value: Rat,
+}
+
 /// What the grid argument knows of one rule, for every question asked of it.
 pub struct Grid<'a> {
     f: &'a RuleFile,
     c: &'a Checked,
     derived: BTreeMap<String, Derived>,
+    atoms: BTreeMap<String, Atom>,
     boxes: RefCell<HashMap<(usize, usize), Vec<Box>>>,
 }
 
@@ -277,7 +290,7 @@ const EXHAUST: usize = 1 << 14;
 
 impl<'a> Grid<'a> {
     pub fn new(f: &'a RuleFile, c: &'a Checked) -> Grid<'a> {
-        let mut g = Grid { f, c, derived: BTreeMap::new(), boxes: RefCell::new(HashMap::new()) };
+        let mut g = Grid { f, c, derived: BTreeMap::new(), atoms: BTreeMap::new(), boxes: RefCell::new(HashMap::new()) };
         let tested: BTreeSet<&str> =
             c.sets.iter().flat_map(|s| s.table.inputs.iter().map(|(n, _)| n.as_str())).collect();
         let inputs: BTreeSet<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
@@ -308,6 +321,33 @@ impl<'a> Grid<'a> {
             derived.insert(d.name.text.clone(), Derived { form: form.clone(), step, range: (lo, hi) });
         }
         g.derived = derived;
+        // The boolean definitions a table tests, each a number compared with a constant.
+        for it in &f.items {
+            let Item::Define(d) = it else { continue };
+            if !tested.contains(d.name.text.as_str()) || c.ty_of(&d.name.text) != Some(Ty::Bool) {
+                continue;
+            }
+            let Expr::Bin(l, op, r, _) = &d.expr else { continue };
+            if !matches!(op, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt | BinOp::Eq) {
+                continue;
+            }
+            let (name, lit, op) = match (l.as_ref(), r.as_ref()) {
+                (Expr::Name(n, _), Expr::Lit(v, _)) => (n, v, *op),
+                (Expr::Lit(v, _), Expr::Name(n, _)) => (n, v, flip(*op)),
+                _ => continue,
+            };
+            if g.lattice(name).is_none() {
+                continue;
+            }
+            let Some(ty) = c.ty_of(name) else { continue };
+            let value = match lit {
+                Lit::Num(x) => crate::types::lit_value_in_pub(x, &ty),
+                Lit::Date(y, m, dd) => Some(crate::types::date_ord(*y, *m, *dd)),
+                _ => None,
+            };
+            let Some(value) = value else { continue };
+            g.atoms.insert(d.name.text.clone(), Atom { name: name.clone(), op, value });
+        }
         // Boxes made while the derived columns were being read do not know them.
         g.boxes.borrow_mut().clear();
         g
@@ -500,44 +540,76 @@ impl<'a> Grid<'a> {
         let set = &self.c.sets[si];
         let t = &set.table;
         let row = &t.rows[ri];
-        let mut own = Box::new();
+        // The row's own cells: on numbers, and on the boolean definitions that compare one.
+        let mut boxes: Vec<Box> = vec![Box::new()];
         for ((col, _), cell) in t.inputs.iter().zip(&row.cells) {
-            if let Some(iv) = self.cell_interval(col, cell) {
-                own.insert(col.clone(), iv);
+            let pieces = match self.cell_interval(col, cell) {
+                Some((l, h)) => vec![(col.clone(), (Some(l), Some(h)))],
+                None => match (self.atoms.get(col), self.truth(col, cell)) {
+                    (Some(a), (true, false)) => self.atom_pieces(a, true).into_iter().map(|p| (a.name.clone(), p)).collect(),
+                    (Some(a), (false, true)) => self.atom_pieces(a, false).into_iter().map(|p| (a.name.clone(), p)).collect(),
+                    // A cell that lets neither through: the row never holds.
+                    (Some(_), (false, false)) => return Vec::new(),
+                    _ => continue,
+                },
+            };
+            let mut next = Vec::new();
+            for b in &boxes {
+                for (n, piece) in &pieces {
+                    let mut b = b.clone();
+                    if self.clip(&mut b, n, *piece) {
+                        next.push(b);
+                    }
+                }
             }
+            boxes = next;
         }
-        let Some(own) = self.settle(own) else { return Vec::new() };
-        let mut boxes = vec![own];
+        let mut boxes: Vec<Box> = boxes.into_iter().filter_map(|b| self.settle(b)).collect();
         for &e in &set.beats[ri] {
             let erow = &t.rows[e];
             let mut next = Vec::new();
             for b in boxes {
                 // The cells of the earlier row this piece does not already satisfy.
-                let mut open: Vec<(&String, (Option<Rat>, Option<Rat>))> = Vec::new();
+                let mut open: Vec<(String, (Option<Rat>, Option<Rat>))> = Vec::new();
                 let mut other = false;
                 for (ci, (col, _)) in t.inputs.iter().enumerate() {
                     let (Some(ecell), Some(rcell)) = (erow.cells.get(ci), row.cells.get(ci)) else { continue };
                     if matches!(ecell, Cell::DontCare) {
                         continue;
                     }
-                    match self.lattice(col) {
-                        Some(q) => {
-                            let Some(ebounds) = self.cell_bounds(col, ecell, q) else {
+                    // The earlier row's cell as bounds on a number: its own column's, or the one a
+                    // boolean definition compares.
+                    let as_bounds = match (self.lattice(col), self.atoms.get(col)) {
+                        (Some(q), _) => self.cell_bounds(col, ecell, q).map(|b| (col.clone(), b)),
+                        (None, Some(a)) => match self.truth(col, ecell) {
+                            (true, true) => continue,
+                            (true, false) | (false, true) => match self.atom_pieces(a, self.truth(col, ecell).0).as_slice() {
+                                [one] => Some((a.name.clone(), *one)),
+                                _ => None,
+                            },
+                            (false, false) => {
+                                // It never holds, so it never takes anything from this row.
+                                open.clear();
                                 other = true;
-                                continue;
-                            };
-                            let (bl, bh) = self.span_in(&b, col);
-                            let inside = ebounds.0.is_none_or(|l| bl.cmp_to(l) != std::cmp::Ordering::Less)
-                                && ebounds.1.is_none_or(|h| bh.cmp_to(h) != std::cmp::Ordering::Greater);
-                            if !inside {
-                                open.push((col, ebounds));
+                                break;
                             }
-                        }
-                        None => {
+                        },
+                        (None, None) => {
                             if !self.implies(col, rcell, ecell) {
                                 other = true;
                             }
+                            continue;
                         }
+                    };
+                    let Some((n, ebounds)) = as_bounds else {
+                        other = true;
+                        continue;
+                    };
+                    let (bl, bh) = self.span_in(&b, &n);
+                    let inside = ebounds.0.is_none_or(|l| bl.cmp_to(l) != std::cmp::Ordering::Less)
+                        && ebounds.1.is_none_or(|h| bh.cmp_to(h) != std::cmp::Ordering::Greater);
+                    if !inside {
+                        open.push((n, ebounds));
                     }
                 }
                 if open.is_empty() && !other {
@@ -547,7 +619,8 @@ impl<'a> Grid<'a> {
                     next.push(b);
                     continue;
                 }
-                let (col, (el, eh)) = open[0];
+                let (col, (el, eh)) = open[0].clone();
+                let col = &col;
                 let q = self.lattice(col).unwrap_or(Rat::int(1));
                 let (bl, bh) = self.span_in(&b, col);
                 // Below the earlier row's interval, and above it.
@@ -717,6 +790,38 @@ impl<'a> Grid<'a> {
         Some((lo.map_or(dl, |l| max_rat(l, dl)), hi.map_or(dh, |h| min_rat(h, dh))))
     }
 
+    /// Which truth values a cell on a boolean column lets through: `(true, false)`.
+    fn truth(&self, col: &str, cell: &Cell) -> (bool, bool) {
+        let ty = self.c.ty_of(col).unwrap_or(Ty::Bool);
+        let lets = |v: bool| matches!(cell, Cell::DontCare) || eval::cell_matches(self.c, cell, &Val::Bool(v), &ty);
+        (lets(true), lets(false))
+    }
+
+    /// The bounds a boolean definition puts on the number it compares, when it is `truth`: one
+    /// interval, or two where `=` is false.
+    fn atom_pieces(&self, a: &Atom, truth: bool) -> Vec<(Option<Rat>, Option<Rat>)> {
+        let q = self.lattice(&a.name).unwrap_or(Rat::int(1));
+        let v = a.value;
+        let op = if truth { a.op } else { not(a.op) };
+        match op {
+            BinOp::Le => vec![(None, Some(down(v, q)))],
+            BinOp::Lt => vec![(None, Some(below(v, q)))],
+            BinOp::Ge => vec![(Some(up(v, q)), None)],
+            BinOp::Gt => vec![(Some(above(v, q)), None)],
+            BinOp::Eq if truth => vec![(Some(v), Some(v))],
+            // `=` false: below the value, or above it.
+            _ => vec![(None, Some(below(v, q))), (Some(above(v, q)), None)],
+        }
+    }
+
+    /// Narrow a box's interval for `name` to the bounds; `false` when nothing is left.
+    fn clip(&self, b: &mut Box, name: &str, (lo, hi): (Option<Rat>, Option<Rat>)) -> bool {
+        let (bl, bh) = self.span_in(b, name);
+        let (l, h) = (lo.map_or(bl, |x| max_rat(x, bl)), hi.map_or(bh, |x| min_rat(x, bh)));
+        b.insert(name.to_string(), (l, h));
+        l.cmp_to(h) != std::cmp::Ordering::Greater
+    }
+
     /// Whether every value `rcell` lets through on a column that is not a number `ecell` lets
     /// through too. An enum or a truth value is a finite set, and the sets are compared.
     fn implies(&self, col: &str, rcell: &Cell, ecell: &Cell) -> bool {
@@ -740,6 +845,28 @@ impl<'a> Grid<'a> {
             .iter()
             .filter(|v| matches!(rcell, Cell::DontCare) || eval::cell_matches(self.c, rcell, v, &ty))
             .all(|v| eval::cell_matches(self.c, ecell, v, &ty))
+    }
+}
+
+/// `a op b` as `b op' a`.
+fn flip(op: BinOp) -> BinOp {
+    match op {
+        BinOp::Le => BinOp::Ge,
+        BinOp::Lt => BinOp::Gt,
+        BinOp::Ge => BinOp::Le,
+        BinOp::Gt => BinOp::Lt,
+        other => other,
+    }
+}
+
+/// The comparison that holds where `op` does not. `=` has none of one piece; the caller splits.
+fn not(op: BinOp) -> BinOp {
+    match op {
+        BinOp::Le => BinOp::Gt,
+        BinOp::Lt => BinOp::Ge,
+        BinOp::Ge => BinOp::Lt,
+        BinOp::Gt => BinOp::Le,
+        other => other,
     }
 }
 
