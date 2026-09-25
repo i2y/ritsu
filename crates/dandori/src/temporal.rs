@@ -32,6 +32,8 @@ use std::collections::BTreeSet;
 pub enum Flavor {
     Temporal,
     Durable,
+    /// the program that runs the tasks dandori writes in a container of an Argo workflow
+    Argo,
 }
 
 impl Flavor {
@@ -39,6 +41,7 @@ impl Flavor {
         match self {
             Flavor::Temporal => Platform::Temporal,
             Flavor::Durable => Platform::Durable,
+            Flavor::Argo => Platform::Argo,
         }
     }
 }
@@ -299,12 +302,18 @@ fn task_result(m: &Model, task: &TaskDef) -> String {
 /// as an activity or a step, the ones the user writes, and the code for the others.
 fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     let p = flavor.platform();
-    let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p)).collect();
+    let tasks: Vec<&TaskDef> = m
+        .tasks
+        .iter()
+        .filter(|t| !t.is_child(p))
+        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. })))
+        .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let mut a = header.to_string();
     let (made, register) = match flavor {
         Flavor::Temporal => ("makeActivities", "the activities to register with the worker"),
         Flavor::Durable => ("makeTasks", "what the handler calls, each in a step of its own"),
+        Flavor::Argo => ("makeTasks", "what call.ts runs"),
     };
     a.push_str("// The tasks the workflow calls.\n//\n");
     a.push_str("// - A task that says `lambda`, `http` or `aws` is written here: it sends what Step Functions\n");
@@ -313,12 +322,19 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     match flavor {
         Flavor::Temporal => a.push_str("A declared error is thrown as\n//   ApplicationFailure.create({ type: \"<error>\", nonRetryable: true }).\n"),
         Flavor::Durable => a.push_str("A declared error is thrown as an Error whose\n//   name is the error's name: const e = new Error(\"...\"); e.name = \"card_declined\"; throw e;\n"),
+        Flavor::Argo => a.push_str("On Argo Workflows they are containers of your own images,\n//   which the workflow runs; see the comment at the top of the workflow.\n"),
     }
-    a.push_str("// - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
+    match flavor {
+        Flavor::Argo => a.push_str("// - A call here is tried once; Argo tries the container again, as the `retry` of each task says.\n"),
+        _ => a.push_str("// - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n"),
+    }
     a.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
     match flavor {
         Flavor::Temporal => a.push_str(
             "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n//   as the signal `dandori.callback`, with { callback_id, ok } or { callback_id, error, message }, to the\n//   workflow `io.workflowOf(callback_id)` names.\n\n",
+        ),
+        Flavor::Argo => a.push_str(
+            "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n//   with `argo node set <workflow> --output-parameter answer=<{\"ok\": …} or {\"error\": …, \"message\": …}>\n//   --node-field-selector inputs.parameters.callback_id.value=<callback_id>` and then `argo resume` with\n//   the same selector; the workflow is the part of the id before the first `/`.\n\n",
         ),
         Flavor::Durable => a.push_str(
             "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer\n//   comes when the other side calls SendDurableExecutionCallbackSuccess with the id and the\n//   answer as JSON, or SendDurableExecutionCallbackFailure with the error's name as ErrorType.\n\n",
@@ -342,7 +358,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     a.push_str("}\n\n");
     match flavor {
         Flavor::Temporal => a.push_str("function fail(kind: string, message: string): never {\n  throw ApplicationFailure.create({ type: kind, message, nonRetryable: true });\n}\n\n"),
-        Flavor::Durable => a.push_str("function fail(kind: string, message: string): never {\n  const e = new Error(message);\n  e.name = kind;\n  throw e;\n}\n\n"),
+        Flavor::Durable | Flavor::Argo => a.push_str("function fail(kind: string, message: string): never {\n  const e = new Error(message);\n  e.name = kind;\n  throw e;\n}\n\n"),
     }
     a.push_str(&format!("/** Your tasks and the ones dandori writes: {register}. */\n"));
     a.push_str(&format!("export function {made}(own: OwnTasks, transport: io.Transport = io.transport()): Tasks {{\n"));
@@ -436,6 +452,89 @@ fn braces(inner: &str) -> String {
     } else {
         format!("{{ {inner} }}")
     }
+}
+
+/// The program that runs, in a container of an Argo workflow, the tasks dandori writes (the
+/// ones that say `lambda`, `http` or `aws`) and the rules: `caller/` in the Argo build.
+pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
+    let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+    // Node runs these directly, stripping the types, and wants the extension on a relative import
+    let ts = |text: String| text.replace("from \"./types\"", "from \"./types.ts\"").replace("from \"./io\"", "from \"./io.ts\"");
+    let mut files = vec![
+        ("caller/types.ts".to_string(), types_file(m, header)),
+        ("caller/tasks.ts".to_string(), ts(tasks_file(m, Flavor::Argo, header))),
+        ("caller/io.ts".to_string(), format!("{header}{IO}")),
+        (
+            "caller/transport.ts".to_string(),
+            format!("{header}// Where the tasks dandori writes send their calls: set the credentials and the AWS SDK's\n// configuration here, as io.ts's Options say.\n\nimport * as io from \"./io.ts\";\n\nexport const transport: io.Transport = io.transport();\n"),
+        ),
+    ];
+    if !called.is_empty() {
+        let rules = rules_file(m, header, &called).lines().map(|l| {
+            if l.starts_with("import ") && l.contains("./rulec/typescript/") {
+                l.replacen("\";", ".ts\";", 1)
+            } else {
+                l.to_string()
+            }
+        }).collect::<Vec<_>>().join("\n") + "\n";
+        files.push(("caller/rules.ts".to_string(), rules));
+    }
+    let mut declared = Vec::new();
+    for t in &m.tasks {
+        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. })) {
+            declared.push(format!("  {}: [{}],", q(&ident(&t.name)), t.errors.iter().map(|e| q(&e.name)).collect::<Vec<_>>().join(", ")));
+        }
+    }
+    let mut call = header.to_string();
+    call.push_str("// Runs one task or rule in a container of the Argo workflow: the call comes in DANDORI_CALL, the\n");
+    call.push_str("// answer goes to /tmp/dandori/answer.json; a declared error goes to /tmp/dandori/error.json and\n");
+    call.push_str("// the exit code is 3; any other failure exits 1.\n//\n//   node call.ts <task or rule_<rule>>\n\n");
+    call.push_str("import fs from \"node:fs\";\nimport { makeTasks } from \"./tasks.ts\";\n");
+    call.push_str("import { transport } from \"./transport.ts\";\n\n");
+    call.push_str(&format!("const DECLARED: Record<string, readonly string[]> = {{\n{}\n}};\n\n", declared.join("\n")));
+    call.push_str("const name = process.argv[2];\nconst args = JSON.parse(process.env.DANDORI_CALL ?? \"{}\");\nfs.mkdirSync(\"/tmp/dandori\", { recursive: true });\n");
+    // the rules are read only when one is called, so a task's container needs no rulec module
+    if called.is_empty() {
+        call.push_str("const all: Record<string, (args: any) => Promise<unknown>> = { ...makeTasks({}, transport) };\n");
+    } else {
+        call.push_str("const all: Record<string, (args: any) => Promise<unknown>> = name.startsWith(\"rule_\") ? (await import(\"./rules.ts\")).rules : { ...makeTasks({}, transport) };\n");
+    }
+    call.push_str("try {\n  const out = await all[name](args);\n  fs.writeFileSync(\"/tmp/dandori/answer.json\", JSON.stringify(out ?? null));\n  process.exit(0);\n} catch (e) {\n");
+    call.push_str("  const kind = e instanceof Error ? e.name : \"Error\";\n  const message = e instanceof Error ? e.message : String(e);\n");
+    call.push_str("  fs.writeFileSync(\"/tmp/dandori/error.json\", JSON.stringify({ error: kind, message }));\n");
+    call.push_str("  if ((DECLARED[name] ?? []).includes(kind)) {\n    try {\n      fs.writeFileSync(\"/dev/termination-log\", kind);\n    } catch {\n      // not in a container\n    }\n    process.exit(3);\n  }\n  process.stderr.write(`${kind}: ${message}\\n`);\n  process.exit(1);\n}\n");
+    files.push(("caller/call.ts".to_string(), call));
+    let mut deps: BTreeSet<&str> = BTreeSet::new();
+    for t in &m.tasks {
+        match t.via(Platform::Argo) {
+            Some(Via::Lambda(_)) => {
+                deps.insert("@aws-sdk/client-lambda");
+            }
+            Some(Via::Aws { service, .. }) => {
+                if let Some((_, pkg, _)) = crate::aws::SDK_CLIENTS.iter().find(|(s, _, _)| *s == service) {
+                    deps.insert(pkg);
+                }
+            }
+            _ => {}
+        }
+    }
+    let deps_json = deps.iter().map(|d| format!("    {}: \"^3\"", q(d))).collect::<Vec<_>>().join(",\n");
+    files.push((
+        "caller/package.json".to_string(),
+        format!("{{\n  \"name\": {},\n  \"private\": true,\n  \"type\": \"module\",\n  \"description\": \"Runs the tasks and rules dandori writes for the Argo workflow {} v{}\",\n  \"dependencies\": {{\n{deps_json}\n  }}\n}}\n", q(&format!("dandori-caller-{}", ident(&m.name).to_lowercase())), m.name, m.version),
+    ));
+    let mut docker = String::new();
+    docker.push_str(&format!("# Code generated by dandori from {}. DO NOT EDIT.\n", m.source_file));
+    docker.push_str("# The image that runs the tasks dandori writes and the rules. Build it here, after\n");
+    if !called.is_empty() {
+        docker.push_str("# `rulec gen <rule> --out rulec` for every rule the workflow calls, ");
+    } else {
+        docker.push_str("# ");
+    }
+    docker.push_str("and give its name to the workflow as the parameter `dandori-caller`.\n");
+    docker.push_str("FROM node:24-alpine\nWORKDIR /app\nCOPY package.json ./\nRUN npm install --omit=dev\nCOPY . .\n");
+    files.push(("caller/Dockerfile".to_string(), docker));
+    files
 }
 
 fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
@@ -1164,13 +1263,13 @@ impl<'a> Gen<'a> {
             }
             TK::Wait { seconds } => match self.flavor {
                 Flavor::Temporal => self.line(d, &format!("await sleep({});", seconds * 1000)),
-                Flavor::Durable => self.line(d, &format!("await {ctx}.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
+                Flavor::Durable | Flavor::Argo => self.line(d, &format!("await {ctx}.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
             },
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
                 match self.flavor {
                     Flavor::Temporal => self.line(d, &format!("await sleep(Math.max(0, Date.parse({x}) - Date.now()));")),
-                    Flavor::Durable => {
+                    Flavor::Durable | Flavor::Argo => {
                         // the clock is read in a step, so that a replay reads the same moment
                         let site = s.site;
                         self.line(d, &format!("const dd_now_{site} = await {ctx}.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }});", q(&format!("{} now", s.line))));
@@ -1268,7 +1367,7 @@ impl<'a> Gen<'a> {
                                 self.line(d + 2, &format!("return {y};"));
                                 self.line(d + 1, "});");
                             }
-                            Flavor::Durable => {
+                            Flavor::Durable | Flavor::Argo => {
                                 let round_ctx = format!("dd_ctx_{site}");
                                 self.line(
                                     d + 1,
@@ -1416,6 +1515,7 @@ impl<'a> Gen<'a> {
         let declared = declared.join(", ");
         let i = "  ".repeat(d + 2);
         let invocation = match (self.flavor, callee) {
+            (Flavor::Argo, _) => unreachable!("the Argo build writes no workflow code in TypeScript"),
             (Flavor::Temporal, Callee::Rule(r)) => format!("dd.attempt(() => rule_calls.{}({{ {} }}), {retriers}, [])", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
             (Flavor::Durable, Callee::Rule(r)) => {
                 let arn = q(m.rules[*r].lambda.as_deref().unwrap_or(""));

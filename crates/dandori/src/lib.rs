@@ -1,9 +1,10 @@
 //! dandori: a small typed language for workflows that call business rules. A `.flow` is
 //! checked before it runs — types, every arm of every match, every state a case can be
 //! left in — and compiled to AWS Step Functions (ASL with JSONata), to Temporal
-//! (TypeScript) and to AWS Lambda durable functions (TypeScript). The rules themselves are
-//! written in rulec and read through its CLI.
+//! (TypeScript), to AWS Lambda durable functions (TypeScript) and to Argo Workflows (a
+//! WorkflowTemplate). The rules themselves are written in rulec and read through its CLI.
 
+pub mod argo;
 pub mod asl;
 pub mod aws;
 pub mod check;

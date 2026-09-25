@@ -420,3 +420,79 @@ fn durable_runs_as_the_reference_says() {
         eprintln!("{}: compared {} run(s) on Lambda durable functions; left out {left_out} with a timeout", rel(&f), references.len());
     }
 }
+
+fn argo_ready() -> Result<(), String> {
+    let argo = std::env::var("DANDORI_ARGO").unwrap_or_else(|_| "argo".into());
+    if !Command::new(&argo).arg("version").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Err("the argo command is missing; put it on the PATH or in DANDORI_ARGO".into());
+    }
+    let mock = Command::new("kubectl").args(["--context", "kind-dandori", "-n", "argo", "get", "deploy", "dandori-mock"]).output();
+    if !mock.map(|o| o.status.success()).unwrap_or(false) {
+        return Err("the kind cluster dandori is not set up; run tools/argo/setup.sh".into());
+    }
+    Ok(())
+}
+
+/// On Argo Workflows the workflows run on a real controller, in the kind cluster that
+/// tools/argo/setup.sh sets up; this test says SKIP when it is not there.
+#[test]
+fn argo_runs_as_the_reference_says() {
+    need_rulec!();
+    if let Err(why) = argo_ready() {
+        eprintln!("SKIP: {why}");
+        return;
+    }
+    for f in runnable() {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        let files = match dandori::argo::build(&m) {
+            Ok(files) => files,
+            Err(d) if d.iter().all(|x| x.code == "E050") => {
+                eprintln!("{}: not for Argo Workflows ({}: E050)", rel(&f), d[0].en);
+                continue;
+            }
+            Err(d) => panic!("{} does not build for Argo: {}", rel(&f), d[0].en),
+        };
+        let dir = scratch(&format!("argo-{}", dandori::render::ident(&m.name)));
+        for (name, text) in &files {
+            let p = dir.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+        let p = Platform::Argo;
+        let own: Vec<Value> = m
+            .tasks
+            .iter()
+            .filter(|t| matches!(t.via(p), Some(Via::Image(_))))
+            .map(|t| json!({ "name": t.name, "callback": t.callback, "declared": t.errors.iter().map(|e| e.name.clone()).collect::<Vec<_>>() }))
+            .collect();
+        let children: Vec<String> = m.tasks.iter().filter_map(|t| t.argo_template.clone()).collect();
+        let (http, aws) = transport_spec(&m, p);
+        // a task's own timeout cannot be scripted there; a callback's can, by the answer the runner sets
+        let (runs, references, left_out) = plays(&m, View::Argo, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+        let runs_file = dir.join("runs.json");
+        let results_file = dir.join("results.json");
+        let doc = dandori::argo::document(&m).unwrap();
+        // the YAML the build writes says what the document the runner applies says
+        let yaml = files.iter().find(|(n, _)| n.ends_with(".argo.yaml")).map(|(n, _)| dir.join(n)).expect("the build writes the WorkflowTemplate");
+        let read = Command::new("kubectl").args(["--context", "kind-dandori", "-n", "argo", "create", "--dry-run=client", "-o", "json", "-f"]).arg(&yaml).output().unwrap();
+        assert!(read.status.success(), "{}: kubectl does not read the YAML:\n{}", rel(&f), String::from_utf8_lossy(&read.stderr));
+        let read: Value = serde_json::from_slice(&read.stdout).unwrap();
+        assert!(read["spec"] == doc["spec"] && read["metadata"]["name"] == doc["metadata"]["name"], "{}: the YAML does not say what the document says", rel(&f));
+        let spec = json!({ "template": doc, "own": own, "children": children, "http": http, "aws": aws, "runs": runs });
+        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+        let out = Command::new("node").arg(root().join("tools/argo/run.mjs")).arg(&dir).arg(&runs_file).arg(&results_file).output().unwrap();
+        assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+        // the nodes each run made, against what E040 reckons with
+        let bound = dandori::check::bound(&m, &dandori::check::ARGO_COST);
+        let mut most = 0;
+        for g in got.iter_mut() {
+            let nodes = g.as_object_mut().unwrap().remove("nodes").and_then(|n| n.as_u64()).expect("the runner counts the nodes");
+            most = most.max(nodes);
+        }
+        assert!(most <= bound, "{}: a run on Argo made {most} nodes, more than the {bound} E040 reckons with", rel(&f));
+        compare("the Argo workflow", &f, &references, &got);
+        eprintln!("{}: compared {} run(s) on Argo Workflows; left out {left_out} with a task's timeout; at most {most} nodes in a run, where E040 reckons with {bound}", rel(&f), references.len());
+    }
+}

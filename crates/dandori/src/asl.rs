@@ -608,7 +608,7 @@ impl<'a> Gen<'a> {
                         }
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), "$states.result.ResponseBody".to_string(), task.timeout, retry)
                     }
-                    Via::Workflow(_) | Via::DurableFunction(_) | Via::Own => unreachable!("not a way Step Functions calls"),
+                    Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) => unreachable!("not a way Step Functions calls"),
                 }
             }
         };

@@ -1,5 +1,5 @@
 workflow 審査 v1
-description "申し込みを別のワーカーの審査にかけ、保留なら人の承認を待つ。タスクはどれも利用者が書く実装なので、Temporal と Lambda durable functions に出す（Step Functions には出さない）"
+description "申し込みを別のワーカーの審査にかけ、保留なら人の承認を待つ。タスクはどれも利用者が書く実装なので、Temporal・Lambda durable functions・Argo Workflows に出す（Step Functions には出さない）"
 
 enum 判断 = 承認 | 却下 | 保留
 
@@ -23,17 +23,20 @@ outputs
 # Scoring runs on workers of its own, which may be written in another language.
 task 審査する(申込ID: string, 金額: int) -> 審査結果
   queue "scoring"
+  image "registry.example.com/review/scoring:1"
   errors 審査不能
   retry 2 times every 10 seconds
   idempotent
 
 # Someone approves in a tool of their own, and the answer comes back with the callback's id.
 task 承認を求める(申込ID: string, 点数: int) -> 承認
+  image "registry.example.com/review/approval:1"
   callback
   timeout 3 days
 
 task 通知する(申込ID: string, 本文: string)
   queue "notify"
+  image "registry.example.com/review/notify:1"
   idempotent
 
 flow

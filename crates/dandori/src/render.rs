@@ -1,8 +1,9 @@
 //! What a call looks like on the wire of each target, with concrete values. The reference
 //! interpreter renders its calls with these functions, and the runners that execute the
-//! generated ASL and the generated TypeScript report their calls in the same shape, so
-//! the three can be compared line for line. The generators build the same shapes as
-//! JSONata and TypeScript expressions; if they drift apart, the comparison says so.
+//! generated ASL, the generated TypeScript and the generated WorkflowTemplate report their
+//! calls in the same shape, so they can be compared line for line. The generators build the
+//! same shapes as JSONata, TypeScript and expr-lang expressions; if they drift apart, the
+//! comparison says so.
 
 use crate::model::*;
 use serde_json::{json, Map, Value};
@@ -13,6 +14,8 @@ pub enum View {
     Temporal,
     /// Lambda durable functions: a task is a step, a callback task a submit, a rule an invoke
     Durable,
+    /// Argo Workflows: a task is a container, a rule a container of dandori's code
+    Argo,
 }
 
 impl View {
@@ -21,6 +24,7 @@ impl View {
             View::Asl => Platform::StepFunctions,
             View::Temporal => Platform::Temporal,
             View::Durable => Platform::Durable,
+            View::Argo => Platform::Argo,
         }
     }
 }
@@ -54,6 +58,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                 View::Temporal => json!({ "activity": rule_activity(&ru.name), "args": args }),
                 View::Durable => json!({ "invoke": ru.lambda.clone().unwrap_or_default(), "payload": args }),
                 View::Asl => json!({ "lambda": ru.lambda.clone().unwrap_or_default(), "payload": args }),
+                View::Argo => json!({ "rule": ru.name, "args": args }),
             };
         }
         Callee::Task(t) => &m.tasks[*t],
@@ -98,7 +103,8 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
         Some(Via::Workflow(t)) => json!({ "child_workflow": t, "args": args }),
         Some(Via::DurableFunction(f)) => json!({ "invoke": f, "payload": args }),
-        Some(Via::Own) => {
+        Some(Via::ArgoTemplate(t)) => json!({ "workflow_template": t, "args": args }),
+        Some(Via::Own) | Some(Via::Image(_)) => {
             let a = with_key("idempotency_key");
             match view {
                 View::Temporal => json!({ "activity": task.name, "args": a }),

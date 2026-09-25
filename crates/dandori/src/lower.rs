@@ -313,7 +313,7 @@ impl<'a> Lowerer<'a> {
                 syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
                 syntax::Binding::Aws { service, action } => Binding::Aws { service: service.clone(), action: action.clone() },
             });
-            let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).map(|(_, s)| *s);
+            let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
             if let Some((syntax::Binding::Aws { service, .. }, bsp)) = &t.binding {
                 if crate::aws::exception_prefix(service).is_none() {
                     self.push(e(
@@ -461,6 +461,8 @@ impl<'a> Lowerer<'a> {
                 workflow: t.workflow.as_ref().map(|x| x.0.clone()),
                 state_machine: t.state_machine.as_ref().map(|x| x.0.clone()),
                 durable_function: t.durable_function.as_ref().map(|x| x.0.clone()),
+                image: t.image.as_ref().map(|x| x.0.clone()),
+                argo_template: t.argo_template.as_ref().map(|x| x.0.clone()),
                 errors,
                 retry,
                 timeout: t.timeout,

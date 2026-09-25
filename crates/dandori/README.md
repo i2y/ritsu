@@ -3,8 +3,8 @@
 A small typed language for workflows that call business rules. A `.flow` is checked
 before it runs — types, every arm of every match, every state a case can be left in,
 retries that could repeat a change, how long the execution history can grow — and
-compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript) and to
-**AWS Lambda durable functions** (TypeScript).
+compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript), to
+**AWS Lambda durable functions** (TypeScript) and to **Argo Workflows** (a WorkflowTemplate).
 
 The decisions themselves are written in [rulec](https://github.com/i2y/rulec): tables
 that rulec proves complete and free of overlaps. dandori reads them through rulec's
@@ -95,36 +95,46 @@ flow
 
 ### What a task calls
 
-| The task says | Step Functions | Temporal | Lambda durable functions |
-|---|---|---|---|
-| `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function |
-| `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` |
-| `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK |
-| `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | |
-| `workflow "<type>"` | | child workflow | |
-| `durable function "<arn>"` | | | invoke of another durable function |
-| none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) |
+| The task says | Step Functions | Temporal | Lambda durable functions | Argo Workflows |
+|---|---|---|---|---|
+| `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function | a container running the code dandori writes |
+| `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` |
+| `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK |
+| `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | |
+| `workflow "<type>"` | | child workflow | | |
+| `durable function "<arn>"` | | | invoke of another durable function | |
+| `workflow template "<name>"` | | | | a Workflow from that WorkflowTemplate |
+| `image "<image>"` | | | | a container of your image |
+| none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) |
 
-The code dandori writes for Temporal and durable functions sends what Step Functions
+The code dandori writes for Temporal, durable functions and Argo sends what Step Functions
 sends, through a `Transport` (`io.ts`) whose credentials and clients are yours to set.
 `queue "<name>"` sends a Temporal activity or child workflow to that task queue. A
 `callback` task hands on a token (Step Functions), a callback id (durable functions), or
-an id the answer comes back with as a signal (Temporal); with `aws sqs:sendMessage` the
-token travels in the message.
+an id the answer comes back with as a signal (Temporal) or through `argo node set` (Argo);
+with `aws sqs:sendMessage` the token travels in the message.
+
+On Argo Workflows every task runs in a container. The code dandori writes for `lambda`,
+`http` and `aws` goes into an image built from `caller/`; a task with `image` runs your
+image, which reads the call from `DANDORI_CALL`, writes the answer to
+`/tmp/dandori/answer.json`, and for a declared error writes `{"error", "message"}` to
+`/tmp/dandori/error.json` and exits with 3. The WorkflowTemplate keeps the flow's variables
+in global output parameters, and the YAML starts with a comment that names each
+variable's parameter.
 
 The complete examples are in [examples/hotel](examples/hotel/hotel.flow),
 [examples/order](examples/order/order.flow), [examples/fulfillment](examples/fulfillment/fulfillment.flow),
 and [examples/review](examples/review/review.flow), which calls only tasks the user writes
-and so is for Temporal and durable functions. The design, in Japanese, is in
+and so is for Temporal, durable functions and Argo (with `image`). The design, in Japanese, is in
 [DESIGN.md](DESIGN.md).
 
 ## Commands
 
 ```
 dandori check <file.flow>...
-dandori build <file.flow> --target asl|temporal|durable [--out <dir>]
+dandori build <file.flow> --target asl|temporal|durable|argo [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target asl|temporal|durable]
+dandori run <file.flow> --scenario <file.json> [--target asl|temporal|durable|argo]
 ```
 
 `--lang ja` prints the messages in Japanese. rulec is found through `DANDORI_RULEC`, else
@@ -139,6 +149,10 @@ on the PATH.
 - `build --target durable` writes `workflow.ts` with `makeHandler(own, transport)`,
   `types.ts`, `tasks.ts`, `io.ts` and `runtime.ts`, and for every rule it calls, the same
   Lambda handler as `asl`, which the durable function invokes.
+- `build --target argo` writes `<workflow>.argo.yaml`, a WorkflowTemplate that takes the
+  input as the parameter `input` and leaves the outputs in the global parameter
+  `dd_output`, and `caller/`: the program that runs the `lambda`, `http` and `aws` tasks and
+  the rules in the workflow's containers, with its `package.json` and `Dockerfile`.
 - `scenarios` writes inputs and scripted answers that together take every arm, every
   handler, every way a case can move, and lists that are empty, short, and longer than
   their loop takes; `run` plays one through the reference interpreter.
@@ -146,36 +160,44 @@ on the PATH.
 ## How the output is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
-of every example and run each of them four ways — the reference interpreter, the
+of every example and run each of them five ways — the reference interpreter, the
 generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal workflow
-in Temporal's time-skipping test environment (`tools/temporal/run.mjs`), and the
-generated durable function in the SDK's local test runner (`tools/durable/run.mjs`) — and
-require the same calls, with the same arguments and idempotency keys, and the same end.
+in Temporal's time-skipping test environment (`tools/temporal/run.mjs`), the generated
+durable function in the SDK's local test runner (`tools/durable/run.mjs`), and the
+generated WorkflowTemplate on Argo Workflows v4.1.4 in a local kind cluster
+(`tools/argo/run.mjs`) — and require the same calls, with the same arguments and
+idempotency keys, and the same end.
 On Temporal and durable functions, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are
-stand-ins that answer from the scenario. The rounds of a parallel loop run one at a time
-in the runners, so the calls come in the reference's order.
+stand-ins that answer from the scenario. On Argo, the caller runs in the pods with such a
+`Transport`, and the other tasks, the rules and the workflows a task starts are stand-in
+containers that ask a mock in the cluster for the scenario's answer. The rounds of a
+parallel loop run one at a time in the runners, so the calls come in the reference's order.
 
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
-timeout are compared on Step Functions and Temporal only; on Temporal a callback's
-timeout is played by not answering it. The ASL is also validated with asl-validator, and
-the code between each platform and a rule answers every vector `rulec vectors` produces as
-rulec says.
+timeout are left out there. Temporal's test environment and Argo cannot time out a task
+either, but a callback's timeout can be played: on Temporal by not answering it, on Argo
+by answering the wait with what its running out gives. The ASL is also validated with
+asl-validator, and the code between each platform and a rule answers every vector
+`rulec vectors` produces as rulec says.
 
 ```
 npm install --prefix tools
 npm install --prefix tools/temporal
 npm install --prefix tools/durable
+sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
-A test that cannot find rulec, Node or the tools prints a `SKIP:` line.
+A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
+`SKIP:` line. The runs on Argo take about half an hour.
 
 ## Status
 
 Early. Not yet: Parallel with different branches, types of AWS API calls read from the
 published Smithy models (the parameters and answers are declared by hand, as for HTTP),
 cases the workflow holds itself, a rule's preconditions checked at the task that produced
-the value, and runs on AWS and on a Temporal server. The design, the decisions and what is
+the value, runs on AWS and on a Temporal server, and the caller image run against real
+Lambda, HTTP and AWS endpoints from Argo. The design, the decisions and what is
 left are in [DESIGN.md](DESIGN.md).

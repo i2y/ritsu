@@ -161,6 +161,10 @@ pub struct TaskDecl {
     pub state_machine: Option<(String, Span)>,
     /// Lambda durable functions: a function invoked by the durable execution
     pub durable_function: Option<(String, Span)>,
+    /// Argo Workflows: the container image that runs the task
+    pub image: Option<(String, Span)>,
+    /// Argo Workflows: a WorkflowTemplate run as a workflow of its own
+    pub argo_template: Option<(String, Span)>,
     pub errors: Vec<ErrDecl>,
     pub retry: Option<RetryDecl>,
     pub timeout: Option<u64>,
@@ -563,7 +567,7 @@ struct Parser {
 const KEYWORDS: &[&str] = &[
     "workflow", "description", "kind", "use", "rule", "from", "enum", "record", "inputs", "outputs", "task", "case",
     "follows", "flow", "on", "let", "match", "wait", "repeat", "break", "succeed", "fail", "leaving", "lambda", "http",
-    "aws", "connection", "queue", "machine", "durable", "function", "errors", "retry", "timeout", "key", "idempotent",
+    "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
     "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json",
 ];
@@ -1225,6 +1229,8 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     workflow: None,
                     state_machine: None,
                     durable_function: None,
+                    image: None,
+                    argo_template: None,
                     errors: vec![],
                     retry: None,
                     timeout: None,
@@ -1368,7 +1374,14 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             t.binding = Some((Binding::Aws { service, action }, sp));
         }
         "queue" => t.queue = Some(cc.string("the task queue", "タスクキュー")?.0),
-        "workflow" => t.workflow = Some((cc.string("the type of the child workflow", "子ワークフローの型")?.0, sp)),
+        "workflow" => {
+            if cc.eat_kw("template") {
+                t.argo_template = Some((cc.string("the WorkflowTemplate", "WorkflowTemplate")?.0, sp));
+            } else {
+                t.workflow = Some((cc.string("the type of the child workflow", "子ワークフローの型")?.0, sp));
+            }
+        }
+        "image" => t.image = Some((cc.string("the container image", "コンテナのイメージ")?.0, sp)),
         "state" => {
             cc.expect_kw("machine")?;
             t.state_machine = Some((cc.string("the state machine's ARN", "ステートマシンの ARN")?.0, sp));
@@ -1477,8 +1490,8 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, aws, connection, queue, workflow, state machine, durable function, errors, retry, timeout, key, idempotent, callback, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・connection・queue・workflow・state machine・durable function・errors・retry・timeout・key・idempotent・callback・starts・sends・observes・refused as）"),
+                format!("`{other}` is not a task clause; expected lambda, http, aws, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, starts, sends, observes or refused as"),
+                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・starts・sends・observes・refused as）"),
             ))
         }
     }

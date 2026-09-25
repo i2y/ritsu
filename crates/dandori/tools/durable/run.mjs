@@ -105,11 +105,13 @@ function answerLater(callbackId, ans) {
   setTimeout(() => deliver(callbackId, ans).catch((e) => process.stderr.write(`${e}\n`)), 0);
 }
 
-// the calls the transport writes down carry the local runner's execution ARN in their keys
+// the stand-in transport writes every call down with the answer it takes; the calls carry the
+// local runner's execution ARN in their keys
 const run = {
-  take: (label) => take(label),
-  steps: {
-    push: (s) => current.steps.push({ ...s, call: normalizeCall(s.call) }),
+  take: (call) => {
+    const ans = take(JSON.stringify(call).slice(0, 80));
+    current.steps.push({ call: normalizeCall(call), answer: recorded(ans) });
+    return ans;
   },
   answerLater,
 };

@@ -113,6 +113,16 @@ fn whole(m: &Model) -> Vec<Diag> {
             ));
         }
     }
+    let n = bound(m, &ARGO_COST);
+    if n > ARGO_LIMIT {
+        out.push(Diag::error(
+            "E040",
+            1,
+            1,
+            format!("on Argo Workflows, an execution of this workflow can make up to about {n} nodes, past {ARGO_LIMIT}; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue"),
+            format!("Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ {n} 個作ります。目安の {ARGO_LIMIT} 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください"),
+        ));
+    }
     let n = bound(m, &DURABLE_COST);
     if n > DURABLE_LIMIT {
         out.push(Diag::error(
@@ -161,28 +171,51 @@ pub struct Cost {
     pub map_iter: u64,
     /// what waiting for a callback adds to a call
     pub callback: u64,
+    /// what each arm of a match and each handler of a call adds, whether it runs or not
+    pub arm: u64,
+    /// `break`
+    pub brk: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
 /// failed try adds scheduled, started, failed (3); a Choice, Pass or Wait is entered and
 /// exited (2); a Map is entered, started, succeeds and is exited (4), and each round
 /// starts and succeeds (2); the execution starts and ends.
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0 };
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
 /// timer and another activity (11); a timer is started and fired, and a workflow task
 /// follows (5); a match costs nothing; a callback adds the signal, its workflow task and the
 /// timer of its timeout (6).
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 6 };
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 6, arm: 0, brk: 0 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
 /// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
 /// wait until reads the clock in a step first (2); a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0 };
 pub const DURABLE_LIMIT: u64 = 3_000;
+
+/// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
+/// block and a step; a template that computes is a template, a step group and a step that
+/// does not run (3), so a `let`, a `fail`, a `succeed` or a `break` is 4. A call is 13: its
+/// template, its step groups for the arguments, the try, the after and the handlers, the two
+/// templates that compute, and the pod; a retry adds the retry's node and a pod; a callback,
+/// the wait and its step group. A match is 8, one node an arm (the arm's block, or a step that
+/// does not run), and one for the arm of a value no arm names. A wait until computes its
+/// seconds first (8). A round of a loop is 12 (its template, step groups, start, the body's
+/// template, and what it yields), of a parallel one 11; around the rounds, a loop takes 11
+/// nodes and a parallel one 13. The run begins with 7 and ends with 22, with `on failure`'s
+/// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
+/// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
+/// of it in the runs of examples/hotel.
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4 };
+/// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
+/// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
+/// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
+pub const ARGO_LIMIT: u64 = 10_000;
 
 pub fn bound(m: &Model, c: &Cost) -> u64 {
     let body = cost(m, &m.flow, c);
@@ -203,16 +236,17 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                     Callee::Task(t) if m.tasks[*t].callback => c.callback,
                     _ => 0,
                 };
-                let after = handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0).max(c.check);
+                let after = (handlers.len() as u64 * c.arm + handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0)).max(c.check);
                 c.call + waits + retries * (c.retry + waits) + after
             }
             TK::Assign { .. } => c.assign,
             TK::For { max, parallel: None, body, .. } => 2 * c.choice + *max as u64 * (cost(m, body, c) + c.loop_iter),
             TK::For { max, body, .. } => c.map_start + c.choice + *max as u64 * (cost(m, body, c) + c.map_iter),
-            TK::Match { arms, .. } => c.choice + arms.iter().map(|a| cost(m, &a.body, c)).max().unwrap_or(0),
+            TK::Match { arms, .. } => c.choice + arms.len() as u64 * c.arm + arms.iter().map(|a| cost(m, &a.body, c)).max().unwrap_or(0),
             TK::Wait { .. } | TK::WaitUntil { .. } => c.wait,
             TK::Repeat { times, body } => c.choice + *times as u64 * (cost(m, body, c) + c.loop_iter),
-            TK::Break | TK::Pass => 0,
+            TK::Break => c.brk,
+            TK::Pass => 0,
             TK::Succeed { .. } | TK::Fail { .. } => c.choice,
         };
         total = total.saturating_add(here);

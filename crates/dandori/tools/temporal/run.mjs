@@ -87,10 +87,12 @@ function answerLater(callbackId, ans) {
   }, 0);
 }
 
+// the stand-in transport writes every call down with the answer it takes
 const run = {
-  take: (label) => take(label),
-  get steps() {
-    return current.steps;
+  take: (call) => {
+    const ans = take(JSON.stringify(call).slice(0, 80));
+    current.steps.push({ call, answer: recorded(ans) });
+    return ans;
   },
   answerLater: (id, ans) => answerLater(id, ans),
 };

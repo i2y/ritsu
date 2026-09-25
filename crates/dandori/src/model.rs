@@ -100,6 +100,7 @@ pub enum Platform {
     StepFunctions,
     Temporal,
     Durable,
+    Argo,
 }
 
 /// How a platform calls a task.
@@ -114,6 +115,10 @@ pub enum Via<'a> {
     Workflow(&'a str),
     /// Lambda durable functions: a function the durable execution invokes and waits for
     DurableFunction(&'a str),
+    /// Argo Workflows: a container of the user's image
+    Image(&'a str),
+    /// Argo Workflows: a workflow made from a WorkflowTemplate, run to its end
+    ArgoTemplate(&'a str),
     /// Temporal and durable functions: the implementation the user writes
     Own,
 }
@@ -146,6 +151,8 @@ pub struct TaskDef {
     pub workflow: Option<String>,
     pub state_machine: Option<String>,
     pub durable_function: Option<String>,
+    pub image: Option<String>,
+    pub argo_template: Option<String>,
     pub errors: Vec<ErrDef>,
     pub retry: Option<Retry>,
     pub timeout: Option<u64>,
@@ -177,12 +184,14 @@ impl TaskDef {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),
             Platform::Temporal => Some(self.workflow.as_deref().map(Via::Workflow).or(bound).unwrap_or(Via::Own)),
             Platform::Durable => Some(self.durable_function.as_deref().map(Via::DurableFunction).or(bound).unwrap_or(Via::Own)),
+            // a task of the user's is a container of their image; the others run the code dandori writes
+            Platform::Argo => self.argo_template.as_deref().map(Via::ArgoTemplate).or(self.image.as_deref().map(Via::Image)).or(bound),
         }
     }
 
     /// Whether a platform runs another workflow for this task, so that its errors come from the child's `fail`.
     pub fn is_child(&self, p: Platform) -> bool {
-        matches!(self.via(p), Some(Via::StateMachine(_)) | Some(Via::Workflow(_)) | Some(Via::DurableFunction(_)))
+        matches!(self.via(p), Some(Via::StateMachine(_)) | Some(Via::Workflow(_)) | Some(Via::DurableFunction(_)) | Some(Via::ArgoTemplate(_)))
     }
 
     pub fn error(&self, name: &str) -> Option<&ErrDef> {
