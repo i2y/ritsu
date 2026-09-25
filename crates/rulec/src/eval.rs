@@ -303,7 +303,18 @@ pub fn run_bindings(
             }
         }
     }
-    let (outs, fired, binds) = run_all(f, c, inputs);
+    let (outs, fired, mut binds) = run_all(f, c, inputs);
+    // A `result` line binds nothing of its own: the first output is its expression, read at
+    // the end. The audit asks for the value before rounding by the output's name — whether it
+    // sits on a tie — so it is added here. Without it, an output written with `result` never
+    // had a tie to look for (§15.151).
+    if let (Some(r), Some(od)) = (&f.result, f.outputs.first()) {
+        if !binds.contains_key(&od.name.text) {
+            if let Some(v) = Env::new(c, binds.clone()).expr(&r.expr) {
+                binds.insert(od.name.text.clone(), v);
+            }
+        }
+    }
     (outs.into_iter().next().and_then(|(_, v)| v), fired, binds)
 }
 

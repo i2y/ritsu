@@ -2,7 +2,8 @@
 //!
 //! Candidate values are chosen per column, the candidate population built from them is run
 //! through the reference evaluator, and a subset satisfying row coverage, boundary-pair
-//! coverage, shadow-pair coverage and rounding-tie coverage is selected deterministically.
+//! coverage, shadow-pair coverage, value-pair coverage and rounding-tie coverage is selected
+//! deterministically.
 //! The evaluator attaches
 //! the expected values and the fired rows.
 
@@ -341,7 +342,7 @@ fn satisfying(cell: &Cell, cands: &[Val], ty: &Ty, c: &Checked) -> Option<Val> {
 /// columns, added in that order.
 /// Every input at its first candidate. One column at a time is moved off it (§9.1), so a value
 /// here that annihilates the arithmetic downstream — a rate of 0% — leaves the whole boundary
-/// family computing zero. That is what `tie_plan` is for: it does not sweep from the baseline.
+/// family computing zero. That is what `tie_search` is for: it does not sweep from the baseline.
 fn baseline(f: &RuleFile, cands: &BTreeMap<String, Vec<Val>>) -> BTreeMap<String, Val> {
     f.inputs
         .iter()
@@ -350,52 +351,249 @@ fn baseline(f: &RuleFile, cands: &BTreeMap<String, Vec<Val>>) -> BTreeMap<String
         .collect()
 }
 
-/// How far out from the baseline a tie is looked for before giving up.
+/// How far out from its starting point a tie is looked for before giving up.
 const TIE_REACH: i128 = 64;
 
-/// The rounding tie of each output that declares one: the value exactly half a step off the
-/// grid, which is the single point where `half_up`, `half_down` and `half_even` disagree, and
-/// where `up` and `down` disagree too. `round` is mandatory (E104) yet none of the three §9.2
-/// criteria aims at it, so a rule may carry two different modes on two outputs and no vector
-/// ever tell them apart — the 50銭 of the social insurance tables is exactly that case.
+/// The same, from a point the search made up itself rather than one a row or the baseline gave.
+const TIE_REACH_NEAR: i128 = 8;
+
+/// An input that lands output `name` on its rounding tie: the value exactly half a step off
+/// the grid, which is the single point where `half_up`, `half_down` and `half_even` disagree,
+/// and where `up` and `down` disagree too. `round` is mandatory (E104) yet none of the three
+/// §9.2 criteria aims at it, so a rule may carry two different modes on two outputs and no
+/// vector ever tell them apart — the 50銭 of the social insurance tables is exactly that case.
 ///
-/// Returns the assignment that reaches the tie, or nothing for an output the rule can never
-/// take off the grid (18.3% of a standard monthly remuneration is always an even number of yen,
-/// so the halved amount has no fraction and there is no tie to reach). The auditor asks the
-/// same question, so the two sides agree on which obligations exist.
-pub fn tie_plan(f: &RuleFile, c: &Checked) -> Vec<(String, Rat, BTreeMap<String, Val>)> {
-    let cands = candidates(f, c);
-    let base = baseline(f, &cands);
-    let mut out = Vec::new();
-    for od in &f.outputs {
-        let Some(rd) = &od.rounding else { continue };
-        let name = od.name.text.clone();
-        let Some(ty) = c.ty_of(&name) else { continue };
-        let Some(g) = crate::types::lit_value_in_pub(&rd.grid, &ty) else { continue };
-        if g.cmp_to(Rat::zero()) == std::cmp::Ordering::Equal {
-            continue;
-        }
-        let half = g.div(Rat::int(2));
-        let Some(v0) = bind(f, c, &base).get(&name).and_then(as_rat) else { continue };
-        // Start at the tie nearest the value the baseline already produces and walk outward.
-        // Every candidate is confirmed by `place`, which re-evaluates the rule, so a non-linear
-        // expression fails to place rather than placing wrongly.
-        let floor0 = v0.round_to(crate::num::RoundMode::Down, g);
-        let mut found = None;
-        'search: for step in 0..TIE_REACH {
-            for dir in [1i128, -1] {
-                if step == 0 && dir == -1 {
-                    continue;
-                }
-                let t = floor0.add(g.mul(Rat::int(dir * step))).add(half);
-                if let Some(a) = place(f, c, &base, &name, t, &BTreeSet::new()) {
-                    found = Some((t, a));
-                    break 'search;
+/// Which outputs owe a tie is the auditor's question, answered from the rule
+/// (`coverage::tie_duties`); this only looks, and it looks harder than it used to (§15.151):
+///
+/// 1. along the slopes from the baseline, which is where every tie was found before;
+/// 2. by solving for it, where the output is linear in its inputs: `amount × 3.49% + 49` hits a
+///    half cent at one amount in ten thousand, and no walk along a slope lands on that;
+/// 3. along the slopes from each row's own point — the baseline lands on one row, and where that
+///    row writes a constant nothing near it leaves the grid;
+/// 4. from each of those points with one number moved off the low end: at `商品合計 × 割引率`
+///    with both at zero, neither slope moves the value at all.
+fn tie_search(f: &RuleFile, c: &Checked, base: &BTreeMap<String, Val>, seeds: &[&BTreeMap<String, Val>], name: &str, g: Rat) -> Option<BTreeMap<String, Val>> {
+    if let Some(a) = walk_to_tie(f, c, base, name, g, TIE_REACH) {
+        return Some(a);
+    }
+    let starts: Vec<&BTreeMap<String, Val>> = std::iter::once(base).chain(seeds.iter().copied()).collect();
+    let lands = |a: &BTreeMap<String, Val>| {
+        allowed(f, a) && bind(f, c, a).get(name).and_then(as_rat).is_some_and(|v| is_tie(v, g))
+    };
+    if let Some(forms) = crate::coverage::grid_forms_of(f, c, name) {
+        for s in &starts {
+            for form in &forms {
+                for x in form.terms.keys().filter(|x| f.inputs.iter().any(|i| &i.name.text == *x)) {
+                    let Some(v) = solve_tie(c, form, s, x, g) else { continue };
+                    let mut a = (*s).clone();
+                    a.insert(x.clone(), v);
+                    if lands(&a) {
+                        return Some(a);
+                    }
                 }
             }
         }
-        if let Some((_, a)) = found {
-            out.push((name, g, a));
+    }
+    for s in seeds {
+        if let Some(a) = walk_to_tie(f, c, s, name, g, TIE_REACH) {
+            return Some(a);
+        }
+    }
+    for s in &starts {
+        for i in &f.inputs {
+            let x = &i.name.text;
+            let Some(ty) = c.ty_of(x) else { continue };
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+                continue;
+            }
+            let q = crate::coverage::quantum(c, x, &ty);
+            let (lo, hi) = c.ranges.get(x).copied().unwrap_or((None, None));
+            let low = lo.map(|l| if l.cmp_to(Rat::zero()) == std::cmp::Ordering::Less { Rat::zero() } else { l }).unwrap_or(Rat::zero()).add(q);
+            for v in [Some(low), hi].into_iter().flatten() {
+                if !within(c, x, v) {
+                    continue;
+                }
+                let mut s2 = (*s).clone();
+                s2.insert(x.clone(), Val::Num(v));
+                if let Some(a) = walk_to_tie(f, c, &s2, name, g, TIE_REACH_NEAR) {
+                    return Some(a);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Walk out from `start` along the slopes, tie by tie, until one is placed.
+fn walk_to_tie(f: &RuleFile, c: &Checked, start: &BTreeMap<String, Val>, name: &str, g: Rat, reach: i128) -> Option<BTreeMap<String, Val>> {
+    let half = g.div(Rat::int(2));
+    let v0 = bind(f, c, start).get(name).and_then(as_rat)?;
+    // Start at the tie nearest the value this point already produces and walk outward.
+    // Every candidate is confirmed by `place`, which re-evaluates the rule, so a non-linear
+    // expression fails to place rather than placing wrongly.
+    let floor0 = v0.round_to(crate::num::RoundMode::Down, g);
+    for step in 0..reach {
+        for dir in [1i128, -1] {
+            if step == 0 && dir == -1 {
+                continue;
+            }
+            let t = floor0.add(g.mul(Rat::int(dir * step))).add(half);
+            if let Some(a) = place(f, c, start, name, t, &BTreeSet::new()) {
+                if allowed(f, &a) {
+                    return Some(a);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// A value of input `x` that puts `form` exactly half a step off `grid`, the form's other names
+/// held where `a` has them: `aₓ·stepₓ·m + rest ≡ grid ÷ 2 (mod grid)`, a linear congruence in
+/// the whole number `m`, solved and taken nearest to where `x` stands, inside its range. Whether
+/// the form is the one the rule takes at that point is the evaluator's to say, afterwards.
+fn solve_tie(c: &Checked, form: &crate::coverage::GridForm, a: &BTreeMap<String, Val>, x: &str, grid: Rat) -> Option<Val> {
+    let ax = *form.terms.get(x)?;
+    if ax.num == 0 {
+        return None;
+    }
+    let q = *form.steps.get(x)?;
+    let mut rest = form.k;
+    for (n, an) in &form.terms {
+        if n == x || an.num == 0 {
+            continue;
+        }
+        rest = rest.checked_add(an.checked_mul(as_rat(a.get(n)?)?)?)?;
+    }
+    let lhs = ax.checked_mul(q)?;
+    let rhs = grid.checked_div(Rat::int(2))?.checked_sub(rest)?;
+    let (m0, period) = crate::coverage::solve_congruence(lhs, rhs, grid)??;
+    // Every solution is m0 + t·period. Take the one nearest to where x stands, in range.
+    let here = as_rat(a.get(x)?)?.checked_div(q)?;
+    let here = here.num.div_euclid(here.den);
+    let (lo, hi) = c.ranges.get(x).copied().unwrap_or((None, None));
+    let lo_m = lo.and_then(|l| l.checked_div(q)).map(|r| -((-r.num).div_euclid(r.den)));
+    let hi_m = hi.and_then(|h| h.checked_div(q)).map(|r| r.num.div_euclid(r.den));
+    let below = m0.checked_add((here.checked_sub(m0)?).div_euclid(period).checked_mul(period)?)?;
+    let first = lo_m.and_then(|l| m0.checked_add((l.checked_sub(m0)?.checked_add(period - 1)?).div_euclid(period).checked_mul(period)?));
+    let ty = c.ty_of(x)?;
+    [Some(below), below.checked_add(period), first]
+        .into_iter()
+        .flatten()
+        .find(|m| lo_m.is_none_or(|l| *m >= l) && hi_m.is_none_or(|h| *m <= h))
+        .and_then(|m| Some(to_val(Rat::int(m).checked_mul(q)?, &ty)))
+}
+
+/// The points that make a value pair (§15.151): two points one input apart, on the row tagged
+/// `tag` (anywhere, for an output no row computes), with `col` moved. Returned are the points
+/// the pool does not have yet.
+///
+/// Each start in turn is tried with one move. Where no single move from any of them does it,
+/// the first start is tried with two: `商品合計 × 割引率` is 0 there with both at the low end,
+/// and only after one of them has moved does the other move the value; a row that returns
+/// `額面` under `残余 > 0` leaves the row as soon as 額面 rises, until 商品合計 has risen
+/// first. The first point of the two is then the pair's other half, and it is on the row too.
+fn value_pair(
+    f: &RuleFile,
+    c: &Checked,
+    cands: &BTreeMap<String, Vec<Val>>,
+    names: &[String],
+    starts: &[(&BTreeMap<String, Val>, bool)],
+    tag: Option<&str>,
+    col: &str,
+) -> Vec<BTreeMap<String, Val>> {
+    // What the auditor compares: the column's value and the rule's outputs (`value_moved`).
+    type Seen = (Option<Val>, Vec<(String, Option<Val>)>);
+    let on_row = |a: &BTreeMap<String, Val>| -> Option<Seen> {
+        if !allowed(f, a) {
+            return None;
+        }
+        let (outs, fired, b) = eval::run_all(f, c, a.clone().into_iter().collect());
+        tag.is_none_or(|tag| fired.iter().any(|t| t == tag)).then(|| (b.get(col).cloned(), outs))
+    };
+    let moved = |x: &Seen, y: &Seen| crate::coverage::value_moved(f, col, (x.0.as_ref(), &x.1), (y.0.as_ref(), &y.1));
+    let moves = |from: &BTreeMap<String, Val>| -> Vec<BTreeMap<String, Val>> {
+        let mut out = Vec::new();
+        for x in names {
+            for v in spread_cands(c, cands, x) {
+                if from.get(x) != Some(&v) {
+                    let mut a = from.clone();
+                    a.insert(x.clone(), v);
+                    out.push(a);
+                }
+            }
+        }
+        out
+    };
+    let on: Vec<(&BTreeMap<String, Val>, bool, Seen)> =
+        starts.iter().filter_map(|(s, pooled)| on_row(s).map(|v| (*s, *pooled, v))).collect();
+    for (s, pooled, v0) in &on {
+        for a in moves(s) {
+            // A start already in the pool — the row's own point, the baseline, a point made for
+            // another obligation — needs only its partner.
+            if on_row(&a).is_some_and(|v| moved(&v, v0)) {
+                return if *pooled { vec![a] } else { vec![(*s).clone(), a] };
+            }
+        }
+    }
+    let Some((s, _, _)) = on.first() else { return Vec::new() };
+    for p in moves(s) {
+        let Some(vp) = on_row(&p) else { continue };
+        for q in moves(&p) {
+            if on_row(&q).is_some_and(|v| moved(&v, &vp)) {
+                return vec![p, q];
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// `a` with every number that has a range moved to the top of it, or to its middle.
+fn lift(c: &Checked, a: &BTreeMap<String, Val>, top: bool) -> BTreeMap<String, Val> {
+    let mut out = a.clone();
+    for (name, v) in a {
+        let Some(ty) = c.ty_of(name) else { continue };
+        if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) || !matches!(v, Val::Num(_) | Val::Date(..)) {
+            continue;
+        }
+        let Some((Some(lo), Some(hi))) = c.ranges.get(name) else { continue };
+        let want = if top { *hi } else { lo.add(*hi).div(Rat::int(2)) };
+        let q = crate::coverage::quantum(c, name, &ty);
+        out.insert(name.clone(), to_val(snap(c, name, want, q), &ty));
+    }
+    out
+}
+
+/// The values a value pair is looked for with (§15.151): every value an enum has — the column's
+/// candidates keep one per class the cells cut, and a row that hands the value itself back
+/// tells apart two values of one class — and for a number the ends of its range first, so
+/// that the value the pair moves is as far from the low end as the input allows.
+fn spread_cands(c: &Checked, cands: &BTreeMap<String, Vec<Val>>, name: &str) -> Vec<Val> {
+    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+    let inner = match &ty {
+        Ty::Opt(t) => (**t).clone(),
+        other => other.clone(),
+    };
+    let mut vs: Vec<Val> = Vec::new();
+    if matches!(ty, Ty::Opt(_)) {
+        vs.push(Val::Enum(crate::kw::NONE.into()));
+    }
+    match &inner {
+        Ty::Enum(en) => vs.extend(c.enums.get(en).into_iter().flatten().map(|v| Val::Enum(v.clone()))),
+        Ty::Bool => vs.extend([Val::Bool(true), Val::Bool(false)]),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
+            if let Some((lo, hi)) = c.ranges.get(name) {
+                vs.extend(hi.iter().chain(lo.iter()).map(|r| to_val(*r, &inner)));
+            }
+            vs.extend(cands.get(name).into_iter().flatten().rev().cloned());
+        }
+        _ => vs.extend(cands.get(name).into_iter().flatten().cloned()),
+    }
+    let mut out: Vec<Val> = Vec::new();
+    for v in vs {
+        if !out.contains(&v) {
+            out.push(v);
         }
     }
     out
@@ -786,13 +984,16 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let base = baseline(f, cands);
     let mut out: Vec<(BTreeMap<String, Val>, String)> = vec![(base.clone(), tr!("基準", "baseline"))];
+    // Each row's own point, by (definition set, row). The value pairs and the rounding ties
+    // start from here as well as from the baseline (§15.151).
+    let mut seeds: BTreeMap<(usize, usize), BTreeMap<String, Val>> = BTreeMap::new();
 
     // Row coverage: build an assignment that makes each row win. Columns holding derived or
     // intermediate values are mapped back onto the inputs (§9.1). Naively "putting a value that
     // satisfies the input cell" never touches a column a derived value decides, and the row
     // stays beaten by an earlier row under `first`. That showed up in the coverage auditor as
     // missing row coverage (クーポン併用 row 3, 適用順序 row 4, 素の割引 row 3).
-    for set in &c.sets {
+    for (si, set) in c.sets.iter().enumerate() {
         let t = &set.table;
         for (ri, row) in t.rows.iter().enumerate() {
             let tname = set.row_table(ri).to_string();
@@ -809,6 +1010,7 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
                 }
             }
             let seed = win_row(f, c, cands, &a, set, ri).unwrap_or(a);
+            seeds.insert((si, ri), seed.clone());
             out.push((seed.clone(), tr!("行を当てる: 表 {tname} 行{}", "row target: table {tname} row {}", rn)));
 
             // Boundary-pair coverage: build a **pair** that steps on both sides of a boundary
@@ -893,10 +1095,50 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
         }
     }
 
+    // Value pairs (§15.151): for each row that returns a computed value, a second point one
+    // input away from the row's own, still on the row, with the value moved. The row's point
+    // is the low end of every range, so a refund of the amount paid is 0 yen there; the input
+    // moved is taken to the far end first, where a wrong factor shows as well as a constant.
+    for d in crate::coverage::value_duties(f, c) {
+        let col = &d.col;
+        // Where the pair may start: the row's own point, then every point already made — at
+        // `min(素割引, 上限額)` the baseline has both at zero, and a point that made 素割引
+        // large for another obligation is one move away from the pair.
+        let (tag, first, why) = match d.at {
+            Some((si, ri)) => {
+                let (set, row) = (&c.sets[si], &c.sets[si].table.rows[ri]);
+                let (tname, rn) = (set.row_table(ri), row.index);
+                let Some(seed) = seeds.get(&(si, ri)) else { continue };
+                (
+                    Some(eval::row_tag(tname, rn)),
+                    seed.clone(),
+                    tr!("計算値の対: 表 {tname} 行{rn} {col}", "value pair: table {tname} row {rn} {col}"),
+                )
+            }
+            None => (None, base.clone(), tr!("計算値の対: 出力 {col}", "value pair: output {col}")),
+        };
+        // The same point with every number at the top of its range, and in the middle: the
+        // row's own point has them at the bottom, where a product is 0 and a `min` with a cap
+        // of 0 is 0 whatever else moves. These are not in the pool yet.
+        let lifted: Vec<BTreeMap<String, Val>> = [true, false].iter().map(|top| lift(c, &first, *top)).collect();
+        let starts: Vec<(&BTreeMap<String, Val>, bool)> = std::iter::once((&first, true))
+            .chain(lifted.iter().map(|a| (a, false)))
+            .chain(out.iter().map(|(a, _)| (a, true)))
+            .collect();
+        let found = value_pair(f, c, cands, &names, &starts, tag.as_deref(), col);
+        for a in found {
+            out.push((a, why.clone()));
+        }
+    }
+
     // The rounding tie (§9.2). Unlike the sweep above, this does not hold the other columns at
     // the baseline: `place` moves whatever it needs to land the value half a step off the grid.
-    for (name, _, a) in tie_plan(f, c) {
-        out.push((a, tr!("丸めの同着: {name}", "rounding tie: {name}")));
+    // It starts from the baseline, then from each row's own point (§15.151).
+    let starts: Vec<&BTreeMap<String, Val>> = seeds.values().collect();
+    for (name, grid) in crate::coverage::tie_duties(f, c) {
+        if let Some(a) = tie_search(f, c, &base, &starts, &name, grid) {
+            out.push((a, tr!("丸めの同着: {name}", "rounding tie: {name}")));
+        }
     }
 
     // Pairwise: greedily add combinations of two columns (the safety net of §9.2).
@@ -1087,7 +1329,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let mut keep: BTreeSet<usize> = audit.witness.clone();
     keep.extend(forced.iter().copied());
 
-    // The pairwise safety net (§9.2): with the five criteria satisfied, greedily add the
+    // The pairwise safety net (§9.2): with the criteria satisfied, greedily add the
     // two-column combinations that have not appeared yet.
     let mut seen2: BTreeSet<(String, String, String, String)> = BTreeSet::new();
     let names: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
@@ -1160,7 +1402,7 @@ pub fn to_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
 }
 
 /// The JSON object of the inputs, in declaration order, in the wire form of §10.2.
-fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
+pub fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     // One value, in the wire form of §10.2. A sequence is an array of objects, and each
     // element's fields are written the same way (§15.56) — the wire gains a shape, not a

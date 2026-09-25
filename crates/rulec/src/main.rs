@@ -267,15 +267,15 @@ fn commands() -> Vec<Cmd> {
             name: "coverage",
             args: "<file.rule>...",
             purpose: tr!(
-                "作ったテストケースの側を検査する。行・境界の両側・隠れ対・丸めの同着・畳み込みの遷移の五つ",
-                "check the vector suite itself against six criteria: rows, both sides of a boundary, shadow pairs, rounding ties, fold transitions, machine transitions"
+                "作ったテストケースの側を検査する。行・境界の両側・隠れ対・計算値の対・丸めの同着・畳み込みの遷移・ステートマシンの遷移の七つ",
+                "check the vector suite itself against seven criteria: rows, both sides of a boundary, shadow pairs, computed values, rounding ties, fold transitions, machine transitions"
             ),
             params: vec![rule_files()],
             flags: vec![
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
-                (0, tr!("六基準すべてを満たす", "all six criteria are met")),
+                (0, tr!("七基準すべてを満たす", "all seven criteria are met")),
                 (1, tr!("欠けている義務がある（名指しされる）、または規則が検査を通らない", "an obligation is missing (it is named), or the rule does not pass check")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],

@@ -121,16 +121,24 @@ function call(text) {
 console.log(call('{"届け先":"北海道","重量":2500,"注文金額":12000,"会員":"ゴールド"}'));
 console.log(call('{"届け先":"火星","重量":2500,"注文金額":12000,"会員":"ゴールド"}'));
 console.log(call('{"届け先":"北海道","重量":99999999,"注文金額":12000,"会員":"ゴールド"}'));
+// The first call again, as Python's json.dumps writes it unless told otherwise (§15.151).
+console.log(call('{"\\u5c4a\\u3051\\u5148": "\\u5317\\u6d77\\u9053", "\\u91cd\\u91cf": 2500, "\\u6ce8\\u6587\\u91d1\\u984d": 12000, "\\u4f1a\\u54e1": "\\u30b4\\u30fc\\u30eb\\u30c9"}'));
+// An input that is not there, and one that is not a number: once answered as 0.
+console.log(call('{"届け先":"北海道","注文金額":12000,"会員":"ゴールド"}'));
+console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000,"会員":"ゴールド"}'));
 "#;
     std::fs::write(dir.join("wasm/host.mjs"), js).unwrap();
     let o = Command::new("node").current_dir(dir.join("wasm")).arg("host.mjs").output().expect("node を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let out = String::from_utf8_lossy(&o.stdout);
     let lines: Vec<&str> = out.lines().collect();
-    assert_eq!(lines.len(), 3, "{out}");
+    assert_eq!(lines.len(), 6, "{out}");
     assert!(lines[0].starts_with("{\"in\":{\"届け先\":\"北海道\"") && lines[0].contains("\"observed\":{\"送料\":1800}"), "{out}");
     assert!(lines[1].starts_with("{\"error\":") && lines[1].contains("火星"), "{out}");
     assert!(lines[2].starts_with("{\"error\":") && lines[2].contains("重量"), "{out}");
+    assert_eq!(lines[3], lines[0], "エスケープした入力で答えが変わった\n{out}");
+    assert!(lines[4].starts_with("{\"error\":") && lines[4].contains("重量") && lines[4].contains("missing"), "{out}");
+    assert!(lines[5].starts_with("{\"error\":") && lines[5].contains("重量") && lines[5].contains("whole number"), "{out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

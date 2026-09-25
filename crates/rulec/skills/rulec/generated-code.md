@@ -605,9 +605,12 @@ pointer to a (pointer, length) pair holding the answer, and `cabi_post_call(ret)
 The input is a JSON object with the inputs by name, in the wire form of
 [formats.md](formats.md) (a record with them under `"in"` is read the same way); the answer
 is the record line the other languages' `_record` writes, or `{"error":"…"}` for an input
-outside the contract — an unknown enum value included, so a host is answered rather than
-trapped. The module imports nothing, so it instantiates with an empty import object anywhere
-WebAssembly runs; the shipping rule is forty kilobytes.
+outside the contract — an unknown enum value, an input that is not there, a number that is not
+a whole number and a date that is not `YYYY-MM-DD` included, so a host is answered rather than
+trapped, and never computed on a value it did not send (§15.151). Any JSON encoder will do: a
+name or a value written with `\u` escapes reads as the characters it stands for. The module
+imports nothing, so it instantiates with an empty import object anywhere WebAssembly runs; the
+shipping rule is forty kilobytes.
 
 ```js
 const { instance } = await WebAssembly.instantiate(bytes, {});

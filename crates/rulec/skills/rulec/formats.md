@@ -110,13 +110,21 @@ One object per rule file.
  "criteria":[{"name":"row","satisfied":7,"total":7,"missing":[]},
              {"name":"boundary_pair","satisfied":4,"total":4,"missing":[]},
              {"name":"shadow_pair","satisfied":3,"total":3,"missing":[]},
+             {"name":"value_pair","satisfied":1,"total":1,"missing":[]},
              {"name":"rounding_tie","satisfied":0,"total":0,"missing":[]},
              {"name":"fold_transition","satisfied":0,"total":0,"missing":[]},
              {"name":"machine_transition","satisfied":0,"total":0,"missing":[]}]}
 ```
 
-`name` is one of `row`, `boundary_pair`, `shadow_pair`, `rounding_tie`, `fold_transition`,
-`machine_transition`. `fold_transition` has obligations only for a rule that walks a sequence
+`name` is one of `row`, `boundary_pair`, `shadow_pair`, `value_pair`, `rounding_tie`,
+`fold_transition`, `machine_transition`. Every obligation is read off the rule, never off what
+the suite happened to reach. `value_pair` has one for each row that returns a computed value —
+a name in its output cell, unless the row itself pins down everything that name is computed
+from — and for each output a `define` or a `result` line computes: two vectors on the row, one
+input apart, with the value moved as `test` and `verify` compare it (an output after rounding)
+(§15.151). `rounding_tie` has one for each output that declares a rounding, unless the rule's
+arithmetic shows that no input takes the output half a step off its grid.
+`fold_transition` has obligations only for a rule that walks a sequence
 (§15.56); `machine_transition` only for a rule with a `machine` (§15.148): every transition a
 case can make, and every two that can follow one another, each met by a trace of the suite that
 makes it. An entry of `missing` is
@@ -960,6 +968,11 @@ legacy ← {"id":2,"err":"unsupported: 離島"}
    `unanswered`, so an adapter cannot raise the rate by refusing the hard cases.
 
 Names and values on the wire are the rule's own names and integers in the canonical unit.
+Every line is read as JSON, so any encoder's output will do: a key or a value written with
+`\u` escapes, as Python's `json.dumps` and PHP's `json_encode` write them by default, reads
+the same as one written out. An optional output with no value is `null`, the way the vectors
+write it. A line that is not JSON, an answer carrying another record's `id`, and an answer
+with neither `out` nor `err` stop the run with exit 2, naming the record (§15.151).
 `rulec schema` prints the JSON Schema of `in` and `out`, and `rulec adapter --template
 python|go` prints a template to fill in.
 

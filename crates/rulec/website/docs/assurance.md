@@ -24,7 +24,7 @@ down, and nothing here can check that reading.
 | **2. The two declarations** | rounding is written down, not guessed; an overlap the proof could not settle becomes a runtime guard that refuses rather than picks | `rulec check` |
 | **3. The examples** | the cases a person wrote by hand still hold | `rulec check` |
 | **4. The vectors** | the generated code answers like the reference evaluator, in twelve languages, byte for byte | `rulec test` |
-| **5. The six coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
+| **5. The seven coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every computed value at two values, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
 | **8. The repository's own tests** | 109 deliberately broken rules each produce the diagnostic they should; 50 rules are checked, generated and run on every commit | `cargo test` |
@@ -92,15 +92,19 @@ a suite designed to be adversarial, which is a different thing from a theorem.
 
 [Generate and call](generate.md){ .md-button }
 
-## 5. The six coverage criteria
+## 5. The seven coverage criteria
 
 A suite that runs is not a suite that reaches. `rulec coverage` states the obligations the
 rule itself implies and says which are met: every **row** wins somewhere, every **boundary
 pair** has the two cases on either side of it, every **shadowed pair** under `policy first`
-is exercised, every **rounding tie** lands on the exact half, every **fold transition** is
+is exercised, every **computed value** — a row that returns a name rather than a literal, an
+output a `define` computes — is seen at two values one input apart, as the implementation's
+answer shows it, every **rounding tie** lands on the exact half, every **fold transition** is
 taken, and, for a state machine, every **transition** a case can make and every two that can
 follow one another are played from the initial state. The obligations come from the rule, never from the suite — an auditor that says
-"all satisfied" of an empty set says nothing, and a test in the repository holds it to that.
+"all satisfied" of an empty set says nothing, and a test in the repository holds it to that. A
+rounding tie the rule's arithmetic shows no input can reach raises none; one that was merely not
+found still counts, and shows as missing.
 
 ## 6. The model checker
 

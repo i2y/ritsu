@@ -130,7 +130,7 @@ fn genは古い生成物と欠けた生成物を分ける() {
 }
 
 #[test]
-fn coverageは六基準を名前つきで出す() {
+fn coverageは七基準を名前つきで出す() {
     let (c, out) = run(&["coverage", "tests/corpus/送料.rule", "--format", "json"]);
     assert_eq!(c, 0);
     let js = objects(&out);
@@ -140,7 +140,7 @@ fn coverageは六基準を名前つきで出す() {
     let names: Vec<&str> = cs.iter().map(|c| c.get("name").unwrap().as_str().unwrap()).collect();
     assert_eq!(
         names,
-        ["row", "boundary_pair", "shadow_pair", "rounding_tie", "fold_transition", "machine_transition"],
+        ["row", "boundary_pair", "shadow_pair", "value_pair", "rounding_tie", "fold_transition", "machine_transition"],
         "基準の名前は英語固定"
     );
     for c in cs {

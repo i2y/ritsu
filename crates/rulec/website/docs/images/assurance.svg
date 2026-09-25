@@ -56,7 +56,7 @@
 <rect x="252" y="420" width="304" height="110" rx="10" fill="#171b24" stroke="#2b3242"/>
 <rect x="252" y="420" width="304" height="5" fill="#8e9cff" clip-path="url(#clip-c3)"/>
 <text x="404.0" y="463" font-size="17" font-weight="700" text-anchor="middle" fill="#e8ebf4">4, 5, 6 — the code</text>
-<text x="404.0" y="492" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">Twelve languages, byte for byte. Six</text>
+<text x="404.0" y="492" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">Twelve languages, byte for byte. Seven</text>
 <text x="404.0" y="511" font-size="12.5" font-weight="400" text-anchor="middle" fill="#98a1b8">coverage criteria. Rust over every input</text>
 <line x1="246" y1="475.0" x2="139.0" y2="427.0" stroke="#8e9cff" stroke-width="1.8" marker-end="url(#head-accent)"/>
 <clipPath id="clip-c4"><rect x="252" y="548" width="304" height="110" rx="10"/></clipPath>

@@ -217,8 +217,8 @@ signs the rule off.
 
 **Covers.** Every case rulec builds from the rule's boundaries, compared answer for answer
 against the reference evaluator. `rulec coverage` says what that suite reaches — every row,
-both sides of every boundary, every shadow pair, every rounding tie — and it is the same suite the built-in
-backends are held to.
+both sides of every boundary, every shadow pair, every computed value at two values, every rounding
+tie — and it is the same suite the built-in backends are held to.
 
 **Does not cover.** It is a comparison over a finite suite, not a proof of equivalence; the
 static proofs (completeness, overlap, units, overflow) are about the *rule*, and they are done

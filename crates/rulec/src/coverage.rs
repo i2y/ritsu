@@ -1,6 +1,6 @@
 //! Completeness audit of the vector suite (§9.2).
 //!
-//! The six coverage criteria are derived **from the rule first**, not from the generated
+//! The seven coverage criteria are derived **from the rule first**, not from the generated
 //! vector set. The list of obligations is built independently of the generator, so that an
 //! obligation the candidate population failed to reach cannot be written off as "never
 //! needed in the first place". The point of the separation is the one-way relation: when the
@@ -11,11 +11,19 @@ use crate::eval::{self, Val};
 use crate::num::Rat;
 use crate::types::{Checked, Ty};
 use crate::vectors::{self, Vector};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub const ROW: &str = "行カバー";
 pub const BOUND: &str = "境界の両側カバー";
 pub const SHADOW: &str = "隠れ対カバー";
+/// A row that returns a computed value — a name in its output cell, not a literal — and an
+/// output a `define` or a `result` line computes (§15.151). What has to be seen is the value
+/// being computed there: two vectors that both land on the row, differ in exactly one input,
+/// and get different values in that column. A cell replaced by a constant, or by a value that
+/// ignores that input, gives one of the two a wrong answer. Row coverage alone is met by one
+/// point, and the point the generator reaches a row with is the low end of every range — a
+/// refund of the amount paid, tried only at 0 yen.
+pub const VALUE: &str = "計算値の対カバー";
 pub const TIE: &str = "丸めの同着カバー";
 /// The transitions of a `fold` (§15.56): nothing, one element on each verdict, and every
 /// ordered pair of verdicts. The length of a sequence is not what has to be covered — the
@@ -27,6 +35,9 @@ pub const FOLD: &str = "畳み込みの遷移カバー";
 /// to the next, in the language under test.
 pub const MACHINE: &str = "ステートマシンの遷移カバー";
 
+/// Every criterion, in the order the report lists them.
+pub const CRITERIA: [&str; 7] = [ROW, BOUND, SHADOW, VALUE, TIE, FOLD, MACHINE];
+
 /// The name of a criterion in the output language. The constants above stay Japanese: they
 /// are the keys of `Audit::tally` and `Missing::kind`, and the tests compare against them.
 fn label(k: &'static str) -> &'static str {
@@ -37,6 +48,7 @@ fn label(k: &'static str) -> &'static str {
             ROW => "row coverage",
             BOUND => "boundary-pair coverage",
             SHADOW => "shadow-pair coverage",
+            VALUE => "value-pair coverage",
             TIE => "rounding-tie coverage",
             FOLD => "fold-transition coverage",
             MACHINE => "machine-transition coverage",
@@ -253,7 +265,7 @@ pub fn show_rat(v: Rat, ty: &Ty) -> String {
     }
 }
 
-/// Judge whether a vector set satisfies the six criteria of §9.2.
+/// Judge whether a vector set satisfies the seven criteria of §9.2.
 /// `refused` are the cases the reference evaluator has no answer for (`vectors::Suite`). They
 /// are part of the suite — `rulec test` holds the generated code to refusing them — so an
 /// obligation only such a case can reach is met, not missing (§15.56).
@@ -269,10 +281,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         .collect();
     let fired: Vec<BTreeSet<String>> = vs.iter().map(|v| v.trace.iter().cloned().collect()).collect();
 
-    // All six criteria are always reported. If a criterion with no obligations were left
+    // All seven criteria are always reported. If a criterion with no obligations were left
     // out, the tallying side could not tell that apart from "the criterion was not checked".
-    let mut tally: BTreeMap<&'static str, (usize, usize)> =
-        [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE].into_iter().map(|k| (k, (0, 0))).collect();
+    let mut tally: BTreeMap<&'static str, (usize, usize)> = CRITERIA.into_iter().map(|k| (k, (0, 0))).collect();
     let mut missing: Vec<Missing> = Vec::new();
     let mut witness: BTreeSet<usize> = BTreeSet::new();
     let mut pruned_bounds = 0usize;
@@ -507,12 +518,67 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         }
     }
 
+    // --- value-pair coverage (§15.151). The obligations are the rule's own; a pair is two
+    // vectors on the row, one input apart, with the column's value moved.
+    for d in value_duties(f, c) {
+        if let Some((si, ri)) = d.at {
+            if checks.get(si).is_some_and(|k| k.dead.contains(&ri)) {
+                continue; // a row E102 already reports as never matching
+            }
+        }
+        let tag = d.at.map(|(si, ri)| eval::row_tag(c.sets[si].row_table(ri), c.sets[si].table.rows[ri].index));
+        let at: Vec<usize> = (0..vs.len())
+            .filter(|&k| tag.as_ref().is_none_or(|t| fired[k].contains(t)) && binds[k].contains_key(&d.col))
+            .collect();
+        let pair = at.iter().enumerate().find_map(|(i, &a)| {
+            at[i + 1..]
+                .iter()
+                .find(|&&z| {
+                    value_moved(f, &d.col, (binds[a].get(&d.col), &vs[a].outputs), (binds[z].get(&d.col), &vs[z].outputs))
+                        && one_apart(&vs[a].input, &vs[z].input)
+                })
+                .map(|&z| (a, z))
+        });
+        if let Some((a, z)) = pair {
+            witness.insert(a);
+            witness.insert(z);
+        }
+        bump(VALUE, pair.is_some(), &mut tally);
+        if pair.is_none() {
+            missing.push(Missing {
+                kind: VALUE,
+                what: match d.at {
+                    Some((si, ri)) => tr!(
+                        "表 {} 行{} 列 {}（{} を返す）",
+                        "table {} row {} column {} (returns {})",
+                        c.sets[si].row_table(ri),
+                        c.sets[si].table.rows[ri].index,
+                        d.col,
+                        d.name
+                    ),
+                    None => tr!("出力 {}", "output {}", d.col),
+                },
+                hint: match d.at {
+                    Some(_) => tr!(
+                        "この行に当たり、入力が一つだけ違い、この列の値も違う二つのベクタがありません。この値を定数に置き換えた実装でも、どのベクタの期待値も変わりません。",
+                        "No two vectors land on this row, differ in one input and get different values in this column. An implementation that returned a constant here would still match every vector."
+                    ),
+                    None => tr!(
+                        "入力が一つだけ違い、この出力の値も違う二つのベクタがありません。この出力を定数にした実装でも、どのベクタの期待値も変わりません。",
+                        "No two vectors differ in one input and get different values of this output. An implementation that returned a constant would still match every vector."
+                    ),
+                },
+            });
+        }
+    }
+
     // The rounding tie (§9.2). `round` is mandatory on a numeric output (E104), and this is the
     // only criterion that looks at whether the declaration was ever exercised: at a tie the five
-    // modes give different answers, anywhere else `half_up` and `half_down` agree. An output the
-    // rule can never take off the grid raises no obligation, the way an unrealizable boundary
-    // does not — `tie_plan` answers that, and the generator aims at the same targets.
-    for (name, grid, _) in vectors::tie_plan(f, c) {
+    // modes give different answers, anywhere else `half_up` and `half_down` agree. The
+    // obligations come from the rule, like every other criterion's: an output raises none only
+    // where the rule shows that no input takes it half a step off the grid (`tie_duties`),
+    // never because the generator did not get there (§15.151).
+    for (name, grid) in tie_duties(f, c) {
         let hit = binds
             .iter()
             .position(|b| b.get(&name).and_then(ord).is_some_and(|v| vectors::is_tie(v, grid)));
@@ -525,13 +591,531 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 kind: TIE,
                 what: tr!("出力 {name} の丸めの同着", "the rounding tie of output {name}"),
                 hint: tr!(
-                    "同着に載る入力が無いと、`half_up` と `half_down` を入れ替えても期待値が変わりません。",
-                    "Without an input that lands on the tie, swapping `half_up` for `half_down` changes no expected value."
+                    "同着に載る入力が無いと、`half_up` と `half_down` を入れ替えても期待値が変わりません。載る入力が見つからず、載らないことも示せませんでした。載る入力を知っていれば、examples に一行足すと監査に加わります。",
+                    "Without an input that lands on the tie, swapping `half_up` for `half_down` changes no expected value. No such input was found, and none was shown impossible. If you know one, a row in `examples` takes part in the audit."
                 ),
             }),
         }
     }
     Audit { tally, missing, witness, pruned_bounds }
+}
+
+/// Whether two cases show the value of `col` moving, as an implementation is held to it: an
+/// output compared after rounding, the way `test` and `verify` compare it — 3.49% of one cent
+/// and of two are different numbers and the same 0 cents — and a column on the way to the
+/// outputs moved together with at least one output, or the move is not seen.
+pub fn value_moved(
+    f: &RuleFile,
+    col: &str,
+    a: (Option<&Val>, &[(String, Option<Val>)]),
+    b: (Option<&Val>, &[(String, Option<Val>)]),
+) -> bool {
+    let out = |outs: &[(String, Option<Val>)]| outs.iter().find(|(n, _)| n == col).map(|(_, v)| v.clone());
+    if f.outputs.iter().any(|o| o.name.text == col) {
+        out(a.1) != out(b.1)
+    } else {
+        a.0 != b.0 && a.1 != b.1
+    }
+}
+
+/// Whether two inputs differ in exactly one name.
+fn one_apart(a: &BTreeMap<String, Val>, b: &BTreeMap<String, Val>) -> bool {
+    a.len() == b.len() && a.iter().filter(|(k, v)| b.get(*k) != Some(*v)).count() == 1
+}
+
+/// One obligation of `VALUE`: a row that writes the name `name` into output column `col`, or
+/// an output the rule computes outside any table.
+pub struct ValueDuty {
+    /// The row: an index into `Checked::sets` and one into the rows of that set's merged
+    /// table. `None` for an output a `define` or a `result` line computes, which is not on a
+    /// row; the pair may then be anywhere.
+    pub at: Option<(usize, usize)>,
+    pub col: String,
+    pub name: String,
+}
+
+/// The obligations of `VALUE`, read off the rule alone (§15.151).
+///
+/// A row whose output cell holds a literal returns a constant and raises none. Nor does a row
+/// that itself pins down everything the name is computed from: `| 受付 | 出荷 | 状態 |` hands
+/// the carried state back, and the same row says the state is 受付 there. Every other name is
+/// an obligation, whether or not the generator reaches it (§9.2).
+///
+/// So is an output that a `define` or a `result` line computes from the inputs, with no table
+/// in between: it is not on any row, and a rule that is nothing but `手数料 = 金額 × 3.49%`
+/// raised no obligation at all — its suite came out empty, and every implementation matched it.
+pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
+    let reads = reads_of(f);
+    let mut out = Vec::new();
+    for (si, set) in c.sets.iter().enumerate() {
+        let t = &set.table;
+        for (ri, row) in t.rows.iter().enumerate() {
+            let pins: BTreeSet<&str> = t
+                .inputs
+                .iter()
+                .zip(&row.cells)
+                .filter(|(_, cell)| match cell {
+                    Cell::Lit(_) | Cell::Nothing => true,
+                    Cell::Set(xs) => xs.len() == 1,
+                    _ => false,
+                })
+                .map(|((col, _), _)| col.as_str())
+                .collect();
+            for (oi, oc) in t.outputs.iter().enumerate() {
+                let Some(OutCell::Name(n)) = row.outs.get(oi) else { continue };
+                // A word that names nothing is a value of the column's enum, or true or false.
+                if !bound(f, n) {
+                    continue;
+                }
+                if pins.contains(n.as_str()) || leaves(&reads, n).iter().all(|l| pins.contains(l.as_str())) {
+                    continue;
+                }
+                out.push(ValueDuty { at: Some((si, ri)), col: oc.name.text.clone(), name: n.clone() });
+            }
+        }
+    }
+    // A walk's outputs are what the fold answers, not a computation of this kind.
+    if f.fold.is_some() {
+        return out;
+    }
+    for (oi, od) in f.outputs.iter().enumerate() {
+        let n = &od.name.text;
+        let by_result = oi == 0 && f.result.is_some();
+        let by_define = f.items.iter().any(|it| matches!(it, Item::Define(d) if &d.name.text == n));
+        let on_table = f.items.iter().any(|it| matches!(it, Item::Table(t) if t.outputs.iter().any(|o| &o.name.text == n)));
+        if !(by_result || (by_define && !on_table)) {
+            continue;
+        }
+        let from: BTreeSet<String> = match (&f.result, by_result) {
+            (Some(r), true) => {
+                let mut ns = BTreeSet::new();
+                expr_names(&r.expr, &mut ns);
+                ns.iter().flat_map(|m| leaves(&reads, m)).collect()
+            }
+            _ => leaves(&reads, n),
+        };
+        if !from.is_empty() {
+            out.push(ValueDuty { at: None, col: n.clone(), name: n.clone() });
+        }
+    }
+    out
+}
+
+/// Every name an expression reads.
+fn expr_names(e: &Expr, out: &mut BTreeSet<String>) {
+    match e {
+        Expr::Name(n, _) => {
+            out.insert(n.clone());
+        }
+        Expr::Lit(..) => {}
+        Expr::Bin(l, _, r, _) => {
+            expr_names(l, out);
+            expr_names(r, out);
+        }
+        Expr::Call(_, args, _) => args.iter().for_each(|a| expr_names(a, out)),
+    }
+}
+
+/// Whether a word in an output cell names a value the rule binds — an input, an element's
+/// field, a count, a `derive`, a `define`, a table's output column — rather than being a value
+/// of the column's own enum. The evaluator reads a cell the same way: the binding when there is
+/// one, the word itself otherwise.
+fn bound(f: &RuleFile, n: &str) -> bool {
+    f.inputs.iter().chain(f.elements.iter().flat_map(|e| &e.fields)).any(|i| i.name.text == n)
+        || f.items.iter().any(|it| match it {
+            Item::Derived(d) => d.name.text == n,
+            Item::Define(d) => d.name.text == n,
+            Item::Table(t) => t.outputs.iter().any(|o| o.name.text == n),
+            Item::Agg(a) => a.name.text == n,
+        })
+}
+
+/// What each computed name reads directly: a `derive` or `define` its expression's names, a
+/// table's output column the table's columns and the names its rows write into it. A name
+/// with no entry is an input, an element's field, or a count — a value that comes in.
+fn reads_of(f: &RuleFile) -> HashMap<String, BTreeSet<String>> {
+    let mut reads: HashMap<String, BTreeSet<String>> = HashMap::new();
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => expr_names(&d.expr, reads.entry(d.name.text.clone()).or_default()),
+            Item::Define(d) => expr_names(&d.expr, reads.entry(d.name.text.clone()).or_default()),
+            Item::Table(t) => {
+                for (ci, oc) in t.outputs.iter().enumerate() {
+                    let r = reads.entry(oc.name.text.clone()).or_default();
+                    r.extend(t.inputs.iter().map(|(n, _)| n.clone()));
+                    for row in &t.rows {
+                        if let Some(OutCell::Name(n)) = row.outs.get(ci) {
+                            r.insert(n.clone());
+                        }
+                    }
+                }
+            }
+            Item::Agg(_) => {}
+        }
+    }
+    reads
+}
+
+/// The values that come in and that `name` is computed from, followed through every
+/// definition and table in between.
+fn leaves(reads: &HashMap<String, BTreeSet<String>>, name: &str) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut out = BTreeSet::new();
+    let mut stack = vec![name.to_string()];
+    while let Some(n) = stack.pop() {
+        if !seen.insert(n.clone()) {
+            continue;
+        }
+        match reads.get(&n) {
+            Some(r) => stack.extend(r.iter().cloned()),
+            None => {
+                out.insert(n);
+            }
+        }
+    }
+    out
+}
+
+/// The outputs whose rounding tie is an obligation, with the grid of each (§15.151).
+///
+/// Every output that declares a rounding raises one, unless the rule shows that no input
+/// brings it half a step off the grid. What shows it is arithmetic on grids: the value, taken
+/// row by row and definition by definition, is `Σ aᵥ·v + k` with each `v` a multiple of its
+/// own step (a yen, one step of a rate), so every value it can take is `k` plus a multiple of
+/// the greatest common divisor `d` of the grid and the `aᵥ·stepᵥ`. The tie is `grid ÷ 2` off
+/// the grid; when `grid ÷ 2 − k` is no multiple of `d` in any branch, nothing reaches it.
+/// 厚生年金保険料 is the case in point: every standard monthly remuneration is a multiple of
+/// 2,000 yen, the rate a multiple of 0.1%, and half of their product is always whole yen.
+///
+/// The ranges are left out, and a product of two names is taken to reach every multiple of the
+/// product of their steps; both only make more values reachable, so what this rules out is
+/// ruled out. What the arithmetic does not cover — a division by an input — proves nothing, and
+/// the obligation stands. So does a tie that some form reaches and no input was found for: the
+/// audit then says so, rather than the obligation going away (§9.2).
+pub fn tie_duties(f: &RuleFile, c: &Checked) -> Vec<(String, Rat)> {
+    let mut out = Vec::new();
+    for od in &f.outputs {
+        let Some(rd) = &od.rounding else { continue };
+        let name = od.name.text.clone();
+        let Some(ty) = c.ty_of(&name) else { continue };
+        let Some(g) = crate::types::lit_value_in_pub(&rd.grid, &ty) else { continue };
+        if g.num == 0 {
+            continue;
+        }
+        let mut fresh = 0usize;
+        let unreachable = grid_forms(f, c, &Expr::Name(name.clone(), od.name.span.clone()), 0, &mut fresh)
+            .is_some_and(|forms| forms.iter().all(|l| l.reaches_tie(g) == Some(false)));
+        if !unreachable {
+            out.push((name, g));
+        }
+    }
+    out
+}
+
+/// A value as the grid argument reads it: `Σ aᵥ·v + k`, each `v` ranging over the multiples
+/// of `steps[v]`, inside `ranges[v]` where that is known. A name that starts with `#` stands for
+/// a value no input sets directly: one the rule rounded on its way (`allocate`, a rounding
+/// function), or the product of two names.
+#[derive(Clone)]
+pub struct GridForm {
+    pub terms: BTreeMap<String, Rat>,
+    pub steps: BTreeMap<String, Rat>,
+    pub ranges: BTreeMap<String, (Rat, Rat)>,
+    pub k: Rat,
+}
+
+/// The forms output `name` can take, one per way through the tables and the sides of a `min`
+/// or `max`; `None` when the arithmetic does not cover it. The vector generator solves them for
+/// a tie, where moving along a slope cannot land on one (§15.151).
+pub fn grid_forms_of(f: &RuleFile, c: &Checked, name: &str) -> Option<Vec<GridForm>> {
+    let span = f.outputs.iter().find(|o| o.name.text == name).map(|o| o.name.span.clone())?;
+    grid_forms(f, c, &Expr::Name(name.to_string(), span), 0, &mut 0)
+}
+
+impl GridForm {
+    fn con(k: Rat) -> GridForm {
+        GridForm { terms: BTreeMap::new(), steps: BTreeMap::new(), ranges: BTreeMap::new(), k }
+    }
+
+    fn var(n: &str, step: Rat, range: Option<(Rat, Rat)>) -> GridForm {
+        GridForm {
+            terms: BTreeMap::from([(n.to_string(), Rat::int(1))]),
+            steps: BTreeMap::from([(n.to_string(), step)]),
+            ranges: range.map(|r| (n.to_string(), r)).into_iter().collect(),
+            k: Rat::zero(),
+        }
+    }
+
+    fn constant(&self) -> Option<Rat> {
+        self.terms.values().all(|a| a.num == 0).then_some(self.k)
+    }
+
+    fn plus(&self, o: &GridForm, sign: i128) -> Option<GridForm> {
+        let mut r = self.clone();
+        for (n, a) in &o.terms {
+            let e = r.terms.entry(n.clone()).or_insert(Rat::zero());
+            *e = e.checked_add(a.checked_mul(Rat::int(sign))?)?;
+        }
+        r.steps.extend(o.steps.iter().map(|(n, s)| (n.clone(), *s)));
+        r.ranges.extend(o.ranges.iter().map(|(n, s)| (n.clone(), *s)));
+        r.k = r.k.checked_add(o.k.checked_mul(Rat::int(sign))?)?;
+        Some(r)
+    }
+
+    fn scale(&self, f: Rat) -> Option<GridForm> {
+        let mut r = self.clone();
+        for a in r.terms.values_mut() {
+            *a = a.checked_mul(f)?;
+        }
+        r.k = r.k.checked_mul(f)?;
+        Some(r)
+    }
+
+    /// The product of two forms. `x·y` with `x = stepₓ·m` and `y = step_y·n` is
+    /// `stepₓ·step_y·(m·n)`, a multiple of `stepₓ·step_y`, so each pair of names becomes one
+    /// name on that grid, between the products of their ends. Which multiples in there it
+    /// reaches is left open — every one, as far as this argument knows — so the product is read
+    /// wider than it is, never narrower.
+    fn times(&self, o: &GridForm) -> Option<GridForm> {
+        let mut r = GridForm::con(self.k.checked_mul(o.k)?);
+        let linear = |g: &GridForm| GridForm { k: Rat::zero(), ..g.clone() };
+        r = r.plus(&linear(self).scale(o.k)?, 1)?;
+        r = r.plus(&linear(o).scale(self.k)?, 1)?;
+        for (x, a) in &self.terms {
+            for (y, b) in &o.terms {
+                let name = if x <= y { format!("#{x}*{y}") } else { format!("#{y}*{x}") };
+                let step = self.steps.get(x)?.checked_mul(*o.steps.get(y)?)?;
+                let range = match (self.ranges.get(x), o.ranges.get(y)) {
+                    (Some((xl, xh)), Some((yl, yh))) => {
+                        let ends = [xl.checked_mul(*yl)?, xl.checked_mul(*yh)?, xh.checked_mul(*yl)?, xh.checked_mul(*yh)?];
+                        let lo = ends.iter().copied().min_by(|p, q| p.cmp_to(*q))?;
+                        let hi = ends.iter().copied().max_by(|p, q| p.cmp_to(*q))?;
+                        Some((lo, hi))
+                    }
+                    _ => None,
+                };
+                r = r.plus(&GridForm::var(&name, step, range).scale(a.checked_mul(*b)?)?, 1)?;
+            }
+        }
+        Some(r)
+    }
+
+    /// `Some(false)` when no value of this form sits half a step off `grid`, `Some(true)` when
+    /// one may, `None` when the numbers do not fit.
+    ///
+    /// A form in one name is settled exactly, its range included: `amount × 3.49%` reaches a
+    /// half cent at one amount in ten thousand, and whether that amount lies in the declared
+    /// range is a question with an answer. Several names are settled by the common divisor
+    /// alone, ranges left out.
+    fn reaches_tie(&self, grid: Rat) -> Option<bool> {
+        let off = grid.checked_div(Rat::int(2))?.checked_sub(self.k)?;
+        let live: Vec<(&String, &Rat)> = self.terms.iter().filter(|(_, a)| a.num != 0).collect();
+        if let [(n, a)] = live.as_slice() {
+            if let Some((lo, hi)) = self.ranges.get(n.as_str()) {
+                let q = *self.steps.get(n.as_str())?;
+                let Some((m0, period)) = solve_congruence(a.checked_mul(q)?, off, grid)? else {
+                    return Some(false);
+                };
+                let lo_m = lo.checked_div(q)?;
+                let lo_m = -((-lo_m.num).div_euclid(lo_m.den));
+                let hi_m = hi.checked_div(q)?;
+                let hi_m = hi_m.num.div_euclid(hi_m.den);
+                let first = m0.checked_add(lo_m.checked_sub(m0)?.checked_add(period - 1)?.div_euclid(period).checked_mul(period)?)?;
+                return Some(first <= hi_m);
+            }
+        }
+        let mut d = abs(grid);
+        for (n, a) in live {
+            d = rat_gcd(d, abs(a.checked_mul(*self.steps.get(n)?)?))?;
+        }
+        Some(off.checked_div(d)?.is_int())
+    }
+}
+
+/// The whole numbers `m` with `a·m ≡ b (mod g)`, as `m0 + t·period`: `Some(None)` when there is
+/// none, `None` when the numbers do not fit in 128 bits.
+pub fn solve_congruence(a: Rat, b: Rat, g: Rat) -> Option<Option<(i128, i128)>> {
+    let d = lcm(lcm(a.den, b.den)?, g.den)?;
+    let big_a = a.num.checked_mul(d / a.den)?;
+    let big_b = b.num.checked_mul(d / b.den)?;
+    let big_g = g.num.checked_mul(d / g.den)?.checked_abs()?;
+    if big_g == 0 {
+        return None;
+    }
+    let (g0, inv, _) = egcd(big_a.rem_euclid(big_g), big_g);
+    if big_b.rem_euclid(g0) != 0 {
+        return Some(None);
+    }
+    let period = big_g / g0;
+    let m0 = (big_b / g0).rem_euclid(period).checked_mul(inv.rem_euclid(period))?.rem_euclid(period);
+    Some(Some((m0, period)))
+}
+
+/// `(g, x, y)` with `a·x + b·y = g`, the greatest common divisor of `a` and `b`.
+fn egcd(a: i128, b: i128) -> (i128, i128, i128) {
+    if b == 0 {
+        (a, 1, 0)
+    } else {
+        let (g, x, y) = egcd(b, a.rem_euclid(b));
+        (g, y, x - a.div_euclid(b) * y)
+    }
+}
+
+fn lcm(a: i128, b: i128) -> Option<i128> {
+    let (mut x, mut y) = (a.abs(), b.abs());
+    while y != 0 {
+        let t = x % y;
+        x = y;
+        y = t;
+    }
+    if x == 0 { Some(0) } else { (a.abs() / x).checked_mul(b.abs()) }
+}
+
+fn abs(r: Rat) -> Rat {
+    Rat { num: r.num.abs(), den: r.den }
+}
+
+/// The greatest common divisor of two non-negative rationals: the largest `d` of which both
+/// are whole multiples.
+fn rat_gcd(a: Rat, b: Rat) -> Option<Rat> {
+    if a.num == 0 {
+        return Some(b);
+    }
+    if b.num == 0 {
+        return Some(a);
+    }
+    let (mut x, mut y) = (a.num.checked_mul(b.den)?, b.num.checked_mul(a.den)?);
+    while y != 0 {
+        let t = x % y;
+        x = y;
+        y = t;
+    }
+    Rat::checked_new(x, a.den.checked_mul(b.den)?)
+}
+
+/// How many branches the grid argument follows before it gives up and leaves the obligation
+/// standing.
+const GRID_BRANCHES: usize = 4096;
+
+/// The forms an expression can take: one per way through the tables it reads — a table's
+/// column is each of its rows' cells in turn — and per side of a `min` or `max`. `None` for
+/// anything the arithmetic does not cover.
+fn grid_forms(f: &RuleFile, c: &Checked, e: &Expr, depth: usize, fresh: &mut usize) -> Option<Vec<GridForm>> {
+    if depth > 64 {
+        return None;
+    }
+    let cross = |a: Vec<GridForm>, b: Vec<GridForm>, op: &dyn Fn(&GridForm, &GridForm) -> Option<GridForm>| {
+        if a.len().saturating_mul(b.len()) > GRID_BRANCHES {
+            return None;
+        }
+        let mut out = Vec::new();
+        for x in &a {
+            for y in &b {
+                out.push(op(x, y)?);
+            }
+        }
+        Some(out)
+    };
+    match e {
+        Expr::Lit(l @ Lit::Num(n), _) => match eval::lit_to_val(l, &crate::types::lit_ty_pub(n))? {
+            Val::Num(r) => Some(vec![GridForm::con(r)]),
+            _ => None,
+        },
+        Expr::Lit(..) => None,
+        Expr::Name(n, _) => {
+            let expr_of = f.items.iter().find_map(|it| match it {
+                Item::Derived(d) if d.name.text == *n => Some(&d.expr),
+                Item::Define(d) if d.name.text == *n => Some(&d.expr),
+                _ => None,
+            });
+            if let Some(x) = expr_of {
+                return grid_forms(f, c, x, depth + 1, fresh);
+            }
+            // The first output, when a `result` line gives it.
+            if let (Some(r), Some(od)) = (&f.result, f.outputs.first()) {
+                if od.name.text == *n {
+                    return grid_forms(f, c, &r.expr, depth + 1, fresh);
+                }
+            }
+            let ty = c.ty_of(n)?;
+            let mut out = Vec::new();
+            let mut column = false;
+            for it in &f.items {
+                let Item::Table(t) = it else { continue };
+                let Some(ci) = t.outputs.iter().position(|o| o.name.text == *n) else { continue };
+                column = true;
+                for row in &t.rows {
+                    match row.outs.get(ci)? {
+                        OutCell::Lit(Lit::Num(x)) => out.push(GridForm::con(crate::types::lit_value_in_pub(x, &ty)?)),
+                        OutCell::Lit(_) => return None,
+                        // A word that names nothing is `none`, or a value of an enum: no number,
+                        // so nothing that could sit on a tie.
+                        OutCell::Name(m) if !bound(f, m) => {}
+                        OutCell::Name(m) => out.extend(grid_forms(f, c, &Expr::Name(m.clone(), row.span.clone()), depth + 1, fresh)?),
+                    }
+                    if out.len() > GRID_BRANCHES {
+                        return None;
+                    }
+                }
+            }
+            if column {
+                return Some(out);
+            }
+            // A value that comes in: a multiple of its own step.
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                return None;
+            }
+            let range = match c.ranges.get(n.as_str()) {
+                Some((Some(lo), Some(hi))) => Some((*lo, *hi)),
+                _ => None,
+            };
+            Some(vec![GridForm::var(n, quantum(c, n, &ty), range)])
+        }
+        Expr::Bin(l, op, r, _) => {
+            let (a, b) = (grid_forms(f, c, l, depth + 1, fresh)?, grid_forms(f, c, r, depth + 1, fresh)?);
+            match op {
+                BinOp::Add => cross(a, b, &|x, y| x.plus(y, 1)),
+                BinOp::Sub => cross(a, b, &|x, y| x.plus(y, -1)),
+                BinOp::Mul => cross(a, b, &|x, y| match (x.constant(), y.constant()) {
+                    (Some(k), _) => y.scale(k),
+                    (_, Some(k)) => x.scale(k),
+                    _ => x.times(y),
+                }),
+                BinOp::Div => cross(a, b, &|x, y| {
+                    let k = y.constant()?;
+                    if k.num == 0 { None } else { x.scale(Rat::int(1).checked_div(k)?) }
+                }),
+                _ => None,
+            }
+        }
+        Expr::Call(name, args, _) => {
+            // `min` and `max` are one of their two sides.
+            if name == crate::kw::MIN || name == crate::kw::MAX {
+                let mut out = Vec::new();
+                for x in args {
+                    out.extend(grid_forms(f, c, x, depth + 1, fresh)?);
+                }
+                return (out.len() <= GRID_BRANCHES).then_some(out);
+            }
+            // `allocate` is rounded down to a whole unit, a rounding to its grid: each lands on
+            // a grid of its own, whatever it was computed from.
+            let step = if name == crate::kw::ALLOCATE {
+                Rat::int(1)
+            } else if crate::num::RoundMode::parse(name).is_some() {
+                let g = grid_forms(f, c, args.get(1)?, depth + 1, fresh)?;
+                let [one] = g.as_slice() else { return None };
+                let g = one.constant()?;
+                if g.num == 0 {
+                    return None;
+                }
+                abs(g)
+            } else {
+                return None;
+            };
+            *fresh += 1;
+            Some(vec![GridForm::var(&format!("#{fresh}"), step, None)])
+        }
+    }
 }
 
 pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
@@ -545,8 +1129,8 @@ pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
     }
     // Padded to display width, not character count: a Japanese label is drawn twice as wide
     // as an ASCII one, so counting characters leaves the column ragged on a terminal.
-    let w: usize = [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE].iter().map(|k| crate::diag::width(label(k))).max().unwrap_or(0);
-    for k in [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE] {
+    let w: usize = CRITERIA.iter().map(|k| crate::diag::width(label(k))).max().unwrap_or(0);
+    for k in CRITERIA {
         let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
         let mark = if met == req { tr!("満たす", "satisfied") } else { tr!("欠け", "missing") };
         let k = label(k);
@@ -577,7 +1161,7 @@ pub fn audit_file(f: &RuleFile, c: &Checked, path: &str) -> (Audit, Vec<Vector>,
 
 /// `--format json` (docs/formats.md). One object per rule file.
 pub fn render_json(a: &Audit, vs: &[Vector], refused: &[Vector], path: &str) -> String {
-    let criteria: Vec<String> = [ROW, BOUND, SHADOW, TIE, FOLD, MACHINE]
+    let criteria: Vec<String> = CRITERIA
         .iter()
         .map(|k| {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
@@ -608,6 +1192,7 @@ fn json_name(k: &str) -> &'static str {
     match k {
         ROW => "row",
         BOUND => "boundary_pair",
+        VALUE => "value_pair",
         TIE => "rounding_tie",
         FOLD => "fold_transition",
         MACHINE => "machine_transition",

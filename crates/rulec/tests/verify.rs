@@ -50,7 +50,11 @@ for line in sys.stdin:
     if BUG == "2" and d["あて先"] == "沖縄県":
         # 旧実装が 1円 の細かさを持っていた場合。ずれは出力の刻み 10円 より必ず小さい。
         got -= 3 + int(d["重量"]) % 5
-    print(json.dumps({"id": req["id"], "out": {"運賃": got}}, ensure_ascii=False), flush=True)
+    if os.environ.get("BROKEN") == "1":
+        print("運賃は " + str(got) + " 円", flush=True)
+        continue
+    # ESCAPE=1 writes the way json.dumps does unless told otherwise: every key and value in \u.
+    print(json.dumps({"id": req["id"], "out": {"運賃": got}}, ensure_ascii=os.environ.get("ESCAPE") == "1"), flush=True)
 "#;
 
 /// The generated module and the adapter beside it, in a directory of this test's own.
@@ -79,13 +83,23 @@ fn setup(tag: &str) -> Option<PathBuf> {
 }
 
 fn verify(dir: &PathBuf, bug: &str) -> (i32, String) {
+    verify_env(dir, &[("BUG", bug)]).0
+}
+
+/// `verify` with the adapter's environment set, and what it wrote to stderr as well.
+fn verify_env(dir: &PathBuf, env: &[(&str, &str)]) -> ((i32, String), String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
     cmd.current_dir(root())
-        .args(["verify", RULE, "--adapter", "python3"])
+        .args(["verify", RULE, "--lang", "ja", "--adapter", "python3"])
         .arg(dir.join("adapter.py"));
-    cmd.env("BUG", bug);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
     let o = cmd.output().expect("rulec を起動できない");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    (
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned()),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
 }
 
 #[test]
@@ -161,4 +175,78 @@ fn 雛形とスキーマが出る() {
     assert!(sc.contains("\"整数。単位は cm\""), "単位を書く: {sc}");
     assert!(sc.contains("\"minimum\":1"), "範囲を書く: {sc}");
     assert!(sc.contains("\"北海道\""), "列挙を書く: {sc}");
+}
+
+/// An answer is read as the JSON it is (§15.151). It used to be searched as text for `"運賃":`,
+/// and a key written `"\u904b\u8cc3"` — Python's `json.dumps` unless told otherwise, and PHP's
+/// `json_encode` — was never found: an adapter that answered every case right came out at 0%.
+#[test]
+fn エスケープしたjsonで答えるアダプタとも一致する() {
+    let Some(dir) = setup("エスケープしたjsonで答えるアダプタとも一致する") else { return };
+    let ((code, out), err) = verify_env(&dir, &[("BUG", "0"), ("ESCAPE", "1")]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("(100.000%)"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A line that is not JSON stops the run and says which record, rather than being read as an
+/// answer with no values in it.
+#[test]
+fn jsonでない答えは止まって何件目かを言う() {
+    let Some(dir) = setup("jsonでない答えは止まって何件目かを言う") else { return };
+    let ((code, out), err) = verify_env(&dir, &[("BUG", "0"), ("BROKEN", "1")]);
+    assert_eq!(code, 2, "{out}{err}");
+    assert!(err.contains("0 件目の答え") && err.contains("運賃は"), "{err}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An optional output with no value is `null` on the wire, which is how the vectors write it;
+/// it was compared as the text `null` against `none`, and never matched.
+#[test]
+fn 任意の出力のnullはnoneとして比べる() {
+    if !have("python3") {
+        eprintln!("注意: python3 が無いので等価検証を飛ばした");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rulec-verify-{}-optional", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rule = "\
+rule 任意(opt) v1
+
+enum 区分(kind) = A(a) | B(b)
+
+inputs
+  区分(kind) : 区分
+  希望(pref) : 区分?
+
+outputs
+  割当(slot) : 区分?
+
+table 割当表(slots)
+policy unique
+| 区分 | -> 割当 |
+| A    | 希望    |
+| B    | B       |
+";
+    let adapter = r#"import json, sys
+sys.stdin.readline()
+print(json.dumps({"ok": True, "impl": "optional"}), flush=True)
+for line in sys.stdin:
+    r = json.loads(line)
+    d = r["in"]
+    got = d["希望"] if d["区分"] == "A" else "B"
+    print(json.dumps({"id": r["id"], "out": {"割当": got}}), flush=True)
+"#;
+    std::fs::write(dir.join("opt.rule"), rule).unwrap();
+    std::fs::write(dir.join("adapter.py"), adapter).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .current_dir(&dir)
+        .args(["verify", "opt.rule", "--lang", "ja", "--adapter", "python3", "adapter.py"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert_eq!(o.status.code(), Some(0), "{out}{}", String::from_utf8_lossy(&o.stderr));
+    assert!(out.contains("(100.000%)"), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

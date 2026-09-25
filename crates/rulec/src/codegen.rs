@@ -5442,37 +5442,32 @@ use std::io::Read;
         let alias = pub_name(&self.f.name);
         // An unknown enum value is answered as an error, where the runner would panic: a host
         // gets a line it can read, not a trap.
+        // An input that is not there, or not of its type, is answered as an error too (§15.151).
         let bind_of = |src: &str, name: &str, ty: &Ty| -> String {
-            match ty {
-                Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!(
-                        "match r::{cls}::parse(s({src}, {name:?})) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}"
-                    )
+            let or_err = |e: String| format!("match {e} {{ Ok(v) => v, Err(e) => return error(&e) }}");
+            let one = |ty: &Ty| -> String {
+                match ty {
+                    Ty::Enum(n) => {
+                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                        let text = or_err(format!("need({src}, {name:?})"));
+                        format!("match r::{cls}::parse({text}) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}")
+                    }
+                    Ty::Bool => or_err(format!("b_of({src}, {name:?})")),
+                    Ty::Date => or_err(format!("date_of({src}, {name:?})")),
+                    Ty::Number => or_err(format!("n_of({src}, {name:?})")),
+                    Ty::Str => format!("{}.to_string()", or_err(format!("need({src}, {name:?})"))),
+                    other => format!("r::{}({})", self.rs_ty(other), or_err(format!("n_of({src}, {name:?})"))),
                 }
-                Ty::Bool => format!("b({src}, {name:?})"),
-                Ty::Date => format!("ord(s({src}, {name:?}))"),
-                Ty::Number => format!("n({src}, {name:?})"),
-                Ty::Str => format!("s({src}, {name:?}).to_string()"),
+            };
+            match ty {
                 // `null` on the wire is `None`; the scanner keeps an unquoted token as its
                 // text, so the four letters are the test (DESIGN §15.88).
-                Ty::Opt(inner) => {
-                    let one = match inner.as_ref() {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!(
-                                "match r::{cls}::parse(s({src}, {name:?})) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}"
-                            )
-                        }
-                        Ty::Bool => format!("b({src}, {name:?})"),
-                        Ty::Date => format!("ord(s({src}, {name:?}))"),
-                        Ty::Number => format!("n({src}, {name:?})"),
-                        Ty::Str => format!("s({src}, {name:?}).to_string()"),
-                        other => format!("r::{}(n({src}, {name:?}))", self.rs_ty(other)),
-                    };
-                    format!("if s({src}, {name:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
-                }
-                _ => format!("r::{}(n({src}, {name:?}))", self.rs_ty(ty)),
+                Ty::Opt(inner) => format!(
+                    "if {} != \"null\" {{ Some({}) }} else {{ None }}",
+                    or_err(format!("need({src}, {name:?})")),
+                    one(inner)
+                ),
+                _ => one(ty),
             }
         };
         let mut binds = String::new();
@@ -5488,7 +5483,7 @@ use std::io::Read;
                 .map(|fd| format!("{}: {}", pub_name(&fd.name), bind_of("e", &fd.name.text, &self.ty_of(&fd.name.text))))
                 .collect();
             binds.push_str(&format!(
-                "    let mut a{n_ins}: Vec<r::Element> = Vec::new();\n    for e in &rows(s(&d, {:?})) {{\n        a{n_ins}.push(r::Element {{ {} }});\n    }}\n",
+                "    let mut a{n_ins}: Vec<r::Element> = Vec::new();\n    for e in &rows(match need(&d, {:?}) {{ Ok(v) => v, Err(e) => return error(&e) }}) {{\n        a{n_ins}.push(r::Element {{ {} }});\n    }}\n",
                 el.name.text,
                 fields.join(", ")
             ));
@@ -5518,6 +5513,7 @@ use std::io::Read;
             env!("CARGO_PKG_VERSION")
         );
         o.push_str(RS_JSON_HELPERS);
+        o.push_str(RS_JSON_STRICT);
         o.push_str(RS_JSON_STR);
         o.push_str(RS_WASM_ABI);
         o.push_str(&format!(
@@ -5605,6 +5601,39 @@ use std::io::Read;
 }
 
 /// The JSON string escaper the generated Rust module and the Wasm entry share.
+/// What the Wasm entry reads inputs with. A host is not rulec, and the runner's readers take a
+/// missing key or a number they cannot read for 0 — an answer computed on an input the host
+/// never sent (§15.151). These say which input, and the entry answers `{"error":…}`.
+pub(crate) const RS_JSON_STRICT: &str = r##"/// The value under `k`, or which input is not there.
+fn need<'a>(d: &'a [(String, String)], k: &str) -> Result<&'a str, String> {
+    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).ok_or_else(|| format!("{k}: missing"))
+}
+
+fn n_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
+    let v = need(d, k)?;
+    v.parse().map_err(|_| format!("{k}: {v:?} is not a whole number"))
+}
+
+fn b_of(d: &[(String, String)], k: &str) -> Result<bool, String> {
+    match need(d, k)? {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        v => Err(format!("{k}: {v:?} is neither true nor false")),
+    }
+}
+
+fn date_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
+    let v = need(d, k)?;
+    let p: Vec<&str> = v.split('-').collect();
+    let ok = p.len() == 3
+        && [4, 2, 2].iter().zip(&p).all(|(n, x)| x.len() == *n && x.chars().all(|c| c.is_ascii_digit()))
+        && (1..=12).contains(&p[1].parse::<i64>().unwrap_or(0))
+        && (1..=31).contains(&p[2].parse::<i64>().unwrap_or(0));
+    if ok { Ok(ord(v)) } else { Err(format!("{k}: {v:?} is not a YYYY-MM-DD date")) }
+}
+
+"##;
+
 pub(crate) const RS_JSON_STR: &str = "fn json_str(s: &str) -> String {\n    let mut o = String::from(\"\\\"\");\n    for ch in s.chars() {\n        match ch {\n            '\"' => o.push_str(\"\\\\\\\"\"),\n            '\\\\' => o.push_str(\"\\\\\\\\\"),\n            c if (c as u32) < 32 => o.push_str(&format!(\"\\\\u{:04x}\", c as u32)),\n            c => o.push(c),\n        }\n    }\n    o.push('\"');\n    o\n}\n\n";
 
 /// The flags the Wasm module is built with, as one line for `rulec api` and as arguments for
@@ -5652,8 +5681,11 @@ fn pairs_from(b: &[char], mut i: usize) -> (Vec<(String, String)>, usize) {
             i += 1;
         }
         i += 1;
-        while i < b.len() && b[i] == ' ' {
+        while i < b.len() && b[i].is_whitespace() {
             i += 1;
+        }
+        if i >= b.len() {
+            break;
         }
         let v = if b[i] == '"' {
             let (v, ni) = string_at(b, i);
@@ -5716,17 +5748,38 @@ fn rows(v: &str) -> Vec<Vec<(String, String)>> {
     out
 }
 
-/// The string starting at `i`, and the index just past its closing quote.
+/// The string starting at `i`, and the index just past its closing quote. Every escape JSON
+/// has is read, `\u` with its surrogate pairs too: a host's encoder may write `入金` as
+/// `\u5165\u91d1`, and Python's does unless told otherwise.
 fn string_at(b: &[char], i: usize) -> (String, usize) {
+    let hex = |j: usize| -> Option<u32> {
+        b.get(j..j + 4).and_then(|h| u32::from_str_radix(&h.iter().collect::<String>(), 16).ok())
+    };
     let (mut i, mut s) = (i + 1, String::new());
     while i < b.len() && b[i] != '"' {
         if b[i] == '\\' && i + 1 < b.len() {
             i += 1;
-            s.push(match b[i] {
-                'n' => '\n',
-                't' => '\t',
-                c => c,
-            });
+            match b[i] {
+                'n' => s.push('\n'),
+                't' => s.push('\t'),
+                'r' => s.push('\r'),
+                'b' => s.push('\u{8}'),
+                'f' => s.push('\u{c}'),
+                'u' => {
+                    let mut c = hex(i + 1);
+                    i += 4;
+                    if let Some(hi) = c.filter(|h| (0xD800..0xDC00).contains(h)) {
+                        if b.get(i + 1) == Some(&'\\') && b.get(i + 2) == Some(&'u') {
+                            if let Some(lo) = hex(i + 3).filter(|l| (0xDC00..0xE000).contains(l)) {
+                                c = Some(0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00));
+                                i += 6;
+                            }
+                        }
+                    }
+                    s.push(c.and_then(char::from_u32).unwrap_or('\u{FFFD}'));
+                }
+                c => s.push(c),
+            }
         } else {
             s.push(b[i]);
         }

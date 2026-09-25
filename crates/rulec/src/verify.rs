@@ -6,45 +6,40 @@
 
 use crate::ast::{Name, RuleFile};
 use crate::eval::Val;
+use crate::json::Json;
 use crate::types::{Checked, Ty};
 use crate::report::{Mismatch, Report, wire};
 use crate::vectors::{self, Vector};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
-/// Naive extraction of a JSON value. Only as much as is needed, so as not to add a
-/// dependency.
-fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
-    let pat = format!("\"{key}\":");
-    let i = line.find(&pat)? + pat.len();
-    let rest = line[i..].trim_start();
-    Some(rest)
+/// One line the adapter wrote, read as the JSON it is.
+///
+/// It used to be searched as text for `"名前":`. A key written `"\u540d\u524d"` — which is
+/// what Python's `json.dumps` and PHP's `json_encode` write unless told otherwise — never
+/// matched, every output read as missing, and an implementation that answered every case
+/// right came out at 0%. A value fared no better: `"\u5165\u91d1"` was read as `u5165u91d1`
+/// (§15.151).
+fn parse_line(line: &str, what: &str) -> Result<Json, String> {
+    crate::json::parse(line.trim()).map_err(|e| {
+        tr!(
+            "アダプタの{what}を JSON として読めません: {e}\n  {}",
+            "The adapter's {what} is not JSON: {e}\n  {}",
+            line.trim()
+        )
+    })
 }
 
-fn scalar(rest: &str) -> String {
-    let rest = rest.trim_start();
-    if let Some(s) = rest.strip_prefix('"') {
-        let mut out = String::new();
-        let mut esc = false;
-        for c in s.chars() {
-            if esc {
-                out.push(c);
-                esc = false;
-            } else if c == '\\' {
-                esc = true;
-            } else if c == '"' {
-                break;
-            } else {
-                out.push(c);
-            }
-        }
-        out
-    } else {
-        rest.chars()
-            .take_while(|c| !matches!(c, ',' | '}' | ']'))
-            .collect::<String>()
-            .trim()
-            .to_string()
+/// An output's value as the adapter sent it, in the form `report::wire` gives the rule's own:
+/// an integer as its digits, an enum value or a date as its text, and `null` for an optional
+/// output as `none`, which is how the vectors write a missing value.
+fn observed(c: &Checked, name: &str, j: &Json) -> String {
+    match j {
+        Json::Null if matches!(c.ty_of(name), Some(Ty::Opt(_))) => crate::kw::NONE.to_string(),
+        Json::Int(n) => n.to_string(),
+        Json::Frac(s) | Json::Str(s) => s.clone(),
+        Json::Bool(b) => b.to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -83,49 +78,61 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     .map_err(|e| e.to_string())?;
     si.flush().ok();
 
-    let mut hello = String::new();
-    so.read_line(&mut hello).map_err(|e| e.to_string())?;
-    // Independent of whitespace. Our own template writes `"ok": true` via json.dumps, so a
-    // naive string comparison would reject our own output.
-    if field(&hello, "ok").map(scalar).as_deref() != Some("true") {
+    let mut line = String::new();
+    so.read_line(&mut line).map_err(|e| e.to_string())?;
+    let hello = parse_line(&line, &tr!("握手の答え", "answer to the handshake"))?;
+    if hello.get("ok") != Some(&Json::Bool(true)) {
         return Err(tr!(
             "アダプタが握手を断りました: {}",
             "The adapter refused the handshake: {}",
-            hello.trim()
+            line.trim()
         ));
     }
-    let impl_id = field(&hello, "impl").map(scalar).unwrap_or_default();
+    let impl_id = hello.get("impl").map(|j| j.as_str().map(str::to_string).unwrap_or_else(|| j.to_string())).unwrap_or_default();
 
     let mut rep =
         Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
 
     for (id, v) in vs.iter().enumerate() {
-        let body = vectors::to_json(f, c, v);
-        let inpart = field(&body, "in").map(|s| {
-            let depth_end = s.find("},\"out\"").map(|i| i + 1).unwrap_or(s.len());
-            s[..depth_end].to_string()
-        });
-        writeln!(si, "{{\"id\":{id},\"in\":{}}}", inpart.unwrap_or_default()).map_err(|e| e.to_string())?;
+        writeln!(si, "{{\"id\":{id},\"in\":{}}}", vectors::in_object(f, c, v)).map_err(|e| e.to_string())?;
         si.flush().ok();
 
         let mut line = String::new();
         if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
             return Err(tr!("アダプタが {id} 件目で黙りました", "The adapter went silent at record {id}"));
         }
+        let ans = parse_line(&line, &tr!("{id} 件目の答え", "answer to record {id}"))?;
+        // An answer to another record would compare one case's values with another's.
+        if let Some(got) = ans.get("id") {
+            if got.as_int() != Some(id as i128) {
+                return Err(tr!(
+                    "アダプタが {id} 件目に {got} 件目の答えを返しました",
+                    "The adapter answered record {id} with the answer to record {got}"
+                ));
+            }
+        }
+        let (out, err) = (ans.get("out"), ans.get("err"));
+        if out.is_none() && err.is_none() {
+            return Err(tr!(
+                "アダプタの {id} 件目の答えに out も err もありません: {}",
+                "The adapter's answer to record {id} has neither out nor err: {}",
+                line.trim()
+            ));
+        }
         rep.total += 1;
         let pairs: Vec<(String, Option<Val>, Option<String>)> = v
             .outputs
             .iter()
-            .map(|(n, val)| (n.clone(), val.clone(), field(&line, n).map(scalar)))
+            .map(|(n, val)| (n.clone(), val.clone(), out.and_then(|o| o.get(n)).map(|j| observed(c, n, j))))
             .collect();
-        if let Some(e) = field(&line, "err") {
+        if let Some(e) = err {
             rep.errored += 1;
             rep.mismatches.push(Mismatch {
                 line: id + 1,
                 tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,
-                err: Some(scalar(e)),
+                err: Some(e.as_str().map(str::to_string).unwrap_or_else(|| e.to_string())),
                 fired: fired_of(v),
             });
             continue;

@@ -3,7 +3,7 @@
 //! The auditor itself is tested by mutation. Unless both are seen — red when vectors are removed,
 //! green when they are not — it cannot be told apart from "an auditor that always returns green".
 
-use rulec::coverage::{self, BOUND, ROW, SHADOW};
+use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
 const CORPUS: [&str; 48] = [
@@ -66,7 +66,7 @@ fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>)
 }
 
 #[test]
-fn コーパスは六基準を全部満たす() {
+fn コーパスは七基準を全部満たす() {
     for rel in CORPUS {
         let (f, c, _) = load(rel);
         // `audit_file` is what `rulec coverage` runs: the cases with an answer **and** the cases
@@ -74,7 +74,7 @@ fn コーパスは六基準を全部満たす() {
         // only ever witnessed by a refused case, so leaving them out fails a rule that is green.
         let (a, vs, refused) = coverage::audit_file(&f, &c, rel);
         assert!(a.ok(), "{rel}\n{}", coverage::render(&a, &vs, &refused));
-        for k in [ROW, BOUND, SHADOW] {
+        for k in [ROW, BOUND, SHADOW, VALUE, TIE] {
             let (met, req) = a.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(met, req, "{rel} の {k}");
         }
@@ -95,7 +95,9 @@ fn 空集合はすべての義務が欠ける() {
         let full = coverage::audit(&f, &c, rel, &vs, &[]);
         let empty = coverage::audit(&f, &c, rel, &[], &[]);
         assert!(!empty.ok(), "{rel}: 空集合を通した");
-        for k in [ROW, BOUND, SHADOW] {
+        // The value pairs and the rounding ties are counted from the rule as well (§15.151): the
+        // tie used to be an obligation only where the generator had found one.
+        for k in [ROW, BOUND, SHADOW, VALUE, TIE] {
             let (_, req) = full.tally.get(k).copied().unwrap_or((0, 0));
             let (met0, req0) = empty.tally.get(k).copied().unwrap_or((0, 0));
             assert_eq!(req0, req, "{rel} の {k}: 義務の数がベクタに依存している");
@@ -227,57 +229,58 @@ fn 境界の義務は素朴な数え上げと一致する() {
 /// feature.
 #[test]
 fn 義務の件数を固定する() {
-    // (rule, row coverage, both-sides boundary coverage, shadow-pair coverage)
-    const PINNED: &[(&str, usize, usize, usize)] = &[
-        ("tests/corpus/ゆうパック運賃.rule", 49, 6, 21),
-        ("tests/corpus/クーポン割引.rule", 9, 2, 10),
-        ("tests/corpus/クーポン併用.rule", 3, 4, 0),
-        ("tests/corpus/送料.rule", 7, 4, 3),
-        ("tests/corpus/期間区分.rule", 4, 6, 0),
-        ("tests/corpus/適用順序.rule", 4, 0, 5),
-        ("tests/corpus/クーポン一枚.rule", 7, 1, 3),
-        ("tests/corpus/ec261.rule", 15, 23, 0),
-        ("tests/corpus/健康保険料.rule", 52, 98, 0),
-        ("tests/corpus/厚生年金保険料.rule", 32, 62, 0),
-        ("tests/corpus/所得税.rule", 7, 12, 0),
-        ("tests/corpus/領収書の印紙税.rule", 17, 28, 0),
-        ("tests/corpus/印紙税.rule", 23, 41, 0),
-        ("tests/corpus/印紙税の本則と軽減.rule", 23, 41, 10),
-        ("tests/corpus/送料のただし書.rule", 6, 1, 1),
-        ("tests/corpus/退職手当.rule", 6, 4, 1),
+    // (rule, row coverage, both-sides boundary coverage, shadow-pair coverage, value-pair
+    // coverage, rounding-tie coverage)
+    const PINNED: &[(&str, usize, usize, usize, usize, usize)] = &[
+        ("tests/corpus/ゆうパック運賃.rule", 49, 6, 21, 0, 0),
+        ("tests/corpus/クーポン割引.rule", 9, 2, 10, 3, 0),
+        ("tests/corpus/クーポン併用.rule", 3, 4, 0, 0, 0),
+        ("tests/corpus/送料.rule", 7, 4, 3, 1, 0),
+        ("tests/corpus/期間区分.rule", 4, 6, 0, 0, 0),
+        ("tests/corpus/適用順序.rule", 4, 0, 5, 0, 0),
+        ("tests/corpus/クーポン一枚.rule", 7, 1, 3, 2, 1),
+        ("tests/corpus/ec261.rule", 15, 23, 0, 1, 0),
+        ("tests/corpus/健康保険料.rule", 52, 98, 0, 4, 2),
+        ("tests/corpus/厚生年金保険料.rule", 32, 62, 0, 2, 0),
+        ("tests/corpus/所得税.rule", 7, 12, 0, 2, 2),
+        ("tests/corpus/領収書の印紙税.rule", 17, 28, 0, 0, 0),
+        ("tests/corpus/印紙税.rule", 23, 41, 0, 0, 0),
+        ("tests/corpus/印紙税の本則と軽減.rule", 23, 41, 10, 0, 0),
+        ("tests/corpus/送料のただし書.rule", 6, 1, 1, 1, 0),
+        ("tests/corpus/退職手当.rule", 6, 4, 1, 2, 0),
         // The callee's rows beyond this rule's ranges are not obligations (§15.69).
-        ("tests/corpus/非常勤退職手当.rule", 2, 0, 0),
-        ("tests/corpus/全国運賃.rule", 4, 4, 0),
-        ("tests/corpus/納入先照合.rule", 7, 6, 0),
-        ("tests/corpus/Claude利用料.rule", 34, 0, 0),
-        ("tests/corpus/ポイント付与.rule", 3, 0, 0),
-        ("tests/corpus/予約取消可否.rule", 6, 0, 15),
-        ("tests/corpus/会員特典.rule", 12, 4, 3),
-        ("tests/corpus/parcel_rate.rule", 15, 6, 3),
-        ("tests/corpus/return_eligibility.rule", 7, 5, 0),
-        ("tests/corpus/uk_minimum_wage.rule", 5, 6, 4),
-        ("tests/corpus/uk_income_tax.rule", 7, 10, 0),
-        ("tests/corpus/us_income_tax.rule", 7, 12, 0),
-        ("tests/corpus/osha_extinguisher.rule", 5, 0, 0),
-        ("tests/corpus/uk_stamp_duty.rule", 9, 11, 4),
-        ("tests/corpus/osha_noise.rule", 9, 15, 8),
-        ("tests/corpus/osha_excavation.rule", 4, 3, 0),
-        ("tests/corpus/paypal_fee.rule", 2, 0, 0),
-        ("tests/corpus/値引の充当.rule", 2, 0, 0),
-        ("tests/corpus/決済手数料.rule", 3, 3, 0),
-        ("tests/corpus/補償証明書.rule", 8, 0, 9),
-        ("tests/corpus/評価ランク.rule", 4, 3, 6),
-        ("tests/corpus/預け荷物料金.rule", 9, 0, 0),
-        ("tests/corpus/保存基準.rule", 15, 9, 3),
-        ("tests/corpus/事務所の衛生基準.rule", 8, 5, 16),
-        ("tests/corpus/買物かごの送料.rule", 4, 6, 0),
-        ("tests/corpus/品番の扱い.rule", 4, 2, 4),
-        ("tests/corpus/比例配分.rule", 2, 0, 0),
-        ("tests/corpus/注文の送料.rule", 7, 2, 0),
-        ("tests/corpus/出荷の送料.rule", 10, 4, 0),
-        ("tests/corpus/速達の見積.rule", 8, 10, 0),
-        ("tests/corpus/注文の状態.rule", 10, 0, 0),
-        ("tests/corpus/payment_intent.rule", 28, 0, 0),
+        ("tests/corpus/非常勤退職手当.rule", 2, 0, 0, 2, 0),
+        ("tests/corpus/全国運賃.rule", 4, 4, 0, 0, 0),
+        ("tests/corpus/納入先照合.rule", 7, 6, 0, 0, 0),
+        ("tests/corpus/Claude利用料.rule", 34, 0, 0, 1, 1),
+        ("tests/corpus/ポイント付与.rule", 3, 0, 0, 4, 1),
+        ("tests/corpus/予約取消可否.rule", 6, 0, 15, 0, 0),
+        ("tests/corpus/会員特典.rule", 12, 4, 3, 2, 2),
+        ("tests/corpus/parcel_rate.rule", 15, 6, 3, 1, 1),
+        ("tests/corpus/return_eligibility.rule", 7, 5, 0, 0, 0),
+        ("tests/corpus/uk_minimum_wage.rule", 5, 6, 4, 0, 0),
+        ("tests/corpus/uk_income_tax.rule", 7, 10, 0, 1, 1),
+        ("tests/corpus/us_income_tax.rule", 7, 12, 0, 1, 1),
+        ("tests/corpus/osha_extinguisher.rule", 5, 0, 0, 0, 0),
+        ("tests/corpus/uk_stamp_duty.rule", 9, 11, 4, 0, 0),
+        ("tests/corpus/osha_noise.rule", 9, 15, 8, 0, 0),
+        ("tests/corpus/osha_excavation.rule", 4, 3, 0, 0, 0),
+        ("tests/corpus/paypal_fee.rule", 2, 0, 0, 1, 1),
+        ("tests/corpus/値引の充当.rule", 2, 0, 0, 2, 0),
+        ("tests/corpus/決済手数料.rule", 3, 3, 0, 2, 1),
+        ("tests/corpus/補償証明書.rule", 8, 0, 9, 1, 0),
+        ("tests/corpus/評価ランク.rule", 4, 3, 6, 1, 0),
+        ("tests/corpus/預け荷物料金.rule", 9, 0, 0, 1, 0),
+        ("tests/corpus/保存基準.rule", 15, 9, 3, 0, 0),
+        ("tests/corpus/事務所の衛生基準.rule", 8, 5, 16, 1, 0),
+        ("tests/corpus/買物かごの送料.rule", 4, 6, 0, 0, 0),
+        ("tests/corpus/品番の扱い.rule", 4, 2, 4, 0, 0),
+        ("tests/corpus/比例配分.rule", 2, 0, 0, 2, 0),
+        ("tests/corpus/注文の送料.rule", 7, 2, 0, 1, 0),
+        ("tests/corpus/出荷の送料.rule", 10, 4, 0, 1, 0),
+        ("tests/corpus/速達の見積.rule", 8, 10, 0, 1, 0),
+        ("tests/corpus/注文の状態.rule", 10, 0, 0, 1, 0),
+        ("tests/corpus/payment_intent.rule", 28, 0, 0, 0, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it
@@ -286,12 +289,12 @@ fn 義務の件数を固定する() {
         assert!(PINNED.iter().any(|(p, ..)| p == &rel), "{rel} の固定値がありません");
     }
     assert_eq!(PINNED.len(), CORPUS.len(), "コーパスを足したら固定値も足す");
-    for (rel, rows, bounds, shadows) in PINNED {
+    for (rel, rows, bounds, shadows, values, ties) in PINNED {
         let (f, c, vs) = load(rel);
         let a = coverage::audit(&f, &c, rel, &vs, &[]);
         assert_eq!(
-            (a.tally[ROW].1, a.tally[BOUND].1, a.tally[SHADOW].1),
-            (*rows, *bounds, *shadows),
+            (a.tally[ROW].1, a.tally[BOUND].1, a.tally[SHADOW].1, a.tally[VALUE].1, a.tally[TIE].1),
+            (*rows, *bounds, *shadows, *values, *ties),
             "{rel}: 義務の件数が動いた。機能を足したのなら固定値を更新し、\
              そうでないなら列挙器が何かを見落とし始めている"
         );
@@ -456,4 +459,184 @@ examples
         2,
         "例の出どころが why に無い"
     );
+}
+
+/// The rule the value pairs and the ties were missing on (§15.151): the one row that computes
+/// the fee is not the first, so its own point sits at 金額 = 0 and the fee there is 0 whatever
+/// an implementation computes.
+const FEE: &str = "\
+rule 手数料(fee) v1
+
+enum 区分(kind) = A(a) | B(b)
+enum 地域(region) = 東(east) | 西(west)
+
+inputs
+  区分(kind)   : 区分
+  地域(region) : 地域
+  金額(amount) : money[円, incl_tax]  range >=0円 <=100万円
+
+outputs
+  手数料(fee) : money[円, incl_tax]  round down(1円)
+
+define 料率分(pct) : money[円, incl_tax] = 金額 × 3%
+
+table 手数料表(table)
+policy unique
+| 区分 | 地域 | -> 手数料 |
+| A    | -    | 0円       |
+| B    | 東   | 0円       |
+| B    | 西   | 料率分    |
+";
+
+fn fee_of(v: &Vector) -> String {
+    vectors::show(v.outputs[0].1.as_ref().expect("手数料が無い"))
+}
+
+/// A row that returns a computed value is seen at two values, one input apart. Without the
+/// pair, an implementation that returned 0 on the row matched every vector.
+#[test]
+fn 計算した値を返す行は二つの値で試される() {
+    let (a, vs) = audit_src("fee.rule", FEE);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!(a.tally[VALUE], (1, 1));
+    let on: Vec<&Vector> = vs.iter().filter(|v| v.trace.iter().any(|t| t == "表 手数料表 行3")).collect();
+    let fees: std::collections::BTreeSet<String> = on.iter().map(|v| fee_of(v)).collect();
+    assert!(fees.len() >= 2, "行3 の手数料が一通りしかない: {fees:?}");
+    assert!(on.iter().any(|v| fee_of(v) != "0"), "行3 が 0 円でしか試されていない");
+}
+
+/// The auditor asks for the pair itself: with the row seen at 金額 = 0 alone, the obligation is
+/// missing and names the row.
+#[test]
+fn 計算した値を一通りに減らすと計算値の対カバーが欠ける() {
+    let (f, c) = rulec::prepare(FEE, "fee.rule").expect("検査を通る");
+    let vs = vectors::generate(&f, &c);
+    let kept: Vec<Vector> = vs
+        .iter()
+        .filter(|v| !v.trace.iter().any(|t| t == "表 手数料表 行3") || fee_of(v) == "0")
+        .cloned()
+        .collect();
+    assert!(kept.len() < vs.len(), "抜く対象がない");
+    let a = coverage::audit(&f, &c, "fee.rule", &kept, &[]);
+    assert_eq!(a.tally[VALUE], (0, 1));
+    let m: Vec<&str> = a.missing.iter().filter(|m| m.kind == VALUE).map(|m| m.what.as_str()).collect();
+    assert!(m.len() == 1 && m[0].contains("行3") && m[0].contains("料率分"), "{m:?}");
+}
+
+/// A row that says itself what the name it hands back is raises nothing: `| 受付 | 出荷 | 状態 |`
+/// returns 受付. Of the order's ten rows, only the refund of what was paid is computed.
+#[test]
+fn 行が値を決めている行は計算値の義務にならない() {
+    let (f, c, _) = load("tests/corpus/注文の状態.rule");
+    let duties = coverage::value_duties(&f, &c);
+    let named: Vec<(usize, &str)> = duties
+        .iter()
+        .map(|d| {
+            let (si, ri) = d.at.expect("表の行の義務");
+            (c.sets[si].table.rows[ri].index, d.col.as_str())
+        })
+        .collect();
+    assert_eq!(named, vec![(5, "返金額")]);
+}
+
+/// The tie is an obligation although the row the baseline lands on returns a constant, and it
+/// is met on the row that computes (§15.151). It used to be looked for from the baseline alone,
+/// and an obligation it did not find there was never counted.
+#[test]
+fn 同着の義務は定数を返す行があっても立つ() {
+    let (a, vs) = audit_src("fee.rule", FEE);
+    assert_eq!(a.tally[TIE], (1, 1));
+    assert!(
+        vs.iter().any(|v| v.why.contains("丸めの同着") && v.trace.iter().any(|t| t == "表 手数料表 行3")),
+        "同着のベクタが行3 に無い"
+    );
+}
+
+/// Taking the tie away leaves it missing, 0 of 1 — not 0 of 0.
+#[test]
+fn 同着のベクタを抜くと丸めの同着カバーが欠ける() {
+    let (f, c) = rulec::prepare(FEE, "fee.rule").expect("検査を通る");
+    let vs = vectors::generate(&f, &c);
+    let a = coverage::audit(&f, &c, "fee.rule", &vs, &[]);
+    let tie: Vec<usize> = a.witness.iter().copied().filter(|&i| vs[i].why.contains("丸めの同着")).collect();
+    assert!(!tie.is_empty(), "同着のベクタが無い");
+    // Every vector whose fee sits half a yen off the grid, whoever made it.
+    let kept: Vec<Vector> = vs
+        .iter()
+        .filter(|v| {
+            let (_, _, b) = rulec::eval::run_bindings(&f, &c, v.input.clone().into_iter().collect());
+            !matches!(b.get("手数料"), Some(rulec::eval::Val::Num(r)) if vectors::is_tie(*r, rulec::num::Rat::int(1)))
+        })
+        .cloned()
+        .collect();
+    let b = coverage::audit(&f, &c, "fee.rule", &kept, &[]);
+    assert_eq!(b.tally[TIE], (0, 1));
+    assert!(b.missing.iter().any(|m| m.kind == TIE && m.what.contains("手数料")));
+}
+
+/// An output the rule shows can never sit on a tie raises no obligation: every standard monthly
+/// remuneration is a multiple of 2,000 yen and the rate one of 0.1%, so half their product is
+/// whole yen; a base fee times a share of 0%, 50% or 100% is a multiple of 10 yen under a 10-yen
+/// grid; a product of two whole numbers is whole; and 3.49% of at most 100 cents never ends in
+/// half a cent, though 3.49% of 5,000 does.
+#[test]
+fn 同着に届かない出力は義務にならない() {
+    for (rel, want) in [("tests/corpus/厚生年金保険料.rule", 0), ("tests/corpus/送料.rule", 0), ("tests/corpus/paypal_fee.rule", 1)] {
+        let (f, c, vs) = load(rel);
+        let a = coverage::audit(&f, &c, rel, &vs, &[]);
+        assert_eq!(a.tally[TIE], (want, want), "{rel}");
+    }
+    let product = "\
+rule 積(product) v1
+
+inputs
+  個数(count) : number  range >=0 <=100
+  単価(price) : money[円]  range >=0円 <=10000円
+
+outputs
+  金額(amount) : money[円]  round down(1円)
+
+define 金額(amount) : money[円] = 単価 × 個数
+";
+    assert_eq!(audit_src("product.rule", product).0.tally[TIE], (0, 0));
+    for (hi, want) in [(100, 0), (10000, 1)] {
+        let src = format!(
+            "\
+rule 手数料率(fee_rate) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=1USDc <={hi}USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 手数料(fee) : money[USDc] = 金額 × 3.49%
+"
+        );
+        let (a, vs) = audit_src("fee_rate.rule", &src);
+        assert_eq!(a.tally[TIE], (want, want), "{hi}\n{}", coverage::render(&a, &vs, &[]));
+    }
+}
+
+/// A rule with no table at all still has a suite: the output it computes is an obligation of
+/// its own. It had none, and its suite came out empty — `rulec test` and `verify` compared
+/// nothing and passed.
+#[test]
+fn 表の無い規則にもベクタがある() {
+    let src = "\
+rule 手数料率(fee_rate) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=1USDc <=100USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 手数料(fee) : money[USDc] = 金額 × 3.49%
+";
+    let (a, vs) = audit_src("fee_rate.rule", src);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!(a.tally[VALUE], (1, 1));
+    let fees: std::collections::BTreeSet<String> = vs.iter().map(fee_of).collect();
+    assert!(fees.len() >= 2, "{fees:?}");
 }

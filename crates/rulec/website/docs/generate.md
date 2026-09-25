@@ -535,24 +535,37 @@ Shopify Function takes the third, a named export — and where its boundary runs
 
 ```console
 $ rulec coverage rules/送料.rule
+rules/送料.rule
 70 vectors
-  row coverage                7 / 7     satisfied
-  boundary-pair coverage      4 / 4     satisfied
-  shadow-pair coverage        3 / 3     satisfied
-  rounding-tie coverage       0 / 0     satisfied
-  fold-transition coverage    0 / 0     satisfied
+  row coverage                   7 / 7     satisfied
+  boundary-pair coverage         4 / 4     satisfied
+  shadow-pair coverage           3 / 3     satisfied
+  value-pair coverage            1 / 1     satisfied
+  rounding-tie coverage          0 / 0     satisfied
+  fold-transition coverage       0 / 0     satisfied
+  machine-transition coverage    0 / 0     satisfied
 ```
 
-`coverage` is **a completeness check on the test suite**. The five
-obligations are derived from the rule rather than from the generated
+`coverage` is **a completeness check on the test suite**. The seven
+kinds of obligation are derived from the rule rather than from the generated
 vectors, and anything missing is named — which row, which boundary,
-which shadow pair, which rounding tie, which fold transition — with exit 1.
+which shadow pair, which computed value, which rounding tie, which fold or
+machine transition — with exit 1.
+
+A computed value is a row that returns a name rather than a literal, or an
+output a `define` or `result` line computes. It has to be seen at two values,
+in two vectors one input apart, as an implementation's answer shows it:
+otherwise an implementation that returned a constant there would match every
+vector. A refund of the amount paid, tried only where the amount is 0 yen,
+is the case it was made for.
 
 A rounding tie is the value exactly half a step off the grid, the one
-point where `half_up` and `half_down` part company. It raises an
-obligation only where the rule can actually reach it: 18.3% of a standard
-monthly remuneration is always an even number of yen, so the halved
-amount has no fraction, and that rule shows 0 / 0.
+point where `half_up` and `half_down` part company. Every output that
+declares a rounding owes one, unless the rule's arithmetic shows that no
+input reaches it: 18.3% of a standard monthly remuneration is always an
+even number of yen, so the halved amount has no fraction, and that rule
+shows 0 / 0. A tie that is merely hard to find still counts, and shows as
+missing.
 
 ## Keeping it in step
 
