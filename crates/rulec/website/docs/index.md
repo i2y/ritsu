@@ -235,7 +235,7 @@ An order is paid, shipped and delivered, or cancelled. A rule that is one step o
 ```console
 $ rulec certificate fee.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule fee.rule cert.json
-Fee (0.19.1), re-checked against the Lean proofs
+Fee (0.20.0), re-checked against the Lean proofs
   FeeTable: 6 rows — complete, 6 rows reached, no two rows meet, 1 axes tiled
     12 boxes read back from the cells they were written as
   the digest is fee.rule's, and 12 cells are read back out of it

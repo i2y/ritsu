@@ -228,7 +228,7 @@ error[E126]: 取消 のあとに 出荷済 に着く手順があります
 ```console
 $ rulec certificate 運賃.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule 運賃.rule cert.json
-運賃 (0.19.1), re-checked against the Lean proofs
+運賃 (0.20.0), re-checked against the Lean proofs
   運賃表: 6 rows — complete, 6 rows reached, no two rows meet, 1 axes tiled
     12 boxes read back from the cells they were written as
   the digest is 運賃.rule's, and 12 cells are read back out of it
