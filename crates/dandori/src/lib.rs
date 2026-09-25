@@ -5,6 +5,7 @@
 //! written in rulec and read through its CLI.
 
 pub mod asl;
+pub mod aws;
 pub mod check;
 pub mod diag;
 pub mod flow;

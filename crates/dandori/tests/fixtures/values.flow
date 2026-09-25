@@ -1,0 +1,36 @@
+workflow values v1
+description "値と型の誤り：リストのリスト、単位の書き誤り、none、無いことがある値、書き出したレコード、答えの無いタスク"
+
+use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+
+record 住所
+  市 : string
+
+record 客
+  名前 : string
+  住所 : 住所?
+  点   : mony[円]
+  履歴 : list[list[string]]
+
+record 受付
+  id : string
+
+inputs
+  客 : 客
+
+task 送る(本文: string) -> 受付
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send"
+
+task 記録する(本文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:log"
+
+flow
+  let a = 送る(本文: 客.住所.市)
+  let b = 送る(本文: "{客.住所} に送ります")
+  let c = 送る(本文: none)
+  let d = {市: "東京"}
+  let e: 住所 = {町: "本町"}
+  let f = 記録する(本文: "x")
+  急ぎ(会員: true, 金額: 100)
+  let g = []

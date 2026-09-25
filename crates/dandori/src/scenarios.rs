@@ -45,6 +45,12 @@ struct Ex<'a> {
     in_on_failure: bool,
     steps: usize,
     stopped: bool,
+    /// how many parallel rounds are running around the current statement
+    par_depth: usize,
+    /// the current parallel round failed: by a task's error (true) or otherwise (false)
+    pending: Option<bool>,
+    /// the `for` loops that went through a list with something in it, in this run
+    done_loops: Vec<String>,
 }
 
 pub fn generate(m: &Model) -> Vec<Value> {
@@ -77,6 +83,9 @@ pub fn generate(m: &Model) -> Vec<Value> {
             in_on_failure: false,
             steps: 0,
             stopped: false,
+            par_depth: 0,
+            pending: None,
+            done_loops: vec![],
         };
         ex.run();
         counts = std::mem::take(&mut ex.counts);
@@ -141,13 +150,16 @@ impl<'a> Ex<'a> {
         json!(format!("{HOLE}{}", self.holes.len() - 1))
     }
 
-    /// A value of type `t` with its enums and bools left open, to be chosen when read.
+    /// A value of type `t` with its enums, bools, optional values and lists left open, to be
+    /// chosen when read.
     fn template(&mut self, t: &Ty, name: &str) -> Value {
         match t {
             Ty::Str => json!(format!("{name}-1")),
             Ty::Timestamp => json!("2026-10-01T10:00:00Z"),
             Ty::Int | Ty::Num(_) => json!(1000),
-            Ty::Bool | Ty::Enum(_) => self.hole(t),
+            // an array, so that the targets show they keep a `json` value that is one as one item
+            Ty::Json => json!([{ "note": format!("{name}-1") }]),
+            Ty::Bool | Ty::Enum(_) | Ty::Opt(_) | Ty::List(_) => self.hole(t),
             Ty::Record(r) => {
                 let fields = self.m.records[*r].fields.clone();
                 let mut o = Map::new();
@@ -164,6 +176,8 @@ impl<'a> Ex<'a> {
         match t {
             Ty::Bool => vec![json!(true), json!(false)],
             Ty::Enum(e) => self.m.enums[*e].values.iter().map(|v| json!(v)).collect(),
+            // a list left open until the end is empty, an optional value absent
+            Ty::List(_) => vec![json!([])],
             _ => vec![Value::Null],
         }
     }
@@ -172,26 +186,102 @@ impl<'a> Ex<'a> {
         v.as_str().and_then(|s| s.strip_prefix(HOLE)).and_then(|x| x.parse().ok())
     }
 
-    /// Read a value, choosing an open enum or bool now.
+    /// Read a value, choosing an open enum, bool or optional value now.
     fn read(&mut self, v: Value, at: &str) -> Value {
         match Ex::hole_id(&v) {
             Some(id) => {
                 if let Some(x) = &self.holes[id].1 {
                     return x.clone();
                 }
-                let dom = self.domain(&self.holes[id].0.clone());
-                let c = self.choose(at, dom.len());
-                self.holes[id].1 = Some(dom[c].clone());
-                dom[c].clone()
+                let t = self.holes[id].0.clone();
+                let picked = match &t {
+                    Ty::Opt(inner) => {
+                        // absent, or each value of an enum or a bool, or some value
+                        let mut dom = vec![Value::Null];
+                        let listed = matches!(**inner, Ty::Bool | Ty::Enum(_));
+                        if listed {
+                            dom.extend(self.domain(inner));
+                        }
+                        let n = if listed { dom.len() } else { 2 };
+                        let c = self.choose(at, n);
+                        if c == 0 {
+                            Value::Null
+                        } else if listed {
+                            dom[c].clone()
+                        } else {
+                            let v = self.template(inner, "value");
+                            v
+                        }
+                    }
+                    _ => {
+                        let dom = self.domain(&t);
+                        let c = self.choose(at, dom.len());
+                        dom[c].clone()
+                    }
+                };
+                self.holes[id].1 = Some(picked.clone());
+                picked
             }
             None => v,
         }
     }
 
+    /// The items of a list a `for` goes through, choosing the length of an open one now:
+    /// empty, one, two, or one more than the loop takes.
+    fn items(&mut self, v: Value, max: u32, at: &str) -> Vec<Value> {
+        let id = match Ex::hole_id(&v) {
+            Some(id) => id,
+            None => return v.as_array().cloned().unwrap_or_default(),
+        };
+        if let Some(x) = &self.holes[id].1 {
+            return x.as_array().cloned().unwrap_or_default();
+        }
+        let elem = match &self.holes[id].0 {
+            Ty::List(t) => (**t).clone(),
+            _ => return vec![],
+        };
+        let mut lengths: Vec<usize> = vec![0, 1, 2];
+        lengths.retain(|n| *n <= max as usize);
+        lengths.push(max as usize + 1);
+        let c = self.choose(at, lengths.len());
+        let mut items = Vec::new();
+        for i in 0..lengths[c] {
+            let v = self.template(&elem, &format!("item{}", i + 1));
+            items.push(v);
+        }
+        self.holes[id].1 = Some(Value::Array(items.clone()));
+        items
+    }
+
+    /// A deliberate end, and for every loop that went through items on the way, the end after
+    /// it: so that a run that fills a list and ends well is kept, not only one with an empty list.
+    fn end_label(&mut self, end: &str) {
+        self.labels.insert(end.to_string());
+        for l in self.done_loops.clone() {
+            self.labels.insert(format!("{l} then {end}"));
+        }
+    }
+
+    /// Stop here: the run ends, or inside a parallel round the round does, and the loop
+    /// fails when every round is done.
+    fn halt(&mut self, task_error: bool) -> Ctl {
+        if self.par_depth > 0 {
+            if self.pending.is_none() {
+                self.pending = Some(task_error);
+            }
+        } else {
+            self.stopped = true;
+        }
+        Ctl::Stop
+    }
+
     fn fill(&self, v: &Value) -> Value {
         match v {
             Value::String(_) => match Ex::hole_id(v) {
-                Some(id) => self.holes[id].1.clone().unwrap_or_else(|| self.domain(&self.holes[id].0)[0].clone()),
+                Some(id) => {
+                    let x = self.holes[id].1.clone().unwrap_or_else(|| self.domain(&self.holes[id].0)[0].clone());
+                    self.fill(&x)
+                }
                 None => v.clone(),
             },
             Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (k.clone(), self.fill(x))).collect()),
@@ -210,17 +300,18 @@ impl<'a> Ex<'a> {
 
     fn value(&mut self, e: &TExpr) -> Value {
         match e {
-            TExpr::Str(s) => json!(s),
-            TExpr::Int(n) => json!(n),
-            TExpr::Bool(b) => json!(b),
-            TExpr::Enum(v, _) => json!(v),
             TExpr::Var { name, fields, .. } => {
                 let mut v = self.vars.get(name).cloned().unwrap_or(Value::Null);
                 for f in fields {
+                    // a record that was left open and chosen since reads as what was chosen
+                    if let Some(id) = Ex::hole_id(&v) {
+                        v = self.holes[id].1.clone().unwrap_or(Value::Null);
+                    }
                     v = v.get(f).cloned().unwrap_or(Value::Null);
                 }
                 v
             }
+            other => crate::interp::value_of(&self.vars, other),
         }
     }
 
@@ -239,7 +330,7 @@ impl<'a> Ex<'a> {
 
     fn block(&mut self, ss: &[TStmt]) -> Ctl {
         for s in ss {
-            if self.stopped {
+            if self.stopped || self.pending.is_some() {
                 return Ctl::Stop;
             }
             self.steps += 1;
@@ -259,15 +350,104 @@ impl<'a> Ex<'a> {
         match &s.kind {
             TK::Pass | TK::Wait { .. } | TK::WaitUntil { .. } => Ctl::Next,
             TK::Break => Ctl::Break,
+            TK::Assign { name, expr } => {
+                let v = self.value(expr);
+                self.vars.insert(name.clone(), v);
+                Ctl::Next
+            }
             TK::Succeed { .. } => {
-                self.labels.insert(format!("{}:succeed", s.site));
-                self.stopped = true;
-                Ctl::Stop
+                self.end_label(&format!("{}:succeed", s.site));
+                self.halt(false)
             }
             TK::Fail { .. } => {
-                self.labels.insert(format!("{}:fail", s.site));
-                self.stopped = true;
-                Ctl::Stop
+                self.end_label(&format!("{}:fail", s.site));
+                self.halt(false)
+            }
+            TK::For { var, list, max, parallel, body, result, locals } => {
+                let raw = self.value(list);
+                let items = self.items(raw, *max, &format!("for {}", s.site));
+                if items.len() > *max as usize {
+                    self.labels.insert(format!("{}:too many", s.site));
+                    return self.halt(false);
+                }
+                if items.is_empty() {
+                    self.labels.insert(format!("{}:empty", s.site));
+                }
+                let mut out = Vec::new();
+                match parallel {
+                    None => {
+                        for it in items.iter() {
+                            self.vars.insert(var.clone(), it.clone());
+                            let c = self.block(body);
+                            match c {
+                                Ctl::Break => {
+                                    self.labels.insert(format!("{}:break", s.site));
+                                    break;
+                                }
+                                Ctl::Stop => return Ctl::Stop,
+                                Ctl::Next => {
+                                    let l = format!("{}:ran", s.site);
+                                    self.labels.insert(l.clone());
+                                    if !self.done_loops.contains(&l) {
+                                        self.done_loops.push(l);
+                                    }
+                                    if let Some((_, y)) = result {
+                                        let v = self.value(y);
+                                        out.push(v);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        let mut first: Option<bool> = None;
+                        let outer = self.pending.take();
+                        for it in items.iter() {
+                            for l in locals {
+                                self.vars.insert(l.clone(), Value::Null);
+                            }
+                            self.vars.insert(var.clone(), it.clone());
+                            self.par_depth += 1;
+                            let _ = self.block(body);
+                            self.par_depth -= 1;
+                            if self.stopped {
+                                return Ctl::Stop;
+                            }
+                            match self.pending.take() {
+                                Some(k) => {
+                                    self.labels.insert(format!("{}:a round fails", s.site));
+                                    if first.is_none() {
+                                        first = Some(k);
+                                    }
+                                }
+                                None => {
+                                    if let Some((_, y)) = result {
+                                        let v = self.value(y);
+                                        out.push(v);
+                                    }
+                                }
+                            }
+                        }
+                        self.pending = outer;
+                        if let Some(task_error) = first {
+                            if task_error {
+                                return self.unhandled();
+                            }
+                            return self.halt(false);
+                        }
+                        if !items.is_empty() {
+                            let l = format!("{}:every round done", s.site);
+                            self.labels.insert(l.clone());
+                            if !self.done_loops.contains(&l) {
+                                self.done_loops.push(l);
+                            }
+                        }
+                    }
+                }
+                if let Some((r, _)) = result {
+                    self.vars.insert(r.clone(), Value::Array(out));
+                }
+                Ctl::Next
             }
             TK::Repeat { times, body } => {
                 for n in 0..*times {
@@ -290,18 +470,22 @@ impl<'a> Ex<'a> {
                 let raw = self.value(expr);
                 let v = self.read(raw, &format!("match {}", s.site));
                 for (i, a) in arms.iter().enumerate() {
-                    let hit = (a.none && v.is_null()) || a.values.iter().any(|x| match &v {
-                        Value::String(s) => s == x,
-                        Value::Bool(b) => b.to_string() == *x,
-                        _ => false,
-                    });
+                    let hit = (a.none && v.is_null())
+                        || (a.some.is_some() && !v.is_null())
+                        || a.values.iter().any(|x| match &v {
+                            Value::String(s) => s == x,
+                            Value::Bool(b) => b.to_string() == *x,
+                            _ => false,
+                        });
                     if hit {
                         self.labels.insert(format!("{}:arm{}", s.site, i));
+                        if let Some(n) = &a.some {
+                            self.vars.insert(n.clone(), v.clone());
+                        }
                         return self.block(&a.body);
                     }
                 }
-                self.stopped = true;
-                Ctl::Stop
+                self.halt(false)
             }
             TK::Call { target, callee, handlers, .. } => self.call(s, target.as_ref(), callee, handlers),
         }
@@ -375,7 +559,7 @@ impl<'a> Ex<'a> {
         let m = self.m;
         let result_ty = match callee {
             Callee::Task(t) => m.tasks[*t].result.clone(),
-            Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
+            Callee::Rule(r) => Some(Ty::Record(m.rules[*r].outputs)),
         };
         // the ways this call can come out: (label, state of the case after, answer)
         enum Way {
@@ -487,12 +671,18 @@ impl<'a> Ex<'a> {
                 ways.push(("unexpected state".into(), Way::Unexpected(st)));
             }
         }
-        ways.push(("malformed".into(), Way::Malformed));
+        // an answer that does not fit is one the workflow reads: not for a task that answers nothing, or anything
+        if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) {
+            ways.push(("malformed".into(), Way::Malformed));
+        }
         let pick = self.choose(&format!("call {}", s.site), ways.len());
         let (label, way) = ways.swap_remove(pick);
         self.labels.insert(format!("{}:{label}", s.site));
         let ok_answer = |ex: &mut Ex, st: Option<usize>| -> Value {
-            let mut v = ex.template(&result_ty, "value");
+            let mut v = match &result_ty {
+                Some(t) => ex.template(t, "value"),
+                None => Value::Null,
+            };
             if let (Some(c), Some(st)) = (case, st) {
                 let field = m.cases[c].state_field.clone();
                 v[field] = json!(m.machine(c).states[st]);
@@ -509,13 +699,11 @@ impl<'a> Ex<'a> {
             Way::Unexpected(st) => {
                 let v = ok_answer(self, Some(st));
                 self.answers.push(json!({ "ok": v }));
-                self.stopped = true;
-                Ctl::Stop
+                self.halt(false)
             }
             Way::Malformed => {
                 self.answers.push(json!({ "ok": {} }));
-                self.stopped = true;
-                Ctl::Stop
+                self.halt(false)
             }
             Way::RetryThenOk(st) => {
                 // one error that the retriers take, then an answer
@@ -552,17 +740,28 @@ impl<'a> Ex<'a> {
                         return self.block(&h.body);
                     }
                 }
-                if !self.in_on_failure {
-                    if let Some(block) = m.on_failure.clone() {
-                        self.in_on_failure = true;
-                        self.labels.insert("on failure".into());
-                        self.block(&block);
-                    }
+                if self.par_depth > 0 {
+                    return self.halt(true);
                 }
-                self.stopped = true;
-                Ctl::Stop
+                self.unhandled()
             }
         }
+    }
+
+    /// A task's error that nothing took: `on failure` runs, and the run ends.
+    fn unhandled(&mut self) -> Ctl {
+        if self.par_depth > 0 {
+            return self.halt(true);
+        }
+        if !self.in_on_failure {
+            if let Some(block) = self.m.on_failure.clone() {
+                self.in_on_failure = true;
+                self.labels.insert("on failure".into());
+                self.block(&block);
+            }
+        }
+        self.stopped = true;
+        Ctl::Stop
     }
 
     fn assign(&mut self, target: Option<&Target>, v: Value, st: Option<usize>) {

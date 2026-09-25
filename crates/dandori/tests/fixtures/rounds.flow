@@ -1,0 +1,29 @@
+workflow rounds v1
+description "for と並列の回の誤り：並列の回からの break と succeed、中と外で同じ変数、yield の場所"
+
+record 明細
+  sku : string
+
+record 結果
+  id : string
+
+inputs
+  明細 : list[明細]
+
+outputs
+  n : int
+
+task 引き当てる(sku: string) -> 結果
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:reserve"
+  idempotent
+
+flow
+  let r = 引き当てる(sku: "a")
+  for x in 明細 at most 10 in parallel
+    let r = 引き当てる(sku: x.sku)
+    break
+  for y in 明細 at most 10 in parallel
+    succeed n = 1
+  for z in 明細 at most 10
+    yield z
+  succeed n = 2

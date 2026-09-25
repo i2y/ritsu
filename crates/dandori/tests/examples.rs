@@ -8,6 +8,8 @@
 //! `DANDORI_BLESS=1` rewrites the golden files.
 
 use dandori::diag::Lang;
+use dandori::interp::CallInfo;
+use dandori::model::{Callee, Model, Platform, Via, TK};
 use dandori::render::View;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -60,6 +62,14 @@ fn flows(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out.sort();
+    out
+}
+
+/// The flows every platform runs: the examples, and the ones in tests/flows that exercise
+/// the corners of the language.
+fn runnable() -> Vec<PathBuf> {
+    let mut out = flows(&root().join("examples"));
+    out.extend(flows(&root().join("tests/flows")));
     out
 }
 
@@ -122,10 +132,18 @@ fn asl_runs_as_the_reference_says() {
     need_rulec!();
     need_node!();
     let mut compared = 0;
-    for f in flows(&root().join("examples")) {
+    for f in runnable() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let files = dandori::asl::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
+        let files = match dandori::asl::build(&m) {
+            Ok(files) => files,
+            Err(d) if d.iter().all(|x| x.code == "E050") => {
+                // a workflow for the platforms that run the user's own code, as it says
+                eprintln!("{}: not for Step Functions ({} task(s) with no way to call them there: E050)", rel(&f), d.len());
+                continue;
+            }
+            Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
+        };
         let dir = scratch(&dandori::render::ident(&m.name));
         let def = dir.join(&files[0].0);
         std::fs::write(&def, &files[0].1).unwrap();
@@ -168,6 +186,63 @@ fn temporal_available() -> bool {
     root().join("tools/temporal/node_modules/@temporalio/testing").exists() && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
+/// What the stand-in transport needs to know to answer as the other side would: the HTTP
+/// status of each declared error, and the exception of an AWS API's.
+fn transport_spec(m: &Model, p: Platform) -> (Vec<Value>, Vec<Value>) {
+    let mut http = Vec::new();
+    let mut aws = Vec::new();
+    for t in &m.tasks {
+        match t.via(p) {
+            Some(Via::Http { method, url, .. }) => {
+                let errors: serde_json::Map<String, Value> = t.errors.iter().filter_map(|e| e.status.map(|s| (e.name.clone(), json!(s)))).collect();
+                http.push(json!({ "method": method, "url": url, "errors": errors }));
+            }
+            Some(Via::Aws { service, action }) => {
+                let errors: serde_json::Map<String, Value> = t.errors.iter().map(|e| (e.name.clone(), json!(e.exception.clone().unwrap_or_else(|| e.name.clone())))).collect();
+                aws.push(json!({ "api": format!("{service}:{action}"), "errors": errors, "keyParam": t.key_param }));
+            }
+            _ => {}
+        }
+    }
+    (http, aws)
+}
+
+/// The scenarios' runs for a platform: the input and the answers, and the reference's
+/// trace; `keep` says which runs the platform's test environment can play.
+fn plays(m: &Model, view: View, keep: impl Fn(&[CallInfo]) -> bool) -> (Vec<Value>, Vec<(Value, Value)>, usize) {
+    let mut runs = Vec::new();
+    let mut references = Vec::new();
+    let mut left_out = 0;
+    for sc in dandori::scenarios::generate(m) {
+        let (reference, calls) = dandori::interp::run_traced(m, &sc, view).unwrap();
+        if !keep(&calls) {
+            left_out += 1;
+            continue;
+        }
+        let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
+        let script: Vec<Value> = answers.iter().map(|a| if a.get("ok").is_some() { json!({ "ok": a["ok"] }) } else { json!({ "error": a["error"] }) }).collect();
+        runs.push(json!({ "input": sc["input"], "answers": script }));
+        references.push((sc, reference));
+    }
+    (runs, references, left_out)
+}
+
+fn compare(what: &str, f: &Path, references: &[(Value, Value)], got: &[Value]) {
+    assert_eq!(got.len(), references.len());
+    for (i, ((sc, reference), g)) in references.iter().zip(got).enumerate() {
+        if norm(g) != norm(reference) {
+            panic!(
+                "{} run {}: {what} and the reference interpreter differ\n--- scenario\n{}\n--- reference\n{}\n--- {what}\n{}",
+                rel(f),
+                i + 1,
+                serde_json::to_string_pretty(sc).unwrap(),
+                serde_json::to_string_pretty(reference).unwrap(),
+                serde_json::to_string_pretty(g).unwrap()
+            );
+        }
+    }
+}
+
 #[test]
 fn temporal_runs_as_the_reference_says() {
     need_rulec!();
@@ -175,7 +250,7 @@ fn temporal_runs_as_the_reference_says() {
         eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
     }
-    for f in flows(&root().join("examples")) {
+    for f in runnable() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("temporal-{}", dandori::render::ident(&m.name)));
@@ -185,26 +260,20 @@ fn temporal_runs_as_the_reference_says() {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, text).unwrap();
         }
-        let mut activities: Vec<String> = m.tasks.iter().map(|t| dandori::render::ident(&t.name)).collect();
-        activities.extend(m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)));
-        // a timeout cannot be scripted in the test environment, so those runs are left out
-        let mut references = Vec::new();
-        let mut runs = Vec::new();
-        let mut left_out = 0;
-        for sc in dandori::scenarios::generate(&m) {
-            let reference = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
-            let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
-            if answers.iter().any(|a| a["error"] == "timeout") {
-                left_out += 1;
-                continue;
-            }
-            let script: Vec<Value> = answers.iter().map(|a| if a.get("ok").is_some() { json!({ "ok": a["ok"] }) } else { json!({ "error": a["error"] }) }).collect();
-            runs.push(json!({ "input": sc["input"], "answers": script }));
-            references.push((sc, reference));
-        }
+        let p = Platform::Temporal;
+        let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::render::ident(&t.name), "callback": t.callback })).collect();
+        let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
+        let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
+        let mut queues: Vec<String> = m.tasks.iter().filter_map(|t| t.queue.clone()).collect();
+        queues.sort();
+        queues.dedup();
+        let (http, aws) = transport_spec(&m, p);
+        // an activity's timeout cannot be scripted in the test environment; a callback's can, by not answering
+        let (runs, references, left_out) = plays(&m, View::Temporal, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
-        std::fs::write(&runs_file, serde_json::to_string(&json!({ "workflow": dandori::render::ident(&m.name), "activities": activities, "runs": runs })).unwrap()).unwrap();
+        let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
+        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
         let out = Command::new("node")
             .arg(root().join("tools/temporal/run.mjs"))
             .arg(dir.join(dandori::render::ident(&m.name)))
@@ -214,20 +283,8 @@ fn temporal_runs_as_the_reference_says() {
             .unwrap();
         assert!(out.status.success(), "{}: the Temporal runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
-        assert_eq!(got.len(), references.len());
-        for (i, ((sc, reference), g)) in references.iter().zip(&got).enumerate() {
-            if norm(g) != norm(reference) {
-                panic!(
-                    "{} run {}: the Temporal workflow and the reference interpreter differ\n--- scenario\n{}\n--- reference\n{}\n--- workflow\n{}",
-                    rel(&f),
-                    i + 1,
-                    serde_json::to_string_pretty(sc).unwrap(),
-                    serde_json::to_string_pretty(reference).unwrap(),
-                    serde_json::to_string_pretty(g).unwrap()
-                );
-            }
-        }
-        eprintln!("{}: compared {} run(s) on Temporal; left out {left_out} with a timeout", rel(&f), references.len());
+        compare("the Temporal workflow", &f, &references, &got);
+        eprintln!("{}: compared {} run(s) on Temporal; left out {left_out} with an activity's timeout", rel(&f), references.len());
     }
 }
 
@@ -245,7 +302,7 @@ fn rule_glue_answers_the_rulec_vectors() {
     for f in flows(&root().join("examples")) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let asl_files = dandori::asl::build(&m).unwrap();
+        let asl_files = dandori::asl::build(&m).unwrap_or_default();
         let ts_files = dandori::temporal::build(&m).unwrap();
         for r in &m.rules {
             let handler = asl_files.iter().find(|(n, _)| n.starts_with("lambda/") && n.contains(r.info.api["python"]["module"].as_str().unwrap_or("?")));
@@ -314,7 +371,7 @@ fn durable_runs_as_the_reference_says() {
         eprintln!("SKIP: tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
         return;
     }
-    for f in flows(&root().join("examples")) {
+    for f in runnable() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("durable-{}", dandori::render::ident(&m.name)));
@@ -325,39 +382,31 @@ fn durable_runs_as_the_reference_says() {
             std::fs::write(&p, text).unwrap();
         }
         // the Lambda functions the handler invokes for the rules are the ones Step Functions calls
-        let asl = dandori::asl::build(&m).unwrap();
-        for (name, text) in asl.iter().filter(|(n, _)| n.starts_with("lambda/")) {
-            let same = files.iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).map(|(_, t)| t);
-            assert_eq!(same, Some(text), "{}: the durable build's {name} differs from the Step Functions build's", rel(&f));
+        if let Ok(asl) = dandori::asl::build(&m) {
+            for (name, text) in asl.iter().filter(|(n, _)| n.starts_with("lambda/")) {
+                let same = files.iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).map(|(_, t)| t);
+                assert_eq!(same, Some(text), "{}: the durable build's {name} differs from the Step Functions build's", rel(&f));
+            }
         }
-        let tasks: Vec<Value> = m.tasks.iter().map(|t| json!({ "name": t.name, "method": dandori::render::ident(&t.name), "callback": t.callback })).collect();
+        let p = Platform::Durable;
+        let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::render::ident(&t.name), "callback": t.callback })).collect();
         let mut rules: Vec<String> = Vec::new();
         for s in m.all_stmts() {
-            if let dandori::model::TK::Call { callee: dandori::model::Callee::Rule(r), .. } = &s.kind {
+            if let TK::Call { callee: Callee::Rule(r), .. } = &s.kind {
                 let arn = m.rules[*r].lambda.clone().unwrap_or_default();
                 if !rules.contains(&arn) {
                     rules.push(arn);
                 }
             }
         }
+        let children: Vec<String> = m.tasks.iter().filter_map(|t| t.durable_function.clone()).collect();
+        let (http, aws) = transport_spec(&m, p);
         // the local runner does not time a callback out, so the runs with a timeout are left out
-        let mut references = Vec::new();
-        let mut runs = Vec::new();
-        let mut left_out = 0;
-        for sc in dandori::scenarios::generate(&m) {
-            let reference = dandori::interp::run(&m, &sc, View::Durable).unwrap();
-            let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
-            if answers.iter().any(|a| a["error"] == "timeout") {
-                left_out += 1;
-                continue;
-            }
-            let script: Vec<Value> = answers.iter().map(|a| if a.get("ok").is_some() { json!({ "ok": a["ok"] }) } else { json!({ "error": a["error"] }) }).collect();
-            runs.push(json!({ "input": sc["input"], "answers": script }));
-            references.push((sc, reference));
-        }
+        let (runs, references, left_out) = plays(&m, View::Durable, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout")));
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
-        std::fs::write(&runs_file, serde_json::to_string(&json!({ "tasks": tasks, "rules": rules, "runs": runs })).unwrap()).unwrap();
+        let spec = json!({ "own": own, "rules": rules, "children": children, "http": http, "aws": aws, "runs": runs });
+        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
         let out = Command::new("node")
             .arg(root().join("tools/durable/run.mjs"))
             .arg(dir.join(dandori::render::ident(&m.name)))
@@ -367,19 +416,7 @@ fn durable_runs_as_the_reference_says() {
             .unwrap();
         assert!(out.status.success(), "{}: the durable runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
-        assert_eq!(got.len(), references.len());
-        for (i, ((sc, reference), g)) in references.iter().zip(&got).enumerate() {
-            if norm(g) != norm(reference) {
-                panic!(
-                    "{} run {}: the durable handler and the reference interpreter differ\n--- scenario\n{}\n--- reference\n{}\n--- handler\n{}",
-                    rel(&f),
-                    i + 1,
-                    serde_json::to_string_pretty(sc).unwrap(),
-                    serde_json::to_string_pretty(reference).unwrap(),
-                    serde_json::to_string_pretty(g).unwrap()
-                );
-            }
-        }
+        compare("the durable handler", &f, &references, &got);
         eprintln!("{}: compared {} run(s) on Lambda durable functions; left out {left_out} with a timeout", rel(&f), references.len());
     }
 }

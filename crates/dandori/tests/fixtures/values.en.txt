@@ -1,0 +1,21 @@
+error[E002]: tests/fixtures/values.flow:13:9: there is no type `mony[円]`
+    13 |   点   : mony[円]
+  = a type is int, string, bool, timestamp, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E003]: tests/fixtures/values.flow:14:8: a list of lists is not supported; put the inner list in a record
+    14 |   履歴 : list[list[string]]
+error[E003]: tests/fixtures/values.flow:29:23: `客.住所` may be absent here; `match` it with `none` and `some <name>` first
+    29 |   let a = 送る(本文: 客.住所.市)
+error[E003]: tests/fixtures/values.flow:30:18: `客.住所` is `住所?` and may be absent, so it cannot be put in a string as it is; `match` it with `none` and `some <name>` first
+    30 |   let b = 送る(本文: "{客.住所} に送ります")
+error[E003]: tests/fixtures/values.flow:31:18: `none` is given only where a value may be absent (`T?`)
+    31 |   let c = 送る(本文: none)
+error[E003]: tests/fixtures/values.flow:32:11: write the record's type: `let d: <record> = {…}`
+    32 |   let d = {市: "東京"}
+error[E002]: tests/fixtures/values.flow:33:16: `住所` has no field `町` (市)
+    33 |   let e: 住所 = {町: "本町"}
+error[E003]: tests/fixtures/values.flow:34:11: `記録する` answers nothing to keep; call it without `let`
+    34 |   let f = 記録する(本文: "x")
+error[E009]: tests/fixtures/values.flow:35:3: a rule only answers; keep its answer with `let`
+    35 |   急ぎ(会員: true, 金額: 100)
+error[E003]: tests/fixtures/values.flow:36:11: the type of an empty list is not known here; write it where a list is expected, or as `let x: list[T] = []`
+    36 |   let g = []

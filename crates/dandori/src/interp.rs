@@ -6,6 +6,11 @@
 //!
 //! Errors and retries follow the ASL the generator writes: the retriers are the same
 //! list (`asl::retriers`), matched the way Step Functions matches them.
+//!
+//! The rounds of a `for … in parallel` run here one after another, in the list's order.
+//! Every round runs to its end; then, if any failed, the loop fails as the first of them
+//! (by place in the list) did. A round does not see or set another round's variables, so
+//! no order in which the platforms interleave them can come out differently.
 
 use crate::model::*;
 use crate::render::{self, View};
@@ -33,6 +38,27 @@ struct Run<'a> {
     end: Option<Value>,
     in_on_failure: bool,
     error: Option<String>,
+    /// how many `for … in parallel` rounds are running around the current statement
+    par_depth: usize,
+    /// how the current parallel round failed, kept until every round is done
+    pending: Option<Pending>,
+    /// for every answer taken: the task that took it, and whether it waits for a callback
+    callees: Vec<CallInfo>,
+}
+
+/// Which task a call was, for a test that has to leave some answers out.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    pub task: Option<usize>,
+    pub callback: bool,
+    pub kind: Option<String>,
+}
+
+/// A parallel round's failure: a task's error nothing handled, or a deliberate end.
+#[derive(Clone)]
+enum Pending {
+    Task(CallError),
+    Fail { error: String, cause: Value },
 }
 
 /// An error a call ended with: the kind as the `.flow` names it, and the name the target uses.
@@ -43,6 +69,11 @@ struct CallError {
 }
 
 pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
+    run_traced(m, sc, view).map(|(v, _)| v)
+}
+
+/// The run, and for every answer the calls took, which task took it and how it came out.
+pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>), String> {
     let answers = sc["answers"].as_array().cloned().unwrap_or_default();
     let mut r = Run {
         m,
@@ -56,6 +87,9 @@ pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
         end: None,
         in_on_failure: false,
         error: None,
+        par_depth: 0,
+        pending: None,
+        callees: vec![],
     };
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
@@ -82,28 +116,25 @@ pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
     if let Some(e) = r.error {
         return Err(e);
     }
-    Ok(json!({ "steps": r.steps, "end": r.end }))
+    Ok((json!({ "steps": r.steps, "end": r.end }), r.callees))
 }
 
 impl<'a> Run<'a> {
     fn fail(&mut self, error: &str, cause: &str) {
-        self.end = Some(json!({ "fail": { "error": error, "cause": cause } }));
+        self.fail_with(error, json!(cause));
+    }
+
+    /// End the run as failed; inside a parallel round, end the round and keep the failure.
+    fn fail_with(&mut self, error: &str, cause: Value) {
+        if self.par_depth > 0 {
+            self.pending = Some(Pending::Fail { error: error.to_string(), cause });
+        } else {
+            self.end = Some(json!({ "fail": { "error": error, "cause": cause } }));
+        }
     }
 
     fn value(&self, e: &TExpr) -> Value {
-        match e {
-            TExpr::Str(s) => json!(s),
-            TExpr::Int(n) => json!(n),
-            TExpr::Bool(b) => json!(b),
-            TExpr::Enum(v, _) => json!(v),
-            TExpr::Var { name, fields, .. } => {
-                let mut v = self.vars.get(name).cloned().unwrap_or(Value::Null);
-                for f in fields {
-                    v = v.get(f).cloned().unwrap_or(Value::Null);
-                }
-                v
-            }
-        }
+        value_of(&self.vars, e)
     }
 
     fn block(&mut self, ss: &[TStmt]) -> Ctl {
@@ -112,7 +143,7 @@ impl<'a> Run<'a> {
                 Ctl::Next => {}
                 other => return other,
             }
-            if self.end.is_some() || self.error.is_some() {
+            if self.end.is_some() || self.error.is_some() || self.pending.is_some() {
                 return Ctl::Stop;
             }
         }
@@ -154,8 +185,81 @@ impl<'a> Run<'a> {
                 Ctl::Stop
             }
             TK::Fail { error, cause, .. } => {
-                self.end = Some(json!({ "fail": { "error": error, "cause": cause.clone().map(Value::String).unwrap_or(Value::Null) } }));
+                let c = cause.as_ref().map(|c| self.value(c)).unwrap_or(Value::Null);
+                self.fail_with(error, c);
                 Ctl::Stop
+            }
+            TK::Assign { name, expr } => {
+                let v = self.value(expr);
+                self.vars.insert(name.clone(), v);
+                Ctl::Next
+            }
+            TK::For { var, list, max, parallel, body, result, locals } => {
+                let items = self.value(list).as_array().cloned().unwrap_or_default();
+                if items.len() > *max as usize {
+                    self.fail("Dandori.TooManyItems", &format!("line {}: the list has more than {max} items", s.line));
+                    return Ctl::Stop;
+                }
+                let mut out = Vec::new();
+                match parallel {
+                    None => {
+                        for (i, it) in items.iter().enumerate() {
+                            self.rounds.push(i as u64);
+                            self.vars.insert(var.clone(), it.clone());
+                            let c = self.block(body);
+                            if let (Ctl::Next, Some((_, y))) = (&c, result) {
+                                if self.end.is_none() && self.error.is_none() && self.pending.is_none() {
+                                    out.push(self.value(y));
+                                }
+                            }
+                            self.rounds.pop();
+                            match c {
+                                Ctl::Break => break,
+                                Ctl::Stop => return Ctl::Stop,
+                                Ctl::Next => {}
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        let mut first: Option<Pending> = None;
+                        for (i, it) in items.iter().enumerate() {
+                            for l in locals {
+                                self.vars.insert(l.clone(), Value::Null);
+                            }
+                            self.rounds.push(i as u64);
+                            self.vars.insert(var.clone(), it.clone());
+                            self.par_depth += 1;
+                            let _ = self.block(body);
+                            self.par_depth -= 1;
+                            self.rounds.pop();
+                            if self.error.is_some() {
+                                return Ctl::Stop;
+                            }
+                            match self.pending.take() {
+                                Some(p) => {
+                                    if first.is_none() {
+                                        first = Some(p);
+                                    }
+                                }
+                                None => {
+                                    if let Some((_, y)) = result {
+                                        out.push(self.value(y));
+                                    }
+                                }
+                            }
+                        }
+                        for l in locals {
+                            self.vars.insert(l.clone(), Value::Null);
+                        }
+                        if let Some(p) = first {
+                            return self.raise(p);
+                        }
+                    }
+                }
+                if let Some((r, _)) = result {
+                    self.vars.insert(r.clone(), Value::Array(out));
+                }
+                Ctl::Next
             }
             TK::Repeat { times, body } => {
                 let mut n: u64 = 0;
@@ -175,16 +279,21 @@ impl<'a> Run<'a> {
             TK::Match { expr, arms } => {
                 let v = self.value(expr);
                 for a in arms {
-                    let hit = (a.none && v.is_null()) || a.values.iter().any(|x| match &v {
-                        Value::String(s) => s == x,
-                        Value::Bool(b) => b.to_string() == *x,
-                        _ => false,
-                    });
+                    let hit = (a.none && v.is_null())
+                        || (a.some.is_some() && !v.is_null())
+                        || a.values.iter().any(|x| match &v {
+                            Value::String(s) => s == x,
+                            Value::Bool(b) => b.to_string() == *x,
+                            _ => false,
+                        });
                     if hit {
+                        if let Some(n) = &a.some {
+                            self.vars.insert(n.clone(), v.clone());
+                        }
                         return self.block(&a.body);
                     }
                 }
-                let shown = show(expr);
+                let shown = expr.show();
                 self.fail("Dandori.UnexpectedValue", &format!("line {}: {} took a value that no arm names", s.line, shown));
                 Ctl::Stop
             }
@@ -227,6 +336,11 @@ impl<'a> Run<'a> {
                 Some(x) => x,
                 None => return Ctl::Stop,
             };
+            let (task, callback) = match callee {
+                Callee::Task(t) => (Some(*t), m.tasks[*t].callback),
+                Callee::Rule(_) => (None, false),
+            };
+            self.callees.push(CallInfo { task, callback, kind: ans.get("error").and_then(|e| e.as_str()).map(String::from) });
             if let Some(v) = ans.get("ok") {
                 self.steps.push(json!({ "call": wire, "answer": { "ok": v } }));
                 break Ok(v.clone());
@@ -264,7 +378,7 @@ impl<'a> Run<'a> {
                 if let Some(var) = var {
                     self.vars.insert(var.clone(), v.clone());
                     let ty = match callee {
-                        Callee::Task(t) => m.tasks[*t].result.clone(),
+                        Callee::Task(t) => m.tasks[*t].result.clone().unwrap_or(Ty::Json),
                         Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
                     };
                     if !render::value_fits(m, &v, &ty) {
@@ -299,27 +413,45 @@ impl<'a> Run<'a> {
                         return self.block(&h.body);
                     }
                 }
-                if !self.in_on_failure {
-                    if let Some(block) = m.on_failure.clone() {
-                        self.in_on_failure = true;
-                        self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": SCRIPTED_CAUSE }));
-                        match self.block(&block) {
-                            Ctl::Stop => return Ctl::Stop,
-                            _ => {
-                                if self.end.is_none() {
-                                    let name = err.target_name.clone();
-                                    self.fail(&name, SCRIPTED_CAUSE);
-                                }
-                                return Ctl::Stop;
-                            }
-                        }
-                    }
-                }
-                let name = err.target_name.clone();
-                self.fail(&name, SCRIPTED_CAUSE);
-                Ctl::Stop
+                self.raise(Pending::Task(err))
             }
         }
+    }
+
+    /// A failure that nothing inside took: inside a parallel round it waits for the other
+    /// rounds; outside, a task's error runs `on failure` and the run fails.
+    fn raise(&mut self, p: Pending) -> Ctl {
+        if self.par_depth > 0 {
+            self.pending = Some(p);
+            return Ctl::Stop;
+        }
+        let err = match p {
+            Pending::Fail { error, cause } => {
+                self.end = Some(json!({ "fail": { "error": error, "cause": cause } }));
+                return Ctl::Stop;
+            }
+            Pending::Task(err) => err,
+        };
+        let m = self.m;
+        if !self.in_on_failure {
+            if let Some(block) = m.on_failure.clone() {
+                self.in_on_failure = true;
+                self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": SCRIPTED_CAUSE }));
+                match self.block(&block) {
+                    Ctl::Stop => return Ctl::Stop,
+                    _ => {
+                        if self.end.is_none() {
+                            let name = err.target_name.clone();
+                            self.fail(&name, SCRIPTED_CAUSE);
+                        }
+                        return Ctl::Stop;
+                    }
+                }
+            }
+        }
+        let name = err.target_name.clone();
+        self.fail(&name, SCRIPTED_CAUSE);
+        Ctl::Stop
     }
 
     /// The name the target gives an error of this kind from this callee.
@@ -364,8 +496,8 @@ impl<'a> Run<'a> {
                                 Callee::Task(t) => self.m.tasks[*t]
                                     .errors
                                     .iter()
-                                    .find(|(e, _)| render::asl_error(self.m, callee, &HErr::Declared(e.clone())).contains(&n))
-                                    .map(|(e, _)| e.clone())
+                                    .find(|e| render::asl_error(self.m, callee, &HErr::Declared(e.name.clone())).contains(&n))
+                                    .map(|e| e.name.clone())
                                     .unwrap_or(n),
                                 Callee::Rule(_) => n,
                             }
@@ -383,12 +515,38 @@ pub fn matches_error(names: &[String], err: &str) -> bool {
     names.iter().any(|n| n == err || (n == "States.ALL" && err != "States.Runtime" && err != "States.DataLimitExceeded"))
 }
 
-fn show(e: &TExpr) -> String {
+/// The value of an expression over the given variables. A field that is absent reads as null.
+pub fn value_of(vars: &BTreeMap<String, Value>, e: &TExpr) -> Value {
     match e {
-        TExpr::Var { name, fields, .. } => std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join("."),
-        TExpr::Str(s) => s.clone(),
-        TExpr::Int(n) => n.to_string(),
-        TExpr::Bool(b) => b.to_string(),
-        TExpr::Enum(v, _) => v.clone(),
+        TExpr::Str(s) => json!(s),
+        TExpr::Int(n) => json!(n),
+        TExpr::Bool(b) => json!(b),
+        TExpr::Enum(v, _) => json!(v),
+        TExpr::None(_) => Value::Null,
+        TExpr::Var { name, fields, .. } => {
+            let mut v = vars.get(name).cloned().unwrap_or(Value::Null);
+            for f in fields {
+                v = v.get(f).cloned().unwrap_or(Value::Null);
+            }
+            v
+        }
+        TExpr::Record { fields, .. } => {
+            let mut o = Map::new();
+            for (f, x) in fields {
+                o.insert(f.clone(), value_of(vars, x));
+            }
+            Value::Object(o)
+        }
+        TExpr::List { items, .. } => Value::Array(items.iter().map(|x| value_of(vars, x)).collect()),
+        TExpr::Interp(parts) => {
+            let mut out = String::new();
+            for p in parts {
+                match p {
+                    IPart::Lit(s) => out.push_str(s),
+                    IPart::Hole(x) => out.push_str(&render::value_text(&value_of(vars, x))),
+                }
+            }
+            json!(out)
+        }
     }
 }

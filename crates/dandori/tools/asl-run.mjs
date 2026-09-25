@@ -2,7 +2,10 @@
 // answers, and prints what it did in the shape the reference interpreter prints:
 // every call as it went out and the answer it got, every wait and retry wait, and how
 // the execution ended. It runs only what dandori writes: Pass, Task, Choice, Wait,
-// Succeed and Fail, with QueryLanguage JSONata, variables, Retry and Catch.
+// Succeed, Fail and inline Map, with QueryLanguage JSONata, variables, Retry and Catch.
+//
+// A Map's rounds run one after another. A round reads the variables outside it and keeps
+// its own; assigning a variable an outer scope has is refused, as Step Functions refuses it.
 //
 //   node tools/asl-run.mjs <definition.asl.json> <run.json> [execution name]
 //
@@ -15,7 +18,7 @@ const def = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const run = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
 const execution = process.argv[4] ?? "test";
 
-const vars = {};
+let vars = {};
 const steps = [];
 let next = 0;
 
@@ -59,10 +62,16 @@ function plain(x) {
   return x === undefined ? x : JSON.parse(JSON.stringify(x));
 }
 
+// the names the scopes around the current one assigned, which it must not assign
+let outer = new Set();
+
 async function assign(block, states) {
   // every expression reads the values as they were on entry; then all are set
   const values = {};
   for (const [k, x] of Object.entries(block)) values[k] = await evaluate(x, states);
+  for (const k of Object.keys(values)) {
+    if (outer.has(k)) throw new Stop({ fail: { error: "States.Runtime", cause: `a Map round assigns ${k}, a variable of an outer scope` } });
+  }
   Object.assign(vars, values);
 }
 
@@ -75,6 +84,17 @@ function wire(resource, args) {
     const payload = { ...(args.Payload ?? {}) };
     delete payload.task_token;
     return { lambda: args.FunctionName, payload };
+  }
+  if (resource.startsWith("arn:aws:states:::aws-sdk:")) {
+    return { aws: resource.slice("arn:aws:states:::aws-sdk:".length), args };
+  }
+  if (resource === "arn:aws:states:::sqs:sendMessage.waitForTaskToken") {
+    const body = { ...(args.MessageBody ?? {}) };
+    delete body.task_token;
+    return { aws: "sqs:sendMessage", args: { ...args, MessageBody: body } };
+  }
+  if (resource === "arn:aws:states:::states:startExecution.sync:2") {
+    return { state_machine: args.StateMachineArn, input: args.Input };
   }
   if (resource === "arn:aws:states:::http:invoke") {
     const w = { http: args.Method, url: args.ApiEndpoint };
@@ -89,15 +109,19 @@ function wire(resource, args) {
 function wrap(resource, answer) {
   if (resource === "arn:aws:states:::lambda:invoke") return { Payload: answer, StatusCode: 200 };
   if (resource === "arn:aws:states:::http:invoke") return { ResponseBody: answer, StatusCode: 200 };
+  if (resource === "arn:aws:states:::states:startExecution.sync:2") return { Output: answer, Status: "SUCCEEDED" };
   return answer;
 }
 
-async function main() {
-  let name = def.StartAt;
-  let input = run.input;
-  const context = { Execution: { Name: execution }, Task: { Token: "token" } };
-  for (let n = 0; n < 20000; n++) {
-    const st = def.States[name];
+let transitions = 0;
+
+// Run states from `start` until a Succeed (its output comes back) or a Fail (Stop is thrown).
+// At the top, a Succeed ends the execution; in a Map round, it ends the round.
+async function runStates(all, start, input, context, top) {
+  let name = start;
+  for (;;) {
+    if (++transitions > 20000) throw new Error("more than 20000 transitions");
+    const st = all[name];
     if (!st) throw new Stop({ fail: { error: "States.Runtime", cause: `no state ${name}` } });
     const states = { input, context };
     let output = input;
@@ -127,8 +151,36 @@ async function main() {
         name = st.Next;
         break;
       }
-      case "Succeed":
-        throw new Stop({ succeed: st.Output !== undefined ? await evaluate(st.Output, states) : null });
+      case "Succeed": {
+        const out = st.Output !== undefined ? await evaluate(st.Output, states) : top ? null : input;
+        if (top) throw new Stop({ succeed: out });
+        return out;
+      }
+      case "Map": {
+        const items = await evaluate(st.Items, states);
+        if (!Array.isArray(items)) throw new Stop({ fail: { error: "States.Runtime", cause: `the Map's items are not a list` } });
+        const results = [];
+        const saved = { ...vars };
+        const savedOuter = outer;
+        for (let i = 0; i < items.length; i++) {
+          const ctx = { ...context, Map: { Item: { Index: i, Value: items[i] } } };
+          const sel = st.ItemSelector !== undefined ? await evaluate(st.ItemSelector, { input, context: ctx }) : items[i];
+          // the round sees the variables outside it, and its own go when it ends
+          vars = { ...saved };
+          outer = new Set([...savedOuter, ...Object.keys(saved)]);
+          try {
+            results.push(await runStates(st.ItemProcessor.States, st.ItemProcessor.StartAt, sel, context, false));
+          } finally {
+            vars = { ...saved };
+            outer = savedOuter;
+          }
+        }
+        const s2 = { ...states, result: results };
+        if (st.Assign) await assign(st.Assign, s2);
+        output = st.Output !== undefined ? await evaluate(st.Output, s2) : results;
+        name = st.Next;
+        break;
+      }
       case "Fail":
         throw new Stop({ fail: { error: await evaluate(st.Error, states), cause: st.Cause !== undefined ? await evaluate(st.Cause, states) : null } });
       case "Task": {
@@ -184,7 +236,11 @@ async function main() {
     }
     input = output;
   }
-  throw new Error("more than 20000 transitions");
+}
+
+async function main() {
+  const context = { Execution: { Name: execution }, Task: { Token: "token" } };
+  await runStates(def.States, def.StartAt, run.input, context, true);
 }
 
 try {

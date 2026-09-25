@@ -1,0 +1,21 @@
+エラー[E002]: tests/fixtures/values.flow:13:9: 型 `mony[円]` はありません
+    13 |   点   : mony[円]
+  = 型は int・string・bool・timestamp・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E003]: tests/fixtures/values.flow:14:8: リストのリストは書けません。内側のリストはレコードに入れてください
+    14 |   履歴 : list[list[string]]
+エラー[E003]: tests/fixtures/values.flow:29:23: ここでは `客.住所` が無いことがあります。先に `none` と `some <名前>` で `match` してください
+    29 |   let a = 送る(本文: 客.住所.市)
+エラー[E003]: tests/fixtures/values.flow:30:18: `客.住所` は `住所?` で、無いことがあるので、そのままでは文字列に入れられません。先に `none` と `some <名前>` で `match` してください
+    30 |   let b = 送る(本文: "{客.住所} に送ります")
+エラー[E003]: tests/fixtures/values.flow:31:18: `none` を渡せるのは、無いことがある値（`T?`）のところだけです
+    31 |   let c = 送る(本文: none)
+エラー[E003]: tests/fixtures/values.flow:32:11: レコードの型を `let d: <レコード> = {…}` のように書いてください
+    32 |   let d = {市: "東京"}
+エラー[E002]: tests/fixtures/values.flow:33:16: `住所` にフィールド `町` はありません（市）
+    33 |   let e: 住所 = {町: "本町"}
+エラー[E003]: tests/fixtures/values.flow:34:11: `記録する` は何も答えません。`let` を付けずに呼んでください
+    34 |   let f = 記録する(本文: "x")
+エラー[E009]: tests/fixtures/values.flow:35:3: 規則は答えを返すだけです。`let` で答えを受けてください
+    35 |   急ぎ(会員: true, 金額: 100)
+エラー[E003]: tests/fixtures/values.flow:36:11: 空のリストの型がここでは分かりません。リストを渡す先に書くか、`let x: list[T] = []` と書いてください
+    36 |   let g = []

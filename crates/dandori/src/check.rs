@@ -26,7 +26,10 @@ pub fn check_source(src: &str, path: &Path) -> Checked {
     let (model, mut diags) = crate::lower::lower(&prog, path);
     let mut model = match model {
         Some(m) => m,
-        None => return Checked { model: None, diags },
+        None => {
+            diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
+            return Checked { model: None, diags };
+        }
     };
     let fr = crate::flow::analyze(&model);
     diags.extend(fr.diags);
@@ -61,6 +64,15 @@ fn whole(m: &Model) -> Vec<Diag> {
         for t in &m.tasks {
             if t.callback {
                 out.push(Diag::error("E031", t.line, 1, format!("an Express workflow cannot wait for a callback (`{}`)", t.name), format!("Express のワークフローはコールバックを待てません（`{}`）", t.name)));
+            }
+            if t.state_machine.is_some() {
+                out.push(Diag::error(
+                    "E031",
+                    t.line,
+                    1,
+                    format!("an Express workflow cannot wait for a nested execution to end (`{}`)", t.name),
+                    format!("Express のワークフローは、入れ子の実行が終わるのを待てません（`{}`）", t.name),
+                ));
             }
             if t.changes_things() && !t.key {
                 out.push(Diag::error(
@@ -122,6 +134,8 @@ fn max_wait(ss: &[TStmt]) -> u64 {
             TK::WaitUntil { .. } => u64::MAX / 4,
             TK::Match { arms, .. } => arms.iter().map(|a| max_wait(&a.body)).max().unwrap_or(0),
             TK::Repeat { times, body } => (*times as u64).saturating_mul(max_wait(body)),
+            TK::For { max, parallel: None, body, .. } => (*max as u64).saturating_mul(max_wait(body)),
+            TK::For { body, .. } => max_wait(body),
             TK::Call { handlers, .. } => handlers.iter().map(|h| max_wait(&h.body)).max().unwrap_or(0),
             _ => 0,
         });
@@ -140,24 +154,34 @@ pub struct Cost {
     pub wait: u64,
     pub loop_iter: u64,
     pub end: u64,
+    /// `let x = <value>`
+    pub assign: u64,
+    /// a `for … in parallel`, and each of its rounds
+    pub map_start: u64,
+    pub map_iter: u64,
+    /// what waiting for a callback adds to a call
+    pub callback: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
 /// failed try adds scheduled, started, failed (3); a Choice, Pass or Wait is entered and
-/// exited (2); the execution starts and ends.
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3 };
+/// exited (2); a Map is entered, started, succeeds and is exited (4), and each round
+/// starts and succeeds (2); the execution starts and ends.
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
 /// timer and another activity (11); a timer is started and fired, and a workflow task
-/// follows (5); a match costs nothing.
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4 };
+/// follows (5); a match costs nothing; a callback adds the signal, its workflow task and the
+/// timer of its timeout (6).
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 6 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
 /// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
-/// wait until reads the clock in a step first (2). The limit is 3,000 operations an
-/// execution and cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0 };
+/// wait until reads the clock in a step first (2); a map is one operation, and each round
+/// runs in a child context of its own (1). The limit is 3,000 operations an execution and
+/// cannot be raised.
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 pub fn bound(m: &Model, c: &Cost) -> u64 {
@@ -175,9 +199,16 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                     Callee::Task(t) => m.tasks[*t].retry.as_ref().map(|r| r.times as u64).unwrap_or(0),
                     Callee::Rule(_) => RULE_RETRIES as u64,
                 };
+                let waits = match callee {
+                    Callee::Task(t) if m.tasks[*t].callback => c.callback,
+                    _ => 0,
+                };
                 let after = handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0).max(c.check);
-                c.call + retries * c.retry + after
+                c.call + waits + retries * (c.retry + waits) + after
             }
+            TK::Assign { .. } => c.assign,
+            TK::For { max, parallel: None, body, .. } => 2 * c.choice + *max as u64 * (cost(m, body, c) + c.loop_iter),
+            TK::For { max, body, .. } => c.map_start + c.choice + *max as u64 * (cost(m, body, c) + c.map_iter),
             TK::Match { arms, .. } => c.choice + arms.iter().map(|a| cost(m, &a.body, c)).max().unwrap_or(0),
             TK::Wait { .. } | TK::WaitUntil { .. } => c.wait,
             TK::Repeat { times, body } => c.choice + *times as u64 * (cost(m, body, c) + c.loop_iter),

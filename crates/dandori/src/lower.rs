@@ -5,9 +5,12 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::rulec::{self, RType};
-use crate::syntax::{self, Block, Call, Expr, MachineUse, Program, Span, StmtKind, TypeExpr};
-use std::collections::BTreeMap;
+use crate::syntax::{self, Block, Call, Expr, MachineUse, Part, Program, Span, StmtKind, TypeExpr};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+const TYPE_HINT_EN: &str = "a type is int, string, bool, timestamp, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?";
+const TYPE_HINT_JA: &str = "型は int・string・bool・timestamp・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです";
 
 pub struct Lowerer<'a> {
     prog: &'a Program,
@@ -19,8 +22,13 @@ pub struct Lowerer<'a> {
     task_ix: BTreeMap<String, usize>,
     var_ty: BTreeMap<String, Ty>,
     site: usize,
-    loop_depth: usize,
+    /// the loops around the statement being lowered: true for `for … in parallel`
+    loops: Vec<bool>,
+    /// how many `for … in parallel` are around it
+    par_depth: usize,
     in_on_failure: bool,
+    /// a variable's type grew to take `none` in this pass over the names
+    widened: bool,
 }
 
 fn e(code: &'static str, sp: Span, en: impl Into<String>, ja: impl Into<String>) -> Diag {
@@ -64,8 +72,10 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         task_ix: BTreeMap::new(),
         var_ty: BTreeMap::new(),
         site: 0,
-        loop_depth: 0,
+        loops: vec![],
+        par_depth: 0,
         in_on_failure: false,
+        widened: false,
     };
     let base = file.parent().unwrap_or(Path::new("."));
     lw.rules(base);
@@ -84,6 +94,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         let t = lw.block(b);
         lw.m.on_failure = Some(t);
     }
+    lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     let ok = !crate::diag::has_errors(&lw.diags);
     (if ok { Some(lw.m) } else { None }, lw.diags)
@@ -204,7 +215,24 @@ impl<'a> Lowerer<'a> {
             TypeExpr::Str(_) => Some(Ty::Str),
             TypeExpr::Bool(_) => Some(Ty::Bool),
             TypeExpr::Timestamp(_) => Some(Ty::Timestamp),
-            TypeExpr::Unit(u, _) => Some(Ty::Num(rulec::normalize_unit(u))),
+            TypeExpr::Json(_) => Some(Ty::Json),
+            TypeExpr::List(inner, sp) => {
+                let t = self.ty(inner)?;
+                if matches!(t.inner(), Ty::List(_)) {
+                    self.push(e("E003", *sp, "a list of lists is not supported; put the inner list in a record", "リストのリストは書けません。内側のリストはレコードに入れてください"));
+                    return None;
+                }
+                Some(Ty::List(Box::new(t)))
+            }
+            TypeExpr::Opt(inner, _) => Some(Ty::Opt(Box::new(self.ty(inner)?))),
+            TypeExpr::Unit(u, sp) => {
+                let kind = u.split('[').next().unwrap_or("");
+                if !syntax::UNIT_KINDS.contains(&kind) {
+                    self.push(e("E002", *sp, format!("there is no type `{u}`"), format!("型 `{u}` はありません")).note(TYPE_HINT_EN, TYPE_HINT_JA));
+                    return None;
+                }
+                Some(Ty::Num(rulec::normalize_unit(u)))
+            }
             TypeExpr::Named(parts) => {
                 let text = parts.iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".");
                 if let Some(i) = self.enum_ix.get(&text) {
@@ -222,8 +250,8 @@ impl<'a> Lowerer<'a> {
                     hint_en = format!("the enums of `{}` are {}", parts[0].0, names.join(", "));
                     hint_ja = format!("`{}` の列挙は {} です", parts[0].0, names.join("・"));
                 } else {
-                    hint_en = "a type is int, string, bool, timestamp, a unit such as money[円, incl_tax], an enum or a record".to_string();
-                    hint_ja = "型は int・string・bool・timestamp・money[円, incl_tax] のような単位・列挙・レコードのどれかです".to_string();
+                    hint_en = TYPE_HINT_EN.to_string();
+                    hint_ja = TYPE_HINT_JA.to_string();
                 }
                 self.push(e("E002", sp, format!("there is no type `{text}`"), format!("型 `{text}` はありません")).note(hint_en, hint_ja));
                 None
@@ -273,36 +301,62 @@ impl<'a> Lowerer<'a> {
                     params.push((p.name.0.clone(), ty));
                 }
             }
-            let result = match self.ty(&t.result) {
-                Some(r) => r,
-                None => continue,
+            let result = match &t.result {
+                Some(te) => match self.ty(te) {
+                    Some(r) => Some(r),
+                    None => continue,
+                },
+                None => None,
             };
             let binding = t.binding.as_ref().map(|(b, _)| match b {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
                 syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
+                syntax::Binding::Aws { service, action } => Binding::Aws { service: service.clone(), action: action.clone() },
             });
-            let mut errors: Vec<(String, Option<u16>)> = Vec::new();
+            let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).map(|(_, s)| *s);
+            if let Some((syntax::Binding::Aws { service, .. }, bsp)) = &t.binding {
+                if crate::aws::exception_prefix(service).is_none() {
+                    self.push(e(
+                        "E007",
+                        *bsp,
+                        format!("Step Functions has no AWS SDK integration for the service `{service}`; write it as the Task's Resource names it, such as `dynamodb` or `secretsmanager`"),
+                        format!("Step Functions の AWS SDK 統合に、サービス `{service}` はありません。`dynamodb` や `secretsmanager` のように、Task の Resource での名前で書いてください"),
+                    ));
+                }
+            }
+            let mut errors: Vec<ErrDef> = Vec::new();
             for er in &t.errors {
                 let (en, esp) = &er.name;
                 if en == "timeout" || en == "failure" {
                     self.push(e("E007", *esp, format!("`{en}` is always there; declare only the task's own errors"), format!("`{en}` は宣言しなくても使えます。タスク自身のエラーだけを宣言します")));
                     continue;
                 }
-                if errors.iter().any(|(n, _)| n == en) {
+                if errors.iter().any(|x| x.name == *en) {
                     self.push(e("E006", *esp, format!("the error `{en}` is written twice"), format!("エラー `{en}` が二度書かれています")));
                     continue;
                 }
-                match (&binding, er.status) {
-                    (Some(Binding::Http { .. }), None) => {
+                match (&binding, er.status, &er.exception) {
+                    (Some(Binding::Http { .. }), None, _) => {
                         self.push(e("E007", *esp, format!("give `{en}` the HTTP status it comes back with, as `{en} = 402`"), format!("`{en}` が返ってくるときの HTTP ステータスを `{en} = 402` のように書きます")));
                     }
-                    (Some(Binding::Lambda(_)), Some(_)) => {
+                    (Some(Binding::Http { .. }), Some(_), None) => {}
+                    (Some(Binding::Aws { .. }), None, _) => {}
+                    (Some(Binding::Aws { .. }), Some(_), _) => {
+                        self.push(e("E007", *esp, format!("an AWS API's error is named by its exception, as `{en} = ConditionalCheckFailedException`, not by a status"), format!("AWS の API のエラーは、ステータスではなく `{en} = ConditionalCheckFailedException` のように例外の名前で書きます")));
+                    }
+                    (Some(Binding::Lambda(_)), None, None) => {}
+                    (Some(Binding::Lambda(_)), _, _) => {
                         self.push(e("E007", *esp, "a Lambda task's error is named by the error type the function raises, without a status", "Lambda のタスクのエラーは関数が投げるエラーの型の名前で表し、ステータスは書きません"));
                     }
-                    _ => {}
+                    (None, None, None) => {}
+                    (None, _, _) => {
+                        self.push(e("E007", *esp, format!("`{en} = …` says how an HTTP or AWS call names the error; this task has neither `http` nor `aws`"), format!("`{en} = …` は HTTP や AWS の呼び出しでのエラーの表し方です。このタスクには `http` も `aws` もありません")));
+                    }
+                    (Some(Binding::Http { .. }), Some(_), Some(_)) => {}
                 }
                 if let Some(st) = er.status {
-                    if let Some((other, _)) = errors.iter().find(|(_, s2)| *s2 == Some(st)) {
+                    if let Some(other) = errors.iter().find(|x| x.status == Some(st)) {
+                        let other = other.name.clone();
                         self.push(e(
                             "E007",
                             *esp,
@@ -312,7 +366,7 @@ impl<'a> Lowerer<'a> {
                         continue;
                     }
                 }
-                errors.push((en.clone(), er.status));
+                errors.push(ErrDef { name: en.clone(), status: er.status, exception: er.exception.clone() });
             }
             if let Some((syntax::Binding::Http { url, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
                 for ph in placeholders(url) {
@@ -320,26 +374,65 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", *bsp, format!("the URL has `{{{ph}}}` but the task has no parameter `{ph}`"), format!("URL に `{{{ph}}}` がありますが、タスクに引数 `{ph}` がありません")));
                     }
                 }
-                if t.connection.is_none() {
-                    self.push(Diag::warning("W104", bsp.line, bsp.col, "an HTTP task on Step Functions needs `connection \"<EventBridge connection ARN>\"`", "Step Functions で HTTP のタスクを呼ぶには `connection \"<EventBridge の接続の ARN>\"` が要ります"));
+            }
+            if let Some(csp) = t.callback {
+                let ok = match &binding {
+                    None | Some(Binding::Lambda(_)) => true,
+                    Some(Binding::Aws { service, action }) => service == "sqs" && action == "sendMessage",
+                    Some(Binding::Http { .. }) => false,
+                };
+                if !ok {
+                    self.push(e(
+                        "E007",
+                        csp,
+                        "a `callback` task hands its token over by `lambda` or by `aws sqs:sendMessage`",
+                        "`callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です",
+                    ));
+                } else if matches!(binding, Some(Binding::Aws { .. })) {
+                    match params.iter().find(|(p, _)| p == "MessageBody").map(|(_, t)| t.inner().clone()) {
+                        Some(Ty::Record(_)) | Some(Ty::Json) => {}
+                        _ => self.push(e(
+                            "E007",
+                            csp,
+                            "a callback through SQS puts its token into `MessageBody`, so the task needs a parameter `MessageBody` that is a record or `json`",
+                            "SQS を通すコールバックはトークンを `MessageBody` に入れるので、レコードか `json` の引数 `MessageBody` が要ります",
+                        )),
+                    }
+                }
+                if let Some(c) = child {
+                    self.push(e("E007", c, "a child workflow answers when it ends; it is not a `callback` task", "子ワークフローは終わったときに答えるので、`callback` のタスクにはなりません"));
                 }
             }
-            if t.binding.is_none() {
-                self.push(Diag::warning("W104", sp.line, sp.col, format!("`{name}` says neither `lambda` nor `http`, so it cannot be built for Step Functions"), format!("`{name}` には `lambda` も `http` も無いので、Step Functions 向けには作れません")));
-            }
-            if t.callback && !matches!(binding, Some(Binding::Lambda(_)) | None) {
-                self.push(e("E007", *sp, "a `callback` task hands its token to a Lambda function; write `lambda`", "`callback` のタスクはトークンを Lambda 関数に渡します。`lambda` を書いてください"));
+            if let Some(ksp) = t.key {
+                if child.is_some() {
+                    self.push(e("E007", ksp, "the platform starts a child workflow once for each call, so `key` does not apply to it", "子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません"));
+                }
+                match (&binding, &t.key_param) {
+                    (Some(Binding::Aws { .. }), None) => self.push(e(
+                        "E007",
+                        ksp,
+                        "an AWS API takes the idempotency key as one of its own parameters; write `key <parameter>`, as `key ClientToken`",
+                        "AWS の API は冪等キーを自分の引数の一つで受け取ります。`key ClientToken` のように `key <引数>` と書いてください",
+                    )),
+                    (Some(Binding::Aws { .. }), Some((kp, kpsp))) => {
+                        if params.iter().any(|(p, _)| p == kp) {
+                            self.push(e("E007", *kpsp, format!("`{kp}` is filled by `key`; leave it out of the parameters"), format!("`{kp}` は `key` が埋めるので、引数からは外してください")));
+                        }
+                    }
+                    (_, Some((_, kpsp))) => self.push(e("E007", *kpsp, "`key <parameter>` is for an AWS API; write just `key`", "`key <引数>` は AWS の API のための書き方です。ここでは `key` だけを書きます")),
+                    _ => {}
+                }
             }
             let retry = t.retry.as_ref().map(|r| {
                 for (on, osp) in &r.on {
-                    if on != "timeout" && on != "failure" && !errors.iter().any(|(n, _)| n == on) {
+                    if on != "timeout" && on != "failure" && !errors.iter().any(|x| x.name == *on) {
                         self.diags.push(e("E002", *osp, format!("`{on}` is not an error of `{name}`"), format!("`{on}` は `{name}` のエラーではありません")));
                     }
                 }
                 Retry { times: r.times, every: r.every, backoff: r.backoff, on: r.on.iter().map(|x| x.0.clone()).collect() }
             });
             if let Some((ra, rsp)) = &t.refused_as {
-                if !errors.iter().any(|(n, _)| n == ra) {
+                if !errors.iter().any(|x| x.name == *ra) {
                     self.push(e("E007", *rsp, format!("declare `{ra}` in `errors` too"), format!("`{ra}` を `errors` にも書いてください")));
                 }
             }
@@ -354,6 +447,9 @@ impl<'a> Lowerer<'a> {
             if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
                 self.push(e("E007", t.refused_as.as_ref().unwrap().1, "`refused as` belongs to a task that `sends` an event", "`refused as` は出来事を `sends` するタスクに書きます"));
             }
+            if machine.is_some() && result.is_none() {
+                self.push(e("E008", *sp, format!("`{name}` moves a case, so it answers with the case's record; write `-> <record>`"), format!("`{name}` は案件を動かすので、案件のレコードを答えます。`-> <レコード>` を書いてください")));
+            }
             self.task_ix.insert(name.clone(), self.m.tasks.len());
             self.m.tasks.push(TaskDef {
                 name: name.clone(),
@@ -361,14 +457,19 @@ impl<'a> Lowerer<'a> {
                 result,
                 binding,
                 connection: t.connection.clone(),
+                queue: t.queue.clone(),
+                workflow: t.workflow.as_ref().map(|x| x.0.clone()),
+                state_machine: t.state_machine.as_ref().map(|x| x.0.clone()),
+                durable_function: t.durable_function.as_ref().map(|x| x.0.clone()),
                 errors,
                 retry,
                 timeout: t.timeout,
                 key: t.key.is_some(),
+                key_param: t.key_param.as_ref().map(|x| x.0.clone()),
                 idempotent: t.idempotent,
                 machine,
                 refused_as: t.refused_as.as_ref().map(|x| x.0.clone()),
-                callback: t.callback,
+                callback: t.callback.is_some(),
                 line: sp.line,
             });
         }
@@ -501,7 +602,9 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Every variable and its type, before the statements are read: inputs, cases, `let`s.
+    /// Every variable and its type, before the statements are read: inputs, cases, and every
+    /// name a statement sets — `let`, `for`, `some`. A value's type can depend on another
+    /// variable's, so the names are read again until no new one turns up.
     fn variables(&mut self) {
         for (n, t) in self.m.inputs.clone() {
             self.var_ty.insert(n, t);
@@ -512,61 +615,139 @@ impl<'a> Lowerer<'a> {
             }
             self.var_ty.insert(c.name.clone(), Ty::Record(c.record));
         }
-        let mut lets: Vec<(String, Span, Call)> = Vec::new();
-        fn scan(b: &Block, out: &mut Vec<(String, Span, Call)>) {
-            for s in b {
-                match &s.kind {
-                    StmtKind::Let { name, call, handlers } => {
-                        out.push((name.0.clone(), name.1, call.clone()));
-                        for h in handlers {
-                            scan(&h.body, out);
-                        }
-                    }
-                    StmtKind::CaseCall { handlers, .. } => {
-                        for h in handlers {
-                            scan(&h.body, out);
-                        }
-                    }
-                    StmtKind::Match { arms, .. } => {
-                        for a in arms {
-                            scan(&a.body, out);
-                        }
-                    }
-                    StmtKind::Repeat { body, .. } => scan(body, out),
-                    _ => {}
-                }
+        let mut problems: BTreeMap<(usize, usize), Diag> = BTreeMap::new();
+        loop {
+            let before = self.var_ty.len();
+            self.widened = false;
+            let blocks: Vec<Block> = [&self.prog.flow, &self.prog.on_failure].iter().filter_map(|b| b.as_ref().map(|(b, _)| b.clone())).collect();
+            for b in &blocks {
+                self.scan_vars(b, &mut problems);
+            }
+            if self.var_ty.len() == before && !self.widened {
+                break;
+            }
+            problems.clear();
+        }
+        for (_, d) in problems {
+            self.push(d);
+        }
+    }
+
+    fn reserved(&self, n: &str) -> bool {
+        self.m.cases.iter().any(|c| c.name == n) || self.m.inputs.iter().any(|(i, _)| *i == n)
+    }
+
+    fn declare(&mut self, n: &str, sp: Span, t: Ty, problems: &mut BTreeMap<(usize, usize), Diag>) {
+        if self.reserved(n) {
+            problems.insert(
+                (sp.line, sp.col),
+                e("E006", sp, format!("`{n}` is an input or a case; a variable set here needs a new name"), format!("`{n}` は入力か案件です。ここで値を入れる変数には別の名前を付けてください")),
+            );
+            return;
+        }
+        match self.var_ty.get(n).cloned() {
+            // a value that fits the name's type is set to it; a name set to both `T` and `T?` is `T?`
+            Some(prev) if t.fits(&prev) => {}
+            Some(prev) if prev.fits(&t) && matches!(t, Ty::Opt(_)) => {
+                self.var_ty.insert(n.to_string(), t);
+                self.widened = true;
+            }
+            Some(prev) if prev != t => {
+                let (a, b) = (self.m.ty_name(&prev), self.m.ty_name(&t));
+                problems.insert(
+                    (sp.line, sp.col),
+                    e("E003", sp, format!("`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type"), format!("`{n}` はほかの場所で `{a}`、ここで `{b}` です。名前の型は一つです")),
+                );
+            }
+            Some(_) => {}
+            None => {
+                self.var_ty.insert(n.to_string(), t);
             }
         }
-        if let Some((b, _)) = &self.prog.flow {
-            scan(b, &mut lets);
-        }
-        if let Some((b, _)) = &self.prog.on_failure {
-            scan(b, &mut lets);
-        }
-        for (n, sp, call) in lets {
-            let t = match self.callee_result(&call) {
-                Some(t) => t,
-                None => continue,
-            };
-            if self.m.cases.iter().any(|c| c.name == n) || self.m.inputs.iter().any(|(i, _)| *i == n) {
-                self.push(e("E006", sp, format!("`{n}` is an input or a case; a `let` needs a new name"), format!("`{n}` は入力か案件です。`let` には別の名前を付けてください")));
-                continue;
-            }
-            match self.var_ty.get(&n) {
-                Some(prev) if *prev != t => {
-                    let (a, b) = (self.m.ty_name(prev), self.m.ty_name(&t));
-                    self.push(e("E003", sp, format!("`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type"), format!("`{n}` はほかの場所で `{a}`、ここで `{b}` です。名前の型は一つです")));
+    }
+
+    /// Run `f` for its answer only: what it would say is dropped.
+    fn quiet<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let n = self.diags.len();
+        let out = f(self);
+        self.diags.truncate(n);
+        out
+    }
+
+    fn quiet_ty(&mut self, te: &TypeExpr) -> Option<Ty> {
+        self.quiet(|x| x.ty(te))
+    }
+
+    fn quiet_expr(&mut self, ex: &Expr, want: Option<&Ty>) -> Option<Ty> {
+        self.quiet(|x| x.expr(ex, want).map(|t| t.ty()))
+    }
+
+    fn scan_vars(&mut self, b: &Block, problems: &mut BTreeMap<(usize, usize), Diag>) {
+        for s in b {
+            match &s.kind {
+                StmtKind::Let { name, ty, call, handlers } => {
+                    let t = match ty {
+                        Some(te) => self.quiet_ty(te),
+                        None => self.callee_result(call),
+                    };
+                    if let Some(t) = t {
+                        self.declare(&name.0, name.1, t, problems);
+                    }
+                    for h in handlers {
+                        self.scan_vars(&h.body, problems);
+                    }
                 }
-                _ => {
-                    self.var_ty.insert(n, t);
+                StmtKind::Assign { name, ty, expr } => {
+                    let t = match ty {
+                        Some(te) => self.quiet_ty(te),
+                        None => self.quiet_expr(expr, None),
+                    };
+                    if let Some(t) = t {
+                        self.declare(&name.0, name.1, t, problems);
+                    }
                 }
+                StmtKind::Call { handlers, .. } | StmtKind::CaseCall { handlers, .. } => {
+                    for h in handlers {
+                        self.scan_vars(&h.body, problems);
+                    }
+                }
+                StmtKind::Match { expr, arms } => {
+                    for a in arms {
+                        if let Some((v, vsp)) = &a.some {
+                            if let Some(Ty::Opt(inner)) = self.quiet_expr(expr, None) {
+                                self.declare(v, *vsp, *inner, problems);
+                            }
+                        }
+                        self.scan_vars(&a.body, problems);
+                    }
+                }
+                StmtKind::Repeat { body, .. } => self.scan_vars(body, problems),
+                StmtKind::For { var, list, body, result, .. } => {
+                    if let Some(Ty::List(elem)) = self.quiet_expr(list, None) {
+                        self.declare(&var.0, var.1, *elem, problems);
+                    }
+                    self.scan_vars(body, problems);
+                    if let Some((r, rty)) = result {
+                        let t = match rty {
+                            Some(te) => self.quiet_ty(te),
+                            None => match body.last().map(|x| &x.kind) {
+                                Some(StmtKind::Yield { expr }) => self.quiet_expr(expr, None).map(|t| Ty::List(Box::new(t))),
+                                _ => None,
+                            },
+                        };
+                        if let Some(t) = t {
+                            self.declare(&r.0, r.1, t, problems);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
 
     fn callee_result(&self, call: &Call) -> Option<Ty> {
         if let Some(t) = self.task_ix.get(&call.callee.0) {
-            return Some(self.m.tasks[*t].result.clone());
+            return self.m.tasks[*t].result.clone();
         }
         if let Some(r) = self.rule_ix.get(&call.callee.0) {
             return Some(Ty::Record(self.m.rules[*r].outputs));
@@ -591,13 +772,58 @@ impl<'a> Lowerer<'a> {
         let site = self.next_site();
         let line = s.span.line;
         let kind = match &s.kind {
-            StmtKind::Let { name, call, handlers } => {
+            StmtKind::Let { name, ty, call, handlers } => {
                 let (callee, args) = self.call(call)?;
+                let result = match &callee {
+                    Callee::Task(t) => self.m.tasks[*t].result.clone(),
+                    Callee::Rule(r) => Some(Ty::Record(self.m.rules[*r].outputs)),
+                };
+                let result = match result {
+                    Some(r) => r,
+                    None => {
+                        self.push(e("E003", call.callee.1, format!("`{}` answers nothing to keep; call it without `let`", call.callee.0), format!("`{}` は何も答えません。`let` を付けずに呼んでください", call.callee.0)));
+                        return None;
+                    }
+                };
+                if let Some(te) = ty {
+                    let want = self.ty(te)?;
+                    if !result.fits(&want) {
+                        let (a, b) = (self.m.ty_name(&result), self.m.ty_name(&want));
+                        self.push(e("E003", call.callee.1, format!("`{}` answers `{a}`, which is not `{b}`", call.callee.0), format!("`{}` が答えるのは `{a}` で、`{b}` ではありません", call.callee.0)));
+                        return None;
+                    }
+                }
                 let hs = self.handlers(&callee, handlers);
-                if !self.var_ty.contains_key(&name.0) {
+                if !self.var_ty.contains_key(&name.0) || self.reserved(&name.0) {
                     return None;
                 }
                 TK::Call { target: Some(Target::Let(name.0.clone())), callee, args, handlers: hs }
+            }
+            StmtKind::Assign { name, ty, expr } => {
+                let want = match ty {
+                    Some(te) => Some(self.ty(te)?),
+                    None => self.var_ty.get(&name.0).cloned(),
+                };
+                if want.is_none() {
+                    if let Expr::Record(_, sp) = expr {
+                        self.push(e("E003", *sp, format!("write the record's type: `let {}: <record> = {{…}}`", name.0), format!("レコードの型を `let {}: <レコード> = {{…}}` のように書いてください", name.0)));
+                        return None;
+                    }
+                }
+                let x = self.expr(expr, want.as_ref())?;
+                if self.reserved(&name.0) || !self.var_ty.contains_key(&name.0) {
+                    return None;
+                }
+                TK::Assign { name: name.0.clone(), expr: x }
+            }
+            StmtKind::Call { call, handlers } => {
+                let (callee, args) = self.call(call)?;
+                if let Callee::Rule(_) = callee {
+                    self.push(e("E009", call.callee.1, "a rule only answers; keep its answer with `let`", "規則は答えを返すだけです。`let` で答えを受けてください"));
+                    return None;
+                }
+                let hs = self.handlers(&callee, handlers);
+                TK::Call { target: None, callee, args, handlers: hs }
             }
             StmtKind::CaseCall { case, call, handlers } => {
                 let ci = match self.m.case_index(&case.0) {
@@ -615,9 +841,19 @@ impl<'a> Lowerer<'a> {
                         return None;
                     }
                 };
+                if self.par_depth > 0 {
+                    self.push(e(
+                        "E009",
+                        case.1,
+                        format!("the case `{}` cannot be moved from inside `for … in parallel`, where the rounds run at the same time", case.0),
+                        format!("同時に回る `for … in parallel` の中からは、案件 `{}` を動かせません", case.0),
+                    ));
+                    return None;
+                }
                 let task = self.m.tasks[ti].clone();
-                if task.result != Ty::Record(self.m.cases[ci].record) {
-                    let (a, b) = (self.m.ty_name(&task.result), self.m.records[self.m.cases[ci].record].name.clone());
+                if task.result != Some(Ty::Record(self.m.cases[ci].record)) {
+                    let a = task.result.as_ref().map(|r| self.m.ty_name(r)).unwrap_or_else(|| "nothing".into());
+                    let b = self.m.records[self.m.cases[ci].record].name.clone();
                     self.push(e("E003", call.callee.1, format!("`{}` returns `{a}`, but the case `{}` is held in `{b}`", task.name, case.0), format!("`{}` が返すのは `{a}` ですが、案件 `{}` の型は `{b}` です", task.name, case.0)));
                     return None;
                 }
@@ -635,54 +871,7 @@ impl<'a> Lowerer<'a> {
                 let hs = self.handlers(&callee, handlers);
                 TK::Call { target: Some(Target::Case(ci)), callee, args, handlers: hs }
             }
-            StmtKind::Match { expr, arms } => {
-                let te = self.expr(expr, None)?;
-                let ty = te.ty();
-                let domain: Vec<String> = match &ty {
-                    Ty::Enum(e) => self.m.enums[*e].values.clone(),
-                    Ty::Bool => vec!["true".into(), "false".into()],
-                    other => {
-                        let n = self.m.ty_name(other);
-                        self.push(e("E009", expr.span(), format!("`match` works on an enum or a bool; this is `{n}`"), format!("`match` に渡せるのは列挙か bool です。これは `{n}` です")));
-                        return None;
-                    }
-                };
-                let is_case_state = match &te {
-                    TExpr::Var { name, fields, .. } => {
-                        fields.len() == 1 && self.m.case_index(name).map(|c| self.m.cases[c].state_field == fields[0]).unwrap_or(false)
-                    }
-                    _ => false,
-                };
-                let mut seen: Vec<String> = Vec::new();
-                let mut tarms = Vec::new();
-                for a in arms {
-                    let mut values = Vec::new();
-                    let mut none = false;
-                    for (v, vsp) in &a.values {
-                        if seen.contains(v) {
-                            self.push(e("E011", *vsp, format!("`{v}` already has an arm above"), format!("`{v}` の行き先は上にもう書かれています")));
-                            continue;
-                        }
-                        seen.push(v.clone());
-                        if v == "none" {
-                            if is_case_state {
-                                none = true;
-                            } else {
-                                self.push(e("E003", *vsp, "`none` is written only when matching a case's state", "`none` を書けるのは案件の状態で分けるときだけです"));
-                            }
-                            continue;
-                        }
-                        if !domain.contains(v) {
-                            self.push(e("E003", *vsp, format!("`{v}` is not a value of `{}` ({})", self.m.ty_name(&ty), domain.join(", ")), format!("`{v}` は `{}` の値ではありません（{}）", self.m.ty_name(&ty), domain.join("・"))));
-                            continue;
-                        }
-                        values.push(v.clone());
-                    }
-                    let body = self.block(&a.body);
-                    tarms.push(TArm { values, none, body, line: a.span.line });
-                }
-                TK::Match { expr: te, arms: tarms }
-            }
+            StmtKind::Match { expr, arms } => self.lower_match(expr, arms)?,
             StmtKind::Wait { seconds } => {
                 if *seconds == 0 {
                     self.push(e("E009", s.span, "a wait of zero does nothing", "0 の待ちは何もしません"));
@@ -694,22 +883,108 @@ impl<'a> Lowerer<'a> {
                 TK::WaitUntil { at: te }
             }
             StmtKind::Repeat { times, body } => {
-                self.loop_depth += 1;
+                self.loops.push(false);
                 let b = self.block(body);
-                self.loop_depth -= 1;
+                self.loops.pop();
                 TK::Repeat { times: *times, body: b }
+            }
+            StmtKind::For { var, list, max, parallel, body, result } => {
+                let lx = self.expr(list, None)?;
+                let elem = match lx.ty() {
+                    Ty::List(t) => *t,
+                    Ty::Opt(_) => {
+                        self.push(e("E003", list.span(), format!("`{}` may be absent here; `match` it with `none` and `some <name>` first", lx.show()), format!("ここでは `{}` が無いことがあります。先に `none` と `some <名前>` で `match` してください", lx.show())));
+                        return None;
+                    }
+                    other => {
+                        let n = self.m.ty_name(&other);
+                        self.push(e("E003", list.span(), format!("`for` goes through a list; this is `{n}`"), format!("`for` で回せるのはリストです。これは `{n}` です")));
+                        return None;
+                    }
+                };
+                if self.reserved(&var.0) {
+                    self.push(e("E006", var.1, format!("`{}` is an input or a case; the loop's variable needs a new name", var.0), format!("`{}` は入力か案件です。ループの変数には別の名前を付けてください", var.0)));
+                    return None;
+                }
+                if self.var_ty.get(&var.0) != Some(&elem) {
+                    return None;
+                }
+                let mut body = body.clone();
+                let yielded = match result {
+                    Some((r, _)) => match body.last().map(|x| x.kind.clone()) {
+                        Some(StmtKind::Yield { expr }) => {
+                            body.pop();
+                            Some((r.clone(), expr))
+                        }
+                        _ => {
+                            self.push(e("E009", s.span, format!("`let {} = for …` needs `yield <value>` as the last line of its body", r.0), format!("`let {} = for …` の本体の最後の行には `yield <値>` が要ります", r.0)));
+                            return None;
+                        }
+                    },
+                    None => None,
+                };
+                self.loops.push(parallel.is_some());
+                if parallel.is_some() {
+                    self.par_depth += 1;
+                }
+                let b = self.block(&body);
+                let result = match yielded {
+                    Some((r, ex)) => {
+                        let want = match self.var_ty.get(&r.0) {
+                            Some(Ty::List(t)) => Some((**t).clone()),
+                            _ => None,
+                        };
+                        let x = self.expr(&ex, want.as_ref());
+                        match x {
+                            Some(x) => Some((r.0.clone(), x)),
+                            None => {
+                                self.loops.pop();
+                                if parallel.is_some() {
+                                    self.par_depth -= 1;
+                                }
+                                return None;
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                if parallel.is_some() {
+                    self.par_depth -= 1;
+                }
+                self.loops.pop();
+                if let Some((r, _)) = &result {
+                    if self.reserved(r) || !self.var_ty.contains_key(r) {
+                        return None;
+                    }
+                }
+                TK::For { var: var.0.clone(), list: lx, max: *max, parallel: *parallel, body: b, result, locals: vec![] }
+            }
+            StmtKind::Yield { expr } => {
+                self.push(e("E009", expr.span(), "`yield` is the last line of the body of `let <name> = for …`", "`yield` は `let <名前> = for …` の本体の最後の行に書きます"));
+                return None;
             }
             StmtKind::Pass => TK::Pass,
             StmtKind::Break => {
-                if self.loop_depth == 0 {
-                    self.push(e("E009", s.span, "`break` is written inside `repeat`", "`break` は `repeat` の中に書きます"));
-                    return None;
+                match self.loops.last() {
+                    None => {
+                        self.push(e("E009", s.span, "`break` is written inside `repeat` or `for`", "`break` は `repeat` か `for` の中に書きます"));
+                        return None;
+                    }
+                    Some(true) => {
+                        self.push(e("E009", s.span, "the rounds of `for … in parallel` run at the same time, so there is no `break` from them", "`for … in parallel` の各回は同時に回るので、`break` で抜けられません"));
+                        return None;
+                    }
+                    Some(false) => {}
                 }
                 TK::Break
             }
             StmtKind::Succeed { fields } => {
                 if self.in_on_failure {
                     self.push(e("E009", s.span, "`on failure` ends the workflow as failed; it cannot `succeed`", "`on failure` はワークフローを失敗で終えます。`succeed` は書けません"));
+                    return None;
+                }
+                if self.par_depth > 0 {
+                    self.push(e("E009", s.span, "the workflow cannot `succeed` from inside `for … in parallel`, where other rounds may still run", "ほかの回がまだ動いていることがあるので、`for … in parallel` の中からは `succeed` できません"));
                     return None;
                 }
                 let mut out = Vec::new();
@@ -729,7 +1004,13 @@ impl<'a> Lowerer<'a> {
                         out.push((n.clone(), te));
                     }
                 }
-                let missing: Vec<String> = self.m.outputs.iter().filter(|(o, _)| !out.iter().any(|(g, _)| g == o) && !fields.iter().any(|((f, _), _)| f == o)).map(|(o, _)| o.clone()).collect();
+                let missing: Vec<String> = self
+                    .m
+                    .outputs
+                    .iter()
+                    .filter(|(o, t)| !matches!(t, Ty::Opt(_)) && !out.iter().any(|(g, _)| g == o) && !fields.iter().any(|((f, _), _)| f == o))
+                    .map(|(o, _)| o.clone())
+                    .collect();
                 if !missing.is_empty() {
                     self.push(e("E004", s.span, format!("`succeed` does not give {}", missing.join(", ")), format!("`succeed` が {} を書いていません", missing.join("・"))));
                 }
@@ -743,15 +1024,107 @@ impl<'a> Lowerer<'a> {
                         None => self.push(e("E002", *lsp, format!("there is no case `{l}`"), format!("案件 `{l}` はありません"))),
                     }
                 }
-                TK::Fail { error: error.0.clone(), cause: cause.clone(), leaving: left }
+                let cause = match cause {
+                    Some(c) => Some(self.expr(c, Some(&Ty::Str))?),
+                    None => None,
+                };
+                TK::Fail { error: error.0.clone(), cause, leaving: left }
             }
         };
         Some(TStmt { kind, line, site })
     }
 
+    fn lower_match(&mut self, expr: &Expr, arms: &[syntax::Arm]) -> Option<TK> {
+        let te = self.expr(expr, None)?;
+        let ty = te.ty();
+        let (domain, optional): (Vec<String>, bool) = match &ty {
+            Ty::Enum(e) => (self.m.enums[*e].values.clone(), false),
+            Ty::Bool => (vec!["true".into(), "false".into()], false),
+            Ty::Opt(inner) => match &**inner {
+                Ty::Enum(e) => (self.m.enums[*e].values.clone(), true),
+                Ty::Bool => (vec!["true".into(), "false".into()], true),
+                _ => (vec![], true),
+            },
+            other => {
+                let n = self.m.ty_name(other);
+                self.push(e(
+                    "E009",
+                    expr.span(),
+                    format!("`match` works on an enum, a bool, or a value that may be absent (`T?`); this is `{n}`"),
+                    format!("`match` に渡せるのは列挙・bool・無いことがある値（`T?`）です。これは `{n}` です"),
+                ));
+                return None;
+            }
+        };
+        let is_case_state = match &te {
+            TExpr::Var { name, fields, .. } => fields.len() == 1 && self.m.case_index(name).map(|c| self.m.cases[c].state_field == fields[0]).unwrap_or(false),
+            _ => false,
+        };
+        let has_some = arms.iter().any(|a| a.some.is_some());
+        let has_values = arms.iter().any(|a| a.values.iter().any(|(v, _)| v != "none"));
+        let mut seen: Vec<String> = Vec::new();
+        let mut tarms = Vec::new();
+        for a in arms {
+            if let Some((v, vsp)) = &a.some {
+                if !optional {
+                    self.push(e("E003", *vsp, "`some` is written when matching a value that may be absent (`T?`)", "`some` を書けるのは、無いことがある値（`T?`）で分けるときだけです"));
+                    continue;
+                }
+                if seen.iter().any(|x| x == "some") {
+                    self.push(e("E011", a.span, "`some` already has an arm above", "`some` の行き先は上にもう書かれています"));
+                    continue;
+                }
+                if has_values {
+                    self.push(e("E003", a.span, "`some` stands for every value that is there; write either the values or `some`", "`some` は値があるときのすべてを表します。値を並べるか `some` を書くかのどちらかにしてください"));
+                    continue;
+                }
+                seen.push("some".into());
+                if self.reserved(v) {
+                    self.push(e("E006", *vsp, format!("`{v}` is an input or a case; `some` needs a new name"), format!("`{v}` は入力か案件です。`some` には別の名前を付けてください")));
+                    continue;
+                }
+                let body = self.block(&a.body);
+                tarms.push(TArm { values: vec![], none: false, some: Some(v.clone()), body, line: a.span.line });
+                continue;
+            }
+            let mut values = Vec::new();
+            let mut none = false;
+            for (v, vsp) in &a.values {
+                if seen.contains(v) {
+                    self.push(e("E011", *vsp, format!("`{v}` already has an arm above"), format!("`{v}` の行き先は上にもう書かれています")));
+                    continue;
+                }
+                seen.push(v.clone());
+                if v == "none" {
+                    if is_case_state || optional {
+                        none = true;
+                    } else {
+                        self.push(e("E003", *vsp, "`none` is written when matching a case's state, or a value that may be absent (`T?`)", "`none` を書けるのは、案件の状態か、無いことがある値（`T?`）で分けるときだけです"));
+                    }
+                    continue;
+                }
+                if optional && domain.is_empty() {
+                    let n = self.m.ty_name(&ty);
+                    self.push(e("E003", *vsp, format!("`{}` is `{n}`; its arms are `none` and `some <name>`", te.show()), format!("`{}` は `{n}` です。行き先は `none` と `some <名前>` です", te.show())));
+                    continue;
+                }
+                if !domain.contains(v) {
+                    let n = self.m.ty_name(ty.inner());
+                    self.push(e("E003", *vsp, format!("`{v}` is not a value of `{n}` ({})", domain.join(", ")), format!("`{v}` は `{n}` の値ではありません（{}）", domain.join("・"))));
+                    continue;
+                }
+                values.push(v.clone());
+            }
+            let _ = has_some;
+            let body = self.block(&a.body);
+            tarms.push(TArm { values, none, some: None, body, line: a.span.line });
+        }
+        Some(TK::Match { expr: te, arms: tarms })
+    }
+
     fn handlers(&mut self, callee: &Callee, hs: &[syntax::Handler]) -> Vec<THandler> {
         let declared: Vec<String> = match callee {
-            Callee::Task(t) => self.m.tasks[*t].errors.iter().map(|(n, _)| n.clone()).collect(),
+            Callee::Task(t) => self.m.tasks[*t].errors.iter().map(|x| x.name.clone()).collect(),
             Callee::Rule(_) => vec![],
         };
         let mut seen: Vec<String> = Vec::new();
@@ -825,13 +1198,19 @@ impl<'a> Lowerer<'a> {
                 None => ok = false,
             }
         }
-        let missing: Vec<String> = params.iter().filter(|(p, _)| !c.args.iter().any(|((a, _), _)| a == p)).map(|(p, _)| p.clone()).collect();
+        // an optional parameter may be left out; it is then sent as null
+        let missing: Vec<String> = params.iter().filter(|(p, t)| !matches!(t, Ty::Opt(_)) && !c.args.iter().any(|((a, _), _)| a == p)).map(|(p, _)| p.clone()).collect();
         if !missing.is_empty() {
             self.push(e("E004", *sp, format!("the call of `{name}` does not give {}", missing.join(", ")), format!("`{name}` の呼び出しに {} がありません", missing.join("・"))));
             ok = false;
         }
         if !ok {
             return None;
+        }
+        for (p, t) in &params {
+            if matches!(t, Ty::Opt(_)) && !args.iter().any(|(a, _)| a == p) {
+                args.push((p.clone(), TExpr::None(t.clone())));
+            }
         }
         // keep the parameters' order, so that the generated code reads like the declaration
         args.sort_by_key(|(a, _)| params.iter().position(|(p, _)| p == a).unwrap_or(usize::MAX));
@@ -843,66 +1222,334 @@ impl<'a> Lowerer<'a> {
             Expr::Str(s, _) => TExpr::Str(s.clone()),
             Expr::Int(n, _) => TExpr::Int(*n),
             Expr::Bool(b, _) => TExpr::Bool(*b),
-            Expr::Path(parts) => {
-                let (first, fsp) = &parts[0];
-                match self.var_ty.get(first).cloned() {
-                    Some(mut t) => {
-                        let mut fields = Vec::new();
-                        for (f, fsp2) in &parts[1..] {
-                            let rec = match t {
-                                Ty::Record(r) => r,
-                                ref other => {
-                                    let n = self.m.ty_name(other);
-                                    self.push(e("E003", *fsp2, format!("`{n}` has no fields"), format!("`{n}` にはフィールドがありません")));
+            Expr::Interp(parts, sp) => {
+                let mut out = Vec::new();
+                for p in parts {
+                    match p {
+                        Part::Lit(s) => out.push(IPart::Lit(s.clone())),
+                        Part::Hole(path) => {
+                            let x = self.path(path, None)?;
+                            let t = x.ty();
+                            if !matches!(t, Ty::Str | Ty::Int | Ty::Num(_) | Ty::Bool | Ty::Enum(_) | Ty::Timestamp) {
+                                let n = self.m.ty_name(&t);
+                                let (en, ja) = if matches!(t, Ty::Opt(_)) {
+                                    (
+                                        format!("`{}` is `{n}` and may be absent, so it cannot be put in a string as it is; `match` it with `none` and `some <name>` first", x.show()),
+                                        format!("`{}` は `{n}` で、無いことがあるので、そのままでは文字列に入れられません。先に `none` と `some <名前>` で `match` してください", x.show()),
+                                    )
+                                } else {
+                                    (format!("`{}` is `{n}`, which cannot be put in a string", x.show()), format!("`{}` は `{n}` なので、文字列に入れられません", x.show()))
+                                };
+                                self.push(e("E003", *sp, en, ja));
+                                return None;
+                            }
+                            out.push(IPart::Hole(x));
+                        }
+                    }
+                }
+                TExpr::Interp(out)
+            }
+            Expr::Record(fields, sp) => {
+                let want = expected.map(|t| t.inner().clone());
+                match want {
+                    Some(Ty::Record(r)) => {
+                        let decl = self.m.records[r].fields.clone();
+                        let rn = self.m.records[r].name.clone();
+                        let mut out: Vec<(String, TExpr)> = Vec::new();
+                        for ((fname, fsp), fe) in fields {
+                            let fty = match decl.iter().find(|(n, _)| n == fname) {
+                                Some((_, t)) => t.clone(),
+                                None => {
+                                    let list: Vec<String> = decl.iter().map(|(n, _)| n.clone()).collect();
+                                    self.push(e("E002", *fsp, format!("`{rn}` has no field `{fname}` ({})", list.join(", ")), format!("`{rn}` にフィールド `{fname}` はありません（{}）", list.join("・"))));
                                     return None;
                                 }
                             };
-                            match self.m.field_ty(rec, f) {
-                                Some(ft) => {
-                                    t = ft.clone();
-                                    fields.push(f.clone());
-                                }
-                                None => {
-                                    let rn = self.m.records[rec].name.clone();
-                                    let list: Vec<String> = self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect();
-                                    self.push(e("E002", *fsp2, format!("`{rn}` has no field `{f}` ({})", list.join(", ")), format!("`{rn}` にフィールド `{f}` はありません（{}）", list.join("・"))));
-                                    return None;
-                                }
+                            if out.iter().any(|(n, _)| n == fname) {
+                                self.push(e("E006", *fsp, format!("`{fname}` is given twice"), format!("`{fname}` が二度書かれています")));
+                                return None;
                             }
+                            let x = self.expr(fe, Some(&fty))?;
+                            out.push((fname.clone(), x));
                         }
-                        TExpr::Var { name: first.clone(), fields, ty: t }
+                        let missing: Vec<String> = decl.iter().filter(|(n, t)| !matches!(t, Ty::Opt(_)) && !out.iter().any(|(g, _)| g == n)).map(|(n, _)| n.clone()).collect();
+                        if !missing.is_empty() {
+                            self.push(e("E004", *sp, format!("this `{rn}` does not give {}", missing.join(", ")), format!("この `{rn}` に {} がありません", missing.join("・"))));
+                            return None;
+                        }
+                        out.sort_by_key(|(n, _)| decl.iter().position(|(d, _)| d == n).unwrap_or(usize::MAX));
+                        TExpr::Record { fields: out, ty: Ty::Record(r) }
                     }
-                    None => {
-                        if parts.len() == 1 {
-                            if let Some(Ty::Enum(id)) = expected {
-                                if self.m.enums[*id].values.contains(first) {
-                                    return Some(TExpr::Enum(first.clone(), *id));
-                                }
+                    Some(Ty::Json) => {
+                        let mut out: Vec<(String, TExpr)> = Vec::new();
+                        for ((fname, fsp), fe) in fields {
+                            if out.iter().any(|(n, _)| n == fname) {
+                                self.push(e("E006", *fsp, format!("`{fname}` is given twice"), format!("`{fname}` が二度書かれています")));
+                                return None;
                             }
+                            let x = self.expr(fe, Some(&Ty::Json))?;
+                            out.push((fname.clone(), x));
                         }
-                        let (hen, hja) = match expected {
-                            Some(Ty::Enum(id)) => (
-                                format!("the values of `{}` are {}", self.m.enums[*id].name, self.m.enums[*id].values.join(", ")),
-                                format!("`{}` の値は {} です", self.m.enums[*id].name, self.m.enums[*id].values.join("・")),
-                            ),
-                            _ => ("a value is a variable, a field of one, a string, a number, true or false".to_string(), "値は変数・そのフィールド・文字列・数・true・false のどれかです".to_string()),
-                        };
-                        self.push(e("E002", *fsp, format!("there is no variable or value `{first}`"), format!("変数や値 `{first}` はありません")).note(hen, hja));
+                        TExpr::Record { fields: out, ty: Ty::Json }
+                    }
+                    _ => {
+                        self.push(e(
+                            "E003",
+                            *sp,
+                            "a record written as `{…}` takes its type from where it goes: an argument, an output, or `let x: <record> = {…}`",
+                            "`{…}` で書いたレコードは、型が決まるところ（引数・出力・`let x: <レコード> = {…}`）に書きます",
+                        ));
                         return None;
                     }
                 }
             }
+            Expr::List(items, sp) => {
+                let want_elem = match expected.map(|t| t.inner()) {
+                    Some(Ty::List(t)) => Some((**t).clone()),
+                    Some(Ty::Json) => Some(Ty::Json),
+                    _ => None,
+                };
+                let mut elem = want_elem;
+                let mut out = Vec::new();
+                for it in items {
+                    let x = self.expr(it, elem.as_ref())?;
+                    if elem.is_none() {
+                        elem = Some(x.ty());
+                    }
+                    out.push(x);
+                }
+                let elem = match elem {
+                    Some(t) => t,
+                    None => {
+                        self.push(e("E003", *sp, "the type of an empty list is not known here; write it where a list is expected, or as `let x: list[T] = []`", "空のリストの型がここでは分かりません。リストを渡す先に書くか、`let x: list[T] = []` と書いてください"));
+                        return None;
+                    }
+                };
+                if matches!(elem.inner(), Ty::List(_)) {
+                    self.push(e("E003", *sp, "a list of lists is not supported; put the inner list in a record", "リストのリストは書けません。内側のリストはレコードに入れてください"));
+                    return None;
+                }
+                TExpr::List { items: out, ty: Ty::List(Box::new(elem)) }
+            }
+            Expr::Path(parts) => {
+                if parts.len() == 1 && parts[0].0 == "none" && !self.var_ty.contains_key("none") {
+                    match expected {
+                        Some(t @ Ty::Opt(_)) => return Some(TExpr::None(t.clone())),
+                        Some(Ty::Json) => return Some(TExpr::None(Ty::Opt(Box::new(Ty::Json)))),
+                        _ => {
+                            self.push(e("E003", parts[0].1, "`none` is given only where a value may be absent (`T?`)", "`none` を渡せるのは、無いことがある値（`T?`）のところだけです"));
+                            return None;
+                        }
+                    }
+                }
+                self.path(parts, expected)?
+            }
         };
         if let Some(want) = expected {
             let got = te.ty();
-            let fits = got == *want || (matches!(te, TExpr::Int(_)) && matches!(want, Ty::Num(_)));
+            let fits = got.fits(want) || (matches!(te, TExpr::Int(_)) && matches!(want.inner(), Ty::Num(_)));
             if !fits {
                 let (a, b) = (self.m.ty_name(want), self.m.ty_name(&got));
-                self.push(e("E003", ex.span(), format!("expected `{a}` here, but this is `{b}`"), format!("ここには `{a}` が要りますが、これは `{b}` です")));
+                let (en, ja) = if matches!(got, Ty::Opt(_)) && got.inner().fits(want) {
+                    (
+                        format!("expected `{a}` here, but this is `{b}`, which may be absent; `match` it with `none` and `some <name>` first"),
+                        format!("ここには `{a}` が要りますが、これは無いことがある `{b}` です。先に `none` と `some <名前>` で `match` してください"),
+                    )
+                } else {
+                    (format!("expected `{a}` here, but this is `{b}`"), format!("ここには `{a}` が要りますが、これは `{b}` です"))
+                };
+                self.push(e("E003", ex.span(), en, ja));
                 return None;
             }
         }
         Some(te)
+    }
+
+    /// A variable and its fields: `pi.status`. A bare name that is no variable may be a value of the enum expected here.
+    fn path(&mut self, parts: &[(String, Span)], expected: Option<&Ty>) -> Option<TExpr> {
+        let (first, fsp) = &parts[0];
+        match self.var_ty.get(first).cloned() {
+            Some(mut t) => {
+                let mut fields = Vec::new();
+                for (f, fsp2) in &parts[1..] {
+                    let so_far = std::iter::once(first.clone()).chain(fields.iter().cloned()).collect::<Vec<String>>().join(".");
+                    let rec = match t {
+                        Ty::Record(r) => r,
+                        Ty::Opt(ref inner) if matches!(**inner, Ty::Record(_)) => {
+                            self.push(e(
+                                "E003",
+                                *fsp2,
+                                format!("`{so_far}` may be absent here; `match` it with `none` and `some <name>` first"),
+                                format!("ここでは `{so_far}` が無いことがあります。先に `none` と `some <名前>` で `match` してください"),
+                            ));
+                            return None;
+                        }
+                        Ty::Json => {
+                            self.push(e("E003", *fsp2, format!("`{so_far}` is `json`, which is carried as it is and not looked into"), format!("`{so_far}` は `json` で、中を見ずにそのまま運ぶ値です")));
+                            return None;
+                        }
+                        ref other => {
+                            let n = self.m.ty_name(other);
+                            self.push(e("E003", *fsp2, format!("`{n}` has no fields"), format!("`{n}` にはフィールドがありません")));
+                            return None;
+                        }
+                    };
+                    match self.m.field_ty(rec, f) {
+                        Some(ft) => {
+                            t = ft.clone();
+                            fields.push(f.clone());
+                        }
+                        None => {
+                            let rn = self.m.records[rec].name.clone();
+                            let list: Vec<String> = self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect();
+                            self.push(e("E002", *fsp2, format!("`{rn}` has no field `{f}` ({})", list.join(", ")), format!("`{rn}` にフィールド `{f}` はありません（{}）", list.join("・"))));
+                            return None;
+                        }
+                    }
+                }
+                Some(TExpr::Var { name: first.clone(), fields, ty: t })
+            }
+            None => {
+                if parts.len() == 1 {
+                    if let Some(Ty::Enum(id)) = expected.map(|t| t.inner()) {
+                        if self.m.enums[*id].values.contains(first) {
+                            return Some(TExpr::Enum(first.clone(), *id));
+                        }
+                    }
+                }
+                let (hen, hja) = match expected.map(|t| t.inner()) {
+                    Some(Ty::Enum(id)) => (
+                        format!("the values of `{}` are {}", self.m.enums[*id].name, self.m.enums[*id].values.join(", ")),
+                        format!("`{}` の値は {} です", self.m.enums[*id].name, self.m.enums[*id].values.join("・")),
+                    ),
+                    _ => ("a value is a variable, a field of one, a string, a number, true or false".to_string(), "値は変数・そのフィールド・文字列・数・true・false のどれかです".to_string()),
+                };
+                self.push(e("E002", *fsp, format!("there is no variable or value `{first}`"), format!("変数や値 `{first}` はありません")).note(hen, hja));
+                None
+            }
+        }
+    }
+
+    /// The variables a `for … in parallel` round sets are its own. A name set inside such a
+    /// round and also outside it would be one variable shared by rounds that run at the
+    /// same time; that is refused. `locals` gets the names each round keeps.
+    fn parallel_scopes(&mut self) {
+        // for every name: the scopes that set it (the path of parallel loops around, by site)
+        let mut sets: BTreeMap<String, BTreeSet<Vec<usize>>> = BTreeMap::new();
+        fn put(sets: &mut BTreeMap<String, BTreeSet<Vec<usize>>>, n: &str, sc: &[usize]) {
+            sets.entry(n.to_string()).or_default().insert(sc.to_vec());
+        }
+        fn visit(ss: &[TStmt], scope: &mut Vec<usize>, sets: &mut BTreeMap<String, BTreeSet<Vec<usize>>>) {
+            for s in ss {
+                match &s.kind {
+                    TK::Call { target, handlers, .. } => {
+                        if let Some(Target::Let(v)) = target {
+                            put(sets, v, scope);
+                        }
+                        for h in handlers {
+                            visit(&h.body, scope, sets);
+                        }
+                    }
+                    TK::Assign { name, .. } => put(sets, name, scope),
+                    TK::Match { arms, .. } => {
+                        for a in arms {
+                            if let Some(v) = &a.some {
+                                put(sets, v, scope);
+                            }
+                            visit(&a.body, scope, sets);
+                        }
+                    }
+                    TK::Repeat { body, .. } => visit(body, scope, sets),
+                    TK::For { var, parallel, body, result, .. } => {
+                        if let Some((r, _)) = result {
+                            put(sets, r, scope);
+                        }
+                        if parallel.is_some() {
+                            scope.push(s.site);
+                            put(sets, var, scope);
+                            visit(body, scope, sets);
+                            scope.pop();
+                        } else {
+                            put(sets, var, scope);
+                            visit(body, scope, sets);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut scope = Vec::new();
+        visit(&self.m.flow, &mut scope, &mut sets);
+        if let Some(f) = &self.m.on_failure {
+            visit(f, &mut scope, &mut sets);
+        }
+        // a name may be set in sibling rounds of different loops, but never in two scopes one of which holds the other
+        let mut bad: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+        for (n, scs) in &sets {
+            let list: Vec<&Vec<usize>> = scs.iter().collect();
+            for i in 0..list.len() {
+                for j in 0..list.len() {
+                    if i != j && list[j].len() > list[i].len() && list[j].starts_with(list[i]) {
+                        bad.entry(*list[j].last().unwrap()).or_default().push(n.clone());
+                    }
+                }
+            }
+        }
+        let mut lines: BTreeMap<usize, usize> = BTreeMap::new();
+        Model::walk(&self.m.flow, &mut |s| {
+            lines.insert(s.site, s.line);
+        });
+        if let Some(f) = &self.m.on_failure {
+            Model::walk(f, &mut |s| {
+                lines.insert(s.site, s.line);
+            });
+        }
+        for (site, mut names) in bad {
+            names.sort();
+            names.dedup();
+            let line = lines.get(&site).cloned().unwrap_or(1);
+            let list = names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+            self.push(Diag::error(
+                "E009",
+                line,
+                1,
+                format!("{list} is set both inside this `for … in parallel` and outside it; the rounds run at the same time and each keeps its own variables, so give them their own names"),
+                format!("{list} は、この `for … in parallel` の中と外の両方で値を入れられています。各回は同時に回り、自分の変数を持つので、別の名前にしてください"),
+            ));
+        }
+        // each parallel loop's own names
+        let mut own: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+        for (n, scs) in &sets {
+            for sc in scs {
+                if let Some(site) = sc.last() {
+                    own.entry(*site).or_default().push(n.clone());
+                }
+            }
+        }
+        fn fill(ss: &mut [TStmt], own: &BTreeMap<usize, Vec<String>>) {
+            for s in ss {
+                let site = s.site;
+                match &mut s.kind {
+                    TK::Call { handlers, .. } => handlers.iter_mut().for_each(|h| fill(&mut h.body, own)),
+                    TK::Match { arms, .. } => arms.iter_mut().for_each(|a| fill(&mut a.body, own)),
+                    TK::Repeat { body, .. } => fill(body, own),
+                    TK::For { body, locals, parallel, .. } => {
+                        if parallel.is_some() {
+                            *locals = own.get(&site).cloned().unwrap_or_default();
+                        }
+                        fill(body, own);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut flow = std::mem::take(&mut self.m.flow);
+        fill(&mut flow, &own);
+        self.m.flow = flow;
+        if let Some(mut f) = self.m.on_failure.take() {
+            fill(&mut f, &own);
+            self.m.on_failure = Some(f);
+        }
     }
 }
 

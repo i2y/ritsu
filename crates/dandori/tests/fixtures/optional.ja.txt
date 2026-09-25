@@ -1,0 +1,8 @@
+エラー[E010]: tests/fixtures/optional.flow:22:1: `match` に none の行き先がありません。ここで `贈り物.宛名` はその値を取りえます
+    22 |   match 贈り物.宛名
+エラー[E012]: tests/fixtures/optional.flow:26:1: ここでは `r` はまだ値を持っていません
+    26 |   let b = 送る(本文: r.id)
+  そうなる例:
+      23  match 贈り物.宛名: some
+      23  a = 送る(…)
+      24  for x in 明細（10 個まで）

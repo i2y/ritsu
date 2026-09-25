@@ -1,0 +1,50 @@
+workflow 審査 v1
+description "申し込みを別のワーカーの審査にかけ、保留なら人の承認を待つ。タスクはどれも利用者が書く実装なので、Temporal と Lambda durable functions に出す（Step Functions には出さない）"
+
+enum 判断 = 承認 | 却下 | 保留
+
+record 申込
+  id   : string
+  金額 : int
+
+record 審査結果
+  点数 : int
+  判断 : 判断
+
+record 承認
+  承認者 : string
+
+inputs
+  申込 : 申込
+
+outputs
+  判断 : 判断
+
+# Scoring runs on workers of its own, which may be written in another language.
+task 審査する(申込ID: string, 金額: int) -> 審査結果
+  queue "scoring"
+  errors 審査不能
+  retry 2 times every 10 seconds
+  idempotent
+
+# Someone approves in a tool of their own, and the answer comes back with the callback's id.
+task 承認を求める(申込ID: string, 点数: int) -> 承認
+  callback
+  timeout 3 days
+
+task 通知する(申込ID: string, 本文: string)
+  queue "notify"
+  idempotent
+
+flow
+  let r = 審査する(申込ID: 申込.id, 金額: 申込.金額)
+    on 審査不能 => fail Unscorable "申込 {申込.id} を審査できませんでした"
+  match r.判断
+    承認, 却下 => pass
+    保留 =>
+      let a = 承認を求める(申込ID: 申込.id, 点数: r.点数)
+        on timeout => fail NoAnswer "三日たっても承認がありません"
+      通知する(申込ID: 申込.id, 本文: "{a.承認者} さんが申込 {申込.id} を承認しました")
+      succeed 判断 = 承認
+  通知する(申込ID: 申込.id, 本文: "申込 {申込.id} の審査の結果は{r.判断}です")
+  succeed 判断 = r.判断

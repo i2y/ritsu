@@ -6,6 +6,10 @@
 //! declared type, and for a case, against the states the checker said it can be in; an
 //! answer that fails the check ends the execution with `Dandori.BadResponse` or
 //! `Dandori.UnexpectedState`, instead of being taken down a branch it does not belong to.
+//!
+//! A `for … in parallel` is a Map. Each round has its own variables, set at the round's
+//! start, and ends with what it yields or with how it failed; a failure does not stop the
+//! other rounds. When all are done, the first failure by place in the list decides.
 
 use crate::diag::Diag;
 use crate::model::*;
@@ -18,20 +22,36 @@ pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
 struct Gen<'a> {
     m: &'a Model,
+    /// the states of the scope being written: the state machine's, or a Map round's
     states: Map<String, Value>,
     used: BTreeSet<String>,
     /// (site of the loop, the state after the loop)
     loops: Vec<(usize, String)>,
     failure_entry: Option<String>,
     in_on_failure: bool,
+    /// inside a parallel round: the state that ends the round with the failure it is given
+    round_failed: Option<String>,
 }
 
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut errs = Vec::new();
     for t in &m.tasks {
-        match &t.binding {
-            None => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `lambda` or `http` to run on Step Functions", t.name), format!("`{}` を Step Functions で動かすには `lambda` か `http` が要ります", t.name))),
-            Some(Binding::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
+        match t.via(Platform::StepFunctions) {
+            None => errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("`{}` needs `lambda`, `http`, `aws` or `state machine` to run on Step Functions", t.name),
+                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`state machine` のどれかが要ります", t.name),
+            )),
+            Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
+            Some(Via::StateMachine(_)) if !t.errors.is_empty() => errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("Step Functions reports a nested execution's failure as States.TaskFailed, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
+                format!("Step Functions は入れ子の実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で受けてください", t.name),
+            )),
             _ => {}
         }
     }
@@ -46,7 +66,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         return Err(errs);
     }
 
-    let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false };
+    let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false, round_failed: None };
     // the end states first, so that everything can point at them
     let done = g.name("done");
     g.states.insert(done.clone(), json!({ "Type": "Succeed" }));
@@ -63,9 +83,14 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     }
     let first = g.block(&m.flow, &done);
 
-    // Start: every variable, the inputs from the execution's input
+    // Start: every variable, the inputs from the execution's input. A parallel round's own
+    // variables belong to the round and are set at its start.
+    let locals = parallel_locals(m);
     let mut assign = Map::new();
     for (v, _) in &m.vars {
+        if locals.contains(v) {
+            continue;
+        }
         if m.inputs.iter().any(|(i, _)| i == v) {
             assign.insert(asl_var(v), json!(format!("{{% $states.input.{} %}}", render::jsonata_field(v))));
         } else {
@@ -102,6 +127,17 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         files.push(lambda_handler(m, r));
     }
     Ok(files)
+}
+
+/// Every variable some parallel round keeps for itself.
+pub fn parallel_locals(m: &Model) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for s in m.all_stmts() {
+        if let TK::For { locals, parallel: Some(_), .. } = &s.kind {
+            out.extend(locals.iter().cloned());
+        }
+    }
+    out
 }
 
 /// The states reachable from the start, in the order a reader follows them.
@@ -145,18 +181,16 @@ fn order(states: &Map<String, Value>, start: &str) -> Map<String, Value> {
     out
 }
 
-fn literal(e: &TExpr) -> Option<Value> {
-    match e {
-        TExpr::Str(s) => Some(json!(s)),
-        TExpr::Int(n) => Some(json!(n)),
-        TExpr::Bool(b) => Some(json!(b)),
-        TExpr::Enum(v, _) => Some(json!(v)),
-        TExpr::Var { .. } => None,
-    }
+fn arg_value(e: &TExpr) -> Value {
+    render::literal(e).unwrap_or_else(|| json!(format!("{{% {} %}}", jsonata_expr(e))))
 }
 
-fn arg_value(e: &TExpr) -> Value {
-    literal(e).unwrap_or_else(|| json!(format!("{{% {} %}}", jsonata_expr(e))))
+/// A value of the ASL (a literal, or a `{% … %}` string) as a JSONata expression.
+fn as_jsonata(v: &Value) -> String {
+    match v.as_str() {
+        Some(s) if s.starts_with("{%") && s.ends_with("%}") => s[2..s.len() - 2].trim().to_string(),
+        _ => v.to_string(),
+    }
 }
 
 impl<'a> Gen<'a> {
@@ -201,6 +235,39 @@ impl<'a> Gen<'a> {
         format!("{{% {e} %}}")
     }
 
+    /// End as failed: a Fail state, or inside a parallel round, the round's end with the
+    /// failure as its answer. `error` and `cause` are ASL values: literals or `{% … %}`.
+    fn failing(&mut self, base: &str, comment: Option<String>, error: Value, cause: Option<Value>, task: bool) -> String {
+        let n = self.name(base);
+        match self.round_failed.clone() {
+            None => {
+                let mut st = Map::new();
+                st.insert("Type".into(), json!("Fail"));
+                if let Some(c) = comment {
+                    st.insert("Comment".into(), json!(c));
+                }
+                st.insert("Error".into(), error);
+                if let Some(c) = cause {
+                    st.insert("Cause".into(), c);
+                }
+                self.states.insert(n.clone(), Value::Object(st));
+            }
+            Some(end) => {
+                let c = cause.as_ref().map(as_jsonata).unwrap_or_else(|| "null".into());
+                let out = format!("{{% {{\"fail\": {{\"Error\": {}, \"Cause\": {c}, \"task\": {task}}}}} %}}", as_jsonata(&error));
+                let mut st = Map::new();
+                st.insert("Type".into(), json!("Pass"));
+                if let Some(c) = comment {
+                    st.insert("Comment".into(), json!(c));
+                }
+                st.insert("Output".into(), json!(out));
+                st.insert("Next".into(), json!(end));
+                self.states.insert(n.clone(), Value::Object(st));
+            }
+        }
+        n
+    }
+
     fn stmt(&mut self, s: &TStmt, cont: &str) -> String {
         match &s.kind {
             TK::Pass => cont.to_string(),
@@ -211,8 +278,13 @@ impl<'a> Gen<'a> {
                 n
             }
             TK::WaitUntil { at } => {
-                let n = self.name(&format!("{} wait until {}", s.line, show_expr(at)));
+                let n = self.name(&format!("{} wait until {}", s.line, at.show()));
                 self.states.insert(n.clone(), json!({ "Type": "Wait", "Comment": format!("line {}", s.line), "Timestamp": format!("{{% {} %}}", jsonata_expr(at)), "Next": cont }));
+                n
+            }
+            TK::Assign { name, expr } => {
+                let n = self.name(&format!("{} let {name}", s.line));
+                self.states.insert(n.clone(), json!({ "Type": "Pass", "Comment": format!("line {}", s.line), "Assign": { asl_var(name): arg_value(expr) }, "Next": cont }));
                 n
             }
             TK::Succeed { fields } => {
@@ -231,16 +303,8 @@ impl<'a> Gen<'a> {
                 n
             }
             TK::Fail { error, cause, .. } => {
-                let n = self.name(&format!("{} fail {error}", s.line));
-                let mut st = Map::new();
-                st.insert("Type".into(), json!("Fail"));
-                st.insert("Comment".into(), json!(format!("line {}", s.line)));
-                st.insert("Error".into(), json!(error));
-                if let Some(c) = cause {
-                    st.insert("Cause".into(), json!(c));
-                }
-                self.states.insert(n.clone(), Value::Object(st));
-                n
+                let c = cause.as_ref().map(arg_value);
+                self.failing(&format!("{} fail {error}", s.line), Some(format!("line {}", s.line)), json!(error), c, false)
             }
             TK::Repeat { times, body } => {
                 let counter = format!("dd_loop_{}", s.site);
@@ -258,21 +322,74 @@ impl<'a> Gen<'a> {
                 self.states.insert(next.clone(), json!({ "Type": "Pass", "Assign": { counter.clone(): format!("{{% ${counter} + 1 %}}") }, "Next": head }));
                 init
             }
+            TK::For { var, list, max, parallel: None, body, result, .. } => {
+                let site = s.site;
+                let counter = format!("dd_loop_{site}");
+                let items = format!("dd_items_{site}");
+                let out = format!("dd_out_{site}");
+                let init = self.name(&format!("{} for {var}", s.line));
+                let bound = self.name(&format!("{} for {var} bound", s.line));
+                let head = self.name(&format!("{} for {var} check", s.line));
+                let take = self.name(&format!("{} for {var} take", s.line));
+                let next = self.name(&format!("{} for {var} next", s.line));
+                let after = match result {
+                    Some((r, _)) => {
+                        let a = self.name(&format!("{} for {var} done", s.line));
+                        self.states.insert(a.clone(), json!({ "Type": "Pass", "Assign": { asl_var(r): format!("{{% ${out} %}}") }, "Next": cont }));
+                        a
+                    }
+                    None => cont.to_string(),
+                };
+                self.loops.push((site, after.clone()));
+                let entry = self.block(body, &next);
+                self.loops.pop();
+                let mut start = Map::new();
+                start.insert(items.clone(), arg_value(list));
+                start.insert(counter.clone(), json!(0));
+                if result.is_some() {
+                    start.insert(out.clone(), json!([]));
+                }
+                self.states.insert(init.clone(), json!({ "Type": "Pass", "Comment": format!("line {}: the list, at most {max} items", s.line), "Assign": start, "Next": bound }));
+                let too_many = self.failing(
+                    &format!("{} too many items", s.line),
+                    None,
+                    json!("Dandori.TooManyItems"),
+                    Some(json!(format!("line {}: the list has more than {max} items", s.line))),
+                    false,
+                );
+                self.states.insert(bound.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count(${items}) > {max} %}}"), "Next": too_many } ], "Default": head }));
+                self.states.insert(head.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% ${counter} < $count(${items}) %}}"), "Next": take } ], "Default": after }));
+                self.states.insert(take.clone(), json!({ "Type": "Pass", "Assign": { asl_var(var): format!("{{% ${items}[${counter}] %}}") }, "Next": entry }));
+                let mut step = Map::new();
+                step.insert(counter.clone(), json!(format!("{{% ${counter} + 1 %}}")));
+                if let Some((_, y)) = result {
+                    step.insert(out.clone(), json!(format!("{{% $append(${out}, {}) %}}", render::jsonata_one(&jsonata_expr(y), &y.ty()))));
+                }
+                self.states.insert(next.clone(), json!({ "Type": "Pass", "Assign": step, "Next": head }));
+                init
+            }
+            TK::For { var, list, max, parallel: Some(k), body, result, locals } => self.map(s, var, list, *max, *k, body, result.as_ref(), locals, cont),
             TK::Match { expr, arms } => {
-                let n = self.name(&format!("{} match {}", s.line, show_expr(expr)));
-                let bad = self.name(&format!("{} no arm", s.line));
+                let n = self.name(&format!("{} match {}", s.line, expr.show()));
                 let x = jsonata_expr(expr);
                 let mut choices = Vec::new();
                 for a in arms {
-                    let entry = self.block(&a.body, cont);
+                    let mut entry = self.block(&a.body, cont);
                     let mut parts = Vec::new();
                     if a.none {
-                        if let TExpr::Var { name, .. } = expr {
-                            parts.push(format!("${} = null", asl_var(name)));
+                        match expr {
+                            TExpr::Var { name, .. } if m_is_case(self.m, name) => parts.push(format!("${} = null", asl_var(name))),
+                            _ => parts.push(format!("({x}) = null")),
                         }
                     }
+                    if let Some(v) = &a.some {
+                        parts.push(format!("({x}) != null"));
+                        let bind = self.name(&format!("{} some {v}", a.line));
+                        self.states.insert(bind.clone(), json!({ "Type": "Pass", "Assign": { asl_var(v): format!("{{% {x} %}}") }, "Next": entry }));
+                        entry = bind;
+                    }
                     if !a.values.is_empty() {
-                        if expr.ty() == Ty::Bool {
+                        if expr.ty().inner() == &Ty::Bool {
                             for v in &a.values {
                                 parts.push(format!("{x} = {v}"));
                             }
@@ -283,12 +400,122 @@ impl<'a> Gen<'a> {
                     let cond = parts.join(" or ");
                     choices.push(json!({ "Condition": format!("{{% {cond} %}}"), "Next": entry }));
                 }
+                let bad = self.failing(
+                    &format!("{} no arm", s.line),
+                    None,
+                    json!("Dandori.UnexpectedValue"),
+                    Some(json!(format!("line {}: {} took a value that no arm names", s.line, expr.show()))),
+                    false,
+                );
                 self.states.insert(n.clone(), json!({ "Type": "Choice", "Comment": format!("line {}", s.line), "Choices": choices, "Default": bad }));
-                self.states.insert(bad, json!({ "Type": "Fail", "Error": "Dandori.UnexpectedValue", "Cause": format!("line {}: {} took a value that no arm names", s.line, show_expr(expr)) }));
                 n
             }
             TK::Call { target, callee, args, handlers } => self.call(s, target.as_ref(), callee, args, handlers, cont),
         }
+    }
+
+    /// `for … in parallel`: a Map whose rounds end with `{"ok": <what they yield>}` or
+    /// `{"fail": {"Error", "Cause", "task"}}`; after it, the first failure decides.
+    #[allow(clippy::too_many_arguments)]
+    fn map(&mut self, s: &TStmt, var: &str, list: &TExpr, max: u32, k: u32, body: &[TStmt], result: Option<&(String, TExpr)>, locals: &[String], cont: &str) -> String {
+        let site = s.site;
+        let rounds = format!("dd_par_{site}");
+        let first = format!("dd_first_{site}");
+        let name = self.name(&format!("{} for {var} in parallel", s.line));
+        let bound = self.name(&format!("{} for {var} bound", s.line));
+
+        // the rounds, in a scope of their own
+        let outer_states = std::mem::take(&mut self.states);
+        let outer_round = self.round_failed.take();
+        let outer_loops = std::mem::take(&mut self.loops);
+        let failed = self.name(&format!("{} round failed", s.line));
+        let finished = self.name(&format!("{} round done", s.line));
+        self.states.insert(failed.clone(), json!({ "Type": "Succeed", "Comment": "the round ends with its failure" }));
+        let ok = match result {
+            Some((_, y)) => format!("{{% {{\"ok\": {}}} %}}", jsonata_expr(y)),
+            None => "{% {\"ok\": null} %}".to_string(),
+        };
+        self.states.insert(finished.clone(), json!({ "Type": "Succeed", "Output": ok }));
+        self.round_failed = Some(failed);
+        self.loops = vec![(site, finished.clone())];
+        let entry = self.block(body, &finished);
+        let begin = self.name(&format!("{} round of {var}", s.line));
+        let mut start = Map::new();
+        start.insert(asl_var(var), json!("{% $states.input.item %}"));
+        start.insert(format!("dd_loop_{site}"), json!("{% $states.input.index %}"));
+        for l in locals {
+            if l != var {
+                start.insert(asl_var(l), Value::Null);
+            }
+        }
+        self.states.insert(begin.clone(), json!({ "Type": "Pass", "Comment": "the round's own variables", "Assign": start, "Next": entry }));
+        let inner = order(&self.states, &begin);
+        self.states = outer_states;
+        self.round_failed = outer_round;
+        self.loops = outer_loops;
+
+        // after the rounds
+        let check = self.name(&format!("{} for {var} rounds", s.line));
+        let raise = self.name(&format!("{} for {var} failed", s.line));
+        let how = self.name(&format!("{} for {var} how it failed", s.line));
+        let collect = match result {
+            Some((r, y)) => {
+                let c = self.name(&format!("{} for {var} done", s.line));
+                // what the rounds yielded, in order; a `json` value that is an array stays one item
+                let all = if y.ty().inner() == &Ty::Json {
+                    format!("{{% $reduce(${rounds}, function($acc, $r) {{ $append($acc, {}) }}, []) %}}", render::jsonata_one("$r.ok", &y.ty()))
+                } else {
+                    format!("{{% $append([], ${rounds}.ok) %}}")
+                };
+                self.states.insert(c.clone(), json!({ "Type": "Pass", "Assign": { asl_var(r): all }, "Next": cont }));
+                c
+            }
+            None => cont.to_string(),
+        };
+        self.states.insert(check.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count(${rounds}[$exists(fail)]) > 0 %}}"), "Next": raise } ], "Default": collect }));
+        self.states.insert(raise.clone(), json!({ "Type": "Pass", "Comment": "the first round that failed", "Assign": { first.clone(): format!("{{% (${rounds}[$exists(fail)])[0].fail %}}") }, "Next": how }));
+        let as_task = self.rethrow(&format!("{} for {var} task error", s.line), &first, true);
+        let as_fail = self.rethrow(&format!("{} for {var} fail", s.line), &first, false);
+        self.states.insert(how.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% ${first}.task = true %}}"), "Next": as_task } ], "Default": as_fail }));
+
+        let mut st = Map::new();
+        st.insert("Type".into(), json!("Map"));
+        st.insert("Comment".into(), json!(format!("line {}: every round runs to its end", s.line)));
+        st.insert("Items".into(), arg_value(list));
+        st.insert("ItemSelector".into(), json!({ "item": "{% $states.context.Map.Item.Value %}", "index": "{% $states.context.Map.Item.Index %}" }));
+        st.insert("MaxConcurrency".into(), json!(k));
+        st.insert("ItemProcessor".into(), json!({ "ProcessorConfig": { "Mode": "INLINE" }, "StartAt": begin, "States": Value::Object(inner) }));
+        st.insert("Assign".into(), json!({ rounds.clone(): "{% $states.result %}" }));
+        st.insert("Next".into(), json!(check));
+        self.states.insert(name.clone(), Value::Object(st));
+        let too_many = self.failing(&format!("{} too many items", s.line), None, json!("Dandori.TooManyItems"), Some(json!(format!("line {}: the list has more than {max} items", s.line))), false);
+        self.states.insert(bound.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $count({}) > {max} %}}", jsonata_expr(list)) , "Next": too_many } ], "Default": name }));
+        bound
+    }
+
+    /// Fail again as a parallel round did (`first` holds how): a task's error goes to
+    /// `on failure`; inside another round, the round ends with the same failure.
+    fn rethrow(&mut self, base: &str, first: &str, task: bool) -> String {
+        if let Some(end) = self.round_failed.clone() {
+            let n = self.name(base);
+            self.states.insert(n.clone(), json!({ "Type": "Pass", "Output": format!("{{% {{\"fail\": ${first}}} %}}"), "Next": end }));
+            return n;
+        }
+        if task && !self.in_on_failure {
+            if let Some(f) = self.failure_entry.clone() {
+                let n = self.name(base);
+                self.states.insert(n.clone(), json!({ "Type": "Pass", "Assign": { "dd_error": format!("{{% {{\"Error\": ${first}.Error, \"Cause\": ${first}.Cause}} %}}") }, "Next": f }));
+                return n;
+            }
+        }
+        // a Fail's cause is a string or nothing
+        let n = self.name(base);
+        let with = self.name(&format!("{base} with cause"));
+        let without = self.name(&format!("{base} without cause"));
+        self.states.insert(with.clone(), json!({ "Type": "Fail", "Error": format!("{{% ${first}.Error %}}"), "Cause": format!("{{% ${first}.Cause %}}") }));
+        self.states.insert(without.clone(), json!({ "Type": "Fail", "Error": format!("{{% ${first}.Error %}}") }));
+        self.states.insert(n.clone(), json!({ "Type": "Choice", "Choices": [ { "Condition": format!("{{% $type(${first}.Cause) = \"string\" %}}"), "Next": with } ], "Default": without }));
+        n
     }
 
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, args: &[(String, TExpr)], handlers: &[THandler], cont: &str) -> String {
@@ -304,7 +531,6 @@ impl<'a> Gen<'a> {
         };
         let task_name = self.name(&format!("{} {} {}", s.line, cname, var));
         let check = self.name(&format!("{} check {}", s.line, cname));
-        let bad = self.name(&format!("{} bad answer from {}", s.line, cname));
 
         // the request
         let mut payload = Map::new();
@@ -323,8 +549,8 @@ impl<'a> Gen<'a> {
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
                 let retry = task.retry.as_ref().map(|r| retriers(m, callee, task, r));
-                match task.binding.as_ref().unwrap() {
-                    Binding::Lambda(f) => {
+                match task.via(Platform::StepFunctions).expect("build refuses a task Step Functions cannot call") {
+                    Via::Lambda(f) => {
                         if task.key {
                             payload.insert("idempotency_key".into(), json!(self.key_expr(s.site)));
                         }
@@ -335,7 +561,23 @@ impl<'a> Gen<'a> {
                             ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), task.timeout, retry)
                         }
                     }
-                    Binding::Http { method, url, form } => {
+                    Via::Aws { service, action } => {
+                        if let (true, Some(p)) = (task.key, &task.key_param) {
+                            payload.insert(p.clone(), json!(self.key_expr(s.site)));
+                        }
+                        if task.callback {
+                            // the token goes in the message; whoever reads it answers with SendTaskSuccess
+                            let body = args.iter().find(|(a, _)| a == "MessageBody").map(|(_, e)| jsonata_expr(e)).unwrap_or_else(|| "{}".into());
+                            payload.insert("MessageBody".into(), json!(format!("{{% $merge([{body}, {{\"task_token\": $states.context.Task.Token}}]) %}}")));
+                            (format!("arn:aws:states:::{service}:{action}.waitForTaskToken"), Value::Object(payload), "$states.result".to_string(), task.timeout, retry)
+                        } else {
+                            (format!("arn:aws:states:::aws-sdk:{service}:{action}"), Value::Object(payload), "$states.result".to_string(), task.timeout, retry)
+                        }
+                    }
+                    Via::StateMachine(arn) => {
+                        ("arn:aws:states:::states:startExecution.sync:2".to_string(), json!({ "StateMachineArn": arn, "Input": payload }), "$states.result.Output".to_string(), task.timeout, retry)
+                    }
+                    Via::Http { method, url, form } => {
                         let used = crate::lower::placeholders(url);
                         let mut rest = Map::new();
                         for (a, e) in args {
@@ -348,7 +590,7 @@ impl<'a> Gen<'a> {
                         w.insert("Method".into(), json!(method));
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
                         let mut headers = Map::new();
-                        if *form {
+                        if form {
                             headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
                         }
                         if task.key {
@@ -361,11 +603,12 @@ impl<'a> Gen<'a> {
                             let place = if method == "GET" || method == "DELETE" { "QueryParameters" } else { "RequestBody" };
                             w.insert(place.into(), Value::Object(rest));
                         }
-                        if *form {
+                        if form {
                             w.insert("Transform".into(), json!({ "RequestBodyEncoding": "URL_ENCODED" }));
                         }
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), "$states.result.ResponseBody".to_string(), task.timeout, retry)
                     }
+                    Via::Workflow(_) | Via::DurableFunction(_) | Via::Own => unreachable!("not a way Step Functions calls"),
                 }
             }
         };
@@ -403,9 +646,17 @@ impl<'a> Gen<'a> {
             }
             catches.push(json!({ "ErrorEquals": errs, "Next": entry }));
         }
-        if !catches_all && !self.in_on_failure {
-            if let Some(f) = &self.failure_entry {
-                catches.push(json!({ "ErrorEquals": ["States.ALL"], "Assign": { "dd_error": "{% $states.errorOutput %}" }, "Next": f }));
+        if !catches_all {
+            if let Some(end) = self.round_failed.clone() {
+                catches.push(json!({
+                    "ErrorEquals": ["States.ALL"],
+                    "Output": "{% {\"fail\": {\"Error\": $states.errorOutput.Error, \"Cause\": $states.errorOutput.Cause, \"task\": true}} %}",
+                    "Next": end
+                }));
+            } else if !self.in_on_failure {
+                if let Some(f) = &self.failure_entry {
+                    catches.push(json!({ "ErrorEquals": ["States.ALL"], "Assign": { "dd_error": "{% $states.errorOutput %}" }, "Next": f }));
+                }
             }
         }
         if !catches.is_empty() {
@@ -413,17 +664,20 @@ impl<'a> Gen<'a> {
         }
 
         // the answer: its declared type, and for a case the states it may carry
-        if var.is_empty() {
-            st.insert("Next".into(), json!(cont));
-            self.states.insert(task_name.clone(), Value::Object(st));
-            return task_name;
-        }
-        st.insert("Next".into(), json!(check.clone()));
-        self.states.insert(task_name.clone(), Value::Object(st));
         let ty = match callee {
             Callee::Task(t) => m.tasks[*t].result.clone(),
-            Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
+            Callee::Rule(r) => Some(Ty::Record(m.rules[*r].outputs)),
         };
+        let ty = match (var.is_empty(), ty) {
+            (false, Some(t)) => t,
+            _ => {
+                st.insert("Next".into(), json!(cont));
+                self.states.insert(task_name.clone(), Value::Object(st));
+                return task_name;
+            }
+        };
+        st.insert("Next".into(), json!(check.clone()));
+        self.states.insert(task_name.clone(), Value::Object(st));
         let x = format!("${}", asl_var(&var));
         let typed = jsonata_check(m, &x, &ty, 0);
         let mut choices = Vec::new();
@@ -431,19 +685,31 @@ impl<'a> Gen<'a> {
             (Some(Target::Case(c)), Some((_, allowed))) => {
                 let field = jsonata_path(&var, &[m.cases[*c].state_field.clone()]);
                 choices.push(json!({ "Condition": format!("{{% {typed} and {field} in {} %}}", jsonata_list(allowed)), "Next": cont }));
-                let unexpected = self.name(&format!("{} unexpected state from {}", s.line, cname));
-                choices.push(json!({ "Condition": format!("{{% {typed} %}}"), "Next": unexpected.clone() }));
-                self.states.insert(
-                    unexpected,
-                    json!({ "Type": "Fail", "Error": "Dandori.UnexpectedState", "Cause": format!("line {}: {} answered with a state the machine does not lead to here (expected one of {})", s.line, cname, allowed.join(", ")) }),
+                let unexpected = self.failing(
+                    &format!("{} unexpected state from {}", s.line, cname),
+                    None,
+                    json!("Dandori.UnexpectedState"),
+                    Some(json!(format!("line {}: {} answered with a state the machine does not lead to here (expected one of {})", s.line, cname, allowed.join(", ")))),
+                    false,
                 );
+                choices.push(json!({ "Condition": format!("{{% {typed} %}}"), "Next": unexpected }));
             }
             _ => choices.push(json!({ "Condition": format!("{{% {typed} %}}"), "Next": cont })),
         }
-        self.states.insert(check.clone(), json!({ "Type": "Choice", "Choices": choices, "Default": bad.clone() }));
-        self.states.insert(bad, json!({ "Type": "Fail", "Error": "Dandori.BadResponse", "Cause": format!("line {}: the answer from {} does not have the declared shape", s.line, cname) }));
+        let bad = self.failing(
+            &format!("{} bad answer from {}", s.line, cname),
+            None,
+            json!("Dandori.BadResponse"),
+            Some(json!(format!("line {}: the answer from {} does not have the declared shape", s.line, cname))),
+            false,
+        );
+        self.states.insert(check.clone(), json!({ "Type": "Choice", "Choices": choices, "Default": bad }));
         task_name
     }
+}
+
+fn m_is_case(m: &Model, name: &str) -> bool {
+    m.case_index(name).is_some()
 }
 
 /// `retry` as ASL retriers. Without `on`, a task is retried on failures and timeouts but
@@ -454,9 +720,9 @@ pub fn retriers(m: &Model, callee: &Callee, task: &TaskDef, r: &Retry) -> Value 
     let mut out = Vec::new();
     if on.iter().any(|x| x == "failure") {
         let mut stop: Vec<String> = Vec::new();
-        for (e, _) in &task.errors {
-            if !on.contains(e) {
-                stop.extend(render::asl_error(m, callee, &HErr::Declared(e.clone())));
+        for e in &task.errors {
+            if !on.contains(&e.name) {
+                stop.extend(render::asl_error(m, callee, &HErr::Declared(e.name.clone())));
             }
         }
         if !on.iter().any(|x| x == "timeout") {
@@ -495,9 +761,9 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
         }
         let p = &rest[i + 1..j];
         match args.iter().find(|(a, _)| a == p) {
-            Some((_, e)) => parts.push(match e {
-                TExpr::Var { .. } => jsonata_expr(e),
-                other => jsonata_string(&render::value_text(&literal(other).unwrap())),
+            Some((_, e)) => parts.push(match render::literal(e) {
+                Some(v) => jsonata_string(&render::value_text(&v)),
+                None => jsonata_expr(e),
             }),
             None => parts.push(jsonata_string("")),
         }
@@ -507,16 +773,6 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
         parts.push(jsonata_string(rest));
     }
     json!(format!("{{% {} %}}", parts.join(" & ")))
-}
-
-fn show_expr(e: &TExpr) -> String {
-    match e {
-        TExpr::Var { name, fields, .. } => std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join("."),
-        TExpr::Str(s) => s.clone(),
-        TExpr::Int(n) => n.to_string(),
-        TExpr::Bool(b) => b.to_string(),
-        TExpr::Enum(v, _) => v.clone(),
-    }
 }
 
 /// The handler of the Lambda function that answers for a rule: JSON in, the call of the

@@ -5,16 +5,22 @@
 //!
 //! Temporal:
 //! - `types.ts`: the records and enums, and a check for each (`is_<Type>`)
-//! - `activities.ts`: the interface of the tasks, which you implement
+//! - `activities.ts`: the tasks' interface; the tasks that say `lambda`, `http` or `aws`
+//!   are written there, the others (`OwnTasks`) are yours
+//! - `io.ts`: how those tasks reach Lambda, HTTP and the AWS APIs (a `Transport`)
 //! - `rules.ts`: the rules as activities, around the TypeScript rulec generates
-//! - `runtime.ts`: what the workflow code shares — retries, error kinds, keys
+//! - `runtime.ts`: what the workflow code shares — retries, error kinds, keys, callbacks
 //! - `workflow.ts`: the workflow
 //!
-//! It means what the state machine means: a task is tried once by Temporal and retried by
-//! the workflow's own code with the same retriers the ASL has, so that the two platforms
+//! Lambda durable functions: `types.ts`, `tasks.ts` (as `activities.ts`), `io.ts`,
+//! `runtime.ts`, `workflow.ts` with `makeHandler`, and the Lambda functions of the rules.
+//!
+//! It means what the state machine means: a task is tried once by the platform and retried
+//! by the workflow's own code with the same retriers the ASL has, so that the platforms
 //! retry the same errors the same number of times; an answer is checked against its type
 //! and, for a case, against the states the checker said it can be in; `on failure` runs for
-//! the errors of tasks that nothing handled, and not for `fail` or a failed check.
+//! the errors of tasks that nothing handled, and not for `fail` or a failed check. A task
+//! that the platform calls by Lambda, HTTP or an AWS API sends what Step Functions sends.
 
 use crate::diag::Diag;
 use crate::model::*;
@@ -26,6 +32,15 @@ use std::collections::BTreeSet;
 pub enum Flavor {
     Temporal,
     Durable,
+}
+
+impl Flavor {
+    fn platform(self) -> Platform {
+        match self {
+            Flavor::Temporal => Platform::Temporal,
+            Flavor::Durable => Platform::Durable,
+        }
+    }
 }
 
 const TS_GLOBALS: &[&str] = &[
@@ -46,6 +61,7 @@ fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
 
+/// The TypeScript type of `t`, as the workflow and the tasks' files name it (`T.` for types.ts).
 fn ts_type(m: &Model, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "number".into(),
@@ -53,12 +69,15 @@ fn ts_type(m: &Model, t: &Ty) -> String {
         Ty::Bool => "boolean".into(),
         Ty::Enum(e) => format!("T.{}", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("T.{}", type_name(&m.records[*r].name)),
+        Ty::List(t) => format!("Array<{}>", ts_type(m, t)),
+        Ty::Opt(t) => format!("{} | null", ts_type(m, t)),
+        Ty::Json => "unknown".into(),
     }
 }
 
 /// A check that `x` is a well-formed value of `t`, as TypeScript. `p` is how the code
 /// reaches types.ts: "" inside it, "T." from the workflow.
-fn ts_check(m: &Model, x: &str, t: &Ty, p: &str) -> String {
+fn ts_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => format!("Number.isInteger({x})"),
         Ty::Str => format!("typeof {x} === \"string\""),
@@ -66,6 +85,12 @@ fn ts_check(m: &Model, x: &str, t: &Ty, p: &str) -> String {
         Ty::Bool => format!("typeof {x} === \"boolean\""),
         Ty::Enum(e) => format!("{p}{}_values.includes({x})", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
+        Ty::List(inner) => {
+            let v = format!("dd_v{depth}");
+            format!("(Array.isArray({x}) && {x}.every(({v}: unknown) => {}))", ts_check(m, &v, inner, p, depth + 1))
+        }
+        Ty::Opt(inner) => format!("({x} === undefined || {x} === null || {})", ts_check(m, x, inner, p, depth)),
+        Ty::Json => format!("({x} !== undefined)"),
     }
 }
 
@@ -84,6 +109,7 @@ fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
                     }
                 }
             }
+            Ty::List(t) | Ty::Opt(t) => visit(m, t, enums, recs),
             _ => {}
         }
     }
@@ -91,7 +117,9 @@ fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
         visit(m, t, &mut enums, &mut recs);
     }
     for t in &m.tasks {
-        visit(m, &t.result, &mut enums, &mut recs);
+        if let Some(r) = &t.result {
+            visit(m, r, &mut enums, &mut recs);
+        }
         for (_, pt) in &t.params {
             visit(m, pt, &mut enums, &mut recs);
         }
@@ -110,26 +138,30 @@ fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
         }
     }
     for s in m.all_stmts() {
-        if let TK::Call { args, .. } = &s.kind {
-            for (_, e) in args {
-                visit(m, &e.ty(), &mut enums, &mut recs);
+        let mut see = |e: &TExpr| {
+            let mut stack = vec![e.clone()];
+            while let Some(x) = stack.pop() {
+                visit(m, &x.ty(), &mut enums, &mut recs);
+                match x {
+                    TExpr::Record { fields, .. } => stack.extend(fields.into_iter().map(|(_, v)| v)),
+                    TExpr::List { items, .. } => stack.extend(items),
+                    _ => {}
+                }
             }
+        };
+        match &s.kind {
+            TK::Call { args, .. } => args.iter().for_each(|(_, e)| see(e)),
+            TK::Assign { expr, .. } => see(expr),
+            TK::Succeed { fields } => fields.iter().for_each(|(_, e)| see(e)),
+            _ => {}
         }
     }
     (enums, recs)
 }
 
-pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
-    build_flavor(m, Flavor::Temporal)
-}
-
-pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, Vec<Diag>> {
-    let dir = ident(&m.name);
-    let header = format!("// Code generated by dandori from {}. DO NOT EDIT.\n", m.source_file);
+fn types_file(m: &Model, header: &str) -> String {
     let (enums, recs) = used_types(m);
-
-    // types.ts
-    let mut t = header.clone();
+    let mut t = header.to_string();
     t.push_str(&format!("// The records and enums of {} v{}, and a check for each.\n\n", m.name, m.version));
     t.push_str(&format!("export const TIMESTAMP = /{}/;\n\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
     for e in &enums {
@@ -139,66 +171,278 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         t.push_str(&format!("export const {n}_values: readonly unknown[] = [{}];\n", vals.join(", ")));
         t.push_str(&format!("export type {n} = {};\n\n", vals.join(" | ")));
     }
+    let local = |m: &Model, ty: &Ty| ts_type(m, ty).replace("T.", "");
     for r in &recs {
         let rd = &m.records[*r];
         let n = type_name(&rd.name);
         t.push_str(&format!("export interface {n} {{\n"));
         for (f, ft) in &rd.fields {
-            t.push_str(&format!("  {}: {};\n", q(f), ts_type(m, ft).replace("T.", "")));
+            let opt = if matches!(ft, Ty::Opt(_)) { "?" } else { "" };
+            t.push_str(&format!("  {}{opt}: {};\n", q(f), local(m, ft)));
         }
         t.push_str("}\n\n");
         let mut conds = vec!["typeof v === \"object\"".to_string(), "v !== null".to_string()];
         for (f, ft) in &rd.fields {
-            conds.push(ts_check(m, &format!("v[{}]", q(f)), ft, ""));
+            conds.push(ts_check(m, &format!("v[{}]", q(f)), ft, "", 0));
         }
         t.push_str(&format!("export function is_{n}(v: any): v is {n} {{\n  return {};\n}}\n\n", conds.join(" &&\n    ")));
     }
     t.push_str("export interface WorkflowInput {\n");
     for (n, ty) in &m.inputs {
-        t.push_str(&format!("  {}: {};\n", q(n), ts_type(m, ty).replace("T.", "")));
+        t.push_str(&format!("  {}: {};\n", q(n), local(m, ty)));
     }
     t.push_str("}\n\n");
     let mut conds = vec!["typeof v === \"object\"".to_string(), "v !== null".to_string()];
     for (n, ty) in &m.inputs {
-        conds.push(ts_check(m, &format!("v[{}]", q(n)), ty, ""));
+        conds.push(ts_check(m, &format!("v[{}]", q(n)), ty, "", 0));
     }
     t.push_str(&format!("export function is_WorkflowInput(v: any): v is WorkflowInput {{\n  return {};\n}}\n\n", conds.join(" &&\n    ")));
     t.push_str("export interface WorkflowOutput {\n");
     for (n, ty) in &m.outputs {
-        t.push_str(&format!("  {}: {};\n", q(n), ts_type(m, ty).replace("T.", "")));
+        t.push_str(&format!("  {}: {};\n", q(n), local(m, ty)));
     }
     t.push_str("}\n");
+    t
+}
 
+pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
+    build_flavor(m, Flavor::Temporal)
+}
+
+pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, Vec<Diag>> {
+    let dir = ident(&m.name);
+    let header = format!("// Code generated by dandori from {}. DO NOT EDIT.\n", m.source_file);
+    let types_ts = types_file(m, &header);
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+    let io = format!("{header}{IO}");
     if flavor == Flavor::Durable {
-        return durable_files(m, &dir, &header, t, &called);
-    }
-
-    // activities.ts
-    let mut a = header.clone();
-    a.push_str("// The tasks the workflow calls. Implement this interface and register it with the worker.\n");
-    a.push_str("//\n");
-    a.push_str("// - A declared error is thrown as ApplicationFailure.create({ type: \"<error>\", nonRetryable: true });\n");
-    a.push_str("//   the workflow retries by itself, as its `retry` says, so Temporal's own retries are off.\n");
-    a.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
-    a.push_str("// - A `callback` task hands Context.current().info.taskToken to whoever answers later and\n");
-    a.push_str("//   throws CompleteAsyncError; the answer comes with client.activity.complete(taskToken, value).\n\n");
-    a.push_str("import type * as T from \"./types\";\n\n");
-    a.push_str("export interface Tasks {\n");
-    for task in &m.tasks {
-        let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), ts_type(m, pt))).collect();
-        if task.key {
-            params.push("\"idempotency_key\": string".into());
+        let mut errs = Vec::new();
+        for r in &called {
+            if m.rules[*r].lambda.is_none() {
+                let ru = &m.rules[*r];
+                errs.push(Diag::error(
+                    "E050",
+                    ru.line,
+                    1,
+                    format!("the rule `{}` is called, so it needs `lambda \"<function>\"` under `use rule` to be invoked", ru.name),
+                    format!("規則 `{}` は呼ばれているので、呼び出す先の `lambda \"<関数>\"` を `use rule` の下に書いてください", ru.name),
+                ));
+            }
         }
-        a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), params.join("; "), ts_type(m, &task.result)));
+        for t in &m.tasks {
+            if t.durable_function.is_some() && t.timeout.is_some() {
+                errs.push(Diag::error(
+                    "E050",
+                    t.line,
+                    1,
+                    format!("a durable function invoked by `{}` cannot be timed out by the invoke; leave out `timeout` and let the function end itself", t.name),
+                    format!("`{}` が呼ぶ durable function は、呼ぶ側からはタイムアウトさせられません。`timeout` を外し、呼ばれる関数の側で終わらせてください", t.name),
+                ));
+            }
+        }
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into() };
+        let wf = g.workflow(&header, !called.is_empty());
+        let mut files = vec![
+            (format!("{dir}/types.ts"), types_ts),
+            (format!("{dir}/tasks.ts"), tasks_file(m, flavor, &header)),
+            (format!("{dir}/io.ts"), io),
+            (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}")),
+            (format!("{dir}/workflow.ts"), wf),
+        ];
+        for r in &called {
+            let (name, text) = crate::asl::lambda_handler(m, *r);
+            files.push((format!("{dir}/{name}"), text));
+        }
+        return Ok(files);
     }
-    a.push_str("}\n");
+    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new() };
+    let wf = g.workflow(&header, !called.is_empty());
+    let mut files = vec![
+        (format!("{dir}/types.ts"), types_ts),
+        (format!("{dir}/activities.ts"), tasks_file(m, flavor, &header)),
+        (format!("{dir}/io.ts"), io),
+        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}")),
+        (format!("{dir}/workflow.ts"), wf),
+    ];
+    if !called.is_empty() {
+        files.push((format!("{dir}/rules.ts"), rules_file(m, &header, &called)));
+    }
+    Ok(files)
+}
 
-    // rules.ts
-    let mut rules_ts = header.clone();
+/// The parameters a task's code gets: its own, the key, and a callback's id.
+fn task_params(m: &Model, task: &TaskDef) -> Vec<String> {
+    let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), ts_type(m, pt))).collect();
+    if task.key {
+        params.push("\"idempotency_key\": string".into());
+    }
+    if task.callback {
+        params.push("\"callback_id\": string".into());
+    }
+    params
+}
+
+fn task_result(m: &Model, task: &TaskDef) -> String {
+    if task.callback {
+        return "void".into();
+    }
+    match &task.result {
+        Some(t) => ts_type(m, t),
+        None => "unknown".into(),
+    }
+}
+
+/// activities.ts (Temporal) or tasks.ts (durable functions): every task the workflow calls
+/// as an activity or a step, the ones the user writes, and the code for the others.
+fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
+    let p = flavor.platform();
+    let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p)).collect();
+    let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
+    let mut a = header.to_string();
+    let (made, register) = match flavor {
+        Flavor::Temporal => ("makeActivities", "the activities to register with the worker"),
+        Flavor::Durable => ("makeTasks", "what the handler calls, each in a step of its own"),
+    };
+    a.push_str("// The tasks the workflow calls.\n//\n");
+    a.push_str("// - A task that says `lambda`, `http` or `aws` is written here: it sends what Step Functions\n");
+    a.push_str("//   would send, through a Transport (io.ts), where the credentials and the clients are yours to set.\n");
+    a.push_str("// - The others are yours to write (OwnTasks). ");
+    match flavor {
+        Flavor::Temporal => a.push_str("A declared error is thrown as\n//   ApplicationFailure.create({ type: \"<error>\", nonRetryable: true }).\n"),
+        Flavor::Durable => a.push_str("A declared error is thrown as an Error whose\n//   name is the error's name: const e = new Error(\"...\"); e.name = \"card_declined\"; throw e;\n"),
+    }
+    a.push_str("// - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
+    a.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
+    match flavor {
+        Flavor::Temporal => a.push_str(
+            "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n//   as the signal `dandori.callback`, with { callback_id, ok } or { callback_id, error, message }, to the\n//   workflow `io.workflowOf(callback_id)` names.\n\n",
+        ),
+        Flavor::Durable => a.push_str(
+            "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer\n//   comes when the other side calls SendDurableExecutionCallbackSuccess with the id and the\n//   answer as JSON, or SendDurableExecutionCallbackFailure with the error's name as ErrorType.\n\n",
+        ),
+    }
+    if flavor == Flavor::Temporal {
+        a.push_str("import { ApplicationFailure } from \"@temporalio/common\";\n");
+    }
+    a.push_str("import type * as T from \"./types\";\n");
+    a.push_str("import * as io from \"./io\";\n\n");
+    a.push_str("export interface Tasks {\n");
+    for task in &tasks {
+        a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
+    }
+    a.push_str("}\n\n");
+    a.push_str("/** The tasks you write: the ones that say neither `lambda`, `http` nor `aws`. */\n");
+    a.push_str("export interface OwnTasks {\n");
+    for task in &own {
+        a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
+    }
+    a.push_str("}\n\n");
+    match flavor {
+        Flavor::Temporal => a.push_str("function fail(kind: string, message: string): never {\n  throw ApplicationFailure.create({ type: kind, message, nonRetryable: true });\n}\n\n"),
+        Flavor::Durable => a.push_str("function fail(kind: string, message: string): never {\n  const e = new Error(message);\n  e.name = kind;\n  throw e;\n}\n\n"),
+    }
+    a.push_str(&format!("/** Your tasks and the ones dandori writes: {register}. */\n"));
+    a.push_str(&format!("export function {made}(own: OwnTasks, transport: io.Transport = io.transport()): Tasks {{\n"));
+    a.push_str("  return {\n");
+    for task in &tasks {
+        let name = ident(&task.name);
+        match task.via(p) {
+            Some(Via::Own) => a.push_str(&format!("    {name}: (args) => own.{name}(args),\n")),
+            Some(Via::Lambda(f)) => {
+                let names = task.errors.iter().map(|e| format!("{}: {}", q(&e.name), q(&e.name))).collect::<Vec<_>>().join(", ");
+                if task.callback {
+                    a.push_str(&format!("    {name}: async (args) => {{\n      io.value(await transport.lambda({}, args), {}, fail);\n    }},\n", q(f), braces(&names)));
+                } else {
+                    a.push_str(&format!("    {name}: async (args) => io.value(await transport.lambda({}, args), {}, fail) as {},\n", q(f), braces(&names), task_result(m, task)));
+                }
+            }
+            Some(Via::Http { method, url, form }) => {
+                let used = crate::lower::placeholders(url);
+                let mut url_parts: Vec<String> = Vec::new();
+                let mut rest = url;
+                while let Some(i) = rest.find('{') {
+                    let j = match rest[i..].find('}') {
+                        Some(j) => i + j,
+                        None => break,
+                    };
+                    if i > 0 {
+                        url_parts.push(q(&rest[..i]));
+                    }
+                    url_parts.push(format!("String(args[{}])", q(&rest[i + 1..j])));
+                    rest = &rest[j + 1..];
+                }
+                if !rest.is_empty() || url_parts.is_empty() {
+                    url_parts.push(q(rest));
+                }
+                let mut req = vec![format!("http: {}", q(method)), format!("url: {}", url_parts.join(" + "))];
+                let mut headers = Vec::new();
+                if form {
+                    headers.push("\"Content-Type\": \"application/x-www-form-urlencoded\"".to_string());
+                }
+                if task.key {
+                    headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
+                }
+                if !headers.is_empty() {
+                    req.push(format!("headers: {{ {} }}", headers.join(", ")));
+                }
+                let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
+                if !rest_args.is_empty() {
+                    let place = if method == "GET" || method == "DELETE" { "query" } else { "body" };
+                    req.push(format!("{place}: {{ {} }}", rest_args.join(", ")));
+                }
+                if form {
+                    req.push("form: true".into());
+                }
+                let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
+                a.push_str(&format!("    {name}: async (args) => io.status(await transport.http({{ {} }}), {}, fail) as {},\n", req.join(", "), braces(&statuses), task_result(m, task)));
+            }
+            Some(Via::Aws { service, action }) => {
+                let names = task.errors.iter().map(|e| format!("{}: {}", q(e.exception.as_deref().unwrap_or(&e.name)), q(&e.name))).collect::<Vec<_>>().join(", ");
+                let mut input: Vec<String> = task
+                    .params
+                    .iter()
+                    .map(|(p, _)| {
+                        if task.callback && p == "MessageBody" {
+                            format!("{}: {{ ...(args[{}] as object), \"callback_id\": args[\"callback_id\"] }}", q(p), q(p))
+                        } else {
+                            format!("{}: args[{}]", q(p), q(p))
+                        }
+                    })
+                    .collect();
+                if let (true, Some(kp)) = (task.key, &task.key_param) {
+                    input.push(format!("{}: args[\"idempotency_key\"]", q(kp)));
+                }
+                let call = format!("transport.aws({}, {}, {{ {} }})", q(service), q(action), input.join(", "));
+                if task.callback {
+                    a.push_str(&format!("    {name}: async (args) => {{\n      io.value(await {call}, {}, fail);\n    }},\n", braces(&names)));
+                } else {
+                    a.push_str(&format!("    {name}: async (args) => io.value(await {call}, {}, fail) as {},\n", braces(&names), task_result(m, task)));
+                }
+            }
+            _ => {}
+        }
+    }
+    a.push_str("  };\n}\n");
+    a
+}
+
+/// `{ a, b }`, or `{}` when there is nothing in it.
+fn braces(inner: &str) -> String {
+    if inner.is_empty() {
+        "{}".into()
+    } else {
+        format!("{{ {inner} }}")
+    }
+}
+
+fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
+    let mut rules_ts = header.to_string();
     rules_ts.push_str("// The rules the workflow calls, as activities around the TypeScript rulec generates.\n");
     rules_ts.push_str("// `rulec gen <rule> --out rulec` writes the modules these imports read.\n\n");
-    for r in &called {
+    for r in called {
         let ts = &m.rules[*r].info.api["typescript"];
         let module = ts["module"].as_str().unwrap_or("rule").trim_end_matches(".ts").to_string();
         let mut names: BTreeSet<String> = BTreeSet::new();
@@ -212,7 +456,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.into_iter().collect::<Vec<_>>().join(", ")));
     }
     rules_ts.push_str("\nexport const rules = {\n");
-    for r in &called {
+    for r in called {
         let ru = &m.rules[*r];
         let ts = &ru.info.api["typescript"];
         let enum_aliases: Vec<String> = ts["enums"].as_array().unwrap_or(&vec![]).iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect();
@@ -254,91 +498,158 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         ));
     }
     rules_ts.push_str("};\n");
-
-    // runtime.ts
-    let runtime = format!("{header}{}", RUNTIME);
-
-    // workflow.ts
-    let mut g = Gen { m, out: String::new(), loops: vec![], flavor };
-    let wf = g.workflow(&header, !called.is_empty());
-
-    let mut files = vec![
-        (format!("{dir}/types.ts"), t),
-        (format!("{dir}/activities.ts"), a),
-        (format!("{dir}/runtime.ts"), runtime),
-        (format!("{dir}/workflow.ts"), wf),
-    ];
-    if !called.is_empty() {
-        files.push((format!("{dir}/rules.ts"), rules_ts));
-    }
-    Ok(files)
+    rules_ts
 }
 
-/// The files for Lambda durable functions: the types, the tasks' interface, the shared
-/// runtime, the handler, and for every rule it calls, the Lambda function it invokes (the
-/// same handler the Step Functions target writes).
-fn durable_files(m: &Model, dir: &str, header: &str, types_ts: String, called: &BTreeSet<usize>) -> Result<Vec<(String, String)>, Vec<Diag>> {
-    let mut errs = Vec::new();
-    for r in called {
-        if m.rules[*r].lambda.is_none() {
-            let ru = &m.rules[*r];
-            errs.push(Diag::error(
-                "E050",
-                ru.line,
-                1,
-                format!("the rule `{}` is called, so it needs `lambda \"<function>\"` under `use rule` to be invoked", ru.name),
-                format!("規則 `{}` は呼ばれているので、呼び出す先の `lambda \"<関数>\"` を `use rule` の下に書いてください", ru.name),
-            ));
-        }
-    }
-    if !errs.is_empty() {
-        return Err(errs);
-    }
-    let mut t = header.to_string();
-    t.push_str("// The tasks the workflow calls. Implement this interface and pass it to makeHandler.\n");
-    t.push_str("//\n");
-    t.push_str("// - A declared error is thrown as an Error whose name is the error's name:\n");
-    t.push_str("//   const e = new Error(\"...\"); e.name = \"card_declined\"; throw e;\n");
-    t.push_str("//   Each call runs in a step of its own, and the workflow retries by itself, as its `retry` says.\n");
-    t.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
-    t.push_str("// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer\n");
-    t.push_str("//   comes when the other side calls SendDurableExecutionCallbackSuccess with the id and the\n");
-    t.push_str("//   answer as JSON, or SendDurableExecutionCallbackFailure with the error's name as ErrorType.\n\n");
-    t.push_str("import type * as T from \"./types\";\n\n");
-    t.push_str("export interface Tasks {\n");
-    for task in &m.tasks {
-        let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), ts_type(m, pt))).collect();
-        if task.key {
-            params.push("\"idempotency_key\": string".into());
-        }
-        let result = if task.callback {
-            params.push("\"callback_id\": string".into());
-            "void".to_string()
-        } else {
-            ts_type(m, &task.result)
-        };
-        t.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), params.join("; "), result));
-    }
-    t.push_str("}\n");
-    let mut g = Gen { m, out: String::new(), loops: vec![], flavor: Flavor::Durable };
-    let wf = g.workflow(header, !called.is_empty());
-    let mut files = vec![
-        (format!("{dir}/types.ts"), types_ts),
-        (format!("{dir}/tasks.ts"), t),
-        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}")),
-        (format!("{dir}/workflow.ts"), wf),
-    ];
-    for r in called {
-        let (name, text) = crate::asl::lambda_handler(m, *r);
-        files.push((format!("{dir}/{name}"), text));
-    }
-    Ok(files)
+const IO: &str = r#"// How the tasks that say `lambda`, `http` or `aws` reach the other side. They go through a
+// Transport, so that the credentials, the clients and a test's stand-in are yours to set; the
+// default one uses fetch and the AWS SDK for JavaScript v3, loaded when first needed.
+
+/** What Lambda or an AWS API answered: the value, or an error by the name the other side gives it. */
+export type Answer = { ok: unknown } | { error: string; message: string };
+
+/** An HTTP request as Step Functions' HTTP Task sends it; `form` asks for a URL-encoded body. */
+export interface HttpRequest {
+  http: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+  form?: boolean;
 }
+
+export interface Transport {
+  /** Invoke a Lambda function; an error the function throws comes back by its type. */
+  lambda(fn: string, payload: Record<string, unknown>): Promise<Answer>;
+  /** Send an HTTP request; the answer is the status and the body (parsed when it is JSON). */
+  http(req: HttpRequest): Promise<{ status: number; body: unknown }>;
+  /** Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name. */
+  aws(service: string, action: string, input: Record<string, unknown>): Promise<Answer>;
+}
+
+export interface Options {
+  /** Headers to add to an HTTP request, such as the credentials the other side wants. */
+  headers?: (url: string) => Record<string, string> | Promise<Record<string, string>>;
+  /** The configuration of the AWS SDK clients, such as the region. */
+  aws?: Record<string, unknown>;
+}
+
+/** The package and the client of the AWS SDK for each service the default transport knows. */
+const CLIENTS: Record<string, [string, string]> = {
+  bedrockruntime: ["@aws-sdk/client-bedrock-runtime", "BedrockRuntime"],
+  dynamodb: ["@aws-sdk/client-dynamodb", "DynamoDB"],
+  ecs: ["@aws-sdk/client-ecs", "ECS"],
+  eventbridge: ["@aws-sdk/client-eventbridge", "EventBridge"],
+  kinesis: ["@aws-sdk/client-kinesis", "Kinesis"],
+  lambda: ["@aws-sdk/client-lambda", "Lambda"],
+  s3: ["@aws-sdk/client-s3", "S3"],
+  secretsmanager: ["@aws-sdk/client-secrets-manager", "SecretsManager"],
+  sesv2: ["@aws-sdk/client-sesv2", "SESv2"],
+  sfn: ["@aws-sdk/client-sfn", "SFN"],
+  sns: ["@aws-sdk/client-sns", "SNS"],
+  sqs: ["@aws-sdk/client-sqs", "SQS"],
+  ssm: ["@aws-sdk/client-ssm", "SSM"],
+};
+
+/** `a=1&b[c]=2`, the way a URL-encoded body nests. */
+function encode(o: Record<string, unknown>, prefix = ""): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(o)) {
+    const key = prefix ? `${prefix}[${k}]` : k;
+    if (v === undefined) continue;
+    if (v !== null && typeof v === "object") parts.push(encode(v as Record<string, unknown>, key));
+    else parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v === null ? "" : String(v))}`);
+  }
+  return parts.filter((p) => p !== "").join("&");
+}
+
+export function transport(options: Options = {}): Transport {
+  const clients = new Map<string, any>();
+  async function client(service: string): Promise<any> {
+    const known = CLIENTS[service];
+    if (!known) throw new Error(`the default transport does not know the AWS SDK client for "${service}"; pass a Transport whose aws() calls it`);
+    let c = clients.get(service);
+    if (!c) {
+      const mod: any = await import(known[0]);
+      c = new mod[known[1]](options.aws ?? {});
+      clients.set(service, c);
+    }
+    return c;
+  }
+  return {
+    async lambda(fn, payload) {
+      const c = await client("lambda");
+      const out = await c.invoke({ FunctionName: fn, Payload: new TextEncoder().encode(JSON.stringify(payload)) });
+      const text = out.Payload ? new TextDecoder().decode(out.Payload) : "";
+      const body = text ? JSON.parse(text) : null;
+      if (out.FunctionError) return { error: String(body?.errorType ?? out.FunctionError), message: String(body?.errorMessage ?? "") };
+      return { ok: body };
+    },
+    async http(req) {
+      let url = req.url;
+      if (req.query) url += (url.includes("?") ? "&" : "?") + encode(req.query);
+      const headers: Record<string, string> = { ...(req.headers ?? {}), ...(options.headers ? await options.headers(req.url) : {}) };
+      let body: string | undefined;
+      if (req.body !== undefined) {
+        if (req.form) body = encode(req.body);
+        else {
+          body = JSON.stringify(req.body);
+          if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+        }
+      }
+      const res = await fetch(url, { method: req.http, headers, body });
+      const text = await res.text();
+      let parsed: unknown = text;
+      if ((res.headers.get("content-type") ?? "").includes("json")) {
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = text;
+        }
+      }
+      return { status: res.status, body: parsed };
+    },
+    async aws(service, action, input) {
+      const c = await client(service);
+      let args = input;
+      // SQS takes the message as text; Step Functions writes a JSON body out the same way
+      if (service === "sqs" && action === "sendMessage" && typeof input.MessageBody === "object") args = { ...input, MessageBody: JSON.stringify(input.MessageBody) };
+      try {
+        const out = await c[action](args);
+        const { $metadata, ...rest } = out ?? {};
+        return { ok: rest };
+      } catch (e: any) {
+        if (e && e.$metadata && typeof e.name === "string") return { error: e.name, message: String(e.message ?? "") };
+        throw e;
+      }
+    },
+  };
+}
+
+/** Temporal: the workflow a callback's answer goes to, from the id the callback task was given. */
+export function workflowOf(callbackId: string): string {
+  return JSON.parse(callbackId)[0];
+}
+
+/** The value of an answer, or the declared error it names (`names`: the other side's name → the error). */
+export function value(a: Answer, names: Record<string, string>, fail: (kind: string, message: string) => never): unknown {
+  if ("ok" in a) return a.ok;
+  const kind = names[a.error];
+  return fail(kind ?? `Dandori.Failure.${a.error}`, a.message);
+}
+
+/** The body of a 2xx answer, or the declared error its status names. */
+export function status(r: { status: number; body: unknown }, names: Record<string, string>, fail: (kind: string, message: string) => never): unknown {
+  if (r.status >= 200 && r.status < 300) return r.body;
+  const kind = names[String(r.status)];
+  return fail(kind ?? `Dandori.HttpStatus.${r.status}`, typeof r.body === "string" ? r.body : JSON.stringify(r.body));
+}
+"#;
 
 const RUNTIME_DURABLE: &str = r#"// What the generated handler shares. The code outside the steps runs again on every replay,
 // so it reads nothing that can change between runs: the clock is read in a step.
 
-import { CallbackTimeoutError, type DurableContext } from "@aws/durable-execution-sdk-js";
+import { CallbackTimeoutError, DurableOperationError, InvokeError, type DurableContext } from "@aws/durable-execution-sdk-js";
 
 /** A task that failed after its retries, with the kind of error the `.flow` names it by. */
 export class TaskError extends Error {
@@ -347,6 +658,20 @@ export class TaskError extends Error {
     super(message);
     this.kind = kind;
     this.name = "TaskError";
+  }
+}
+
+/**
+ * A deliberate end of the workflow as failed. Its name is the error's; the error's name is
+ * also in ErrorData as { "error": … }, so that a durable function that invoked this one can
+ * tell which error it was.
+ */
+export class Failure extends DurableOperationError {
+  errorType: string;
+  constructor(error: string, cause: string) {
+    super(cause, undefined, JSON.stringify({ error }));
+    this.errorType = error;
+    this.name = error;
   }
 }
 
@@ -364,6 +689,16 @@ export const noRetry = () => ({ shouldRetry: false });
 /** The kind of an error from a step, an invoke or a callback: a declared error, "timeout", or "failure". */
 export function kindOf(e: unknown, declared: readonly string[]): string {
   if (e instanceof CallbackTimeoutError) return "timeout";
+  if (e instanceof InvokeError) {
+    // the invoked function's error comes by its ErrorData: { "error": … }
+    try {
+      const d = JSON.parse(e.errorData ?? "null");
+      if (d && typeof d.error === "string" && declared.includes(d.error)) return d.error;
+    } catch {
+      // not a dandori failure
+    }
+    return "failure";
+  }
   const cause = (e as { cause?: { name?: unknown } } | null)?.cause;
   const name = cause && typeof cause.name === "string" ? cause.name : e instanceof Error ? e.name : "";
   if (name === "Dandori.Timeout") return "timeout";
@@ -430,11 +765,31 @@ export function key(context: DurableContext, site: number, rounds: readonly numb
   return [context.executionContext.durableExecutionArn, String(site), ...rounds.map(String)].join("/");
 }
 
+/** How many rounds of `for … in parallel` run at a time: all, when the `.flow` does not say. */
+export function atATime(k: number): number | undefined {
+  return k > 0 ? k : undefined;
+}
+
+/** A parallel round's end, as a value the checkpoint can keep: what it yields, or how it failed. */
+export type Round<R> = { ok: R } | { fail: { task: boolean; kind: string; message: string } };
+
+export function envelope(e: unknown): Round<never> {
+  if (e instanceof TaskError) return { fail: { task: true, kind: e.kind, message: e.message } };
+  if (e instanceof Error) return { fail: { task: false, kind: e.name, message: e.message } };
+  return { fail: { task: false, kind: "Error", message: String(e) } };
+}
+
+/** What every round yields, in the list's order; or, when a round failed, the first such failure again. */
+export function settle<R>(rounds: readonly Round<R>[]): R[] {
+  for (const r of rounds) {
+    if ("fail" in r) throw r.fail.task ? new TaskError(r.fail.kind, r.fail.message) : fail(r.fail.kind, r.fail.message);
+  }
+  return rounds.map((r) => (r as { ok: R }).ok);
+}
+
 /** A deliberate end of the workflow as failed. */
 export function fail(error: string, cause: string | null): Error {
-  const e = new Error(cause ?? "");
-  e.name = error;
-  return e;
+  return new Failure(error, cause ?? "");
 }
 
 /** A task's error that nothing handled ends the workflow with the error's kind. */
@@ -446,16 +801,43 @@ export function asFailure(e: unknown): unknown {
 const RUNTIME: &str = r#"// What the generated workflow code shares. It runs inside the workflow, so it uses nothing
 // but @temporalio/workflow.
 
-import { ActivityFailure, ApplicationFailure, TimeoutFailure, sleep, workflowInfo } from "@temporalio/workflow";
+import {
+  ActivityFailure,
+  ApplicationFailure,
+  ChildWorkflowFailure,
+  TimeoutFailure,
+  condition,
+  defineSignal,
+  setHandler,
+  sleep,
+  workflowInfo,
+} from "@temporalio/workflow";
 
 /** A task that failed after its retries, with the kind of error the `.flow` names it by. */
 export class TaskError extends Error {
-  constructor(
-    public readonly kind: string,
-    message: string,
-  ) {
+  readonly kind: string;
+  constructor(kind: string, message: string) {
     super(message);
+    this.kind = kind;
     this.name = "TaskError";
+  }
+}
+
+/** A callback that got no answer in time. */
+export class CallbackTimeout extends Error {
+  constructor() {
+    super("no answer in time");
+    this.name = "CallbackTimeout";
+  }
+}
+
+/** A callback answered with an error. */
+export class CallbackError extends Error {
+  readonly kind: string;
+  constructor(kind: string, message: string) {
+    super(message);
+    this.kind = kind;
+    this.name = "CallbackError";
   }
 }
 
@@ -467,9 +849,11 @@ export interface Retrier {
   backoff: number;
 }
 
-/** The kind of an error from an activity: a declared error, "timeout", or "failure". */
+/** The kind of an error from an activity, a child workflow or a callback: a declared error, "timeout", or "failure". */
 export function kindOf(e: unknown, declared: readonly string[]): string {
-  if (e instanceof ActivityFailure) {
+  if (e instanceof CallbackTimeout) return "timeout";
+  if (e instanceof CallbackError) return declared.includes(e.kind) ? e.kind : "failure";
+  if (e instanceof ActivityFailure || e instanceof ChildWorkflowFailure) {
     const c = e.cause;
     if (c instanceof TimeoutFailure) return "timeout";
     if (c instanceof ApplicationFailure && c.type && declared.includes(c.type)) return c.type;
@@ -478,7 +862,7 @@ export function kindOf(e: unknown, declared: readonly string[]): string {
 }
 
 function messageOf(e: unknown): string {
-  if (e instanceof ActivityFailure && e.cause) return e.cause.message;
+  if ((e instanceof ActivityFailure || e instanceof ChildWorkflowFailure) && e.cause) return e.cause.message;
   return e instanceof Error ? e.message : String(e);
 }
 
@@ -512,6 +896,78 @@ export function key(site: number, rounds: readonly number[]): string {
   return [workflowInfo().workflowId, String(site), ...rounds.map(String)].join("/");
 }
 
+/** The workflow id of a child workflow: this workflow's, the call's place, the rounds, and the try. */
+export function childId(site: number, rounds: readonly number[], n: number): string {
+  return [workflowInfo().workflowId, String(site), ...rounds.map(String), String(n)].join("/");
+}
+
+/** A callback's answer, as the signal brings it. */
+export interface CallbackAnswer {
+  callback_id: string;
+  ok?: unknown;
+  error?: string;
+  message?: string;
+}
+
+/** The signal that brings a callback's answer. */
+export const callbackSignal = defineSignal<[CallbackAnswer]>("dandori.callback");
+
+const answers = new Map<string, CallbackAnswer>();
+
+/** Take the answers of callbacks as they come. */
+export function listen(): void {
+  setHandler(callbackSignal, (a: CallbackAnswer) => {
+    answers.set(a.callback_id, a);
+  });
+}
+
+/** The id a callback task hands on: which workflow to signal, and which call it answers. */
+export function callbackId(site: number, rounds: readonly number[], n: number): string {
+  return JSON.stringify([workflowInfo().workflowId, [String(site), ...rounds.map(String), String(n)].join("/")]);
+}
+
+/** Wait for the answer of the callback with this id. */
+export async function awaitCallback(id: string, seconds: number): Promise<unknown> {
+  const got = await condition(() => answers.has(id), seconds * 1000);
+  if (!got) throw new CallbackTimeout();
+  const a = answers.get(id)!;
+  answers.delete(id);
+  if (typeof a.error === "string") throw new CallbackError(a.error, a.message ?? "");
+  return a.ok;
+}
+
+/** How many rounds of `for … in parallel` run at a time: all, when the `.flow` does not say. */
+export function atATime(k: number): number {
+  return k;
+}
+
+/**
+ * Run a round for every item, `k` at a time (0: all at once). Every round runs to its end;
+ * then what they yield comes back in the list's order, or the first failure by place in
+ * the list is thrown again.
+ */
+export async function rounds<I, R>(items: readonly I[], k: number, round: (item: I, index: number) => Promise<R>): Promise<R[]> {
+  const out: Array<{ ok: R } | { fail: unknown }> = new Array(items.length);
+  let next = 0;
+  const lanes = k > 0 ? Math.min(k, items.length) : items.length;
+  async function lane(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      try {
+        out[i] = { ok: await round(items[i], i) };
+      } catch (e) {
+        out[i] = { fail: e };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: lanes }, () => lane()));
+  for (const r of out) {
+    if ("fail" in r) throw r.fail;
+  }
+  return out.map((r) => (r as { ok: R }).ok);
+}
+
 /** A deliberate end of the workflow as failed. */
 export function fail(error: string, cause: string | null): ApplicationFailure {
   return ApplicationFailure.create({ type: error, message: cause ?? "", nonRetryable: true });
@@ -529,6 +985,8 @@ struct Gen<'a> {
     /// the counters of the loops around the current statement
     loops: Vec<usize>,
     flavor: Flavor,
+    /// durable functions: the context the current code calls through
+    ctx: String,
 }
 
 impl<'a> Gen<'a> {
@@ -550,7 +1008,8 @@ impl<'a> Gen<'a> {
             TExpr::Int(n) => n.to_string(),
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
-            TExpr::Var { name, fields, .. } => {
+            TExpr::None(_) => "null".into(),
+            TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 let is_input = self.m.inputs.iter().any(|(i, _)| i == name);
                 for (i, f) in fields.iter().enumerate() {
@@ -559,7 +1018,26 @@ impl<'a> Gen<'a> {
                     }
                     s.push_str(&format!("[{}]", q(f)));
                 }
+                if !fields.is_empty() && matches!(ty, Ty::Opt(_)) {
+                    // an absent field reads as null
+                    s = format!("({s} ?? null)");
+                }
                 s
+            }
+            TExpr::Record { fields, .. } => format!("{{ {} }}", fields.iter().map(|(f, x)| format!("{}: {}", q(f), self.expr(x))).collect::<Vec<_>>().join(", ")),
+            TExpr::List { items, .. } => format!("[{}]", items.iter().map(|x| self.expr(x)).collect::<Vec<_>>().join(", ")),
+            TExpr::Interp(parts) => {
+                let mut out: Vec<String> = Vec::new();
+                for p in parts {
+                    match p {
+                        IPart::Lit(s) => out.push(q(s)),
+                        IPart::Hole(x) => out.push(format!("String({})", self.expr(x))),
+                    }
+                }
+                if !matches!(parts.first(), Some(IPart::Lit(_))) {
+                    out.insert(0, "\"\"".into());
+                }
+                format!("({})", out.join(" + "))
             }
         }
     }
@@ -571,29 +1049,44 @@ impl<'a> Gen<'a> {
         let ret = if m.outputs.is_empty() { "null".to_string() } else { "T.WorkflowOutput".to_string() };
         if self.flavor == Flavor::Durable {
             self.out.push_str("import { StepSemantics, withDurableExecution, type DurableContext } from \"@aws/durable-execution-sdk-js\";\n");
-            self.out.push_str("import type { Tasks } from \"./tasks\";\n");
+            self.out.push_str("import { makeTasks, type OwnTasks, type Tasks } from \"./tasks\";\n");
+            self.out.push_str("import * as io from \"./io\";\n");
             self.out.push_str("import * as T from \"./types\";\n");
             self.out.push_str("import * as dd from \"./runtime\";\n\n");
             self.out.push_str("/** The Lambda handler: `export const handler = makeHandler(yourTasks);` */\n");
-            self.out.push_str("export function makeHandler(tasks: Tasks) {\n");
+            self.out.push_str("export function makeHandler(own: OwnTasks, transport: io.Transport = io.transport()) {\n");
+            self.out.push_str("  const tasks = makeTasks(own, transport);\n");
             self.out.push_str(&format!("  return withDurableExecution(async (input: T.WorkflowInput, context: DurableContext): Promise<{ret}> => {{\n"));
             self.out.push_str("    try {\n      return await run(input, context, tasks);\n    } catch (e) {\n      throw dd.asFailure(e);\n    }\n  });\n}\n\n");
             self.out.push_str(&format!("async function run(input: T.WorkflowInput, context: DurableContext, tasks: Tasks): Promise<{ret}> {{\n"));
             self.body();
             return std::mem::take(&mut self.out);
         }
-        self.out.push_str("import { proxyActivities, sleep } from \"@temporalio/workflow\";\n");
+        let callbacks = m.tasks.iter().any(|t| t.callback);
+        let children = m.tasks.iter().any(|t| t.is_child(Platform::Temporal));
+        let mut names = vec!["proxyActivities", "sleep"];
+        if children {
+            names.push("executeChild");
+        }
+        self.out.push_str(&format!("import {{ {} }} from \"@temporalio/workflow\";\n", names.join(", ")));
         self.out.push_str("import type { Tasks } from \"./activities\";\n");
         if rules {
             self.out.push_str("import type { rules } from \"./rules\";\n");
         }
         self.out.push_str("import * as T from \"./types\";\n");
         self.out.push_str("import * as dd from \"./runtime\";\n\n");
-        // one proxy per task, so each has its own timeout; Temporal does not retry, the workflow does
+        if callbacks {
+            self.out.push_str("/** The signal that brings a callback's answer. */\nexport const callbackSignal = dd.callbackSignal;\n\n");
+        }
+        // one proxy per task, so each has its own timeout and queue; Temporal does not retry, the workflow does
         for t in &m.tasks {
-            let timeout = t.timeout.unwrap_or(if t.callback { 86_400 } else { 60 });
+            if t.is_child(Platform::Temporal) {
+                continue;
+            }
+            let timeout = if t.callback { 60 } else { t.timeout.unwrap_or(60) };
+            let queue = t.queue.as_ref().map(|qn| format!(", taskQueue: {}", q(qn))).unwrap_or_default();
             self.out.push_str(&format!(
-                "const {} = proxyActivities<Tasks>({{ startToCloseTimeout: \"{timeout} seconds\", retry: {{ maximumAttempts: 1 }} }}).{};\n",
+                "const {} = proxyActivities<Tasks>({{ startToCloseTimeout: \"{timeout} seconds\", retry: {{ maximumAttempts: 1 }}{queue} }}).{};\n",
                 ident(&format!("task_{}", t.name)),
                 ident(&t.name)
             ));
@@ -604,6 +1097,9 @@ impl<'a> Gen<'a> {
         self.out.push('\n');
         let fname = ident(&m.name);
         self.out.push_str(&format!("export async function {fname}(input: T.WorkflowInput): Promise<{ret}> {{\n"));
+        if callbacks {
+            self.out.push_str("  dd.listen();\n");
+        }
         self.out.push_str("  try {\n    return await run(input);\n  } catch (e) {\n    throw dd.asFailure(e);\n  }\n}\n\n");
         self.out.push_str(&format!("async function run(input: T.WorkflowInput): Promise<{ret}> {{\n"));
         self.body();
@@ -614,11 +1110,13 @@ impl<'a> Gen<'a> {
     fn body(&mut self) {
         let m = self.m;
         self.line(1, "if (!T.is_WorkflowInput(input)) throw dd.fail(\"Dandori.BadInput\", \"the execution's input does not have the declared shape\");");
+        let locals = crate::asl::parallel_locals(m);
         for (v, ty) in &m.vars {
             if m.inputs.iter().any(|(i, _)| i == v) {
                 self.line(1, &format!("const {}: {} = input[{}];", self.var(v), ts_type(m, ty), q(v)));
-            } else {
-                self.line(1, &format!("let {}: {} | null = null;", self.var(v), ts_type(m, ty)));
+            } else if !locals.contains(v) {
+                let t = if matches!(ty, Ty::Opt(_)) { ts_type(m, ty) } else { format!("{} | null", ts_type(m, ty)) };
+                self.line(1, &format!("let {}: {t} = null;", self.var(v)));
             }
         }
         match &m.on_failure {
@@ -650,17 +1148,23 @@ impl<'a> Gen<'a> {
         }
     }
 
+    fn rounds_expr(&self) -> String {
+        let rounds: Vec<String> = self.loops.iter().map(|l| format!("dd_loop_{l}")).collect();
+        format!("[{}]", rounds.join(", "))
+    }
+
     fn stmt(&mut self, s: &TStmt, d: usize) {
         let m = self.m;
+        let ctx = self.ctx.clone();
         match &s.kind {
             TK::Pass => {}
             TK::Break => {
-                let site = *self.loops.last().expect("lowering keeps break inside repeat");
+                let site = *self.loops.last().expect("lowering keeps break inside a loop");
                 self.line(d, &format!("break loop_{site};"));
             }
             TK::Wait { seconds } => match self.flavor {
                 Flavor::Temporal => self.line(d, &format!("await sleep({});", seconds * 1000)),
-                Flavor::Durable => self.line(d, &format!("await context.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
+                Flavor::Durable => self.line(d, &format!("await {ctx}.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
             },
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
@@ -669,11 +1173,15 @@ impl<'a> Gen<'a> {
                     Flavor::Durable => {
                         // the clock is read in a step, so that a replay reads the same moment
                         let site = s.site;
-                        self.line(d, &format!("const dd_now_{site} = await context.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }});", q(&format!("{} now", s.line))));
+                        self.line(d, &format!("const dd_now_{site} = await {ctx}.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }});", q(&format!("{} now", s.line))));
                         self.line(d, &format!("const dd_wait_{site} = Math.ceil((Date.parse({x}) - dd_now_{site}) / 1000);"));
-                        self.line(d, &format!("if (dd_wait_{site} > 0) await context.wait({}, {{ seconds: dd_wait_{site} }});", q(&format!("{} wait until", s.line))));
+                        self.line(d, &format!("if (dd_wait_{site} > 0) await {ctx}.wait({}, {{ seconds: dd_wait_{site} }});", q(&format!("{} wait until", s.line))));
                     }
                 }
+            }
+            TK::Assign { name, expr } => {
+                let x = self.expr(expr);
+                self.line(d, &format!("{} = {x};", self.var(name)));
             }
             TK::Succeed { fields } => {
                 if fields.is_empty() {
@@ -684,7 +1192,7 @@ impl<'a> Gen<'a> {
                 }
             }
             TK::Fail { error, cause, .. } => {
-                let c = cause.as_ref().map(|c| q(c)).unwrap_or_else(|| "null".into());
+                let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "null".into());
                 self.line(d, &format!("throw dd.fail({}, {c});", q(error)));
             }
             TK::Repeat { times, body } => {
@@ -693,6 +1201,100 @@ impl<'a> Gen<'a> {
                 self.loops.push(site);
                 self.block(body, d + 1);
                 self.loops.pop();
+                self.line(d, "}");
+            }
+            TK::For { var, list, max, parallel, body, result, locals } => {
+                let site = s.site;
+                let items = format!("dd_items_{site}");
+                self.line(d, "{");
+                self.line(d + 1, &format!("// line {}: for {var} in {}", s.line, list.show()));
+                let lx = match list {
+                    // a variable is set by now: the checker says so
+                    TExpr::Var { name, fields, .. } if fields.is_empty() && !m.inputs.iter().any(|(i, _)| i == name) => format!("{}!", self.expr(list)),
+                    _ => self.expr(list),
+                };
+                self.line(d + 1, &format!("const {items} = {lx};"));
+                self.line(
+                    d + 1,
+                    &format!("if ({items}.length > {max}) throw dd.fail(\"Dandori.TooManyItems\", {});", q(&format!("line {}: the list has more than {max} items", s.line))),
+                );
+                match parallel {
+                    None => {
+                        if result.is_some() {
+                            self.line(d + 1, &format!("const dd_out_{site}: unknown[] = [];"));
+                        }
+                        self.line(d + 1, &format!("loop_{site}: for (let dd_loop_{site} = 0; dd_loop_{site} < {items}.length; dd_loop_{site}++) {{"));
+                        self.line(d + 2, &format!("{} = {items}[dd_loop_{site}];", self.var(var)));
+                        self.loops.push(site);
+                        self.block(body, d + 2);
+                        let ends = body.last().map(|x| matches!(x.kind, TK::Succeed { .. } | TK::Fail { .. } | TK::Break)).unwrap_or(false);
+                        if let (Some((_, y)), false) = (result, ends) {
+                            let yv = self.expr(y);
+                            self.line(d + 2, &format!("dd_out_{site}.push({yv});"));
+                        }
+                        self.loops.pop();
+                        self.line(d + 1, "}");
+                        if let Some((r, _)) = result {
+                            self.line(d + 1, &format!("{} = dd_out_{site} as any;", self.var(r)));
+                        }
+                    }
+                    Some(k) => {
+                        let elem = match list.ty() {
+                            Ty::List(t) => ts_type(m, &t),
+                            _ => "unknown".into(),
+                        };
+                        let declare = |g: &mut Gen, d: usize| {
+                            g.line(d, &format!("let {}: {} = dd_item;", g.var(var), elem));
+                            for l in locals {
+                                if l != var {
+                                    let t = match m.var_ty(l) {
+                                        Some(t @ Ty::Opt(_)) => ts_type(m, t),
+                                        Some(t) => format!("{} | null", ts_type(m, t)),
+                                        None => "unknown".into(),
+                                    };
+                                    g.line(d, &format!("let {}: {t} = null;", g.var(l)));
+                                }
+                            }
+                        };
+                        let yv = |g: &Gen| result.as_ref().map(|(_, y)| g.expr(y)).unwrap_or_else(|| "null".into());
+                        match self.flavor {
+                            Flavor::Temporal => {
+                                self.line(d + 1, &format!("const dd_res_{site} = await dd.rounds({items}, dd.atATime({k}), async (dd_item, dd_loop_{site}) => {{"));
+                                declare(self, d + 2);
+                                self.loops.push(site);
+                                self.block(body, d + 2);
+                                self.loops.pop();
+                                let y = yv(self);
+                                self.line(d + 2, &format!("return {y};"));
+                                self.line(d + 1, "});");
+                            }
+                            Flavor::Durable => {
+                                let round_ctx = format!("dd_ctx_{site}");
+                                self.line(
+                                    d + 1,
+                                    &format!("const dd_map_{site} = await {ctx}.map({}, {items}, async ({round_ctx}, dd_item, dd_loop_{site}) => {{", q(&format!("{} for {var}", s.line))),
+                                );
+                                self.line(d + 2, "try {");
+                                declare(self, d + 3);
+                                self.loops.push(site);
+                                let outer = std::mem::replace(&mut self.ctx, round_ctx);
+                                self.block(body, d + 3);
+                                self.ctx = outer;
+                                self.loops.pop();
+                                let y = yv(self);
+                                self.line(d + 3, &format!("return {{ ok: {y} }};"));
+                                self.line(d + 2, "} catch (dd_e) {");
+                                self.line(d + 3, "return dd.envelope(dd_e);");
+                                self.line(d + 2, "}");
+                                self.line(d + 1, &format!("}}, {{ maxConcurrency: dd.atATime({k}) }});"));
+                                self.line(d + 1, &format!("const dd_res_{site} = dd.settle(dd_map_{site}.getResults());"));
+                            }
+                        }
+                        if let Some((r, _)) = result {
+                            self.line(d + 1, &format!("{} = dd_res_{site} as any;", self.var(r)));
+                        }
+                    }
+                }
                 self.line(d, "}");
             }
             TK::Match { expr, arms } => {
@@ -708,14 +1310,17 @@ impl<'a> Gen<'a> {
                     other => self.expr(other),
                 };
                 self.line(d, "{");
-                self.line(d + 1, &format!("const dd_v: unknown = {x};"));
+                self.line(d + 1, &format!("const dd_v: any = {x};"));
                 for (i, a) in arms.iter().enumerate() {
                     let mut parts = Vec::new();
                     if a.none {
-                        parts.push("dd_v === null".to_string());
+                        parts.push("dd_v === null || dd_v === undefined".to_string());
+                    }
+                    if a.some.is_some() {
+                        parts.push("dd_v !== null && dd_v !== undefined".to_string());
                     }
                     if !a.values.is_empty() {
-                        if expr.ty() == Ty::Bool {
+                        if expr.ty().inner() == &Ty::Bool {
                             for v in &a.values {
                                 parts.push(format!("dd_v === {v}"));
                             }
@@ -725,10 +1330,13 @@ impl<'a> Gen<'a> {
                     }
                     let kw = if i == 0 { "if" } else { "} else if" };
                     self.line(d + 1, &format!("{kw} ({}) {{", parts.join(" || ")));
+                    if let Some(v) = &a.some {
+                        self.line(d + 2, &format!("{} = dd_v;", self.var(v)));
+                    }
                     self.block(&a.body, d + 2);
                 }
                 self.line(d + 1, "} else {");
-                self.line(d + 2, &format!("throw dd.fail(\"Dandori.UnexpectedValue\", {});", q(&format!("line {}: {} took a value that no arm names", s.line, show(expr)))));
+                self.line(d + 2, &format!("throw dd.fail(\"Dandori.UnexpectedValue\", {});", q(&format!("line {}: {} took a value that no arm names", s.line, expr.show()))));
                 self.line(d + 1, "}");
                 self.line(d, "}");
             }
@@ -765,8 +1373,8 @@ impl<'a> Gen<'a> {
                             Callee::Task(t) => m.tasks[*t]
                                 .errors
                                 .iter()
-                                .find(|(e, _)| render::asl_error(m, callee, &HErr::Declared(e.clone())).iter().any(|a| a == n))
-                                .map(|(e, _)| e.clone())
+                                .find(|e| render::asl_error(m, callee, &HErr::Declared(e.name.clone())).iter().any(|a| a == n))
+                                .map(|e| e.name.clone())
                                 .unwrap_or_else(|| n.to_string()),
                             Callee::Rule(_) => n.to_string(),
                         }
@@ -787,58 +1395,99 @@ impl<'a> Gen<'a> {
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, args: &[(String, TExpr)], handlers: &[THandler], d: usize) {
         let m = self.m;
         let site = s.site;
-        let (fn_expr, cname, declared, result_ty) = match callee {
+        let ctx = self.ctx.clone();
+        let p = self.flavor.platform();
+        let (cname, declared, result_ty) = match callee {
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
-                (ident(&format!("task_{}", task.name)), task.name.clone(), task.errors.iter().map(|(e, _)| q(e)).collect::<Vec<_>>(), task.result.clone())
+                (task.name.clone(), task.errors.iter().map(|e| q(&e.name)).collect::<Vec<_>>(), task.result.clone())
             }
-            Callee::Rule(r) => (format!("rule_calls.{}", render::rule_activity(&m.rules[*r].name)), m.rules[*r].name.clone(), vec![], Ty::Record(m.rules[*r].outputs)),
+            Callee::Rule(r) => (m.rules[*r].name.clone(), vec![], Some(Ty::Record(m.rules[*r].outputs))),
         };
         let mut parts: Vec<String> = args.iter().map(|(a, e)| format!("{}: {}", q(a), self.expr(e))).collect();
         if let Callee::Task(t) = callee {
             if m.tasks[*t].key {
-                let rounds: Vec<String> = self.loops.iter().map(|l| format!("dd_loop_{l}")).collect();
-                let ctx = if self.flavor == Flavor::Durable { "context, " } else { "" };
-                parts.push(format!("\"idempotency_key\": dd.key({ctx}{site}, [{}])", rounds.join(", ")));
+                let c = if self.flavor == Flavor::Durable { format!("{ctx}, ") } else { String::new() };
+                parts.push(format!("\"idempotency_key\": dd.key({c}{site}, {})", self.rounds_expr()));
             }
         }
         let retriers = self.retriers(callee);
         let op = q(&format!("{} {}", s.line, cname));
+        let declared = declared.join(", ");
+        let i = "  ".repeat(d + 2);
         let invocation = match (self.flavor, callee) {
-            (Flavor::Temporal, _) => format!("dd.attempt(() => {fn_expr}({{ {} }}), {retriers}, [{}])", parts.join(", "), declared.join(", ")),
+            (Flavor::Temporal, Callee::Rule(r)) => format!("dd.attempt(() => rule_calls.{}({{ {} }}), {retriers}, [])", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
             (Flavor::Durable, Callee::Rule(r)) => {
                 let arn = q(m.rules[*r].lambda.as_deref().unwrap_or(""));
-                format!("dd.attempt(context, {op}, () => context.invoke({op}, {arn}, {{ {} }}), {retriers}, [])", parts.join(", "))
+                format!("dd.attempt({ctx}, {op}, () => {ctx}.invoke({op}, {arn}, {{ {} }}), {retriers}, [])", parts.join(", "))
+            }
+            (Flavor::Temporal, Callee::Task(t)) => {
+                let task = &m.tasks[*t];
+                let f = ident(&format!("task_{}", task.name));
+                match task.via(p) {
+                    Some(Via::Workflow(ty)) => {
+                        let mut opts = vec![format!("args: [{{ {} }}]", parts.join(", ")), format!("workflowId: dd.childId({site}, {}, ++dd_n)", self.rounds_expr())];
+                        if let Some(qn) = &task.queue {
+                            opts.push(format!("taskQueue: {}", q(qn)));
+                        }
+                        if let Some(t) = task.timeout {
+                            opts.push(format!("workflowExecutionTimeout: \"{t} seconds\""));
+                        }
+                        format!("dd.attempt(() => executeChild({}, {{ {} }}), {retriers}, [{declared}])", q(ty), opts.join(", "))
+                    }
+                    _ if task.callback => {
+                        let timeout = task.timeout.unwrap_or(86_400);
+                        let mut with_id = parts.clone();
+                        with_id.push("\"callback_id\": dd_id".into());
+                        format!(
+                            "dd.attempt(async () => {{\n{i}  const dd_id = dd.callbackId({site}, {}, ++dd_n);\n{i}  await {f}({{ {} }});\n{i}  return await dd.awaitCallback(dd_id, {timeout});\n{i}}}, {retriers}, [{declared}])",
+                            self.rounds_expr(),
+                            with_id.join(", ")
+                        )
+                    }
+                    _ => format!("dd.attempt(() => {f}({{ {} }}), {retriers}, [{declared}])", parts.join(", ")),
+                }
             }
             (Flavor::Durable, Callee::Task(t)) => {
                 let task = &m.tasks[*t];
                 let method = ident(&task.name);
-                if task.callback {
-                    let timeout = task.timeout.unwrap_or(86_400);
-                    let submit = q(&format!("{} {} submit", s.line, cname));
-                    let mut with_id = parts.clone();
-                    with_id.push("\"callback_id\": dd_id".into());
-                    format!(
-                        "dd.attempt(context, {op}, async () => {{\n{i}  const [dd_p, dd_id] = await context.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await context.step({submit}, async () => {{\n{i}    await tasks.{method}({{ {} }});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{}])",
-                        with_id.join(", "),
-                        declared.join(", "),
-                        i = "  ".repeat(d + 2)
-                    )
-                } else {
-                    // a call that changes things and carries no key must not run twice unseen
-                    let semantics = if task.changes_things() && !task.key { "AtMostOncePerRetry" } else { "AtLeastOncePerRetry" };
-                    let timeout = task.timeout.map(|t| t.to_string()).unwrap_or_else(|| "null".into());
-                    format!(
-                        "dd.attempt(context, {op}, () => context.step({op}, async () => dd.within(tasks.{method}({{ {} }}), {timeout}), {{ retryStrategy: dd.noRetry, semantics: StepSemantics.{semantics} }}), {retriers}, [{}])",
-                        parts.join(", "),
-                        declared.join(", ")
-                    )
+                match task.via(p) {
+                    Some(Via::DurableFunction(f)) => format!("dd.attempt({ctx}, {op}, () => {ctx}.invoke({op}, {}, {{ {} }}), {retriers}, [{declared}])", q(f), parts.join(", ")),
+                    _ if task.callback => {
+                        let timeout = task.timeout.unwrap_or(86_400);
+                        let submit = q(&format!("{} {} submit", s.line, cname));
+                        let mut with_id = parts.clone();
+                        with_id.push("\"callback_id\": dd_id".into());
+                        format!(
+                            "dd.attempt({ctx}, {op}, async () => {{\n{i}  const [dd_p, dd_id] = await {ctx}.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await {ctx}.step({submit}, async () => {{\n{i}    await tasks.{method}({{ {} }});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{declared}])",
+                            with_id.join(", ")
+                        )
+                    }
+                    _ => {
+                        // a call that changes things and carries no key must not run twice unseen
+                        let semantics = if task.changes_things() && !task.key { "AtMostOncePerRetry" } else { "AtLeastOncePerRetry" };
+                        let timeout = task.timeout.map(|t| t.to_string()).unwrap_or_else(|| "null".into());
+                        format!(
+                            "dd.attempt({ctx}, {op}, () => {ctx}.step({op}, async () => dd.within(tasks.{method}({{ {} }}), {timeout}), {{ retryStrategy: dd.noRetry, semantics: StepSemantics.{semantics} }}), {retriers}, [{declared}])",
+                            parts.join(", ")
+                        )
+                    }
                 }
             }
         };
+        let counted = match callee {
+            Callee::Task(t) => {
+                let task = &m.tasks[*t];
+                self.flavor == Flavor::Temporal && (task.callback || matches!(task.via(p), Some(Via::Workflow(_))))
+            }
+            _ => false,
+        };
         self.line(d, &format!("call_{site}: {{"));
         self.line(d + 1, &format!("// line {}: {cname}", s.line));
-        self.line(d + 1, "let dd_r: unknown;");
+        if counted {
+            self.line(d + 1, "let dd_n = 0;");
+        }
+        self.line(d + 1, "let dd_r: any;");
         self.line(d + 1, "try {");
         self.line(d + 2, &format!("dd_r = await {invocation};"));
         self.line(d + 1, "} catch (dd_e) {");
@@ -863,39 +1512,29 @@ impl<'a> Gen<'a> {
         }
         self.line(d + 2, "throw dd_e;");
         self.line(d + 1, "}");
-        // the answer: its declared type, and for a case the states it may carry
-        let check = format!("({})", ts_check(m, "dd_r", &result_ty, "T."));
-        self.line(d + 1, &format!("if (!{check}) throw dd.fail(\"Dandori.BadResponse\", {});", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
         let var = match target {
             Some(Target::Let(v)) => Some(self.var(v)),
             Some(Target::Case(c)) => Some(self.var(&m.cases[*c].name)),
             None => None,
         };
-        if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
-            let field = &m.cases[*c].state_field;
-            self.line(
-                d + 1,
-                &format!(
-                    "if (![{}].includes(dd_r[{}])) throw dd.fail(\"Dandori.UnexpectedState\", {});",
-                    allowed.iter().map(|v| q(v)).collect::<Vec<_>>().join(", "),
-                    q(field),
-                    q(&format!("line {}: {} answered with a state the machine does not lead to here (expected one of {})", s.line, cname, allowed.join(", ")))
-                ),
-            );
-        }
-        if let Some(v) = var {
+        // the answer: its declared type, and for a case the states it may carry
+        if let (Some(v), Some(ty)) = (var, result_ty) {
+            let check = format!("({})", ts_check(m, "dd_r", &ty, "T.", 0));
+            self.line(d + 1, &format!("if (!{check}) throw dd.fail(\"Dandori.BadResponse\", {});", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
+            if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
+                let field = &m.cases[*c].state_field;
+                self.line(
+                    d + 1,
+                    &format!(
+                        "if (![{}].includes(dd_r[{}])) throw dd.fail(\"Dandori.UnexpectedState\", {});",
+                        allowed.iter().map(|v| q(v)).collect::<Vec<_>>().join(", "),
+                        q(field),
+                        q(&format!("line {}: {} answered with a state the machine does not lead to here (expected one of {})", s.line, cname, allowed.join(", ")))
+                    ),
+                );
+            }
             self.line(d + 1, &format!("{v} = dd_r;"));
         }
         self.line(d, "}");
-    }
-}
-
-fn show(e: &TExpr) -> String {
-    match e {
-        TExpr::Var { name, fields, .. } => std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join("."),
-        TExpr::Str(s) => s.clone(),
-        TExpr::Int(n) => n.to_string(),
-        TExpr::Bool(b) => b.to_string(),
-        TExpr::Enum(v, _) => v.clone(),
     }
 }

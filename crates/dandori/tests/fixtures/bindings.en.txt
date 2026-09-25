@@ -1,0 +1,10 @@
+error[E007]: tests/fixtures/bindings.flow:9:10: an AWS API's error is named by its exception, as `重複 = ConditionalCheckFailedException`, not by a status
+     9 |   errors 重複 = 409
+error[E007]: tests/fixtures/bindings.flow:10:3: an AWS API takes the idempotency key as one of its own parameters; write `key <parameter>`, as `key ClientToken`
+    10 |   key
+error[E007]: tests/fixtures/bindings.flow:15:3: a `callback` task hands its token over by `lambda` or by `aws sqs:sendMessage`
+    15 |   callback
+error[E007]: tests/fixtures/bindings.flow:18:3: Step Functions has no AWS SDK integration for the service `dynamo`; write it as the Task's Resource names it, such as `dynamodb` or `secretsmanager`
+    18 |   aws dynamo:putItem
+error[E007]: tests/fixtures/bindings.flow:22:3: the platform starts a child workflow once for each call, so `key` does not apply to it
+    22 |   key

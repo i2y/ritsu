@@ -352,6 +352,13 @@ impl<'a> Flow<'a> {
         }
     }
 
+    /// Every variable the expression reads must have its value here.
+    fn check_reads(&mut self, e: &TExpr, a: &Abs, line: usize) {
+        for x in e.vars() {
+            self.check_set(x, a, line);
+        }
+    }
+
     fn check_set(&mut self, e: &TExpr, a: &Abs, line: usize) {
         if let TExpr::Var { name, .. } = e {
             if let Some(ci) = self.m.case_index(name) {
@@ -402,9 +409,79 @@ impl<'a> Flow<'a> {
             TK::Match { expr, arms } => self.matching(s, expr, arms, a),
             TK::Wait { seconds } => a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds)))),
             TK::WaitUntil { at } => {
-                self.check_set(at, &a, s.line);
+                self.check_reads(at, &a, s.line);
                 let shown = show(at);
                 a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")))
+            }
+            TK::Assign { name, expr } => {
+                self.check_reads(expr, &a, s.line);
+                let mut a = a.step(Step::new(s.line, format!("{name} = {}", show(expr)), format!("{name} = {}", show(expr))));
+                Flow::assign(&mut a, name);
+                a
+            }
+            TK::For { var, list, max, parallel, body, result, locals } => {
+                self.check_reads(list, &a, s.line);
+                let entry = a.step(Step::new(s.line, format!("for {var} in {} (at most {max})", show(list)), format!("for {var} in {}（{max} 個まで）", show(list))));
+                match parallel {
+                    None => {
+                        // like `repeat`, but the list may be empty, so the loop can also end before a round
+                        let mut head = entry;
+                        let mut rounds = 0;
+                        loop {
+                            rounds += 1;
+                            self.loops.push(vec![]);
+                            let mut inner = head.clone();
+                            Flow::assign(&mut inner, var);
+                            let end = self.stmts(body, inner);
+                            let breaks = self.loops.pop().unwrap_or_default();
+                            let next = join(&head, &end);
+                            if next.same(&head) || rounds > 64 {
+                                if let Some((_, y)) = result {
+                                    if end.live {
+                                        self.check_reads(y, &end, s.line);
+                                    }
+                                }
+                                let mut after = next;
+                                for b in &breaks {
+                                    after = join(&after, b);
+                                }
+                                if let Some((r, _)) = result {
+                                    if after.live {
+                                        Flow::assign(&mut after, r);
+                                    }
+                                }
+                                return after;
+                            }
+                            head = next;
+                        }
+                    }
+                    Some(_) => {
+                        // every round starts from here; none changes a case or a variable outside it
+                        let mut inner = entry.clone();
+                        Flow::assign(&mut inner, var);
+                        let before = self.failures.len();
+                        self.loops.push(vec![]);
+                        let end = self.stmts(body, inner);
+                        self.loops.pop();
+                        if let Some((_, y)) = result {
+                            if end.live {
+                                self.check_reads(y, &end, s.line);
+                            }
+                        }
+                        // a round's failure ends the loop only after every round is done, and `on failure`
+                        // does not see the round's own variables
+                        for f in self.failures[before..].iter_mut() {
+                            for l in locals {
+                                f.0.set.insert(l.clone(), (Tri::No, Some(entry.path.clone())));
+                            }
+                        }
+                        let mut after = entry;
+                        if let Some((r, _)) = result {
+                            Flow::assign(&mut after, r);
+                        }
+                        after
+                    }
+                }
             }
             TK::Repeat { times, body } => {
                 let mut head = a.clone().step(Step::new(s.line, format!("repeat (at most {times} times)"), format!("repeat（{times} 回まで）")));
@@ -435,12 +512,15 @@ impl<'a> Flow<'a> {
             }
             TK::Succeed { fields } => {
                 for (_, e) in fields {
-                    self.check_set(e, &a, s.line);
+                    self.check_reads(e, &a, s.line);
                 }
                 self.exit(&a, s.line, &[], Exit::Succeed);
                 Abs::dead()
             }
-            TK::Fail { error, leaving, .. } => {
+            TK::Fail { error, leaving, cause } => {
+                if let Some(c) = cause {
+                    self.check_reads(c, &a, s.line);
+                }
                 self.exit(&a, s.line, leaving, Exit::Fail(error.clone()));
                 Abs::dead()
             }
@@ -526,7 +606,7 @@ impl<'a> Flow<'a> {
 
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, args: &[(String, TExpr)], handlers: &[THandler], a: Abs) -> Abs {
         for (_, e) in args {
-            self.check_set(e, &a, s.line);
+            self.check_reads(e, &a, s.line);
         }
         let callee_name = match callee {
             Callee::Task(t) => self.m.tasks[*t].name.clone(),
@@ -725,8 +805,8 @@ impl<'a> Flow<'a> {
         // the errors the call can end with, and which of them nothing here takes
         let mut kinds: Vec<(HErr, String)> = Vec::new();
         if let Callee::Task(t) = callee {
-            for (e, _) in &self.m.tasks[*t].errors {
-                kinds.push((HErr::Declared(e.clone()), e.clone()));
+            for e in &self.m.tasks[*t].errors {
+                kinds.push((HErr::Declared(e.name.clone()), e.name.clone()));
             }
         }
         kinds.push((HErr::Timeout, "timeout".into()));
@@ -803,11 +883,21 @@ impl<'a> Flow<'a> {
             // a case's state is read with a `none` arm for the runs that did not start it
             self.check_set(expr, &a, s.line);
         }
-        let domain: Vec<String> = match expr.ty() {
-            Ty::Enum(e) => self.m.enums[e].values.clone(),
+        let ety = expr.ty();
+        let optional = matches!(ety, Ty::Opt(_));
+        let mut domain: Vec<String> = match ety.inner() {
+            Ty::Enum(e) => self.m.enums[*e].values.clone(),
             Ty::Bool => vec!["true".into(), "false".into()],
             _ => vec![],
         };
+        // a value that may be absent: `none`, and its values, or `some` when they are not listed
+        let some_values: Vec<String> = if domain.is_empty() { vec!["some".into()] } else { domain.clone() };
+        if optional {
+            if domain.is_empty() {
+                domain.push("some".into());
+            }
+            domain.push("none".into());
+        }
         // what the value can be here, with a run for each
         let mut possible: BTreeMap<String, Path> = BTreeMap::new();
         let narrowed;
@@ -847,9 +937,12 @@ impl<'a> Flow<'a> {
             if arm.none {
                 vals.push("none".into());
             }
+            if arm.some.is_some() {
+                vals.extend(some_values.iter().cloned());
+            }
             for v in &vals {
                 if !possible.contains_key(v) {
-                    if narrowed || v == "none" {
+                    if narrowed || (v == "none" && !optional) {
                         let (en, ja) = if v == "none" {
                             (format!("the arm `none` can never be taken: the case `{name}` has been started on every run that gets here"), format!("行き先 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています"))
                         } else {
@@ -888,6 +981,9 @@ impl<'a> Flow<'a> {
                     }
                 }
                 None => {
+                    if let Some(v) = &arm.some {
+                        Flow::assign(&mut inner, v);
+                    }
                     if !key.is_empty() && !here.is_empty() {
                         let vals: BTreeMap<String, Path> = here.iter().filter_map(|v| possible.get(v).map(|p| {
                             let mut p = p.clone();
@@ -951,10 +1047,8 @@ pub fn severity_is_error(d: &Diag) -> bool {
 
 fn show(e: &TExpr) -> String {
     match e {
-        TExpr::Var { name, fields, .. } => std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join("."),
         TExpr::Str(s) => format!("\"{s}\""),
-        TExpr::Int(n) => n.to_string(),
-        TExpr::Bool(b) => b.to_string(),
-        TExpr::Enum(v, _) => v.clone(),
+        TExpr::Interp(_) => format!("\"{}\"", e.show()),
+        other => other.show(),
     }
 }

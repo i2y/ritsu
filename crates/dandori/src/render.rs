@@ -15,6 +15,16 @@ pub enum View {
     Durable,
 }
 
+impl View {
+    pub fn platform(self) -> Platform {
+        match self {
+            View::Asl => Platform::StepFunctions,
+            View::Temporal => Platform::Temporal,
+            View::Durable => Platform::Durable,
+        }
+    }
+}
+
 /// The idempotency key of one call: the execution, the call's place in the source, and
 /// the round of every loop around it, so that a retry repeats the key and a new round does not.
 pub fn key(execution: &str, site: usize, rounds: &[u64]) -> String {
@@ -33,61 +43,72 @@ pub fn value_text(v: &Value) -> String {
     }
 }
 
-/// A call as the target sees it. `args` are by parameter name.
+/// A call as the target sees it. `args` are by parameter name. A task that the platform
+/// calls by Lambda, HTTP or an AWS API looks the same on every platform, since the code
+/// dandori writes for Temporal and durable functions sends what Step Functions sends.
 pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, key: Option<&str>) -> Value {
-    match (view, callee) {
-        (View::Temporal, Callee::Task(t)) => {
-            let mut a = args.clone();
+    let task = match callee {
+        Callee::Rule(r) => {
+            let ru = &m.rules[*r];
+            return match view {
+                View::Temporal => json!({ "activity": rule_activity(&ru.name), "args": args }),
+                View::Durable => json!({ "invoke": ru.lambda.clone().unwrap_or_default(), "payload": args }),
+                View::Asl => json!({ "lambda": ru.lambda.clone().unwrap_or_default(), "payload": args }),
+            };
+        }
+        Callee::Task(t) => &m.tasks[*t],
+    };
+    let with_key = |name: &str| {
+        let mut a = args.clone();
+        if let Some(k) = key {
+            a.insert(name.into(), json!(k));
+        }
+        a
+    };
+    match task.via(view.platform()) {
+        Some(Via::Lambda(f)) => json!({ "lambda": f, "payload": with_key("idempotency_key") }),
+        Some(Via::Http { method, url, form }) => {
+            let (url, rest) = fill_url(url, args);
+            let mut headers = Map::new();
+            if form {
+                headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
+            }
             if let Some(k) = key {
-                a.insert("idempotency_key".into(), json!(k));
+                headers.insert("Idempotency-Key".into(), json!(k));
             }
-            json!({ "activity": m.tasks[*t].name, "args": a })
-        }
-        (View::Temporal, Callee::Rule(r)) => json!({ "activity": rule_activity(&m.rules[*r].name), "args": args }),
-        (View::Durable, Callee::Task(t)) => {
-            let mut a = args.clone();
-            if let Some(k) = key {
-                a.insert("idempotency_key".into(), json!(k));
+            let mut w = Map::new();
+            w.insert("http".into(), json!(method));
+            w.insert("url".into(), json!(url));
+            if !headers.is_empty() {
+                w.insert("headers".into(), Value::Object(headers));
             }
-            let kind = if m.tasks[*t].callback { "callback" } else { "task" };
-            json!({ kind: m.tasks[*t].name, "args": a })
+            if !rest.is_empty() {
+                let place = if method == "GET" || method == "DELETE" { "query" } else { "body" };
+                w.insert(place.into(), Value::Object(rest));
+            }
+            Value::Object(w)
         }
-        (View::Durable, Callee::Rule(r)) => json!({ "invoke": m.rules[*r].lambda.clone().unwrap_or_default(), "payload": args }),
-        (View::Asl, Callee::Rule(r)) => json!({ "lambda": m.rules[*r].lambda.clone().unwrap_or_default(), "payload": args }),
-        (View::Asl, Callee::Task(t)) => {
-            let task = &m.tasks[*t];
-            match &task.binding {
-                Some(Binding::Lambda(f)) => {
-                    let mut p = args.clone();
-                    if let Some(k) = key {
-                        p.insert("idempotency_key".into(), json!(k));
-                    }
-                    json!({ "lambda": f, "payload": p })
+        Some(Via::Aws { service, action }) => {
+            let a = match &task.key_param {
+                Some(p) => with_key(p),
+                None => args.clone(),
+            };
+            json!({ "aws": format!("{service}:{action}"), "args": a })
+        }
+        Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
+        Some(Via::Workflow(t)) => json!({ "child_workflow": t, "args": args }),
+        Some(Via::DurableFunction(f)) => json!({ "invoke": f, "payload": args }),
+        Some(Via::Own) => {
+            let a = with_key("idempotency_key");
+            match view {
+                View::Temporal => json!({ "activity": task.name, "args": a }),
+                _ => {
+                    let kind = if task.callback { "callback" } else { "task" };
+                    json!({ kind: task.name, "args": a })
                 }
-                Some(Binding::Http { method, url, form }) => {
-                    let (url, rest) = fill_url(url, args);
-                    let mut headers = Map::new();
-                    if *form {
-                        headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
-                    }
-                    if let Some(k) = key {
-                        headers.insert("Idempotency-Key".into(), json!(k));
-                    }
-                    let mut w = Map::new();
-                    w.insert("http".into(), json!(method));
-                    w.insert("url".into(), json!(url));
-                    if !headers.is_empty() {
-                        w.insert("headers".into(), Value::Object(headers));
-                    }
-                    if !rest.is_empty() {
-                        let place = if method == "GET" || method == "DELETE" { "query" } else { "body" };
-                        w.insert(place.into(), Value::Object(rest));
-                    }
-                    Value::Object(w)
-                }
-                None => json!({ "task": task.name, "args": args }),
             }
         }
+        None => json!({ "task": task.name, "args": args }),
     }
 }
 
@@ -156,19 +177,96 @@ pub fn jsonata_path(var: &str, fields: &[String]) -> String {
     s
 }
 
+/// The value of an expression, in JSONata. A field that may be absent reads as null, so
+/// that no expression the state machine evaluates comes out undefined.
 pub fn jsonata_expr(e: &TExpr) -> String {
     match e {
-        TExpr::Var { name, fields, .. } => jsonata_path(name, fields),
+        TExpr::Var { name, fields, ty } => {
+            let p = jsonata_path(name, fields);
+            if !fields.is_empty() && matches!(ty, Ty::Opt(_)) {
+                format!("($exists({p}) ? {p} : null)")
+            } else {
+                p
+            }
+        }
         TExpr::Str(s) => jsonata_string(s),
         TExpr::Int(n) => n.to_string(),
         TExpr::Bool(b) => b.to_string(),
         TExpr::Enum(v, _) => jsonata_string(v),
+        TExpr::None(_) => "null".into(),
+        TExpr::Record { fields, .. } => {
+            format!("{{{}}}", fields.iter().map(|(f, x)| format!("{}: {}", jsonata_string(f), jsonata_expr(x))).collect::<Vec<_>>().join(", "))
+        }
+        TExpr::List { items, .. } => {
+            if items.iter().any(|x| x.ty().inner() == &Ty::Json) {
+                // a `json` value may be an array itself, which `[…]` would flatten into the list
+                let mut acc = "[]".to_string();
+                for x in items {
+                    acc = format!("$append({acc}, {})", jsonata_one(&jsonata_expr(x), &x.ty()));
+                }
+                acc
+            } else {
+                format!("[{}]", items.iter().map(jsonata_expr).collect::<Vec<_>>().join(", "))
+            }
+        }
+        TExpr::Interp(parts) => {
+            let mut out: Vec<String> = Vec::new();
+            for p in parts {
+                match p {
+                    IPart::Lit(s) => out.push(jsonata_string(s)),
+                    IPart::Hole(x) => match x.ty() {
+                        Ty::Str | Ty::Timestamp | Ty::Enum(_) => out.push(jsonata_expr(x)),
+                        _ => out.push(format!("$string({})", jsonata_expr(x))),
+                    },
+                }
+            }
+            if out.len() == 1 && !matches!(parts[0], IPart::Lit(_)) {
+                out.insert(0, "\"\"".into());
+            }
+            out.join(" & ")
+        }
+    }
+}
+
+/// A list of one item, `x`, which `$append` adds to a list as one item even when it is an
+/// array itself (only a `json` value can be).
+pub fn jsonata_one(x: &str, t: &Ty) -> String {
+    if t.inner() == &Ty::Json {
+        format!("($type({x}) = \"array\" ? [[{x}]] : [{x}])")
+    } else {
+        format!("[{x}]")
+    }
+}
+
+/// A value that needs no evaluation, as JSON.
+pub fn literal(e: &TExpr) -> Option<Value> {
+    match e {
+        TExpr::Str(s) => Some(json!(s)),
+        TExpr::Int(n) => Some(json!(n)),
+        TExpr::Bool(b) => Some(json!(b)),
+        TExpr::Enum(v, _) => Some(json!(v)),
+        TExpr::None(_) => Some(Value::Null),
+        TExpr::Record { fields, .. } => {
+            let mut o = Map::new();
+            for (f, x) in fields {
+                o.insert(f.clone(), literal(x)?);
+            }
+            Some(Value::Object(o))
+        }
+        TExpr::List { items, .. } => items.iter().map(literal).collect::<Option<Vec<_>>>().map(Value::Array),
+        TExpr::Var { .. } | TExpr::Interp(_) => None,
     }
 }
 
 /// A JSONata test that `x` is a well-formed value of type `t`.
 pub fn jsonata_check(m: &Model, x: &str, t: &Ty, depth: usize) -> String {
     match t {
+        Ty::List(inner) => {
+            let v = format!("$dd_v{depth}");
+            format!("($type({x}) = \"array\" and $count($filter({x}, function({v}) {{ $not({}) }})) = 0)", jsonata_check(m, &v, inner, depth + 1))
+        }
+        Ty::Opt(inner) => format!("($not($exists({x})) or {x} = null or {})", jsonata_check(m, x, inner, depth)),
+        Ty::Json => format!("$exists({x})"),
         Ty::Str => format!("$type({x}) = \"string\""),
         Ty::Bool => format!("$type({x}) = \"boolean\""),
         Ty::Timestamp => format!("($type({x}) = \"string\" and $contains({x}, /{TIMESTAMP_RE}/))"),
@@ -210,13 +308,19 @@ pub fn jsonata_list(values: &[String]) -> String {
 /// Whether a JSON value is a well-formed value of type `t` (the interpreter's side of `jsonata_check`).
 pub fn value_fits(m: &Model, v: &Value, t: &Ty) -> bool {
     match t {
+        Ty::List(inner) => v.as_array().map(|a| a.iter().all(|x| value_fits(m, x, inner))).unwrap_or(false),
+        Ty::Opt(inner) => v.is_null() || value_fits(m, v, inner),
+        Ty::Json => true,
         Ty::Str => v.is_string(),
         Ty::Bool => v.is_boolean(),
         Ty::Timestamp => v.as_str().map(is_timestamp).unwrap_or(false),
         Ty::Int | Ty::Num(_) => v.as_f64().map(|f| f.fract() == 0.0).unwrap_or(false),
         Ty::Enum(e) => v.as_str().map(|s| m.enums[*e].values.iter().any(|x| x == s)).unwrap_or(false),
         Ty::Record(r) => match v.as_object() {
-            Some(o) => m.records[*r].fields.iter().all(|(f, ft)| o.get(f).map(|x| value_fits(m, x, ft)).unwrap_or(false)),
+            Some(o) => m.records[*r].fields.iter().all(|(f, ft)| match o.get(f) {
+                Some(x) => value_fits(m, x, ft),
+                None => matches!(ft, Ty::Opt(_)),
+            }),
             None => false,
         },
     }
@@ -230,8 +334,14 @@ pub fn asl_error(m: &Model, callee: &Callee, e: &HErr) -> Vec<String> {
         HErr::Declared(n) => match callee {
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
-                match (&task.binding, task.errors.iter().find(|(x, _)| x == n)) {
-                    (Some(Binding::Http { .. }), Some((_, Some(st)))) => vec![format!("States.Http.StatusCode.{st}")],
+                let decl = task.error(n);
+                if task.callback {
+                    // whoever answers the callback names the error
+                    return vec![n.clone()];
+                }
+                match (task.via(Platform::StepFunctions), decl) {
+                    (Some(Via::Http { .. }), Some(ErrDef { status: Some(st), .. })) => vec![format!("States.Http.StatusCode.{st}")],
+                    (Some(Via::Aws { service, .. }), Some(d)) => vec![crate::aws::error_name(service, d.exception.as_deref().unwrap_or(&d.name))],
                     _ => vec![n.clone()],
                 }
             }

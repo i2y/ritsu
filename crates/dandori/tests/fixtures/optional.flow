@@ -1,0 +1,26 @@
+workflow optional v1
+description "無いことがある値の match の漏れと、並列の回の変数をループの外で読むこと"
+
+record 贈り物
+  宛名 : string?
+
+record 明細
+  sku : string
+
+record 結果
+  id : string
+
+inputs
+  贈り物 : 贈り物
+  明細   : list[明細]
+
+task 送る(本文: string) -> 結果
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send"
+  idempotent
+
+flow
+  match 贈り物.宛名
+    some n => let a = 送る(本文: n)
+  for x in 明細 at most 10 in parallel
+    let r = 送る(本文: x.sku)
+  let b = 送る(本文: r.id)

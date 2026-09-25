@@ -56,16 +56,66 @@ flow
   …
 ```
 
-- Conditions and arithmetic live in rulec rules; a `.flow` has no expressions beyond
-  variables, fields and literals, and branches only by matching an enum or a bool.
+Lists, values that may be absent, and anything a task can call
+([examples/fulfillment](examples/fulfillment/fulfillment.flow)):
+
+```
+task 梱包を待つ(QueueUrl: string, MessageBody: 梱包の依頼) -> 梱包
+  aws sqs:sendMessage
+  callback
+  timeout 2 days
+
+flow
+  let 結果 = for 明細 in 注文.明細 at most 50 in parallel, 10 at a time
+    let r = 在庫を引き当てる(sku: 明細.sku, 数: 明細.数)
+    yield r
+  …
+  match 注文.贈り物
+    some 贈り物 => let 宛名 = 贈り物.宛名
+    none => pass
+  let 箱 = 梱包を待つ(QueueUrl: "https://sqs.…/packing", MessageBody: {注文ID: 注文.id, 引当: 結果})
+    on timeout => fail PackingLate "二日たっても梱包の知らせがありません"
+  知らせる(TopicArn: "arn:aws:sns:…:orders", Message: "注文 {注文.id} を{判定.便}で出しました")
+```
+
+- Conditions and arithmetic live in rulec rules. A `.flow` builds values — records,
+  lists, strings with values put in — but has no comparison or arithmetic, and branches
+  only by matching an enum, a bool, or a value that may be absent (`none` / `some x`).
+- Types: `int`, units such as `money[円, incl_tax]`, `string`, `bool`, `timestamp`, enums,
+  records, `list[T]`, `T?` for a value that may be absent, and `json` for a value that is
+  passed along without being looked into.
 - A task declares its errors, its retries, whether it is idempotent or takes an
   idempotency `key`, and what it does to a case: `starts`, `sends <event>`, `observes`.
-- Loops have a bound (`repeat at most 12 times`), so the history size has one.
+- Loops have a bound (`repeat at most 12 times`, `for x in xs at most 50`), so the history
+  size has one. The rounds of `for … in parallel` run at the same time; each keeps its
+  own variables, and when a round fails, the others still run to their end and the first
+  failure in the list's order decides.
 - `fail … leaving pi` hands an unfinished case over on purpose; `on failure` settles
   cases when a task fails and nothing handled it.
 
-The complete examples are in [examples/hotel](examples/hotel/hotel.flow) and
-[examples/order](examples/order/order.flow). The design, in Japanese, is in
+### What a task calls
+
+| The task says | Step Functions | Temporal | Lambda durable functions |
+|---|---|---|---|
+| `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function |
+| `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` |
+| `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK |
+| `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | |
+| `workflow "<type>"` | | child workflow | |
+| `durable function "<arn>"` | | | invoke of another durable function |
+| none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) |
+
+The code dandori writes for Temporal and durable functions sends what Step Functions
+sends, through a `Transport` (`io.ts`) whose credentials and clients are yours to set.
+`queue "<name>"` sends a Temporal activity or child workflow to that task queue. A
+`callback` task hands on a token (Step Functions), a callback id (durable functions), or
+an id the answer comes back with as a signal (Temporal); with `aws sqs:sendMessage` the
+token travels in the message.
+
+The complete examples are in [examples/hotel](examples/hotel/hotel.flow),
+[examples/order](examples/order/order.flow), [examples/fulfillment](examples/fulfillment/fulfillment.flow),
+and [examples/review](examples/review/review.flow), which calls only tasks the user writes
+and so is for Temporal and durable functions. The design, in Japanese, is in
 [DESIGN.md](DESIGN.md).
 
 ## Commands
@@ -82,16 +132,16 @@ on the PATH.
 
 - `build --target asl` writes the state machine and, for every rule it calls, a Lambda
   handler around the Python rulec generates.
-- `build --target temporal` writes `workflow.ts`, `types.ts`, `activities.ts` (the tasks'
-  interface, which you implement), `rules.ts` (the rules as activities around rulec's
+- `build --target temporal` writes `workflow.ts`, `types.ts`, `activities.ts`
+  (`makeActivities(own, transport)`: the tasks dandori writes, with the ones you write),
+  `io.ts` (the `Transport`), `rules.ts` (the rules as activities around rulec's
   TypeScript) and `runtime.ts`.
-- `build --target durable` writes `workflow.ts` with `makeHandler(tasks)`, `types.ts`,
-  `tasks.ts` (the tasks' interface, which you implement; each call runs in a step) and
-  `runtime.ts`, and for every rule it calls, the same Lambda handler as `asl`, which the
-  durable function invokes.
+- `build --target durable` writes `workflow.ts` with `makeHandler(own, transport)`,
+  `types.ts`, `tasks.ts`, `io.ts` and `runtime.ts`, and for every rule it calls, the same
+  Lambda handler as `asl`, which the durable function invokes.
 - `scenarios` writes inputs and scripted answers that together take every arm, every
-  handler and every way a case can move; `run` plays one through the reference
-  interpreter.
+  handler, every way a case can move, and lists that are empty, short, and longer than
+  their loop takes; `run` plays one through the reference interpreter.
 
 ## How the output is checked
 
@@ -101,10 +151,17 @@ generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal 
 in Temporal's time-skipping test environment (`tools/temporal/run.mjs`), and the
 generated durable function in the SDK's local test runner (`tools/durable/run.mjs`) — and
 require the same calls, with the same arguments and idempotency keys, and the same end.
-The two test environments cannot time a call out on cue, so the scenarios with a timeout
-are compared on Step Functions only. The ASL is
-also validated with asl-validator, and the code between each platform and a rule answers
-every vector `rulec vectors` produces as rulec says.
+On Temporal and durable functions, the tasks dandori writes run with a stand-in
+`Transport` that records what they would send, so the comparison is with what Step
+Functions sends; the tasks the user writes, the rules and the child workflows are
+stand-ins that answer from the scenario. The rounds of a parallel loop run one at a time
+in the runners, so the calls come in the reference's order.
+
+The durable functions test runner cannot time a call out on cue, so the scenarios with a
+timeout are compared on Step Functions and Temporal only; on Temporal a callback's
+timeout is played by not answering it. The ASL is also validated with asl-validator, and
+the code between each platform and a rule answers every vector `rulec vectors` produces as
+rulec says.
 
 ```
 npm install --prefix tools
@@ -117,7 +174,8 @@ A test that cannot find rulec, Node or the tools prints a `SKIP:` line.
 
 ## Status
 
-Early. Not yet: lists with Map and Parallel, AWS SDK integrations typed from the
-published Smithy models, cases the workflow holds itself, a rule's preconditions checked
-at the task that produced the value, and runs on AWS and on a Temporal server.
-The design, the decisions and what is left are in [DESIGN.md](DESIGN.md).
+Early. Not yet: Parallel with different branches, types of AWS API calls read from the
+published Smithy models (the parameters and answers are declared by hand, as for HTTP),
+cases the workflow holds itself, a rule's preconditions checked at the task that produced
+the value, and runs on AWS and on a Temporal server. The design, the decisions and what is
+left are in [DESIGN.md](DESIGN.md).
