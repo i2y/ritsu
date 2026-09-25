@@ -87,12 +87,12 @@ A few shapes are worth knowing before the first draft:
   as the share up to it minus the share up to the line before: the parts then add up to the
   amount exactly, odd yen included. Three names with declared ranges, nothing negative, a
   positive whole, and a `constraint` that the running total never passes it — else E117.
-- **A process that goes on is decided one call at a time.** `machine <name>(<alias>) over
-  <table>` says which output the caller passes back as which input (`carry`), which inputs a
-  case holds (`held`), where it starts and ends, and what no sequence of calls may do; `check`
-  proves that over every sequence (E124–E127) with the shortest breaking one in
-  `witness.trace`, and `scenario` is an example several calls long (§6.4). With two versions,
-  `diff` names the states a case in progress would be stranded in.
+- **A process that goes on is decided one call at a time.** `machine <name>(<alias>) over <table>`
+  says which output the caller passes back as which input (`carry`), which inputs a case holds
+  (`held`), where it starts and ends, and what no sequence of calls may do; `check` proves that
+  over every sequence (E124–E127) with the shortest breaking one in `witness.trace`, and
+  `scenario` is an example several calls long (§6.4). With two versions, `diff` names the states
+  a case in progress would be stranded in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
   takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`

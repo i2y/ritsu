@@ -862,3 +862,62 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
         assert!(read(page).contains(&want), "{page} に「{want}」がありません");
     }
 }
+
+/// The tag names that open an HTML block, and so end a paragraph, when a line begins with one:
+/// CommonMark's, which GitHub renders README.md and AGENTS.md with, and Python-Markdown's, which
+/// the site is built with and which adds words a placeholder may well be (`output`, `option`,
+/// `object`, `map`). A line wrapped so that it begins with one is read as raw HTML even in the
+/// middle of a code span: AGENTS.md once broke `` `machine <name>(<alias>) over <table>` `` after
+/// `over`, and the `<table>` on the next line opened an HTML table that swallowed the rest of
+/// the agents page, on the site and on GitHub alike.
+const HTML_BLOCKS: &[&str] = &[
+    "address", "article", "aside", "base", "basefont", "blockquote", "body", "canvas", "caption",
+    "center", "col", "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt", "fieldset",
+    "figcaption", "figure", "footer", "form", "frame", "frameset", "group", "h1", "h2", "h3", "h4",
+    "h5", "h6", "head", "header", "hgroup", "hr", "html", "iframe", "legend", "li", "link", "main",
+    "map", "math", "menu", "menuitem", "nav", "noframes", "noscript", "object", "ol", "optgroup",
+    "option", "output", "p", "param", "pre", "progress", "script", "search", "section", "style",
+    "summary", "table", "tbody", "td", "textarea", "tfoot", "th", "thead", "title", "tr", "track",
+    "ul", "video",
+];
+
+#[test]
+fn 段落の途中の行はhtmlのブロックのタグで始まらない() {
+    let mut docs = repo_docs();
+    docs.extend(authored_pages());
+    docs.push(("DESIGN.md".to_string(), read("DESIGN.md")));
+    for (name, body) in docs {
+        let lines: Vec<&str> = body.lines().collect();
+        let mut fence: Option<&str> = None;
+        for (i, l) in lines.iter().enumerate() {
+            let t = l.trim_start();
+            if t.starts_with("```") || t.starts_with("~~~") {
+                let mark = &t[..3];
+                match fence {
+                    None => fence = Some(mark),
+                    Some(f) if f == mark => fence = None,
+                    Some(_) => {}
+                }
+                continue;
+            }
+            if fence.is_some() || i == 0 {
+                continue;
+            }
+            // After a blank line, raw HTML or a table row, a line starts a block of its own
+            // rather than continuing a paragraph; the HTML the site's pages mean is written so.
+            let prev = lines[i - 1].trim();
+            if prev.is_empty() || prev.starts_with('<') || prev.starts_with('|') {
+                continue;
+            }
+            // A closing tag (`</div>`) is where the site's pages end the HTML they opened.
+            let Some(rest) = t.strip_prefix('<') else { continue };
+            let tag: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+            let ends = matches!(rest[tag.len()..].chars().next(), None | Some(' ' | '\t' | '>' | '/'));
+            assert!(
+                !(ends && HTML_BLOCKS.contains(&tag.to_ascii_lowercase().as_str())),
+                "{name}:{}: 段落の途中の行が <{tag}> で始まり、HTML のブロックとして読まれます。折り返す位置を変えてください: {t}",
+                i + 1
+            );
+        }
+    }
+}
