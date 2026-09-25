@@ -11,7 +11,7 @@ that rulec proves complete and free of overlaps. dandori reads them through rule
 command line, and uses a rule's state machine as the type of the thing a workflow
 drives — a Stripe PaymentIntent, an order in a warehouse.
 
-The name is provisional (段取り, arranging the steps of a job beforehand).
+The name comes from 段取り (dandori), arranging the steps of a job beforehand.
 
 ## What the checker says
 

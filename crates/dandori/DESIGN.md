@@ -2,7 +2,7 @@
 
 業務ルールを呼ぶワークフローのための、型の付いた小さな言語。書いたものを走らせる前に検査し、AWS Step Functions（ASL）、Temporal（TypeScript）、AWS Lambda durable functions（TypeScript）、Argo Workflows（WorkflowTemplate の YAML）へコンパイルする。判断そのものは rulec の規則に書き、dandori はそれを rulec の CLI を通して読む。
 
-名前は仮で、段取り（手順を前もって組むこと）から取った。ファイルの拡張子は `.flow`。
+名前は段取り（手順を前もって組むこと）から取った。ファイルの拡張子は `.flow`。
 
 ## 0. 全体像
 
