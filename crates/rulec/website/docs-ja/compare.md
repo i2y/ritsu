@@ -9,15 +9,16 @@
 20〜30 行のアダプタを書きます。テンプレートは rulec が出してくれます。
 
 ```console
-$ rulec adapter rules/送料.rule --template python > adapter.py
-$ rulec schema rules/送料.rule                      # やりとりする JSON Schema
+$ rulec adapter rules/ゆうパック運賃.rule --template python > adapter.py
+$ rulec schema rules/ゆうパック運賃.rule            # やりとりする JSON Schema
 $ rulec verify rules/ゆうパック運賃.rule --adapter python3 adapter.py --lang ja
-照合 207 件 / 一致 182 (87.923%)
+照合 209 件 / 一致 184 (88.038%)
 相手: legacy@fake-1
 
-影響 25 件 (12.077%)  金額 -250
-  表 サイズ判定 行1 / 表 運賃表 行36                 7 件  差 -10 一様  合計 -70
+影響 25 件 (11.962%)  金額 -250
+  表 サイズ判定 行1 / 表 運賃表 行36                               7 件  差 -10 一様  合計 -70
     例: あて先=沖縄県, 三辺合計=1, 重量=1 → 規則 運賃=1450 / 現行 運賃=1460
+  …
 ```
 
 「一様」は **7 件が全部おなじ額だけ動いた**という意味です。ばらつきがあるときは、代わりに最小と最大が出ます。
@@ -130,13 +131,14 @@ checkout とインストールまで含めたジョブ全体は[インストー�
 ## ここも全部、機械可読です
 
 ```console
-$ rulec verify rules/送料.rule --format json --adapter python3 adapter.py
-{"compared":207,"matched":182,"rate":0.87923,"counterpart":"legacy@fake-1","unanswered":0,
+$ rulec verify rules/ゆうパック運賃.rule --format json --adapter python3 adapter.py
+{"compared":209,"matched":184,"rate":0.88038,"counterpart":"legacy@fake-1","unanswered":0,
  "clusters":[{"rows":[{"table":"サイズ判定","row":1},{"table":"運賃表","row":36}],"count":7,
               "delta":{"運賃":{"min":-10,"max":-10,"uniform":true,"total":-70}},
-              "witness":{"in":{…},"ours":{"運賃":1450},"theirs":{"運賃":1460}},
-              "suspect_rounding":false}],
- "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}}}
+              "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},"ours":{"運賃":1450},"theirs":{"運賃":1460}},
+              "records":[{"line":42,"tag":""},{"line":115,"tag":""},…],
+              "suspect_rounding":false},…],
+ "moved":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 三つのコマンドで同じ形です。定義は [形式](formats.md#verify-replay-diff) にあります。

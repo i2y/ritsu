@@ -14,15 +14,16 @@ report counts, amount differences and a witness.
 Write a 20-to-30-line adapter — rulec prints the shape:
 
 ```console
-$ rulec adapter rules/送料.rule --template python > adapter.py
-$ rulec schema rules/送料.rule                      # the JSON Schema of the wire
+$ rulec adapter rules/ゆうパック運賃.rule --template python > adapter.py
+$ rulec schema rules/ゆうパック運賃.rule            # the JSON Schema of the wire
 $ rulec verify rules/ゆうパック運賃.rule --adapter python3 adapter.py
-Compared 207 / matched 182 (87.923%)
+Compared 209 / matched 184 (88.038%)
 Counterpart: legacy@fake-1
 
-Affected 25 (12.077%)  amount -250
+Affected 25 (11.962%)  amount -250
   table サイズ判定 row 1 / table 運賃表 row 36                 7 records  difference -10 uniform  total -70
     Example: あて先=沖縄県, 三辺合計=1, 重量=1 → rule 運賃=1450 / legacy 運賃=1460
+  …
 ```
 
 The legacy implementation is **started as a child process and spoken to
@@ -199,13 +200,14 @@ it impossible.
 ## Everything here is machine-readable too
 
 ```console
-$ rulec verify rules/送料.rule --format json --adapter python3 adapter.py
-{"compared":207,"matched":182,"rate":0.87923,"counterpart":"legacy@fake-1","unanswered":0,
+$ rulec verify rules/ゆうパック運賃.rule --format json --adapter python3 adapter.py
+{"compared":209,"matched":184,"rate":0.88038,"counterpart":"legacy@fake-1","unanswered":0,
  "clusters":[{"rows":[{"table":"サイズ判定","row":1},{"table":"運賃表","row":36}],"count":7,
               "delta":{"運賃":{"min":-10,"max":-10,"uniform":true,"total":-70}},
-              "witness":{"in":{…},"ours":{"運賃":1450},"theirs":{"運賃":1460}},
-              "suspect_rounding":false}],
- "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}}}
+              "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},"ours":{"運賃":1450},"theirs":{"運賃":1460}},
+              "records":[{"line":42,"tag":""},{"line":115,"tag":""},…],
+              "suspect_rounding":false},…],
+ "moved":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 The same shape for all three commands, defined in

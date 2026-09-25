@@ -250,3 +250,43 @@ for line in sys.stdin:
     assert!(out.contains("(100.000%)"), "{out}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The example on the compare page is what the tool prints: the head of the report in each
+/// language, and the JSON beside it. Nothing held it to the output, and the page went on saying
+/// 207 cases after the suite had grown to 209 (§15.155). `tests/vdiff.rs` holds the page's
+/// `diff` example the same way.
+#[test]
+fn 文書に載せた実演は_いまの出力と一致する() {
+    let Some(dir) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
+    let run = |lang: &str, json: bool| -> String {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
+        cmd.current_dir(root()).args(["verify", RULE, "--lang", lang]);
+        if json {
+            cmd.args(["--format", "json"]);
+        }
+        cmd.args(["--adapter", "python3"]).arg(dir.join("adapter.py")).env("BUG", "1");
+        String::from_utf8_lossy(&cmd.output().expect("rulec を起動できない").stdout).into_owned()
+    };
+    for (lang, page) in [("en", "website/docs/compare.md"), ("ja", "website/docs-ja/compare.md")] {
+        let page = std::fs::read_to_string(root().join(page)).unwrap();
+        // The page shows the head of the report: the totals, the counterpart, the first cluster.
+        let out = run(lang, false);
+        for line in out.lines().take(6).filter(|l| !l.trim().is_empty()) {
+            assert!(page.contains(line), "{lang}: 実演に無い行:\n{line}\n出力:\n{out}");
+        }
+        // And the JSON, in the pieces the page breaks it into.
+        let js = run(lang, true);
+        let at = |k: &str| js.find(k).unwrap_or_else(|| panic!("{k} が無い:\n{js}"));
+        let tail = js.rfind("\"moved\":").expect("moved が無い");
+        for piece in [
+            &js[..at("\"clusters\":")],
+            &js[at("\"clusters\":")..at("\"delta\":")],
+            &js[at("\"delta\":")..at("\"witness\":")],
+            &js[at("\"witness\":")..at("\"records\":")],
+            js[tail..].trim_end(),
+        ] {
+            assert!(page.contains(piece), "{lang}: JSON の実演に無い部分:\n{piece}\n出力:\n{js}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
