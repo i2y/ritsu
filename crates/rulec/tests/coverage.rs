@@ -640,3 +640,85 @@ define 手数料(fee) : money[USDc] = 金額 × 3.49%
     let fees: std::collections::BTreeSet<String> = vs.iter().map(fee_of).collect();
     assert!(fees.len() >= 2, "{fees:?}");
 }
+
+/// Two amounts at two rates, each amount at most `hi` cents.
+fn two_rates(lo: i32, hi: i32) -> String {
+    format!(
+        "\
+rule 二つの率(two_rates) v1
+
+inputs
+  国内(domestic) : money[USDc]  range >={lo}USDc <={hi}USDc
+  国外(abroad)   : money[USDc]  range >={lo}USDc <={hi}USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 手数料(fee) : money[USDc] = 国内 × 3.49% + 国外 × 1.5%
+"
+    )
+}
+
+/// With two names in the value, the ranges are taken in too (§15.152). At ten cents apiece the
+/// fee never passes 0.499 cents: no tie, and nothing but 0 after rounding, so neither a tie nor
+/// a value pair is owed. Both were owed, and neither could be met — a red no rule could fix,
+/// since the rounding is required and no example can land where no input does.
+#[test]
+fn 範囲の中で届かない同着と一つにしかならない値は義務にならない() {
+    let (a, vs) = audit_src("two_rates.rule", &two_rates(0, 10));
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+    // A product can be fixed the same way: at most ten yen at at most 1% is 0 yen.
+    let product = "\
+rule 積の範囲(narrow_product) v1
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=10円
+  率(rate)     : rate[step 0.01%]  range >=0% <=1%
+
+outputs
+  額(fee) : money[円]  round half_up(1円)
+
+define 額(fee) : money[円] = 金額 × 率
+";
+    let (a, vs) = audit_src("narrow_product.rule", product);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+}
+
+/// A row's own cells narrow what it can compute from: 3.49% reaches a half cent at 5,000 cents,
+/// but the row that computes it only holds up to 10.
+#[test]
+fn 行の条件の中で届かない同着は義務にならない() {
+    let src = "\
+rule 行で狭い(narrow_row) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=0USDc <=10000USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 料率分(pct) : money[USDc] = 金額 × 3.49%
+
+table 手数料表(fees)
+policy unique
+| 金額     | -> 手数料 |
+| <=10USDc | 料率分    |
+| >10USDc  | 0USDc     |
+";
+    let (a, vs) = audit_src("narrow_row.rule", src);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+}
+
+/// Where the tie is reached by one combination of the two amounts alone — 50 and 117 cents,
+/// 1.745 + 1.755 — the generator solves for it rather than walking to it, and the tie is met.
+#[test]
+fn 二つの入力を同時に動かさないと届かない同着も見つける() {
+    let (a, vs) = audit_src("two_rates.rule", &two_rates(1, 120));
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!(a.tally[TIE], (1, 1));
+    let at = |v: &Vector, k: &str| vectors::show(&v.input[k]);
+    assert!(vs.iter().any(|v| at(v, "国内") == "50" && at(v, "国外") == "117"), "同着の組み合わせが無い");
+}

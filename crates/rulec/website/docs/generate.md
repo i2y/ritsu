@@ -556,16 +556,17 @@ A computed value is a row that returns a name rather than a literal, or an
 output a `define` or `result` line computes. It has to be seen at two values,
 in two vectors one input apart, as an implementation's answer shows it:
 otherwise an implementation that returned a constant there would match every
-vector. A refund of the amount paid, tried only where the amount is 0 yen,
+vector. A value that can only ever be one value — an output that rounds to the
+same amount whatever comes in — raises no such obligation. A refund of the amount paid, tried only where the amount is 0 yen,
 is the case it was made for.
 
 A rounding tie is the value exactly half a step off the grid, the one
 point where `half_up` and `half_down` part company. Every output that
 declares a rounding owes one, unless the rule's arithmetic shows that no
-input reaches it: 18.3% of a standard monthly remuneration is always an
-even number of yen, so the halved amount has no fraction, and that rule
-shows 0 / 0. A tie that is merely hard to find still counts, and shows as
-missing.
+input reaches it, inside the declared ranges and the rows' own conditions:
+18.3% of a standard monthly remuneration is always an even number of yen, so
+the halved amount has no fraction, and that rule shows 0 / 0. A tie that is
+merely hard to find still counts, and shows as missing.
 
 ## Keeping it in step
 

@@ -394,6 +394,28 @@ fn tie_search(f: &RuleFile, c: &Checked, base: &BTreeMap<String, Val>, seeds: &[
                 }
             }
         }
+        // The point the audit's own argument walks to, where every name it sets is an input:
+        // several inputs moved at once, inside the ranges the rows allow (§15.152).
+        for form in &forms {
+            let Some(Some(point)) = form.tie_witness(g) else { continue };
+            let Some(vals) = point
+                .iter()
+                .map(|(x, v)| Some((x.clone(), to_val(*v, &c.ty_of(x)?))))
+                .collect::<Option<Vec<(String, Val)>>>()
+            else {
+                continue;
+            };
+            if !vals.iter().all(|(x, _)| f.inputs.iter().any(|i| &i.name.text == x)) {
+                continue;
+            }
+            for s in &starts {
+                let mut a = (*s).clone();
+                a.extend(vals.iter().cloned());
+                if lands(&a) {
+                    return Some(a);
+                }
+            }
+        }
     }
     for s in seeds {
         if let Some(a) = walk_to_tie(f, c, s, name, g, TIE_REACH) {

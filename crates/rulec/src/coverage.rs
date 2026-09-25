@@ -647,6 +647,40 @@ pub struct ValueDuty {
 pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
     let reads = reads_of(f);
     let mut out = Vec::new();
+    // A value that is one value wherever it can be looked at raises none either (§15.152): an
+    // output whose every possible value rounds to the same amount — 3.49% of at most ten cents
+    // is 0 cents, whatever comes in — and a column that is one number wherever its row holds.
+    // Shown by the value's range, row by row; what that cannot show stays an obligation.
+    let rounding_of = |col: &str| -> Option<(crate::num::RoundMode, Rat)> {
+        let od = f.outputs.iter().find(|o| o.name.text == col)?;
+        let rd = od.rounding.as_ref()?;
+        Some((crate::num::RoundMode::parse(&rd.mode)?, crate::types::lit_value_in_pub(&rd.grid, &c.ty_of(col)?)?))
+    };
+    let fixed = |forms: &[GridForm], rounding: Option<(crate::num::RoundMode, Rat)>| -> bool {
+        let mut span: Option<(Rat, Rat)> = None;
+        for g in forms {
+            match g.interval() {
+                None => return false,
+                Some(None) => {}
+                Some(Some((l, h))) => {
+                    span = Some(match span {
+                        Some((a, b)) => (min_rat(a, l), max_rat(b, h)),
+                        None => (l, h),
+                    })
+                }
+            }
+        }
+        let Some((l, h)) = span else { return true };
+        match rounding {
+            Some((m, g)) => l.round_to(m, g) == h.round_to(m, g),
+            None => l == h,
+        }
+    };
+    let output_fixed = |n: &str| grid_forms_of(f, c, n).is_some_and(|forms| fixed(&forms, rounding_of(n)));
+    // Nothing moves an answer when every output is fixed.
+    if !f.outputs.is_empty() && f.outputs.iter().all(|o| output_fixed(&o.name.text)) {
+        return out;
+    }
     for (si, set) in c.sets.iter().enumerate() {
         let t = &set.table;
         for (ri, row) in t.rows.iter().enumerate() {
@@ -668,6 +702,14 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
                     continue;
                 }
                 if pins.contains(n.as_str()) || leaves(&reads, n).iter().all(|l| pins.contains(l.as_str())) {
+                    continue;
+                }
+                let bx = row_box(f, c, t, row);
+                let at_row = grid_forms(f, c, &Expr::Name(n.clone(), row.span.clone()), 0, &mut 0).map(|mut forms| {
+                    forms.iter_mut().for_each(|g| g.narrow(&bx));
+                    forms
+                });
+                if at_row.is_some_and(|forms| fixed(&forms, rounding_of(&oc.name.text))) {
                     continue;
                 }
                 out.push(ValueDuty { at: Some((si, ri)), col: oc.name.text.clone(), name: n.clone() });
@@ -694,7 +736,7 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
             }
             _ => leaves(&reads, n),
         };
-        if !from.is_empty() {
+        if !from.is_empty() && !output_fixed(n) {
             out.push(ValueDuty { at: None, col: n.clone(), name: n.clone() });
         }
     }
@@ -857,9 +899,131 @@ impl GridForm {
             *e = e.checked_add(a.checked_mul(Rat::int(sign))?)?;
         }
         r.steps.extend(o.steps.iter().map(|(n, s)| (n.clone(), *s)));
-        r.ranges.extend(o.ranges.iter().map(|(n, s)| (n.clone(), *s)));
+        // A name both sides carry is bounded by both: the rows the two came from each narrowed
+        // it, and a pair of rows that cannot hold together leaves it no values at all.
+        for (n, b) in &o.ranges {
+            let v = match r.ranges.get(n) {
+                Some(a) => (max_rat(a.0, b.0), min_rat(a.1, b.1)),
+                None => *b,
+            };
+            r.ranges.insert(n.clone(), v);
+        }
         r.k = r.k.checked_add(o.k.checked_mul(Rat::int(sign))?)?;
         Some(r)
+    }
+
+    /// Narrow the names this form reads to what a row's own cells allow of them.
+    fn narrow(&mut self, bx: &BTreeMap<String, (Rat, Rat)>) {
+        for (n, b) in bx {
+            if !self.terms.contains_key(n) {
+                continue;
+            }
+            let v = match self.ranges.get(n) {
+                Some(a) => (max_rat(a.0, b.0), min_rat(a.1, b.1)),
+                None => *b,
+            };
+            self.ranges.insert(n.clone(), v);
+        }
+    }
+
+    /// The values the form takes over the ranges of its names: `Some(None)` when some name has
+    /// no value left (the rows it came from cannot hold together), `None` when a name has no
+    /// known range.
+    fn interval(&self) -> Option<Option<(Rat, Rat)>> {
+        let (mut lo, mut hi) = (self.k, self.k);
+        for (n, a) in &self.terms {
+            if a.num == 0 {
+                continue;
+            }
+            let (l, h) = *self.ranges.get(n)?;
+            if l.cmp_to(h) == std::cmp::Ordering::Greater {
+                return Some(None);
+            }
+            let (x, y) = (a.checked_mul(l)?, a.checked_mul(h)?);
+            let (x, y) = if x.cmp_to(y) == std::cmp::Ordering::Greater { (y, x) } else { (x, y) };
+            lo = lo.checked_add(x)?;
+            hi = hi.checked_add(y)?;
+        }
+        Some(Some((lo, hi)))
+    }
+
+    /// A point that puts this form exactly half a step off `grid`, each name inside its range:
+    /// `Some(Some(point))`, or `Some(None)` when there is none. Every name but one is walked —
+    /// only as far as its multiples still land on new remainders of the grid — and the last is
+    /// solved for (`solve_congruence`). `None` when a name has no known range, the walk would be
+    /// too long, or the numbers do not fit; the caller then falls back on the divisor alone.
+    pub fn tie_witness(&self, grid: Rat) -> Option<Option<BTreeMap<String, Rat>>> {
+        let off = grid.checked_div(Rat::int(2))?.checked_sub(self.k)?;
+        // (name, coefficient × step, step, first multiple, last multiple)
+        let mut vars: Vec<(&String, Rat, Rat, i128, i128)> = Vec::new();
+        for (n, a) in &self.terms {
+            if a.num == 0 {
+                continue;
+            }
+            let q = *self.steps.get(n)?;
+            let (lo, hi) = *self.ranges.get(n)?;
+            let (lo_m, hi_m) = (lo.checked_div(q)?, hi.checked_div(q)?);
+            let lo_m = -((-lo_m.num).div_euclid(lo_m.den));
+            let hi_m = hi_m.num.div_euclid(hi_m.den);
+            if hi_m < lo_m {
+                return Some(None);
+            }
+            vars.push((n, a.checked_mul(q)?, q, lo_m, hi_m));
+        }
+        // The widest name is the one solved for, so that the walk is over the narrow ones.
+        vars.sort_by_key(|v| v.4 - v.3);
+        let Some((solved, others)) = vars.split_last_mut().map(|(l, rest)| (*l, rest)) else {
+            // A constant: on the tie or not, whatever comes in.
+            return Some(off.checked_div(grid)?.is_int().then(BTreeMap::new));
+        };
+        // Walk the others. Past `grid ÷ gcd(coefficient × step, grid)` multiples a name repeats
+        // the remainders it already gave, so that many are all it can say.
+        let mut spans: Vec<i128> = Vec::new();
+        let mut total: i128 = 1;
+        for (_, a, _, lo_m, hi_m) in others.iter() {
+            let period = grid.checked_div(rat_gcd(abs(*a), abs(grid))?)?;
+            if !period.is_int() {
+                return None;
+            }
+            let span = (hi_m - lo_m + 1).min(period.num);
+            spans.push(span);
+            total = total.checked_mul(span)?;
+            if total > TIE_WALK {
+                return None;
+            }
+        }
+        let (sn, sa, sq, slo, shi) = solved;
+        let mut at: Vec<i128> = vec![0; others.len()];
+        loop {
+            let mut rest = off;
+            for (i, (_, a, _, lo_m, _)) in others.iter().enumerate() {
+                rest = rest.checked_sub(a.checked_mul(Rat::int(lo_m + at[i]))?)?;
+            }
+            if let Some((m0, period)) = solve_congruence(sa, rest, grid)? {
+                let first = m0.checked_add(slo.checked_sub(m0)?.checked_add(period - 1)?.div_euclid(period).checked_mul(period)?)?;
+                if first <= shi {
+                    let mut point = BTreeMap::new();
+                    point.insert(sn.clone(), Rat::int(first).checked_mul(sq)?);
+                    for (i, (n, _, q, lo_m, _)) in others.iter().enumerate() {
+                        point.insert((*n).clone(), Rat::int(lo_m + at[i]).checked_mul(*q)?);
+                    }
+                    return Some(Some(point));
+                }
+            }
+            // The next combination, odometer fashion.
+            let mut i = 0;
+            loop {
+                if i == at.len() {
+                    return Some(None);
+                }
+                at[i] += 1;
+                if at[i] < spans[i] {
+                    break;
+                }
+                at[i] = 0;
+                i += 1;
+            }
+        }
     }
 
     fn scale(&self, f: Rat) -> Option<GridForm> {
@@ -903,29 +1067,17 @@ impl GridForm {
     /// `Some(false)` when no value of this form sits half a step off `grid`, `Some(true)` when
     /// one may, `None` when the numbers do not fit.
     ///
-    /// A form in one name is settled exactly, its range included: `amount × 3.49%` reaches a
-    /// half cent at one amount in ten thousand, and whether that amount lies in the declared
-    /// range is a question with an answer. Several names are settled by the common divisor
-    /// alone, ranges left out.
+    /// Settled exactly, ranges included, wherever `tie_witness` can walk it: `amount × 3.49%`
+    /// reaches a half cent at one amount in ten thousand, and whether that amount lies in the
+    /// declared range is a question with an answer; so is whether two small amounts at two
+    /// rates ever add up to one. Past that, the common divisor alone decides, ranges left out.
     fn reaches_tie(&self, grid: Rat) -> Option<bool> {
-        let off = grid.checked_div(Rat::int(2))?.checked_sub(self.k)?;
-        let live: Vec<(&String, &Rat)> = self.terms.iter().filter(|(_, a)| a.num != 0).collect();
-        if let [(n, a)] = live.as_slice() {
-            if let Some((lo, hi)) = self.ranges.get(n.as_str()) {
-                let q = *self.steps.get(n.as_str())?;
-                let Some((m0, period)) = solve_congruence(a.checked_mul(q)?, off, grid)? else {
-                    return Some(false);
-                };
-                let lo_m = lo.checked_div(q)?;
-                let lo_m = -((-lo_m.num).div_euclid(lo_m.den));
-                let hi_m = hi.checked_div(q)?;
-                let hi_m = hi_m.num.div_euclid(hi_m.den);
-                let first = m0.checked_add(lo_m.checked_sub(m0)?.checked_add(period - 1)?.div_euclid(period).checked_mul(period)?)?;
-                return Some(first <= hi_m);
-            }
+        if let Some(w) = self.tie_witness(grid) {
+            return Some(w.is_some());
         }
+        let off = grid.checked_div(Rat::int(2))?.checked_sub(self.k)?;
         let mut d = abs(grid);
-        for (n, a) in live {
+        for (n, a) in self.terms.iter().filter(|(_, a)| a.num != 0) {
             d = rat_gcd(d, abs(a.checked_mul(*self.steps.get(n)?)?))?;
         }
         Some(off.checked_div(d)?.is_int())
@@ -973,6 +1125,65 @@ fn lcm(a: i128, b: i128) -> Option<i128> {
 
 fn abs(r: Rat) -> Rat {
     Rat { num: r.num.abs(), den: r.den }
+}
+
+fn max_rat(a: Rat, b: Rat) -> Rat {
+    if a.cmp_to(b) == std::cmp::Ordering::Less { b } else { a }
+}
+
+fn min_rat(a: Rat, b: Rat) -> Rat {
+    if a.cmp_to(b) == std::cmp::Ordering::Greater { b } else { a }
+}
+
+/// How many combinations `tie_witness` walks before it leaves the question to the divisor.
+const TIE_WALK: i128 = 1 << 20;
+
+/// What a row's own cells say of the numbers that come in: an interval for each input column
+/// the row tests with a number. A column computed from several inputs says something too, but
+/// not about one of them alone, and is left out — which only leaves more values possible.
+fn row_box(f: &RuleFile, c: &Checked, t: &Table, row: &Row) -> BTreeMap<String, (Rat, Rat)> {
+    let mut out = BTreeMap::new();
+    for ((col, _), cell) in t.inputs.iter().zip(&row.cells) {
+        if !f.inputs.iter().chain(f.elements.iter().flat_map(|e| &e.fields)).any(|i| &i.name.text == col) {
+            continue;
+        }
+        let Some(ty) = c.ty_of(col) else { continue };
+        if !is_numeric(&ty) {
+            continue;
+        }
+        let q = quantum(c, col, &ty);
+        let (mut lo, mut hi) = match c.ranges.get(col.as_str()) {
+            Some((Some(l), Some(h))) => (*l, *h),
+            _ => continue,
+        };
+        let val = |l: &Lit| -> Option<Rat> {
+            match l {
+                Lit::Num(n) => crate::types::lit_value_in_pub(n, &ty),
+                Lit::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+                _ => None,
+            }
+        };
+        match cell {
+            Cell::Lit(l) => {
+                let Some(v) = val(l) else { continue };
+                (lo, hi) = (max_rat(lo, v), min_rat(hi, v));
+            }
+            Cell::Cmp(atoms) => {
+                for (op, l) in atoms {
+                    let Some(v) = val(l) else { continue };
+                    match op {
+                        CmpOp::Le => hi = min_rat(hi, v),
+                        CmpOp::Lt => hi = min_rat(hi, v.sub(q)),
+                        CmpOp::Ge => lo = max_rat(lo, v),
+                        CmpOp::Gt => lo = max_rat(lo, v.add(q)),
+                    }
+                }
+            }
+            _ => continue,
+        }
+        out.insert(col.clone(), (lo, hi));
+    }
+    out
 }
 
 /// The greatest common divisor of two non-negative rationals: the largest `d` of which both
@@ -1051,7 +1262,15 @@ fn grid_forms(f: &RuleFile, c: &Checked, e: &Expr, depth: usize, fresh: &mut usi
                         // A word that names nothing is `none`, or a value of an enum: no number,
                         // so nothing that could sit on a tie.
                         OutCell::Name(m) if !bound(f, m) => {}
-                        OutCell::Name(m) => out.extend(grid_forms(f, c, &Expr::Name(m.clone(), row.span.clone()), depth + 1, fresh)?),
+                        OutCell::Name(m) => {
+                            // The row's value only where the row holds: its cells narrow what
+                            // comes in (§15.152).
+                            let bx = row_box(f, c, t, row);
+                            for mut g in grid_forms(f, c, &Expr::Name(m.clone(), row.span.clone()), depth + 1, fresh)? {
+                                g.narrow(&bx);
+                                out.push(g);
+                            }
+                        }
                     }
                     if out.len() > GRID_BRANCHES {
                         return None;

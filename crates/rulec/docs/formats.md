@@ -120,10 +120,12 @@ One object per rule file.
 `fold_transition`, `machine_transition`. Every obligation is read off the rule, never off what
 the suite happened to reach. `value_pair` has one for each row that returns a computed value —
 a name in its output cell, unless the row itself pins down everything that name is computed
-from — and for each output a `define` or a `result` line computes: two vectors on the row, one
-input apart, with the value moved as `test` and `verify` compare it (an output after rounding)
-(§15.151). `rounding_tie` has one for each output that declares a rounding, unless the rule's
-arithmetic shows that no input takes the output half a step off its grid.
+from, or the value can only be one value there (an output that rounds to the same amount
+whatever comes in) — and for each output a `define` or a `result` line computes: two vectors on
+the row, one input apart, with the value moved as `test` and `verify` compare it (an output
+after rounding) (§15.151, §15.152). `rounding_tie` has one for each output that declares a
+rounding, unless the rule's arithmetic shows that no input inside the declared ranges and the
+rows' own conditions takes the output half a step off its grid.
 `fold_transition` has obligations only for a rule that walks a sequence
 (§15.56); `machine_transition` only for a rule with a `machine` (§15.148): every transition a
 case can make, and every two that can follow one another, each met by a trace of the suite that
