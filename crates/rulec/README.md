@@ -238,7 +238,7 @@ website/          the documentation site (Zensical): docs/ English, docs-ja/ Jap
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
-src/              49 modules, and 6 more under codegen/
+src/              50 modules, and 6 more under codegen/
 tests/corpus/     50 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 53 in Japanese, 42 in English

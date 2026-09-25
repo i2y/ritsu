@@ -33,6 +33,7 @@ pub mod eval;
 pub mod fixtures;
 pub mod fmt;
 pub mod fourier;
+pub mod grid;
 pub mod graph;
 pub mod i18n;
 pub mod extract;

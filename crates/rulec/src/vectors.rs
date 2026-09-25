@@ -381,7 +381,7 @@ fn tie_search(f: &RuleFile, c: &Checked, base: &BTreeMap<String, Val>, seeds: &[
     let lands = |a: &BTreeMap<String, Val>| {
         allowed(f, a) && bind(f, c, a).get(name).and_then(as_rat).is_some_and(|v| is_tie(v, g))
     };
-    if let Some(forms) = crate::coverage::grid_forms_of(f, c, name) {
+    if let Some(forms) = crate::grid::Grid::new(f, c).forms_of(name) {
         for s in &starts {
             for form in &forms {
                 for x in form.terms.keys().filter(|x| f.inputs.iter().any(|i| &i.name.text == *x)) {
@@ -444,7 +444,8 @@ fn tie_search(f: &RuleFile, c: &Checked, base: &BTreeMap<String, Val>, seeds: &[
             }
         }
     }
-    None
+    // Last, where few enough inputs are involved: every one of them (§15.153).
+    crate::grid::exhaust_tie(f, c, name, g).flatten()
 }
 
 /// Walk out from `start` along the slopes, tie by tie, until one is placed.
@@ -475,7 +476,7 @@ fn walk_to_tie(f: &RuleFile, c: &Checked, start: &BTreeMap<String, Val>, name: &
 /// held where `a` has them: `aₓ·stepₓ·m + rest ≡ grid ÷ 2 (mod grid)`, a linear congruence in
 /// the whole number `m`, solved and taken nearest to where `x` stands, inside its range. Whether
 /// the form is the one the rule takes at that point is the evaluator's to say, afterwards.
-fn solve_tie(c: &Checked, form: &crate::coverage::GridForm, a: &BTreeMap<String, Val>, x: &str, grid: Rat) -> Option<Val> {
+fn solve_tie(c: &Checked, form: &crate::grid::GridForm, a: &BTreeMap<String, Val>, x: &str, grid: Rat) -> Option<Val> {
     let ax = *form.terms.get(x)?;
     if ax.num == 0 {
         return None;
@@ -490,7 +491,7 @@ fn solve_tie(c: &Checked, form: &crate::coverage::GridForm, a: &BTreeMap<String,
     }
     let lhs = ax.checked_mul(q)?;
     let rhs = grid.checked_div(Rat::int(2))?.checked_sub(rest)?;
-    let (m0, period) = crate::coverage::solve_congruence(lhs, rhs, grid)??;
+    let (m0, period) = crate::grid::solve_congruence(lhs, rhs, grid)??;
     // Every solution is m0 + t·period. Take the one nearest to where x stands, in range.
     let here = as_rat(a.get(x)?)?.checked_div(q)?;
     let here = here.num.div_euclid(here.den);
@@ -1147,7 +1148,13 @@ fn pool_inner(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> 
             .chain(lifted.iter().map(|a| (a, false)))
             .chain(out.iter().map(|(a, _)| (a, true)))
             .collect();
-        let found = value_pair(f, c, cands, &names, &starts, tag.as_deref(), col);
+        let mut found = value_pair(f, c, cands, &names, &starts, tag.as_deref(), col);
+        // Last, where few enough inputs are involved: every one of them (§15.153).
+        if found.is_empty() {
+            if let Some(Some((p, q))) = crate::grid::exhaust_pair(f, c, tag.as_deref(), col) {
+                found = vec![p, q];
+            }
+        }
         for a in found {
             out.push((a, why.clone()));
         }

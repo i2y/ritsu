@@ -722,3 +722,119 @@ fn 二つの入力を同時に動かさないと届かない同着も見つけ�
     let at = |v: &Vector, k: &str| vectors::show(&v.input[k]);
     assert!(vs.iter().any(|v| at(v, "国内") == "50" && at(v, "国外") == "117"), "同着の組み合わせが無い");
 }
+
+/// A derived column a table tests is one name to the argument, on the grid its expression lands
+/// on (§15.153): 1.5% of a total of at most 60 yen never ends in half a yen, though a total of
+/// 100 would. The inputs alone go up to 2,000 yen together.
+#[test]
+fn 導出の列の条件の中で届かない同着は義務にならない() {
+    let src = "\
+rule 導出の条件(derived_cond) v1
+
+inputs
+  商品A(a) : money[円]  range >=0円 <=1000円
+  商品B(b) : money[円]  range >=0円 <=1000円
+
+outputs
+  手数料(fee) : money[円]  round half_up(1円)
+
+derive 合計(total) : money[円] = 商品A + 商品B  range >=0円 <=2000円
+
+define 料率分(pct) : money[円] = 合計 × 1.5%
+
+table 手数料表(fees)
+policy unique
+| 合計   | -> 手数料 |
+| <=60円 | 料率分    |
+| >60円  | 0円       |
+";
+    let (a, vs) = audit_src("derived_cond.rule", src);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((1, 1), (0, 0)));
+}
+
+/// Under `policy first` a row wins only where the rows before it do not: the rate here applies
+/// to at most 10 cents, whatever the declared range says — a million cents, too many to try
+/// one by one. Where the row before it leaves 5,000 cents to it, the tie is owed and met.
+#[test]
+fn 前の行に取られる分は計算値にも同着にも入らない() {
+    let src = |cut: &str| {
+        format!(
+            "\
+rule 先の行(first_row) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=0USDc <=1000000USDc
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 料率分(pct) : money[USDc] = 金額 × 3.49%
+
+table 手数料表(fees)
+policy first
+| 金額      | -> 手数料 |
+| >{cut}USDc | 0USDc     |
+| -         | 料率分    |
+"
+        )
+    };
+    let (a, vs) = audit_src("first_row.rule", &src("10"));
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+    let (a, vs) = audit_src("first_row.rule", &src("10000"));
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((1, 1), (1, 1)));
+}
+
+/// A `constraint` narrows what comes in the same way: 国内 never passes 国外, and 国外 stops at
+/// 10 cents.
+#[test]
+fn 制約で届かない同着と一つにしかならない値は義務にならない() {
+    let src = "\
+rule 制約(constrained) v1
+
+inputs
+  国内(domestic) : money[USDc]  range >=0USDc <=10000USDc
+  国外(abroad)   : money[USDc]  range >=0USDc <=10USDc
+
+constraint 国内 <= 国外
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 手数料(fee) : money[USDc] = 国内 × 3.49%
+";
+    let (a, vs) = audit_src("constrained.rule", src);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+}
+
+/// Where the arithmetic cannot say — the rows before this one each test two columns, so neither
+/// takes a single interval away — and few enough inputs are involved, every one of them is
+/// evaluated (§15.153): 6,001 amounts by two, and none lands the rate on half a cent.
+#[test]
+fn 決めきれない形でも入力が少なければ総当たりで決める() {
+    let src = "\
+rule 二列の先の行(first_two_cols) v1
+
+inputs
+  金額(amount) : money[USDc]  range >=0USDc <=6000USDc
+  会員(member) : bool
+
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+define 料率分(pct) : money[USDc] = 金額 × 3.49%
+
+table 手数料表(fees)
+policy first
+| 金額    | 会員  | -> 手数料 |
+| >10USDc | true  | 0USDc     |
+| >10USDc | false | 0USDc     |
+| -       | -     | 料率分    |
+";
+    let (a, vs) = audit_src("first_two_cols.rule", src);
+    assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
+    assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
+}
