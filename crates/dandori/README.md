@@ -201,11 +201,41 @@ flow
   that may be absent. Step Functions refuses an agent without `connection`, and an HTTP Task
   whose `timeout` is over the 60 seconds it gives a request (E050).
 
-The complete examples are in [examples/hotel](examples/hotel/hotel.flow),
-[examples/order](examples/order/order.flow), [examples/fulfillment](examples/fulfillment/fulfillment.flow),
-[examples/inquiry](examples/inquiry/inquiry.flow), and [examples/review](examples/review/review.flow),
-which calls only tasks the user writes and so is for Temporal, durable functions and Argo
-(with `image`). The design, in Japanese, is in [DESIGN.md](DESIGN.md).
+## Examples
+
+Five examples, each written three ways: the same flow, with its tasks called and its news
+brought in the way the platform does.
+
+| Example | For AWS (Step Functions, and every platform) | For Temporal | For pydantic-graph |
+|---|---|---|---|
+| a hotel booking that holds a card and captures at check-out | [hotel](examples/hotel/hotel.flow) | [temporal](examples/hotel/temporal/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
+| an order in a warehouse's system, reminded, shipped, delivered | [order](examples/order/order.flow) | [temporal](examples/order/temporal/order.flow) | [pydantic-graph](examples/order/pydantic-graph/order.flow) |
+| reserving the lines of an order side by side, packing, delivery | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
+| agents that read an inquiry and draft a reply, and a rule that routes it | [inquiry](examples/inquiry/inquiry.flow) | [temporal](examples/inquiry/temporal/inquiry.flow) | [pydantic-graph](examples/inquiry/pydantic-graph/inquiry.flow) |
+| an application scored by other workers, and a person's approval | [review](examples/review/review.flow) | [temporal](examples/review/temporal/review.flow) | [pydantic-graph](examples/review/pydantic-graph/review.flow) |
+
+- **For AWS**, the tasks call Lambda functions, HTTP APIs through EventBridge connections, and
+  SNS and SQS, as Step Functions does; a callback hands on a task token. The code dandori writes
+  for the other platforms makes the same calls, so these build for all five — but review, whose
+  tasks are all the user's own, is not for Step Functions (the first column is its version for
+  the platforms that run the user's code: Temporal, durable functions, Argo with `image`, and
+  pydantic-graph).
+- **For Temporal**, a call to an HTTP API is an activity dandori writes (the `Transport` adds
+  the credentials, so there is no `connection`), and the rest are activities you write. News
+  from outside the workflow comes as an `event`, sent to the workflow by its id (Stripe's
+  webhook in hotel, the carrier in order); a request that is answered later stays a `callback`,
+  answered by the Update the generated client sends. Hotel and order release what they hold
+  when the workflow is cancelled (`on cancel`); fulfillment and review send work to other task
+  queues; inquiry calls its rule as a local activity; order's reminder loop goes on in a new
+  run as its history grows.
+- **For pydantic-graph**, the graph runs in the Python process that takes the input: a call to
+  an HTTP API or an agent is a function dandori writes, the rules run in the process, the rest
+  are functions you write, and a callback is answered in the same process (`Deps.callbacks`).
+  Waits hold the process, and a run the process loses is lost, so this is the shape for a
+  prototype, or a short flow inside an agent.
+
+Each version is played by the runners of the platform it is written for (the ones for AWS by
+all of them). The design, in Japanese, is in [DESIGN.md](DESIGN.md).
 
 ## Commands
 
@@ -367,7 +397,7 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes a minute and a half to a little over two minutes; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes about two minutes; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of

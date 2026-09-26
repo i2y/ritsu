@@ -1,0 +1,102 @@
+workflow ship_order v1
+description "The order of examples/order, written for Temporal. The warehouse's calls are activities dandori writes, and the notice is an activity you write; the carrier's system tells the workflow of the order about the delivery, by the order's id (an event); and an order the shop cancels on the way is cancelled at the warehouse too (on cancel). The loop over the reminders goes on in a new run when its history grows long"
+
+use rule order_state from "../rules/order_state.rule"
+use rule urgency from "../rules/urgency.rule"
+
+record Order
+  id     : string
+  state  : order_state.state
+  amount : money[JPY, incl_tax]
+  member : bool
+
+record Receipt
+  id : string
+
+inputs
+  order_id : string
+
+outputs
+  carrier : urgency.carrier
+
+task get_order(id: string, expand: string) -> Order
+  http GET "https://warehouse.example.com/v1/orders/{id}"
+  observes
+  idempotent
+  errors busy = 429
+  retry 3 times every 1 second on busy
+
+task request_shipment(id: string, carrier: urgency.carrier) -> Order
+  http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
+  sends ship
+  errors conflict = 409
+  refused as conflict
+  key
+
+task request_cancel(id: string) -> Order
+  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  sends cancel
+  errors conflict = 409
+  refused as conflict
+  key
+
+# The shop's own notice service, called from code you write.
+task notify(order_id: string, text: string) -> Receipt
+  errors no_recipient
+  key
+  retry 2 times every 5 seconds
+
+# The carrier's system sends the order as the warehouse has it now to the workflow of the
+# order when the carrier reports the delivery.
+task delivered() -> Order
+  event
+  observes
+  timeout 7 days
+
+case order : Order follows order_state.order
+  external pay, deliver, cancel
+  refused when accepted = false
+
+flow
+  order <- get_order(id: order_id, expand: "items")
+  repeat at most 3 times
+    match order.state
+      received =>
+        let r = notify(order_id: order.id, text: "We are waiting for your payment")
+          on no_recipient => fail NoContact leaving order
+        wait 1 day
+        order <- get_order(id: order.id, expand: "items")
+      paid, shipped, delivered, cancelled => break
+  match order.state
+    received =>
+      order <- request_cancel(id: order.id)
+        on conflict => pass
+      fail NotPaid "No payment came in three days"
+    cancelled => fail Canceled "The order was canceled"
+    shipped, delivered => fail AlreadyShipped "The order has shipped already" leaving order
+    paid => pass
+  let decision = urgency(member: order.member, amount: order.amount)
+  order <- request_shipment(id: order.id, carrier: decision.carrier)
+    on conflict => fail Canceled "The order was canceled before it shipped"
+  match decision.urgent
+    true => let n = notify(order_id: order.id, text: "Shipped by next-day delivery")
+    false => pass
+  order <- delivered()
+    on timeout => fail DeliveryLate "No word of the delivery in seven days" leaving order
+  match order.state
+    delivered => succeed carrier = decision.carrier
+    shipped => fail DeliveryLate "Still shipped after word of the delivery" leaving order
+
+on failure
+  fail Stopped "Stopped on the way; the order stays in the warehouse's system as it is" leaving order
+
+# The shop cancels the order on the way: the workflow is cancelled, and the warehouse is asked to
+# cancel the order too, unless it has gone out.
+on cancel
+  match order.state
+    none, cancelled => pass
+    received, paid =>
+      order <- request_cancel(id: order.id)
+        on conflict => pass
+        on failure => fail CancelFailed "Could not cancel order {order.id} at the warehouse" leaving order
+    shipped => fail ShippedAlready "Order {order.id} has shipped already" leaving order

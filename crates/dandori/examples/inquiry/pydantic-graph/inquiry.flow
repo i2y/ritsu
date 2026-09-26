@@ -1,0 +1,56 @@
+workflow inquiry v1
+description "The inquiry of examples/inquiry, written for pydantic-graph: the graph runs in the Python process that takes the inquiry, which is where agents usually live. The agents are functions dandori writes, on OpenAI's Agents SDK and Anthropic's SDK for Python; the rule runs in the process; and filing the ticket is a function you write"
+
+use rule routing from "../rules/inquiry_routing.rule"
+
+record Inquiry
+  id     : string
+  member : bool
+  text   : string
+
+record Reading
+  kind     : routing.kind
+  order_id : string?
+  point    : string
+
+record Ticket
+  ticket_id : string
+
+inputs
+  inquiry : Inquiry
+
+outputs
+  ticket_id : string
+  desk      : routing.desk
+
+# The model reads the text; the schema of Reading holds its answer to one of the rule's kinds.
+task read_inquiry(text: string) -> Reading
+  agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, and sum up its point in one sentence. If no order number is written, give null."
+  model "gpt-5.4-mini"
+  timeout 60 seconds
+  retry 2 times every 10 seconds
+
+task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
+  agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. `within` is the number of hours before the reply is due. Promise nothing that cannot be kept."
+  model "claude-sonnet-5"
+  timeout 60 seconds
+
+# The ticket goes into the desk's system through its client library, in code you write.
+task file_ticket(inquiry_id: string, desk: routing.desk, within: duration[h], subject: string, text: string, draft: string?) -> Ticket
+  key
+  retry 2 times every 5 seconds
+
+flow
+  let reading = read_inquiry(text: inquiry.text)
+    on failure =>
+      let by_hand = file_ticket(inquiry_id: inquiry.id, desk: general, within: 24, subject: "An inquiry that could not be read", text: inquiry.text, draft: none)
+      succeed ticket_id = by_hand.ticket_id, desk = general
+  let decision = routing(kind: reading.kind, member: inquiry.member)
+  let subject = "An inquiry about {reading.kind}"
+  match reading.order_id
+    some order_id => let subject = "An inquiry about {reading.kind} (order {order_id})"
+    none => pass
+  let draft = draft_reply(kind: reading.kind, point: reading.point, order_id: reading.order_id, within: decision.within)
+    on failure => let draft: string? = none
+  let t = file_ticket(inquiry_id: inquiry.id, desk: decision.desk, within: decision.within, subject: subject, text: inquiry.text, draft: draft)
+  succeed ticket_id = t.ticket_id, desk = decision.desk

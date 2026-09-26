@@ -1,0 +1,124 @@
+workflow hotel_stay v1
+description "The hotel booking of examples/hotel, written for Temporal. The Stripe calls are activities dandori writes, and the Transport gives them the secret key; Stripe's webhook tells the workflow of the booking that the customer's 3-D Secure step is over, by the booking's id (an event); and a booking the guest cancels releases its hold (on cancel)"
+
+use rule hold from "../rules/hold_amount.rule"
+use rule payment_intent from "../rules/payment_intent.rule"
+
+record Booking
+  id        : string
+  room      : hold.room
+  nights    : int
+  card      : string
+  check_out : timestamp
+
+record PaymentIntent
+  id     : string
+  status : payment_intent.status
+
+enum Outcome = stayed | awaiting_review
+
+inputs
+  booking : Booking
+
+outputs
+  outcome : Outcome
+
+task create_intent(amount: money[JPY, incl_tax], currency: string, payment_method: string, capture_method: payment_intent.capture_method) -> PaymentIntent
+  http POST "https://api.stripe.com/v1/payment_intents" form
+  starts payment_intent.payment then attach
+  key
+  retry 2 times every 2 seconds
+
+task confirm_intent(id: string) -> PaymentIntent
+  http POST "https://api.stripe.com/v1/payment_intents/{id}/confirm" form
+  sends confirm
+  errors card_declined = 402, unexpected_state = 400
+  refused as unexpected_state
+  key
+
+task capture_intent(id: string) -> PaymentIntent
+  http POST "https://api.stripe.com/v1/payment_intents/{id}/capture" form
+  sends capture
+  errors unexpected_state = 400
+  refused as unexpected_state
+  key
+  retry 2 times every 5 seconds
+
+task cancel_intent(id: string) -> PaymentIntent
+  http POST "https://api.stripe.com/v1/payment_intents/{id}/cancel" form
+  sends cancel
+  errors unexpected_state = 400
+  refused as unexpected_state
+  key
+
+task get_intent(id: string) -> PaymentIntent
+  http GET "https://api.stripe.com/v1/payment_intents/{id}"
+  observes
+  idempotent
+  retry 3 times every 2 seconds
+
+# Stripe's webhook, handled by the shop, sends the PaymentIntent as it is now to the workflow of
+# the booking once the customer's 3-D Secure step is over.
+task customer_authenticated() -> PaymentIntent
+  event
+  observes
+  timeout 1 hour
+
+case pi : PaymentIntent follows payment_intent.payment
+  held capture_method = manual
+  held confirmation_method = automatic
+  external authenticate, settle, expire
+  refused when refused = true
+
+flow
+  let quote = hold(room: booking.room, nights: booking.nights)
+  match quote.handling
+    review => succeed outcome = awaiting_review
+    auto => pi <- create_intent(amount: quote.amount, currency: "jpy", payment_method: booking.card, capture_method: manual)
+  pi <- confirm_intent(id: pi.id)
+    on card_declined => pi <- get_intent(id: pi.id)
+  match pi.status
+    requires_action =>
+      pi <- customer_authenticated()
+        on timeout => pi <- get_intent(id: pi.id)
+    requires_capture, requires_payment_method, requires_confirmation, canceled => pass
+  match pi.status
+    requires_capture => wait until booking.check_out
+    requires_payment_method, requires_confirmation, requires_action =>
+      pi <- cancel_intent(id: pi.id)
+        on unexpected_state => pass
+      fail CardDeclined "The card could not be held"
+    canceled => fail PaymentCanceled "The PaymentIntent was canceled"
+  pi <- capture_intent(id: pi.id)
+    on unexpected_state => fail HoldExpired "The hold had expired by check-out"
+  match pi.status
+    succeeded => succeed outcome = stayed
+    processing =>
+      repeat at most 12 times
+        wait 1 hour
+        pi <- get_intent(id: pi.id)
+        match pi.status
+          processing => pass
+          succeeded, requires_payment_method => break
+      match pi.status
+        succeeded => succeed outcome = stayed
+        processing, requires_payment_method => fail SettlementUnclear "The capture has no clear outcome; handing it over to staff" leaving pi
+
+on failure
+  match pi.status
+    none, succeeded, canceled => pass
+    requires_payment_method, requires_confirmation, requires_action, requires_capture =>
+      pi <- cancel_intent(id: pi.id)
+        on unexpected_state => pass
+        on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
+    processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi
+
+# The guest cancels the booking: the workflow is cancelled, and whatever the card holds is released.
+on cancel
+  match pi.status
+    none, succeeded, canceled => pass
+    requires_payment_method, requires_confirmation, requires_action, requires_capture =>
+      pi <- cancel_intent(id: pi.id)
+        on unexpected_state => pass
+        on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
+    processing => fail SettlementUnclear "Cancelled in the middle of the capture; handing it over to staff" leaving pi

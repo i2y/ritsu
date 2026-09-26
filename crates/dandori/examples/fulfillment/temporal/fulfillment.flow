@@ -1,0 +1,107 @@
+workflow fulfillment v1
+description "The fulfillment of examples/fulfillment, written for Temporal. The warehouse's calls are activities dandori writes; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow); and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
+
+use rule urgency from "../../order/rules/urgency.rule"
+
+enum Stock = secured | short
+
+record Line
+  sku      : string
+  quantity : int
+
+record Gift
+  recipient : string
+  message   : string?
+
+record Order
+  id     : string
+  member : bool
+  amount : money[JPY, incl_tax]
+  lines  : list[Line]
+  gift   : Gift?
+  extra  : json
+
+record Reservation
+  sku   : string
+  stock : Stock
+  id    : string?
+
+record Delivery
+  tracking_number : string
+
+record PackingRequest
+  order_id     : string
+  reservations : list[Reservation]
+
+record Packing
+  boxes : int
+
+inputs
+  order : Order
+
+outputs
+  reservations    : list[Reservation]
+  tracking_number : string
+
+# The warehouse answers every reservation: secured with its id, or short when the stock is short.
+task reserve_stock(sku: string, quantity: int) -> Reservation
+  http POST "https://warehouse.example.com/v1/reservations"
+  errors busy = 429
+  key
+  retry 2 times every 1 second on busy
+
+task release_stock(id: string)
+  http DELETE "https://warehouse.example.com/v1/reservations/{id}"
+  idempotent
+
+# The delivery team's workflow arranges the delivery, on the workers of its own task queue.
+task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
+  workflow "arrange_delivery"
+  queue "delivery"
+
+# The packing crew's app gets the request and the callback's id from the function you write,
+# and answers the callback when the boxes are packed.
+task wait_for_packing(order_id: string, reservations: list[Reservation]) -> Packing
+  callback
+  timeout 2 days
+
+# The shop's own notice service.
+task notify(order_id: string, text: string)
+  errors no_recipient
+
+task audit(order_id: string, extra: json)
+  idempotent
+
+flow
+  let decision = urgency(member: order.member, amount: order.amount)
+  let results = for line in order.lines at most 50 in parallel, 10 at a time
+    let r = reserve_stock(sku: line.sku, quantity: line.quantity)
+    yield r
+  let any_short = false
+  for one in results at most 50
+    match one.stock
+      short => let any_short = true
+      secured => pass
+  match any_short
+    true =>
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
+          none => pass
+      fail OutOfStock "Order {order.id} has lines the stock is short of"
+    false => pass
+  let recipient: string? = none
+  match order.gift
+    some gift =>
+      let recipient = gift.recipient
+      match gift.message
+        some words => audit(order_id: order.id, extra: {message: words, recipient: gift.recipient})
+        none => pass
+    none => pass
+  let delivery = arrange_delivery(order_id: order.id, carrier: decision.carrier, recipient: recipient, extra: order.extra)
+    on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
+  let packed = wait_for_packing(order_id: order.id, reservations: results)
+    on timeout => fail PackingLate "No word of the packing in two days"
+  notify(order_id: order.id, text: "Order {order.id} went out by {decision.carrier} ({packed.boxes} boxes, tracking number {delivery.tracking_number})")
+    on no_recipient => pass
+  succeed reservations = results, tracking_number = delivery.tracking_number

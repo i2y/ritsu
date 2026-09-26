@@ -77,6 +77,24 @@ fn runnable() -> Vec<PathBuf> {
     out
 }
 
+/// The platform a version of an example is written for, from its directory: `temporal/` or
+/// `pydantic-graph/`, beside the example written for AWS, which every platform plays.
+fn written_for(f: &Path) -> Option<Platform> {
+    let r = rel(f);
+    if r.contains("/temporal/") {
+        Some(Platform::Temporal)
+    } else if r.contains("/pydantic-graph/") {
+        Some(Platform::Graph)
+    } else {
+        None
+    }
+}
+
+/// The flows a platform's runner plays: every flow but the versions written for another platform.
+fn runnable_on(p: Platform) -> Vec<PathBuf> {
+    runnable().into_iter().filter(|f| written_for(f).is_none_or(|w| w == p)).collect()
+}
+
 /// The tests that start a process for every flow at once — the Temporal runners with their dev
 /// servers, and the durable functions runners — take turns: run together, they slow each other
 /// down, and the Argo test beside them, more than they gain. The Argo test, the longest, does not
@@ -89,6 +107,12 @@ fn heavy() -> std::sync::MutexGuard<'static, ()> {
 
 fn rel(p: &Path) -> String {
     p.strip_prefix(root()).unwrap_or(p).display().to_string()
+}
+
+/// A name for a flow's work directory, from its path: the versions of an example, written for
+/// different platforms, share the workflow's name.
+fn key(f: &Path) -> String {
+    rel(f).trim_end_matches(".flow").replace(['/', '.'], "-")
 }
 
 fn scratch(name: &str) -> PathBuf {
@@ -165,7 +189,7 @@ fn asl_runs_as_the_reference_says() {
     need_rulec!();
     need_node!();
     let mut compared = 0;
-    for f in runnable() {
+    for f in runnable_on(Platform::StepFunctions) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let files = match dandori::asl::build(&m) {
@@ -177,7 +201,7 @@ fn asl_runs_as_the_reference_says() {
             }
             Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
         };
-        let dir = scratch(&dandori::render::ident(&m.name));
+        let dir = scratch(&key(&f));
         let def = dir.join(&files[0].0);
         std::fs::write(&def, &files[0].1).unwrap();
 
@@ -336,7 +360,7 @@ fn temporal_python_runs_as_the_reference_says() {
 fn temporal_all(python: Option<PathBuf>) {
     let _turn = heavy();
     std::thread::scope(|scope| {
-        for f in runnable() {
+        for f in runnable_on(Platform::Temporal) {
             let python = python.clone();
             scope.spawn(move || temporal_one(&f, python.as_deref(), None));
         }
@@ -358,7 +382,7 @@ fn temporal_activities_run_in_the_other_language() {
         }
     };
     let _turn = heavy();
-    let flows: Vec<PathBuf> = runnable()
+    let flows: Vec<PathBuf> = runnable_on(Platform::Temporal)
         .into_iter()
         .filter(|f| {
             let (_, checked) = dandori::check::check_file(f).unwrap();
@@ -395,7 +419,7 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
         (false, true) => "ts-py-",
         (true, true) => "py-ts-",
     };
-    let dir = scratch(&format!("temporal-{lang}{}", dandori::render::ident(&m.name)));
+    let dir = scratch(&format!("temporal-{lang}{}", key(f)));
     let mut files = match python {
         Some(_) => dandori::temporal_py::build(&m),
         None => dandori::temporal::build(&m),
@@ -756,7 +780,7 @@ fn default_transports_send_what_the_calls_say() {
             if cases.is_empty() {
                 continue;
             }
-            let dir = scratch(&format!("wire-{}", dandori::render::ident(&m.name)));
+            let dir = scratch(&format!("wire-{}", key(&f)));
             let (Ok(ts), Ok(py)) = (dandori::temporal::build(&m), dandori::temporal_py::build(&m)) else { continue };
             for (name, text) in ts.iter().chain(py.iter()) {
                 let p = dir.join(name);
@@ -889,7 +913,7 @@ fn temporal_replays_the_recorded_histories() {
             if !kept.exists() {
                 panic!("{r}: no histories kept in {}; record them with DANDORI_BLESS=1", rel(&kept));
             }
-            let dir = scratch(&format!("replay-{}-{}", if py { "python" } else { "typescript" }, dandori::render::ident(&m.name)));
+            let dir = scratch(&format!("replay-{}-{}", if py { "python" } else { "typescript" }, key(&f)));
             let files = if py { dandori::temporal_py::build(&m) } else { dandori::temporal::build(&m) }.unwrap();
             for (name, text) in &files {
                 let p = dir.join(name);
@@ -942,7 +966,7 @@ fn generated_typescript_type_checks() {
                 Err(d) if d.iter().all(|x| x.code == "E050") => continue,
                 Err(d) => panic!("{} does not build for {target}: {}", rel(&f), d[0].en),
             };
-            let dir = scratch(&format!("tsc-{target}-{}", dandori::render::ident(&m.name)));
+            let dir = scratch(&format!("tsc-{target}-{}", key(&f)));
             for (name, text) in &files {
                 let p = dir.join(name);
                 std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -1065,10 +1089,10 @@ fn pydantic_graph_runs_as_the_reference_says() {
             return;
         }
     };
-    for f in runnable() {
+    for f in runnable_on(Platform::Graph) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let dir = scratch(&format!("pydantic-graph-{}", dandori::render::ident(&m.name)));
+        let dir = scratch(&format!("pydantic-graph-{}", key(&f)));
         let files = match dandori::pydantic_graph::build(&m) {
             Ok(files) => files,
             Err(d) if d.iter().all(|x| x.code == "E050") => {
@@ -1189,7 +1213,7 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
                 }
             }
         }
-        let dir = scratch(&format!("agents-{}", dandori::render::ident(&m.name)));
+        let dir = scratch(&format!("agents-{}", key(&f)));
         let cases_file = dir.join("cases.json");
         std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
         // the Agents SDKs hand the model the input as a user message; its text is what is compared
@@ -1256,12 +1280,14 @@ fn python_rules_answer_the_rulec_vectors() {
     for f in flows(&root().join("examples")) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        for (label, files) in [("Temporal", dandori::temporal_py::build(&m).unwrap()), ("pydantic-graph", dandori::pydantic_graph::build(&m).unwrap())] {
+        // a version of an example written for one platform may not build for the other
+        for (label, built) in [("Temporal", dandori::temporal_py::build(&m)), ("pydantic-graph", dandori::pydantic_graph::build(&m))] {
+            let Ok(files) = built else { continue };
             let rules_py = match files.iter().find(|(n, _)| n.ends_with("/rules.py")) {
                 Some((_, t)) => t.clone(),
                 None => continue,
             };
-            let dir = scratch(&format!("glue-python-{}-{}", label, dandori::render::ident(&m.name)));
+            let dir = scratch(&format!("glue-python-{}-{}", label, key(&f)));
             let pkg = dir.join("glue");
             std::fs::create_dir_all(&pkg).unwrap();
             std::fs::write(pkg.join("__init__.py"), "").unwrap();
@@ -1306,7 +1332,7 @@ fn durable_runs_as_the_reference_says() {
     // every flow at once, taking its turn with the other tests that start many processes
     let _turn = heavy();
     std::thread::scope(|scope| {
-        for f in runnable() {
+        for f in runnable_on(Platform::Durable) {
             scope.spawn(move || durable_one(&f));
         }
     });
@@ -1317,7 +1343,7 @@ fn durable_one(f: &Path) {
         let f = f.to_path_buf();
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let dir = scratch(&format!("durable-{}", dandori::render::ident(&m.name)));
+        let dir = scratch(&format!("durable-{}", key(&f)));
         let files = match dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable) {
             Ok(files) => files,
             Err(d) if d.iter().all(|x| x.code == "E050") => {
@@ -1410,7 +1436,7 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
         }
         Err(d) => panic!("{} does not build for Argo: {}", rel(&f), d[0].en),
     };
-    let dir = scratch(&format!("argo-{}", dandori::render::ident(&m.name)));
+    let dir = scratch(&format!("argo-{}", key(&f)));
     for (name, text) in &files {
         let p = dir.join(name);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -1463,7 +1489,7 @@ fn argo_runs_as_the_reference_says() {
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and
     // runs one of them again with real pods; each flow is made ready on a thread of its own
     let going: Vec<ArgoFlow> = std::thread::scope(|scope| {
-        let ready: Vec<_> = runnable().into_iter().map(|f| scope.spawn(move || ready_on_argo(f))).collect();
+        let ready: Vec<_> = runnable_on(Platform::Argo).into_iter().map(|f| scope.spawn(move || ready_on_argo(f))).collect();
         ready.into_iter().filter_map(|h| h.join().unwrap()).collect()
     });
     for flow in going {

@@ -1,0 +1,50 @@
+workflow review v1
+description "The review of examples/review, written for Temporal. Scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends"
+
+enum Verdict = approve | reject | hold
+
+record Application
+  id     : string
+  amount : int
+
+record Score
+  points  : int
+  verdict : Verdict
+
+record Approval
+  approver : string
+
+inputs
+  application : Application
+
+outputs
+  verdict : Verdict
+
+# Scoring runs on workers of its own, which may be written in another language.
+task score(application_id: string, amount: int) -> Score
+  queue "scoring"
+  errors unscorable
+  retry 2 times every 10 seconds
+  idempotent
+
+# Someone approves in a tool of their own, and the answer comes back with the callback's id.
+task ask_for_approval(application_id: string, points: int) -> Approval
+  callback
+  timeout 3 days
+
+task notify(application_id: string, text: string)
+  queue "notify"
+  idempotent
+
+flow
+  let r = score(application_id: application.id, amount: application.amount)
+    on unscorable => fail Unscorable "Could not score application {application.id}"
+  match r.verdict
+    approve, reject => pass
+    hold =>
+      let a = ask_for_approval(application_id: application.id, points: r.points)
+        on timeout => fail NoAnswer "No approval in three days"
+      notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
+      succeed verdict = approve
+  notify(application_id: application.id, text: "Application {application.id} was reviewed: {r.verdict}")
+  succeed verdict = r.verdict

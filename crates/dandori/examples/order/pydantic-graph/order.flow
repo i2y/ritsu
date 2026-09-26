@@ -1,0 +1,91 @@
+workflow ship_order v1
+description "The order of examples/order, written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, which send with the standard library; the notice is a function you write; and the word of the delivery is a callback that the shop's handler of the carrier's reports, in the same process, answers. The waits hold the process, and a run the process loses is lost"
+
+use rule order_state from "../rules/order_state.rule"
+use rule urgency from "../rules/urgency.rule"
+
+record Order
+  id     : string
+  state  : order_state.state
+  amount : money[JPY, incl_tax]
+  member : bool
+
+record Receipt
+  id : string
+
+inputs
+  order_id : string
+
+outputs
+  carrier : urgency.carrier
+
+task get_order(id: string, expand: string) -> Order
+  http GET "https://warehouse.example.com/v1/orders/{id}"
+  observes
+  idempotent
+  errors busy = 429
+  retry 3 times every 1 second on busy
+
+task request_shipment(id: string, carrier: urgency.carrier) -> Order
+  http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
+  sends ship
+  errors conflict = 409
+  refused as conflict
+  key
+
+task request_cancel(id: string) -> Order
+  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  sends cancel
+  errors conflict = 409
+  refused as conflict
+  key
+
+# The shop's own notice service, called from code you write.
+task notify(order_id: string, text: string) -> Receipt
+  errors no_recipient
+  key
+  retry 2 times every 5 seconds
+
+# The function hands the callback's id to the carrier's service; the shop's handler of the
+# carrier's reports answers it with the order as the warehouse has it after the delivery.
+task wait_for_delivery(id: string) -> Order
+  callback
+  observes
+  timeout 7 days
+
+case order : Order follows order_state.order
+  external pay, deliver, cancel
+  refused when accepted = false
+
+flow
+  order <- get_order(id: order_id, expand: "items")
+  repeat at most 3 times
+    match order.state
+      received =>
+        let r = notify(order_id: order.id, text: "We are waiting for your payment")
+          on no_recipient => fail NoContact leaving order
+        wait 1 day
+        order <- get_order(id: order.id, expand: "items")
+      paid, shipped, delivered, cancelled => break
+  match order.state
+    received =>
+      order <- request_cancel(id: order.id)
+        on conflict => pass
+      fail NotPaid "No payment came in three days"
+    cancelled => fail Canceled "The order was canceled"
+    shipped, delivered => fail AlreadyShipped "The order has shipped already" leaving order
+    paid => pass
+  let decision = urgency(member: order.member, amount: order.amount)
+  order <- request_shipment(id: order.id, carrier: decision.carrier)
+    on conflict => fail Canceled "The order was canceled before it shipped"
+  match decision.urgent
+    true => let n = notify(order_id: order.id, text: "Shipped by next-day delivery")
+    false => pass
+  order <- wait_for_delivery(id: order.id)
+    on timeout => fail DeliveryLate "No word of the delivery in seven days" leaving order
+  match order.state
+    delivered => succeed carrier = decision.carrier
+    shipped => fail DeliveryLate "Still shipped after word of the delivery" leaving order
+
+on failure
+  fail Stopped "Stopped on the way; the order stays in the warehouse's system as it is" leaving order
