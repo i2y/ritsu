@@ -471,11 +471,12 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
   - タスクのタイムアウトは起こせないので、それを含むシナリオは外す。並列の回は一つずつ回す（`withSequence` を持つテンプレートの `parallelism` を 1 にする）。
 - **エージェントの突き合わせ**：`Transport` の差し替えは、エージェントの呼び出しを `Transport` に渡された形（名前・モデル・指示・引数・Schema）のまま書き出し、シナリオの値を `{"answer": …}` に包んで返す。失敗は投げる（Agents SDK が断りを投げるのと同じ）。ASL のランナーは、Responses API への HTTP Task に API の答えの形（推論の項目と、`output_text` を持つメッセージ）で答え、失敗は、モデルが断った答え（`output_text` の無いメッセージ）で返す。Messages API への HTTP Task には、思考のブロックと `text` のブロックを持ち `stop_reason` が `end_turn` の答えで答え、失敗は `stop_reason` が `refusal` の答えで返す。ステートマシンがそれを読む式で Task が失敗し、Retry と Catch に渡るところまでを確かめる。ランナーは、Task の Assign と Output の式の失敗を、Step Functions と同じく Retry と Catch に渡す。
 - **既定の `Transport` のエージェント**：TypeScript の既定の実装（Temporal・durable functions・Argo の caller が同じ `io.ts` を使う）と Python の既定の実装（Temporal と pydantic-graph が同じ `io.py` を使う）を、OpenAI の Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせる（`tools/agents`）。モデルには、OpenAI の代わりに、答えを前もって決めた SDK のテスト用のモデル（`ScriptedModel`）を渡すので、OpenAI には何も送らない。シナリオのエージェントの呼び出しすべてについて、モデルが受け取ったもの（モデルの名前・指示・入力の文字列・答えの Schema）が Step Functions の同じ呼び出しで送るものと同じで、モデルの設定もツールも空であること、答えがそのまま返ること、断りが `ModelRefusalError` になることを確かめる。また、`Transport` が作るクライアントを手元の Responses API の代わりに向け、500 が返ると一回だけ送って `InternalServerError` で失敗することを確かめる。Claude のエージェントは、Anthropic の SDK（TypeScript 0.128.0、Python 1.8.0）で、手元（127.0.0.1）に立てた Messages API の代わりに送らせる。代わりが受け取った要求（パス、`anthropic-version`、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、答えがそのまま返ること、断り（`stop_reason: refusal`）で `AgentStopped` を投げること、500 が返るとやり直さずに `InternalServerError` で失敗することを確かめる。Anthropic には何も送らない。
+- **既定の `Transport`**：シナリオの呼び出しのうち `Transport` を通るもの（HTTP、Lambda、AWS の API）を、TypeScript の既定の実装（`fetch` と AWS SDK for JavaScript v3）と Python の既定の実装（標準ライブラリと boto3）から、手元の代わりに送る（`tools/wire`）。手元のサーバーは、HTTP と Lambda の Invoke に、ランナーの差し替えの `Transport` がそのシナリオの答えで返すものになる応答を返す。HTTP のタスクの URL は、スキームとホストをこのサーバーに置き換える。AWS の API は、AWS の API を手元でまねる moto（5.2.3）に渡す。届いたもの（HTTP ならメソッド・パス・クエリ・ヘッダ・本文、Lambda なら関数と payload、SNS と SQS なら moto のキューに届いたメッセージ）が呼び出しと同じで、`Transport` が返すものが差し替えの `Transport` と同じで、二つの言語が同じ文字列を送ることを確かめる。AWS のエラーは、moto に起こさせられるもの（無いトピックへの `sns:publish` の `NotFoundException`、無いキューへの `sqs:sendMessage` の `QueueDoesNotExist`）だけを試す。何も手元の外には出ない。
 - **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つの出力先の `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **診断**：`tests/fixtures` の各ファイルの診断を、英語と日本語の両方で固定する（`DANDORI_BLESS=1` で書き直す）。
 - 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。
 
-`Transport` の既定の実装（`fetch` と AWS SDK で本当に送る部分）は、突き合わせでは走らない。確かめているのは、dandori が書く実装が何を送り、答えをどう読むかである。エージェントの既定の実装は、上のとおり OpenAI では Agents SDK の中まで、Claude では SDK が HTTP で送るところまで走らせるが、OpenAI と Anthropic の API が Schema を受け付けて答えるところは確かめていない。
+`Transport` の既定の実装は、突き合わせでは走らない（差し替える）。突き合わせが確かめているのは、dandori が書く実装が何を送り、答えをどう読むかで、既定の実装が本当に送るところは、上の既定の `Transport` の確かめで、手元の代わりに向けて確かめる。本物の Stripe や AWS に向けて送るところは確かめていない。エージェントの既定の実装は、上のとおり OpenAI では Agents SDK の中まで、Claude では SDK が HTTP で送るところまで走らせるが、OpenAI と Anthropic の API が Schema を受け付けて答えるところは確かめていない。
 
 ### 5.1 走らせた（2026-09-26）
 
@@ -487,6 +488,10 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - `on cancel` を持つ `tests/flows/cancel.flow` の 32 本（うち 13 本でキャンセルが届く）は、Temporal の TypeScript と Python の dev server の上で、すべて参照インタプリタと一致した（2026-09-26）。生成器にわざと誤りを入れると、`dd.attempt` がキャンセルをタスクのエラーに直すと九本目で、`on cancel` を `CancellationScope.nonCancellable` の外で走らせると十一本目で、Python の `dd.attempt` がキャンセルをタスクのエラーに直すと九本目で、`dd.rounds` がキャンセルより前の回の失敗を先に投げると 23 本目で、食い違いとして出た。最後の誤りは、はじめ捕まらなかった。回が失敗したあとに別の回でキャンセルが届く実行がシナリオに無かったので、それを別のところとして数えるようにした。
 - Continue-As-New の生成にわざと誤りを入れると、TypeScript と Python のどちらでも、続きの実行が回を 0 から数え直すと倉庫の出荷の 15 本目で、ループより前の文を飛ばさないと同じ 15 本目で、変数を受け取らないと一本目で、クエリが答える案件の状態が参照と違うこととして出た。`yield` した値を渡さないと、edges の 10 本目で呼び出しの食い違いとして出た。続ける回を一つずらすと、残した倉庫の出荷の履歴の二つ目の実行が、再生で非決定的と言われた（2026-09-26）。
 - Temporal の突き合わせは、生成した `worker` と `client` を通しても、TypeScript と Python の両方で 201 本すべてが一致し、どの実行でも、終わりのクエリ `dandori.status` と search attribute `DandoriCases` が参照インタプリタの案件の状態と同じだった。コールバックへの二度目の答えと、待っていない ID への答えは、Update がすべて断った（2026-09-26）。
+- 既定の `Transport` では、シナリオの呼び出しのうち 175 件（HTTP が 127 件で、うち 47 件はエラーのステータス、Lambda が 45 件で、うち 18 件は関数のエラー、SNS と SQS が 3 件）を、TypeScript と Python の両方から手元の代わりに送り、すべて呼び出しのとおりに届き、差し替えの `Transport` と同じものが返った（2026-09-26）。はじめ、Python の既定の実装が三か所で食い違った。
+  - AWS のエラーを、線の上の符号（`NotFound`、`AWS.SimpleQueueService.NonExistentQueue`）で返していた。TypeScript の SDK と、タスクが宣言する名前は、API のモデルの名前（`NotFoundException`、`QueueDoesNotExist`）である。boto3 が投げる例外のクラスの名前がモデルの名前なので、それを返すようにした。
+  - URL のパスに ASCII でない文字があると（倉庫の出荷の `/v1/orders/注文ID-1`）、urllib が `UnicodeEncodeError` で送れなかった。fetch と同じく、UTF-8 でパーセントエンコードしてから送るようにした。
+  - JSON の本文（HTTP の本文、Lambda の payload、SQS のメッセージ）を、`json.dumps` の既定のまま、空白を入れ、日本語を `\u` でエスケープして書いていた。値は同じだが、TypeScript と Step Functions の書き方（空白なし、文字はそのまま）にそろえた。
 - 言語をまたぐアクティビティでは、TypeScript のワークフローと Python のアクティビティ、Python のワークフローと TypeScript のアクティビティの両方で、`local` の規則を持つフローを除く 189 本すべてが参照インタプリタと一致した（コールバックの答え、キャンセル、タイムアウト、エージェントの呼び出しも、もう一方の言語を通った）。Python のアクティビティの名前に一字足すと、TypeScript のワークフローの側だけが食い違いとして出た（2026-09-26）。
 - Temporal の再生は、TypeScript と Python の両方で、201 本すべて（続きの実行も）が同じコードで再生でき、`tests/histories` の十四の履歴も再生できた。Worker Deployment Versioning では、A で始まった実行が B を current にしたあとも、新しい実行で始まった二回目の回まで A のコードで終わり、B で始めた実行は B のコードで走った（TypeScript と Python。ビルド ID は、TypeScript が `dandori-c98507328717f2f4` と `dandori-5fe7c15ba38debcf`）。生成するワーカーの既定の振る舞いを PINNED から AUTO_UPGRADE にすると、どちらの言語でも A の実行が B のコードで終わり、食い違いとして出た（2026-09-26）。
 - TypeScript の実行の履歴を Python のコードで再生すると、cancel の 32 本のうち 27 本が再生でき、Python の履歴を TypeScript で再生すると 31 本が再生できた。再生できなかったのは、キャンセルやタイムアウトやコールバックの待ちを通る実行で、タイマーとアクティビティの順か番号が二つの言語で違っていた。同じ言語の中では決定的なので、どちらかの言語のワーカーだけで一つのワークフローを持つかぎり問題は無い。二つの言語のワーカーを同じキューに混ぜると、こうした実行で止まる。
@@ -549,7 +554,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - 規則を ASL の中に JSONata として埋めること。rulec の側の新しい出力先になり、数を 2^53 までに収める証明が要る。
 - durable functions のシナリオでタイムアウトを起こすこと。
 - durable functions の Python（`aws_durable_execution_sdk_python`）への出力。
-- AWS の上（Step Functions の TestState と、durable functions の CloudDurableTestRunner）での確認と、`Transport` の既定の実装の確認。Temporal は dev server の上で確かめているが、本番の構成や Temporal Cloud の上では確かめていない。
+- AWS の上（Step Functions の TestState と、durable functions の CloudDurableTestRunner）での確認と、`Transport` の既定の実装を本物の AWS と HTTP の相手に向ける確認（いまは手元の代わりと moto まで）。Temporal は dev server の上で確かめているが、本番の構成や Temporal Cloud の上では確かめていない。
 - 実行中の案件が、規則やワークフローの改定でどうなるか（rulec の `diff` と `replay` を実行履歴に当てる）。
 - `dandori explain` と、`build` の JSON 出力。
 - Temporal で、一番外にないループ（ループの中のループ、`match` の中のループ）でも新しい実行で続けること。続きの実行に、外のループの回と、どの枝にいたかも渡すことになる。
@@ -561,7 +566,6 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - Argo の突き合わせのうち Pod を演じる回では、Argo の executor（init と wait のコンテナ、ファイルからの出力の読み取り）とコンテナの実行が走らない。それを通るのは、フローごとに一本の本物の Pod の回だけである。
 - Argo で、`break` のあとの回もノードを作ること。回の数だけ Workflow が大きくなる。
 - TypeScript と Python の生成したワークフローが、どの実行でも同じコマンドを同じ順で出すこと（いまはキャンセルやタイムアウトを通る実行で違う。5.1）。そうなれば、二つの言語のワーカーを同じキューに混ぜられる。
-- Python の `Transport` の既定の実装（urllib と boto3 で本当に送る部分）の確認。TypeScript の既定の実装と同じく、突き合わせでは走らない。
 - pydantic-graph の実行を、止まったあとに続けること。2.x が状態を外に置く手段を持たないので、今はプロセスの中の実行だけにしている。
 - エージェントを OpenAI と Anthropic の API に本当に向ける確認。構造化出力が生成した Schema を受け付けるか（Claude では、文法の大きさの上限に当たらないかも）、Step Functions の HTTP Task と EventBridge の接続で呼べるか、どちらも確かめていない。
 - エージェントの断りや API のエラー（429 など）を、名前の付いたエラーとして受けること。いまは `failure` にまとめている。

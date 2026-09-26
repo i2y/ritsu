@@ -598,6 +598,11 @@ def text(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
 
+def json_text(v: Any) -> str:
+    """A value as JSON text, as Step Functions and the TypeScript code write it: no spaces, and text as it is."""
+    return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
 def encode(o: dict[str, Any], prefix: str = "") -> str:
     """`a=1&b[c]=2`, the way a URL-encoded body nests."""
     parts = []
@@ -641,7 +646,7 @@ class DefaultTransport:
 
     async def lambda_(self, fn: str, payload: dict[str, Any]) -> Answer:
         def call() -> Answer:
-            out = self._client("lambda").invoke(FunctionName=fn, Payload=json.dumps(payload).encode())
+            out = self._client("lambda").invoke(FunctionName=fn, Payload=json_text(payload).encode())
             raw = out["Payload"].read()
             body = json.loads(raw) if raw else None
             if out.get("FunctionError"):
@@ -655,6 +660,8 @@ class DefaultTransport:
             url = req["url"]
             if req.get("query") is not None:
                 url += ("&" if "?" in url else "?") + encode(req["query"])
+            # as fetch sends a URL: what is not ASCII, percent-encoded as UTF-8
+            url = urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=%~")
             headers = dict(req.get("headers") or {})
             if self._headers is not None:
                 headers.update(self._headers(req["url"]))
@@ -663,7 +670,7 @@ class DefaultTransport:
                 if req.get("form"):
                     data = encode(req["body"]).encode()
                 else:
-                    data = json.dumps(req["body"]).encode()
+                    data = json_text(req["body"]).encode()
                     headers.setdefault("Content-Type", "application/json")
             r = urllib.request.Request(url, data=data, method=req["http"], headers=headers)
             try:
@@ -688,13 +695,16 @@ class DefaultTransport:
             args = dict(input)
             # SQS takes the message as text; Step Functions writes a JSON body out the same way
             if service == "sqs" and action == "sendMessage" and isinstance(args.get("MessageBody"), (dict, list)):
-                args["MessageBody"] = json.dumps(args["MessageBody"])
+                args["MessageBody"] = json_text(args["MessageBody"])
             method = re.sub(r"(?<!^)(?=[A-Z])", "_", action).lower()
             try:
                 out = getattr(self._client(service), method)(**args)
             except ClientError as e:
                 err = e.response.get("Error", {})
-                return {"error": str(err.get("Code", "")), "message": str(err.get("Message", ""))}
+                # the error by the name the API's model gives it (NotFoundException), as the SDK for
+                # JavaScript names it; the code on the wire can be another (NotFound)
+                name = type(e).__name__ if type(e) is not ClientError else str(err.get("Code", ""))
+                return {"error": name, "message": str(err.get("Message", ""))}
             out = dict(out or {})
             out.pop("ResponseMetadata", None)
             return {"ok": out}

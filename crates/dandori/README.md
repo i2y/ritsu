@@ -320,6 +320,14 @@ against a stand-in of the Messages API on this machine (`tools/agents`): the mod
 asked what Step Functions asks for the same call, and an error status must fail the call
 without a retry. Nothing goes to OpenAI or Anthropic.
 
+The rest of the default `Transport` — `fetch` and the AWS SDK in TypeScript, the standard
+library and boto3 in Python — sends every HTTP, Lambda and AWS call of the scenarios to
+stand-ins on this machine (`tools/wire`): a server that answers HTTP and Lambda's Invoke as
+the runners' stand-in `Transport` would, with the URL's scheme and host replaced by its own,
+and moto for SNS and SQS. What arrives must be the call, in the same text from both languages,
+and what comes back must be what the stand-in gives; an AWS error comes back by the
+name the task declares (`NotFoundException`).
+
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
 timeout are left out there. Argo and the graph's runner cannot time out a task either, but a
 callback's timeout can be played: on pydantic-graph by not answering it, on Argo by answering
@@ -339,6 +347,9 @@ uv pip install --python tools/pydantic-graph/.venv/bin/python -r tools/pydantic-
 npm install --prefix tools/agents
 uv venv --python 3.13 tools/agents/.venv
 uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirements.txt
+npm install --prefix tools/wire
+uv venv --python 3.13 tools/wire/.venv
+uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
 sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```

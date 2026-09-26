@@ -584,6 +584,276 @@ fn recorded_dir(m: &Model, python: bool) -> PathBuf {
     root().join("tests/histories").join(if python { "python" } else { "typescript" }).join(dandori::render::ident(&m.name))
 }
 
+/// Whether an HTTP task's URL, with its `{placeholders}`, is the URL of a call.
+fn url_matches(pattern: &str, url: &str) -> bool {
+    // the literal parts between the placeholders
+    let mut lits = Vec::new();
+    let mut rest = pattern;
+    while let Some(i) = rest.find('{') {
+        lits.push(&rest[..i]);
+        rest = &rest[rest[i..].find('}').map(|j| i + j + 1).unwrap_or(rest.len())..];
+    }
+    lits.push(rest);
+    let Some(mut u) = url.strip_prefix(lits[0]) else { return false };
+    for lit in &lits[1..] {
+        // a placeholder's value is one segment of the path
+        let seg = u.find(['/', '?']).unwrap_or(u.len());
+        if lit.is_empty() {
+            u = &u[seg..];
+            continue;
+        }
+        match u.find(lit) {
+            Some(i) if i <= seg => u = &u[i + lit.len()..],
+            _ => return false,
+        }
+    }
+    u.is_empty()
+}
+
+/// A value's pairs in a URL-encoded body or query, as the Transports write them: `a[b]=c`, and
+/// nothing for none.
+fn form_pairs(v: &Value, prefix: &str, out: &mut Vec<Value>) {
+    match v {
+        Value::Object(o) => {
+            for (k, x) in o {
+                let key = if prefix.is_empty() { k.clone() } else { format!("{prefix}[{k}]") };
+                form_pairs(x, &key, out);
+            }
+        }
+        Value::Null => out.push(json!([prefix, ""])),
+        Value::String(s) => out.push(json!([prefix, s])),
+        other => out.push(json!([prefix, other.to_string()])),
+    }
+}
+
+/// The calls of the scenarios that go through a Transport — Lambda, HTTP, the AWS APIs — as
+/// cases for tools/wire: the request, and what the stand-in on this machine answers, which
+/// makes the Transport give back what the stand-in Transport of the runners gives for the
+/// scenario's answer. A call the scenario times out or cancels during gets no answer, and is
+/// left out; so is an AWS error that moto cannot be made to give.
+fn wire_cases(m: &Model) -> Vec<Value> {
+    let p = Platform::Temporal;
+    let mut cases = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for sc in dandori::scenarios::generate(m) {
+        let reference = dandori::interp::run(m, &sc, View::Temporal).unwrap();
+        for st in reference["steps"].as_array().unwrap() {
+            let (Some(call), Some(ans)) = (st.get("call"), st.get("answer")) else { continue };
+            if ans.get("cancel").is_some() || ans.get("error") == Some(&json!("timeout")) {
+                continue;
+            }
+            let kind = ans.get("error").and_then(|e| e.as_str());
+            let case = if let Some(method) = call.get("http").and_then(|x| x.as_str()) {
+                let url = call["url"].as_str().unwrap();
+                let task = m.tasks.iter().find(|t| matches!(t.via(p), Some(Via::Http { method: tm, url: tu, .. }) if tm == method && url_matches(tu, url))).unwrap_or_else(|| panic!("no task sends {method} {url}"));
+                let Some(Via::Http { form, .. }) = task.via(p) else { unreachable!() };
+                let mut request = call.clone();
+                request["form"] = json!(form);
+                let reply = match kind {
+                    None => json!({ "status": 200, "body": ans["ok"] }),
+                    Some(k) => json!({ "status": task.errors.iter().find(|e| e.name == k).and_then(|e| e.status).unwrap_or(500), "body": "scripted" }),
+                };
+                json!({ "kind": "http", "request": request, "reply": reply })
+            } else if let Some(fn_) = call.get("lambda").and_then(|x| x.as_str()) {
+                let task = m.tasks.iter().find(|t| t.via(p) == Some(Via::Lambda(fn_)));
+                let mut payload = call["payload"].clone();
+                let reply = if task.map(|t| t.callback).unwrap_or(false) {
+                    // a callback's submit hands on its id, and its answer comes later
+                    payload["callback_id"] = json!("wire-callback");
+                    json!({ "ok": null })
+                } else {
+                    match kind {
+                        None => json!({ "ok": ans["ok"] }),
+                        Some(k) => json!({ "error": if k == "failure" { "Dandori.Test.Failure" } else { k }, "message": "scripted" }),
+                    }
+                };
+                json!({ "kind": "lambda", "fn": fn_, "payload": payload, "reply": reply })
+            } else if let Some(api) = call.get("aws").and_then(|x| x.as_str()) {
+                let (service, action) = api.split_once(':').unwrap();
+                let task = m.tasks.iter().find(|t| t.via(p) == Some(Via::Aws { service, action })).unwrap();
+                let mut input = call["args"].clone();
+                let name_of = |arn_or_url: &str| arn_or_url.rsplit([':', '/']).next().unwrap().to_string();
+                let (target, is_topic) = match api {
+                    "sns:publish" => (name_of(input["TopicArn"].as_str().unwrap()), true),
+                    "sqs:sendMessage" => (name_of(input["QueueUrl"].as_str().unwrap()), false),
+                    _ => continue,
+                };
+                let listen = if is_topic { json!({ "topic": target, "queue": "wire-listen" }) } else { json!({ "queue": target }) };
+                if task.callback {
+                    input["MessageBody"]["callback_id"] = json!("wire-callback");
+                }
+                match kind {
+                    // the topic or the queue is there, and a queue listens
+                    _ if task.callback => json!({ "kind": "aws", "service": service, "action": action, "input": input, "topics": if is_topic { vec![target.clone()] } else { vec![] }, "queues": if is_topic { vec![] } else { vec![target.clone()] }, "listen": listen }),
+                    None => json!({ "kind": "aws", "service": service, "action": action, "input": input, "topics": if is_topic { vec![target.clone()] } else { vec![] }, "queues": if is_topic { vec![] } else { vec![target.clone()] }, "listen": listen }),
+                    // an error moto gives: the topic or the queue is not there
+                    Some(k) => {
+                        let exception = task.errors.iter().find(|e| e.name == k).and_then(|e| e.exception.clone());
+                        match exception.as_deref() {
+                            Some("NotFoundException") if is_topic => json!({ "kind": "aws", "service": service, "action": action, "input": input, "topics": [], "queues": [], "listen": null, "error": "NotFoundException" }),
+                            Some("QueueDoesNotExist") if !is_topic => json!({ "kind": "aws", "service": service, "action": action, "input": input, "topics": [], "queues": [], "listen": null, "error": "QueueDoesNotExist" }),
+                            _ => continue,
+                        }
+                    }
+                }
+            } else {
+                continue;
+            };
+            if seen.insert(case.to_string()) {
+                cases.push(case);
+            }
+        }
+    }
+    cases
+}
+
+/// The default Transports — TypeScript's (fetch, the AWS SDK for JavaScript) and Python's (the
+/// standard library, boto3) — send the calls of every scenario to stand-ins on this machine
+/// (tools/wire): an HTTP request arrives with the method, the path, the query, the headers and
+/// the body the call has, JSON or URL-encoded; a Lambda invoke with the function and the
+/// payload; an SNS message or an SQS message on moto, the AWS APIs' stand-in; and each gives
+/// back what the runners' stand-in Transport gives for the scenario's answer, an AWS error by
+/// the name the task declares. Nothing leaves the machine.
+#[test]
+fn default_transports_send_what_the_calls_say() {
+    need_rulec!();
+    need_node!();
+    let wire = root().join("tools/wire");
+    let python = wire.join(".venv/bin/python");
+    if !wire.join("node_modules").exists() || !python.exists() {
+        eprintln!("SKIP: tools/wire/node_modules or tools/wire/.venv is missing; see tools/wire/package.json and requirements.txt");
+        return;
+    }
+    // moto, on a port nothing else holds
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let mut moto = Command::new(wire.join(".venv/bin/moto_server")).arg("-p").arg(port.to_string()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
+    let address = format!("http://127.0.0.1:{port}");
+    for _ in 0..100 {
+        if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let mut checked = 0;
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for f in runnable() {
+            let (_, got) = dandori::check::check_file(&f).unwrap();
+            let m = got.model.expect("the flows pass check");
+            let cases = wire_cases(&m);
+            if cases.is_empty() {
+                continue;
+            }
+            let dir = scratch(&format!("wire-{}", dandori::render::ident(&m.name)));
+            let (Ok(ts), Ok(py)) = (dandori::temporal::build(&m), dandori::temporal_py::build(&m)) else { continue };
+            for (name, text) in ts.iter().chain(py.iter()) {
+                let p = dir.join(name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, text).unwrap();
+            }
+            let cases_file = dir.join("cases.json");
+            std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
+            let mut by_lang = Vec::new();
+            for (lang, out) in [
+                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).output().unwrap()),
+                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).output().unwrap()),
+            ] {
+                assert!(out.status.success(), "{}: the {lang} check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+                let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join(if lang == "Python" { "py.json" } else { "ts.json" })).unwrap()).unwrap();
+                for (c, r) in cases.iter().zip(&results) {
+                    let at = || format!("{} ({lang}): {}", rel(&f), serde_json::to_string(c).unwrap());
+                    match c["kind"].as_str().unwrap() {
+                        "http" => {
+                            let req = &c["request"];
+                            let got = &r["received"];
+                            assert_eq!(got["method"], req["http"], "{}: the method", at());
+                            let url = req["url"].as_str().unwrap();
+                            let path = url.splitn(4, '/').nth(3).map(|p| format!("/{}", p.split('?').next().unwrap())).unwrap();
+                            // the path arrives as the URL has it, percent-encoded where it is not ASCII
+                            let arrived = got["path"].as_str().unwrap();
+                            let decoded = String::from_utf8(arrived.split('%').enumerate().fold(Vec::new(), |mut b, (i, s)| {
+                                if i == 0 {
+                                    b.extend(s.bytes());
+                                } else {
+                                    b.push(u8::from_str_radix(&s[..2], 16).unwrap());
+                                    b.extend(s[2..].bytes());
+                                }
+                                b
+                            }))
+                            .unwrap();
+                            assert_eq!(decoded, path, "{}: the path", at());
+                            let mut want_query = Vec::new();
+                            if !req["query"].is_null() {
+                                form_pairs(&req["query"], "", &mut want_query);
+                            }
+                            assert_eq!(got["query"], Value::Array(want_query), "{}: the query", at());
+                            for (k, v) in req["headers"].as_object().into_iter().flatten() {
+                                assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
+                            }
+                            assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
+                            let want_body = if req["body"].is_null() {
+                                Value::Null
+                            } else if req["form"] == json!(true) {
+                                let mut p = Vec::new();
+                                form_pairs(&req["body"], "", &mut p);
+                                Value::Array(p)
+                            } else {
+                                assert_eq!(got["headers"]["content-type"], json!("application/json"), "{}: the body's type", at());
+                                req["body"].clone()
+                            };
+                            assert_eq!(got["body"], want_body, "{}: the body", at());
+                            assert_eq!(r["returned"], c["reply"], "{}: what the Transport gave back", at());
+                        }
+                        "lambda" => {
+                            assert_eq!(r["received"]["fn"], c["fn"], "{}: the function", at());
+                            assert_eq!(r["received"]["payload"], c["payload"], "{}: the payload", at());
+                            assert!(r["received"]["invocationType"].is_null() || r["received"]["invocationType"] == json!("RequestResponse"), "{}: the invocation's type", at());
+                            assert_eq!(r["returned"], c["reply"], "{}: what the Transport gave back", at());
+                        }
+                        _ => match c.get("error") {
+                            Some(e) => assert_eq!(r["returned"]["error"], *e, "{}: the error's name ({})", at(), r["returned"]),
+                            None => {
+                                assert!(r["returned"]["ok"]["MessageId"].is_string(), "{}: no message id in {}", at(), r["returned"]);
+                                let messages = r["messages"].as_array().unwrap();
+                                assert_eq!(messages.len(), 1, "{}: the listening queue got {messages:?}", at());
+                                let body = messages[0].as_str().unwrap();
+                                let input = &c["input"];
+                                if c["service"] == "sns" {
+                                    assert_eq!(body, input["Message"].as_str().unwrap(), "{}: the message", at());
+                                } else {
+                                    // SQS takes the message as text: a JSON body goes as JSON text
+                                    let want = &input["MessageBody"];
+                                    let got: Value = if want.is_string() { json!(body) } else { serde_json::from_str(body).unwrap() };
+                                    assert_eq!(&got, want, "{}: the message", at());
+                                }
+                            }
+                        },
+                    }
+                }
+                by_lang.push(results);
+            }
+            // the two languages send the same text, and what came back from moto has the same fields
+            for (i, c) in cases.iter().enumerate() {
+                let (ts, py) = (&by_lang[0][i], &by_lang[1][i]);
+                let case = serde_json::to_string(c).unwrap();
+                assert_eq!(ts["received"]["raw"], py["received"]["raw"], "{}: the two languages send different text: {case}", rel(&f));
+                assert_eq!(ts["received"]["rawQuery"], py["received"]["rawQuery"], "{}: the two languages send different queries: {case}", rel(&f));
+                assert_eq!(ts["messages"], py["messages"], "{}: the two languages send different messages: {case}", rel(&f));
+                if c["kind"] == "aws" {
+                    let keys = |r: &Value| r["returned"]["ok"].as_object().map(|o| o.keys().cloned().collect::<Vec<_>>());
+                    assert_eq!(keys(ts), keys(py), "{}: the fields of moto's answer differ between the languages: {case}", rel(&f));
+                }
+            }
+            eprintln!("{}: sent {} call(s) through the default Transport of TypeScript and of Python", rel(&f), cases.len());
+            checked += cases.len();
+        }
+    }));
+    let _ = moto.kill();
+    if let Err(e) = outcome {
+        std::panic::resume_unwind(e);
+    }
+    assert!(checked > 0, "no call went through a Transport");
+}
+
 /// The kept histories replay with the code dandori writes now: a change of the generator that
 /// would make a running workflow of an unchanged `.flow` nondeterministic shows here. A change
 /// that has to do so is made with DANDORI_BLESS=1, which records the histories anew; runs that
