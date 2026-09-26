@@ -2,7 +2,7 @@
   "name": "dandori-temporal-runner",
   "private": true,
   "type": "module",
-  "description": "Runs the workflows dandori generates for Temporal in a time-skipping test environment, against scripted answers",
+  "description": "Runs the workflows dandori generates for Temporal on the Temporal CLI's dev server against scripted answers, and type-checks the TypeScript dandori generates",
   "dependencies": {
     "@temporalio/activity": "1.24.0",
     "@temporalio/client": "1.24.0",
@@ -10,5 +10,8 @@
     "@temporalio/testing": "1.24.0",
     "@temporalio/worker": "1.24.0",
     "@temporalio/workflow": "1.24.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
   }
 }

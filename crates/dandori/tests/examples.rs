@@ -77,9 +77,10 @@ fn runnable() -> Vec<PathBuf> {
     out
 }
 
-/// The tests that start many processes at once — the Temporal runners and dev servers, and the
-/// Argo runner with its cluster — take turns: run together, they slow each other down more than
-/// they gain.
+/// The tests that start a process for every flow at once — the Temporal runners with their dev
+/// servers, and the durable functions runners — take turns: run together, they slow each other
+/// down, and the Argo test beside them, more than they gain. The Argo test, the longest, does not
+/// wait for them.
 static HEAVY: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn heavy() -> std::sync::MutexGuard<'static, ()> {
@@ -369,9 +370,84 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
     };
     let what = if python.is_some() { "the Temporal workflow in Python" } else { "the Temporal workflow" };
     assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
-    let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    // what the query dandori.status and the search attribute DandoriCases say of the cases at the end
+    for (i, (g, (sc, _))) in got.iter_mut().zip(&references).enumerate() {
+        let o = g.as_object_mut().unwrap();
+        let (cases, shown) = (o.remove("cases").unwrap_or(Value::Null), o.remove("shown").unwrap_or(Value::Null));
+        let want = dandori::interp::cases_at_end(&m, sc, View::Temporal).unwrap();
+        assert_eq!(cases, Value::Object(want.clone()), "{} run {}: the query says the cases are {cases}, and the reference {}", rel(f), i + 1, Value::Object(want.clone()));
+        // the workflow writes the search attribute when a case moves; before that, it has none
+        let listed: Vec<Value> = want.iter().filter(|(_, s)| !s.is_null()).map(|(c, s)| json!(format!("{c}={}", s.as_str().unwrap_or_default()))).collect();
+        let listed = if listed.is_empty() { Value::Null } else { Value::Array(listed) };
+        assert_eq!(shown, listed, "{} run {}: the search attribute says {shown}, and the reference's cases {listed}", rel(f), i + 1);
+    }
     compare(what, f, &references, &got);
-    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server)", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
+    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server), with the query and the search attribute", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
+}
+
+/// The TypeScript dandori writes — for Temporal, for durable functions, and Argo's caller —
+/// passes `tsc --strict` (TypeScript 7 in tools/temporal), with the modules rulec generates for
+/// the rules. The packages the default Transport loads when it needs them (the AWS SDK's clients,
+/// the agents' SDKs) are declared as modules of any type.
+#[test]
+fn generated_typescript_type_checks() {
+    need_rulec!();
+    let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
+    if !tsc.exists() {
+        eprintln!("SKIP: TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`");
+        return;
+    }
+    let types = root().join("tools/temporal/node_modules/@types");
+    let shims = "declare module \"@anthropic-ai/sdk\";\ndeclare module \"openai\";\ndeclare module \"@openai/agents\";\ndeclare module \"@aws-sdk/*\";\n";
+    let mut checked = 0;
+    for f in runnable() {
+        let (_, c) = dandori::check::check_file(&f).unwrap();
+        let m = c.model.expect("the flows pass check");
+        let builds = [
+            ("temporal", dandori::temporal::build(&m), "tools/temporal/node_modules", false),
+            ("durable", dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable), "tools/durable/node_modules", false),
+            ("argo", dandori::argo::build(&m), "tools/temporal/node_modules", true),
+        ];
+        for (target, built, modules, argo) in builds {
+            let files = match built {
+                Ok(files) => files,
+                Err(d) if d.iter().all(|x| x.code == "E050") => continue,
+                Err(d) => panic!("{} does not build for {target}: {}", rel(&f), d[0].en),
+            };
+            let dir = scratch(&format!("tsc-{target}-{}", dandori::render::ident(&m.name)));
+            for (name, text) in &files {
+                let p = dir.join(name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, text).unwrap();
+            }
+            // the directory of the TypeScript: the workflow's package, or Argo's caller
+            let code = if argo { dir.join("caller") } else { dir.join(dandori::render::ident(&m.name)) };
+            let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+            if target != "durable" {
+                for r in &called {
+                    let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(code.join("rulec")).output().unwrap();
+                    assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+                }
+            }
+            let link = code.join("node_modules");
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(root().join(modules), &link).unwrap();
+            std::fs::write(code.join("shims.d.ts"), shims).unwrap();
+            let tsconfig = json!({
+                "compilerOptions": {
+                    "strict": true, "noEmit": true, "module": "nodenext", "moduleResolution": "nodenext", "target": "es2022",
+                    "skipLibCheck": true, "types": ["node"], "typeRoots": [types], "allowImportingTsExtensions": argo
+                },
+                "include": ["*.ts"]
+            });
+            std::fs::write(code.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
+            let out = Command::new(&tsc).arg("-p").arg(code.join("tsconfig.json")).output().unwrap();
+            assert!(out.status.success(), "{}: the TypeScript for {target} does not type-check:\n{}{}", rel(&f), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            checked += 1;
+        }
+    }
+    eprintln!("type-checked the TypeScript of {checked} build(s) with tsc --strict");
 }
 
 fn rulec_bin() -> String {
@@ -700,7 +776,18 @@ fn durable_runs_as_the_reference_says() {
         eprintln!("SKIP: tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
         return;
     }
-    for f in runnable() {
+    // every flow at once, taking its turn with the other tests that start many processes
+    let _turn = heavy();
+    std::thread::scope(|scope| {
+        for f in runnable() {
+            scope.spawn(move || durable_one(&f));
+        }
+    });
+}
+
+fn durable_one(f: &Path) {
+    {
+        let f = f.to_path_buf();
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("durable-{}", dandori::render::ident(&m.name)));
@@ -708,7 +795,7 @@ fn durable_runs_as_the_reference_says() {
             Ok(files) => files,
             Err(d) if d.iter().all(|x| x.code == "E050") => {
                 eprintln!("{}: not for Lambda durable functions ({}: E050)", rel(&f), d[0].en);
-                continue;
+                return;
             }
             Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
         };
@@ -846,7 +933,6 @@ fn argo_runs_as_the_reference_says() {
         eprintln!("SKIP: {why}");
         return;
     }
-    let _turn = heavy();
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and
     // runs one of them again with real pods; each flow is made ready on a thread of its own
     let going: Vec<ArgoFlow> = std::thread::scope(|scope| {

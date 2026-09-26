@@ -1,7 +1,10 @@
 // Runs a workflow that dandori generated for Temporal on a real Temporal server — the dev server
 // of the Temporal CLI, which the SDK's testing package starts — against scripted answers, and
 // prints what it did in the shape the reference interpreter prints for Temporal: every call with
-// its arguments and the answer it got, and how the workflow ended.
+// its arguments and the answer it got, and how the workflow ended. With each run, it also prints
+// what the query dandori.status says of the cases at the end (`cases`), and the search attribute
+// DandoriCases (`shown`). The workers, the starts, the callbacks' answers and the query go
+// through the generated worker.ts and client.ts.
 //
 //   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json>
 //
@@ -34,8 +37,8 @@ import { fileURLToPath } from "node:url";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { DefaultLogger, Runtime, Worker } from "@temporalio/worker";
 import { Context } from "@temporalio/activity";
-import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
-import { WorkflowFailedError } from "@temporalio/client";
+import { ApplicationFailure, CancelledFailure, SearchAttributeType, defineSearchAttributeKey } from "@temporalio/common";
+import { WorkflowFailedError, WorkflowUpdateFailedError } from "@temporalio/client";
 import { makeTransport } from "../transport.mjs";
 
 // the worker's log goes to stderr; the results go to a file
@@ -57,6 +60,8 @@ const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-temporal-"));
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);
+  // the rules are stand-ins here, so the worker needs none of rulec's modules
+  if (f === "rules.ts") text = "export const rules = {};\n";
   if (f === "workflow.ts") {
     text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
     text = text.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`);
@@ -79,6 +84,9 @@ for (const c of spec.children ?? []) {
 fs.writeFileSync(path.join(work, "workflows.ts"), children);
 
 const { makeActivities } = await import(path.join(work, "activities.ts"));
+const { workerOptions } = await import(path.join(work, "worker.ts"));
+const { start, answer, status, TASK_QUEUE } = await import(path.join(work, "client.ts"));
+const CASES = defineSearchAttributeKey("DandoriCases", SearchAttributeType.KEYWORD_LIST);
 
 /** Each run by its workflow's id: the answers it gets, the next one, and the calls it made. */
 const runs = new Map();
@@ -139,7 +147,7 @@ function hold(run, ans) {
 }
 
 /** The answer of a stand-in: its value, the scripted error, no answer in time, or none before the workflow is cancelled. */
-async function answer(run, ans) {
+async function reply(run, ans) {
   if (ans.cancel === true) return cancelling(run);
   if ("ok" in ans) return ans.ok;
   if (ans.error === "timeout") return late();
@@ -157,9 +165,27 @@ async function answerLater(callbackId, ans) {
     await env.client.workflow.getHandle(current().id).cancel();
     return;
   }
-  const [workflowId] = JSON.parse(callbackId);
-  const signal = "ok" in ans ? { callback_id: callbackId, ok: ans.ok } : { callback_id: callbackId, error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
-  await env.client.workflow.getHandle(workflowId).signal("dandori.callback", signal);
+  const a = "ok" in ans ? { ok: ans.ok } : { error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
+  await answer(env.client, callbackId, a);
+  await mustRefuse(callbackId, a, "a second answer to a callback");
+  if (!refusalsChecked) {
+    refusalsChecked = true;
+    const [workflowId] = JSON.parse(callbackId);
+    await mustRefuse(JSON.stringify([workflowId, "0"]), a, "an answer to a callback it does not wait for");
+  }
+}
+
+// a second answer to a callback, and an answer to one the workflow never waits for, must be refused
+let refusalsChecked = false;
+
+async function mustRefuse(callbackId, a, why) {
+  try {
+    await answer(env.client, callbackId, a);
+  } catch (e) {
+    if (e instanceof WorkflowUpdateFailedError) return;
+    throw e;
+  }
+  throw new Error(`the workflow took ${why}`);
 }
 
 // the stand-in transport writes every call down with the answer it takes; a call it times out gets none
@@ -186,39 +212,43 @@ for (const t of spec.own ?? []) {
       return;
     }
     run.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });
-    return answer(run, ans);
+    return reply(run, ans);
   };
 }
-const activities = { ...makeActivities(own, makeTransport(spec, transportRun)) };
+const transport = makeTransport(spec, transportRun);
+const activities = {};
 for (const name of spec.rules ?? []) {
   activities[name] = async (args) => {
     const run = current();
     const ans = take(run, name);
     run.steps.push({ call: { activity: name, args }, answer: recorded(ans) });
-    return answer(run, ans);
+    return reply(run, ans);
   };
 }
 activities.dd_test_child = async ({ type, args }) => {
   const run = current();
   const ans = take(run, type);
   run.steps.push({ call: { child_workflow: type, args }, answer: recorded(ans) });
-  return answer(run, ans);
+  return reply(run, ans);
 };
 
 // the server fires a timer up to a second late unless told to shift its timers less
-env = await TestWorkflowEnvironment.createLocal({ server: { ui: false, log: { format: "pretty", level: "error" }, extraArgs: ["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'] } });
+env = await TestWorkflowEnvironment.createLocal({
+  server: { ui: false, log: { format: "pretty", level: "error" }, extraArgs: ["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'], searchAttributes: [CASES] },
+});
 const results = [];
 try {
-  const queues = ["dandori", ...(spec.queues ?? []).filter((q) => q !== "dandori")];
+  // the bundler loses its way when the path goes through a symbolic link (/var on macOS)
+  const base = workerOptions(own, { transport, workflowsPath: path.join(fs.realpathSync(work), "workflows.ts") });
+  const queues = [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)];
   const workers = [];
   for (const taskQueue of queues) {
     workers.push(
       await Worker.create({
+        ...base,
         connection: env.nativeConnection,
         taskQueue,
-        // the bundler loses its way when the path goes through a symbolic link (/var on macOS)
-        workflowsPath: path.join(fs.realpathSync(work), "workflows.ts"),
-        activities,
+        activities: { ...base.activities, ...activities },
         // heartbeats go out at once, so that a held activity hears soon that it is over
         defaultHeartbeatThrottleInterval: "100 milliseconds",
         maxHeartbeatThrottleInterval: "100 milliseconds",
@@ -237,18 +267,24 @@ try {
     const ends = await Promise.all(
       spec.runs.map(async (r) => {
         runs.set(r.id, { id: r.id, answers: r.answers, next: 0, steps: [] });
+        const handle = await start(env.client, r.id, r.input, { searchAttributes: true });
+        let end;
         try {
-          const out = await env.client.workflow.execute(spec.workflow, { args: [r.input], taskQueue: "dandori", workflowId: r.id });
-          return { succeed: out ?? null };
+          const out = await handle.result();
+          end = { succeed: out ?? null };
         } catch (e) {
           if (!(e instanceof WorkflowFailedError)) throw e;
           const c = e.cause;
-          if (c instanceof CancelledFailure) return { cancel: null };
-          return { fail: { error: c?.type ?? String(c), cause: c?.message || null } };
+          if (c instanceof CancelledFailure) end = { cancel: null };
+          else end = { fail: { error: c?.type ?? String(c), cause: c?.message || null } };
         }
+        // what the query and the search attribute say of the cases once the run is over
+        const cases = (await status(env.client, r.id)).cases;
+        const shown = (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;
+        return { end, cases, shown };
       }),
     );
-    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i] }));
+    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, ...ends[i] }));
   };
   // every worker runs until the runs are done
   let chain = runAll;

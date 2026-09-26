@@ -91,6 +91,23 @@ pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
 
 /// The run, and for every answer the calls took, which task took it and how it came out.
 pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>), String> {
+    run_all(m, sc, view).map(|(v, calls, _)| (v, calls))
+}
+
+/// Each case's state when the run ends, by the case's name: null for a case the run did not
+/// start. What Temporal's query `dandori.status` says of the cases then.
+pub fn cases_at_end(m: &Model, sc: &Value, view: View) -> Result<Map<String, Value>, String> {
+    let (_, _, vars) = run_all(m, sc, view)?;
+    Ok(m.cases
+        .iter()
+        .map(|c| {
+            let st = vars.get(&c.name).and_then(|v| v.get(&c.state_field)).cloned().unwrap_or(Value::Null);
+            (c.name.clone(), st)
+        })
+        .collect())
+}
+
+fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, BTreeMap<String, Value>), String> {
     let answers = sc["answers"].as_array().cloned().unwrap_or_default();
     let mut r = Run {
         m,
@@ -146,7 +163,7 @@ pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallI
     if let Some(e) = r.error {
         return Err(e);
     }
-    Ok((json!({ "steps": r.steps, "end": r.end }), r.callees))
+    Ok((json!({ "steps": r.steps, "end": r.end }), r.callees, r.vars))
 }
 
 impl<'a> Run<'a> {
@@ -421,7 +438,6 @@ impl<'a> Run<'a> {
                     None => None,
                 };
                 if let Some(var) = var {
-                    self.vars.insert(var.clone(), v.clone());
                     let ty = match callee {
                         Callee::Task(t) => m.tasks[*t].result.clone().unwrap_or(Ty::Json),
                         Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
@@ -440,6 +456,8 @@ impl<'a> Run<'a> {
                             return Ctl::Stop;
                         }
                     }
+                    // the answer is kept only when it passes its checks, as in the generated code
+                    self.vars.insert(var.clone(), v.clone());
                 }
                 Ctl::Next
             }

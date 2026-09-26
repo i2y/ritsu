@@ -208,7 +208,16 @@ on the PATH.
 - `build --target temporal` writes `workflow.ts`, `types.ts`, `activities.ts`
   (`makeActivities(own, transport)`: the tasks dandori writes, with the ones you write),
   `io.ts` (the `Transport`), `rules.ts` (the rules as activities around rulec's
-  TypeScript) and `runtime.ts`. A task without `timeout` gets as long as the other platforms
+  TypeScript), `runtime.ts`, `worker.ts` (`makeWorker(own)`) and `client.ts`. The workflow's
+  type and task queue carry the `.flow`'s version (`hotel_stay_v1`), so a new version runs
+  beside the old one; `makeWorker(own, { deployment })` also puts the worker on Worker
+  Deployment Versioning, with a hash of the code as its build id, and pins each run to the
+  build it started on. `client.ts` has `start` (which never reuses a workflow id, since the
+  idempotency keys are made from it), `answer` (a callback's answer as an Update, which the
+  workflow refuses for a callback it does not wait for, or a second time) and `status` (the
+  query `dandori.status`: the line the workflow waits at, and each case's state). Started with
+  `{ searchAttributes: true }`, the workflow also keeps the search attribute `DandoriCases`
+  (`"pi=requires_capture"`, …) up to date, so runs can be found by their cases' states. A task without `timeout` gets as long as the other platforms
   would give it — 60 seconds for `http` and `agent`, as an HTTP Task has, 900 for `lambda`,
   and no limit of its own for the rest — and every activity the workflow's worker serves
   heartbeats, so that a worker that went away is noticed within 30 seconds. A rule's activity
@@ -216,9 +225,10 @@ on the PATH.
 - `build --target temporal-python` writes the same for Temporal's Python SDK, as a package
   named after the workflow: `workflow.py` (the workflow, and `workflows` to give the
   worker), `types.py`, `activities.py` (`make_activities(own, transport)`), `io.py`,
-  `rules.py` (around rulec's Python) and `runtime.py`. The workflow type, the activities,
-  the callback's signal and the ids are named as in the TypeScript, so a worker in one
-  language can serve the other.
+  `rules.py` (around rulec's Python), `runtime.py`, `worker.py` (`make_worker`) and
+  `client.py` (`start`, `answer`, `status`). The workflow type, the activities, the
+  callback's update and signal, the query and the ids are named as in the TypeScript, so a
+  worker in one language can serve the other.
 - `build --target durable` writes `workflow.ts` with `makeHandler(own, transport)`,
   `types.ts`, `tasks.ts`, `io.ts` and `runtime.ts`, and for every rule it calls, the same
   Lambda handler as `asl`, which the durable function invokes.
@@ -256,7 +266,9 @@ stand-ins that answer from the scenario. The rounds of a parallel loop run one a
 the runners, so the calls come in the reference's order.
 
 On Temporal, every run of a flow goes at once, each as a workflow of its own id, which the
-idempotency keys carry. The server keeps real time, so the copy of the code the runners run
+idempotency keys carry. The runners make their workers and start their runs with the generated
+`worker` and `client`, answer callbacks with its Update (and see that a second answer is
+refused), and check what the query and the search attribute say of the cases at the end. The server keeps real time, so the copy of the code the runners run
 waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the scenario times
 out is kept busy until the server times it out. In a flow with `on cancel`, the scenarios
 also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
@@ -287,7 +299,8 @@ The durable functions test runner cannot time a call out on cue, so the scenario
 timeout are left out there. Argo and the graph's runner cannot time out a task either, but a
 callback's timeout can be played: on pydantic-graph by not answering it, on Argo by answering
 the wait with what its running out gives. On Temporal, both can. The ASL is also validated with
-asl-validator, and the code between each platform and a rule answers every vector
+asl-validator, the TypeScript for Temporal, durable functions and Argo's caller passes
+`tsc --strict`, and the code between each platform and a rule answers every vector
 `rulec vectors` produces as rulec says.
 
 ```

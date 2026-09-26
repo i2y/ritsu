@@ -38,6 +38,13 @@ const OPENAI_CLIENT: &str = "^7.2.0";
 /// The version of Anthropic's SDK for JavaScript that the default Transport is written against.
 const ANTHROPIC_SDK: &str = "^0.128.0";
 
+/// The workflow's type on Temporal, which is also the task queue of its worker: the flow's name
+/// and its version (`hotel_stay_v1`), so that a new version of a `.flow` is a new workflow, and
+/// the runs of the old one go on with the old code on its own queue.
+pub fn workflow_type(m: &Model) -> String {
+    format!("{}_v{}", ident(&m.name), m.version)
+}
+
 /// How long an activity may run when its task says no `timeout`, in seconds. A task that the
 /// workflow's own worker serves (no `queue`) heartbeats (`HEARTBEAT_SECONDS`), so a worker that
 /// went away is noticed without a limit on the task: an HTTP request or an agent gets what Step
@@ -323,11 +330,73 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         (format!("{dir}/io.ts"), io),
         (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}")),
         (format!("{dir}/workflow.ts"), wf),
+        (format!("{dir}/client.ts"), client_file(m, &header)),
     ];
     if !called.is_empty() {
         files.push((format!("{dir}/rules.ts"), rules_file(m, &header, &called)));
     }
+    let id = build_id(&files);
+    files.push((format!("{dir}/worker.ts"), worker_file(m, &header, !called.is_empty(), &id)));
     Ok(files)
+}
+
+/// The build id of Worker Deployment Versioning: a hash of the code dandori wrote, which
+/// changes whenever the code does.
+pub(crate) fn build_id(files: &[(String, String)]) -> String {
+    // FNV-1a, 64 bits
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for (name, text) in files {
+        for b in name.bytes().chain([0u8]).chain(text.bytes()).chain([0u8]) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("dandori-{h:016x}")
+}
+
+/// client.ts: starting the workflow, answering its callbacks, and asking where it is.
+fn client_file(m: &Model, header: &str) -> String {
+    let ty = workflow_type(m);
+    let mut c = header.to_string();
+    c.push_str(&format!("// Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
+    c.push_str("import { type Client, type WorkflowHandle } from \"@temporalio/client\";\n");
+    c.push_str("import { WorkflowIdReusePolicy } from \"@temporalio/common\";\n");
+    c.push_str("import type * as T from \"./types\";\n\n");
+    c.push_str(&format!("/** The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow. */\nexport const WORKFLOW_TYPE = {};\n\n", q(&ty)));
+    c.push_str(&format!("/** The task queue of the workflow and its activities (the tasks that say `queue` go to theirs). */\nexport const TASK_QUEUE = {};\n\n", q(&ty)));
+    c.push_str("export interface StartOptions {\n  /** Keep the search attribute DandoriCases (a keyword list) up to date with the cases' states, as \"<case>=<state>\". Register it on the namespace first. */\n  searchAttributes?: boolean;\n}\n\n");
+    c.push_str("/**\n * Start the workflow as `id`. The idempotency keys of its calls are made from the id, so an id\n * is used once: a second start with it is refused, even after the first run has ended.\n */\n");
+    c.push_str("export async function start(client: Client, id: string, input: T.WorkflowInput, options: StartOptions = {}): Promise<WorkflowHandle> {\n");
+    c.push_str("  return client.workflow.start(WORKFLOW_TYPE, {\n    args: [input],\n    taskQueue: TASK_QUEUE,\n    workflowId: id,\n    workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,\n    ...(options.searchAttributes ? { memo: { \"dandori.cases\": true } } : {}),\n  });\n}\n\n");
+    c.push_str("/** A callback's answer: its value, or the error it names. */\nexport type CallbackAnswer = { ok: unknown } | { error: string; message?: string };\n\n");
+    c.push_str("/**\n * Answer a callback, by the id its task handed on. The workflow says whether it took the answer:\n * it refuses one for a callback it does not wait for, and a second one (WorkflowUpdateFailedError).\n */\n");
+    c.push_str("export async function answer(client: Client, callbackId: string, a: CallbackAnswer): Promise<void> {\n  const [workflowId] = JSON.parse(callbackId) as [string, string];\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.answer\", { args: [{ callback_id: callbackId, ...a }] });\n}\n\n");
+    c.push_str("/** Where the workflow is: the line of the call or the wait it is at, and each case's state (null before it starts). */\nexport interface Status {\n  at: number | null;\n  cases: Record<string, string | null>;\n}\n\n");
+    c.push_str("export async function status(client: Client, id: string): Promise<Status> {\n  return client.workflow.getHandle(id).query<Status>(\"dandori.status\");\n}\n");
+    c
+}
+
+/// worker.ts: the worker that runs the workflow, its tasks and its rules.
+fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
+    let mut w = header.to_string();
+    w.push_str(&format!("// The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
+    w.push_str("import { NativeConnection, Worker, type WorkerOptions } from \"@temporalio/worker\";\n");
+    w.push_str("import { makeActivities, type OwnTasks } from \"./activities\";\n");
+    w.push_str("import { TASK_QUEUE } from \"./client\";\n");
+    w.push_str("import * as io from \"./io\";\n");
+    if rules {
+        w.push_str("import { rules } from \"./rules\";\n");
+    }
+    w.push('\n');
+    w.push_str(&format!("/** A hash of the code dandori wrote: it changes whenever the code does. The build id of Worker Deployment Versioning. */\nexport const BUILD_ID = {};\n\n", q(build)));
+    w.push_str("export interface WorkerConfig {\n  /** Where the workflow's code is; by default workflow.ts beside this file, as CommonJS finds it. */\n  workflowsPath?: string;\n  transport?: io.Transport;\n  namespace?: string;\n");
+    w.push_str("  /**\n   * Worker Deployment Versioning: the deployment this worker is a version of. A run stays on the\n   * build it started on (PINNED), so the code dandori writes anew never replays an old run.\n   */\n  deployment?: string;\n}\n\n");
+    w.push_str("/** The worker's options but the connection: the workflow, and the activities on TASK_QUEUE. */\n");
+    w.push_str("export function workerOptions(own: OwnTasks, config: WorkerConfig = {}): Omit<WorkerOptions, \"connection\"> {\n  return {\n    namespace: config.namespace ?? \"default\",\n    taskQueue: TASK_QUEUE,\n    workflowsPath: config.workflowsPath ?? require.resolve(\"./workflow\"),\n");
+    w.push_str(&format!("    activities: {{ ...makeActivities(own, config.transport){} }},\n", if rules { ", ...rules" } else { "" }));
+    w.push_str("    ...(config.deployment === undefined\n      ? {}\n      : { workerDeploymentOptions: { useWorkerVersioning: true, version: { deploymentName: config.deployment, buildId: BUILD_ID }, defaultVersioningBehavior: \"PINNED\" } }),\n  };\n}\n\n");
+    w.push_str("/** The worker, on the connection given or on one to the local server. */\nexport async function makeWorker(own: OwnTasks, config: WorkerConfig & { connection?: NativeConnection } = {}): Promise<Worker> {\n  const connection = config.connection ?? (await NativeConnection.connect({}));\n  return Worker.create({ ...workerOptions(own, config), connection });\n}\n");
+    w
 }
 
 /// The parameters a task's code gets: its own, the key, and a callback's id.
@@ -654,10 +723,17 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
         let module = ts["module"].as_str().unwrap_or("rule").trim_end_matches(".ts").to_string();
         let mut names: BTreeSet<String> = BTreeSet::new();
         names.insert(ts["function"].as_str().unwrap_or("rule").to_string());
-        for e in ts["enums"].as_array().unwrap_or(&vec![]) {
-            let alias = e["alias"].as_str().unwrap_or("");
+        let enum_aliases: Vec<&str> = ts["enums"].as_array().map(|a| a.iter().filter_map(|e| e["alias"].as_str()).collect()).unwrap_or_default();
+        for alias in &enum_aliases {
             if ts["params"].as_array().unwrap_or(&vec![]).iter().any(|p| p["type"].as_str() == Some(alias)) {
                 names.insert(format!("parse{alias}"));
+            }
+        }
+        // a number with a unit is a bigint with a brand, which rulec's own runner makes by `as`
+        for p in ts["params"].as_array().unwrap_or(&vec![]) {
+            let ty = p["type"].as_str().unwrap_or("");
+            if !["boolean", "string", "bigint"].contains(&ty) && !enum_aliases.contains(&ty) {
+                names.insert(format!("type {ty}"));
             }
         }
         rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.into_iter().collect::<Vec<_>>().join(", ")));
@@ -682,8 +758,11 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             } else if ty == "string" {
                 args.push(format!("String({get})"));
                 arg_types.push(format!("{}: string", q(name)));
-            } else {
+            } else if ty == "bigint" {
                 args.push(format!("BigInt({get})"));
+                arg_types.push(format!("{}: number", q(name)));
+            } else {
+                args.push(format!("BigInt({get}) as {ty}"));
                 arg_types.push(format!("{}: number", q(name)));
             }
         }
@@ -1115,18 +1194,22 @@ export function asFailure(e: unknown): unknown {
 "#;
 
 const RUNTIME: &str = r#"// What the generated workflow code shares. It runs inside the workflow, so it uses nothing
-// but @temporalio/workflow.
+// but @temporalio/workflow, and @temporalio/common's search attribute keys.
 
+import { SearchAttributeType, defineSearchAttributeKey } from "@temporalio/common";
 import {
   ActivityFailure,
   ApplicationFailure,
   ChildWorkflowFailure,
   TimeoutFailure,
   condition,
+  defineQuery,
   defineSignal,
+  defineUpdate,
   isCancellation,
   setHandler,
   sleep,
+  upsertSearchAttributes,
   workflowInfo,
 } from "@temporalio/workflow";
 
@@ -1240,28 +1323,90 @@ export interface CallbackAnswer {
 /** The signal that brings a callback's answer. */
 export const callbackSignal = defineSignal<[CallbackAnswer]>("dandori.callback");
 
+/**
+ * The update that brings a callback's answer, and tells the one who answers whether the workflow
+ * took it: it refuses an answer for a callback the workflow does not wait for (an id it never
+ * handed on, or one it gave up on), and a second answer.
+ */
+export const answerUpdate = defineUpdate<void, [CallbackAnswer]>("dandori.answer");
+
 const answers = new Map<string, CallbackAnswer>();
+/** The callbacks whose ids the workflow has handed on, and that it still waits for. */
+const waiting = new Set<string>();
 
 /** Take the answers of callbacks as they come. */
 export function listen(): void {
   setHandler(callbackSignal, (a: CallbackAnswer) => {
-    answers.set(a.callback_id, a);
+    if (waiting.has(a.callback_id)) answers.set(a.callback_id, a);
   });
+  setHandler(
+    answerUpdate,
+    (a: CallbackAnswer) => {
+      answers.set(a.callback_id, a);
+    },
+    {
+      validator: (a: CallbackAnswer) => {
+        if (!waiting.has(a.callback_id)) throw new Error(`no callback waits for an answer with the id ${a.callback_id}`);
+        if (answers.has(a.callback_id)) throw new Error(`the callback ${a.callback_id} has its answer already`);
+      },
+    },
+  );
 }
 
-/** The id a callback task hands on: which workflow to signal, and which call it answers. */
+/** The id a callback task hands on: which workflow to answer, and which call it answers. */
 export function callbackId(site: number, rounds: readonly number[], n: number): string {
-  return JSON.stringify([workflowInfo().workflowId, [String(site), ...rounds.map(String), String(n)].join("/")]);
+  const id = JSON.stringify([workflowInfo().workflowId, [String(site), ...rounds.map(String), String(n)].join("/")]);
+  waiting.add(id);
+  return id;
 }
 
 /** Wait for the answer of the callback with this id. */
 export async function awaitCallback(id: string, seconds: number): Promise<unknown> {
   const got = await condition(() => answers.has(id), ms(seconds));
+  waiting.delete(id);
   if (!got) throw new CallbackTimeout();
   const a = answers.get(id)!;
   answers.delete(id);
   if (typeof a.error === "string") throw new CallbackError(a.error, a.message ?? "");
   return a.ok;
+}
+
+/** What the query `dandori.status` answers: the line of the call or the wait the workflow is at, and each case's state (null before it starts). */
+export interface Status {
+  at: number | null;
+  cases: Record<string, string | null>;
+}
+
+export const statusQuery = defineQuery<Status>("dandori.status");
+
+let where: number | null = null;
+let cases: () => Record<string, string | null> = () => ({});
+
+/** The workflow is at the call or the wait on this line. */
+export function at(line: number): void {
+  where = line;
+}
+
+/** Answer the query `dandori.status`, reading the cases' states with `read`. */
+export function report(read: () => Record<string, string | null>): void {
+  cases = read;
+  setHandler(statusQuery, () => ({ at: where, cases: cases() }));
+}
+
+/**
+ * The search attribute that lists the cases' states, as "<case>=<state>". The workflow keeps it
+ * up to date only when it was started so (client.ts: start(…, { searchAttributes: true }), which
+ * puts `dandori.cases` in the memo), since it must be registered on the namespace first.
+ */
+export const CASES = defineSearchAttributeKey("DandoriCases", SearchAttributeType.KEYWORD_LIST);
+
+/** A case moved: show the cases' states in the search attribute, when the workflow was started so. */
+export function shown(): void {
+  if (workflowInfo().memo?.["dandori.cases"] !== true) return;
+  const now = Object.entries(cases())
+    .filter(([, state]) => state !== null)
+    .map(([name, state]) => `${name}=${state}`);
+  upsertSearchAttributes([{ key: CASES, value: now }]);
 }
 
 /** How many rounds of `for … in parallel` run at a time: all, when the `.flow` does not say. */
@@ -1343,6 +1488,10 @@ impl<'a> Gen<'a> {
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 let is_input = self.m.inputs.iter().any(|(i, _)| i == name);
+                // a variable is declared with null in it until it is set; the checker says it is set here
+                if fields.is_empty() && !is_input && !matches!(ty, Ty::Opt(_)) {
+                    s.push('!');
+                }
                 for (i, f) in fields.iter().enumerate() {
                     if i == 0 && !is_input {
                         s.push('!');
@@ -1433,7 +1582,7 @@ impl<'a> Gen<'a> {
             self.out.push_str(&format!("const rule_calls = proxyActivities<typeof rules>({{ startToCloseTimeout: \"{RULE_SECONDS} seconds\", retry: {{ maximumAttempts: 1 }} }});\n"));
         }
         self.out.push('\n');
-        let fname = ident(&m.name);
+        let fname = workflow_type(m);
         self.out.push_str(&format!("export async function {fname}(input: T.WorkflowInput): Promise<{ret}> {{\n"));
         if callbacks {
             self.out.push_str("  dd.listen();\n");
@@ -1457,6 +1606,22 @@ impl<'a> Gen<'a> {
                 self.line(1, &format!("let {}: {t} = null;", self.var(v)));
             }
         }
+        if self.flavor == Flavor::Temporal {
+            // what the query `dandori.status` and the search attribute say of the cases
+            let cases: Vec<String> = m
+                .cases
+                .iter()
+                .map(|c| {
+                    let v = self.var(&c.name);
+                    format!("{}: {v} === null ? null : {v}[{}]", q(&c.name), q(&c.state_field))
+                })
+                .collect();
+            if cases.is_empty() {
+                self.line(1, "dd.report(() => ({}));");
+            } else {
+                self.line(1, &format!("dd.report(() => ({{ {} }}));", cases.join(", ")));
+            }
+        }
         // a cancellation reaches past `on failure` to `on cancel`
         let d = if m.on_cancel.is_some() && self.flavor == Flavor::Temporal {
             self.line(1, "try {");
@@ -1464,11 +1629,13 @@ impl<'a> Gen<'a> {
         } else {
             1
         };
+        // a flow with outputs ends with `succeed` or `fail` (the checker says so), never at its end
+        let end = if m.outputs.is_empty() { "return null;" } else { "throw dd.fail(\"Dandori.NoOutput\", \"the flow ended without succeed\");" };
         match &m.on_failure {
             Some(block) => {
                 self.line(d, "try {");
                 self.block(&m.flow, d + 1);
-                self.line(d + 1, "return null;");
+                self.line(d + 1, end);
                 self.line(d, "} catch (dd_e) {");
                 self.line(d + 1, "if (!(dd_e instanceof dd.TaskError)) throw dd_e;");
                 self.line(d + 1, "// on failure");
@@ -1478,7 +1645,7 @@ impl<'a> Gen<'a> {
             }
             None => {
                 self.block(&m.flow, d);
-                self.line(d, "return null;");
+                self.line(d, end);
             }
         }
         if let (Some(block), Flavor::Temporal) = (&m.on_cancel, self.flavor) {
@@ -1518,13 +1685,19 @@ impl<'a> Gen<'a> {
                 self.line(d, &format!("break loop_{site};"));
             }
             TK::Wait { seconds } => match self.flavor {
-                Flavor::Temporal => self.line(d, &format!("await sleep(dd.ms({seconds}));")),
+                Flavor::Temporal => {
+                    self.line(d, &format!("dd.at({});", s.line));
+                    self.line(d, &format!("await sleep(dd.ms({seconds}));"));
+                }
                 Flavor::Durable | Flavor::Argo => self.line(d, &format!("await {ctx}.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
             },
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
                 match self.flavor {
-                    Flavor::Temporal => self.line(d, &format!("await sleep(dd.until({x}));")),
+                    Flavor::Temporal => {
+                        self.line(d, &format!("dd.at({});", s.line));
+                        self.line(d, &format!("await sleep(dd.until({x}));"));
+                    }
                     Flavor::Durable | Flavor::Argo => {
                         // the clock is read in a step, so that a replay reads the same moment
                         let site = s.site;
@@ -1563,11 +1736,7 @@ impl<'a> Gen<'a> {
                 let items = format!("dd_items_{site}");
                 self.line(d, "{");
                 self.line(d + 1, &format!("// line {}: for {var} in {}", s.line, list.show()));
-                let lx = match list {
-                    // a variable is set by now: the checker says so
-                    TExpr::Var { name, fields, .. } if fields.is_empty() && !m.inputs.iter().any(|(i, _)| i == name) => format!("{}!", self.expr(list)),
-                    _ => self.expr(list),
-                };
+                let lx = self.expr(list);
                 self.line(d + 1, &format!("const {items} = {lx};"));
                 self.line(
                     d + 1,
@@ -1837,6 +2006,9 @@ impl<'a> Gen<'a> {
         };
         self.line(d, &format!("call_{site}: {{"));
         self.line(d + 1, &format!("// line {}: {cname}", s.line));
+        if self.flavor == Flavor::Temporal {
+            self.line(d + 1, &format!("dd.at({});", s.line));
+        }
         if counted {
             self.line(d + 1, "let dd_n = 0;");
         }
@@ -1887,6 +2059,9 @@ impl<'a> Gen<'a> {
                 );
             }
             self.line(d + 1, &format!("{v} = dd_r;"));
+            if let (Some(Target::Case(_)), Flavor::Temporal) = (target, self.flavor) {
+                self.line(d + 1, "dd.shown();");
+            }
         }
         self.line(d, "}");
     }

@@ -172,7 +172,55 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     if !called.is_empty() {
         files.push((format!("{dir}/rules.py"), rules_file(m, &header, &called, true)));
     }
+    files.push((format!("{dir}/client.py"), client_file(m, &header)));
+    let id = crate::temporal::build_id(&files);
+    files.push((format!("{dir}/worker.py"), worker_file(m, &header, !called.is_empty(), &id)));
     Ok(files)
+}
+
+/// client.py: starting the workflow, answering its callbacks, and asking where it is.
+fn client_file(m: &Model, header: &str) -> String {
+    let ty = crate::temporal::workflow_type(m);
+    let mut c = header.to_string();
+    c.push_str(&format!("# Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
+    c.push_str("from __future__ import annotations\n\nimport json\nfrom typing import Any\n\n");
+    c.push_str("from temporalio.client import Client, WorkflowHandle\nfrom temporalio.common import WorkflowIDReusePolicy\n\n");
+    c.push_str(&format!("# The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow.\nWORKFLOW_TYPE = {}\n\n", q(&ty)));
+    c.push_str(&format!("# The task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nTASK_QUEUE = {}\n\n", q(&ty)));
+    c.push('\n');
+    c.push_str("async def start(client: Client, id: str, input: dict[str, Any], *, search_attributes: bool = False) -> WorkflowHandle[Any, Any]:\n");
+    c.push_str("    \"\"\"Start the workflow as `id`. The idempotency keys of its calls are made from the id, so an id is\n    used once: a second start with it is refused, even after the first run has ended. With\n    `search_attributes`, the workflow keeps the search attribute DandoriCases (a keyword list) up to\n    date with the cases' states, as \"<case>=<state>\"; register it on the namespace first.\"\"\"\n");
+    c.push_str("    extra: dict[str, Any] = {}\n    if search_attributes:\n        extra[\"memo\"] = {\"dandori.cases\": True}\n");
+    c.push_str("    return await client.start_workflow(WORKFLOW_TYPE, input, id=id, task_queue=TASK_QUEUE, id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE, **extra)\n\n\n");
+    c.push_str("async def answer(client: Client, callback_id: str, a: dict[str, Any]) -> None:\n");
+    c.push_str("    \"\"\"Answer a callback, by the id its task handed on, with {\"ok\": value} or {\"error\": name, \"message\": text}.\n    The workflow says whether it took the answer: it refuses one for a callback it does not wait\n    for, and a second one (WorkflowUpdateFailedError).\"\"\"\n");
+    c.push_str("    workflow_id = json.loads(callback_id)[0]\n    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.answer\", {\"callback_id\": callback_id, **a})\n\n\n");
+    c.push_str("async def status(client: Client, id: str) -> dict[str, Any]:\n");
+    c.push_str("    \"\"\"Where the workflow is: {\"at\": the line of the call or the wait it is at, \"cases\": each case's state (None before it starts)}.\"\"\"\n");
+    c.push_str("    return await client.get_workflow_handle(id).query(\"dandori.status\")\n");
+    c
+}
+
+/// worker.py: the worker that runs the workflow, its tasks and its rules.
+fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
+    let mut w = header.to_string();
+    w.push_str(&format!("# The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
+    w.push_str("from __future__ import annotations\n\nfrom typing import Any\n\n");
+    w.push_str("from temporalio.client import Client\nfrom temporalio.common import VersioningBehavior, WorkerDeploymentVersion\nfrom temporalio.worker import Worker, WorkerDeploymentConfig\n\n");
+    w.push_str("from . import io\nfrom .activities import OwnTasks, make_activities\nfrom .client import TASK_QUEUE\n");
+    if rules {
+        w.push_str("from .rules import rules\n");
+    }
+    w.push_str("from .workflow import workflows\n\n");
+    w.push_str(&format!("# A hash of the code dandori wrote: it changes whenever the code does. The build id of Worker\n# Deployment Versioning.\nBUILD_ID = {}\n\n\n", q(build)));
+    w.push_str("def worker_options(own: OwnTasks, *, transport: io.Transport | None = None, deployment: str | None = None) -> dict[str, Any]:\n");
+    w.push_str("    \"\"\"The worker's keyword arguments but the client: the workflow, and the activities on TASK_QUEUE.\n    With `deployment`, the worker is a version of that deployment (Worker Deployment Versioning),\n    and a run stays on the build it started on (PINNED), so the code dandori writes anew never\n    replays an old run.\"\"\"\n");
+    w.push_str(&format!("    options: dict[str, Any] = {{\"task_queue\": TASK_QUEUE, \"workflows\": workflows, \"activities\": [*make_activities(own, transport){}]}}\n", if rules { ", *rules" } else { "" }));
+    w.push_str("    if deployment is not None:\n        options[\"deployment_config\"] = WorkerDeploymentConfig(\n            version=WorkerDeploymentVersion(deployment_name=deployment, build_id=BUILD_ID),\n            use_worker_versioning=True,\n            default_versioning_behavior=VersioningBehavior.PINNED,\n        )\n    return options\n\n\n");
+    w.push_str("def make_worker(client: Client, own: OwnTasks, *, transport: io.Transport | None = None, deployment: str | None = None, **more: Any) -> Worker:\n");
+    w.push_str("    \"\"\"The worker, with `more` of the worker's keyword arguments of your own.\"\"\"\n");
+    w.push_str("    return Worker(client, **{**worker_options(own, transport=transport, deployment=deployment), **more})\n");
+    w
 }
 
 /// What a task's code gets, as a docstring: its arguments, the key, a callback's id, and the answer.
@@ -765,6 +813,7 @@ from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Sequence
 
 from temporalio import workflow
+from temporalio.common import SearchAttributeKey
 from temporalio.exceptions import ActivityError, ApplicationError, ChildWorkflowError, is_cancelled_exception
 from temporalio.exceptions import TimeoutError as TemporalTimeout
 
@@ -872,12 +921,15 @@ def callback_id(site: int, rounds: Sequence[int], n: int) -> str:
     return json.dumps([workflow.info().workflow_id, "/".join([str(site), *(str(r) for r in rounds), str(n)])], ensure_ascii=False, separators=(",", ":"))
 
 
-async def await_callback(answers: dict[str, dict[str, Any]], id: str, limit: int) -> Any:
-    """Wait for the answer of the callback with this id, which the signal puts in `answers`, at most `limit` seconds."""
+async def await_callback(answers: dict[str, dict[str, Any]], waiting: set[str], id: str, limit: int) -> Any:
+    """Wait for the answer of the callback with this id, which the update or the signal puts in
+    `answers`, at most `limit` seconds; the workflow then waits for it no more."""
     try:
         await workflow.wait_condition(lambda: id in answers, timeout=timedelta(seconds=seconds(limit)))
     except asyncio.TimeoutError:
+        waiting.discard(id)
         raise CallbackTimeout() from None
+    waiting.discard(id)
     a = answers.pop(id)
     if isinstance(a.get("error"), str):
         raise CallbackError(a["error"], a.get("message") or "")
@@ -934,6 +986,19 @@ async def wait_until(at: str) -> None:
 def fail(error: str, cause: str | None) -> ApplicationError:
     """A deliberate end of the workflow as failed."""
     return ApplicationError(cause or "", type=error, non_retryable=True)
+
+
+# The search attribute that lists the cases' states, as "<case>=<state>". The workflow keeps it up
+# to date only when it was started so (client.py: start(…, search_attributes=True), which puts
+# `dandori.cases` in the memo), since it must be registered on the namespace first.
+CASES = SearchAttributeKey.for_keyword_list("DandoriCases")
+
+
+def shown(cases: dict[str, str | None]) -> None:
+    """A case moved: show the cases' states in the search attribute, when the workflow was started so."""
+    if workflow.memo_value("dandori.cases", default=False) is not True:
+        return
+    workflow.upsert_search_attributes([CASES.value_set([f"{name}={state}" for name, state in cases.items() if state is not None])])
 "#;
 
 /// The retriers of a call, as the list `dd.attempt` takes: the ASL's, by the `.flow`'s kinds.
@@ -1051,7 +1116,7 @@ impl<'a> Gen<'a> {
         let m = self.m;
         self.out.push_str(header);
         self.out.push_str(&format!("# {} v{}{}\n\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
-        self.out.push_str("from __future__ import annotations\n\nimport asyncio\nfrom datetime import timedelta\nfrom typing import Any\n\n");
+        self.out.push_str("from __future__ import annotations\n\nimport asyncio\nfrom datetime import timedelta\nfrom typing import Any, Callable\n\n");
         self.out.push_str("from temporalio import workflow\nfrom temporalio.common import RetryPolicy\n\n");
         self.out.push_str("from . import runtime as dd\nfrom . import types as T\n\n");
         self.out.push_str("# Temporal tries an activity once; the workflow retries, as the `retry` of each task says\nNO_RETRY = RetryPolicy(maximum_attempts=1)\n\n");
@@ -1080,10 +1145,17 @@ impl<'a> Gen<'a> {
         }
         let class = py_name(&m.name);
         let ret = "dict[str, Any] | None";
-        self.out.push_str(&format!("\n@workflow.defn(name={})\nclass {class}:\n", q(&ident(&m.name))));
+        self.out.push_str(&format!("\n@workflow.defn(name={})\nclass {class}:\n", q(&crate::temporal::workflow_type(m))));
+        self.out.push_str("    def __init__(self) -> None:\n        # where the workflow is, and how its cases' states are read: the query dandori.status\n        self.dd_at: int | None = None\n        self.dd_cases: Callable[[], dict[str, str | None]] = lambda: {}\n");
         if callbacks {
-            self.out.push_str("    def __init__(self) -> None:\n        self.dd_answers: dict[str, dict[str, Any]] = {}\n\n");
-            self.out.push_str("    @workflow.signal(name=\"dandori.callback\")\n    def dd_callback(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback: {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\"\"\"\n        self.dd_answers[a[\"callback_id\"]] = a\n\n");
+            self.out.push_str("        # the answers of callbacks, and the ids of the callbacks the workflow waits for\n        self.dd_answers: dict[str, dict[str, Any]] = {}\n        self.dd_waiting: set[str] = set()\n");
+        }
+        self.out.push('\n');
+        self.out.push_str("    @workflow.query(name=\"dandori.status\")\n    def dd_status(self) -> dict[str, Any]:\n        \"\"\"Where the workflow is: the line of the call or the wait it is at, and each case's state (None before it starts).\"\"\"\n        return {\"at\": self.dd_at, \"cases\": self.dd_cases()}\n\n");
+        if callbacks {
+            self.out.push_str("    @workflow.signal(name=\"dandori.callback\")\n    def dd_callback(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback: {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\"\"\"\n        if a.get(\"callback_id\") in self.dd_waiting:\n            self.dd_answers[a[\"callback_id\"]] = a\n\n");
+            self.out.push_str("    @workflow.update(name=\"dandori.answer\")\n    def dd_answer(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback, which the one who answers learns the workflow took.\"\"\"\n        self.dd_answers[a[\"callback_id\"]] = a\n\n");
+            self.out.push_str("    @dd_answer.validator\n    def dd_check_answer(self, a: dict[str, Any]) -> None:\n        \"\"\"Refuse an answer for a callback the workflow does not wait for, and a second answer.\"\"\"\n        if a.get(\"callback_id\") not in self.dd_waiting:\n            raise ValueError(f\"no callback waits for an answer with the id {a.get('callback_id')}\")\n        if a[\"callback_id\"] in self.dd_answers:\n            raise ValueError(f\"the callback {a['callback_id']} has its answer already\")\n\n");
         }
         self.out.push_str(&format!("    @workflow.run\n    async def run(self, input: dict[str, Any]) -> {ret}:\n        try:\n            return await self.flow(input)\n        except dd.TaskError as e:\n            # a task's error that nothing handled ends the workflow with the error's kind\n            raise dd.fail(e.kind, e.message) from None\n\n"));
         self.out.push_str(&format!("    async def flow(self, input: dict[str, Any]) -> {ret}:\n"));
@@ -1107,6 +1179,16 @@ impl<'a> Gen<'a> {
                 self.line(d, &format!("{}: {t} = None", self.var(v)));
             }
         }
+        // what the query `dandori.status` and the search attribute say of the cases
+        let cases: Vec<String> = m
+            .cases
+            .iter()
+            .map(|c| {
+                let v = self.var(&c.name);
+                format!("{}: None if {v} is None else {v}.get({})", q(&c.name), q(&c.state_field))
+            })
+            .collect();
+        self.line(d, &format!("self.dd_cases = lambda: {{{}}}", cases.join(", ")));
         // a cancellation reaches past `on failure` to `on cancel`
         let e = if m.on_cancel.is_some() {
             self.line(d, "try:");
@@ -1158,9 +1240,13 @@ impl<'a> Gen<'a> {
         match &s.kind {
             TK::Pass => {}
             TK::Break => self.line(d, "break"),
-            TK::Wait { seconds } => self.line(d, &format!("await asyncio.sleep(dd.seconds({seconds}))")),
+            TK::Wait { seconds } => {
+                self.line(d, &format!("self.dd_at = {}", s.line));
+                self.line(d, &format!("await asyncio.sleep(dd.seconds({seconds}))"));
+            }
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
+                self.line(d, &format!("self.dd_at = {}", s.line));
                 self.line(d, &format!("await dd.wait_until({x})"));
             }
             TK::Assign { name, expr } => {
@@ -1310,6 +1396,7 @@ impl<'a> Gen<'a> {
         let retriers = retriers(m, callee);
         let declared = format!("[{}]", declared.join(", "));
         self.line(d, &format!("# line {}: {cname}", s.line));
+        self.line(d, &format!("self.dd_at = {}", s.line));
         let invocation = match callee {
             Callee::Rule(r) => format!("dd.attempt(lambda: dd_rule({}, {{{}}}), {retriers}, [])", q(&render::rule_activity(&m.rules[*r].name)), parts.join(", ")),
             Callee::Task(t) => {
@@ -1335,8 +1422,9 @@ impl<'a> Gen<'a> {
                         self.line(d, "");
                         self.line(d, &format!("async def dd_call_{site}() -> Any:"));
                         self.line(d + 1, &format!("dd_id = dd.callback_id({site}, {}, next(dd_n_{site}))", self.rounds_expr()));
+                        self.line(d + 1, "self.dd_waiting.add(dd_id)");
                         self.line(d + 1, &format!("await {f}({{{}}})", with_id.join(", ")));
-                        self.line(d + 1, &format!("return await dd.await_callback(self.dd_answers, dd_id, {timeout})"));
+                        self.line(d + 1, &format!("return await dd.await_callback(self.dd_answers, self.dd_waiting, dd_id, {timeout})"));
                         self.line(d, "");
                         format!("dd.attempt(dd_call_{site}, {retriers}, {declared})")
                     }
@@ -1366,6 +1454,9 @@ impl<'a> Gen<'a> {
                     );
                 }
                 g.line(d, &format!("{v} = dd_r"));
+                if let Some(Target::Case(_)) = target {
+                    g.line(d, "dd.shown(self.dd_cases())");
+                }
             }
         };
         let reads = var.is_some() && result_ty.is_some();

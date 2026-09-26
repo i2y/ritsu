@@ -1,8 +1,10 @@
 # Runs a workflow that dandori generated for Temporal's Python SDK on a real Temporal server — the
 # dev server of the Temporal CLI, which the SDK's testing package starts — against scripted
 # answers, and prints what it did in the shape the reference interpreter prints for Temporal:
-# every call with its arguments and the answer it got, and how the workflow ended. The Python twin
-# of ../temporal/run.mjs.
+# every call with its arguments and the answer it got, and how the workflow ended. With each run,
+# it also prints what the query dandori.status says of the cases at the end (`cases`), and the
+# search attribute DandoriCases (`shown`). The workers, the starts, the callbacks' answers and the
+# query go through the generated worker.py and client.py. The Python twin of ../temporal/run.mjs.
 #
 #   .venv/bin/python run.py <generated package> <runs.json> <results.json>
 #
@@ -45,7 +47,8 @@ from datetime import timedelta
 from typing import Any
 
 from temporalio import activity
-from temporalio.client import WorkflowFailureError
+from temporalio.client import WorkflowFailureError, WorkflowUpdateFailedError
+from temporalio.common import SearchAttributeKey
 from temporalio.exceptions import ApplicationError, CancelledError
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig, TelemetryFilter
 from temporalio.testing import WorkflowEnvironment
@@ -97,9 +100,11 @@ def child_stand_ins(children: list[dict[str, Any]]) -> str:
 
 
 async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
-    wf = importlib.import_module(f"{package}.workflow")
-    acts = importlib.import_module(f"{package}.activities")
     children = importlib.import_module(f"{package}.dd_test_children").children
+    worker = importlib.import_module(f"{package}.worker")
+    client = importlib.import_module(f"{package}.client")
+    cases_key = SearchAttributeKey.for_keyword_list("DandoriCases")
+    refusals_checked = False
     runs: dict[str, dict[str, Any]] = {}
     env: WorkflowEnvironment | None = None
 
@@ -155,23 +160,36 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             return await late()
         raise scripted(ans["error"])
 
+    async def must_refuse(callback_id: str, a: dict[str, Any], why: str) -> None:
+        """A second answer to a callback, and an answer to one the workflow never waits for, must be refused."""
+        assert env is not None
+        try:
+            await client.answer(env.client, callback_id, a)
+        except WorkflowUpdateFailedError:
+            return
+        raise RuntimeError(f"the workflow took {why}")
+
     async def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
-        """Answer a callback with a signal to the workflow the id names, before the task that
-        hands the id on returns: then the answer is in the history before the workflow waits for
-        it, and its short wait cannot run out first. A timeout gets no answer."""
+        """Answer a callback with the generated client's update, before the task that hands the
+        id on returns: then the answer is in the history before the workflow waits for it, and its
+        short wait cannot run out first. A timeout gets no answer."""
+        nonlocal refusals_checked
         if "ok" not in ans and ans.get("error") == "timeout":
             return
         assert env is not None
         if ans.get("cancel") is True:
             await env.client.get_workflow_handle(current()["id"]).cancel()
             return
-        workflow_id = json.loads(callback_id)[0]
         if "ok" in ans:
-            signal = {"callback_id": callback_id, "ok": ans["ok"]}
+            a = {"ok": ans["ok"]}
         else:
-            signal = {"callback_id": callback_id, "error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
-        assert env is not None
-        await env.client.get_workflow_handle(workflow_id).signal("dandori.callback", signal)
+            a = {"error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
+        await client.answer(env.client, callback_id, a)
+        await must_refuse(callback_id, a, "a second answer to a callback")
+        if not refusals_checked:
+            refusals_checked = True
+            workflow_id = json.loads(callback_id)[0]
+            await must_refuse(json.dumps([workflow_id, "0"]), a, "an answer to a callback it does not wait for")
 
     class Run:
         """The stand-in transport writes every call down with the answer it takes; a call it times out gets none."""
@@ -213,7 +231,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
 
         setattr(own, t["method"], own_task(t))
 
-    activities = list(acts.make_activities(own, make_transport(spec, Run())))
+    activities: list[Any] = []
     for name in spec.get("rules", []):
 
         def rule(name: str) -> Any:
@@ -238,10 +256,18 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
     activities.append(test_child)
 
     # the server fires a timer up to a second late unless told to shift its timers less
-    env = await WorkflowEnvironment.start_local(ui=False, dev_server_log_level="error", dev_server_extra_args=["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'])
+    env = await WorkflowEnvironment.start_local(
+        ui=False,
+        dev_server_log_level="error",
+        dev_server_extra_args=["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'],
+        search_attributes=[cases_key],
+    )
     results = []
     try:
-        queues = ["dandori", *sorted({q for q in spec.get("queues", []) if q != "dandori"})]
+        base = worker.worker_options(own, transport=make_transport(spec, Run()))
+        base["workflows"] = [*base["workflows"], *children]
+        base["activities"] = [*base["activities"], *activities]
+        queues = [client.TASK_QUEUE, *sorted({q for q in spec.get("queues", []) if q != client.TASK_QUEUE})]
         async with contextlib.AsyncExitStack() as stack:
             # every worker runs until the runs are done
             for q in queues:
@@ -249,32 +275,39 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
                 await stack.enter_async_context(
                     Worker(
                         env.client,
-                        task_queue=q,
-                        workflows=[*wf.workflows, *children],
-                        activities=activities,
-                        max_concurrent_activities=200,
-                        default_heartbeat_throttle_interval=timedelta(milliseconds=100),
-                        max_heartbeat_throttle_interval=timedelta(milliseconds=100),
+                        **{
+                            **base,
+                            "task_queue": q,
+                            "max_concurrent_activities": 200,
+                            "default_heartbeat_throttle_interval": timedelta(milliseconds=100),
+                            "max_heartbeat_throttle_interval": timedelta(milliseconds=100),
+                        },
                     )
                 )
 
             async def one(r: dict[str, Any]) -> dict[str, Any]:
                 runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
+                handle = await client.start(env.client, r["id"], r["input"], search_attributes=True)
+                end: dict[str, Any]
                 try:
-                    out = await env.client.execute_workflow(spec["workflow"], r["input"], id=r["id"], task_queue="dandori")
-                    return {"succeed": out}
+                    end = {"succeed": await handle.result()}
                 except WorkflowFailureError as e:
                     c = e.cause
                     if isinstance(c, CancelledError):
-                        return {"cancel": None}
-                    # the message as the workflow sent it: the SDK reads an empty one as "Application error"
-                    raw = getattr(c, "failure", None)
-                    message = raw.message if raw is not None else getattr(c, "message", None)
-                    return {"fail": {"error": getattr(c, "type", None) or str(c), "cause": message or None}}
+                        end = {"cancel": None}
+                    else:
+                        # the message as the workflow sent it: the SDK reads an empty one as "Application error"
+                        raw = getattr(c, "failure", None)
+                        message = raw.message if raw is not None else getattr(c, "message", None)
+                        end = {"fail": {"error": getattr(c, "type", None) or str(c), "cause": message or None}}
+                # what the query and the search attribute say of the cases once the run is over
+                cases = (await client.status(env.client, r["id"]))["cases"]
+                shown = (await handle.describe()).typed_search_attributes.get(cases_key)
+                return {"end": end, "cases": cases, "shown": list(shown) if shown is not None else None}
 
             ends = await asyncio.gather(*(one(r) for r in spec["runs"]))
-            for r, end in zip(spec["runs"], ends):
-                results.append({"steps": runs[r["id"]]["steps"], "end": end})
+            for r, got in zip(spec["runs"], ends):
+                results.append({"steps": runs[r["id"]]["steps"], **got})
     finally:
         await env.shutdown()
     return results
@@ -308,6 +341,10 @@ def main() -> None:
         f.write(text)
     with open(os.path.join(copy, "dd_test_children.py"), "w", encoding="utf-8") as f:
         f.write(child_stand_ins(spec.get("children", [])))
+    # the rules are stand-ins here, so the worker needs none of rulec's modules
+    if os.path.exists(os.path.join(copy, "rules.py")):
+        with open(os.path.join(copy, "rules.py"), "w", encoding="utf-8") as f:
+            f.write("rules: list = []\n")
     sys.path.insert(0, work)
     try:
         results = asyncio.run(run_all(package, spec))
