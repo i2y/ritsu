@@ -60,6 +60,10 @@ struct Gen<'a> {
 
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut errs = Vec::new();
+    errs.extend(m.refuse_on_cancel(
+        "Step Functions ends an execution at once when it is stopped (StopExecution) and runs nothing after, so `on cancel` cannot run there",
+        "Step Functions は実行を止めると（StopExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
+    ));
     for t in &m.tasks {
         match t.via(Platform::StepFunctions) {
             None => errs.push(Diag::error(

@@ -158,8 +158,12 @@ pub struct Flow<'a> {
     diags: BTreeMap<(&'static str, usize, usize), Diag>,
     loops: Vec<Vec<Abs>>,
     failures: Vec<(Abs, usize, String)>,
+    /// the points where a cancellation can stop the run: every call and every wait, outside
+    /// `on cancel`, with what is known there
+    cancels: Vec<(Abs, usize, String)>,
     monitors: BTreeMap<usize, (usize, BTreeSet<usize>)>,
     in_on_failure: bool,
+    in_on_cancel: bool,
 }
 
 pub struct FlowResult {
@@ -168,7 +172,7 @@ pub struct FlowResult {
 }
 
 pub fn analyze(m: &Model) -> FlowResult {
-    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], monitors: BTreeMap::new(), in_on_failure: false };
+    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false };
     let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] };
     for (v, _) in &m.vars {
         let is_input = m.inputs.iter().any(|(i, _)| i == v);
@@ -207,9 +211,28 @@ pub fn analyze(m: &Model) -> FlowResult {
                 }
             }
             let inner = std::mem::take(&mut f.failures);
-            f.warn_failures(&inner, true);
+            f.warn_failures(&inner, Settling::OnFailure);
         }
-        None => f.warn_failures(&failures, false),
+        None => f.warn_failures(&failures, Settling::No),
+    }
+    // `on cancel` runs from wherever a cancellation stopped the run
+    if let Some(block) = &m.on_cancel {
+        f.in_on_cancel = true;
+        let mut entry = Abs::dead();
+        for (a, _, _) in &std::mem::take(&mut f.cancels) {
+            entry = join(&entry, a);
+        }
+        if entry.live {
+            let line = block.first().map(|s| s.line).unwrap_or(1);
+            let entry = entry.step(Step::new(line, "on cancel", "on cancel"));
+            let end = f.stmts(block, entry);
+            if end.live {
+                let line = block.last().map(|s| s.line).unwrap_or(1);
+                f.exit(&end, line, &[], Exit::CancelEnd);
+            }
+        }
+        let inner = std::mem::take(&mut f.failures);
+        f.warn_failures(&inner, Settling::OnCancel);
     }
     let monitors = f
         .monitors
@@ -230,6 +253,16 @@ enum Exit {
     Fail(String),
     End,
     FailEnd,
+    /// `on cancel` ends, and the workflow ends as cancelled
+    CancelEnd,
+}
+
+/// Which block settles the cases when a call fails: none, `on failure`, or `on cancel`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Settling {
+    No,
+    OnFailure,
+    OnCancel,
 }
 
 impl<'a> Flow<'a> {
@@ -407,11 +440,17 @@ impl<'a> Flow<'a> {
         match &s.kind {
             TK::Call { target, callee, args, handlers } => self.call(s, target.as_ref(), callee, args, handlers, a),
             TK::Match { expr, arms } => self.matching(s, expr, arms, a),
-            TK::Wait { seconds } => a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds)))),
+            TK::Wait { seconds } => {
+                let a = a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds))));
+                self.cancel_point(&a, s.line, "wait");
+                a
+            }
             TK::WaitUntil { at } => {
                 self.check_reads(at, &a, s.line);
                 let shown = show(at);
-                a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")))
+                let a = a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")));
+                self.cancel_point(&a, s.line, "wait");
+                a
             }
             TK::Assign { name, expr } => {
                 self.check_reads(expr, &a, s.line);
@@ -460,6 +499,7 @@ impl<'a> Flow<'a> {
                         let mut inner = entry.clone();
                         Flow::assign(&mut inner, var);
                         let before = self.failures.len();
+                        let cancels_before = self.cancels.len();
                         self.loops.push(vec![]);
                         let end = self.stmts(body, inner);
                         self.loops.pop();
@@ -470,7 +510,7 @@ impl<'a> Flow<'a> {
                         }
                         // a round's failure ends the loop only after every round is done, and `on failure`
                         // does not see the round's own variables
-                        for f in self.failures[before..].iter_mut() {
+                        for f in self.failures[before..].iter_mut().chain(self.cancels[cancels_before..].iter_mut()) {
                             for l in locals {
                                 f.0.set.insert(l.clone(), (Tri::No, Some(entry.path.clone())));
                             }
@@ -552,6 +592,10 @@ impl<'a> Flow<'a> {
                     format!("the workflow can fail here with the case `{cn}` in {names}, which is not final ({finals} are); settle it first, or write `leaving {cn}` to hand it over as it is"),
                     format!("案件 `{cn}` が {names} のまま、ここでワークフローが失敗することがあります（終わりの状態は {finals}）。先に片付けるか、そのまま引き渡すなら `leaving {cn}` と書いてください"),
                 ),
+                Exit::CancelEnd => (
+                    format!("the workflow can end cancelled here with the case `{cn}` in {names}, which is not final ({finals} are); settle it in `on cancel`, or end with `fail … leaving {cn}` to hand it over as it is"),
+                    format!("案件 `{cn}` が {names} のまま、ここでワークフローがキャンセルで終わることがあります（終わりの状態は {finals}）。`on cancel` で片付けるか、そのまま引き渡すなら `fail … leaving {cn}` で終えてください"),
+                ),
             };
             let mut p = bad[0].1.clone();
             let (xen, xja) = match &how {
@@ -559,13 +603,14 @@ impl<'a> Flow<'a> {
                 Exit::End => ("the flow ends".to_string(), "flow が終わる".to_string()),
                 Exit::Fail(e) => (format!("fail {e}"), format!("fail {e}")),
                 Exit::FailEnd => ("`on failure` ends and the workflow fails".to_string(), "`on failure` が終わり、ワークフローが失敗する".to_string()),
+                Exit::CancelEnd => ("`on cancel` ends and the workflow ends cancelled".to_string(), "`on cancel` が終わり、ワークフローがキャンセルで終わる".to_string()),
             };
             p.push(Step::new(line, xen, xja));
             self.push(Diag::error("E020", line, 1, en, ja).with_path(p));
         }
     }
 
-    fn warn_failures(&mut self, points: &[(Abs, usize, String)], settling: bool) {
+    fn warn_failures(&mut self, points: &[(Abs, usize, String)], settling: Settling) {
         // one warning per case: how many calls can fail with it unfinished, and the first
         for c in 0..self.m.cases.len() {
             let mut first: Option<(usize, String, Path, Vec<String>)> = None;
@@ -588,16 +633,18 @@ impl<'a> Flow<'a> {
             if let Some((line, callee, path, states)) = first {
                 let cn = self.case_name(c).to_string();
                 let st = states.join(", ");
-                let (en, ja) = if settling {
-                    (
-                        format!("if `{callee}` fails while `on failure` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))"),
-                        format!("`on failure` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st} のままワークフローが失敗します（そうなる呼び出しは {count} か所）"),
-                    )
-                } else {
-                    (
+                let (en, ja) = match settling {
+                    Settling::OnFailure | Settling::OnCancel => {
+                        let block = if settling == Settling::OnFailure { "on failure" } else { "on cancel" };
+                        (
+                            format!("if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))"),
+                            format!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st} のままワークフローが失敗します（そうなる呼び出しは {count} か所）"),
+                        )
+                    }
+                    Settling::No => (
                         format!("if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
                         format!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを受けるか、`on failure` を足して案件を片付けてください"),
-                    )
+                    ),
                 };
                 self.push(Diag::warning("W101", line, 1, en, ja).with_path(path));
             }
@@ -824,6 +871,8 @@ impl<'a> Flow<'a> {
             let fa = other_err.clone().step(Step::new(s.line, format!("{callee_name} fails ({})", unhandled.join(", ")), format!("{callee_name} が失敗する（{}）", unhandled.join("・"))));
             self.failures.push((fa, s.line, callee_name.clone()));
         }
+        // a cancellation that comes while the call is out: it may or may not have gone through
+        self.cancel_point(&other_err, s.line, &callee_name);
 
         let mut after = ok;
         for h in handlers {
@@ -855,6 +904,15 @@ impl<'a> Flow<'a> {
             after = join(&after, &end);
         }
         after
+    }
+
+    /// A cancellation can stop the run here, outside `on cancel`, which it does not reach.
+    fn cancel_point(&mut self, a: &Abs, line: usize, what: &str) {
+        if self.in_on_cancel || self.m.on_cancel.is_none() {
+            return;
+        }
+        let at = a.clone().step(Step::new(line, format!("the workflow is cancelled ({what})"), format!("ワークフローがキャンセルされる（{what}）")));
+        self.cancels.push((at, line, what.to_string()));
     }
 
     fn need_started(&mut self, c: usize, a: &Abs, line: usize) -> bool {

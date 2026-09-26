@@ -7,6 +7,9 @@
 //! Errors and retries follow the ASL the generator writes: the retriers are the same
 //! list (`asl::retriers`), matched the way Step Functions matches them.
 //!
+//! A scenario's answer `{"cancel": true}` is a cancellation that comes while that call is out:
+//! the run stops there, `on cancel` runs if there is one, and the run ends as cancelled.
+//!
 //! The rounds of a `for … in parallel` run here one after another, in the list's order.
 //! Every round runs to its end; then, if any failed, the loop fails as the first of them
 //! (by place in the list) did. A round does not see or set another round's variables, so
@@ -48,6 +51,9 @@ struct Run<'a> {
     steps: Vec<Value>,
     end: Option<Value>,
     in_on_failure: bool,
+    /// a cancellation stopped the run; `on cancel` has not run yet
+    cancelled: bool,
+    in_on_cancel: bool,
     error: Option<String>,
     /// how many `for … in parallel` rounds are running around the current statement
     par_depth: usize,
@@ -97,6 +103,8 @@ pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallI
         steps: vec![],
         end: None,
         in_on_failure: false,
+        cancelled: false,
+        in_on_cancel: false,
         error: None,
         par_depth: 0,
         pending: None,
@@ -121,6 +129,17 @@ pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallI
         if let Ctl::Next = r.block(&flow) {
             if r.end.is_none() {
                 r.end = Some(json!({ "succeed": Value::Null }));
+            }
+        }
+        if r.cancelled && r.error.is_none() {
+            // `on cancel` runs to its end; the run ends as cancelled, unless it fails there
+            r.cancelled = false;
+            r.in_on_cancel = true;
+            if let Some(block) = m.on_cancel.clone() {
+                let _ = r.block(&block);
+            }
+            if r.end.is_none() {
+                r.end = Some(json!({ "cancel": Value::Null }));
             }
         }
     }
@@ -154,7 +173,7 @@ impl<'a> Run<'a> {
                 Ctl::Next => {}
                 other => return other,
             }
-            if self.end.is_some() || self.error.is_some() || self.pending.is_some() {
+            if self.end.is_some() || self.error.is_some() || self.pending.is_some() || self.cancelled {
                 return Ctl::Stop;
             }
         }
@@ -243,7 +262,8 @@ impl<'a> Run<'a> {
                             let _ = self.block(body);
                             self.par_depth -= 1;
                             self.rounds.pop();
-                            if self.error.is_some() {
+                            // a cancellation stops every round, not only its own
+                            if self.error.is_some() || self.cancelled {
                                 return Ctl::Stop;
                             }
                             match self.pending.take() {
@@ -351,6 +371,12 @@ impl<'a> Run<'a> {
                 Callee::Task(t) => (Some(*t), m.tasks[*t].callback),
                 Callee::Rule(_) => (None, false),
             };
+            if ans.get("cancel").is_some() {
+                self.callees.push(CallInfo { task, callback, kind: Some("cancel".into()) });
+                self.steps.push(json!({ "call": wire, "answer": { "cancel": true } }));
+                self.cancelled = true;
+                return Ctl::Stop;
+            }
             self.callees.push(CallInfo { task, callback, kind: ans.get("error").and_then(|e| e.as_str()).map(String::from) });
             if let Some(v) = ans.get("ok") {
                 self.steps.push(json!({ "call": wire, "answer": { "ok": v } }));
@@ -452,7 +478,8 @@ impl<'a> Run<'a> {
             Pending::Task(err) => err,
         };
         let m = self.m;
-        if !self.in_on_failure {
+        // `on failure` does not run for an error in itself, nor in `on cancel`
+        if !self.in_on_failure && !self.in_on_cancel {
             if let Some(block) = m.on_failure.clone() {
                 self.in_on_failure = true;
                 self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": SCRIPTED_CAUSE }));

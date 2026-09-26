@@ -765,7 +765,7 @@ from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Sequence
 
 from temporalio import workflow
-from temporalio.exceptions import ActivityError, ApplicationError, ChildWorkflowError
+from temporalio.exceptions import ActivityError, ApplicationError, ChildWorkflowError, is_cancelled_exception
 from temporalio.exceptions import TimeoutError as TemporalTimeout
 
 
@@ -819,13 +819,21 @@ def message_of(e: BaseException) -> str:
     return str(getattr(c, "message", c))
 
 
+def cancelled(e: BaseException) -> bool:
+    """Whether the error is the workflow's cancellation, as a wait or a call in the workflow meets it."""
+    return is_cancelled_exception(e)
+
+
 async def attempt(call: Callable[[], Awaitable[Any]], retriers: Sequence[dict[str, Any]], declared: Sequence[str]) -> Any:
-    """Call once, and again as the retriers say, waiting between as Step Functions would."""
+    """Call once, and again as the retriers say, waiting between as Step Functions would. A
+    cancellation is no task's error: it goes on as it is."""
     counts = [0] * len(retriers)
     while True:
         try:
             return await call()
         except (ActivityError, ChildWorkflowError, CallbackTimeout, CallbackError) as e:
+            if cancelled(e):
+                raise
             kind = kind_of(e, declared)
             again = False
             for i, r in enumerate(retriers):
@@ -1099,20 +1107,35 @@ impl<'a> Gen<'a> {
                 self.line(d, &format!("{}: {t} = None", self.var(v)));
             }
         }
+        // a cancellation reaches past `on failure` to `on cancel`
+        let e = if m.on_cancel.is_some() {
+            self.line(d, "try:");
+            d + 1
+        } else {
+            d
+        };
         match &m.on_failure {
             Some(block) => {
-                self.line(d, "try:");
-                self.block(&m.flow, d + 1);
-                self.line(d + 1, "return None");
-                self.line(d, "except dd.TaskError as dd_failed:");
-                self.line(d + 1, "# on failure");
-                self.block(block, d + 1);
-                self.line(d + 1, "raise dd_failed");
+                self.line(e, "try:");
+                self.block(&m.flow, e + 1);
+                self.line(e + 1, "return None");
+                self.line(e, "except dd.TaskError as dd_failed:");
+                self.line(e + 1, "# on failure");
+                self.block(block, e + 1);
+                self.line(e + 1, "raise dd_failed");
             }
             None => {
-                self.block(&m.flow, d);
-                self.line(d, "return None");
+                self.block(&m.flow, e);
+                self.line(e, "return None");
             }
+        }
+        if let Some(block) = &m.on_cancel {
+            self.line(d, "except BaseException as dd_c:");
+            self.line(d + 1, "if not dd.cancelled(dd_c):");
+            self.line(d + 2, "raise");
+            self.line(d + 1, "# on cancel: the cancellation comes once, so what runs here runs to its end; then the workflow ends as cancelled");
+            self.block(block, d + 1);
+            self.line(d + 1, "raise");
         }
     }
 

@@ -84,7 +84,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                 ));
             }
         }
-        let longest = max_wait(&m.flow).saturating_add(m.on_failure.as_ref().map(|f| max_wait(f)).unwrap_or(0));
+        let longest = max_wait(&m.flow).saturating_add(m.on_failure.as_ref().map(|f| max_wait(f)).unwrap_or(0)).saturating_add(m.on_cancel.as_ref().map(|f| max_wait(f)).unwrap_or(0));
         if longest > 300 {
             out.push(Diag::error(
                 "E031",
@@ -219,7 +219,8 @@ pub const ARGO_LIMIT: u64 = 10_000;
 
 pub fn bound(m: &Model, c: &Cost) -> u64 {
     let body = cost(m, &m.flow, c);
-    let cleanup = m.on_failure.as_ref().map(|f| cost(m, f, c)).unwrap_or(0);
+    // a run can fail, run `on failure`, be cancelled in it, and run `on cancel`
+    let cleanup = m.on_failure.as_ref().map(|f| cost(m, f, c)).unwrap_or(0) + m.on_cancel.as_ref().map(|f| cost(m, f, c)).unwrap_or(0);
     c.start + body + cleanup + c.end
 }
 

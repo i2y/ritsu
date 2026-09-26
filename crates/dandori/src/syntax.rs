@@ -58,6 +58,8 @@ pub struct Program {
     pub cases: Vec<CaseDecl>,
     pub flow: Option<(Block, Span)>,
     pub on_failure: Option<(Block, Span)>,
+    /// what runs when the workflow is asked to stop (a cancellation)
+    pub on_cancel: Option<(Block, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -1107,6 +1109,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         cases: vec![],
         flow: None,
         on_failure: None,
+        on_cancel: None,
     };
     while let Some(l) = p.cur_line() {
         let l = l.clone();
@@ -1324,20 +1327,30 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 prog.flow = Some((b, sp));
             }
             "on" => {
-                cur.expect_kw("failure")?;
-                cur.expect_end()?;
-                p.pos += 1;
-                if prog.on_failure.is_some() {
-                    return Err(err(sp, "a workflow has one `on failure`", "`on failure` は一つだけ書けます"));
+                if cur.eat_kw("cancel") {
+                    cur.expect_end()?;
+                    p.pos += 1;
+                    if prog.on_cancel.is_some() {
+                        return Err(err(sp, "a workflow has one `on cancel`", "`on cancel` は一つだけ書けます"));
+                    }
+                    let b = p.child_block(0, "`on cancel`", "`on cancel`", sp)?;
+                    prog.on_cancel = Some((b, sp));
+                } else {
+                    cur.expect_kw("failure")?;
+                    cur.expect_end()?;
+                    p.pos += 1;
+                    if prog.on_failure.is_some() {
+                        return Err(err(sp, "a workflow has one `on failure`", "`on failure` は一つだけ書けます"));
+                    }
+                    let b = p.child_block(0, "`on failure`", "`on failure`", sp)?;
+                    prog.on_failure = Some((b, sp));
                 }
-                let b = p.child_block(0, "`on failure`", "`on failure`", sp)?;
-                prog.on_failure = Some((b, sp));
             }
             other => {
                 return Err(err(
                     sp,
-                    format!("`{other}` does not start a declaration; expected workflow, description, kind, use, enum, record, inputs, outputs, task, case, flow or on failure"),
-                    format!("`{other}` で始まる宣言はありません（workflow・description・kind・use・enum・record・inputs・outputs・task・case・flow・on failure）"),
+                    format!("`{other}` does not start a declaration; expected workflow, description, kind, use, enum, record, inputs, outputs, task, case, flow, on failure or on cancel"),
+                    format!("`{other}` で始まる宣言はありません（workflow・description・kind・use・enum・record・inputs・outputs・task・case・flow・on failure・on cancel）"),
                 ))
             }
         }

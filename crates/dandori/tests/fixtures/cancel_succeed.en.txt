@@ -1,0 +1,2 @@
+error[E009]: tests/fixtures/cancel_succeed.flow:19:3: `on cancel` ends the workflow as cancelled; it cannot `succeed`
+    19 |   succeed 結果 = "止めました"

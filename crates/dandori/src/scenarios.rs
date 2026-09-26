@@ -43,6 +43,9 @@ struct Ex<'a> {
     cases: Vec<Option<usize>>,
     answers: Vec<Value>,
     in_on_failure: bool,
+    /// a cancellation stopped the run, and `on cancel` runs next
+    cancelled: bool,
+    in_on_cancel: bool,
     steps: usize,
     stopped: bool,
     /// how many parallel rounds are running around the current statement
@@ -84,6 +87,8 @@ pub fn generate(m: &Model) -> Vec<Value> {
             cases: vec![None; m.cases.len()],
             answers: vec![],
             in_on_failure: false,
+            cancelled: false,
+            in_on_cancel: false,
             steps: 0,
             stopped: false,
             par_depth: 0,
@@ -375,6 +380,14 @@ impl<'a> Ex<'a> {
         }
         let flow = self.m.flow.clone();
         self.block(&flow);
+        if self.cancelled {
+            if let Some(block) = self.m.on_cancel.clone() {
+                self.stopped = false;
+                self.in_on_cancel = true;
+                self.labels.insert("on cancel".into());
+                self.block(&block);
+            }
+        }
     }
 
     fn block(&mut self, ss: &[TStmt]) -> Ctl {
@@ -463,6 +476,10 @@ impl<'a> Ex<'a> {
                             let _ = self.block(body);
                             self.par_depth -= 1;
                             if self.stopped {
+                                // a cancellation after a round failed: the cancellation still decides
+                                if self.cancelled && first.is_some() {
+                                    self.labels.insert(format!("{}:cancelled after a round failed", s.site));
+                                }
                                 return Ctl::Stop;
                             }
                             match self.pending.take() {
@@ -625,6 +642,8 @@ impl<'a> Ex<'a> {
             Unexpected(usize),
             /// an answer that does not have the declared shape
             Malformed,
+            /// a cancellation that comes while the call is out
+            Cancelled,
         }
         let mut ways: Vec<(String, Way)> = Vec::new();
         let case = match target {
@@ -735,6 +754,10 @@ impl<'a> Ex<'a> {
         if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) {
             ways.push(("malformed".into(), Way::Malformed));
         }
+        // a workflow that says what to do when it is cancelled can be cancelled at any call, but not in `on cancel`
+        if self.m.on_cancel.is_some() && !self.in_on_cancel {
+            ways.push(("cancelled".into(), Way::Cancelled));
+        }
         let pick = self.choose(&format!("call {}", s.site), ways.len());
         let (label, way) = ways.swap_remove(pick);
         self.labels.insert(format!("{}:{label}", s.site));
@@ -775,6 +798,13 @@ impl<'a> Ex<'a> {
             Way::Malformed => {
                 self.answers.push(json!({ "ok": {} }));
                 self.halt(false)
+            }
+            Way::Cancelled => {
+                // every round stops, not only this one
+                self.answers.push(json!({ "cancel": true }));
+                self.cancelled = true;
+                self.stopped = true;
+                Ctl::Stop
             }
             Way::RetryThenOk(st) => {
                 // one error that the retriers take, then an answer
@@ -824,7 +854,7 @@ impl<'a> Ex<'a> {
         if self.par_depth > 0 {
             return self.halt(true);
         }
-        if !self.in_on_failure {
+        if !self.in_on_failure && !self.in_on_cancel {
             if let Some(block) = self.m.on_failure.clone() {
                 self.in_on_failure = true;
                 self.labels.insert("on failure".into());

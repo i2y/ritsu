@@ -15,9 +15,10 @@
 # An agent answers {"answer": <the scenario's value>}, as the model would under the schema; its
 # failure is raised, as the Agents SDK raises a refusal.
 #
-# A call the scenario times out goes to `run.late()`, when the runner has one: the runner keeps
-# the call from answering until the platform times it out. Without one, it answers with the
-# error "timeout".
+# A call that the scenario times out, or cancels the workflow during, goes to `run.hold(answer)`
+# when the runner has one: the runner keeps the call from answering until the platform times it
+# out, or cancels the workflow and keeps the call until the platform cancels it. Without one, a
+# timeout answers with the error "timeout".
 
 from __future__ import annotations
 
@@ -36,8 +37,8 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
     def error_name(kind: str) -> str:
         return "Dandori.Test.Failure" if kind == "failure" else kind
 
-    def late(ans: dict[str, Any]) -> bool:
-        return "ok" not in ans and ans["error"] == "timeout" and hasattr(run, "late")
+    def held(ans: dict[str, Any]) -> bool:
+        return hasattr(run, "hold") and (ans.get("cancel") is True or ("ok" not in ans and ans.get("error") == "timeout"))
 
     class StandIn:
         async def lambda_(self, fn: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -49,16 +50,16 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
                 if inspect.isawaitable(answered):
                     await answered
                 return {"ok": None}
-            if late(ans):
-                return await run.late()
+            if held(ans):
+                return await run.hold(ans)
             if "ok" in ans:
                 return {"ok": ans["ok"]}
             return {"error": error_name(ans["error"]), "message": "scripted"}
 
         async def http(self, req: dict[str, Any]) -> dict[str, Any]:
             ans = run.take({k: v for k, v in req.items() if k != "form"}, None)
-            if late(ans):
-                return await run.late()
+            if held(ans):
+                return await run.hold(ans)
             if "ok" in ans:
                 return {"status": 200, "body": ans["ok"]}
             task = next((t for t in http_tasks if t["method"] == req["http"] and t["re"].match(req["url"])), None)
@@ -79,8 +80,8 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
                 if inspect.isawaitable(answered):
                     await answered
                 return {"ok": {"MessageId": "message-1"}}
-            if late(ans):
-                return await run.late()
+            if held(ans):
+                return await run.hold(ans)
             if "ok" in ans:
                 return {"ok": ans["ok"]}
             task = next((t for t in aws_tasks if t["api"] == api), None)
@@ -88,8 +89,8 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
 
         async def agent(self, call: dict[str, Any]) -> Any:
             ans = run.take(call, None)
-            if late(ans):
-                return await run.late()
+            if held(ans):
+                return await run.hold(ans)
             if "ok" in ans:
                 return {"answer": ans["ok"]}
             raise RuntimeError("scripted")

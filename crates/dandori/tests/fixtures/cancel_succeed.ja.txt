@@ -1,0 +1,2 @@
+エラー[E009]: tests/fixtures/cancel_succeed.flow:19:3: `on cancel` はワークフローをキャンセルされたとして終えます。`succeed` は書けません
+    19 |   succeed 結果 = "止めました"

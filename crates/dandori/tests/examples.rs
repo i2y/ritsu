@@ -77,6 +77,15 @@ fn runnable() -> Vec<PathBuf> {
     out
 }
 
+/// The tests that start many processes at once — the Temporal runners and dev servers, and the
+/// Argo runner with its cluster — take turns: run together, they slow each other down more than
+/// they gain.
+static HEAVY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn heavy() -> std::sync::MutexGuard<'static, ()> {
+    HEAVY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn rel(p: &Path) -> String {
     p.strip_prefix(root()).unwrap_or(p).display().to_string()
 }
@@ -249,7 +258,18 @@ fn plays(m: &Model, view: View, named: bool, keep: impl Fn(&[CallInfo]) -> bool)
             continue;
         }
         let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
-        let script: Vec<Value> = answers.iter().map(|a| if a.get("ok").is_some() { json!({ "ok": a["ok"] }) } else { json!({ "error": a["error"] }) }).collect();
+        let script: Vec<Value> = answers
+            .iter()
+            .map(|a| {
+                if a.get("ok").is_some() {
+                    json!({ "ok": a["ok"] })
+                } else if a.get("cancel").is_some() {
+                    json!({ "cancel": true })
+                } else {
+                    json!({ "error": a["error"] })
+                }
+            })
+            .collect();
         runs.push(json!({ "id": id, "input": sc["input"], "answers": script }));
         references.push((sc, reference));
     }
@@ -279,42 +299,7 @@ fn temporal_runs_as_the_reference_says() {
         eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
     }
-    for f in runnable() {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
-        let m = checked.model.expect("the examples pass check");
-        let dir = scratch(&format!("temporal-{}", dandori::render::ident(&m.name)));
-        let files = dandori::temporal::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
-        for (name, text) in &files {
-            let p = dir.join(name);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(&p, text).unwrap();
-        }
-        let p = Platform::Temporal;
-        let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::render::ident(&t.name), "callback": t.callback })).collect();
-        let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
-        let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
-        let mut queues: Vec<String> = m.tasks.iter().filter_map(|t| t.queue.clone()).collect();
-        queues.sort();
-        queues.dedup();
-        let (http, aws) = transport_spec(&m, p);
-        // on a real server an activity times out as the scenario says, and a callback that gets no answer
-        let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
-        let runs_file = dir.join("runs.json");
-        let results_file = dir.join("results.json");
-        let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
-        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-        let out = Command::new("node")
-            .arg(root().join("tools/temporal/run.mjs"))
-            .arg(dir.join(dandori::render::ident(&m.name)))
-            .arg(&runs_file)
-            .arg(&results_file)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}: the Temporal runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
-        let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
-        compare("the Temporal workflow", &f, &references, &got);
-        eprintln!("{}: compared {} run(s) on Temporal (the dev server)", rel(&f), references.len());
-    }
+    temporal_all(None);
 }
 
 /// The Python of tools/temporal-python/.venv, where the Temporal SDK for Python is.
@@ -333,42 +318,60 @@ fn temporal_python_runs_as_the_reference_says() {
             return;
         }
     };
-    for f in runnable() {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
-        let m = checked.model.expect("the examples pass check");
-        let dir = scratch(&format!("temporal-python-{}", dandori::render::ident(&m.name)));
-        let files = dandori::temporal_py::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
-        for (name, text) in &files {
-            let p = dir.join(name);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(&p, text).unwrap();
+    temporal_all(Some(python));
+}
+
+/// Every flow on Temporal at once, each with a runner and a dev server of its own: the
+/// TypeScript build, or with `python`, the Python build.
+fn temporal_all(python: Option<PathBuf>) {
+    let _turn = heavy();
+    std::thread::scope(|scope| {
+        for f in runnable() {
+            let python = python.clone();
+            scope.spawn(move || temporal_one(&f, python.as_deref()));
         }
-        let p = Platform::Temporal;
-        let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::temporal_py::method(&t.name), "callback": t.callback })).collect();
-        let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
-        let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
-        let mut queues: Vec<String> = m.tasks.iter().filter_map(|t| t.queue.clone()).collect();
-        queues.sort();
-        queues.dedup();
-        let (http, aws) = transport_spec(&m, p);
-        // the same runs as with the TypeScript
-        let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
-        let runs_file = dir.join("runs.json");
-        let results_file = dir.join("results.json");
-        let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
-        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-        let out = Command::new(&python)
-            .arg(root().join("tools/temporal-python/run.py"))
-            .arg(dir.join(dandori::temporal_py::package(&m)))
-            .arg(&runs_file)
-            .arg(&results_file)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}: the Temporal runner for Python failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
-        let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
-        compare("the Temporal workflow in Python", &f, &references, &got);
-        eprintln!("{}: compared {} run(s) on Temporal in Python (the dev server)", rel(&f), references.len());
+    });
+}
+
+fn temporal_one(f: &Path, python: Option<&Path>) {
+    let (_, checked) = dandori::check::check_file(f).unwrap();
+    let m = checked.model.expect("the examples pass check");
+    let lang = if python.is_some() { "python-" } else { "" };
+    let dir = scratch(&format!("temporal-{lang}{}", dandori::render::ident(&m.name)));
+    let files = match python {
+        Some(_) => dandori::temporal_py::build(&m),
+        None => dandori::temporal::build(&m),
     }
+    .unwrap_or_else(|d| panic!("{} does not build: {}", rel(f), d[0].en));
+    for (name, text) in &files {
+        let p = dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, text).unwrap();
+    }
+    let p = Platform::Temporal;
+    let method = |t: &str| if python.is_some() { dandori::temporal_py::method(t) } else { dandori::render::ident(t) };
+    let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": method(&t.name), "callback": t.callback })).collect();
+    let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
+    let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
+    let mut queues: Vec<String> = m.tasks.iter().filter_map(|t| t.queue.clone()).collect();
+    queues.sort();
+    queues.dedup();
+    let (http, aws) = transport_spec(&m, p);
+    // on a real server an activity times out as the scenario says, and a callback that gets no answer
+    let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
+    let runs_file = dir.join("runs.json");
+    let results_file = dir.join("results.json");
+    let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
+    std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+    let out = match python {
+        Some(py) => Command::new(py).arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&runs_file).arg(&results_file).output().unwrap(),
+        None => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).output().unwrap(),
+    };
+    let what = if python.is_some() { "the Temporal workflow in Python" } else { "the Temporal workflow" };
+    assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
+    let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    compare(what, f, &references, &got);
+    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server)", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
 }
 
 fn rulec_bin() -> String {
@@ -463,7 +466,14 @@ fn pydantic_graph_runs_as_the_reference_says() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("pydantic-graph-{}", dandori::render::ident(&m.name)));
-        let files = dandori::pydantic_graph::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
+        let files = match dandori::pydantic_graph::build(&m) {
+            Ok(files) => files,
+            Err(d) if d.iter().all(|x| x.code == "E050") => {
+                eprintln!("{}: not for pydantic-graph ({}: E050)", rel(&f), d[0].en);
+                continue;
+            }
+            Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
+        };
         for (name, text) in &files {
             let p = dir.join(name);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -694,7 +704,14 @@ fn durable_runs_as_the_reference_says() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("durable-{}", dandori::render::ident(&m.name)));
-        let files = dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
+        let files = match dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable) {
+            Ok(files) => files,
+            Err(d) if d.iter().all(|x| x.code == "E050") => {
+                eprintln!("{}: not for Lambda durable functions ({}: E050)", rel(&f), d[0].en);
+                continue;
+            }
+            Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
+        };
         for (name, text) in &files {
             let p = dir.join(name);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -829,6 +846,7 @@ fn argo_runs_as_the_reference_says() {
         eprintln!("SKIP: {why}");
         return;
     }
+    let _turn = heavy();
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and
     // runs one of them again with real pods; each flow is made ready on a thread of its own
     let going: Vec<ArgoFlow> = std::thread::scope(|scope| {

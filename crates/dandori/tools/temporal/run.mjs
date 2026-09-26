@@ -7,7 +7,8 @@
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
-//              "runs": [ { "id": workflow id, "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
+//              "runs": [ { "id": workflow id, "input": {...},
+//                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
 //
 // Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the
 // id of the workflow that called it (a child workflow's id starts with its parent's). The tasks
@@ -16,7 +17,10 @@
 // workflows are stand-ins that answer from the scenario. A callback's answer comes as the signal
 // the workflow waits for, sent before the task that hands the id on returns; a callback that
 // the scenario times out gets none. A call that the scenario times out gets no answer either:
-// its stand-in keeps the activity busy until the server times it out.
+// its stand-in keeps the activity busy until the server times it out. A call during which the
+// scenario cancels the workflow asks the server to cancel it, and keeps the activity busy until
+// the server tells it that it is cancelled; a callback's answer that is a cancellation is the
+// request to cancel.
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
@@ -95,6 +99,7 @@ function take(run, label) {
 }
 
 function recorded(ans) {
+  if (ans.cancel === true) return { cancel: true };
   return "ok" in ans ? { ok: ans.ok } : { error: ans.error, as: ans.error };
 }
 
@@ -102,19 +107,40 @@ function scripted(kind) {
   return ApplicationFailure.create({ type: kind === "failure" ? "Dandori.Test.Failure" : kind, message: "scripted", nonRetryable: true });
 }
 
-/** A call the scenario times out: keep the activity busy past its timeout, heartbeating, so that the server times it out. */
-async function late() {
+/** Heartbeat until the server says the activity is over (cancelled, or timed out), at most LATE_MS. */
+async function holdOn() {
   const context = Context.current();
-  const until = Date.now() + LATE_MS;
-  while (Date.now() < until) {
-    context.heartbeat();
-    await new Promise((ok) => setTimeout(ok, 100));
+  const timer = setInterval(() => context.heartbeat(), 100);
+  try {
+    await Promise.race([context.cancelled, new Promise((ok) => setTimeout(ok, LATE_MS))]);
+  } catch {
+    // the server is done with it
+  } finally {
+    clearInterval(timer);
   }
+}
+
+/** A call the scenario times out: keep the activity busy past its timeout, so that the server times it out. */
+async function late() {
+  await holdOn();
   throw ApplicationFailure.create({ type: "Dandori.Test.Late", message: "the server should have timed this out", nonRetryable: true });
 }
 
-/** The answer of a stand-in: its value, the scripted error, or no answer in time. */
-async function answer(ans) {
+/** A call during which the scenario cancels the workflow: ask the server, and keep the activity until it is cancelled. */
+async function cancelling(run) {
+  await env.client.workflow.getHandle(run.id).cancel();
+  await holdOn();
+  throw ApplicationFailure.create({ type: "Dandori.Test.Cancelled", message: "the workflow was cancelled", nonRetryable: true });
+}
+
+/** A call the runner keeps from answering: one that times out, or one during which the workflow is cancelled. */
+function hold(run, ans) {
+  return ans.cancel === true ? cancelling(run) : late();
+}
+
+/** The answer of a stand-in: its value, the scripted error, no answer in time, or none before the workflow is cancelled. */
+async function answer(run, ans) {
+  if (ans.cancel === true) return cancelling(run);
   if ("ok" in ans) return ans.ok;
   if (ans.error === "timeout") return late();
   throw scripted(ans.error);
@@ -127,6 +153,10 @@ async function answer(ans) {
  */
 async function answerLater(callbackId, ans) {
   if (!("ok" in ans) && ans.error === "timeout") return;
+  if (ans.cancel === true) {
+    await env.client.workflow.getHandle(current().id).cancel();
+    return;
+  }
   const [workflowId] = JSON.parse(callbackId);
   const signal = "ok" in ans ? { callback_id: callbackId, ok: ans.ok } : { callback_id: callbackId, error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
   await env.client.workflow.getHandle(workflowId).signal("dandori.callback", signal);
@@ -141,7 +171,7 @@ const transportRun = {
     return ans;
   },
   answerLater: (id, ans) => answerLater(id, ans),
-  late,
+  hold: (ans) => hold(current(), ans),
 };
 
 const own = {};
@@ -156,7 +186,7 @@ for (const t of spec.own ?? []) {
       return;
     }
     run.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });
-    return answer(ans);
+    return answer(run, ans);
   };
 }
 const activities = { ...makeActivities(own, makeTransport(spec, transportRun)) };
@@ -165,14 +195,14 @@ for (const name of spec.rules ?? []) {
     const run = current();
     const ans = take(run, name);
     run.steps.push({ call: { activity: name, args }, answer: recorded(ans) });
-    return answer(ans);
+    return answer(run, ans);
   };
 }
 activities.dd_test_child = async ({ type, args }) => {
   const run = current();
   const ans = take(run, type);
   run.steps.push({ call: { child_workflow: type, args }, answer: recorded(ans) });
-  return answer(ans);
+  return answer(run, ans);
 };
 
 // the server fires a timer up to a second late unless told to shift its timers less
@@ -189,6 +219,9 @@ try {
         // the bundler loses its way when the path goes through a symbolic link (/var on macOS)
         workflowsPath: path.join(fs.realpathSync(work), "workflows.ts"),
         activities,
+        // heartbeats go out at once, so that a held activity hears soon that it is over
+        defaultHeartbeatThrottleInterval: "100 milliseconds",
+        maxHeartbeatThrottleInterval: "100 milliseconds",
         bundlerOptions: {
           webpackConfigHook: (config) => {
             config.resolve = config.resolve ?? {};
@@ -203,7 +236,7 @@ try {
   const runAll = async () => {
     const ends = await Promise.all(
       spec.runs.map(async (r) => {
-        runs.set(r.id, { answers: r.answers, next: 0, steps: [] });
+        runs.set(r.id, { id: r.id, answers: r.answers, next: 0, steps: [] });
         try {
           const out = await env.client.workflow.execute(spec.workflow, { args: [r.input], taskQueue: "dandori", workflowId: r.id });
           return { succeed: out ?? null };

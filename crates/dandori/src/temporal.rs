@@ -270,6 +270,10 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     let io = format!("{header}{}", io_ts());
     if flavor == Flavor::Durable {
         let mut errs = Vec::new();
+        errs.extend(m.refuse_on_cancel(
+            "Lambda durable functions ends an execution at once when it is stopped (StopDurableExecution) and runs nothing after, so `on cancel` cannot run there",
+            "Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
+        ));
         for r in &called {
             if m.rules[*r].lambda.is_none() {
                 let ru = &m.rules[*r];
@@ -1120,6 +1124,7 @@ import {
   TimeoutFailure,
   condition,
   defineSignal,
+  isCancellation,
   setHandler,
   sleep,
   workflowInfo,
@@ -1178,13 +1183,14 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Call once, and again as the retriers say, waiting between as Step Functions would. */
+/** Call once, and again as the retriers say, waiting between as Step Functions would. A cancellation is no task's error: it goes on as it is. */
 export async function attempt<R>(call: () => Promise<R>, retriers: readonly Retrier[], declared: readonly string[]): Promise<R> {
   const counts = retriers.map(() => 0);
   for (;;) {
     try {
       return await call();
     } catch (e) {
+      if (isCancellation(e)) throw e;
       const kind = kindOf(e, declared);
       let again = false;
       for (let i = 0; i < retriers.length; i++) {
@@ -1284,6 +1290,9 @@ export async function rounds<I, R>(items: readonly I[], k: number, round: (item:
     }
   }
   await Promise.all(Array.from({ length: lanes }, () => lane()));
+  // a cancellation stops every round, whatever failed before it
+  const cancelled = out.find((r) => "fail" in r && isCancellation(r.fail));
+  if (cancelled) throw (cancelled as { fail: unknown }).fail;
   for (const r of out) {
     if ("fail" in r) throw r.fail;
   }
@@ -1390,6 +1399,9 @@ impl<'a> Gen<'a> {
         if children {
             names.push("executeChild");
         }
+        if m.on_cancel.is_some() {
+            names.extend(["CancellationScope", "isCancellation"]);
+        }
         self.out.push_str(&format!("import {{ {} }} from \"@temporalio/workflow\";\n", names.join(", ")));
         self.out.push_str("import type { Tasks } from \"./activities\";\n");
         if rules {
@@ -1445,22 +1457,39 @@ impl<'a> Gen<'a> {
                 self.line(1, &format!("let {}: {t} = null;", self.var(v)));
             }
         }
+        // a cancellation reaches past `on failure` to `on cancel`
+        let d = if m.on_cancel.is_some() && self.flavor == Flavor::Temporal {
+            self.line(1, "try {");
+            2
+        } else {
+            1
+        };
         match &m.on_failure {
             Some(block) => {
-                self.line(1, "try {");
-                self.block(&m.flow, 2);
-                self.line(2, "return null;");
-                self.line(1, "} catch (dd_e) {");
-                self.line(2, "if (!(dd_e instanceof dd.TaskError)) throw dd_e;");
-                self.line(2, "// on failure");
-                self.block(block, 2);
-                self.line(2, "throw dd_e;");
-                self.line(1, "}");
+                self.line(d, "try {");
+                self.block(&m.flow, d + 1);
+                self.line(d + 1, "return null;");
+                self.line(d, "} catch (dd_e) {");
+                self.line(d + 1, "if (!(dd_e instanceof dd.TaskError)) throw dd_e;");
+                self.line(d + 1, "// on failure");
+                self.block(block, d + 1);
+                self.line(d + 1, "throw dd_e;");
+                self.line(d, "}");
             }
             None => {
-                self.block(&m.flow, 1);
-                self.line(1, "return null;");
+                self.block(&m.flow, d);
+                self.line(d, "return null;");
             }
+        }
+        if let (Some(block), Flavor::Temporal) = (&m.on_cancel, self.flavor) {
+            self.line(1, "} catch (dd_c) {");
+            self.line(2, "if (!isCancellation(dd_c)) throw dd_c;");
+            self.line(2, "// on cancel: out of the cancellation's reach; then the workflow ends as cancelled");
+            self.line(2, "await CancellationScope.nonCancellable(async () => {");
+            self.block(block, 3);
+            self.line(2, "});");
+            self.line(2, "throw dd_c;");
+            self.line(1, "}");
         }
         self.out.push_str("}\n");
     }

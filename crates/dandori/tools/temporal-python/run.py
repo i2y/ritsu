@@ -8,7 +8,8 @@
 #
 # runs.json: { "workflow": type, "own": [ { "name", "method", "callback" } ], "rules": [activity],
 #              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
-#              "runs": [ { "id": workflow id, "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
+#              "runs": [ { "id": workflow id, "input": {...},
+#                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
 #
 # Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the id
 # of the workflow that called it (a child workflow's id starts with its parent's). The tasks that
@@ -17,7 +18,10 @@
 # stand-ins that answer from the scenario. A callback's answer comes as the signal the workflow
 # waits for, sent before the task that hands the id on returns; a callback that the scenario
 # times out gets none. A call that the scenario times out gets no answer either: its stand-in
-# keeps the activity busy until the server times it out.
+# keeps the activity busy until the server times it out. A call during which the scenario
+# cancels the workflow asks the server to cancel it, and keeps the activity busy until the server
+# tells it that it is cancelled; a callback's answer that is a cancellation is the request to
+# cancel.
 #
 # The server keeps real time, so the copy of the generated code that runs here waits far less:
 # every duration of the workflow's timers (dd.seconds) is at most 10 ms, and an activity or a
@@ -37,6 +41,7 @@ import shutil
 import sys
 import tempfile
 import time
+from datetime import timedelta
 from typing import Any
 
 from temporalio import activity
@@ -111,21 +116,39 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         return ans
 
     def recorded(ans: dict[str, Any]) -> dict[str, Any]:
+        if ans.get("cancel") is True:
+            return {"cancel": True}
         return {"ok": ans["ok"]} if "ok" in ans else {"error": ans["error"], "as": ans["error"]}
 
     def scripted(kind: str) -> ApplicationError:
         return ApplicationError("scripted", type="Dandori.Test.Failure" if kind == "failure" else kind, non_retryable=True)
 
-    async def late() -> Any:
-        """A call the scenario times out: keep the activity busy past its timeout, heartbeating, so that the server times it out."""
+    async def hold_on() -> None:
+        """Heartbeat until the server says the activity is over (cancelled, or timed out), at most LATE seconds."""
         until = time.monotonic() + LATE
         while time.monotonic() < until:
             activity.heartbeat()
-            await asyncio.sleep(0.1)
+            try:
+                await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                return
+
+    async def late() -> Any:
+        """A call the scenario times out: keep the activity busy past its timeout, so that the server times it out."""
+        await hold_on()
         raise ApplicationError("the server should have timed this out", type="Dandori.Test.Late", non_retryable=True)
 
-    async def answer(ans: dict[str, Any]) -> Any:
-        """The answer of a stand-in: its value, the scripted error, or no answer in time."""
+    async def cancelling(run: dict[str, Any]) -> Any:
+        """A call during which the scenario cancels the workflow: ask the server, and keep the activity until it is cancelled."""
+        assert env is not None
+        await env.client.get_workflow_handle(run["id"]).cancel()
+        await hold_on()
+        raise ApplicationError("the workflow was cancelled", type="Dandori.Test.Cancelled", non_retryable=True)
+
+    async def answer(run: dict[str, Any], ans: dict[str, Any]) -> Any:
+        """The answer of a stand-in: its value, the scripted error, no answer in time, or none before the workflow is cancelled."""
+        if ans.get("cancel") is True:
+            return await cancelling(run)
         if "ok" in ans:
             return ans["ok"]
         if ans["error"] == "timeout":
@@ -136,7 +159,11 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         """Answer a callback with a signal to the workflow the id names, before the task that
         hands the id on returns: then the answer is in the history before the workflow waits for
         it, and its short wait cannot run out first. A timeout gets no answer."""
-        if "ok" not in ans and ans["error"] == "timeout":
+        if "ok" not in ans and ans.get("error") == "timeout":
+            return
+        assert env is not None
+        if ans.get("cancel") is True:
+            await env.client.get_workflow_handle(current()["id"]).cancel()
             return
         workflow_id = json.loads(callback_id)[0]
         if "ok" in ans:
@@ -158,7 +185,10 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         def answer_later(self, callback_id: str, ans: dict[str, Any]) -> Any:
             return answer_later(callback_id, ans)
 
-        async def late(self) -> Any:
+        async def hold(self, ans: dict[str, Any]) -> Any:
+            """A call the runner keeps from answering: one that times out, or one during which the workflow is cancelled."""
+            if ans.get("cancel") is True:
+                return await cancelling(current())
             return await late()
 
     class Own:
@@ -177,7 +207,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
                     await answer_later(args["callback_id"], ans)
                     return None
                 run["steps"].append({"call": {"activity": t["name"], "args": args}, "answer": recorded(ans)})
-                return await answer(ans)
+                return await answer(run, ans)
 
             return call
 
@@ -192,7 +222,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
                 run = current()
                 ans = take(run, name)
                 run["steps"].append({"call": {"activity": name, "args": args}, "answer": recorded(ans)})
-                return await answer(ans)
+                return await answer(run, ans)
 
             return call
 
@@ -203,7 +233,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         run = current()
         ans = take(run, a["type"])
         run["steps"].append({"call": {"child_workflow": a["type"], "args": a["args"]}, "answer": recorded(ans)})
-        return await answer(ans)
+        return await answer(run, ans)
 
     activities.append(test_child)
 
@@ -215,10 +245,21 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
         async with contextlib.AsyncExitStack() as stack:
             # every worker runs until the runs are done
             for q in queues:
-                await stack.enter_async_context(Worker(env.client, task_queue=q, workflows=[*wf.workflows, *children], activities=activities, max_concurrent_activities=200))
+                # heartbeats go out at once, so that a held activity hears soon that it is over
+                await stack.enter_async_context(
+                    Worker(
+                        env.client,
+                        task_queue=q,
+                        workflows=[*wf.workflows, *children],
+                        activities=activities,
+                        max_concurrent_activities=200,
+                        default_heartbeat_throttle_interval=timedelta(milliseconds=100),
+                        max_heartbeat_throttle_interval=timedelta(milliseconds=100),
+                    )
+                )
 
             async def one(r: dict[str, Any]) -> dict[str, Any]:
-                runs[r["id"]] = {"answers": r["answers"], "next": 0, "steps": []}
+                runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
                 try:
                     out = await env.client.execute_workflow(spec["workflow"], r["input"], id=r["id"], task_queue="dandori")
                     return {"succeed": out}

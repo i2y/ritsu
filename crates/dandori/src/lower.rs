@@ -27,6 +27,7 @@ pub struct Lowerer<'a> {
     /// how many `for … in parallel` are around it
     par_depth: usize,
     in_on_failure: bool,
+    in_on_cancel: bool,
     /// a variable's type grew to take `none` in this pass over the names
     widened: bool,
 }
@@ -64,6 +65,8 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             vars: vec![],
             flow: vec![],
             on_failure: None,
+            on_cancel: None,
+            on_cancel_line: 0,
             monitors: BTreeMap::new(),
         },
         enum_ix: BTreeMap::new(),
@@ -75,6 +78,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         loops: vec![],
         par_depth: 0,
         in_on_failure: false,
+        in_on_cancel: false,
         widened: false,
     };
     let base = file.parent().unwrap_or(Path::new("."));
@@ -93,6 +97,14 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         lw.in_on_failure = true;
         let t = lw.block(b);
         lw.m.on_failure = Some(t);
+        lw.in_on_failure = false;
+    }
+    if let Some((b, sp)) = &prog.on_cancel {
+        lw.m.on_cancel_line = sp.line;
+        lw.in_on_cancel = true;
+        let t = lw.block(b);
+        lw.m.on_cancel = Some(t);
+        lw.in_on_cancel = false;
     }
     lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -765,7 +777,7 @@ impl<'a> Lowerer<'a> {
         loop {
             let before = self.var_ty.len();
             self.widened = false;
-            let blocks: Vec<Block> = [&self.prog.flow, &self.prog.on_failure].iter().filter_map(|b| b.as_ref().map(|(b, _)| b.clone())).collect();
+            let blocks: Vec<Block> = [&self.prog.flow, &self.prog.on_failure, &self.prog.on_cancel].iter().filter_map(|b| b.as_ref().map(|(b, _)| b.clone())).collect();
             for b in &blocks {
                 self.scan_vars(b, &mut problems);
             }
@@ -1127,6 +1139,10 @@ impl<'a> Lowerer<'a> {
             StmtKind::Succeed { fields } => {
                 if self.in_on_failure {
                     self.push(e("E009", s.span, "`on failure` ends the workflow as failed; it cannot `succeed`", "`on failure` はワークフローを失敗で終えます。`succeed` は書けません"));
+                    return None;
+                }
+                if self.in_on_cancel {
+                    self.push(e("E009", s.span, "`on cancel` ends the workflow as cancelled; it cannot `succeed`", "`on cancel` はワークフローをキャンセルされたとして終えます。`succeed` は書けません"));
                     return None;
                 }
                 if self.par_depth > 0 {
@@ -1629,6 +1645,9 @@ impl<'a> Lowerer<'a> {
         if let Some(f) = &self.m.on_failure {
             visit(f, &mut scope, &mut sets);
         }
+        if let Some(f) = &self.m.on_cancel {
+            visit(f, &mut scope, &mut sets);
+        }
         // a name may be set in sibling rounds of different loops, but never in two scopes one of which holds the other
         let mut bad: BTreeMap<usize, Vec<String>> = BTreeMap::new();
         for (n, scs) in &sets {
@@ -1645,7 +1664,7 @@ impl<'a> Lowerer<'a> {
         Model::walk(&self.m.flow, &mut |s| {
             lines.insert(s.site, s.line);
         });
-        if let Some(f) = &self.m.on_failure {
+        for f in [&self.m.on_failure, &self.m.on_cancel].into_iter().flatten() {
             Model::walk(f, &mut |s| {
                 lines.insert(s.site, s.line);
             });
@@ -1695,6 +1714,10 @@ impl<'a> Lowerer<'a> {
         if let Some(mut f) = self.m.on_failure.take() {
             fill(&mut f, &own);
             self.m.on_failure = Some(f);
+        }
+        if let Some(mut f) = self.m.on_cancel.take() {
+            fill(&mut f, &own);
+            self.m.on_cancel = Some(f);
         }
     }
 }

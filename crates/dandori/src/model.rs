@@ -402,11 +402,22 @@ pub struct Model {
     pub vars: Vec<(String, Ty)>,
     pub flow: Vec<TStmt>,
     pub on_failure: Option<Vec<TStmt>>,
+    /// what runs when the workflow is cancelled: Temporal asks a workflow to stop, and it
+    /// settles what it must before it ends as cancelled
+    pub on_cancel: Option<Vec<TStmt>>,
+    /// the line of `on cancel`
+    pub on_cancel_line: usize,
     /// for a call on a case: the states its answer may carry, which the generated code checks
     pub monitors: BTreeMap<usize, (usize, Vec<String>)>,
 }
 
 impl Model {
+    /// A platform's refusal of `on cancel`, when the workflow has one: the platform stops a run
+    /// at once and runs nothing after.
+    pub fn refuse_on_cancel(&self, en: &str, ja: &str) -> Option<crate::diag::Diag> {
+        self.on_cancel.as_ref().map(|_| crate::diag::Diag::error("E050", self.on_cancel_line, 1, en, ja))
+    }
+
     pub fn ty_name(&self, t: &Ty) -> String {
         match t {
             Ty::Int => "int".into(),
@@ -463,6 +474,9 @@ impl Model {
         let mut out = Vec::new();
         Model::walk(&self.flow, &mut |s| out.push(s));
         if let Some(f) = &self.on_failure {
+            Model::walk(f, &mut |s| out.push(s));
+        }
+        if let Some(f) = &self.on_cancel {
             Model::walk(f, &mut |s| out.push(s));
         }
         out

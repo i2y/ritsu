@@ -94,7 +94,11 @@ flow
   own variables, and when a round fails, the others still run to their end and the first
   failure in the list's order decides.
 - `fail … leaving pi` hands an unfinished case over on purpose; `on failure` settles
-  cases when a task fails and nothing handled it.
+  cases when a task fails and nothing handled it, and `on cancel` when the workflow is
+  cancelled (on Temporal, which asks a workflow to stop and lets it clean up; the other
+  platforms stop a run at once, and refuse `on cancel` with E050). The checker enters
+  `on cancel` from every call and wait a cancellation can stop, and wants the cases settled
+  there too.
 
 ### What a task calls
 
@@ -254,7 +258,9 @@ the runners, so the calls come in the reference's order.
 On Temporal, every run of a flow goes at once, each as a workflow of its own id, which the
 idempotency keys carry. The server keeps real time, so the copy of the code the runners run
 waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the scenario times
-out is kept busy until the server times it out.
+out is kept busy until the server times it out. In a flow with `on cancel`, the scenarios
+also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
+its activity until the server cancels that too.
 
 On Argo, the controller runs the generated WorkflowTemplate, but the runner plays the pods:
 each pod waits for a scheduler the cluster does not have, and the runner does what its
@@ -300,7 +306,7 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes about a minute and a half; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes about two minutes; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of
