@@ -392,18 +392,24 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
         let keep = recorded_dir(&m, python.is_some());
         let _ = std::fs::remove_dir_all(&keep);
         std::fs::create_dir_all(&keep).unwrap();
-        let name = format!("run-{}.json", longest + 1);
-        std::fs::copy(histories.join(&name), keep.join(&name)).unwrap();
+        // the run's history, and the histories of the runs that went on from it (Continue-As-New)
+        let id = format!("run-{}", longest + 1);
+        for e in std::fs::read_dir(&histories).unwrap() {
+            let name = e.unwrap().file_name().into_string().unwrap();
+            if name == format!("{id}.json") || (name.starts_with(&format!("{id}.")) && name[id.len() + 1..].trim_end_matches(".json").parse::<u32>().is_ok()) {
+                std::fs::copy(histories.join(&name), keep.join(&name)).unwrap();
+            }
+        }
         std::fs::copy(histories.join("spec.json"), keep.join("spec.json")).unwrap();
     }
 }
 
 /// Worker Deployment Versioning, through the generated worker, on the dev server: two builds of
-/// examples/review (without its queues) whose code differs in one text, A and B, as versions of
-/// one deployment. A run
-/// that starts on A and waits for its approval while B becomes the current version ends on A's
-/// code; a run that starts after runs on B's. The build id is a hash of the code: the same for
-/// the same code, and another for B.
+/// tests/versions/approvals.flow whose code differs in one text, A and B, as versions of one
+/// deployment. A run that starts on A and waits for its approval while B becomes the current
+/// version ends on A's code, and so does its second round, which starts in a new run
+/// (Continue-As-New); a run that starts after runs on B's. The build id is a hash of the code:
+/// the same for the same code, and another for B.
 #[test]
 fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     need_rulec!();
@@ -412,10 +418,9 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         return;
     }
     let _turn = heavy();
-    // every task on the workflow's own queue, so that one worker a build serves them all
-    let text: String = std::fs::read_to_string(root().join("examples/review/review.flow")).unwrap().lines().filter(|l| !l.trim_start().starts_with("queue ")).map(|l| format!("{l}\n")).collect();
+    let text = std::fs::read_to_string(root().join("tests/versions/approvals.flow")).unwrap();
     let changed = text.replace("さんが申込 {申込.id} を承認しました\")", "さんが申込 {申込.id} を承認しました（新しいビルド）\")");
-    assert_ne!(text, changed, "examples/review/review.flow no longer has the text the test changes");
+    assert_ne!(text, changed, "tests/versions/approvals.flow no longer has the text the test changes");
     let dir = scratch("versions");
     let python = temporal_python();
     for (lang, py) in [("TypeScript", None), ("Python", python.as_ref())] {
@@ -427,7 +432,7 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         for (name, flow) in [("a", &text), ("b", &changed), ("again", &text)] {
             let d = dir.join(format!("{}-{name}", lang.to_lowercase()));
             std::fs::create_dir_all(&d).unwrap();
-            let f = d.join("review.flow");
+            let f = d.join("approvals.flow");
             std::fs::write(&f, flow).unwrap();
             let (_, checked) = dandori::check::check_file(&f).unwrap();
             let m = checked.model.unwrap();
@@ -450,17 +455,19 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         };
         assert!(out.status.success(), "the Worker Deployment Versioning run in {lang} failed:\n{}", String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
-        let a_says = json!(["a さんが申込 申込-1 を承認しました"]);
-        let b_says = json!(["b さんが申込 申込-1 を承認しました（新しいビルド）"]);
+        let a_says = json!(["a さんが申込 申込-1 を承認しました", "a さんが申込 申込-1 を承認しました"]);
+        let b_says = json!(["b さんが申込 申込-1 を承認しました（新しいビルド）", "b さんが申込 申込-1 を承認しました（新しいビルド）"]);
+        assert_eq!(got["runs"], json!({ "run-a": 2, "run-b": 2 }), "{lang}: the second round of each did not start in a new run: {}", got["runs"]);
         assert_eq!(got["notified"]["run-a"], a_says, "{lang}: the run that started on A did not end on A's code: {}", got["notified"]);
         assert_eq!(got["notified"]["run-b"], b_says, "{lang}: the run that started on B did not run B's code: {}", got["notified"]);
-        eprintln!("{lang}: a run pinned to build {} ended on it after {} became the current version", built[0].1, built[1].1);
+        eprintln!("{lang}: a run pinned to build {} ended on it, in the run it went on in too, after {} became the current version", built[0].1, built[1].1);
     }
 }
 
 /// The flows whose histories are kept in tests/histories: one run of each, the one with the most
-/// calls, recorded by the Temporal runners with DANDORI_BLESS=1.
-const RECORDED: [&str; 4] = ["examples/hotel/hotel.flow", "examples/fulfillment/fulfillment.flow", "examples/review/review.flow", "tests/flows/cancel.flow"];
+/// calls, recorded by the Temporal runners with DANDORI_BLESS=1. The run of examples/order goes
+/// on in new runs (Continue-As-New), and each of them is kept.
+const RECORDED: [&str; 5] = ["examples/hotel/hotel.flow", "examples/fulfillment/fulfillment.flow", "examples/review/review.flow", "tests/flows/cancel.flow", "examples/order/order.flow"];
 
 fn recorded_dir(m: &Model, python: bool) -> PathBuf {
     root().join("tests/histories").join(if python { "python" } else { "typescript" }).join(dandori::render::ident(&m.name))

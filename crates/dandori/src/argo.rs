@@ -71,6 +71,7 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
         "dandori does not write `on cancel` for Argo Workflows yet; there, it would have to be the exit handler that `argo stop` runs",
         "Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります",
     ));
+    errs.extend(crate::check::history_limit(m, Platform::Argo));
     for t in &m.tasks {
         match t.via(Platform::Argo) {
             None => errs.push(Diag::error(

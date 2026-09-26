@@ -2,7 +2,8 @@
 
 A small typed language for workflows that call business rules. A `.flow` is checked
 before it runs — types, every arm of every match, every state a case can be left in,
-retries that could repeat a change, how long the execution history can grow — and
+retries that could repeat a change, how long the execution history can grow on the platform
+it is built for — and
 compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript or
 Python), to **AWS Lambda durable functions** (TypeScript), to **Argo Workflows** (a
 WorkflowTemplate) and to **pydantic-graph** (a graph that runs in the process that calls it).
@@ -201,7 +202,9 @@ dandori run <file.flow> --scenario <file.json> [--target asl|temporal|temporal-p
 ```
 
 `--lang ja` prints the messages in Japanese. rulec is found through `DANDORI_RULEC`, else
-on the PATH.
+on the PATH. `build` also refuses what the platform cannot do (E050), and a workflow whose one
+run can outgrow the platform (E040): its history on Step Functions and Temporal, its operations
+on durable functions, its nodes on Argo.
 
 - `build --target asl` writes the state machine and, for every rule it calls, a Lambda
   handler around the Python rulec generates.
@@ -219,7 +222,13 @@ on the PATH.
   `{ searchAttributes: true }`, the workflow also keeps the search attribute `DandoriCases`
   (`"pi=requires_capture"`, …) up to date, so runs can be found by their cases' states.
   To change the code of a version without Worker Deployment Versioning, give the histories
-  of the runs that are going on (`client.ts`'s `histories`) to `worker.ts`'s `replay` first. A task without `timeout` gets as long as the other platforms
+  of the runs that are going on (`client.ts`'s `histories`) to `worker.ts`'s `replay` first.
+  A `repeat`, or a `for` that is not parallel, at the top of the flow goes on in a new run
+  (Continue-As-New) at the start of a round once the history is long — 10,000 events, or
+  sooner when the server suggests it (the dev server did past 4,096) — and hands on the
+  variables, the round, and the loop's list and what it has yielded. The workflow id stays, and
+  so do the idempotency keys and the ids of callbacks and child workflows; the new run stays on
+  the build under Worker Deployment Versioning. A task without `timeout` gets as long as the other platforms
   would give it — 60 seconds for `http` and `agent`, as an HTTP Task has, 900 for `lambda`,
   and no limit of its own for the rest — and every activity the workflow's worker serves
   heartbeats, so that a worker that went away is noticed within 30 seconds. A rule's activity
@@ -274,9 +283,12 @@ refused), check what the query and the search attribute say of the cases at the 
 replay every run's history with the same code. Histories kept in `tests/histories` are
 replayed with the code dandori writes now, so a change of the generator that would break a
 running workflow shows. Two builds that differ in one text run as versions of one deployment
-under Worker Deployment Versioning, and a run that started on the first ends on it. The server keeps real time, so the copy of the code the runners run
-waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the scenario times
-out is kept busy until the server times it out. In a flow with `on cancel`, the scenarios
+under Worker Deployment Versioning, and a run that started on the first ends on it, the
+round it goes on to in a new run too. The server keeps real time, so the copy of the code the
+runners run waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the
+scenario times out is kept busy until the server times it out. The copy also counts every
+history as long, so a loop at the top of the flow goes on in a new run at every round but the
+first of a run, and the runners follow each run to the next to replay them all. In a flow with `on cancel`, the scenarios
 also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
 its activity until the server cancels that too.
 

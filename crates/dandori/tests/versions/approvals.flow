@@ -1,0 +1,25 @@
+workflow 承認の回 v1
+description "Worker Deployment Versioning の試し：回ごとに承認を待ってから知らせる。Temporal では二回目の回が新しい実行で始まる（Continue-As-New）"
+
+record 申込
+  id : string
+
+record 承認
+  承認者 : string
+
+inputs
+  申込 : 申込
+
+# Someone approves in a tool of their own, and the answer comes back with the callback's id.
+task 承認を求める(申込ID: string) -> 承認
+  callback
+  timeout 3 days
+
+task 通知する(申込ID: string, 本文: string)
+  idempotent
+
+flow
+  repeat at most 2 times
+    let a = 承認を求める(申込ID: 申込.id)
+      on timeout => fail NoAnswer "三日たっても承認がありません"
+    通知する(申込ID: 申込.id, 本文: "{a.承認者} さんが申込 {申込.id} を承認しました")

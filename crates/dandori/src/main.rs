@@ -6,11 +6,12 @@ use std::process::ExitCode;
 const USAGE: &str = "dandori — a small typed language for workflows that call business rules
 
 Usage:
-  dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries, history size
+  dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries
   dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
                                                   compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript or Python),
                                                   to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML),
-                                                  or to pydantic-graph (Python)
+                                                  or to pydantic-graph (Python); a build also refuses what the platform
+                                                  cannot do, and a run that can outgrow its history
   dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
                                                   run the workflow in the reference interpreter against scripted answers,
                                                   and print the trace as the target would show it

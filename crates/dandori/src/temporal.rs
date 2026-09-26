@@ -281,6 +281,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
             "Lambda durable functions ends an execution at once when it is stopped (StopDurableExecution) and runs nothing after, so `on cancel` cannot run there",
             "Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
         ));
+        errs.extend(crate::check::history_limit(m, Platform::Durable));
         for r in &called {
             if m.rules[*r].lambda.is_none() {
                 let ru = &m.rules[*r];
@@ -307,7 +308,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         if !errs.is_empty() {
             return Err(errs);
         }
-        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into() };
+        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into(), can: None };
         let wf = g.workflow(&header, !called.is_empty());
         let mut files = vec![
             (format!("{dir}/types.ts"), types_ts),
@@ -322,7 +323,10 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         }
         return Ok(files);
     }
-    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new() };
+    if let Some(d) = crate::check::history_limit(m, Platform::Temporal) {
+        return Err(vec![d]);
+    }
+    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new(), can: None };
     let wf = g.workflow(&header, !called.is_empty());
     let mut files = vec![
         (format!("{dir}/types.ts"), types_ts),
@@ -1416,6 +1420,36 @@ export function shown(): void {
   upsertSearchAttributes([{ key: CASES, value: now }]);
 }
 
+/**
+ * What a run hands on to the run that goes on from it (Continue-As-New): at which loop at the top
+ * of the flow it goes on (the first such loop is 1), from which round, the variables, and the
+ * loop's list and what the loop has yielded so far.
+ */
+export interface Resume {
+  at: number;
+  round: number;
+  vars: Record<string, unknown>;
+  items?: unknown[];
+  out?: unknown[];
+}
+
+/**
+ * How many events a run's history has before a loop at the top of the flow goes on in a new run,
+ * at the start of a round. The server suggests it sooner when the history grows large.
+ */
+export const CONTINUE_AT = 10000;
+
+/** Whether a loop at the top of the flow should go on in a new run: the history is long, or the server suggests it. */
+export function historyIsLong(): boolean {
+  const info = workflowInfo();
+  return info.continueAsNewSuggested || info.historyLength >= CONTINUE_AT;
+}
+
+/** What a run that goes on at the `at`-th loop was handed (the round, the list, or what the loop yielded), or else what `fresh` makes. */
+export function carried<T>(resume: Resume | null, at: number, what: "round" | "items" | "out", fresh: () => T): T {
+  return resume !== null && resume.at === at ? (resume[what] as T) : fresh();
+}
+
 /** How many rounds of `for … in parallel` run at a time: all, when the `.flow` does not say. */
 export function atATime(k: number): number {
   return k;
@@ -1470,6 +1504,9 @@ struct Gen<'a> {
     flavor: Flavor,
     /// durable functions: the context the current code calls through
     ctx: String,
+    /// Temporal: the loop at the top of the flow that the next statement is, which goes on in a
+    /// new run once the history is long, by its place among such loops (the first is 1)
+    can: Option<usize>,
 }
 
 impl<'a> Gen<'a> {
@@ -1552,6 +1589,9 @@ impl<'a> Gen<'a> {
         let callbacks = m.tasks.iter().any(|t| t.callback);
         let children = m.tasks.iter().any(|t| t.is_child(Platform::Temporal));
         let mut names = vec!["proxyActivities", "sleep"];
+        if self.resumes() {
+            names.insert(0, "continueAsNew");
+        }
         if children {
             names.push("executeChild");
         }
@@ -1590,12 +1630,22 @@ impl<'a> Gen<'a> {
         }
         self.out.push('\n');
         let fname = workflow_type(m);
-        self.out.push_str(&format!("export async function {fname}(input: T.WorkflowInput): Promise<{ret}> {{\n"));
+        if self.resumes() {
+            // a run that goes on from an earlier one gets what that one handed on
+            self.out.push_str(&format!("export async function {fname}(input: T.WorkflowInput, resume: dd.Resume | null = null): Promise<{ret}> {{\n"));
+        } else {
+            self.out.push_str(&format!("export async function {fname}(input: T.WorkflowInput): Promise<{ret}> {{\n"));
+        }
         if callbacks {
             self.out.push_str("  dd.listen();\n");
         }
-        self.out.push_str("  try {\n    return await run(input);\n  } catch (e) {\n    throw dd.asFailure(e);\n  }\n}\n\n");
-        self.out.push_str(&format!("async function run(input: T.WorkflowInput): Promise<{ret}> {{\n"));
+        let args = if self.resumes() { "input, resume" } else { "input" };
+        self.out.push_str(&format!("  try {{\n    return await run({args});\n  }} catch (e) {{\n    throw dd.asFailure(e);\n  }}\n}}\n\n"));
+        if self.resumes() {
+            self.out.push_str(&format!("async function run(input: T.WorkflowInput, dd_resume: dd.Resume | null): Promise<{ret}> {{\n"));
+        } else {
+            self.out.push_str(&format!("async function run(input: T.WorkflowInput): Promise<{ret}> {{\n"));
+        }
         self.body();
         std::mem::take(&mut self.out)
     }
@@ -1611,6 +1661,25 @@ impl<'a> Gen<'a> {
             } else if !locals.contains(v) {
                 let t = if matches!(ty, Ty::Opt(_)) { ts_type(m, ty) } else { format!("{} | null", ts_type(m, ty)) };
                 self.line(1, &format!("let {}: {t} = null;", self.var(v)));
+            }
+        }
+        if self.resumes() {
+            let carried: Vec<&String> = m.vars.iter().map(|(v, _)| v).filter(|v| !m.inputs.iter().any(|(i, _)| i == *v) && !locals.contains(*v)).collect();
+            self.line(1, "// a run that goes on from an earlier one (Continue-As-New) takes up its variables, and starts at its loop");
+            self.line(1, "const dd_from = dd_resume === null ? 0 : dd_resume.at;");
+            if !carried.is_empty() {
+                self.line(1, "if (dd_resume !== null) {");
+                for v in &carried {
+                    let x = self.var(v);
+                    self.line(2, &format!("{x} = dd_resume.vars[{}] as typeof {x};", q(v)));
+                }
+                self.line(1, "}");
+            }
+            let vars: Vec<String> = carried.iter().map(|v| format!("{}: {}", q(v), self.var(v))).collect();
+            if vars.is_empty() {
+                self.line(1, "const dd_vars = () => ({});");
+            } else {
+                self.line(1, &format!("const dd_vars = () => ({{ {} }});", vars.join(", ")));
             }
         }
         if self.flavor == Flavor::Temporal {
@@ -1641,7 +1710,7 @@ impl<'a> Gen<'a> {
         match &m.on_failure {
             Some(block) => {
                 self.line(d, "try {");
-                self.block(&m.flow, d + 1);
+                self.flow(d + 1);
                 self.line(d + 1, end);
                 self.line(d, "} catch (dd_e) {");
                 self.line(d + 1, "if (!(dd_e instanceof dd.TaskError)) throw dd_e;");
@@ -1651,7 +1720,7 @@ impl<'a> Gen<'a> {
                 self.line(d, "}");
             }
             None => {
-                self.block(&m.flow, d);
+                self.flow(d);
                 self.line(d, end);
             }
         }
@@ -1675,6 +1744,63 @@ impl<'a> Gen<'a> {
                 break;
             }
         }
+    }
+
+    /// Temporal: whether a loop at the top of the flow goes on in a new run once the history is long.
+    fn resumes(&self) -> bool {
+        self.flavor == Flavor::Temporal && self.m.flow.iter().any(crate::check::continues_as_new)
+    }
+
+    /// The flow's statements. On Temporal, a loop at the top of the flow goes on in a new run once
+    /// the history is long (Continue-As-New); a run that goes on so starts at that loop, the
+    /// `dd_from`-th such loop, and skips what comes before it.
+    fn flow(&mut self, d: usize) {
+        let ss = &self.m.flow;
+        if !self.resumes() {
+            self.block(ss, d);
+            return;
+        }
+        let total = ss.iter().filter(|s| crate::check::continues_as_new(s)).count();
+        let mut k = 0;
+        // the statements under the `if` that is open run when dd_from is at most this
+        let mut open: Option<usize> = None;
+        for s in ss {
+            let can = crate::check::continues_as_new(s);
+            let guard = if can { Some(k + 1) } else if k < total { Some(k) } else { None };
+            if open != guard {
+                if open.is_some() {
+                    self.line(d, "}");
+                }
+                match guard {
+                    Some(0) => self.line(d, "if (dd_resume === null) {"),
+                    Some(g) => self.line(d, &format!("if (dd_from <= {g}) {{")),
+                    None => {}
+                }
+                open = guard;
+            }
+            if can {
+                k += 1;
+                self.can = Some(k);
+            }
+            self.stmt(s, if open.is_some() { d + 1 } else { d });
+            if matches!(s.kind, TK::Succeed { .. } | TK::Fail { .. } | TK::Break) {
+                break;
+            }
+        }
+        if open.is_some() {
+            self.line(d, "}");
+        }
+    }
+
+    /// At the start of a round of the `k`-th loop at the top of the flow but its first in this
+    /// run: once the history is long, go on in a new run, with the variables, the round, and
+    /// `more` (the loop's list, and what it has yielded).
+    fn continue_as_new(&mut self, d: usize, site: usize, k: usize, more: &str) {
+        let fname = workflow_type(self.m);
+        self.line(
+            d,
+            &format!("if (dd_loop_{site} > dd_first_{site} && dd.historyIsLong()) await continueAsNew<typeof {fname}>(input, {{ at: {k}, round: dd_loop_{site}, vars: dd_vars(){more} }});"),
+        );
     }
 
     fn rounds_expr(&self) -> String {
@@ -1732,7 +1858,15 @@ impl<'a> Gen<'a> {
             }
             TK::Repeat { times, body } => {
                 let site = s.site;
-                self.line(d, &format!("loop_{site}: for (let dd_loop_{site} = 0; dd_loop_{site} < {times}; dd_loop_{site}++) {{"));
+                let can = self.can.take();
+                if let Some(k) = can {
+                    self.line(d, &format!("// line {}: a round starts in a new run once the history is long", s.line));
+                    self.line(d, &format!("const dd_first_{site} = dd.carried(dd_resume, {k}, \"round\", () => 0);"));
+                    self.line(d, &format!("loop_{site}: for (let dd_loop_{site} = dd_first_{site}; dd_loop_{site} < {times}; dd_loop_{site}++) {{"));
+                    self.continue_as_new(d + 1, site, k, "");
+                } else {
+                    self.line(d, &format!("loop_{site}: for (let dd_loop_{site} = 0; dd_loop_{site} < {times}; dd_loop_{site}++) {{"));
+                }
                 self.loops.push(site);
                 self.block(body, d + 1);
                 self.loops.pop();
@@ -1740,21 +1874,36 @@ impl<'a> Gen<'a> {
             }
             TK::For { var, list, max, parallel, body, result, locals } => {
                 let site = s.site;
+                let can = self.can.take();
                 let items = format!("dd_items_{site}");
                 self.line(d, "{");
                 self.line(d + 1, &format!("// line {}: for {var} in {}", s.line, list.show()));
                 let lx = self.expr(list);
-                self.line(d + 1, &format!("const {items} = {lx};"));
+                match can {
+                    // a run that goes on in the loop takes up the list the loop began with
+                    Some(k) => self.line(d + 1, &format!("const {items} = dd.carried(dd_resume, {k}, \"items\", () => {lx});")),
+                    None => self.line(d + 1, &format!("const {items} = {lx};")),
+                }
                 self.line(
                     d + 1,
                     &format!("if ({items}.length > {max}) throw dd.fail(\"Dandori.TooManyItems\", {});", q(&format!("line {}: the list has more than {max} items", s.line))),
                 );
                 match parallel {
                     None => {
-                        if result.is_some() {
-                            self.line(d + 1, &format!("const dd_out_{site}: unknown[] = [];"));
+                        match (result, can) {
+                            (Some(_), Some(k)) => self.line(d + 1, &format!("const dd_out_{site}: unknown[] = dd.carried(dd_resume, {k}, \"out\", () => []);")),
+                            (Some(_), None) => self.line(d + 1, &format!("const dd_out_{site}: unknown[] = [];")),
+                            (None, _) => {}
                         }
-                        self.line(d + 1, &format!("loop_{site}: for (let dd_loop_{site} = 0; dd_loop_{site} < {items}.length; dd_loop_{site}++) {{"));
+                        if let Some(k) = can {
+                            self.line(d + 1, "// a round starts in a new run once the history is long");
+                            self.line(d + 1, &format!("const dd_first_{site} = dd.carried(dd_resume, {k}, \"round\", () => 0);"));
+                            self.line(d + 1, &format!("loop_{site}: for (let dd_loop_{site} = dd_first_{site}; dd_loop_{site} < {items}.length; dd_loop_{site}++) {{"));
+                            let more = if result.is_some() { format!(", items: {items}, out: dd_out_{site}") } else { format!(", items: {items}") };
+                            self.continue_as_new(d + 2, site, k, &more);
+                        } else {
+                            self.line(d + 1, &format!("loop_{site}: for (let dd_loop_{site} = 0; dd_loop_{site} < {items}.length; dd_loop_{site}++) {{"));
+                        }
                         self.line(d + 2, &format!("{} = {items}[dd_loop_{site}];", self.var(var)));
                         self.loops.push(site);
                         self.block(body, d + 2);

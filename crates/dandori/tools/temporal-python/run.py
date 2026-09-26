@@ -11,8 +11,10 @@
 #
 # Once the runs are over, the history of each is replayed with the same code, which must not find
 # it nondeterministic; with a histories directory, the histories are also written there as JSON,
-# one file a run. With --replay, it only replays the histories of a directory (written by this
-# runner, or by the TypeScript one) with the code, and writes for each file the error, or None.
+# one file a run: <workflow id>.json, and for each run that went on from it after a
+# Continue-As-New, <workflow id>.<n>.json (the second is 2). With --replay, it only replays the
+# histories of a directory (written by this runner, or by the TypeScript one) with the code, and
+# writes for each file the error, or None.
 #
 # runs.json: { "workflow": type, "own": [ { "name", "method", "callback" } ], "rules": [activity],
 #              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
@@ -34,7 +36,9 @@
 # The server keeps real time, so the copy of the generated code that runs here waits far less:
 # every duration of the workflow's timers (dd.seconds) is at most 10 ms, and an activity or a
 # child workflow gets 2 seconds before it times out. The rounds of `for … in parallel` run one at
-# a time here, so that the calls come in the order the reference interpreter makes them.
+# a time here, so that the calls come in the order the reference interpreter makes them. A loop at
+# the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
+# run, since the history counts as long from one event on here (dd.CONTINUE_AT).
 
 from __future__ import annotations
 
@@ -106,8 +110,25 @@ def child_stand_ins(children: list[dict[str, Any]]) -> str:
     return "\n".join(out) + "\n"
 
 
+def workflow_id_of(file: str) -> str:
+    """The workflow id of a history's file: <workflow id>.json, or <workflow id>.<n>.json for a run that went on from it."""
+    return re.sub(r"(\.\d+)?\.json$", "", file)
+
+
+async def runs_of(client: Any, workflow_id: str, first_run_id: str | None) -> list[WorkflowHistory]:
+    """The histories of a workflow's runs, from the first: a run that went on in a new one (Continue-As-New) is followed by that one."""
+    out = []
+    run_id = first_run_id
+    while run_id:
+        history = await client.get_workflow_handle(workflow_id, run_id=run_id).fetch_history()
+        out.append(history)
+        last = history.events[-1]
+        run_id = last.workflow_execution_continued_as_new_event_attributes.new_execution_run_id if last.HasField("workflow_execution_continued_as_new_event_attributes") else None
+    return out
+
+
 async def replay(package: str, histories: list[Any]) -> dict[str, str | None]:
-    """Replay histories with the generated worker's replay: the error of each that it finds nondeterministic, or None."""
+    """Replay histories with the generated worker's replay: for each workflow, the error of a run of it that it finds nondeterministic, or None."""
     worker = importlib.import_module(f"{package}.worker")
     why = dict(await worker.replay(histories))
     return {h.workflow_id: why.get(h.workflow_id) for h in histories}
@@ -317,28 +338,31 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None)
                 # what the query and the search attribute say of the cases once the run is over
                 cases = (await client.status(env.client, r["id"]))["cases"]
                 shown = (await handle.describe()).typed_search_attributes.get(cases_key)
-                return {"end": end, "cases": cases, "shown": list(shown) if shown is not None else None, "history": await handle.fetch_history()}
+                return {"end": end, "cases": cases, "shown": list(shown) if shown is not None else None, "histories": await runs_of(env.client, r["id"], handle.first_execution_run_id)}
 
             ends = await asyncio.gather(*(one(r) for r in spec["runs"]))
-            histories = [got.pop("history") for got in ends]
+            histories = []
+            for got in ends:
+                for n, h in enumerate(got.pop("histories")):
+                    histories.append((h.workflow_id + (".json" if n == 0 else f".{n + 1}.json"), h))
             for r, got in zip(spec["runs"], ends):
                 results.append({"steps": runs[r["id"]]["steps"], **got})
-            # the generated client finds every run by the workflow's type (the server lists them a moment late)
+            # the generated client finds every run by the workflow's type, the ones that went on in a new run too (the server lists them a moment late)
             for tries in range(51):
                 found = [h.workflow_id async for h in client.histories(env.client, f"WorkflowType = '{client.WORKFLOW_TYPE}'")]
-                if len(found) == len(spec["runs"]):
+                if len(found) == len(histories):
                     break
                 if tries == 50:
-                    raise RuntimeError(f"the client's histories found {len(found)} run(s) of {len(spec['runs'])}")
+                    raise RuntimeError(f"the client's histories found {len(found)} run(s) of {len(histories)}")
                 await asyncio.sleep(0.1)
         # the same code, replaying what it did, must find it deterministic
-        for wid, error in (await replay(package, histories)).items():
+        for wid, error in (await replay(package, [h for _, h in histories])).items():
             if error is not None:
                 raise RuntimeError(f"replaying the history of {wid} with the same code: {error}")
         if histories_dir is not None:
             os.makedirs(histories_dir, exist_ok=True)
-            for h in histories:
-                with open(os.path.join(histories_dir, f"{h.workflow_id}.json"), "w", encoding="utf-8") as f:
+            for name, h in histories:
+                with open(os.path.join(histories_dir, name), "w", encoding="utf-8") as f:
                     f.write(h.to_json() + "\n")
             with open(os.path.join(histories_dir, "spec.json"), "w", encoding="utf-8") as f:
                 json.dump({"children": spec.get("children", [])}, f, ensure_ascii=False)
@@ -359,8 +383,8 @@ def main() -> None:
         with open(runs_file, encoding="utf-8") as f:
             spec = json.load(f)
     # a copy of the package: the rounds of a parallel loop run one at a time, the timers are
-    # short, so are the activities' and the child workflows' timeouts, and the child workflows'
-    # stand-ins sit beside the workflow
+    # short, so are the activities' and the child workflows' timeouts, every history is long
+    # enough to go on in a new run, and the child workflows' stand-ins sit beside the workflow
     work = tempfile.mkdtemp(prefix="dandori-temporal-python-")
     package = os.path.basename(os.path.normpath(package_dir))
     copy = os.path.join(work, package)
@@ -378,6 +402,8 @@ def main() -> None:
     marker = '"""A duration of the workflow\'s timers, in seconds: every wait of the workflow goes through here."""\n    return n\n'
     assert marker in text, "runtime.py has no seconds() to shorten"
     text = text.replace(marker, marker.replace("return n", "return min(n, 0.01)"))
+    assert "\nCONTINUE_AT = 10000\n" in text, "runtime.py has no CONTINUE_AT to lower"
+    text = text.replace("\nCONTINUE_AT = 10000\n", "\nCONTINUE_AT = 1\n")
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     with open(os.path.join(copy, "dd_test_children.py"), "w", encoding="utf-8") as f:
@@ -393,9 +419,9 @@ def main() -> None:
             histories = []
             for name in files:
                 with open(os.path.join(histories_dir, name), encoding="utf-8") as f:
-                    histories.append(WorkflowHistory.from_json(name[: -len(".json")], f.read()))
+                    histories.append(WorkflowHistory.from_json(workflow_id_of(name), f.read()))
             got = asyncio.run(replay(package, histories))
-            results: Any = [{"file": name, "error": got.get(name[: -len(".json")], "not replayed")} for name in files]
+            results: Any = [{"file": name, "error": got.get(workflow_id_of(name), "not replayed")} for name in files]
         else:
             results = asyncio.run(run_all(package, spec, histories_dir))
     finally:

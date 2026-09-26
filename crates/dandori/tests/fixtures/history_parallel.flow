@@ -1,0 +1,13 @@
+workflow look_at_all v1
+
+inputs
+  ids : list[string]
+
+task look(id: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:look"
+  idempotent
+
+# A parallel loop does not go on in a new run on Temporal: its rounds are all in one history.
+flow
+  for id in ids at most 10000 in parallel
+    look(id: id)

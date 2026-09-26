@@ -1,11 +1,13 @@
 # Worker Deployment Versioning on a real Temporal server (the dev server): two builds of one
 # workflow, A and B, whose workers are versions of one deployment through the generated
 # worker.py. A run that starts on A and waits while B becomes the current version must end on A's
-# code; a run that starts after must run on B's. The Python twin of ../temporal/versions.mjs.
+# code, the rounds it runs in a new run after a Continue-As-New too; a run that starts after must
+# run on B's. The Python twin of ../temporal/versions.mjs.
 #
 #   .venv/bin/python versions.py <generated package A> <generated package B> <results.json>
 #
-# results.json: { "buildIds": [A's, B's], "notified": { "<run>": [the texts it notified] } }
+# results.json: { "buildIds": [A's, B's], "notified": { "<run>": [the texts it notified] },
+#                 "runs": { "<run>": how many runs it took } }
 
 from __future__ import annotations
 
@@ -31,18 +33,15 @@ Runtime.set_default(Runtime(telemetry=TelemetryConfig(logging=LoggingConfig(filt
 DEPLOYMENT = "dandori-versions"
 
 # what each run did: the ids of its callbacks, and the texts it notified
-callbacks: dict[str, str] = {}
+callbacks: dict[str, list[str]] = {}
 notified: dict[str, list[str]] = {}
 
 
 class Own:
-    """The tasks of examples/review, as the scenario wants them: scoring holds each application."""
-
-    async def 審査する(self, args: dict[str, Any]) -> Any:
-        return {"点数": 50, "判断": "保留"}
+    """The tasks of tests/versions/approvals.flow."""
 
     async def 承認を求める(self, args: dict[str, Any]) -> None:
-        callbacks[activity.info().workflow_id] = args["callback_id"]
+        callbacks.setdefault(activity.info().workflow_id, []).append(args["callback_id"])
 
     async def 通知する(self, args: dict[str, Any]) -> None:
         notified.setdefault(activity.info().workflow_id, []).append(args["本文"])
@@ -77,29 +76,42 @@ async def main(packages: list[str], out_file: str) -> None:
 
             await until(f"{worker.BUILD_ID} can be the current version", set_it)
 
-        inputs = {"申込": {"id": "申込-1", "金額": 1000}}
+        async def runs_of(workflow_id: str, run_id: str | None) -> int:
+            """How many runs a workflow took: the first, and each that went on from the one before (Continue-As-New)."""
+            n = 0
+            while run_id:
+                n += 1
+                history = await env.client.get_workflow_handle(workflow_id, run_id=run_id).fetch_history()
+                last = history.events[-1]
+                run_id = last.workflow_execution_continued_as_new_event_attributes.new_execution_run_id if last.HasField("workflow_execution_continued_as_new_event_attributes") else None
+            return n
+
+        def waiting(run: str, n: int) -> Callable[[], Awaitable[bool]]:
+            async def ok() -> bool:
+                return len(callbacks.get(run, [])) == n
+
+            return ok
+
+        inputs = {"申込": {"id": "申込-1"}}
         # no workflow kept in the workers' cache: a run goes where the server sends it, not where it was
         async with Worker(env.client, **worker_a.worker_options(Own(), deployment=DEPLOYMENT), max_cached_workflows=0):
             await current(worker_a)
             first = await client_a.start(env.client, "run-a", inputs)
-
-            async def first_waits() -> Any:
-                return callbacks.get("run-a")
-
-            await until("the first run waits for its approval", first_waits)
+            await until("the first run waits for its approval", waiting("run-a", 1))
             async with Worker(env.client, **worker_b.worker_options(Own(), deployment=DEPLOYMENT), max_cached_workflows=0):
                 await current(worker_b)
                 second = await client_b.start(env.client, "run-b", inputs)
-
-                async def second_waits() -> Any:
-                    return callbacks.get("run-b")
-
-                await until("the second run waits for its approval", second_waits)
-                # the first run, pinned to A, goes on with A's code; the second, started on B, with B's
-                await client_a.answer(env.client, callbacks["run-a"], {"ok": {"承認者": "a"}})
-                await client_b.answer(env.client, callbacks["run-b"], {"ok": {"承認者": "b"}})
+                await until("the second run waits for its approval", waiting("run-b", 1))
+                # the first run, pinned to A, goes on with A's code, in its next run too; the second, started on B, with B's
+                await client_a.answer(env.client, callbacks["run-a"][0], {"ok": {"承認者": "a"}})
+                await client_b.answer(env.client, callbacks["run-b"][0], {"ok": {"承認者": "b"}})
+                await until("the first run waits for its second approval", waiting("run-a", 2))
+                await until("the second run waits for its second approval", waiting("run-b", 2))
+                await client_a.answer(env.client, callbacks["run-a"][1], {"ok": {"承認者": "a"}})
+                await client_b.answer(env.client, callbacks["run-b"][1], {"ok": {"承認者": "b"}})
                 await asyncio.gather(first.result(), second.result())
-        out = {"buildIds": [worker_a.BUILD_ID, worker_b.BUILD_ID], "notified": notified}
+                runs = {"run-a": await runs_of("run-a", first.first_execution_run_id), "run-b": await runs_of("run-b", second.first_execution_run_id)}
+        out = {"buildIds": [worker_a.BUILD_ID, worker_b.BUILD_ID], "notified": notified, "runs": runs}
     finally:
         await env.shutdown()
     with open(out_file, "w", encoding="utf-8") as f:
@@ -109,12 +121,18 @@ async def main(packages: list[str], out_file: str) -> None:
 
 if __name__ == "__main__":
     dir_a, dir_b, out_file = sys.argv[1:4]
-    # the two builds are two packages of their own
+    # the two builds are two packages of their own, where every history is long enough to go on in a new run
     work = tempfile.mkdtemp(prefix="dandori-versions-")
     names = []
     for i, d in enumerate([dir_a, dir_b]):
         name = f"build_{'ab'[i]}"
         shutil.copytree(d, os.path.join(work, name))
+        runtime = os.path.join(work, name, "runtime.py")
+        with open(runtime, encoding="utf-8") as f:
+            text = f.read()
+        assert "\nCONTINUE_AT = 10000\n" in text, "runtime.py has no CONTINUE_AT to lower"
+        with open(runtime, "w", encoding="utf-8") as f:
+            f.write(text.replace("\nCONTINUE_AT = 10000\n", "\nCONTINUE_AT = 1\n"))
         names.append(name)
     sys.path.insert(0, work)
     try:

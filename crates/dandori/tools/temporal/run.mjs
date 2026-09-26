@@ -11,8 +11,10 @@
 //
 // Once the runs are over, the history of each is replayed with the same code, which must not
 // find it nondeterministic; with a histories directory, the histories are also written there as
-// JSON, one file a run. With --replay, it only replays the histories of a directory (written by
-// this runner, or by the Python one) with the code, and writes for each file the error, or null.
+// JSON, one file a run: <workflow id>.json, and for each run that went on from it after a
+// Continue-As-New, <workflow id>.<n>.json (the second is 2). With --replay, it only replays the
+// histories of a directory (written by this runner, or by the Python one) with the code, and
+// writes for each file the error, or null.
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
@@ -34,7 +36,9 @@
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
 // workflow gets 2 seconds before it times out. The rounds of `for … in parallel` run one at a
-// time here, so that the calls come in the order the reference interpreter makes them.
+// time here, so that the calls come in the order the reference interpreter makes them. A loop at
+// the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
+// run, since the history counts as long from one event on here (dd.CONTINUE_AT).
 
 import fs from "node:fs";
 import os from "node:os";
@@ -63,7 +67,8 @@ const LATE_MS = 5000;
 
 // A copy of the generated code: Node runs the activities' TypeScript by stripping the types and
 // wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
-// timers are short, and so are the activities' and the child workflows' timeouts.
+// timers are short, and so are the activities' and the child workflows' timeouts; every history
+// is long enough to go on in a new run.
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-temporal-"));
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
@@ -78,6 +83,8 @@ for (const f of fs.readdirSync(dir)) {
   if (f === "runtime.ts") {
     if (!text.includes("return seconds * 1000;")) throw new Error("runtime.ts has no ms() to shorten");
     text = text.replace("return seconds * 1000;", "return Math.min(seconds * 1000, 10);");
+    if (!text.includes("export const CONTINUE_AT = 10000;")) throw new Error("runtime.ts has no CONTINUE_AT to lower");
+    text = text.replace("export const CONTINUE_AT = 10000;", "export const CONTINUE_AT = 1;");
   }
   fs.writeFileSync(path.join(work, f), text);
 }
@@ -107,15 +114,20 @@ const rulesFile = path.join(work, "rules.ts");
 if (fs.existsSync(rulesFile)) fs.writeFileSync(rulesFile, "export const rules = {};\n");
 const { replay } = await import(path.join(work, "worker.ts"));
 
+/** The workflow id of a history's file: <workflow id>.json, or <workflow id>.<n>.json for a run that went on from it. */
+function workflowIdOf(file) {
+  return file.replace(/(\.\d+)?\.json$/, "");
+}
+
 if (replaying) {
-  // the generated worker's replay, which tells the runs it finds nondeterministic
+  // the generated worker's replay, which tells the workflows it finds a nondeterministic run of
   const files = fs.readdirSync(historiesDir).filter((f) => f.endsWith(".json") && f !== "spec.json").sort();
   const failed = await replay(
-    files.map((f) => ({ workflowId: f.replace(/\.json$/, ""), history: historyFromJSON(JSON.parse(fs.readFileSync(path.join(historiesDir, f), "utf8"))) })),
+    files.map((f) => ({ workflowId: workflowIdOf(f), history: historyFromJSON(JSON.parse(fs.readFileSync(path.join(historiesDir, f), "utf8"))) })),
     { workflowsPath, bundlerOptions },
   );
   const why = new Map(failed.map((x) => [x.workflowId, x.error]));
-  fs.writeFileSync(outFile, JSON.stringify(files.map((f) => ({ file: f, error: why.get(f.replace(/\.json$/, "")) ?? null })), null, 2) + "\n");
+  fs.writeFileSync(outFile, JSON.stringify(files.map((f) => ({ file: f, error: why.get(workflowIdOf(f)) ?? null })), null, 2) + "\n");
   fs.rmSync(work, { recursive: true, force: true });
   process.exit(0);
 }
@@ -269,6 +281,17 @@ activities.dd_test_child = async ({ type, args }) => {
   return reply(run, ans);
 };
 
+/** The histories of a workflow's runs, from the first: a run that went on in a new one (Continue-As-New) is followed by that one. */
+async function runsOf(workflowId, firstRunId) {
+  const out = [];
+  for (let runId = firstRunId; runId; ) {
+    const history = await env.client.workflow.getHandle(workflowId, runId).fetchHistory();
+    out.push(history);
+    runId = history.events.at(-1)?.workflowExecutionContinuedAsNewEventAttributes?.newExecutionRunId;
+  }
+  return out;
+}
+
 // the server fires a timer up to a second late unless told to shift its timers less
 let histories = [];
 env = await TestWorkflowEnvironment.createLocal({
@@ -311,11 +334,11 @@ try {
         // what the query and the search attribute say of the cases once the run is over
         const cases = (await status(env.client, r.id)).cases;
         const shown = (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;
-        return { end, cases, shown, history: await handle.fetchHistory() };
+        return { end, cases, shown, histories: await runsOf(r.id, handle.firstExecutionRunId) };
       }),
     );
     spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i].end, cases: ends[i].cases, shown: ends[i].shown }));
-    histories = spec.runs.map((r, i) => ({ workflowId: r.id, history: ends[i].history }));
+    histories = spec.runs.flatMap((r, i) => ends[i].histories.map((history, n) => ({ workflowId: r.id, file: n === 0 ? `${r.id}.json` : `${r.id}.${n + 1}.json`, history })));
   };
   // every worker runs until the runs are done
   let chain = runAll;
@@ -324,12 +347,12 @@ try {
     chain = () => w.runUntil(inner);
   }
   await chain();
-  // the generated client finds every run by the workflow's type (the server lists them a moment late)
+  // the generated client finds every run by the workflow's type, the ones that went on in a new run too (the server lists them a moment late)
   for (let tries = 0; ; tries++) {
     const found = [];
     for await (const h of listed(env.client, `WorkflowType = '${WORKFLOW_TYPE}'`)) found.push(h.workflowId);
-    if (found.length === spec.runs.length) break;
-    if (tries === 50) throw new Error(`the client's histories found ${found.length} run(s) of ${spec.runs.length}`);
+    if (found.length === histories.length) break;
+    if (tries === 50) throw new Error(`the client's histories found ${found.length} run(s) of ${histories.length}`);
     await new Promise((ok) => setTimeout(ok, 100));
   }
   // the same code, replaying what it did with the generated worker's replay, must find it deterministic
@@ -337,7 +360,7 @@ try {
   if (failed.length > 0) throw new Error(`replaying with the same code: ${failed.map((x) => `${x.workflowId}: ${x.error}`).join("; ")}`);
   if (historiesDir) {
     fs.mkdirSync(historiesDir, { recursive: true });
-    for (const h of histories) fs.writeFileSync(path.join(historiesDir, `${h.workflowId}.json`), historyToJSON(h.history) + "\n");
+    for (const h of histories) fs.writeFileSync(path.join(historiesDir, h.file), historyToJSON(h.history) + "\n");
     fs.writeFileSync(path.join(historiesDir, "spec.json"), JSON.stringify({ children: spec.children ?? [] }) + "\n");
   }
 } finally {

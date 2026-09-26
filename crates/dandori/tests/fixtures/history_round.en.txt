@@ -1,0 +1,15 @@
+build --target asl:
+error[E040]: tests/fixtures/history_round.flow:1:1: on Step Functions, an execution of this workflow can write up to about 12600610 history events, past the limit of 25000; lower the loop counts, or start a new execution to continue
+     1 | workflow poll_in_rounds v1
+build --target temporal:
+error[E040]: tests/fixtures/history_round.flow:1:1: on Temporal, an execution of this workflow can write up to about 64008 history events, past the limit of 51200; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop; lower the loop counts, or start a new execution to continue
+     1 | workflow poll_in_rounds v1
+build --target temporal-python:
+error[E040]: tests/fixtures/history_round.flow:1:1: on Temporal, an execution of this workflow can write up to about 64008 history events, past the limit of 51200; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop; lower the loop counts, or start a new execution to continue
+     1 | workflow poll_in_rounds v1
+build --target durable:
+error[E040]: tests/fixtures/history_round.flow:1:1: on Lambda durable functions, an execution of this workflow can take up to about 1800000 durable operations, past the limit of 3000; lower the loop counts, or start a new execution to continue
+     1 | workflow poll_in_rounds v1
+build --target argo:
+error[E040]: tests/fixtures/history_round.flow:1:1: on Argo Workflows, an execution of this workflow can make up to about 36002138 nodes, past 10000; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue
+     1 | workflow poll_in_rounds v1
