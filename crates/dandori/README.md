@@ -133,6 +133,30 @@ arithmetic, so a range travels as it is, from where the value comes to where it 
 Temporal, adding a range or narrowing one changes what a running workflow does when its values
 fall outside, so it ships as a new version (`v2`) or through Worker Deployment Versioning.
 
+### Child flows
+
+A task whose child workflow is written in dandori too says where its `.flow` is:
+`flow "arrange_delivery.flow"`. The checker checks the child on its own and holds the task to it
+(E015): the task passes every input the child needs, of a type and in a range the input takes;
+its answer is a record whose fields are the child's outputs; and every error it declares is one
+the child fails with. The two files declare their records and enums each on their own, so the
+types are compared by shape: a record by its fields, an enum by its values, a range by what it
+holds, in the direction the values go.
+
+```
+error[E015]: tests/fixtures/children.flow:46:1: the parameter `申込` is not what `査定` takes as its input `申込`: in the field `区分` of `申込`, `団体` of `区分たち` is not a value of `区分`
+    46 | task 値の多い(申込: 団体もある申込) -> 結果
+error[E015]: tests/fixtures/children.flow:52:1: `査定` answers `点` with what the field `点` of `狭い結果` does not take: it is `>=0 <=100`, and `>=0 <=50` is taken
+    52 | task 答えの合わない(申込: 申込) -> 狭い結果
+```
+
+The child's names come from its `.flow`: on Temporal the task starts the child's workflow type
+(`arrange_delivery_v1`) on its task queue (the same name, where the child's generated worker
+polls), and on Argo a Workflow of the child's WorkflowTemplate. Step Functions and Lambda
+durable functions still need the ARN the child is deployed as (`state machine`, `durable
+function`). A flow that runs itself, directly or through others, is refused: there is no
+recursion.
+
 ### What a task calls
 
 | The task says | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |
@@ -143,6 +167,7 @@ fall outside, so it ships as a new version (`v2`) or through Worker Deployment V
 | `agent "<instructions>"` and `model "<model>"` | HTTP Task to OpenAI's Responses API | an activity dandori writes, with OpenAI's Agents SDK | a step dandori writes, with the Agents SDK | the same, with the Agents SDK | the same, with the Agents SDK for Python |
 | `agent claude "<instructions>"` and `model "<model>"` | HTTP Task to Claude's Messages API | an activity dandori writes, with Anthropic's SDK | a step dandori writes, with Anthropic's SDK | the same, with Anthropic's SDK | the same, with Anthropic's SDK for Python |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
+| `flow "<path>"` ([Child flows](#child-flows)) | nested execution, with `state machine` | child workflow `<name>_v<n>` on the child's task queue | invoke, with `durable function` | a Workflow from the child's WorkflowTemplate | a function you write |
 | `workflow "<type>"` | | child workflow | | | |
 | `durable function "<arn>"` | | | invoke of another durable function | | |
 | `workflow template "<name>"` | | | | a Workflow from that WorkflowTemplate | |
@@ -242,7 +267,7 @@ brought in the way the platform does.
 |---|---|---|---|
 | a hotel booking that holds a card and captures at check-out | [hotel](examples/hotel/hotel.flow) | [temporal](examples/hotel/temporal/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
 | an order in a warehouse's system, reminded, shipped, delivered | [order](examples/order/order.flow) | [temporal](examples/order/temporal/order.flow) | [pydantic-graph](examples/order/pydantic-graph/order.flow) |
-| reserving the lines of an order side by side, packing, delivery | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
+| reserving the lines of an order side by side, packing, delivery (a child flow, [arrange_delivery](examples/fulfillment/arrange_delivery.flow), which each version runs) | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
 | agents that read an inquiry and draft a reply, and a rule that routes it | [inquiry](examples/inquiry/inquiry.flow) | [temporal](examples/inquiry/temporal/inquiry.flow) | [pydantic-graph](examples/inquiry/pydantic-graph/inquiry.flow) |
 | an application scored by other workers, and a person's approval | [review](examples/review/review.flow) | [temporal](examples/review/temporal/review.flow) | [pydantic-graph](examples/review/pydantic-graph/review.flow) |
 
@@ -258,7 +283,8 @@ brought in the way the platform does.
   webhook in hotel, the carrier in order); a request that is answered later stays a `callback`,
   answered by the Update the generated client sends. Hotel and order release what they hold
   when the workflow is cancelled (`on cancel`); fulfillment and review send work to other task
-  queues; inquiry calls its rule as a local activity; order's reminder loop goes on in a new
+  queues, and fulfillment falls back to the standard carrier when its child flow finds no
+  next-day van (the child's `fail NoVan`, which the task declares); inquiry calls its rule as a local activity; order's reminder loop goes on in a new
   run as its history grows.
 - **For pydantic-graph**, the graph runs in the Python process that takes the input: a call to
   an HTTP API or an agent is a function dandori writes, the rules run in the process, the rest
@@ -374,7 +400,11 @@ also runs with its workflow in one language and its activities in the other, bot
 other language's runner serves the activities on the same server, and answers the callbacks
 with its own client. In a flow with `on cancel`, the scenarios
 also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
-its activity until the server cancels that too.
+its activity until the server cancels that too. A workflow that runs another `.flow` as its
+child ([tests/children](tests/children)) also runs with the child's generated workflow in place of
+a stand-in, on one server, with the two in one language and in the two crossed: each run must end
+as the reference interpreter says when it is given the child's end, which the reference
+interpreter decides too, from the input the parent passes.
 
 On Argo, the controller runs the generated WorkflowTemplate, but the runner plays the pods:
 each pod waits for a scheduler the cluster does not have, and the runner does what its

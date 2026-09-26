@@ -5,7 +5,37 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::syntax::{self, Kind};
-use std::path::Path;
+use std::cell::RefCell;
+use std::path::{Path, PathBuf};
+
+thread_local! {
+    /// The `.flow`s being checked, the outermost first: a child is checked inside its parent's check.
+    static CHECKING: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Why a child `.flow` could not be read into a model.
+pub enum ChildTrouble {
+    /// it is one of the flows being checked: the flows that run each other, from the outermost
+    Cycle(Vec<PathBuf>),
+    Unreadable(String),
+    /// it does not pass check: its errors
+    Refused(Vec<Diag>),
+}
+
+/// The checked model of a child `.flow`, checked as it would be on its own.
+pub fn child(path: &Path) -> Result<Model, ChildTrouble> {
+    let me = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let chain = CHECKING.with(|c| c.borrow().clone());
+    if let Some(at) = chain.iter().position(|p| *p == me) {
+        return Err(ChildTrouble::Cycle(chain[at..].iter().cloned().chain(std::iter::once(me)).collect()));
+    }
+    let src = std::fs::read_to_string(path).map_err(|e| ChildTrouble::Unreadable(e.to_string()))?;
+    let checked = check_source(&src, path);
+    match checked.model {
+        Some(m) => Ok(m),
+        None => Err(ChildTrouble::Refused(checked.diags.into_iter().filter(crate::flow::severity_is_error).collect())),
+    }
+}
 
 pub struct Checked {
     pub model: Option<Model>,
@@ -19,6 +49,13 @@ pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
 }
 
 pub fn check_source(src: &str, path: &Path) -> Checked {
+    CHECKING.with(|c| c.borrow_mut().push(path.canonicalize().unwrap_or_else(|_| path.to_path_buf())));
+    let out = check_one(src, path);
+    CHECKING.with(|c| c.borrow_mut().pop());
+    out
+}
+
+fn check_one(src: &str, path: &Path) -> Checked {
     let prog = match syntax::parse(src) {
         Ok(p) => p,
         Err(d) => return Checked { model: None, diags: vec![d] },

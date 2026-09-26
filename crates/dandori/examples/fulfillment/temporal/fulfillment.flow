@@ -54,10 +54,11 @@ task release_stock(id: string)
   http DELETE "https://warehouse.example.com/v1/reservations/{id}"
   idempotent
 
-# The delivery team's workflow arranges the delivery, on the workers of its own task queue.
+# The delivery team's workflow arranges the delivery, on the workers of its own task queue. It is
+# written as a .flow of its own, and the checker holds this task to its inputs, outputs and errors.
 task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
-  workflow "arrange_delivery"
-  queue "delivery"
+  flow "../arrange_delivery.flow"
+  errors NoVan
 
 # The packing crew's app gets the request and the callback's id from the function you write,
 # and answers the callback when the boxes are packed.
@@ -99,6 +100,9 @@ flow
         none => pass
     none => pass
   let delivery = arrange_delivery(order_id: order.id, carrier: decision.carrier, recipient: recipient, extra: order.extra)
+    on NoVan =>
+      let delivery = arrange_delivery(order_id: order.id, carrier: standard, recipient: recipient, extra: order.extra)
+        on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
     on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
   let packed = wait_for_packing(order_id: order.id, reservations: results)
     on timeout => fail PackingLate "No word of the packing in two days"

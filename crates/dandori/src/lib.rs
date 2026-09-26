@@ -8,6 +8,7 @@ pub mod argo;
 pub mod asl;
 pub mod aws;
 pub mod check;
+pub mod contract;
 pub mod diag;
 pub mod flow;
 pub mod interp;

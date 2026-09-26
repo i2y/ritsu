@@ -243,6 +243,14 @@ pub enum TaskMachine {
     Observes,
 }
 
+/// Another `.flow` that a task runs as its child workflow: where it is, and its checked model,
+/// which the task's parameters, answer and errors are held to.
+#[derive(Clone, Debug)]
+pub struct ChildFlow {
+    pub path: String,
+    pub model: Model,
+}
+
 #[derive(Clone, Debug)]
 pub struct TaskDef {
     pub name: String,
@@ -274,6 +282,8 @@ pub struct TaskDef {
     /// Temporal: the task calls nothing; it waits for a value sent to the workflow by its id
     /// and the task's name (an Update), which the other platforms cannot do
     pub event: bool,
+    /// the child workflow is this `.flow`
+    pub flow: Option<Box<ChildFlow>>,
     pub line: usize,
 }
 

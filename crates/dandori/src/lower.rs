@@ -14,6 +14,8 @@ const TYPE_HINT_JA: &str = "型は int・string・bool・timestamp・json・mone
 
 pub struct Lowerer<'a> {
     prog: &'a Program,
+    /// the directory of the `.flow`, which the paths of rules and child flows start from
+    dir: std::path::PathBuf,
     pub diags: Vec<Diag>,
     m: Model,
     enum_ix: BTreeMap<String, EnumId>,
@@ -48,6 +50,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     };
     let mut lw = Lowerer {
         prog,
+        dir: file.parent().unwrap_or(Path::new(".")).to_path_buf(),
         diags: vec![],
         m: Model {
             name,
@@ -279,6 +282,34 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// The `.flow` a task runs as its child, checked on its own (E015 when it cannot be).
+    fn child_flow(&mut self, path: &str, sp: Span) -> Option<Box<ChildFlow>> {
+        use crate::check::ChildTrouble;
+        let (en, ja, note) = match crate::check::child(&self.dir.join(path)) {
+            Ok(model) => return Some(Box::new(ChildFlow { path: path.to_string(), model })),
+            Err(ChildTrouble::Cycle(chain)) => {
+                let names: Vec<String> = chain.iter().map(|p| p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).collect();
+                (
+                    format!("`{path}` runs this flow again ({}); a flow cannot run itself, directly or through others", names.join(" → ")),
+                    format!("`{path}` はこのフローをまた走らせます（{}）。フローは自分を、直接にもほかのフローを通しても走らせられません", names.join(" → ")),
+                    None,
+                )
+            }
+            Err(ChildTrouble::Unreadable(msg)) => (format!("could not read `{path}`"), format!("`{path}` を読めませんでした"), Some((msg.clone(), msg))),
+            Err(ChildTrouble::Refused(diags)) => (
+                format!("`{path}` does not pass check"),
+                format!("`{path}` は検査を通りません"),
+                diags.first().map(|d| (format!("line {}: {} ({})", d.line, d.en, d.code), format!("{} 行目：{}（{}）", d.line, d.ja, d.code))),
+            ),
+        };
+        let mut d = e("E015", sp, en, ja);
+        if let Some((nen, nja)) = note {
+            d = d.note(nen, nja);
+        }
+        self.push(d);
+        None
+    }
+
     /// The range written after a type, which only a number can have (or a `?` or a list of numbers).
     fn range(&mut self, t: &Ty, r: Option<&RangeDecl>) -> Option<Range> {
         let r = r?;
@@ -376,7 +407,17 @@ impl<'a> Lowerer<'a> {
                 },
             });
             self.agent(t, result.as_ref(), result_range);
-            let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
+            // another `.flow` as the child: checked here, for its names and the contract it holds the task to
+            let flow = t.flow.as_ref().and_then(|(path, fsp)| self.child_flow(path, *fsp));
+            if t.flow.is_some() {
+                if let Some((_, bsp)) = &t.binding {
+                    self.push(e("E007", *bsp, "a task that runs another `.flow` calls nothing else; leave out `lambda`, `http`, `aws` and `agent`", "ほかの `.flow` を走らせるタスクは、ほかに何も呼びません。`lambda`・`http`・`aws`・`agent` は外してください"));
+                }
+                if let Some((_, isp)) = &t.image {
+                    self.push(e("E007", *isp, "on Argo, a task that runs another `.flow` makes a workflow of the child's WorkflowTemplate; leave out `image`", "Argo では、ほかの `.flow` を走らせるタスクは、子の WorkflowTemplate からワークフローを作ります。`image` は外してください"));
+                }
+            }
+            let child = t.flow.as_ref().or(t.workflow.as_ref()).or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
             if let Some((syntax::Binding::Aws { service, .. }, bsp)) = &t.binding {
                 if crate::aws::exception_prefix(service).is_none() {
                     self.push(e(
@@ -559,12 +600,13 @@ impl<'a> Lowerer<'a> {
                 result_range,
                 binding,
                 connection: t.connection.clone(),
-                queue: t.queue.clone(),
-                workflow: t.workflow.as_ref().map(|x| x.0.clone()),
+                // a `.flow` child runs on the queue of its own worker, unless the task names the type it runs as
+                queue: t.queue.clone().or_else(|| flow.as_ref().filter(|_| t.workflow.is_none()).map(|c| crate::temporal::workflow_type(&c.model))),
+                workflow: t.workflow.as_ref().map(|x| x.0.clone()).or_else(|| flow.as_ref().map(|c| crate::temporal::workflow_type(&c.model))),
                 state_machine: t.state_machine.as_ref().map(|x| x.0.clone()),
                 durable_function: t.durable_function.as_ref().map(|x| x.0.clone()),
                 image: t.image.as_ref().map(|x| x.0.clone()),
-                argo_template: t.argo_template.as_ref().map(|x| x.0.clone()),
+                argo_template: t.argo_template.as_ref().map(|x| x.0.clone()).or_else(|| flow.as_ref().map(|c| crate::argo::workflow_name(&c.model))),
                 errors,
                 retry,
                 timeout: t.timeout,
@@ -575,8 +617,12 @@ impl<'a> Lowerer<'a> {
                 refused_as: t.refused_as.as_ref().map(|x| x.0.clone()),
                 callback: t.callback.is_some(),
                 event: t.event.is_some(),
+                flow,
                 line: sp.line,
             });
+            let task = self.m.tasks.last().expect("just pushed");
+            let held = task.flow.as_ref().map(|c| crate::contract::check(&self.m, task, &c.model)).unwrap_or_default();
+            self.diags.extend(held);
         }
     }
 

@@ -198,6 +198,9 @@ pub struct TaskDecl {
     pub callback: Option<Span>,
     /// Temporal: the task calls nothing, and waits for a value sent to the workflow by name
     pub event: Option<Span>,
+    /// `flow "<path>"`: the child workflow is another `.flow`, whose inputs, outputs and
+    /// errors the task is held to
+    pub flow: Option<(String, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -1311,6 +1314,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     refused_as: None,
                     callback: None,
                     event: None,
+                    flow: None,
                 };
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
@@ -1556,6 +1560,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         "idempotent" => t.idempotent = true,
         "callback" => t.callback = Some(sp),
         "event" => t.event = Some(sp),
+        "flow" => t.flow = Some((cc.string("the path of the child's .flow", "子の .flow のパス")?.0, sp)),
         "starts" => {
             let machine = cc.qualname()?;
             let mut then = Vec::new();

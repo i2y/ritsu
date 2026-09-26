@@ -612,6 +612,102 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     }
 }
 
+/// A workflow that runs another `.flow` as its child (`flow "<path>"`, tests/children), both as
+/// dandori writes them, on one Temporal server: the parent's worker and the child's, in one
+/// language and in the two crossed. Nothing stands in for the child. Each run must end as the
+/// reference interpreter says, given the child's end, which the reference interpreter also
+/// decides, from the input the parent passes it, as the answer of the parent's call.
+#[test]
+fn temporal_runs_a_flow_as_its_child() {
+    need_rulec!();
+    let python = temporal_python();
+    if !temporal_available() || python.is_none() {
+        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        return;
+    }
+    let python = python.unwrap();
+    let f = root().join("tests/children/受付.flow");
+    let (_, checked) = dandori::check::check_file(&f).unwrap();
+    let pm = checked.model.expect("the flow passes check");
+    let task = pm.tasks.iter().find(|t| t.flow.is_some()).expect("a task runs a .flow");
+    let cm = task.flow.as_ref().unwrap().model.clone();
+    // a run for each kind of application, and what the reference says each ends with
+    let kinds = match &pm.inputs[0].1 {
+        dandori::model::Ty::Record(r) => match pm.field_ty(*r, "区分") {
+            Some(dandori::model::Ty::Enum(e)) => pm.enums[*e].values.clone(),
+            _ => panic!("the application has a kind"),
+        },
+        _ => panic!("the input is an application"),
+    };
+    let mut runs = Vec::new();
+    let mut references = Vec::new();
+    for (i, kind) in kinds.iter().enumerate() {
+        let input = json!({ "申込": { "id": format!("申込-{}", i + 1), "額": 1000 * (i + 1), "区分": kind } });
+        // what the parent passes the child: the arguments of its call, whatever the call answers
+        let probe = dandori::interp::run(&pm, &json!({ "input": input, "answers": [{ "error": "failure" }] }), View::Temporal).unwrap();
+        let args = probe["steps"][0]["call"]["args"].clone();
+        let child_end = dandori::interp::run(&cm, &json!({ "input": args, "answers": [] }), View::Temporal).unwrap()["end"].clone();
+        let answer = match (&child_end["succeed"], child_end["fail"]["error"].as_str()) {
+            (out, None) if !out.is_null() => json!({ "ok": out }),
+            (_, Some(e)) if task.error(e).is_some() => json!({ "error": e }),
+            _ => json!({ "error": "failure" }),
+        };
+        let reference = dandori::interp::run(&pm, &json!({ "input": input, "answers": [answer] }), View::Temporal).unwrap();
+        runs.push(json!({ "id": format!("run-{}", i + 1), "input": input }));
+        references.push(json!({ "end": reference["end"] }));
+    }
+    let dir = scratch("children");
+    let runs_file = dir.join("runs.json");
+    std::fs::write(&runs_file, serde_json::to_string(&runs).unwrap()).unwrap();
+    // both flows, in both languages
+    let mut built = std::collections::BTreeMap::new();
+    for (lang, m) in [("ts", &pm), ("ts", &cm), ("py", &pm), ("py", &cm)] {
+        let out = dir.join(lang).join(dandori::render::ident(&m.name));
+        let files = if lang == "py" { dandori::temporal_py::build(m) } else { dandori::temporal::build(m) }.unwrap();
+        for (name, text) in &files {
+            let p = dir.join(lang).join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+        let pkg = if lang == "py" { dir.join(lang).join(dandori::temporal_py::package(m)) } else { out };
+        built.insert((lang, m.name.clone()), pkg);
+    }
+    let node_runner = root().join("tools/temporal/children.mjs");
+    let py_runner = root().join("tools/temporal-python/children.py");
+    let lang = |l: &str| if l == "py" { "Python" } else { "TypeScript" };
+    let _turn = heavy();
+    for (parent, child) in [("ts", "ts"), ("py", "py"), ("ts", "py"), ("py", "ts")] {
+        let (p_dir, c_dir) = (&built[&(parent, pm.name.clone())], &built[&(child, cm.name.clone())]);
+        let results = dir.join(format!("results-{parent}-{child}.json"));
+        let mut cmd = if parent == "py" {
+            let mut c = Command::new(&python);
+            c.arg(&py_runner);
+            c
+        } else {
+            let mut c = Command::new("node");
+            c.arg(&node_runner);
+            c
+        };
+        cmd.arg(p_dir).arg(c_dir).arg(&runs_file).arg(&results);
+        if parent != child {
+            let serve: Vec<String> = if child == "py" {
+                vec![python.display().to_string(), py_runner.display().to_string(), "--serve".into(), c_dir.display().to_string()]
+            } else {
+                vec!["node".into(), node_runner.display().to_string(), "--serve".into(), c_dir.display().to_string()]
+            };
+            cmd.env("DANDORI_CHILD_BY", serde_json::to_string(&serve).unwrap());
+        }
+        let out = cmd.output().unwrap();
+        assert!(out.status.success(), "the parent in {} with the child in {} failed:\n{}", lang(parent), lang(child), String::from_utf8_lossy(&out.stderr));
+        let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
+        assert_eq!(got.len(), references.len());
+        for (i, (g, r)) in got.iter().zip(&references).enumerate() {
+            assert_eq!(norm(g), norm(r), "run {} (the parent in {}, the child in {}) ends otherwise than the reference says", i + 1, lang(parent), lang(child));
+        }
+        eprintln!("{}: {} run(s) of the parent in {} with its child {} in {} on Temporal (the dev server) ended as the reference says", rel(&f), got.len(), lang(parent), task.flow.as_ref().unwrap().path, lang(child));
+    }
+}
+
 /// The flows whose histories are kept in tests/histories: one run of each, the one with the most
 /// calls, recorded by the Temporal runners with DANDORI_BLESS=1. The run of examples/order goes
 /// on in new runs (Continue-As-New), and each of them is kept.

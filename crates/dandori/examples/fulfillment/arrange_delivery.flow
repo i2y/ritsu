@@ -1,0 +1,40 @@
+workflow arrange_delivery v1
+description "Book the delivery of an order with the carrier the urgency rule chose, and answer with its tracking number. The workflow of fulfillment runs it as its child: a child workflow on Temporal, an invoked durable function on Lambda durable functions, a workflow of this WorkflowTemplate on Argo, a nested execution on Step Functions"
+
+enum carrier = standard | next_day
+
+record Booking
+  tracking_number : string
+
+inputs
+  order_id  : string
+  carrier   : carrier
+  recipient : string?
+  extra     : json
+
+outputs
+  tracking_number : string
+
+# The next-day carrier sends a van for the parcels; on a busy day it has no van left.
+task book_next_day(order_id: string, recipient: string?) -> Booking
+  http POST "https://next-day.example.com/v1/pickups"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/next-day/2a3b4c"
+  errors no_van = 409
+  key
+  retry 2 times every 5 seconds
+
+task book_standard(order_id: string, recipient: string?, extra: json) -> Booking
+  http POST "https://post.example.com/v1/parcels"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/post/3b4c5d"
+  key
+  retry 2 times every 5 seconds
+
+flow
+  match carrier
+    next_day =>
+      let booked = book_next_day(order_id: order_id, recipient: recipient)
+        on no_van => fail NoVan "No next-day van is left for order {order_id}"
+      succeed tracking_number = booked.tracking_number
+    standard =>
+      let booked = book_standard(order_id: order_id, recipient: recipient, extra: extra)
+      succeed tracking_number = booked.tracking_number

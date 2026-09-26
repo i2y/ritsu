@@ -60,15 +60,14 @@ task release_stock(id: string)
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
   idempotent
 
-# Another workflow arranges the delivery: a child workflow on Temporal, a nested execution on
-# Step Functions, an invoked durable function on Lambda durable functions, a workflow made
-# from a WorkflowTemplate on Argo.
+# Another workflow arranges the delivery, written as a .flow of its own; the checker holds this
+# task to its inputs, outputs and errors. It is a child workflow on Temporal (its type and task
+# queue are arrange_delivery_v1) and a workflow of its WorkflowTemplate on Argo; Step Functions
+# and Lambda durable functions start it by the ARN it is deployed as.
 task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
-  workflow "arrange_delivery"
-  queue "delivery"
+  flow "arrange_delivery.flow"
   state machine "arn:aws:states:ap-northeast-1:123456789012:stateMachine:arrange-delivery"
   durable function "arn:aws:lambda:ap-northeast-1:123456789012:function:arrange-delivery:live"
-  workflow template "arrange-delivery"
 
 # The packing crew reads the request from a queue, and answers when the boxes are packed.
 task wait_for_packing(QueueUrl: string, MessageBody: PackingRequest) -> Packing

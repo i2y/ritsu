@@ -54,8 +54,10 @@ task release_stock(id: string)
   http DELETE "https://warehouse.example.com/v1/reservations/{id}"
   idempotent
 
-# Arranging the delivery is a function you write: another graph, or a call to the delivery team.
+# Arranging the delivery is a function you write: the graph of arrange_delivery.flow, or a call to
+# the delivery team. The checker holds this task to that .flow's inputs, outputs and errors.
 task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
+  flow "../arrange_delivery.flow"
 
 # The packing crew's app gets the request and the callback's id from the function you write,
 # and answers the callback when the boxes are packed.

@@ -224,13 +224,22 @@ if (plays.some((p) => p.real)) {
   const files = fs.readdirSync(code).flatMap((f) => ["--from-file", `${f}=${path.join(code, f)}`]);
   await kubectl(["apply", "-f", "-"], await kubectl(["create", "configmap", cm, ...files, "--dry-run=client", "-o", "json"]));
 }
+// the workflows a task starts: stand-ins that answer with dd_output, or fail, each under a name of
+// this runner's, since another flow of the test may be the child itself, with its own template of
+// that name in the cluster at the same time
+const stubName = (child) => `${child}-${suffix}`;
+for (const t of wt.spec.templates) {
+  if (!t.resource?.manifest) continue;
+  for (const child of spec.children ?? []) {
+    t.resource.manifest = t.resource.manifest.replace(`workflowTemplateRef:\n    name: ${child}\n`, `workflowTemplateRef:\n    name: ${stubName(child)}\n`);
+  }
+}
 await kubectl(["apply", "-f", "-"], JSON.stringify(wt));
-// the workflows a task starts: stand-ins that answer with dd_output, or fail
 for (const child of spec.children ?? []) {
   const stub = {
     apiVersion: "argoproj.io/v1alpha1",
     kind: "WorkflowTemplate",
-    metadata: { name: child },
+    metadata: { name: stubName(child) },
     spec: {
       entrypoint: "main",
       arguments: { parameters: [{ name: "input", value: "{}" }] },
@@ -426,6 +435,8 @@ async function clean() {
   // and the workflows the real runs' tasks started
   const real = made.filter((n) => byName.get(n)?.real);
   if ((spec.children ?? []).length > 0 && real.length > 0) await kubectl(["delete", "workflows", "-l", `dandori-parent in (${real.join(",")})`, "--wait=false"]).catch(() => {});
+  // and the stand-ins of the workflows the tasks start
+  if ((spec.children ?? []).length > 0) await kubectl(["delete", "workflowtemplates", ...spec.children.map(stubName), "--wait=false"]).catch(() => {});
 }
 
 // Start them all, then play the pods, answer the callbacks, and read the ends as they come.

@@ -1,0 +1,2 @@
+error[E015]: tests/fixtures/children/自分.flow:8:3: `自分.flow` runs this flow again (自分.flow → 自分.flow); a flow cannot run itself, directly or through others
+     8 |   flow "自分.flow"

@@ -1,0 +1,32 @@
+workflow 受付 v1
+description "申込の査定を、ほかの .flow（査定.flow）の子ワークフローに任せる受付。人の確認に回った申込と、扱わない申込も受けて終わる"
+
+enum 区分 = 個人 | 法人 | 団体
+enum 結論 = 可 | 保留
+
+record 申込
+  id   : string
+  額   : int  range >=1 <=1000000
+  区分 : 区分
+
+record 査定の結果
+  結論 : 結論
+  点   : int  range >=0 <=100
+
+inputs
+  申込 : 申込
+
+outputs
+  結論 : 結論
+  点   : int  range >=0 <=100
+  経路 : string
+
+task 査定する(申込: 申込, 担当: string?) -> 査定の結果
+  flow "査定.flow"
+  errors 要確認
+
+flow
+  let r = 査定する(申込: 申込, 担当: "受付係")
+    on 要確認 => succeed 結論 = 保留, 点 = 0, 経路 = "人の確認"
+    on failure => succeed 結論 = 保留, 点 = 0, 経路 = "扱わない"
+  succeed 結論 = r.結論, 点 = r.点, 経路 = "自動"
