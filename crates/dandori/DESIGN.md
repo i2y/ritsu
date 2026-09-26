@@ -56,9 +56,9 @@ rulec の実行ファイルは `DANDORI_RULEC`、無ければ PATH の `rulec` �
 
 ```
 workflow hotel_stay v1
-description "ホテルの予約で、カードの与信を取り、チェックアウトの日に確定する"
+description "When a stay is booked, hold an amount on the card, and capture it on the day of check-out"
 
-use rule 与信 from "rules/宿泊の与信額.rule"
+use rule hold from "rules/hold_amount.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
 use rule payment_intent from "rules/payment_intent.rule"
 
@@ -81,17 +81,17 @@ case pi : PaymentIntent follows payment_intent.payment
   refused when refused = true
 
 flow
-  let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
-  match 見積.扱い
-    確認 => succeed 結果 = 確認待ち
-    自動 => pi <- create_intent(…)
+  let quote = hold(room: booking.room, nights: booking.nights)
+  match quote.handling
+    review => succeed outcome = awaiting_review
+    auto => pi <- create_intent(…)
   …
 
 on failure
   …
 ```
 
-字下げがブロックを表す。コメントは `#` から行末まで。名前には日本語が使え、生成物でもそのまま識別子になる（JavaScript と Step Functions の変数は Unicode の識別子を受け付ける）。
+字下げがブロックを表す。コメントは `#` から行末まで。名前には日本語が使え、生成物でもそのまま識別子になる（JavaScript と Step Functions の変数は Unicode の識別子を受け付ける）。`examples` の例は英語で書き、`tests/flows` のフローと `tests/rules` の規則は日本語の名前で書いてある（5 章）。
 
 ### 1.2 型
 
@@ -200,15 +200,15 @@ AWS の API のエラーは、Step Functions では「サービスの接頭辞.�
 エージェントは OpenAI のもの（`agent "<指示>"`、`agent openai "<指示>"` と書いても同じ）か、Claude のもの（`agent claude "<指示>"`）。例では、読むのが OpenAI、書くのが Claude である。
 
 ```
-task 読み取る(本文: string) -> 読み取り
-  agent "お客さまからの問い合わせの本文を読み、種類を一つ選び、…"
+task read_inquiry(text: string) -> Reading
+  agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
   model "gpt-5.4-mini"
   connection "arn:aws:events:…:connection/openai/…"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
-task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
-  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。…"
+task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
+  agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. …"
   model "claude-sonnet-5"
   connection "arn:aws:events:…:connection/claude/…"
   timeout 60 seconds
@@ -496,13 +496,13 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - **既定の `Transport`**：シナリオの呼び出しのうち `Transport` を通るもの（HTTP、Lambda、AWS の API）を、TypeScript の既定の実装（`fetch` と AWS SDK for JavaScript v3）と Python の既定の実装（標準ライブラリと boto3）から、手元の代わりに送る（`tools/wire`）。手元のサーバーは、HTTP と Lambda の Invoke に、ランナーの差し替えの `Transport` がそのシナリオの答えで返すものになる応答を返す。HTTP のタスクの URL は、スキームとホストをこのサーバーに置き換える。AWS の API は、AWS の API を手元でまねる moto（5.2.3）に渡す。届いたもの（HTTP ならメソッド・パス・クエリ・ヘッダ・本文、Lambda なら関数と payload、SNS と SQS なら moto のキューに届いたメッセージ）が呼び出しと同じで、`Transport` が返すものが差し替えの `Transport` と同じで、二つの言語が同じ文字列を送ることを確かめる。AWS のエラーは、moto に起こさせられるもの（無いトピックへの `sns:publish` の `NotFoundException`、無いキューへの `sqs:sendMessage` の `QueueDoesNotExist`）だけを試す。何も手元の外には出ない。
 - **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つの出力先の `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **診断**：`tests/fixtures` の各ファイルの診断を、英語と日本語の両方で固定する（`DANDORI_BLESS=1` で書き直す）。
-- 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。
+- 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。例は英語で書き、`tests/flows` のフローとそれが読む `tests/rules` の規則は日本語の名前で書いてあるので、日本語の名前が五つの出力先でそのまま識別子や鍵になることは、こちらで確かめる（`timeouts.flow` は、HTTP のパスにも日本語の値を入れる）。
 
 `Transport` の既定の実装は、突き合わせでは走らない（差し替える）。突き合わせが確かめているのは、dandori が書く実装が何を送り、答えをどう読むかで、既定の実装が本当に送るところは、上の既定の `Transport` の確かめで、手元の代わりに向けて確かめる。本物の Stripe や AWS に向けて送るところは確かめていない。エージェントの既定の実装は、上のとおり OpenAI では Agents SDK の中まで、Claude では SDK が HTTP で送るところまで走らせるが、OpenAI と Anthropic の API が Schema を受け付けて答えるところは確かめていない。
 
 ### 5.1 走らせた（2026-09-26）
 
-- 例は五つ。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の「注文の状態」）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直し、列挙の値を大文字と小文字を変えて答える Claude のエージェントを通り、`tests/flows/timeouts.flow` が、期限切れを受ける呼び出し、期限切れだけをやり直す呼び出し、`timeout` を書かないタスクの期限切れを通り、`tests/flows/local_rules.flow` が、`local` の規則（期限切れを受けてタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認の出来事とその断りと期限切れ、一番外のループの回ごとに待つ、案件の状態を知らせる配達の出来事）を通る（Temporal だけ）。
+- 例は五つ。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の規則 `order_state`）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直し、列挙の値を大文字と小文字を変えて答える Claude のエージェントを通り、`tests/flows/timeouts.flow` が、期限切れを受ける呼び出し、期限切れだけをやり直す呼び出し、`timeout` を書かないタスクの期限切れを通り、`tests/flows/local_rules.flow` が、`local` の規則（期限切れを受けてタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認の出来事とその断りと期限切れ、一番外のループの回ごとに待つ、案件の状態を知らせる配達の出来事）を通る（Temporal だけ）。
 - シナリオは 49 本・33 本・19 本・12 本・10 本と、edges の 12 本、agents の 15 本、timeouts の 7 本、local_rules の 12 本、events の 12 本。Step Functions では、審査と events を除く 159 本すべてが参照インタプリタと一致した。Temporal では、dev server の上で、`on cancel` を持つ cancel の 32 本と events の 12 本を加えた 213 本すべてが一致した（アクティビティのタイムアウトはサーバーが期限切れにし、コールバックのタイムアウトは答えを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 213 本すべてが一致した。どちらの言語でも、このうち 13 本（倉庫の出荷の 10 本、引当と発送の 1 本、edges の 2 本）が一番外のループの回で新しい実行に続き、続きの実行は合わせて 19 本だった（倉庫の出荷の 6 本は三つの実行にまたがる）。Lambda durable functions では、タイムアウトを含む 17 本を除く 152 本すべてが一致した。pydantic-graph では、タスクのタイムアウトを含む 5 本を除く 164 本すべてが一致した。agents の 15 本のうち 3 本は、Claude のエージェントが列挙の値の大文字と小文字を変えて答える（`Normal` と、`urgent` と `Low` のリスト）。どの出力先も、それを宣言した値として読んだ。
 - Argo Workflows（v4.1.4、kind の上）では、タスクのタイムアウトを含む 5 本を除く 164 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（九本）も一致した。コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こした。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 115 個（177 個）、審査が 74 個（136 個）、timeouts が 49 個（87 個）、local_rules が 117 個（272 個）で、どれも見積もりの中に収まった。テスト全体は 1 分半から 2 分余りで終わる（96〜128 秒。Argo だけで 76〜88 秒、Temporal の突き合わせは TypeScript が 23 秒、Python が 17 秒、言語をまたぐアクティビティが 14 秒、durable functions が 16 秒。kind のノードは、何も走らせていなくても CPU を 3 割ほど使っていて、Argo の時間はそれに左右される）。
 - 同じ日の昼、Argo の突き合わせがときどき食い違った。呼び出しは参照と同じで、終わり方だけが違い、その回の Pod が init の失敗（Error）や `Unknown (exit code 255)` で終わっていた。kind のノードの中の containerd（2.1.1）が SEGV で落ちては立ち上がり直していて、落ちた時刻が食い違いと重なった。落ちたときに動いていたコンテナは、どれもこう終わる。生成したワークフローは、その Pod の失敗を `failure` として正しく扱っていた。そこでランナーは、プラットフォームが動かせなかった Pod のある回を、名前を変えて二度まで走らせ直し、そのことを出力するようにした。いまはこれが本物の Pod の回にだけかかわる（次の項）。クラスタを kind 0.33.0 のノード（Kubernetes 1.37.0、containerd 2.3.4）で作り直してからは、containerd は一度も落ちていない。テスト全体を通したときも、ホテルの予約の 49 本すべてを本物の Pod で同時に走らせたとき（375 秒）も SEGV は無く、本物の Pod の 49 本は演じた回と一本残らず一致した。
@@ -513,7 +513,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - Temporal の突き合わせは、生成した `worker` と `client` を通しても、TypeScript と Python の両方で 213 本すべてが一致し、どの実行でも、終わりのクエリ `dandori.status` と search attribute `DandoriCases` が参照インタプリタの案件の状態と同じだった。コールバックへの二度目の答えと、待っていない ID への答えは、Update がすべて断った（2026-09-26）。
 - 既定の `Transport` では、シナリオの呼び出しのうち 175 件（HTTP が 127 件で、うち 47 件はエラーのステータス、Lambda が 45 件で、うち 18 件は関数のエラー、SNS と SQS が 3 件）を、TypeScript と Python の両方から手元の代わりに送り、すべて呼び出しのとおりに届き、差し替えの `Transport` と同じものが返った（2026-09-26）。はじめ、Python の既定の実装が三か所で食い違った。
   - AWS のエラーを、線の上の符号（`NotFound`、`AWS.SimpleQueueService.NonExistentQueue`）で返していた。TypeScript の SDK と、タスクが宣言する名前は、API のモデルの名前（`NotFoundException`、`QueueDoesNotExist`）である。boto3 が投げる例外のクラスの名前がモデルの名前なので、それを返すようにした。
-  - URL のパスに ASCII でない文字があると（倉庫の出荷の `/v1/orders/注文ID-1`）、urllib が `UnicodeEncodeError` で送れなかった。fetch と同じく、UTF-8 でパーセントエンコードしてから送るようにした。
+  - URL のパスに ASCII でない文字があると（例を英語にする前の倉庫の出荷の `/v1/orders/注文ID-1`。いまは `tests/flows/timeouts.flow` の `/v1/items/品番-2/check` で確かめる）、urllib が `UnicodeEncodeError` で送れなかった。fetch と同じく、UTF-8 でパーセントエンコードしてから送るようにした。
   - JSON の本文（HTTP の本文、Lambda の payload、SQS のメッセージ）を、`json.dumps` の既定のまま、空白を入れ、日本語を `\u` でエスケープして書いていた。値は同じだが、TypeScript と Step Functions の書き方（空白なし、文字はそのまま）にそろえた。
 - 言語をまたぐアクティビティでは、TypeScript のワークフローと Python のアクティビティ、Python のワークフローと TypeScript のアクティビティの両方で、`local` の規則を持つフローを除く 189 本すべてが参照インタプリタと一致した（コールバックの答え、キャンセル、タイムアウト、エージェントの呼び出しも、もう一方の言語を通った）。Python のアクティビティの名前に一字足すと、TypeScript のワークフローの側だけが食い違いとして出た（2026-09-26）。
 - Temporal の再生は、TypeScript と Python の両方で、213 本すべて（続きの実行も）が同じコードで再生でき、`tests/histories` の十四の履歴も再生できた。Worker Deployment Versioning では、A で始まった実行が B を current にしたあとも、新しい実行で始まった二回目の回まで A のコードで終わり、B で始めた実行は B のコードで走った（TypeScript と Python。ビルド ID は、TypeScript が `dandori-c98507328717f2f4` と `dandori-5fe7c15ba38debcf`）。生成するワーカーの既定の振る舞いを PINNED から AUTO_UPGRADE にすると、どちらの言語でも A の実行が B のコードで終わり、食い違いとして出た（2026-09-26）。
@@ -527,7 +527,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
   - ほかに、Argo の Kubernetes のイベントを止め、Pod を作る速さと API を呼ぶ回数の上限を上げた（`setup.sh`）。
   - テスト全体が 85 秒になった（kind 0.33.0 のノードで作り直したあとは 71 秒）。コントローラーの待ちを 300 ms にすると、かえって遅くなった（ホテルの予約の一本で 48 秒が 57 秒）。
 - 演じる形でも、生成器にわざと入れた誤りは捕まる。`match` の条件から値を一つ落とす誤りと、caller が宣言したエラーで終わるときの終了コードを 3 から 1 に変える誤りは、どちらもホテルの予約の九本目で食い違いとして出た（2026-09-26）。
-- つなぐコードは、与信額の規則のベクタ 24 件、急ぎの規則のベクタ 16 件、振り分けの規則のベクタ 8 件で、rulec の期待値と一致した。Python 版の `rules.py` も同じベクタで一致した。
+- つなぐコードは、与信額の規則（`hold_amount`）のベクタ 24 件、急ぎの規則（`urgency`）のベクタ 16 件、振り分けの規則（`inquiry_routing`）のベクタ 8 件で、rulec の期待値と一致した。Python 版の `rules.py` も同じベクタで一致した。
 - 既定の `Transport` のエージェントは、問い合わせの 15 件と agents の 40 件のどれでも、TypeScript と Python の両方で、Step Functions と同じものをモデルに渡した（Agents SDK は TypeScript 0.18.0 と Python 0.22.3、Anthropic の SDK は TypeScript 0.128.0 と Python 1.8.0）。Claude の件では、手元の Messages API の代わりが受け取った本文が Step Functions の本文と同じだった。500 を返すと、どちらの提供元も一回だけ送って失敗した。空の設定を渡さないと、どちらの Agents SDK も gpt-5.4-mini に `reasoning.effort: none` と `text.verbosity: low` を足す（走らせて確かめた）。OpenAI のクライアントのやり直しを切らないと、500 に三回送った。
 - 検査が例を書く途中で見つけたこと。チェックアウトまで待つあいだに与信の期限が切れると capture が断られる。capture のあとは `processing` を経て `requires_payment_method` に戻ることがある。`requires_action` を見てから cancel するまでに、客が認証を済ませて期限が切れると、cancel も断られる。入金がないので注文の取消を頼むあいだに、客が自分で取り消していると、倉庫はその取消依頼を断る。
 

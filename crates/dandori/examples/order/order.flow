@@ -1,95 +1,95 @@
-workflow 出荷 v1
-description "倉庫のシステムにある注文について、入金を催促し、出荷させ、配達の知らせを待つ。注文の状態は倉庫のシステムが持ち、その移り方は rulec の規則「注文の状態」に従う"
+workflow ship_order v1
+description "For an order in the warehouse's system, ask for the payment, have it shipped, and wait for word of the delivery. The warehouse's system keeps the order's state, which moves as rulec's rule order_state says"
 
-use rule 注文の状態 from "rules/注文の状態.rule"
-use rule 急ぎ from "rules/出荷の急ぎ.rule"
+use rule order_state from "rules/order_state.rule"
+use rule urgency from "rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
 
-record 注文
-  id   : string
-  状態 : 注文の状態.状態
-  金額 : money[円, incl_tax]
-  会員 : bool
+record Order
+  id     : string
+  state  : order_state.state
+  amount : money[JPY, incl_tax]
+  member : bool
 
-record 受付
+record Receipt
   id : string
 
 inputs
-  注文ID : string
+  order_id : string
 
 outputs
-  便 : 急ぎ.便
+  carrier : urgency.carrier
 
-task 注文を見る(id: string, expand: string) -> 注文
+task get_order(id: string, expand: string) -> Order
   http GET "https://warehouse.example.com/v1/orders/{id}"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
   observes
   idempotent
-  errors 混雑 = 429
-  retry 3 times every 1 second on 混雑
+  errors busy = 429
+  retry 3 times every 1 second on busy
 
-task 出荷を頼む(id: string, 便: 急ぎ.便) -> 注文
+task request_shipment(id: string, carrier: urgency.carrier) -> Order
   http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
-  sends 出荷
-  errors 断られた = 409
-  refused as 断られた
+  sends ship
+  errors conflict = 409
+  refused as conflict
   key
 
-task 取消を頼む(id: string) -> 注文
+task request_cancel(id: string) -> Order
   http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
-  sends 取消依頼
-  errors 断られた = 409
-  refused as 断られた
+  sends cancel
+  errors conflict = 409
+  refused as conflict
   key
 
-task 知らせる(注文ID: string, 本文: string) -> 受付
+task notify(order_id: string, text: string) -> Receipt
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
-  errors 宛先なし
+  errors no_recipient
   key
   retry 2 times every 5 seconds
 
 # The warehouse calls back when the carrier reports the delivery.
-task 配達を待つ(id: string) -> 注文
+task wait_for_delivery(id: string) -> Order
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:delivery-inbox"
   callback
   observes
   timeout 7 days
 
-case 受注 : 注文 follows 注文の状態.注文
-  external 入金, 配達, 取消依頼
-  refused when 受理 = false
+case order : Order follows order_state.order
+  external pay, deliver, cancel
+  refused when accepted = false
 
 flow
-  受注 <- 注文を見る(id: 注文ID, expand: "items")
+  order <- get_order(id: order_id, expand: "items")
   repeat at most 3 times
-    match 受注.状態
-      受付 =>
-        let r = 知らせる(注文ID: 受注.id, 本文: "お支払いをお待ちしています")
-          on 宛先なし => fail NoContact leaving 受注
+    match order.state
+      received =>
+        let r = notify(order_id: order.id, text: "We are waiting for your payment")
+          on no_recipient => fail NoContact leaving order
         wait 1 day
-        受注 <- 注文を見る(id: 受注.id, expand: "items")
-      入金済, 出荷済, 配達済, 取消 => break
-  match 受注.状態
-    受付 =>
-      受注 <- 取消を頼む(id: 受注.id)
-        on 断られた => pass
-      fail NotPaid "三日たっても入金がありませんでした"
-    取消 => fail Canceled "取り消された注文です"
-    出荷済, 配達済 => fail AlreadyShipped "もう出荷されています" leaving 受注
-    入金済 => pass
-  let 判定 = 急ぎ(会員: 受注.会員, 金額: 受注.金額)
-  受注 <- 出荷を頼む(id: 受注.id, 便: 判定.便)
-    on 断られた => fail Canceled "出荷の前に取り消されました"
-  match 判定.急ぎ
-    true => let n = 知らせる(注文ID: 受注.id, 本文: "翌日便で出荷しました")
+        order <- get_order(id: order.id, expand: "items")
+      paid, shipped, delivered, cancelled => break
+  match order.state
+    received =>
+      order <- request_cancel(id: order.id)
+        on conflict => pass
+      fail NotPaid "No payment came in three days"
+    cancelled => fail Canceled "The order was canceled"
+    shipped, delivered => fail AlreadyShipped "The order has shipped already" leaving order
+    paid => pass
+  let decision = urgency(member: order.member, amount: order.amount)
+  order <- request_shipment(id: order.id, carrier: decision.carrier)
+    on conflict => fail Canceled "The order was canceled before it shipped"
+  match decision.urgent
+    true => let n = notify(order_id: order.id, text: "Shipped by next-day delivery")
     false => pass
-  受注 <- 配達を待つ(id: 受注.id)
-    on timeout => fail DeliveryLate "七日たっても配達の知らせがありません" leaving 受注
-  match 受注.状態
-    配達済 => succeed 便 = 判定.便
-    出荷済 => fail DeliveryLate "配達の知らせのあとも出荷済のままです" leaving 受注
+  order <- wait_for_delivery(id: order.id)
+    on timeout => fail DeliveryLate "No word of the delivery in seven days" leaving order
+  match order.state
+    delivered => succeed carrier = decision.carrier
+    shipped => fail DeliveryLate "Still shipped after word of the delivery" leaving order
 
 on failure
-  fail Stopped "途中で止まりました。注文は倉庫のシステムにそのまま残ります" leaving 受注
+  fail Stopped "Stopped on the way; the order stays in the warehouse's system as it is" leaving order

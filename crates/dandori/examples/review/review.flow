@@ -1,53 +1,53 @@
-workflow 審査 v1
-description "申し込みを別のワーカーの審査にかけ、保留なら人の承認を待つ。タスクはどれも利用者が書く実装なので、Temporal・Lambda durable functions・Argo Workflows に出す（Step Functions には出さない）"
+workflow review v1
+description "Send an application to be scored on workers of their own, and when the score says hold, wait for a person's approval. Every task is one the user writes, so it goes to the platforms that run the user's code: Temporal, Lambda durable functions, Argo Workflows (images) and pydantic-graph, not Step Functions"
 
-enum 判断 = 承認 | 却下 | 保留
+enum Verdict = approve | reject | hold
 
-record 申込
-  id   : string
-  金額 : int
+record Application
+  id     : string
+  amount : int
 
-record 審査結果
-  点数 : int
-  判断 : 判断
+record Score
+  points  : int
+  verdict : Verdict
 
-record 承認
-  承認者 : string
+record Approval
+  approver : string
 
 inputs
-  申込 : 申込
+  application : Application
 
 outputs
-  判断 : 判断
+  verdict : Verdict
 
 # Scoring runs on workers of its own, which may be written in another language.
-task 審査する(申込ID: string, 金額: int) -> 審査結果
+task score(application_id: string, amount: int) -> Score
   queue "scoring"
   image "registry.example.com/review/scoring:1"
-  errors 審査不能
+  errors unscorable
   retry 2 times every 10 seconds
   idempotent
 
 # Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task 承認を求める(申込ID: string, 点数: int) -> 承認
+task ask_for_approval(application_id: string, points: int) -> Approval
   image "registry.example.com/review/approval:1"
   callback
   timeout 3 days
 
-task 通知する(申込ID: string, 本文: string)
+task notify(application_id: string, text: string)
   queue "notify"
   image "registry.example.com/review/notify:1"
   idempotent
 
 flow
-  let r = 審査する(申込ID: 申込.id, 金額: 申込.金額)
-    on 審査不能 => fail Unscorable "申込 {申込.id} を審査できませんでした"
-  match r.判断
-    承認, 却下 => pass
-    保留 =>
-      let a = 承認を求める(申込ID: 申込.id, 点数: r.点数)
-        on timeout => fail NoAnswer "三日たっても承認がありません"
-      通知する(申込ID: 申込.id, 本文: "{a.承認者} さんが申込 {申込.id} を承認しました")
-      succeed 判断 = 承認
-  通知する(申込ID: 申込.id, 本文: "申込 {申込.id} の審査の結果は{r.判断}です")
-  succeed 判断 = r.判断
+  let r = score(application_id: application.id, amount: application.amount)
+    on unscorable => fail Unscorable "Could not score application {application.id}"
+  match r.verdict
+    approve, reject => pass
+    hold =>
+      let a = ask_for_approval(application_id: application.id, points: r.points)
+        on timeout => fail NoAnswer "No approval in three days"
+      notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
+      succeed verdict = approve
+  notify(application_id: application.id, text: "Application {application.id} was reviewed: {r.verdict}")
+  succeed verdict = r.verdict

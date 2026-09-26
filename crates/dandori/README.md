@@ -23,14 +23,14 @@ In a hotel booking that authorizes a card and captures at check-out ([tests/fixt
 
 ```
 error[E020]: tests/fixtures/hotel_naive.flow:95:1: the workflow can end here with the case `pi` in requires_payment_method, processing, which is not final (succeeded, canceled are)
-    95 |   succeed 結果 = 宿泊済
+    95 |   succeed outcome = stayed
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       85  confirm_intent: pi requires_confirmation → requires_capture
       90  match pi.status: requires_capture
-      90  wait until 予約.チェックアウト
+      90  wait until booking.check_out
       93  capture_intent: pi requires_capture → processing
           `settle` happens on the other side: pi processing → requires_payment_method
       95  succeed
@@ -51,10 +51,10 @@ case pi : PaymentIntent follows payment_intent.payment
   refused when refused = true
 
 flow
-  let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
-  match 見積.扱い
-    確認 => succeed 結果 = 確認待ち
-    自動 => pi <- create_intent(amount: 見積.与信額, currency: "jpy", payment_method: 予約.カード, capture_method: manual)
+  let quote = hold(room: booking.room, nights: booking.nights)
+  match quote.handling
+    review => succeed outcome = awaiting_review
+    auto => pi <- create_intent(amount: quote.amount, currency: "jpy", payment_method: booking.card, capture_method: manual)
   pi <- confirm_intent(id: pi.id)
     on card_declined => pi <- get_intent(id: pi.id)
   …
@@ -64,28 +64,28 @@ Lists, values that may be absent, and anything a task can call
 ([examples/fulfillment](examples/fulfillment/fulfillment.flow)):
 
 ```
-task 梱包を待つ(QueueUrl: string, MessageBody: 梱包の依頼) -> 梱包
+task wait_for_packing(QueueUrl: string, MessageBody: PackingRequest) -> Packing
   aws sqs:sendMessage
   callback
   timeout 2 days
 
 flow
-  let 結果 = for 明細 in 注文.明細 at most 50 in parallel, 10 at a time
-    let r = 在庫を引き当てる(sku: 明細.sku, 数: 明細.数)
+  let results = for line in order.lines at most 50 in parallel, 10 at a time
+    let r = reserve_stock(sku: line.sku, quantity: line.quantity)
     yield r
   …
-  match 注文.贈り物
-    some 贈り物 => let 宛名 = 贈り物.宛名
+  match order.gift
+    some gift => let recipient = gift.recipient
     none => pass
-  let 箱 = 梱包を待つ(QueueUrl: "https://sqs.…/packing", MessageBody: {注文ID: 注文.id, 引当: 結果})
-    on timeout => fail PackingLate "二日たっても梱包の知らせがありません"
-  知らせる(TopicArn: "arn:aws:sns:…:orders", Message: "注文 {注文.id} を{判定.便}で出しました")
+  let packed = wait_for_packing(QueueUrl: "https://sqs.…/packing", MessageBody: {order_id: order.id, reservations: results})
+    on timeout => fail PackingLate "No word of the packing in two days"
+  notify(TopicArn: "arn:aws:sns:…:orders", Message: "Order {order.id} went out by {decision.carrier} (…)")
 ```
 
 - Conditions and arithmetic live in rulec rules. A `.flow` builds values — records,
   lists, strings with values put in — but has no comparison or arithmetic, and branches
   only by matching an enum, a bool, or a value that may be absent (`none` / `some x`).
-- Types: `int`, units such as `money[円, incl_tax]`, `string`, `bool`, `timestamp`, enums,
+- Types: `int`, units such as `money[JPY, incl_tax]`, `string`, `bool`, `timestamp`, enums,
   records, `list[T]`, `T?` for a value that may be absent, and `json` for a value that is
   passed along without being looked into.
 - A task declares its errors, its retries, whether it is idempotent or takes an
@@ -133,7 +133,7 @@ with `aws sqs:sendMessage` the token travels in the message.
 
 A task that says `event` calls nothing: the workflow waits for a value sent to it by its id and
 the task's name, as an approval tool or a carrier's webhook would, knowing only the order it is
-about (`client.ts`'s `send(client, workflowId, "配達の知らせ", { ok: … })`, an Update). The
+about (`client.ts`'s `send(client, workflowId, "delivered", { ok: … })`, an Update). The
 workflow takes an event only while it waits for it, and refuses any other, so the one who sends
 it learns so and sends it again later; the query `dandori.status` says which events it waits
 for. Only Temporal can be sent a value by name, so the other platforms refuse the task (E050):
@@ -157,23 +157,23 @@ reads a customer's message with an OpenAI agent, routes it with a rulec rule, an
 reply with a Claude one:
 
 ```
-task 読み取る(本文: string) -> 読み取り
-  agent "お客さまからの問い合わせの本文を読み、種類を一つ選び、注文番号が書かれていれば取り出し、…"
+task read_inquiry(text: string) -> Reading
+  agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
   model "gpt-5.4-mini"
   connection "arn:aws:events:…:connection/openai/…"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
-task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
-  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。…"
+task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
+  agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. …"
   model "claude-sonnet-5"
   connection "arn:aws:events:…:connection/claude/…"
   timeout 60 seconds
 
 flow
-  let 読 = 読み取る(本文: 問い合わせ.本文)
+  let reading = read_inquiry(text: inquiry.text)
     on failure => …
-  let 判定 = 振り分け(種類: 読.種類, 会員: 問い合わせ.会員)
+  let decision = routing(kind: reading.kind, member: inquiry.member)
 ```
 
 - The answer's type becomes a JSON Schema in the strict form of OpenAI's Structured Outputs —

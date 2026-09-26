@@ -1,6 +1,6 @@
 workflow decide_all v1
 
-use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
+use rule 急ぎ from "../rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
   local
 

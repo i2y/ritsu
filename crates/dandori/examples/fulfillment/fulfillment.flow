@@ -1,61 +1,61 @@
-workflow 引当と発送 v1
-description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから知らせる。明細は並べて引き当て、足りない明細があれば引き当てたぶんを戻す"
+workflow fulfillment v1
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released"
 
-use rule 急ぎ from "../order/rules/出荷の急ぎ.rule"
+use rule urgency from "../order/rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
 
-enum 引当の状態 = 確保 | 不足
+enum Stock = secured | short
 
-record 明細
-  sku : string
-  数  : int
+record Line
+  sku      : string
+  quantity : int
 
-record 贈り物
-  宛名       : string
-  メッセージ : string?
+record Gift
+  recipient : string
+  message   : string?
 
-record 注文
+record Order
   id     : string
-  会員   : bool
-  金額   : money[円, incl_tax]
-  明細   : list[明細]
-  贈り物 : 贈り物?
-  付帯   : json
+  member : bool
+  amount : money[JPY, incl_tax]
+  lines  : list[Line]
+  gift   : Gift?
+  extra  : json
 
-record 引当
-  sku  : string
-  状態 : 引当の状態
-  id   : string?
+record Reservation
+  sku   : string
+  stock : Stock
+  id    : string?
 
-record 配送
-  追跡番号 : string
+record Delivery
+  tracking_number : string
 
-record 梱包の依頼
-  注文ID : string
-  引当   : list[引当]
+record PackingRequest
+  order_id     : string
+  reservations : list[Reservation]
 
-record 梱包
-  箱の数 : int
+record Packing
+  boxes : int
 
-record 送信
+record Sent
   MessageId : string
 
 inputs
-  注文 : 注文
+  order : Order
 
 outputs
-  引当     : list[引当]
-  追跡番号 : string
+  reservations    : list[Reservation]
+  tracking_number : string
 
-# The warehouse answers every reservation: 確保 with its id, or 不足 when the stock is short.
-task 在庫を引き当てる(sku: string, 数: int) -> 引当
+# The warehouse answers every reservation: secured with its id, or short when the stock is short.
+task reserve_stock(sku: string, quantity: int) -> Reservation
   http POST "https://warehouse.example.com/v1/reservations"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
-  errors 混雑 = 429
+  errors busy = 429
   key
-  retry 2 times every 1 second on 混雑
+  retry 2 times every 1 second on busy
 
-task 引当を戻す(id: string)
+task release_stock(id: string)
   http DELETE "https://warehouse.example.com/v1/reservations/{id}"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
   idempotent
@@ -63,7 +63,7 @@ task 引当を戻す(id: string)
 # Another workflow arranges the delivery: a child workflow on Temporal, a nested execution on
 # Step Functions, an invoked durable function on Lambda durable functions, a workflow made
 # from a WorkflowTemplate on Argo.
-task 配送を手配する(注文ID: string, 便: 急ぎ.便, 宛名: string?, 付帯: json) -> 配送
+task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
   workflow "arrange_delivery"
   queue "delivery"
   state machine "arn:aws:states:ap-northeast-1:123456789012:stateMachine:arrange-delivery"
@@ -71,49 +71,49 @@ task 配送を手配する(注文ID: string, 便: 急ぎ.便, 宛名: string?, �
   workflow template "arrange-delivery"
 
 # The packing crew reads the request from a queue, and answers when the boxes are packed.
-task 梱包を待つ(QueueUrl: string, MessageBody: 梱包の依頼) -> 梱包
+task wait_for_packing(QueueUrl: string, MessageBody: PackingRequest) -> Packing
   aws sqs:sendMessage
   callback
   timeout 2 days
 
-task 知らせる(TopicArn: string, Message: string) -> 送信
+task notify(TopicArn: string, Message: string) -> Sent
   aws sns:publish
-  errors 宛先なし = NotFoundException
+  errors no_recipient = NotFoundException
 
-task 記録する(注文ID: string, 付帯: json)
+task audit(order_id: string, extra: json)
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:audit-log"
   idempotent
 
 flow
-  let 判定 = 急ぎ(会員: 注文.会員, 金額: 注文.金額)
-  let 結果 = for 明細 in 注文.明細 at most 50 in parallel, 10 at a time
-    let r = 在庫を引き当てる(sku: 明細.sku, 数: 明細.数)
+  let decision = urgency(member: order.member, amount: order.amount)
+  let results = for line in order.lines at most 50 in parallel, 10 at a time
+    let r = reserve_stock(sku: line.sku, quantity: line.quantity)
     yield r
-  let 足りない = false
-  for 一つ in 結果 at most 50
-    match 一つ.状態
-      不足 => let 足りない = true
-      確保 => pass
-  match 足りない
+  let any_short = false
+  for one in results at most 50
+    match one.stock
+      short => let any_short = true
+      secured => pass
+  match any_short
     true =>
-      for 戻す in 結果 at most 50 in parallel
-        match 戻す.id
-          some id => 引当を戻す(id: id)
+      for taken in results at most 50 in parallel
+        match taken.id
+          some id => release_stock(id: id)
           none => pass
-      fail OutOfStock "注文 {注文.id} に在庫の足りない明細があります"
+      fail OutOfStock "Order {order.id} has lines the stock is short of"
     false => pass
-  let 宛名: string? = none
-  match 注文.贈り物
-    some 贈り物 =>
-      let 宛名 = 贈り物.宛名
-      match 贈り物.メッセージ
-        some 一言 => 記録する(注文ID: 注文.id, 付帯: {メッセージ: 一言, 宛名: 贈り物.宛名})
+  let recipient: string? = none
+  match order.gift
+    some gift =>
+      let recipient = gift.recipient
+      match gift.message
+        some words => audit(order_id: order.id, extra: {message: words, recipient: gift.recipient})
         none => pass
     none => pass
-  let 配送 = 配送を手配する(注文ID: 注文.id, 便: 判定.便, 宛名: 宛名, 付帯: 注文.付帯)
-    on failure => fail DeliveryFailed "注文 {注文.id} の配送を手配できませんでした"
-  let 箱 = 梱包を待つ(QueueUrl: "https://sqs.ap-northeast-1.amazonaws.com/123456789012/packing", MessageBody: {注文ID: 注文.id, 引当: 結果})
-    on timeout => fail PackingLate "二日たっても梱包の知らせがありません"
-  知らせる(TopicArn: "arn:aws:sns:ap-northeast-1:123456789012:orders", Message: "注文 {注文.id} を{判定.便}で出しました（{箱.箱の数} 箱、追跡番号 {配送.追跡番号}）")
-    on 宛先なし => pass
-  succeed 引当 = 結果, 追跡番号 = 配送.追跡番号
+  let delivery = arrange_delivery(order_id: order.id, carrier: decision.carrier, recipient: recipient, extra: order.extra)
+    on failure => fail DeliveryFailed "Could not arrange the delivery of order {order.id}"
+  let packed = wait_for_packing(QueueUrl: "https://sqs.ap-northeast-1.amazonaws.com/123456789012/packing", MessageBody: {order_id: order.id, reservations: results})
+    on timeout => fail PackingLate "No word of the packing in two days"
+  notify(TopicArn: "arn:aws:sns:ap-northeast-1:123456789012:orders", Message: "Order {order.id} went out by {decision.carrier} ({packed.boxes} boxes, tracking number {delivery.tracking_number})")
+    on no_recipient => pass
+  succeed reservations = results, tracking_number = delivery.tracking_number

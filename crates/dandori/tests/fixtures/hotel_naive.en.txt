@@ -1,33 +1,33 @@
 warning[W101]: tests/fixtures/hotel_naive.flow:85:1: if `confirm_intent` fails, the workflow fails with the case `pi` in requires_payment_method, requires_confirmation, requires_action, requires_capture; 4 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
     85 |   pi <- confirm_intent(id: pi.id)
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       85  confirm_intent: pi requires_confirmation → requires_payment_method
       85  confirm_intent fails (timeout, failure)
 error[E010]: tests/fixtures/hotel_naive.flow:87:1: `match` has no arm for requires_confirmation, which `pi.status` can be here
     87 |   match pi.status
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       86  confirm_intent fails: on card_declined
       86  get_intent: pi is requires_confirmation
 error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here with the case `pi` in requires_payment_method, which is not final (succeeded, canceled are); settle it first, or write `leaving pi` to hand it over as it is
-    91 |     requires_payment_method => fail CardDeclined "カードが通りませんでした"
+    91 |     requires_payment_method => fail CardDeclined "The card was declined"
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       85  confirm_intent: pi requires_confirmation → requires_payment_method
       91  match pi.status: requires_payment_method
       91  fail CardDeclined
 error[E020]: tests/fixtures/hotel_naive.flow:94:1: the workflow can fail here with the case `pi` in requires_payment_method, requires_action, requires_capture, which is not final (succeeded, canceled are); settle it first, or write `leaving pi` to hand it over as it is
-    94 |     on unexpected_state => fail HoldExpired "与信の期限が切れていました"
+    94 |     on unexpected_state => fail HoldExpired "The hold had expired"
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       85  confirm_intent: pi requires_confirmation → requires_action
       88  match pi.status: requires_action
@@ -36,14 +36,14 @@ error[E020]: tests/fixtures/hotel_naive.flow:94:1: the workflow can fail here wi
       93  capture_intent: capture is refused (unexpected_state)
       94  fail HoldExpired
 error[E020]: tests/fixtures/hotel_naive.flow:95:1: the workflow can end here with the case `pi` in requires_payment_method, processing, which is not final (succeeded, canceled are)
-    95 |   succeed 結果 = 宿泊済
+    95 |   succeed outcome = stayed
   the run that gets there:
-      81  見積 = 与信(…)
-      84  match 見積.扱い: 自動
+      81  quote = hold(…)
+      84  match quote.handling: auto
       84  create_intent: pi starts in requires_confirmation
       85  confirm_intent: pi requires_confirmation → requires_capture
       90  match pi.status: requires_capture
-      90  wait until 予約.チェックアウト
+      90  wait until booking.check_out
       93  capture_intent: pi requires_capture → processing
           `settle` happens on the other side: pi processing → requires_payment_method
       95  succeed

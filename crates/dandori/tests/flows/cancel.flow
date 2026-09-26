@@ -1,7 +1,7 @@
 workflow 取消 v1
 description "キャンセルの端の振る舞い：案件を片付ける on cancel、やり直しと受けを素通りするキャンセル、並列の回の中のキャンセル、コールバックを待つあいだのキャンセル、on failure の最中のキャンセル。Temporal 向け"
 
-use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
+use rule 注文の状態 from "../rules/注文の状態.rule"
 
 record 注文
   id   : string
