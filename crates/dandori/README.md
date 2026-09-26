@@ -3,8 +3,9 @@
 A small typed language for workflows that call business rules. A `.flow` is checked
 before it runs — types, every arm of every match, every state a case can be left in,
 retries that could repeat a change, how long the execution history can grow — and
-compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript), to
-**AWS Lambda durable functions** (TypeScript) and to **Argo Workflows** (a WorkflowTemplate).
+compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript or
+Python), to **AWS Lambda durable functions** (TypeScript) and to **Argo Workflows** (a
+WorkflowTemplate).
 
 The decisions themselves are written in [rulec](https://github.com/i2y/rulec): tables
 that rulec proves complete and free of overlaps. dandori reads them through rulec's
@@ -132,9 +133,9 @@ and so is for Temporal, durable functions and Argo (with `image`). The design, i
 
 ```
 dandori check <file.flow>...
-dandori build <file.flow> --target asl|temporal|durable|argo [--out <dir>]
+dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target asl|temporal|durable|argo]
+dandori run <file.flow> --scenario <file.json> [--target asl|temporal|temporal-python|durable|argo]
 ```
 
 `--lang ja` prints the messages in Japanese. rulec is found through `DANDORI_RULEC`, else
@@ -146,6 +147,12 @@ on the PATH.
   (`makeActivities(own, transport)`: the tasks dandori writes, with the ones you write),
   `io.ts` (the `Transport`), `rules.ts` (the rules as activities around rulec's
   TypeScript) and `runtime.ts`.
+- `build --target temporal-python` writes the same for Temporal's Python SDK, as a package
+  named after the workflow: `workflow.py` (the workflow, and `workflows` to give the
+  worker), `types.py`, `activities.py` (`make_activities(own, transport)`), `io.py`,
+  `rules.py` (around rulec's Python) and `runtime.py`. The workflow type, the activities,
+  the callback's signal and the ids are named as in the TypeScript, so a worker in one
+  language can serve the other.
 - `build --target durable` writes `workflow.ts` with `makeHandler(own, transport)`,
   `types.ts`, `tasks.ts`, `io.ts` and `runtime.ts`, and for every rule it calls, the same
   Lambda handler as `asl`, which the durable function invokes.
@@ -160,13 +167,13 @@ on the PATH.
 ## How the output is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
-of every example and run each of them five ways — the reference interpreter, the
+of every example and run each of them six ways — the reference interpreter, the
 generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal workflow
-in Temporal's time-skipping test environment (`tools/temporal/run.mjs`), the generated
-durable function in the SDK's local test runner (`tools/durable/run.mjs`), and the
-generated WorkflowTemplate on Argo Workflows v4.1.4 in a local kind cluster
-(`tools/argo/run.mjs`) — and require the same calls, with the same arguments and
-idempotency keys, and the same end.
+in Temporal's time-skipping test environment, in TypeScript (`tools/temporal/run.mjs`)
+and in Python (`tools/temporal-python/run.py`), the generated durable function in the
+SDK's local test runner (`tools/durable/run.mjs`), and the generated WorkflowTemplate on
+Argo Workflows v4.1.4 in a local kind cluster (`tools/argo/run.mjs`) — and require the
+same calls, with the same arguments and idempotency keys, and the same end.
 On Temporal and durable functions, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are
@@ -186,6 +193,8 @@ asl-validator, and the code between each platform and a rule answers every vecto
 npm install --prefix tools
 npm install --prefix tools/temporal
 npm install --prefix tools/durable
+uv venv --python 3.13 tools/temporal-python/.venv
+uv pip install --python tools/temporal-python/.venv/bin/python -r tools/temporal-python/requirements.txt
 sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```

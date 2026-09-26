@@ -7,10 +7,10 @@ const USAGE: &str = "dandori — a small typed language for workflows that call 
 
 Usage:
   dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries, history size
-  dandori build <file.flow> --target asl|temporal|durable|argo [--out <dir>]
-                                                  compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript),
+  dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]
+                                                  compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript or Python),
                                                   to AWS Lambda durable functions (TypeScript), or to Argo Workflows (YAML)
-  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|durable|argo]
+  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo]
                                                   run the workflow in the reference interpreter against scripted answers,
                                                   and print the trace as the target would show it
   dandori scenarios <file.flow> [--out <dir>]     write scenarios that take every arm and every way a case can move
@@ -48,7 +48,7 @@ fn parse_args() -> Result<Args, String> {
                 _ => return Err("--format takes json or text".into()),
             },
             "--lang" => lang_flag = Some(it.next().ok_or("--lang takes ja or en")?),
-            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, durable, argo or reference")?),
+            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, durable, argo or reference")?),
             "--out" => a.out = Some(PathBuf::from(it.next().ok_or("--out takes a directory")?)),
             "--scenario" => a.scenario = Some(PathBuf::from(it.next().ok_or("--scenario takes a file")?)),
             "--help" | "-h" => return Err(USAGE.to_string()),
@@ -131,7 +131,7 @@ fn cmd_build(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori build <file.flow> --target asl|temporal|durable|argo [--out <dir>]");
+            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]");
             return 2;
         }
     };
@@ -144,10 +144,11 @@ fn cmd_build(a: &Args) -> u8 {
     let files = match a.target.as_deref() {
         Some("asl") => dandori::asl::build(&model),
         Some("temporal") => dandori::temporal::build(&model),
+        Some("temporal-python") => dandori::temporal_py::build(&model),
         Some("durable") => dandori::temporal::build_flavor(&model, dandori::temporal::Flavor::Durable),
         Some("argo") => dandori::argo::build(&model),
         _ => {
-            eprintln!("--target takes asl, temporal, durable or argo");
+            eprintln!("--target takes asl, temporal, temporal-python, durable or argo");
             return 2;
         }
     };
@@ -182,7 +183,7 @@ fn cmd_run(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|durable|argo]");
+            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo]");
             return 2;
         }
     };
@@ -206,7 +207,8 @@ fn cmd_run(a: &Args) -> u8 {
     };
     let view = match a.target.as_deref() {
         None | Some("reference") | Some("asl") => dandori::render::View::Asl,
-        Some("temporal") => dandori::render::View::Temporal,
+        // both SDKs put the same names on the wire
+        Some("temporal") | Some("temporal-python") => dandori::render::View::Temporal,
         Some("durable") => dandori::render::View::Durable,
         Some("argo") => dandori::render::View::Argo,
         Some(o) => {

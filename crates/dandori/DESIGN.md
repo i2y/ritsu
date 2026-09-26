@@ -1,6 +1,6 @@
 # dandori 設計文書
 
-業務ルールを呼ぶワークフローのための、型の付いた小さな言語。書いたものを走らせる前に検査し、AWS Step Functions（ASL）、Temporal（TypeScript）、AWS Lambda durable functions（TypeScript）、Argo Workflows（WorkflowTemplate の YAML）へコンパイルする。判断そのものは rulec の規則に書き、dandori はそれを rulec の CLI を通して読む。
+業務ルールを呼ぶワークフローのための、型の付いた小さな言語。書いたものを走らせる前に検査し、AWS Step Functions（ASL）、Temporal（TypeScript と Python）、AWS Lambda durable functions（TypeScript）、Argo Workflows（WorkflowTemplate の YAML）へコンパイルする。判断そのものは rulec の規則に書き、dandori はそれを rulec の CLI を通して読む。
 
 名前は段取り（手順を前もって組むこと）から取った。ファイルの拡張子は `.flow`。
 
@@ -11,7 +11,7 @@
                                                                               ├── 流れに沿った検査（案件の状態、代入、網羅、出口）
                                                                               ├── 参照インタプリタ ── シナリオの自動生成
                                                                               ├── Step Functions（ASL、JSONata）と Lambda をつなぐコード
-                                                                              ├── Temporal（TypeScript）と、タスクと規則のアクティビティ
+                                                                              ├── Temporal（TypeScript と Python）と、タスクと規則のアクティビティ
                                                                               ├── Lambda durable functions（TypeScript）と、規則を呼ぶ Lambda
                                                                               └── Argo Workflows（YAML）と、タスクと規則をコンテナで動かすプログラム
 ```
@@ -284,6 +284,15 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 
   費用は、一回につきタスクキューの往復と履歴 6 件。業務のワークフローで判定が数回なら問題にならない。
 
+**Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックのシグナル、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる。書き方が違うのは次のところ。
+
+- Python にはラベルを付けた `break` が無い。`on` のある呼び出しは `try` にし、`except` でタスクのエラーを受けて、合う `on` が無ければ投げ直す。答えの検査は `else` に置く。ループの `break` は Python の `break` のまま使える。コードの中のループは `.flow` のループだけだからである。
+- 並列の回は、回ごとの `async def` を `asyncio.gather` で `k` 個ずつ走らせる。Temporal の Python SDK はワークフローの中の asyncio を決定的に動かす。
+- 待ちは `asyncio.sleep`（SDK が durable なタイマーにする）、今の時刻は `workflow.now()`。
+- 値は JSON のままの `dict` と `list` で運び、型は `TypedDict` と `Literal` の注釈にとどめる。フィールドの名前が日本語でも、そのまま鍵になる。流れの名前が Python の予約語や組み込みと重なるときは、後ろに `_` を付ける。
+- 規則は、rulec の Python をパッケージの中の `rulec/python/` から読むアクティビティにする。Step Functions の Lambda と同じく、列挙はその型で、数は `int` で渡す。
+- SDK は、空のエラーメッセージを受け取ると「Application error」と読む。ワークフローの中でエラーの理由を読むときは、届いた failure の `message` をそのまま読む。
+
 ### 4.3 Lambda durable functions
 
 Temporal と同じく、コードを書き、チェックポイントと再生で続きから動かす形なので、Temporal の生成器と骨組みを共有する（型、答えの検査、やり直しの並び、エラーの種類、`on failure`、`io.ts`）。違うのは、タスク・待ち・コールバック・子の呼び方である。
@@ -341,21 +350,22 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - **シナリオの自動生成**（`dandori scenarios`）：選んだ答えの記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。答えの検査に落ちる答え（型の合わない答え、ありえない状態）も入れる。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。無いことがある値は `match` が読むときに、無い場合とある場合を選ぶ。
 - **Step Functions の突き合わせ**：生成した ASL を `tools/asl-run.mjs` が JSONata 2.0.6 で実行し、参照インタプリタと同じ形で書き出す。Map の回は一つずつ回し、回の中で外の変数に値を入れたら失敗させる（Step Functions の規則）。全シナリオで一致を見る。定義は asl-validator 4.0.0 にも通す。呼び方を持たないタスクのあるワークフロー（Temporal と durable functions 向けのもの）は、E050 を表示して外す。
 - **Temporal の突き合わせ**：生成した TypeScript を `tools/temporal/run.mjs` が SDK 1.24.0 の時間を飛ばすテスト環境で実行する。dandori が書くアクティビティは本物を走らせ、`Transport` だけを、送るものを書き出してシナリオどおりに答える代わり（`tools/transport.mjs`）に差し替える。だから Step Functions が送るものと一字ずつ比べられる。利用者のタスク、規則、子ワークフローは、シナリオどおりに答える代わりを置く（子ワークフローは、答えをアクティビティに聞く小さなワークフロー）。`queue` ごとにワーカーを立てる。コールバックの答えはシグナルで送り、タイムアウトのシナリオでは送らずに、待ちの時間を飛ばして切れさせる。アクティビティのタイムアウトはこの環境では起こせないので、それを含むシナリオは外す。並列の回は一つずつ回す（`dd.atATime` を 1 に書き換える）。
+- **Temporal（Python）の突き合わせ**：生成したパッケージを `tools/temporal-python/run.py` が SDK 1.33.0 の時間を飛ばすテスト環境で実行する（ワークフローは SDK のサンドボックスの中で動く）。やり方は TypeScript 版と同じで、`Transport` の差し替え（`tools/temporal-python/transport.py`）も、利用者のタスク・規則・子ワークフローの代わりも、コールバックをシグナルで答えることも、そろえてある。
 - **Lambda durable functions の突き合わせ**：生成した TypeScript を `tools/durable/run.mjs` が SDK 2.4.0 のローカルのテストランナー（`@aws/durable-execution-sdk-js-testing` 1.1.4、時間を飛ばす）で実行する。`Transport` の差し替えは Temporal と同じ。規則は `registerFunction`、`durable function` の先は `registerDurableFunction` で登録した代わりで答え、後者は失敗するとき `ErrorData` を入れる。コールバックはその ID に答えを送って置き換える。このランナーは答えの来ないコールバックを期限切れにしないので、タイムアウトを含むシナリオは外す。
 - **Argo Workflows の突き合わせ**：生成した WorkflowTemplate を、kind の上の Argo Workflows v4.1.4（`tools/argo/setup.sh` が用意する）で `tools/argo/run.mjs` が実行する。`caller/` は、Temporal と同じ差し替えの `Transport` を持たせて Pod の中で動かす。`image` のタスク、規則、`workflow template` の先は、クラスタの中のモック（`tools/argo/mock.mjs`）にシナリオの答えを聞く代わりのコンテナ（`tools/argo/stand-in.mjs`）にする。コールバックの答えは `argo node set` と `argo resume` で渡し、タイムアウトのシナリオでは、期限が来たときと同じ値を渡す。タスクのタイムアウトは起こせないので、それを含むシナリオは外す。並列の回は一つずつ回す（`withSequence` を持つテンプレートの `parallelism` を 1 にする）。
-- **つなぐコード**：Lambda の Python と `rules.ts` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
+- **つなぐコード**：Lambda の Python、`rules.ts`、Python 版の `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **診断**：`tests/fixtures` の各ファイルの診断を、英語と日本語の両方で固定する（`DANDORI_BLESS=1` で書き直す）。
 - 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。
 
 `Transport` の既定の実装（`fetch` と AWS SDK で本当に送る部分）は、突き合わせでは走らない。確かめているのは、dandori が書く実装が何を送り、答えをどう読むかである。
 
-### 5.1 走らせた（2026-09-25、Argo は 2026-09-26）
+### 5.1 走らせた（2026-09-25、Argo と Temporal の Python 版は 2026-09-26）
 
 - 例は四つ。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の「注文の状態」）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通る。
-- シナリオは 49 本・33 本・18 本・10 本と、edges の 10 本。Step Functions では、審査を除く 110 本すべてが参照インタプリタと一致した。Temporal では 120 本すべてが一致した（コールバックのタイムアウトもシグナルを送らないことで起こせるので、外したものは無い）。Lambda durable functions では、タイムアウトを含む 12 本を除く 108 本すべてが一致した。
+- シナリオは 49 本・33 本・18 本・10 本と、edges の 10 本。Step Functions では、審査を除く 110 本すべてが参照インタプリタと一致した。Temporal では 120 本すべてが一致した（コールバックのタイムアウトもシグナルを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 120 本すべてが一致した。Lambda durable functions では、タイムアウトを含む 12 本を除く 108 本すべてが一致した。
 - Argo Workflows（v4.1.4、kind の上）では、120 本すべてが参照インタプリタと一致した。タスクのタイムアウトを含むシナリオは無く、コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こしたので、外したものは無い。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 248 個（593 個）、引当と発送が 171 個（4,746 個）、審査が 74 個（136 個）で、どれも見積もりの中に収まった。テスト全体でおよそ 28 分かかり、そのほとんどが Argo の突き合わせである。
-- 生成器にわざと誤りを入れると（ASL の冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とす、durable functions の冪等キーの呼び出しの場所をずらす）、どれも一本目のシナリオで食い違いとして出た（2026-09-25）。Argo の生成器でも、冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とすと、どちらもホテルの予約の一本目で食い違いとして出た（2026-09-26）。
-- つなぐコードは、与信額の規則のベクタ 24 件と、急ぎの規則のベクタ 16 件で、rulec の期待値と一致した。
+- 生成器にわざと誤りを入れると（ASL の冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とす、durable functions の冪等キーの呼び出しの場所をずらす）、どれも一本目のシナリオで食い違いとして出た（2026-09-25）。Argo の生成器でも、冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とすと、どちらもホテルの予約の一本目で食い違いとして出た。Temporal の Python 版では、冪等キーの区切りを一文字変えると注文の引当と発送の四本目で、`match` の条件から値を一つ落とすとホテルの予約の一本目で出た（2026-09-26）。
+- つなぐコードは、与信額の規則のベクタ 24 件と、急ぎの規則のベクタ 16 件で、rulec の期待値と一致した。Python 版の `rules.py` も同じベクタで一致した。
 - 検査が例を書く途中で見つけたこと。チェックアウトまで待つあいだに与信の期限が切れると capture が断られる。capture のあとは `processing` を経て `requires_payment_method` に戻ることがある。`requires_action` を見てから cancel するまでに、客が認証を済ませて期限が切れると、cancel も断られる。入金がないので注文の取消を頼むあいだに、客が自分で取り消していると、倉庫はその取消依頼を断る。
 
 ## 6. 捨てたもの

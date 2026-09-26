@@ -1,0 +1,8 @@
+# The Temporal SDK for Python, which tools/temporal-python/run.py runs the generated workflows with.
+#   uv venv --python 3.13 tools/temporal-python/.venv
+#   uv pip install --python tools/temporal-python/.venv/bin/python -r tools/temporal-python/requirements.txt
+nexus-rpc==1.4.0
+protobuf==7.36.2
+temporalio==1.33.0
+types-protobuf==7.35.1.20260906
+typing-extensions==4.16.0

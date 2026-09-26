@@ -1,3 +1,5 @@
 /target
 node_modules/
 /out/
+.venv/
+__pycache__/

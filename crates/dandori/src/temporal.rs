@@ -97,7 +97,8 @@ fn ts_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
     }
 }
 
-fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
+/// The enums and records the workflow uses, by index.
+pub(crate) fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
     let mut enums = BTreeSet::new();
     let mut recs = BTreeSet::new();
     fn visit(m: &Model, t: &Ty, enums: &mut BTreeSet<usize>, recs: &mut BTreeSet<usize>) {
