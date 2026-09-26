@@ -103,13 +103,22 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             };
             json!({ "aws": format!("{service}:{action}"), "args": a })
         }
-        Some(Via::Agent { instructions, model }) => {
+        Some(Via::Agent { provider, instructions, model }) => {
             let input = agent_input(task, args);
             let schema = task.result.as_ref().and_then(|t| agent_schema(m, t)).unwrap_or(Value::Null);
             match view {
                 // the HTTP Task's request; the input goes as the arguments' JSON text
-                View::Asl => json!({ "http": "POST", "url": AGENT_URL, "body": agent_request(model, instructions, json!(Value::Object(input).to_string()), schema) }),
-                _ => json!({ "agent": task.name, "model": model, "instructions": instructions, "input": input, "schema": schema }),
+                View::Asl => {
+                    let mut w = Map::new();
+                    w.insert("http".into(), json!("POST"));
+                    w.insert("url".into(), json!(agent_url(provider)));
+                    if let Some(h) = agent_headers(provider) {
+                        w.insert("headers".into(), h);
+                    }
+                    w.insert("body".into(), agent_request(provider, model, instructions, json!(Value::Object(input).to_string()), schema));
+                    Value::Object(w)
+                }
+                _ => json!({ "agent": task.name, "provider": provider.name(), "model": model, "instructions": instructions, "input": input, "schema": schema }),
             }
         }
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
@@ -130,8 +139,31 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
     }
 }
 
-/// Where Step Functions sends an agent's call: OpenAI's Responses API.
-pub const AGENT_URL: &str = "https://api.openai.com/v1/responses";
+/// Where Step Functions sends an agent's call: OpenAI's Responses API, or Claude's Messages API.
+pub fn agent_url(p: Provider) -> &'static str {
+    match p {
+        Provider::OpenAi => "https://api.openai.com/v1/responses",
+        Provider::Claude => "https://api.anthropic.com/v1/messages",
+    }
+}
+
+/// The version of the Messages API that every target asks for.
+pub const CLAUDE_VERSION: &str = "2023-06-01";
+
+/// The most a Claude agent's answer may take, thinking included: the Messages API wants a
+/// number, and every target sends this one.
+pub const CLAUDE_MAX_TOKENS: u64 = 16000;
+
+/// How many parameters with a choice (`anyOf`) Claude's structured outputs take in a request.
+pub const CLAUDE_UNIONS: usize = 16;
+
+/// The headers of the HTTP Task beyond what its connection adds (the API key).
+pub fn agent_headers(p: Provider) -> Option<Value> {
+    match p {
+        Provider::OpenAi => None,
+        Provider::Claude => Some(json!({ "anthropic-version": CLAUDE_VERSION })),
+    }
+}
 
 /// What an agent reads: the arguments, in the order of the task's parameters. Every target
 /// gives it to the model as this object's JSON text.
@@ -139,15 +171,26 @@ pub fn agent_input(task: &TaskDef, args: &Map<String, Value>) -> Map<String, Val
     task.params.iter().filter_map(|(p, _)| args.get(p).map(|v| (p.clone(), v.clone()))).collect()
 }
 
-/// The Responses API's request for an agent's call, as Step Functions sends it: the model,
-/// what it is to do, the input as text, and the JSON Schema its answer is held to.
-pub fn agent_request(model: &str, instructions: &str, input: Value, schema: Value) -> Value {
-    json!({
-        "model": model,
-        "instructions": instructions,
-        "input": input,
-        "text": { "format": { "type": "json_schema", "name": "answer", "strict": true, "schema": schema } }
-    })
+/// The request for an agent's call, as Step Functions sends it: the model, what it is to do,
+/// the input as text, and the JSON Schema its answer is held to. OpenAI's Responses API takes
+/// them as they are; Claude's Messages API wants the instructions as the system prompt, the
+/// input as the user's message, and a limit on the answer's length.
+pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value, schema: Value) -> Value {
+    match p {
+        Provider::OpenAi => json!({
+            "model": model,
+            "instructions": instructions,
+            "input": input,
+            "text": { "format": { "type": "json_schema", "name": "answer", "strict": true, "schema": schema } }
+        }),
+        Provider::Claude => json!({
+            "model": model,
+            "max_tokens": CLAUDE_MAX_TOKENS,
+            "system": instructions,
+            "messages": [{ "role": "user", "content": input }],
+            "output_config": { "format": { "type": "json_schema", "schema": schema } }
+        }),
+    }
 }
 
 /// What an agent answers in: `{"answer": …}` with a value of the task's type inside, since
@@ -253,6 +296,138 @@ pub fn schema_size(s: &Value) -> (usize, usize, usize) {
         depth += 1;
     }
     (depth, props, values)
+}
+
+/// How many choices (`anyOf`) a JSON Schema has, the ones inside others included.
+pub fn schema_unions(s: &Value) -> usize {
+    match s {
+        Value::Object(o) => usize::from(o.contains_key("anyOf")) + o.values().map(schema_unions).sum::<usize>(),
+        Value::Array(a) => a.iter().map(schema_unions).sum(),
+        _ => 0,
+    }
+}
+
+/// The enums a value of type `t` can hold, each once.
+pub fn enums_of(m: &Model, t: &Ty) -> Vec<usize> {
+    fn go(m: &Model, t: &Ty, out: &mut Vec<usize>, within: &mut Vec<RecordId>) {
+        match t {
+            Ty::Enum(e) => {
+                if !out.contains(e) {
+                    out.push(*e);
+                }
+            }
+            Ty::List(x) | Ty::Opt(x) => go(m, x, out, within),
+            Ty::Record(r) => {
+                if !within.contains(r) {
+                    within.push(*r);
+                    for (_, ft) in &m.records[*r].fields {
+                        go(m, ft, out, within);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    go(m, t, &mut out, &mut Vec::new());
+    out
+}
+
+/// The value of the enum `e` that `s` spells without regard to case, when it is not one already.
+fn enum_folded(m: &Model, e: usize, s: &str) -> Option<String> {
+    let values = &m.enums[e].values;
+    if values.iter().any(|v| v == s) {
+        return None;
+    }
+    values.iter().find(|v| v.to_lowercase() == s.to_lowercase()).cloned()
+}
+
+/// A Claude agent's answer with every enum value in it spelled as the enum spells it. Claude's
+/// structured outputs do not keep the case of an enum's value, so an answer may differ from a
+/// value only in case; dandori takes it as that value. What is not of the type stays as it is,
+/// for the answer's check to find.
+pub fn fold_enums(m: &Model, v: &Value, t: &Ty) -> Value {
+    match (t, v) {
+        (Ty::Enum(e), Value::String(s)) => enum_folded(m, *e, s).map(Value::String).unwrap_or_else(|| v.clone()),
+        (Ty::Opt(x), _) => fold_enums(m, v, x),
+        (Ty::List(x), Value::Array(a)) => Value::Array(a.iter().map(|i| fold_enums(m, i, x)).collect()),
+        (Ty::Record(r), Value::Object(o)) => {
+            let mut out = o.clone();
+            for (f, ft) in &m.records[*r].fields {
+                if let Some(x) = o.get(f) {
+                    out.insert(f.clone(), fold_enums(m, x, ft));
+                }
+            }
+            Value::Object(out)
+        }
+        _ => v.clone(),
+    }
+}
+
+/// `fold_enums` in JSONata, for Step Functions to read a Claude agent's answer `x` with; None
+/// when `t` holds no enum, and there is nothing to fold.
+pub fn jsonata_fold(m: &Model, x: &str, t: &Ty, depth: usize) -> Option<String> {
+    if enums_of(m, t).is_empty() {
+        return None;
+    }
+    let v = format!("$dd_f{depth}");
+    Some(match t {
+        Ty::Enum(e) => {
+            // each value by its lowercase spelling; the checker refuses two values that differ only in case
+            let spelled: Map<String, Value> = m.enums[*e].values.iter().map(|x| (x.to_lowercase(), json!(x))).collect();
+            let w = format!("$dd_w{depth}");
+            format!("({v} := {x}; $type({v}) = \"string\" ? ({w} := $lookup({}, $lowercase({v})); $exists({w}) ? {w} : {v}) : {v})", Value::Object(spelled))
+        }
+        Ty::Opt(inner) => jsonata_fold(m, x, inner, depth)?,
+        Ty::List(inner) => {
+            let item = format!("$dd_i{depth}");
+            let f = jsonata_fold(m, &item, inner, depth + 1)?;
+            format!("({v} := {x}; $type({v}) = \"array\" ? [$map({v}, function({item}) {{ {f} }})] : {v})")
+        }
+        Ty::Record(r) => {
+            let mut parts = Vec::new();
+            for (f, ft) in &m.records[*r].fields {
+                if let Some(e) = jsonata_fold(m, &format!("{v}.{}", jsonata_field(f)), ft, depth + 1) {
+                    parts.push(format!("{}: {e}", jsonata_string(f)));
+                }
+            }
+            format!("({v} := {x}; $type({v}) = \"object\" ? $merge([{v}, {{{}}}]) : {v})", parts.join(", "))
+        }
+        _ => return None,
+    })
+}
+
+/// A value of type `t` whose enum values are spelled in another case where they have one (the
+/// first letter's case turned), as Claude may answer: for the scenarios to see that the targets
+/// take it as the value.
+pub fn recase(m: &Model, v: &Value, t: &Ty) -> Value {
+    match (t, v) {
+        (Ty::Enum(_), Value::String(s)) => {
+            let mut cs = s.chars();
+            match cs.next() {
+                Some(c) if c.is_lowercase() => Value::String(c.to_uppercase().chain(cs).collect()),
+                Some(c) if c.is_uppercase() => Value::String(c.to_lowercase().chain(cs).collect()),
+                _ => v.clone(),
+            }
+        }
+        (Ty::Opt(x), _) => recase(m, v, x),
+        (Ty::List(x), Value::Array(a)) => Value::Array(a.iter().map(|i| recase(m, i, x)).collect()),
+        (Ty::Record(r), Value::Object(o)) => {
+            let mut out = o.clone();
+            for (f, ft) in &m.records[*r].fields {
+                if let Some(x) = o.get(f) {
+                    out.insert(f.clone(), recase(m, x, ft));
+                }
+            }
+            Value::Object(out)
+        }
+        _ => v.clone(),
+    }
+}
+
+/// Whether a value of type `t` can hold an enum value that has a case to turn.
+pub fn has_cased_enum(m: &Model, t: &Ty) -> bool {
+    enums_of(m, t).iter().any(|e| m.enums[*e].values.iter().any(|v| v.chars().next().is_some_and(|c| c.is_lowercase() || c.is_uppercase())))
 }
 
 /// `https://…/{id}/confirm` with `id` put in; the arguments the URL did not take.

@@ -312,7 +312,15 @@ impl<'a> Lowerer<'a> {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
                 syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
                 syntax::Binding::Aws { service, action } => Binding::Aws { service: service.clone(), action: action.clone() },
-                syntax::Binding::Agent { instructions } => Binding::Agent { instructions: instructions.clone(), model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default() },
+                syntax::Binding::Agent { provider, instructions } => Binding::Agent {
+                    // an unknown provider is refused in `agent` below
+                    provider: match provider.as_ref().map(|x| x.0.as_str()) {
+                        Some("claude") => Provider::Claude,
+                        _ => Provider::OpenAi,
+                    },
+                    instructions: instructions.clone(),
+                    model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default(),
+                },
             });
             self.agent(t, result.as_ref());
             let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
@@ -491,19 +499,48 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// What an agent task must have, and what it cannot: a model, an answer whose type OpenAI's
-    /// Structured Outputs can hold the model to, and nothing that moves a case.
+    /// What an agent task must have, and what it cannot: a provider dandori knows, a model, an
+    /// answer whose type the provider's structured outputs can hold the model to, and nothing that
+    /// moves a case.
     fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>) {
-        let bsp = match (&t.binding, &t.model) {
-            (Some((syntax::Binding::Agent { .. }, bsp)), _) => *bsp,
+        let (provider, bsp) = match (&t.binding, &t.model) {
+            (Some((syntax::Binding::Agent { provider, .. }, bsp)), _) => (provider.clone(), *bsp),
             (_, Some((_, msp))) => {
                 self.push(e("E007", *msp, "`model` says which model an agent uses; this task has no `agent`", "`model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません"));
                 return;
             }
             _ => return,
         };
+        let provider = match provider {
+            None => Provider::OpenAi,
+            Some((p, _)) if p == "openai" => Provider::OpenAi,
+            Some((p, _)) if p == "claude" => Provider::Claude,
+            Some((p, psp)) => {
+                self.push(e(
+                    "E007",
+                    psp,
+                    format!("`{p}` is not an agent dandori knows; write `agent openai \"…\"` (or just `agent \"…\"`) or `agent claude \"…\"`"),
+                    format!("`{p}` は dandori の知らないエージェントです。`agent openai \"…\"`（`agent \"…\"` だけでも同じ）か `agent claude \"…\"` と書いてください"),
+                ));
+                return;
+            }
+        };
+        let (outputs_en, outputs_ja) = match provider {
+            // with a space before the Japanese that follows an English word
+            Provider::OpenAi => ("OpenAI's Structured Outputs", "OpenAI の Structured Outputs "),
+            Provider::Claude => ("Claude's structured outputs", "Claude の構造化出力"),
+        };
         if t.model.is_none() {
-            self.push(e("E007", bsp, "an agent needs the model it uses; write it as `model \"gpt-5.4-mini\"`", "エージェントには、使うモデルを `model \"gpt-5.4-mini\"` のように書いてください"));
+            let example = match provider {
+                Provider::OpenAi => "gpt-5.4-mini",
+                Provider::Claude => "claude-sonnet-5",
+            };
+            self.push(e(
+                "E007",
+                bsp,
+                format!("an agent needs the model it uses; write it as `model \"{example}\"`"),
+                format!("エージェントには、使うモデルを `model \"{example}\"` のように書いてください"),
+            ));
         }
         if let Some((_, msp)) = &t.machine {
             self.push(e(
@@ -520,36 +557,67 @@ impl<'a> Lowerer<'a> {
         let Some(schema) = crate::render::agent_schema(&self.m, r) else {
             let (en, ja) = if has_json(&self.m, r, &mut Vec::new()) {
                 (
-                    "OpenAI's Structured Outputs hold an agent's answer to a JSON Schema, and `json` has none; give the answer a type without `json`",
-                    "エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください",
+                    format!("{outputs_en} hold an agent's answer to a JSON Schema, and `json` has none; give the answer a type without `json`"),
+                    format!("エージェントの答えは、{outputs_ja}で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください"),
                 )
             } else {
                 (
-                    "OpenAI's Structured Outputs hold an agent's answer to a JSON Schema written out in full, and a record that holds itself through others has no end; give the answer a type without it",
-                    "エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください",
+                    format!("{outputs_en} hold an agent's answer to a JSON Schema written out in full, and a record that holds itself through others has no end; give the answer a type without it"),
+                    format!("エージェントの答えは、{outputs_ja}で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください"),
                 )
             };
             self.push(e("E007", bsp, en, ja));
             return;
         };
-        let (depth, props, values) = crate::render::schema_size(&schema);
         let mut over: Vec<(String, String)> = Vec::new();
-        if depth > 10 {
-            over.push((format!("its objects nest {depth} deep (at most 10)"), format!("オブジェクトの入れ子が {depth} 段（10 段まで）")));
-        }
-        if props > 5000 {
-            over.push((format!("it has {props} properties (at most 5,000)"), format!("プロパティが {props} 個（5,000 個まで）")));
-        }
-        if values > 1000 {
-            over.push((format!("it has {values} enum values (at most 1,000)"), format!("列挙の値が {values} 個（1,000 個まで）")));
+        match provider {
+            Provider::OpenAi => {
+                let (depth, props, values) = crate::render::schema_size(&schema);
+                if depth > 10 {
+                    over.push((format!("its objects nest {depth} deep (at most 10)"), format!("オブジェクトの入れ子が {depth} 段（10 段まで）")));
+                }
+                if props > 5000 {
+                    over.push((format!("it has {props} properties (at most 5,000)"), format!("プロパティが {props} 個（5,000 個まで）")));
+                }
+                if values > 1000 {
+                    over.push((format!("it has {values} enum values (at most 1,000)"), format!("列挙の値が {values} 個（1,000 個まで）")));
+                }
+            }
+            Provider::Claude => {
+                let unions = crate::render::schema_unions(&schema);
+                if unions > crate::render::CLAUDE_UNIONS {
+                    over.push((
+                        format!("it has {unions} values that may be absent, each a choice with null (at most {})", crate::render::CLAUDE_UNIONS),
+                        format!("無いことがある値（null との選択）が {unions} 個（{} 個まで）", crate::render::CLAUDE_UNIONS),
+                    ));
+                }
+            }
         }
         if !over.is_empty() {
             self.push(e(
                 "E007",
                 bsp,
-                format!("the answer's JSON Schema, in `{{\"answer\": …}}`, is larger than OpenAI's Structured Outputs take: {}", over.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join(", ")),
-                format!("答えの JSON Schema（`{{\"answer\": …}}` に包んだもの）が、OpenAI の Structured Outputs の受け付ける大きさを超えています。{}", over.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("、")),
+                format!("the answer's JSON Schema, in `{{\"answer\": …}}`, is larger than {outputs_en} take: {}", over.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join(", ")),
+                format!("答えの JSON Schema（`{{\"answer\": …}}` に包んだもの）が、{outputs_ja}の受け付ける大きさを超えています。{}", over.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("、")),
             ));
+        }
+        if provider == Provider::Claude {
+            // Claude may answer an enum's value in another case, which dandori takes as the value
+            // it differs from only in case; two values that differ only in case would be one
+            for en in crate::render::enums_of(&self.m, r) {
+                let name = self.m.enums[en].name.clone();
+                let values = self.m.enums[en].values.clone();
+                for (i, a) in values.iter().enumerate() {
+                    if let Some(b) = values[..i].iter().find(|b| b.to_lowercase() == a.to_lowercase()) {
+                        self.push(e(
+                            "E007",
+                            bsp,
+                            format!("Claude may answer an enum's value in another case, and dandori takes it as the value it matches without regard to case, so `{b}` and `{a}` of `{name}` would be the same; give them names that differ in more than case"),
+                            format!("Claude は列挙の値の大文字と小文字を変えて答えることがあり、dandori は大文字と小文字を区別せずに値を読みます。このため `{name}` の `{b}` と `{a}` は同じ値になります。大文字と小文字のほかにも違いのある名前にしてください"),
+                        ));
+                    }
+                }
+            }
         }
     }
 

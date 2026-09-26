@@ -2,8 +2,9 @@
   "name": "dandori-agents-check",
   "private": true,
   "type": "module",
-  "description": "OpenAI's Agents SDK, which tools/agents/check.mjs runs the default Transport of the generated TypeScript with, against a scripted model",
+  "description": "OpenAI's Agents SDK and Anthropic's SDK, which tools/agents/check.mjs runs the default Transport of the generated TypeScript with, against a scripted model and a stand-in of the Messages API",
   "dependencies": {
+    "@anthropic-ai/sdk": "0.128.0",
     "@openai/agents": "0.18.0",
     "zod": "4.6.5"
   }

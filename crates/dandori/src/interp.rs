@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 
 pub const SCRIPTED_CAUSE: &str = "scripted";
 pub const TEST_FAILURE: &str = "Dandori.Test.Failure";
-/// An agent's failure as Step Functions sees it when the model refuses: the answer has no
-/// text, and reading it fails the Task. The ASL runner plays an agent's failure this way.
+/// An agent's failure as Step Functions sees it when the model refuses: the answer has nothing
+/// to read, and reading it fails the Task. The ASL runner plays an agent's failure this way.
 pub const AGENT_REFUSED: &str = "States.QueryEvaluationError";
 
 /// The name Step Functions gives a failure of this callee in a scenario.
@@ -381,6 +381,14 @@ impl<'a> Run<'a> {
         };
         match outcome {
             Ok(v) => {
+                // a Claude agent's enum values are taken without regard to case
+                let v = match callee {
+                    Callee::Task(t) => match (m.tasks[*t].via(self.view.platform()), &m.tasks[*t].result) {
+                        (Some(Via::Agent { provider: Provider::Claude, .. }), Some(ty)) => render::fold_enums(m, &v, ty),
+                        _ => v,
+                    },
+                    Callee::Rule(_) => v,
+                };
                 let var = match target {
                     Some(Target::Let(x)) => Some(x.clone()),
                     Some(Target::Case(c)) => Some(m.cases[*c].name.clone()),

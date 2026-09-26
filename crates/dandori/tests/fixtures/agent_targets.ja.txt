@@ -3,5 +3,7 @@ build --target asl:
     10 | task 読む(本文: string) -> string
 エラー[E050]: tests/fixtures/agent_targets.flow:10:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`読む` の `timeout` はそれより長くできません
     10 | task 読む(本文: string) -> string
-エラー[E050]: tests/fixtures/agent_targets.flow:15:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`送る` の `timeout` はそれより長くできません
-    15 | task 送る(本文: string)
+エラー[E050]: tests/fixtures/agent_targets.flow:15:1: Step Functions はエージェント `書く` を HTTP Task で呼ぶので、Claude の API キー（ヘッダ x-api-key）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    15 | task 書く(要点: string) -> string
+エラー[E050]: tests/fixtures/agent_targets.flow:19:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`送る` の `timeout` はそれより長くできません
+    19 | task 送る(本文: string)

@@ -1,6 +1,10 @@
-# Runs the agent call of the default Transport that dandori writes for Python (io.py) with
-# OpenAI's Agents SDK, and a scripted model in place of OpenAI's, so that nothing leaves the
-# machine. The Python twin of check.mjs: the same cases, and the results in the same shape.
+# Runs the agent call of the default Transport that dandori writes for Python (io.py), so that
+# nothing leaves the machine: OpenAI's agents with OpenAI's Agents SDK and a scripted model in
+# place of OpenAI's, Claude's with Anthropic's SDK and a stand-in of the Messages API on
+# 127.0.0.1. A case with a `status` has the stand-in answer every request with that error
+# status, to see that the SDK's client does not retry by itself; an OpenAI agent's then goes to a
+# stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL). The
+# Python twin of check.mjs: the same cases, and the results in the same shape.
 #
 #   .venv/bin/python check.py <io.py> <cases.json> <results.json>
 #
@@ -11,9 +15,12 @@
 from __future__ import annotations
 
 import asyncio
+import http.server
 import importlib.util
 import json
+import os
 import sys
+import threading
 from typing import Any
 
 from agents import Model, ModelProvider, RunConfig
@@ -33,6 +40,91 @@ class Provider(ModelProvider):
         return self.model
 
 
+def message(model: str, text: str, stop: str) -> dict[str, Any]:
+    """The Messages API's answer: the text, and how the turn ended; a refusal has no content, as the API reference shows it."""
+    refused = stop == "refusal"
+    return {
+        "id": "msg_test",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": [] if refused else [{"type": "text", "text": text}],
+        "stop_reason": stop,
+        "stop_sequence": None,
+        "stop_details": {"type": "refusal", "category": None, "explanation": None} if refused else None,
+        "usage": {"input_tokens": 10, "output_tokens": 10},
+    }
+
+
+class StandIn(http.server.ThreadingHTTPServer):
+    """A stand-in of the Messages API that answers every request with `reply` and writes it down."""
+
+    def __init__(self, reply: tuple[int, Any]) -> None:
+        self.reply = reply
+        self.asked: list[dict[str, Any]] = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(handler) -> None:  # noqa: N805 - the server is `self` here
+                raw = handler.rfile.read(int(handler.headers.get("content-length") or 0))
+                self.asked.append({"method": "POST", "path": handler.path, "version": handler.headers.get("anthropic-version"), "body": json.loads(raw) if raw else None})
+                status, body = self.reply
+                data = json.dumps(body).encode()
+                handler.send_response(status)
+                handler.send_header("content-type", "application/json")
+                handler.send_header("content-length", str(len(data)))
+                handler.end_headers()
+                handler.wfile.write(data)
+
+            def log_message(handler, *args: Any) -> None:  # noqa: N805
+                pass
+
+        super().__init__(("127.0.0.1", 0), Handler)
+
+
+async def openai_failing(io: Any, c: dict[str, Any]) -> dict[str, Any]:
+    """An OpenAI agent against a stand-in of the Responses API that answers with an error status."""
+    server = StandIn((c["status"], {"error": {"message": "scripted", "type": "server_error"}}))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    os.environ["OPENAI_BASE_URL"] = f"http://127.0.0.1:{server.server_address[1]}/v1"
+    os.environ["OPENAI_API_KEY"] = "test"
+    os.environ["OPENAI_AGENTS_DISABLE_TRACING"] = "1"
+    out: dict[str, Any] = {}
+    try:
+        try:
+            out["answer"] = await io.transport().agent(c["call"])
+        except Exception as e:  # noqa: BLE001 - the error's name is what is compared
+            out["error"] = type(e).__name__
+    finally:
+        server.shutdown()
+        server.server_close()
+    out["asked"] = [{"method": a["method"], "path": a["path"]} for a in server.asked]
+    return out
+
+
+async def claude(io: Any, c: dict[str, Any]) -> dict[str, Any]:
+    call = c["call"]
+    if "status" in c:
+        reply: tuple[int, Any] = (c["status"], {"type": "error", "error": {"type": "api_error", "message": "scripted"}})
+    elif "refusal" in c:
+        reply = (200, message(call["model"], c["refusal"], "refusal"))
+    else:
+        reply = (200, message(call["model"], c["text"], "end_turn"))
+    server = StandIn(reply)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    out: dict[str, Any] = {}
+    try:
+        transport = io.transport(claude={"base_url": f"http://127.0.0.1:{server.server_address[1]}", "api_key": "test"})
+        try:
+            out["answer"] = await transport.agent(call)
+        except Exception as e:  # noqa: BLE001 - the error's name is what is compared
+            out["error"] = type(e).__name__
+    finally:
+        server.shutdown()
+        server.server_close()
+    out["asked"] = server.asked
+    return out
+
+
 def load(path: str) -> Any:
     spec = importlib.util.spec_from_file_location("dandori_io", path)
     assert spec is not None and spec.loader is not None
@@ -48,6 +140,12 @@ async def main() -> None:
         cases = json.load(f)
     results = []
     for c in cases:
+        if c["call"].get("provider") == "claude":
+            results.append(await claude(io, c))
+            continue
+        if "status" in c:
+            results.append(await openai_failing(io, c))
+            continue
         if "refusal" in c:
             refusal = ResponseOutputRefusal(type="refusal", refusal=c["refusal"])
             message: Any = ResponseOutputMessage(id="scripted-message", type="message", role="assistant", status="completed", content=[refusal])

@@ -18,7 +18,7 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
-use crate::temporal_py::{method, py_check, py_name, py_type, q, retriers, rules_file, task_doc, task_impl, types_file, IO};
+use crate::temporal_py::{method, py_check, py_name, py_type, q, retriers, rules_file, task_doc, task_impl, types_file, io_py};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The package the build writes: the workflow's name.
@@ -114,7 +114,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow as a pydantic-graph graph. See graph.py.\n", m.name, m.version)),
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/tasks.py"), tasks_file(m, &header)),
-        (format!("{dir}/io.py"), format!("{header}{IO}")),
+        (format!("{dir}/io.py"), format!("{header}{}", io_py())),
         (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}")),
         (format!("{dir}/graph.py"), graph),
     ];
@@ -156,7 +156,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("    def __init__(self, own: OwnTasks, transport: io.Transport | None = None) -> None:\n        self._own = own\n        self._t = transport if transport is not None else io.transport()\n");
     for task in &m.tasks {
         a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", method(&task.name), task_doc(m, task)));
-        let lines = task_impl(task, p);
+        let lines = task_impl(m, task, p);
         let uses_own = lines.iter().any(|l| l.contains("own."));
         a.push_str(if uses_own { "        own = self._own\n" } else { "        t = self._t\n" });
         for l in lines {

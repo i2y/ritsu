@@ -9,8 +9,8 @@
 //
 // A Task whose Assign or Output cannot be evaluated fails with States.QueryEvaluationError,
 // which its Retry and Catch take, as on Step Functions. An HTTP Task to OpenAI's Responses API
-// (an `agent` task) gets its answer as the API gives it, { "answer": <value> } as the message's
-// text; a failure is played as the model refusing, with no text to read.
+// or Claude's Messages API (an `agent` task) gets its answer as the API gives it, { "answer":
+// <value> } as the text; a failure is played as the model refusing, with nothing to read.
 //
 //   node tools/asl-run.mjs <definition.asl.json> <run.json> [execution name]
 //
@@ -126,14 +126,15 @@ function wire(resource, args) {
   return { resource, args };
 }
 
-const AGENT_URL = "https://api.openai.com/v1/responses";
+const OPENAI_URL = "https://api.openai.com/v1/responses";
+const CLAUDE_URL = "https://api.anthropic.com/v1/messages";
 
 function isAgent(resource, args) {
-  return resource === "arn:aws:states:::http:invoke" && args.ApiEndpoint === AGENT_URL;
+  return resource === "arn:aws:states:::http:invoke" && (args.ApiEndpoint === OPENAI_URL || args.ApiEndpoint === CLAUDE_URL);
 }
 
 // the Responses API's answer: a reasoning item, then the message, whose content is `content`
-function response(content) {
+function openaiResponse(content) {
   return {
     ResponseBody: {
       id: "resp_test",
@@ -149,8 +150,40 @@ function response(content) {
   };
 }
 
+// the Messages API's answer: the model's thinking (whose text the API leaves out), then the
+// text, and how the turn ended; a refusal has no content, as the API reference shows it
+function claudeResponse(model, text) {
+  const refused = text === null;
+  return {
+    ResponseBody: {
+      id: "msg_test",
+      type: "message",
+      role: "assistant",
+      model,
+      content: refused
+        ? []
+        : [
+            { type: "thinking", thinking: "", signature: "test" },
+            { type: "text", text },
+          ],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      stop_details: refused ? { type: "refusal", category: null, explanation: null } : null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    },
+    StatusCode: 200,
+    StatusText: "OK",
+  };
+}
+
+// an agent's answer as its API gives it, or its refusal
+function agentResponse(args, answer, refused) {
+  if (args.ApiEndpoint === CLAUDE_URL) return claudeResponse(args.RequestBody.model, refused ? null : JSON.stringify({ answer }));
+  return refused ? openaiResponse({ type: "refusal", refusal: "scripted" }) : openaiResponse({ type: "output_text", text: JSON.stringify({ answer }), annotations: [] });
+}
+
 function wrap(resource, args, answer) {
-  if (isAgent(resource, args)) return response({ type: "output_text", text: JSON.stringify({ answer }), annotations: [] });
+  if (isAgent(resource, args)) return agentResponse(args, answer, false);
   if (resource === "arn:aws:states:::lambda:invoke") return { Payload: answer, StatusCode: 200 };
   if (resource === "arn:aws:states:::http:invoke") return { ResponseBody: answer, StatusCode: 200 };
   if (resource === "arn:aws:states:::states:startExecution.sync:2") return { Output: answer, Status: "SUCCEEDED" };
@@ -239,7 +272,7 @@ async function runStates(all, start, input, context, top) {
           if (ans === undefined) throw new Error(`no answer for call ${next} (${name})`);
           let result;
           if ("ok" in ans) result = wrap(st.Resource, args, ans.ok);
-          else if (isAgent(st.Resource, args) && ans.error === "failure") result = response({ type: "refusal", refusal: "scripted" });
+          else if (isAgent(st.Resource, args) && ans.error === "failure") result = agentResponse(args, null, true);
           error = "ok" in ans || result !== undefined ? null : ans.as;
           if (result !== undefined) {
             // the answer is read into the variables and the output, or the Task fails

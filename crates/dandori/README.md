@@ -11,8 +11,8 @@ The decisions themselves are written in [rulec](https://github.com/i2y/rulec): t
 that rulec proves complete and free of overlaps. dandori reads them through rulec's
 command line, and uses a rule's state machine as the type of the thing a workflow
 drives — a Stripe PaymentIntent, an order in a warehouse. Reading and writing — pulling
-the fields out of a customer's message, drafting a reply — can go to an OpenAI agent,
-whose answer comes back in a declared type ([Agents](#agents)).
+the fields out of a customer's message, drafting a reply — can go to an agent, OpenAI's or
+Claude, whose answer comes back in a declared type ([Agents](#agents)).
 
 The name comes from 段取り (dandori), arranging the steps of a job beforehand.
 
@@ -104,6 +104,7 @@ flow
 | `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
 | `agent "<instructions>"` and `model "<model>"` | HTTP Task to OpenAI's Responses API | an activity dandori writes, with OpenAI's Agents SDK | a step dandori writes, with the Agents SDK | the same, with the Agents SDK | the same, with the Agents SDK for Python |
+| `agent claude "<instructions>"` and `model "<model>"` | HTTP Task to Claude's Messages API | an activity dandori writes, with Anthropic's SDK | a step dandori writes, with Anthropic's SDK | the same, with Anthropic's SDK | the same, with Anthropic's SDK for Python |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
 | `workflow "<type>"` | | child workflow | | | |
 | `durable function "<arn>"` | | | invoke of another durable function | | |
@@ -132,8 +133,8 @@ variable's parameter.
 
 An `agent` task gives a model its arguments and takes back a value of the task's type. The
 model reads and writes; the rules decide. [examples/inquiry](examples/inquiry/inquiry.flow)
-reads a customer's message with one agent, routes it with a rulec rule, and drafts the reply
-with another:
+reads a customer's message with an OpenAI agent, routes it with a rulec rule, and drafts the
+reply with a Claude one:
 
 ```
 task 読み取る(本文: string) -> 読み取り
@@ -143,6 +144,12 @@ task 読み取る(本文: string) -> 読み取り
   timeout 60 seconds
   retry 2 times every 10 seconds
 
+task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
+  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。…"
+  model "claude-sonnet-5"
+  connection "arn:aws:events:…:connection/claude/…"
+  timeout 60 seconds
+
 flow
   let 読 = 読み取る(本文: 問い合わせ.本文)
     on failure => …
@@ -151,20 +158,28 @@ flow
 
 - The answer's type becomes a JSON Schema in the strict form of OpenAI's Structured Outputs —
   every field of a record required, `T?` a choice with null, an enum its values — around
-  `{"answer": …}`, since the top must be an object. The answer is then checked against the
-  type like any other.
+  `{"answer": …}`, since the top must be an object. Claude's structured outputs take the same
+  schema. The answer is then checked against the type like any other.
 - Every target asks the model the same thing: the instructions, the arguments as the same
   JSON text, and the schema, and no model settings — dandori adds none, and keeps the Agents
   SDK from adding its defaults. Step Functions sends it to the Responses API from an HTTP
   Task, with the API key in the EventBridge connection. The code dandori writes for the other targets runs it with
   OpenAI's Agents SDK through the `Transport`, which reads `OPENAI_API_KEY`, or takes a run
   configuration of your own (another model provider, for one).
+- A Claude agent gets the instructions as the system prompt, the arguments' JSON text as the
+  user's message, and the schema as `output_config.format`, with `max_tokens` 16000 (the
+  Messages API wants one) — from an HTTP Task on Step Functions, with the key in the connection
+  as `x-api-key`, and with Anthropic's SDK elsewhere, which reads `ANTHROPIC_API_KEY`. Claude may
+  give an enum's value in another case, so a Claude agent's enum values are taken without regard
+  to case; an enum whose values differ only in case cannot be in such an answer (E007).
+- Neither SDK's client retries by itself in the default `Transport`: the workflow retries, as
+  the task's `retry` says, as Step Functions does.
 - An agent changes nothing on the other side, so it takes no `key`, and retrying it is
   always safe. It declares no errors: a refusal, or a call that fails, is `failure`.
 - The checker refuses an answer the schema cannot say (`json`, a record that contains itself
-  through others) or one larger than Structured Outputs take (E007). Step Functions refuses an
-  agent without `connection`, and an HTTP Task whose `timeout` is over the 60 seconds it
-  gives a request (E050).
+  through others) or one larger than the provider takes (E007): for Claude, more than 16 values
+  that may be absent. Step Functions refuses an agent without `connection`, and an HTTP Task
+  whose `timeout` is over the 60 seconds it gives a request (E050).
 
 The complete examples are in [examples/hotel](examples/hotel/hotel.flow),
 [examples/order](examples/order/order.flow), [examples/fulfillment](examples/fulfillment/fulfillment.flow),
@@ -243,12 +258,15 @@ caller and the stand-ins in node:24-alpine, answered by a mock in the cluster �
 containers' side is run too.
 
 An agent's call is recorded as the `Transport` gets it, and the stand-in answers
-`{"answer": …}` as the model would. The ASL runner answers an HTTP Task to the Responses API
-with a response of the API's shape, and plays a failure as the model refusing, so the state
-machine's reading of the answer is what fails the Task. The agent call of the default
-`Transport` itself, in TypeScript and in Python, runs with OpenAI's Agents SDK and a scripted
-model in place of OpenAI's (`tools/agents`), and the model must be asked what Step Functions
-asks for the same call; nothing goes to OpenAI.
+`{"answer": …}` as the model would. The ASL runner answers an HTTP Task to the Responses API or
+the Messages API with a response of the API's shape, and plays a failure as the model refusing,
+so the state machine's reading of the answer is what fails the Task. The scenarios give a
+Claude agent answers whose enum values are in another case, and every target must take them as
+the values. The agent call of the default `Transport` itself, in TypeScript and in Python, runs
+with OpenAI's Agents SDK and a scripted model in place of OpenAI's, and with Anthropic's SDK
+against a stand-in of the Messages API on this machine (`tools/agents`): the model must be
+asked what Step Functions asks for the same call, and an error status must fail the call
+without a retry. Nothing goes to OpenAI or Anthropic.
 
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
 timeout are left out there. Temporal's test environment, Argo and the graph's runner cannot
@@ -273,7 +291,7 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes a little over a minute; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes about a minute and a half; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of
@@ -287,5 +305,5 @@ Early. Not yet: Parallel with different branches, types of AWS API calls read fr
 published Smithy models (the parameters and answers are declared by hand, as for HTTP),
 cases the workflow holds itself, a rule's preconditions checked at the task that produced
 the value, runs on AWS and on a Temporal server, the caller image run against real
-Lambda, HTTP and AWS endpoints from Argo, and agents run against OpenAI itself. The design, the decisions and what is
+Lambda, HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The design, the decisions and what is
 left are in [DESIGN.md](DESIGN.md).

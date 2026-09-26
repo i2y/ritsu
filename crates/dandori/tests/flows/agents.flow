@@ -1,7 +1,14 @@
 workflow 経費 v1
-description "エージェントの端の振る舞い：リスト・単位・時刻・無いことがある値を持つ答え、答えを読まない呼び出し、並列の回の中のエージェント"
+description "エージェントの端の振る舞い：リスト・単位・時刻・無いことがある値を持つ答え、答えを読まない呼び出し、並列の回の中のエージェント、大文字と小文字の違う列挙の値で答える Claude のエージェント"
 
 enum 区分 = 交通 | 飲食 | 宿泊 | その他
+enum 急ぎ = low | normal | Urgent
+
+record 仕分け
+  急ぎ : 急ぎ
+  印   : list[急ぎ]
+  期日 : timestamp?
+  区分 : 区分?
 
 record 領収書
   店       : string
@@ -16,6 +23,8 @@ inputs
 
 outputs
   領収書たち : list[領収書]
+  急ぎ       : 急ぎ
+  印         : list[急ぎ]
 
 task 確かめる(写したち: list[string]) -> bool
   agent "文字起こしの束が、どれも領収書かどうかを答えてください。"
@@ -29,10 +38,21 @@ task 読み取る(写し: string) -> 領収書
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
   retry 1 times every 5 seconds
 
+# Claude may answer `Urgent` as `urgent`, or `low` as `Low`: it is taken as the enum's value
+task 仕分ける(領収書たち: list[領収書]) -> 仕分け
+  agent claude "領収書を見て、精算の急ぎ具合、急ぎ具合の印、支払いの期日（UTC）、いちばん多い区分を答えてください。期日が分からなければ null にします。"
+  model "claude-sonnet-5"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/claude/6f7a8b9c"
+  timeout 60 seconds
+  retry 1 times every 5 seconds
+
 flow
   # the answer is not read, but a refusal still fails the call
   確かめる(写したち: 写したち)
   let 領収書たち = for 写し in 写したち at most 3 in parallel
     let r = 読み取る(写し: 写し)
     yield r
-  succeed 領収書たち = 領収書たち
+  let 仕 = 仕分ける(領収書たち: 領収書たち)
+  match 仕.急ぎ
+    Urgent => succeed 領収書たち = 領収書たち, 急ぎ = Urgent, 印 = 仕.印
+    low, normal => succeed 領収書たち = 領収書たち, 急ぎ = 仕.急ぎ, 印 = 仕.印

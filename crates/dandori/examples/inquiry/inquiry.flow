@@ -1,5 +1,5 @@
 workflow 問い合わせ v1
-description "お客さまの問い合わせを、エージェントが読んで種類と注文番号と要点を取り出し、受け持つ窓口と返事の期限は規則が決め、返事の下書きをエージェントが書いて、窓口のシステムに起票する。読むことと書くことはエージェント、決めることは規則が受け持つ"
+description "お客さまの問い合わせを、エージェントが読んで種類と注文番号と要点を取り出し、受け持つ窓口と返事の期限は規則が決め、返事の下書きを別のエージェントが書いて、窓口のシステムに起票する。読むことと書くことはエージェント（読むのは OpenAI、書くのは Claude）、決めることは規則が受け持つ"
 
 use rule 振り分け from "rules/問い合わせの振り分け.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:inquiry-routing"
@@ -33,9 +33,9 @@ task 読み取る(本文: string) -> 読み取り
   retry 2 times every 10 seconds
 
 task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
-  agent "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。期限は返事をするまでの時間の数です。約束できないことは書きません。"
-  model "gpt-5.4-mini"
-  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
+  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。期限は返事をするまでの時間の数です。約束できないことは書きません。"
+  model "claude-sonnet-5"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/claude/6f7a8b9c"
   timeout 60 seconds
 
 task 起票する(問い合わせID: string, 窓口: 振り分け.窓口, 期限: duration[h], 件名: string, 本文: string, 下書き: string?) -> 起票

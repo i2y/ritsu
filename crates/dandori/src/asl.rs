@@ -20,10 +20,20 @@ use std::collections::BTreeSet;
 /// How long Step Functions lets an HTTP Task's request take.
 pub const HTTP_TASK_SECONDS: u64 = 60;
 
-/// An agent's answer, read from the Responses API's: the text of the message, parsed, and
-/// the value under `answer`. When the model refuses, there is no text, and `$error` fails the
-/// Task with States.QueryEvaluationError, which its Retry and Catch take as `failure`.
-const AGENT_ANSWER: &str = "($dd_text := ($states.result.ResponseBody.output[type = \"message\"].content[type = \"output_text\"].text)[0]; $exists($dd_text) ? $parse($dd_text).answer : $error(\"the agent gave no answer to read; the model may have refused\"))";
+/// An OpenAI agent's answer, read from the Responses API's: the text of the message, parsed,
+/// and the value under `answer`. When the model refuses, there is no text, and `$error` fails
+/// the Task with States.QueryEvaluationError, which its Retry and Catch take as `failure`.
+const OPENAI_ANSWER: &str = "($dd_text := ($states.result.ResponseBody.output[type = \"message\"].content[type = \"output_text\"].text)[0]; $exists($dd_text) ? $parse($dd_text).answer : $error(\"the agent gave no answer to read; the model may have refused\"))";
+
+/// A Claude agent's answer, read from the Messages API's: the text, parsed, and the value under
+/// `answer`, with its enum values spelled as the enums spell them (Claude may change their
+/// case). An answer that did not end as a turn ends (a refusal, or one cut off at the limit) has
+/// nothing to read, and `$error` fails the Task as for OpenAI's.
+fn claude_answer(m: &Model, t: &Ty) -> String {
+    let parsed = "$parse($dd_text).answer";
+    let folded = render::jsonata_fold(m, parsed, t, 0).unwrap_or_else(|| parsed.to_string());
+    format!("($dd_body := $states.result.ResponseBody; $dd_text := $join($dd_body.content[type = \"text\"].text, \"\"); ($dd_body.stop_reason = \"end_turn\" and $exists($dd_text)) ? {folded} : $error(\"the agent gave no answer to read; the model may have refused, or stopped at the limit\"))")
+}
 
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
@@ -53,13 +63,19 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`state machine` のどれかが要ります", t.name),
             )),
             Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
-            Some(Via::Agent { .. }) if t.connection.is_none() => errs.push(Diag::error(
-                "E050",
-                t.line,
-                1,
-                format!("Step Functions calls the agent `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds the OpenAI API key", t.name),
-                format!("Step Functions はエージェント `{}` を HTTP Task で呼ぶので、OpenAI の API キーを持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
-            )),
+            Some(Via::Agent { provider, .. }) if t.connection.is_none() => {
+                let (whose_en, whose_ja) = match provider {
+                    Provider::OpenAi => ("the OpenAI API key", "OpenAI の API キー"),
+                    Provider::Claude => ("the Claude API key (as the header x-api-key)", "Claude の API キー（ヘッダ x-api-key）"),
+                };
+                errs.push(Diag::error(
+                    "E050",
+                    t.line,
+                    1,
+                    format!("Step Functions calls the agent `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds {whose_en}", t.name),
+                    format!("Step Functions はエージェント `{}` を HTTP Task で呼ぶので、{whose_ja}を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
+                ))
+            }
 
             Some(Via::StateMachine(_)) if !t.errors.is_empty() => errs.push(Diag::error(
                 "E050",
@@ -633,22 +649,29 @@ impl<'a> Gen<'a> {
                         }
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), "$states.result.ResponseBody".to_string(), task.timeout, retry)
                     }
-                    Via::Agent { instructions, model } => {
+                    Via::Agent { provider, instructions, model } => {
                         // the input is the arguments' JSON text, in the order of the parameters
                         let input: Vec<String> = task
                             .params
                             .iter()
                             .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
                             .collect();
-                        let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
-                        let body = render::agent_request(model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
-                        let w = json!({
-                            "ApiEndpoint": render::AGENT_URL,
-                            "Method": "POST",
-                            "InvocationConfig": { "ConnectionArn": task.connection.clone().unwrap_or_default() },
-                            "RequestBody": body
-                        });
-                        ("arn:aws:states:::http:invoke".to_string(), w, AGENT_ANSWER.to_string(), task.timeout, retry)
+                        let ty = task.result.as_ref().expect("the checker gives an agent an answer");
+                        let schema = render::agent_schema(m, ty).expect("the checker gives an agent an answer with a schema");
+                        let body = render::agent_request(provider, model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
+                        let mut w = Map::new();
+                        w.insert("ApiEndpoint".into(), json!(render::agent_url(provider)));
+                        w.insert("Method".into(), json!("POST"));
+                        w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
+                        if let Some(h) = render::agent_headers(provider) {
+                            w.insert("Headers".into(), h);
+                        }
+                        w.insert("RequestBody".into(), body);
+                        let answer = match provider {
+                            Provider::OpenAi => OPENAI_ANSWER.to_string(),
+                            Provider::Claude => claude_answer(m, ty),
+                        };
+                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), answer, task.timeout, retry)
                     }
                     Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) => unreachable!("not a way Step Functions calls"),
                 }
@@ -662,7 +685,7 @@ impl<'a> Gen<'a> {
         st.insert("Arguments".into(), arguments);
         if !var.is_empty() {
             st.insert("Assign".into(), json!({ asl_var(&var): format!("{{% {result} %}}") }));
-        } else if result == AGENT_ANSWER {
+        } else if matches!(callee, Callee::Task(t) if matches!(m.tasks[*t].via(Platform::StepFunctions), Some(Via::Agent { .. }))) {
             // an agent's answer is read even when the flow does not keep it, so that a refusal fails the call
             st.insert("Output".into(), json!(format!("{{% {result} %}}")));
         }

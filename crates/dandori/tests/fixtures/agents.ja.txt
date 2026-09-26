@@ -1,20 +1,30 @@
-エラー[E007]: tests/fixtures/agents.flow:35:3: エージェントには、使うモデルを `model "gpt-5.4-mini"` のように書いてください
-    35 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:39:3: `model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません
-    39 |   model "gpt-5.4-mini"
-エラー[E007]: tests/fixtures/agents.flow:44:10: エージェントのタスクにはエラーを宣言できません。モデルが断ったときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります
-    44 |   errors 断った
-エラー[E007]: tests/fixtures/agents.flow:49:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
-    49 |   callback
-エラー[E007]: tests/fixtures/agents.flow:54:3: エージェントは相手の側を何も変えないので、`key` は要りません
-    54 |   key
-エラー[E007]: tests/fixtures/agents.flow:57:3: エージェントは答えを返します。答えの型を `-> <型>` と書いてください
-    57 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:61:3: エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください
-    61 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:65:3: エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください
-    65 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:69:3: 答えの JSON Schema（`{"answer": …}` に包んだもの）が、OpenAI の Structured Outputs の受け付ける大きさを超えています。オブジェクトの入れ子が 11 段（10 段まで）
-    69 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:75:3: エージェントは渡されたものを読んで答えるだけで、相手の側の案件を始めたり動かしたり見たりはしません
-    75 |   observes
+エラー[E007]: tests/fixtures/agents.flow:56:3: エージェントには、使うモデルを `model "gpt-5.4-mini"` のように書いてください
+    56 |   agent "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:60:3: `model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません
+    60 |   model "gpt-5.4-mini"
+エラー[E007]: tests/fixtures/agents.flow:65:10: エージェントのタスクにはエラーを宣言できません。モデルが断ったときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります
+    65 |   errors 断った
+エラー[E007]: tests/fixtures/agents.flow:70:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
+    70 |   callback
+エラー[E007]: tests/fixtures/agents.flow:75:3: エージェントは相手の側を何も変えないので、`key` は要りません
+    75 |   key
+エラー[E007]: tests/fixtures/agents.flow:78:3: エージェントは答えを返します。答えの型を `-> <型>` と書いてください
+    78 |   agent "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:82:3: エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください
+    82 |   agent "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:86:3: エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください
+    86 |   agent "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:90:3: 答えの JSON Schema（`{"answer": …}` に包んだもの）が、OpenAI の Structured Outputs の受け付ける大きさを超えています。オブジェクトの入れ子が 11 段（10 段まで）
+    90 |   agent "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:96:3: エージェントは渡されたものを読んで答えるだけで、相手の側の案件を始めたり動かしたり見たりはしません
+    96 |   observes
+エラー[E007]: tests/fixtures/agents.flow:99:9: `gemini` は dandori の知らないエージェントです。`agent openai "…"`（`agent "…"` だけでも同じ）か `agent claude "…"` と書いてください
+    99 |   agent gemini "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:103:3: エージェントには、使うモデルを `model "claude-sonnet-5"` のように書いてください
+   103 |   agent claude "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:106:3: エージェントの答えは、Claude の構造化出力で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください
+   106 |   agent claude "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:110:3: 答えの JSON Schema（`{"answer": …}` に包んだもの）が、Claude の構造化出力の受け付ける大きさを超えています。無いことがある値（null との選択）が 17 個（16 個まで）
+   110 |   agent claude "読んでください。"
+エラー[E007]: tests/fixtures/agents.flow:114:3: Claude は列挙の値の大文字と小文字を変えて答えることがあり、dandori は大文字と小文字を区別せずに値を読みます。このため `大小` の `low` と `Low` は同じ値になります。大文字と小文字のほかにも違いのある名前にしてください
+   114 |   agent claude "読んでください。"

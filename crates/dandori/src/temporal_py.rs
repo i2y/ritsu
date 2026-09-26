@@ -165,7 +165,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow for Temporal's Python SDK. See workflow.py.\n", m.name, m.version)),
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/activities.py"), tasks_file(m, &header)),
-        (format!("{dir}/io.py"), format!("{header}{IO}")),
+        (format!("{dir}/io.py"), format!("{header}{}", io_py())),
         (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}")),
         (format!("{dir}/workflow.py"), wf),
     ];
@@ -198,7 +198,7 @@ pub(crate) fn task_doc(m: &Model, task: &TaskDef) -> String {
 /// The body of the function that runs a task, as lines: the user's own (`own`), or the call
 /// that dandori writes for `lambda`, `http`, `aws` and `agent` through the Transport `t`. A
 /// declared error is raised as `fail(kind, message)`.
-pub(crate) fn task_impl(task: &TaskDef, p: Platform) -> Vec<String> {
+pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
     let fname = method(&task.name);
     match task.via(p) {
         Some(Via::Own) => vec![format!("return await own.{fname}(args)")],
@@ -274,21 +274,35 @@ pub(crate) fn task_impl(task: &TaskDef, p: Platform) -> Vec<String> {
                 vec![format!("return {call}")]
             }
         }
-        Some(Via::Agent { instructions, model }) => {
+        Some(Via::Agent { provider, instructions, model }) => {
             let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
-            vec![
-                "return io.answer(".into(),
-                "    await t.agent(".into(),
-                "        {".into(),
-                format!("            \"agent\": {},", q(&task.name)),
-                format!("            \"model\": {},", q(model)),
-                format!("            \"instructions\": {},", q(instructions)),
-                format!("            \"input\": {{{}}},", input.join(", ")),
-                format!("            \"schema\": SCHEMAS[{}],", q(&task.name)),
-                "        }".into(),
-                "    )".into(),
+            let call = vec![
+                "await t.agent(".to_string(),
+                "    {".into(),
+                format!("        \"agent\": {},", q(&task.name)),
+                format!("        \"provider\": {},", q(provider.name())),
+                format!("        \"model\": {},", q(model)),
+                format!("        \"instructions\": {},", q(instructions)),
+                format!("        \"input\": {{{}}},", input.join(", ")),
+                format!("        \"schema\": SCHEMAS[{}],", q(&task.name)),
+                "    }".into(),
                 ")".into(),
-            ]
+            ];
+            // Claude may answer an enum's value in another case: it is taken as the value
+            let fold = provider == Provider::Claude && !render::enums_of(m, task.result.as_ref().unwrap_or(&Ty::Json)).is_empty();
+            let mut out = vec!["return io.answer(".to_string()];
+            if fold {
+                out.push("    io.fold(".into());
+                out.extend(call.iter().map(|l| format!("        {l}")));
+                // the call is the first of two arguments
+                out.last_mut().unwrap().push(',');
+                out.push(format!("        SCHEMAS[{}],", q(&task.name)));
+                out.push("    )".into());
+            } else {
+                out.extend(call.iter().map(|l| format!("    {l}")));
+            }
+            out.push(")".into());
+            out
         }
         _ => vec!["raise NotImplementedError".into()],
     }
@@ -300,7 +314,7 @@ pub(crate) fn schemas_block(m: &Model, tasks: &[&TaskDef], p: Platform) -> Strin
     if agents.is_empty() {
         return String::new();
     }
-    let mut out = String::from("# What each agent answers in: the JSON Schema OpenAI's Structured Outputs hold its model to.\nSCHEMAS: dict[str, Any] = {\n");
+    let mut out = String::from("# What each agent answers in: the JSON Schema its provider's structured outputs hold the model to.\nSCHEMAS: dict[str, Any] = {\n");
     for task in agents {
         let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
         out.push_str(&format!("    {}: {},\n", q(&task.name), render::layout(&schema, 1, "    ", true)));
@@ -321,6 +335,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   would send, through a Transport (io.py), where the credentials and the clients are yours to set.\n");
     a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
+    a.push_str("#   A Claude agent's enum values are taken without regard to case (io.fold).\n");
     a.push_str("# - The others are yours to write (OwnTasks). A declared error is raised as\n");
     a.push_str("#   ApplicationError(\"...\", type=\"<error>\", non_retryable=True).\n");
     a.push_str("# - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
@@ -347,7 +362,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
         let fname = method(&task.name);
         names.push(fname.clone());
         a.push_str(&format!("\n    @activity.defn(name={})\n    async def {fname}(args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", q(&ident(&task.name)), task_doc(m, task)));
-        for l in task_impl(task, p) {
+        for l in task_impl(m, task, p) {
             a.push_str(&format!("        {l}\n"));
         }
     }
@@ -434,11 +449,17 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     t
 }
 
-pub(crate) const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
+/// io.py, with the numbers every target sends put in.
+pub(crate) fn io_py() -> String {
+    IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())
+}
+
+const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
 # through a Transport, so that the credentials, the clients and a test's stand-in are yours to
 # set; the default one uses the standard library for HTTP, boto3 (the AWS SDK for Python) for
-# Lambda and the AWS APIs, and OpenAI's Agents SDK (openai-agents, which reads OPENAI_API_KEY)
-# for the agents, each imported when first needed.
+# Lambda and the AWS APIs, OpenAI's Agents SDK (openai-agents, which reads OPENAI_API_KEY) for
+# OpenAI's agents and Anthropic's SDK (anthropic, which reads ANTHROPIC_API_KEY) for Claude's,
+# each imported when first needed.
 
 from __future__ import annotations
 
@@ -458,10 +479,23 @@ Answer = dict
 # "body", "query", "form"}; `form` asks for a URL-encoded body.
 HttpRequest = dict
 
-# A call of an agent: {"agent": the task's name, "model", "instructions", "input", "schema"}.
-# The model is told `instructions`, reads `input` as JSON text, and answers in `schema`, the
-# JSON Schema of {"answer": …} in the strict form of OpenAI's Structured Outputs.
+# A call of an agent: {"agent": the task's name, "provider", "model", "instructions", "input",
+# "schema"}. The provider is "openai" (run with the Agents SDK) or "claude" (with Anthropic's
+# SDK). The model is told `instructions`, reads `input` as JSON text, and answers in `schema`,
+# the JSON Schema of {"answer": …} in the strict form of OpenAI's Structured Outputs, which
+# Claude's take too.
 AgentCall = dict
+
+# The most a Claude agent's answer may take, thinking included, as every target asks for.
+CLAUDE_MAX_TOKENS = {{CLAUDE_MAX_TOKENS}}
+
+
+class AgentStopped(Exception):
+    """A Claude agent that did not end its turn with an answer: it refused, or stopped at the limit."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"the model stopped with {reason}, not with an answer")
+        self.reason = reason
 
 
 class Transport(Protocol):
@@ -508,14 +542,25 @@ def encode(o: dict[str, Any], prefix: str = "") -> str:
 
 
 class DefaultTransport:
-    def __init__(self, headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None, agents: Any = None) -> None:
+    def __init__(
+        self,
+        headers: Callable[[str], dict[str, str]] | None = None,
+        aws: dict[str, Any] | None = None,
+        agents: Any = None,
+        claude: dict[str, Any] | None = None,
+    ) -> None:
         """`headers`: what to add to an HTTP request, such as the credentials the other side
         wants; `aws`: the keyword arguments of boto3's clients, such as `region_name`;
         `agents`: the Agents SDK's RunConfig, such as one whose model_provider serves models
-        other than OpenAI's."""
+        other than OpenAI's (without one, OpenAI's agents run through a client that does not
+        retry by itself); `claude`: the keyword arguments of Anthropic's client for the
+        Claude agents, such as `api_key` or `base_url`. That client does not retry by itself
+        unless they say so: the workflow retries, as `retry` says."""
         self._headers = headers
         self._aws = aws or {}
         self._agents = agents
+        self._claude_options = claude or {}
+        self._claude: Any = None
         self._clients: dict[str, Any] = {}
 
     def _client(self, service: str) -> Any:
@@ -588,6 +633,8 @@ class DefaultTransport:
         return await asyncio.to_thread(call)
 
     async def agent(self, call: AgentCall) -> Any:
+        if call.get("provider") == "claude":
+            return await self._claude_agent(call)
         from agents import Agent, AgentOutputSchemaBase, ModelBehaviorError, ModelSettings, Runner
 
         class Answer(AgentOutputSchemaBase):
@@ -611,12 +658,42 @@ class DefaultTransport:
 
         # no model settings of the SDK's own, so that the model gets what Step Functions sends
         agent = Agent(name=call["agent"], instructions=call["instructions"], model=call["model"], model_settings=ModelSettings(), output_type=Answer())
-        result = await Runner.run(agent, text(call["input"]), run_config=self._agents)
+        run_config = self._agents
+        if run_config is None:
+            # OpenAI's client retries twice by itself unless it is told not to
+            from agents import OpenAIProvider, RunConfig
+            from openai import AsyncOpenAI
+
+            run_config = RunConfig(model_provider=OpenAIProvider(openai_client=AsyncOpenAI(max_retries=0)))
+            self._agents = run_config
+        result = await Runner.run(agent, text(call["input"]), run_config=run_config)
         return result.final_output
 
+    async def _claude_agent(self, call: AgentCall) -> Any:
+        if self._claude is None:
+            from anthropic import AsyncAnthropic
 
-def transport(headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None, agents: Any = None) -> Transport:
-    return DefaultTransport(headers, aws, agents)
+            self._claude = AsyncAnthropic(**{"max_retries": 0, **self._claude_options})
+        # what Step Functions sends: the instructions as the system prompt, the input as the user's message
+        message = await self._claude.messages.create(
+            model=call["model"],
+            max_tokens=CLAUDE_MAX_TOKENS,
+            system=call["instructions"],
+            messages=[{"role": "user", "content": text(call["input"])}],
+            output_config={"format": {"type": "json_schema", "schema": call["schema"]}},
+        )
+        if message.stop_reason != "end_turn":
+            raise AgentStopped(str(message.stop_reason))
+        return json.loads("".join(b.text for b in message.content if b.type == "text"))
+
+
+def transport(
+    headers: Callable[[str], dict[str, str]] | None = None,
+    aws: dict[str, Any] | None = None,
+    agents: Any = None,
+    claude: dict[str, Any] | None = None,
+) -> Transport:
+    return DefaultTransport(headers, aws, agents, claude)
 
 
 def workflow_of(callback_id: str) -> str:
@@ -630,6 +707,29 @@ def value(a: Answer, names: dict[str, str], fail: Callable[[str, str], Exception
         return a["ok"]
     kind = names.get(a["error"])
     raise fail(kind if kind is not None else f"Dandori.Failure.{a['error']}", a.get("message", ""))
+
+
+def fold(v: Any, schema: Any) -> Any:
+    """A Claude agent's answer with every enum value in it spelled as `schema` spells it. Claude's
+    structured outputs do not keep an enum value's case, so a value that differs from one only
+    in case is taken as that one; what does not fit stays, for the answer's check to find."""
+    if not isinstance(schema, dict):
+        return v
+    if isinstance(schema.get("enum"), list):
+        if not isinstance(v, str) or v in schema["enum"]:
+            return v
+        return next((e for e in schema["enum"] if isinstance(e, str) and e.lower() == v.lower()), v)
+    if isinstance(schema.get("anyOf"), list):
+        return fold(v, next((s for s in schema["anyOf"] if not (isinstance(s, dict) and s.get("type") == "null")), None))
+    if schema.get("type") == "array":
+        return [fold(x, schema.get("items")) for x in v] if isinstance(v, list) else v
+    if schema.get("type") == "object" and isinstance(v, dict):
+        out = dict(v)
+        for k, s in (schema.get("properties") or {}).items():
+            if k in out:
+                out[k] = fold(out[k], s)
+        return out
+    return v
 
 
 def answer(out: Any) -> Any:

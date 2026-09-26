@@ -118,8 +118,9 @@ pub enum Binding {
     Http { method: String, url: String, form: bool },
     /// an AWS API call, as Step Functions' AWS SDK integrations name it: `sns:publish`
     Aws { service: String, action: String },
-    /// an agent that reads the arguments and answers in the task's type, told what to do by `instructions`
-    Agent { instructions: String },
+    /// an agent that reads the arguments and answers in the task's type, told what to do by
+    /// `instructions`; `agent claude "…"` names whose models it runs on (OpenAI's when it does not)
+    Agent { provider: Option<Name>, instructions: String },
 }
 
 #[derive(Clone, Debug)]
@@ -1406,8 +1407,12 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             t.binding = Some((Binding::Http { method, url, form }, sp));
         }
         "agent" => {
+            let provider = match cc.peek() {
+                Some(Tok::Ident(_)) => Some(cc.ident("whose agent it is, openai or claude", "どこのエージェントか（openai か claude）")?),
+                _ => None,
+            };
             let instructions = cc.string("what the agent is to do", "エージェントへの指示")?.0;
-            t.binding = Some((Binding::Agent { instructions }, sp));
+            t.binding = Some((Binding::Agent { provider, instructions }, sp));
         }
         "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
         "connection" => t.connection = Some(cc.string("the EventBridge connection", "EventBridge の接続")?.0),

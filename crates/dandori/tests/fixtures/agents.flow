@@ -1,5 +1,26 @@
 workflow agents v1
-description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント"
+description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント、知らない提供元、Claude で null との選択が多すぎる答え、Claude で大文字と小文字だけが違う列挙の値"
+
+enum 大小 = low | Low | high
+
+record 選択
+  a : string?
+  b : string?
+  c : string?
+  d : string?
+  e : string?
+  f : string?
+  g : string?
+  h : string?
+  i : string?
+  j : string?
+  k : string?
+  l : string?
+  m : string?
+  n : string?
+  o : string?
+  p : string?
+  q : string?
 
 record 甲
   乙 : 乙?
@@ -73,6 +94,29 @@ task 見る(本文: string) -> 十
   agent "読んでください。"
   model "gpt-5.4-mini"
   observes
+
+task 知らない(本文: string) -> string
+  agent gemini "読んでください。"
+  model "gemini-3-pro"
+
+task クロードにモデルが無い(本文: string) -> string
+  agent claude "読んでください。"
+
+task クロードが巡る(本文: string) -> 甲
+  agent claude "読んでください。"
+  model "claude-sonnet-5"
+
+task 選択が多い(本文: string) -> 選択
+  agent claude "読んでください。"
+  model "claude-sonnet-5"
+
+task 大きさ(本文: string) -> list[大小]
+  agent claude "読んでください。"
+  model "claude-sonnet-5"
+
+task オープンエーアイの大きさ(本文: string) -> list[大小]
+  agent openai "読んでください。"
+  model "gpt-5.4-mini"
 
 flow
   pass

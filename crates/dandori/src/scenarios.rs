@@ -109,7 +109,18 @@ pub fn generate(m: &Model) -> Vec<Value> {
             }
         }
         let input = ex.finish_input();
-        let answers: Vec<Value> = ex.answers.iter().map(|a| ex.fill(a)).collect();
+        let answers: Vec<Value> = ex
+            .answers
+            .iter()
+            .map(|a| {
+                let filled = ex.fill(a);
+                // a Claude agent's answer with its enum values in another case, as Claude may give them
+                match a.get("recase").and_then(|t| t.as_u64()) {
+                    Some(t) => json!({ "ok": render::recase(m, &filled["ok"], m.tasks[t as usize].result.as_ref().unwrap_or(&Ty::Json)) }),
+                    None => filled,
+                }
+            })
+            .collect();
         out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ex.labels.iter().collect::<Vec<_>>() }));
     }
     out
@@ -182,6 +193,31 @@ impl<'a> Ex<'a> {
                 }
                 Value::Object(o)
             }
+        }
+    }
+
+    /// A value of type `t` with nothing left open: every value that may be absent there, every
+    /// list with two items, and the enums' values in turn.
+    fn full(&mut self, t: &Ty, name: &str) -> Value {
+        match t {
+            Ty::Bool => json!(true),
+            Ty::Enum(e) => {
+                self.made_values += 1;
+                let values = &self.m.enums[*e].values;
+                json!(values[self.made_values % values.len()])
+            }
+            Ty::Opt(inner) => self.full(inner, name),
+            Ty::List(inner) => Value::Array((1..=2).map(|i| self.full(inner, &format!("item{i}"))).collect()),
+            Ty::Record(r) => {
+                let fields = self.m.records[*r].fields.clone();
+                let mut o = Map::new();
+                for (f, ft) in fields {
+                    let v = self.full(&ft, &f);
+                    o.insert(f, v);
+                }
+                Value::Object(o)
+            }
+            _ => self.template(t, name),
         }
     }
 
@@ -583,6 +619,8 @@ impl<'a> Ex<'a> {
             Ok(Option<usize>),
             Err(String, Option<usize>),
             RetryThenOk(Option<usize>),
+            /// a Claude agent's answer whose enum values differ from the enum's in case
+            Recased(Option<usize>),
             /// an answer with a state the generated check does not let through
             Unexpected(usize),
             /// an answer that does not have the declared shape
@@ -682,6 +720,11 @@ impl<'a> Ex<'a> {
                 }
             }
         }
+        if let (Callee::Task(t), Some(ty), Some(st), true) = (callee, &result_ty, first_ok, target.is_some()) {
+            if matches!(m.tasks[*t].via(Platform::Temporal), Some(Via::Agent { provider: Provider::Claude, .. })) && render::has_cased_enum(m, ty) {
+                ways.push(("recased".into(), Way::Recased(st)));
+            }
+        }
         if let (Some(c), Some((_, allowed))) = (case, m.monitors.get(&s.site)) {
             let mc = m.machine(c);
             if let Some(st) = (0..mc.states.len()).find(|x| !allowed.contains(&mc.states[*x])) {
@@ -710,6 +753,17 @@ impl<'a> Ex<'a> {
             Way::Ok(st) => {
                 let v = ok_answer(self, st);
                 self.answers.push(json!({ "ok": v }));
+                self.assign(target, v, st);
+                Ctl::Next
+            }
+            Way::Recased(st) => {
+                // every part of the answer there, lists with items, so that every enum value in it is turned
+                let t = match callee {
+                    Callee::Task(t) => *t,
+                    Callee::Rule(_) => unreachable!("only an agent's answer is recased"),
+                };
+                let v = self.full(result_ty.as_ref().unwrap_or(&Ty::Json), "value");
+                self.answers.push(json!({ "ok": v, "recase": t }));
                 self.assign(target, v, st);
                 Ctl::Next
             }

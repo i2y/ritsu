@@ -113,7 +113,7 @@ on failure
 
 - `use rule <名前> from "<パス>"`：規則を読む。Step Functions と durable functions から呼ぶなら、下に `lambda "<関数>"` を書く。
 - `task <名前>(<引数>) [-> <型>]`：外の相手への呼び出し。`->` を書かないタスクは何も答えない（答えは読まない）。下に次の項目を書く。
-  - 呼び方（1.5）：`lambda "<関数>"`、`http <メソッド> "<URL>" [form]` と `connection "<EventBridge の接続>"`、`aws <サービス>:<操作>`、`agent "<指示>"` と `model "<モデル>"`（1.6。Step Functions では `connection` も）のどれか一つ。子ワークフローとして呼ぶなら、出力先ごとに `workflow "<型>"`（Temporal）、`state machine "<ARN>"`（Step Functions）、`durable function "<関数>"`（durable functions）、`workflow template "<名前>"`（Argo）。Temporal では `queue "<タスクキュー>"` で送り先のキューを選べる。Argo で利用者のコンテナを動かすなら `image "<イメージ>"`。
+  - 呼び方（1.5）：`lambda "<関数>"`、`http <メソッド> "<URL>" [form]` と `connection "<EventBridge の接続>"`、`aws <サービス>:<操作>`、`agent [openai | claude] "<指示>"` と `model "<モデル>"`（1.6。Step Functions では `connection` も）のどれか一つ。子ワークフローとして呼ぶなら、出力先ごとに `workflow "<型>"`（Temporal）、`state machine "<ARN>"`（Step Functions）、`durable function "<関数>"`（durable functions）、`workflow template "<名前>"`（Argo）。Temporal では `queue "<タスクキュー>"` で送り先のキューを選べる。Argo で利用者のコンテナを動かすなら `image "<イメージ>"`。
   - `errors <名前> [= <HTTP ステータス> | = <例外の名前>], …`：業務のエラー。`http` のタスクではステータスを、`aws` のタスクでは API の例外（`ConditionalCheckFailedException`、書かなければエラーの名前そのもの）を書く。`timeout` と `failure`（それ以外の失敗のすべて）は宣言しなくても使える。
   - `retry <n> times [every <時間>] [backoff <k>] [on <エラー>, …]`：`on` を書かなければ、`failure` と `timeout` をやり直し、宣言したエラーはやり直さない。
   - `timeout <時間>`、`key`（冪等キーを送る。`aws` のタスクでは `key ClientToken` のように、キーを受け取る API の引数を書く）、`idempotent`（二度しても一度と同じ）、`callback`（トークンや ID を渡して答えを待つ）。
@@ -152,7 +152,7 @@ on failure
 | `lambda` | Lambda の Task | dandori が書くアクティビティが関数を呼ぶ | dandori が書く step の中で関数を呼ぶ | dandori が書く実装をコンテナで動かす | dandori が書く関数が関数を呼ぶ |
 | `http` | HTTP Task | dandori が書くアクティビティが `fetch` で送る | dandori が書く step の中で `fetch` で送る | 同じく、コンテナで `fetch` | 同じく、urllib で |
 | `aws` | AWS SDK 統合 | dandori が書くアクティビティが AWS SDK で呼ぶ | dandori が書く step の中で AWS SDK で呼ぶ | 同じく、コンテナで AWS SDK | 同じく、boto3 で |
-| `agent` | HTTP Task で OpenAI の Responses API を呼ぶ | dandori が書くアクティビティが OpenAI の Agents SDK で呼ぶ | dandori が書く step の中で Agents SDK で呼ぶ | 同じく、コンテナで Agents SDK | 同じく、Python の Agents SDK で |
+| `agent` | HTTP Task で OpenAI の Responses API を呼ぶ（Claude なら Messages API） | dandori が書くアクティビティが OpenAI の Agents SDK で呼ぶ（Claude なら Anthropic の SDK） | dandori が書く step の中で、同じ SDK で呼ぶ | 同じく、コンテナで | 同じく、Python の Agents SDK か Anthropic の SDK で |
 | `state machine` | 入れ子の実行（`startExecution.sync:2`） | | | | |
 | `workflow` | | 子ワークフロー（`executeChild`） | | | |
 | `durable function` | | | 別の durable function の invoke | | |
@@ -178,6 +178,8 @@ AWS の API のエラーは、Step Functions では「サービスの接頭辞.�
 
 `agent "<指示>"` のタスクは、引数をモデルに読ませ、タスクの型の値を答えさせる。問い合わせの文面から種類と注文番号を取り出す、返事を下書きする、といった読むことと書くことをモデルに任せ、決めることは rulec の規則に残す（`examples/inquiry`）。エージェントの答えも、外の相手が返すほかの値と同じに扱う。流れが分かれるのは、その値を `match` するところか、規則に渡したところだけなので、P1 は変わらない。
 
+エージェントは OpenAI のもの（`agent "<指示>"`、`agent openai "<指示>"` と書いても同じ）か、Claude のもの（`agent claude "<指示>"`）。例では、読むのが OpenAI、書くのが Claude である。
+
 ```
 task 読み取る(本文: string) -> 読み取り
   agent "お客さまからの問い合わせの本文を読み、種類を一つ選び、…"
@@ -185,14 +187,23 @@ task 読み取る(本文: string) -> 読み取り
   connection "arn:aws:events:…:connection/openai/…"
   timeout 60 seconds
   retry 2 times every 10 seconds
+
+task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
+  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。…"
+  model "claude-sonnet-5"
+  connection "arn:aws:events:…:connection/claude/…"
+  timeout 60 seconds
 ```
 
-- **答えの型を JSON Schema にして、モデルをそれに従わせる。** OpenAI の Structured Outputs の strict の形で書く。レコードのフィールドはすべて必須でほかは許さず、`T?` は null との選択、列挙はその値、`timestamp` は Step Functions の Wait が受け付ける形の正規表現、単位の付いた数は単位を説明に書く。Structured Outputs は一番外がオブジェクトであることを求めるので、どの型でも `{"answer": …}` に包む。答えは、ほかのタスクと同じく型で確かめ、外れれば `Dandori.BadResponse` になる。
-- **どの出力先でも、モデルには同じものを渡す。** 渡すのは指示、引数を JSON にした文字列（引数は宣言の順）、答えの Schema の三つで、モデルの設定は何も足さない。Step Functions は HTTP Task から Responses API に送り、API キーは EventBridge の接続に置く（HTTP Task の定義には `Authorization` のヘッダを書けない）。ほかの出力先で dandori が書く実装は、`Transport` の `agent` を通し、OpenAI の Agents SDK で走らせる。Agents SDK は GPT-5 系のモデルに推論の強さなどの設定を自分で足すので、既定の `Transport` は空の設定を渡して、Step Functions と同じ要求にしている。API キーは `OPENAI_API_KEY` から読む。ほかのモデルの提供元を使うときは、Agents SDK の実行の設定を `Transport` に渡す。
+- **答えの型を JSON Schema にして、モデルをそれに従わせる。** OpenAI の Structured Outputs の strict の形で書く。レコードのフィールドはすべて必須でほかは許さず、`T?` は null との選択、列挙はその値、`timestamp` は Step Functions の Wait が受け付ける形の正規表現、単位の付いた数は単位を説明に書く。Structured Outputs は一番外がオブジェクトであることを求めるので、どの型でも `{"answer": …}` に包む。Claude の構造化出力にも同じ Schema を渡す。この形は Claude も受け付け、`timestamp` の正規表現も、Claude が受け付ける単純なもの（`^…$`、`[0-9]`、`{4}` のような回数、グループ）に収まる（Claude の文書で確かめた）。答えは、ほかのタスクと同じく型で確かめ、外れれば `Dandori.BadResponse` になる。
+- **どの出力先でも、モデルには同じものを渡す。** 渡すのは指示、引数を JSON にした文字列（引数は宣言の順）、答えの Schema の三つで、モデルの設定は何も足さない。Step Functions は HTTP Task から Responses API に送り、API キーは EventBridge の接続に置く（HTTP Task の定義には `Authorization` のヘッダを書けない）。ほかの出力先で dandori が書く実装は、`Transport` の `agent` を通し、OpenAI の Agents SDK で走らせる。Agents SDK は GPT-5 系のモデルに推論の強さなどの設定を自分で足すので、既定の `Transport` は空の設定を渡して、Step Functions と同じ要求にしている。Agents SDK が使う OpenAI のクライアントは、既定では失敗を二度までやり直す（走らせて確かめた。500 を返すと三回送った）。既定の `Transport` はやり直さないクライアントを渡し、やり直しはタスクの `retry` だけにする（Step Functions の HTTP Task も自分ではやり直さない）。API キーは `OPENAI_API_KEY` から読む。ほかのモデルの提供元を使うときは、Agents SDK の実行の設定を `Transport` に渡す。
+- **Claude には、同じ三つを Messages API の形で渡す。** 指示はシステムプロンプトに、引数の JSON の文字列は user のメッセージ一つに、Schema は `output_config.format` に入れる。Messages API は答えの長さの上限（`max_tokens`）を必ず求めるので、どの出力先も同じ 16,000 を送る。モデルが考えるのに使うトークンもこれに含まれる。ヘッダは `anthropic-version: 2023-06-01`。Step Functions の API キーは、EventBridge の接続に `x-api-key` のヘッダとして置く。ほかの出力先で dandori が書く実装は、Anthropic の SDK（`@anthropic-ai/sdk`、Python では `anthropic`）で送り、API キーは `ANTHROPIC_API_KEY` から読む。この SDK も既定で失敗を二度までやり直すので、既定の `Transport` はそれを切る。
+- **Claude の答えの列挙は、大文字と小文字を区別せずに読む。** Claude の構造化出力は、列挙の値の大文字と小文字を守らないことがある（Claude の文書にそう書かれ、エラーも特別な終わり方も無く返る）。そこで、Claude のエージェントの答えにある列挙の値は、宣言した値と大文字と小文字だけが違えば、その値として読む。Step Functions では答えを読む JSONata の式で、ほかの出力先では dandori が書く実装（`io.fold`）で直す。大文字と小文字だけが違う値を並べた列挙を答えに含むと、どちらの値か決められないので E007。
 - **エージェントは相手の側を何も変えない。** だから `key` は書けず（E007）、`key` なしでやり直しても E030 にならない。ツールを持たせないので、読んで答える一往復で終わる。
-- **エラーは宣言しない**（E007）。モデルが断ったとき、答えを読めなかったとき、呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になる。断りも `failure` なので、`retry` でやり直せ、`on failure` で受けられる。
+- **エラーは宣言しない**（E007）。モデルが断ったとき、答えを読めなかったとき、呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になる。Claude では、答えが一つの手番として終わらなかったとき（`stop_reason` が `end_turn` でないとき。断りと、上限で切れた答え）も `failure` になる。断りも `failure` なので、`retry` でやり直せ、`on failure` で受けられる。
 - `callback` にはできず、案件に何かするタスク（`starts`・`sends`・`observes`）にもできない（E007）。答えの型を書かないエージェントも E007。
-- 答えの型が Schema に書けないもの（`json`、ほかのレコードを通して自分を含むレコード）と、Structured Outputs の受け付ける大きさ（オブジェクトの入れ子が 10 段、プロパティが 5,000 個、列挙の値が 1,000 個まで）を超えるものも E007 にする。
+- 答えの型が Schema に書けないもの（`json`、ほかのレコードを通して自分を含むレコード）と、提供元の受け付ける大きさを超えるものも E007 にする。OpenAI の Structured Outputs は、オブジェクトの入れ子が 10 段、プロパティが 5,000 個、列挙の値が 1,000 個まで。Claude の構造化出力は、null との選択（`anyOf`）が一つの要求の中で 16 個までなので、`T?` が 16 個を超える答えは書けない。Claude には文書に数の無い上限（Schema から作る文法の大きさ）もあり、これは送るまで分からない。
+- 提供元は `openai` と `claude` だけで、ほかの名前は E007。
 
 ### 1.7 並列の回
 
@@ -248,7 +259,7 @@ Step Functions の Map は、どれか一つの回が失敗すると Map ごと�
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則を rulec で読めなかった |
 | E006 | 二度の宣言 |
-| E007 | タスクの項目の誤り（ステータスの付け忘れ、同じステータスの二つのエラー、呼び方の重なり、`aws` の `key` の引数、`callback` にできない呼び方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない答えなど） |
+| E007 | タスクの項目の誤り（ステータスの付け忘れ、同じステータスの二つのエラー、呼び方の重なり、`aws` の `key` の引数、`callback` にできない呼び方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない答え・知らない提供元・Claude で大文字と小文字だけが違う列挙の値など） |
 | E008 | 案件の宣言や、案件に何をするかの誤り |
 | E009 | 文の置き場所の誤り（`yield`、並列の回の中の `break`・`succeed`・案件の呼び出し、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` に行き先の無い値がある |
@@ -290,6 +301,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - `callback` は、Lambda なら `lambda:invoke.waitForTaskToken` でトークンを `task_token` で渡し、SQS なら `sqs:sendMessage.waitForTaskToken` でメッセージの本文に入れる。
 - `aws` は `arn:aws:states:::aws-sdk:<サービス>:<操作>`。引数と答えは API のまま（PascalCase）で、型は利用者がタスクに書く（HTTP のタスクと同じ）。
 - `agent` は HTTP Task で `https://api.openai.com/v1/responses` に送る。本文は `model`、`instructions`、`input`（引数を `$string` で JSON の文字列にしたもの）、`text.format`（`json_schema`、名前は `answer`、`strict`）。答えは、Responses API の出力のうち `message` の `output_text` を `$parse` で読み、`answer` を取り出す。モデルが断ると `output_text` が無いので、`$error` で Task を `States.QueryEvaluationError` で失敗させる。JSONata の式の失敗はその Task の Retry と Catch で受けられる（Step Functions の文書で確かめた）ので、断りは `failure` としてやり直せ、`on failure` で受けられる。答えを `let` で受けない呼び出しでも、同じ式を Task の `Output` に置いて答えを読み、断りを失敗にする。
+- Claude の `agent` は HTTP Task で `https://api.anthropic.com/v1/messages` に送る。ヘッダは `anthropic-version`、本文は `model`、`max_tokens`、`system`（指示）、`messages`（user のメッセージ一つに、引数を `$string` で JSON の文字列にしたもの）、`output_config.format`（`json_schema`）。答えは、`content` のうち `text` のブロックをつないで `$parse` で読み、`answer` を取り出し、その中の列挙の値を大文字と小文字を区別せずに宣言した値に直す（直す式は答えの型から作る）。`stop_reason` が `end_turn` でなければ、`$error` で Task を失敗させる。あとは OpenAI のときと同じ。
 - HTTP Task のリクエストは 60 秒で打ち切られるので、`http` と `agent` のタスクの `timeout` が 60 秒を超えれば E050 にする。
 - `state machine` は `startExecution.sync:2` で、答えは子の出力（`Output`）。子の失敗は親には `States.TaskFailed` として届き、子の `fail` の名前は Cause の中にしかない。Cause の形は文書で確かめられなかったので、入れ子の実行に宣言したエラーは E050 とし、`failure` で受けてもらう。
 - `for` は、Pass と Choice で数えるループにする。要素の数は最初の Choice で確かめる。`yield` は `$append` で集める。
@@ -342,7 +354,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 ### 4.4 Argo Workflows
 
 - `<ワークフロー>.argo.yaml`（WorkflowTemplate）と、`caller/`（`lambda`・`http`・`aws`・`agent` のタスクと規則をコンテナの中で動かすプログラム。`types.ts`・`tasks.ts`・`io.ts`・`transport.ts`・`rules.ts`・`call.ts`・`package.json`・`Dockerfile`）を出す。入力はパラメータ `input` に JSON で渡し、出力はグローバル出力パラメータ `dd_output` に残る。
-- **タスクはどれもコンテナで動く。** `image` のタスクは利用者のイメージ、`lambda`・`http`・`aws`・`agent` のタスクと規則は `caller/` から作るイメージで動く（エージェントがあれば、`package.json` に `@openai/agents` が入る）。中の実装は Temporal と durable functions 向けと同じもので、同じ `Transport` を通す。呼び出しは環境変数 `DANDORI_CALL` で渡る。答えは `/tmp/dandori/answer.json` に書き、宣言したエラーなら `/tmp/dandori/error.json` に `{"error", "message"}` を書いて終了コード 3 で終える。期限で止められた Pod（終了コード 143 か 137）は `timeout`、ほかの終わり方は `failure`。
+- **タスクはどれもコンテナで動く。** `image` のタスクは利用者のイメージ、`lambda`・`http`・`aws`・`agent` のタスクと規則は `caller/` から作るイメージで動く（エージェントがあれば、`package.json` に `@openai/agents` か `@anthropic-ai/sdk` が入る）。中の実装は Temporal と durable functions 向けと同じもので、同じ `Transport` を通す。呼び出しは環境変数 `DANDORI_CALL` で渡る。答えは `/tmp/dandori/answer.json` に書き、宣言したエラーなら `/tmp/dandori/error.json` に `{"error", "message"}` を書いて終了コード 3 で終える。期限で止められた Pod（終了コード 143 か 137）は `timeout`、ほかの終わり方は `failure`。
 - **Argo には変数が無いので、ワークフローの状態をグローバル出力パラメータに置く。** 変数ごとに `v<番号>`（値は JSON）、流れがどう進むかを表す `dd_ctl`（`next`・`break`・`succeed`・`fail`・`task`）、失敗の `dd_error`、出力の `dd_output`。並列の回が持つ変数は、回ごとに接尾辞を付けた別のパラメータにする。YAML の頭のコメントに、どの変数がどのパラメータかを書く。
 - **グローバル出力パラメータを読むのは、値を計算するテンプレートの出力の式だけにした。** Argo は、ステップの `when` と引数を、そのステップが動いているあいだ、ワークフローを見に来るたびに評価し直す。また、ステップを並べたテンプレートは、グローバル出力パラメータを、そのテンプレートに来たときの値で持っていて、自分のステップがそのあと入れた値は見えない。コントローラのソース（v4.1.4 の `executeSteps` と `executeStepGroup`）でこの二つを確かめ、kind の上でも起こした。そこで、ステップが一つで、それが決して走らないテンプレートを作り、値はその出力の式で計算する。Argo はこの式を、そのテンプレートに来たときに一度だけ、それまでに入った値をすべて見て評価する。ほかのステップはこの出力を読む。出力は一度入ると変わらない。
   - 呼び出しの引数、`match` の行き先、ループの回数は、その直前にこの形のテンプレートで計算する。
@@ -377,7 +389,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 | 答えの検査 | Choice と Fail | `is_<型>` と `dd.fail` | Temporal と同じ | 出力の式（`type()` と `matches`） | Temporal の Python 版と同じ |
 | 冪等キー | `$states.context.Execution.Name` から | `workflowInfo().workflowId` から | `durableExecutionArn` から | `workflow.name` から | `Deps.run_id` から |
 | `lambda`・`http`・`aws` のタスク | Task（Lambda、HTTP、AWS SDK 統合） | dandori が書くアクティビティ（`Transport` を通す） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通す） |
-| `agent` のタスク | HTTP Task（Responses API）、答えは `$parse` で読む | dandori が書くアクティビティ（`Transport` を通し、Agents SDK で） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通し、Agents SDK で） |
+| `agent` のタスク | HTTP Task（Responses API か Messages API）、答えは `$parse` で読む | dandori が書くアクティビティ（`Transport` を通し、Agents SDK か Anthropic の SDK で） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通し、Agents SDK か Anthropic の SDK で） |
 | それ以外のタスク | 作れない | 利用者のアクティビティ | 利用者の実装を step の中で | `image` のコンテナ（無ければ作れない） | 利用者の関数 |
 | 子ワークフロー | 入れ子の実行 | `executeChild` | `context.invoke` | WorkflowTemplate から Workflow を作る | 利用者の関数 |
 | コールバック | `.waitForTaskToken` | シグナル | `createCallback` | suspend と `argo node set` | `Deps.callbacks` |
@@ -389,8 +401,8 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 
 ## 5. 確かめ方
 
-- **参照インタプリタ**（`dandori run`）：シナリオ（入力と、呼び出しが受け取る答えの並び）に沿って型を付けた構文木を実行し、呼び出しを出力先から見える形（Lambda の関数と payload、HTTP のメソッドと URL とヘッダと本文、AWS の API と引数、エージェントの名前・モデル・指示・引数・Schema（Step Functions では Responses API への HTTP の要求）、入れ子の実行・子ワークフロー・invoke の先と入力、Temporal のアクティビティと引数、durable functions の step と引数・コールバックの submit）で書き出す。並列の回は、リストの順に一つずつ回す。
-- **シナリオの自動生成**（`dandori scenarios`）：選んだ答えの記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。答えの検査に落ちる答え（型の合わない答え、ありえない状態）も入れる。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。無いことがある値は `match` が読むときに、無い場合とある場合を選ぶ。二回以上回ったループと、一回だけのループを別のところとして数えるので、二つの回が済んでその先の終わりまで行く実行も残る。答えと入力の文字列と数は、一つの実行の中でどれも違う値にする（`id-5`、`id-6`、`1003` など）。同じ値ばかりだと、出力先が二つの答えや並列の回の結果を取り違えても、突き合わせに出ない。
+- **参照インタプリタ**（`dandori run`）：シナリオ（入力と、呼び出しが受け取る答えの並び）に沿って型を付けた構文木を実行し、呼び出しを出力先から見える形（Lambda の関数と payload、HTTP のメソッドと URL とヘッダと本文、AWS の API と引数、エージェントの名前・提供元・モデル・指示・引数・Schema（Step Functions では Responses API か Messages API への HTTP の要求）、入れ子の実行・子ワークフロー・invoke の先と入力、Temporal のアクティビティと引数、durable functions の step と引数・コールバックの submit）で書き出す。並列の回は、リストの順に一つずつ回す。
+- **シナリオの自動生成**（`dandori scenarios`）：選んだ答えの記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。答えの検査に落ちる答え（型の合わない答え、ありえない状態）も入れる。Claude のエージェントの答えには、列挙の値の大文字と小文字を変えた答え（どのリストにも項目が二つあり、無いことがある値もある形）も入れる。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。無いことがある値は `match` が読むときに、無い場合とある場合を選ぶ。二回以上回ったループと、一回だけのループを別のところとして数えるので、二つの回が済んでその先の終わりまで行く実行も残る。答えと入力の文字列と数は、一つの実行の中でどれも違う値にする（`id-5`、`id-6`、`1003` など）。同じ値ばかりだと、出力先が二つの答えや並列の回の結果を取り違えても、突き合わせに出ない。
 - **Step Functions の突き合わせ**：生成した ASL を `tools/asl-run.mjs` が JSONata 2.0.6 で実行し、参照インタプリタと同じ形で書き出す。Map の回は一つずつ回し、回の中で外の変数に値を入れたら失敗させる（Step Functions の規則）。全シナリオで一致を見る。定義は asl-validator 4.0.0 にも通す。呼び方を持たないタスクのあるワークフロー（Temporal と durable functions 向けのもの）は、E050 を表示して外す。
 - **Temporal の突き合わせ**：生成した TypeScript を `tools/temporal/run.mjs` が SDK 1.24.0 の時間を飛ばすテスト環境で実行する。dandori が書くアクティビティは本物を走らせ、`Transport` だけを、送るものを書き出してシナリオどおりに答える代わり（`tools/transport.mjs`）に差し替える。だから Step Functions が送るものと一字ずつ比べられる。利用者のタスク、規則、子ワークフローは、シナリオどおりに答える代わりを置く（子ワークフローは、答えをアクティビティに聞く小さなワークフロー）。`queue` ごとにワーカーを立てる。コールバックの答えは、ID を渡すアクティビティが返る前にシグナルで送り終える（返ったあとに送ると、テスト環境が待ちの時間を先に飛ばして切れさせることがあった）。タイムアウトのシナリオでは送らずに、待ちの時間を飛ばして切れさせる。アクティビティのタイムアウトはこの環境では起こせないので、それを含むシナリオは外す。並列の回は一つずつ回す（`dd.atATime` を 1 に書き換える）。
 - **Temporal（Python）の突き合わせ**：生成したパッケージを `tools/temporal-python/run.py` が SDK 1.33.0 の時間を飛ばすテスト環境で実行する（ワークフローは SDK のサンドボックスの中で動く）。やり方は TypeScript 版と同じで、`Transport` の差し替え（`tools/transport.py`）も、利用者のタスク・規則・子ワークフローの代わりも、コールバックをシグナルで答えることも、そろえてある。
@@ -405,21 +417,21 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
   - フローごとに一本（宣言したエラーを通るものがあればそれ）は、本物の Pod でも走らせる。`argo submit --from` と同じく WorkflowTemplate から作り、代わりのコンテナがクラスタの中のモック（`tools/argo/mock.mjs`）に答えを聞く。
   - コールバックの答えは `argo node set` と `argo resume` で渡し、タイムアウトのシナリオでは、期限が来たときと同じ値を渡す。待ちは長さを 0 にしてすぐ進める。
   - タスクのタイムアウトは起こせないので、それを含むシナリオは外す。並列の回は一つずつ回す（`withSequence` を持つテンプレートの `parallelism` を 1 にする）。
-- **エージェントの突き合わせ**：`Transport` の差し替えは、エージェントの呼び出しを `Transport` に渡された形（名前・モデル・指示・引数・Schema）のまま書き出し、シナリオの値を `{"answer": …}` に包んで返す。失敗は投げる（Agents SDK が断りを投げるのと同じ）。ASL のランナーは、Responses API への HTTP Task に API の答えの形（推論の項目と、`output_text` を持つメッセージ）で答え、失敗は、モデルが断った答え（`output_text` の無いメッセージ）で返す。ステートマシンがそれを読む式で Task が失敗し、Retry と Catch に渡るところまでを確かめる。ランナーは、Task の Assign と Output の式の失敗を、Step Functions と同じく Retry と Catch に渡す。
-- **既定の `Transport` のエージェント**：TypeScript の既定の実装（Temporal・durable functions・Argo の caller が同じ `io.ts` を使う）と Python の既定の実装（Temporal と pydantic-graph が同じ `io.py` を使う）を、OpenAI の Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせる（`tools/agents`）。モデルには、OpenAI の代わりに、答えを前もって決めた SDK のテスト用のモデル（`ScriptedModel`）を渡すので、OpenAI には何も送らない。シナリオのエージェントの呼び出しすべてについて、モデルが受け取ったもの（モデルの名前・指示・入力の文字列・答えの Schema）が Step Functions の同じ呼び出しで送るものと同じで、モデルの設定もツールも空であること、答えがそのまま返ること、断りが `ModelRefusalError` になることを確かめる。
+- **エージェントの突き合わせ**：`Transport` の差し替えは、エージェントの呼び出しを `Transport` に渡された形（名前・モデル・指示・引数・Schema）のまま書き出し、シナリオの値を `{"answer": …}` に包んで返す。失敗は投げる（Agents SDK が断りを投げるのと同じ）。ASL のランナーは、Responses API への HTTP Task に API の答えの形（推論の項目と、`output_text` を持つメッセージ）で答え、失敗は、モデルが断った答え（`output_text` の無いメッセージ）で返す。Messages API への HTTP Task には、思考のブロックと `text` のブロックを持ち `stop_reason` が `end_turn` の答えで答え、失敗は `stop_reason` が `refusal` の答えで返す。ステートマシンがそれを読む式で Task が失敗し、Retry と Catch に渡るところまでを確かめる。ランナーは、Task の Assign と Output の式の失敗を、Step Functions と同じく Retry と Catch に渡す。
+- **既定の `Transport` のエージェント**：TypeScript の既定の実装（Temporal・durable functions・Argo の caller が同じ `io.ts` を使う）と Python の既定の実装（Temporal と pydantic-graph が同じ `io.py` を使う）を、OpenAI の Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせる（`tools/agents`）。モデルには、OpenAI の代わりに、答えを前もって決めた SDK のテスト用のモデル（`ScriptedModel`）を渡すので、OpenAI には何も送らない。シナリオのエージェントの呼び出しすべてについて、モデルが受け取ったもの（モデルの名前・指示・入力の文字列・答えの Schema）が Step Functions の同じ呼び出しで送るものと同じで、モデルの設定もツールも空であること、答えがそのまま返ること、断りが `ModelRefusalError` になることを確かめる。また、`Transport` が作るクライアントを手元の Responses API の代わりに向け、500 が返ると一回だけ送って `InternalServerError` で失敗することを確かめる。Claude のエージェントは、Anthropic の SDK（TypeScript 0.128.0、Python 1.8.0）で、手元（127.0.0.1）に立てた Messages API の代わりに送らせる。代わりが受け取った要求（パス、`anthropic-version`、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、答えがそのまま返ること、断り（`stop_reason: refusal`）で `AgentStopped` を投げること、500 が返るとやり直さずに `InternalServerError` で失敗することを確かめる。Anthropic には何も送らない。
 - **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つの出力先の `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **診断**：`tests/fixtures` の各ファイルの診断を、英語と日本語の両方で固定する（`DANDORI_BLESS=1` で書き直す）。
 - 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。
 
-`Transport` の既定の実装（`fetch` と AWS SDK で本当に送る部分）は、突き合わせでは走らない。確かめているのは、dandori が書く実装が何を送り、答えをどう読むかである。エージェントの既定の実装は、上のとおり Agents SDK の中までは走らせるが、OpenAI の API が Schema を受け付けて答えるところは確かめていない。
+`Transport` の既定の実装（`fetch` と AWS SDK で本当に送る部分）は、突き合わせでは走らない。確かめているのは、dandori が書く実装が何を送り、答えをどう読むかである。エージェントの既定の実装は、上のとおり OpenAI では Agents SDK の中まで、Claude では SDK が HTTP で送るところまで走らせるが、OpenAI と Anthropic の API が Schema を受け付けて答えるところは確かめていない。
 
 ### 5.1 走らせた（2026-09-26）
 
-- 例は五つ。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の「注文の状態」）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー）、問い合わせの振り分け（エージェント二つと規則一つ。読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直しを通る。
-- シナリオは 49 本・33 本・19 本・12 本・10 本と、edges の 12 本、agents の 8 本。Step Functions では、審査を除く 133 本すべてが参照インタプリタと一致した。Temporal では 143 本すべてが一致した（コールバックのタイムアウトもシグナルを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 143 本すべてが一致した。Lambda durable functions では、タイムアウトを含む 12 本を除く 131 本すべてが一致した。pydantic-graph では 143 本すべてが一致した。
-- Argo Workflows（v4.1.4、kind の上）では、143 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（七本）も一致した。タスクのタイムアウトを含むシナリオは無く、コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こしたので、外したものは無い。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 90 個（151 個）、審査が 74 個（136 個）で、どれも見積もりの中に収まった。テスト全体は 71 秒で終わる（Pod を演じる形にし、kind 0.33.0 のノードで作り直したあと。次の項）。
+- 例は五つ。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の「注文の状態」）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直し、列挙の値を大文字と小文字を変えて答える Claude のエージェントを通る。
+- シナリオは 49 本・33 本・19 本・12 本・10 本と、edges の 12 本、agents の 15 本。Step Functions では、審査を除く 140 本すべてが参照インタプリタと一致した。Temporal では 150 本すべてが一致した（コールバックのタイムアウトもシグナルを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 150 本すべてが一致した。Lambda durable functions では、タイムアウトを含む 12 本を除く 138 本すべてが一致した。pydantic-graph では 150 本すべてが一致した。agents の 15 本のうち 3 本は、Claude のエージェントが列挙の値の大文字と小文字を変えて答える（`Normal` と、`urgent` と `Low` のリスト）。どの出力先も、それを宣言した値として読んだ。
+- Argo Workflows（v4.1.4、kind の上）では、150 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（七本）も一致した。タスクのタイムアウトを含むシナリオは無く、コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こしたので、外したものは無い。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 115 個（177 個）、審査が 74 個（136 個）で、どれも見積もりの中に収まった。テスト全体は 86 秒で終わる（Pod を演じる形にし、kind 0.33.0 のノードで作り直したあと。次の項。Claude のエージェントを足す前は 71 秒だった）。
 - 同じ日の昼、Argo の突き合わせがときどき食い違った。呼び出しは参照と同じで、終わり方だけが違い、その回の Pod が init の失敗（Error）や `Unknown (exit code 255)` で終わっていた。kind のノードの中の containerd（2.1.1）が SEGV で落ちては立ち上がり直していて、落ちた時刻が食い違いと重なった。落ちたときに動いていたコンテナは、どれもこう終わる。生成したワークフローは、その Pod の失敗を `failure` として正しく扱っていた。そこでランナーは、プラットフォームが動かせなかった Pod のある回を、名前を変えて二度まで走らせ直し、そのことを出力するようにした。いまはこれが本物の Pod の回にだけかかわる（次の項）。クラスタを kind 0.33.0 のノード（Kubernetes 1.37.0、containerd 2.3.4）で作り直してからは、containerd は一度も落ちていない。テスト全体を通したときも、ホテルの予約の 49 本すべてを本物の Pod で同時に走らせたとき（375 秒）も SEGV は無く、本物の Pod の 49 本は演じた回と一本残らず一致した。
-- 生成器にわざと誤りを入れると（ASL の冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とす、durable functions の冪等キーの呼び出しの場所をずらす）、どれも一本目のシナリオで食い違いとして出た（2026-09-25）。Argo の生成器でも、冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とすと、どちらもホテルの予約の一本目で食い違いとして出た。Temporal の Python 版と pydantic-graph では、冪等キーの区切りを一文字変えると注文の引当と発送の四本目で、`match` の条件から値を一つ落とすとホテルの予約の一本目で出た（2026-09-26）。エージェントでも、ASL で答えを読まない呼び出しの `Output` を落とすと agents の二本目で、ASL で入力の引数の順を逆にすると問い合わせの一本目で、TypeScript で答えから `answer` を取り出さないと Temporal の問い合わせの一本目で、Python で別のタスクの Schema を渡すと pydantic-graph の問い合わせの一本目で、既定の `Transport` で Agents SDK に空の設定を渡さないと Agents SDK の確かめの一件目で、それぞれ食い違いとして出た（同日）。
+- 生成器にわざと誤りを入れると（ASL の冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とす、durable functions の冪等キーの呼び出しの場所をずらす）、どれも一本目のシナリオで食い違いとして出た（2026-09-25）。Argo の生成器でも、冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とすと、どちらもホテルの予約の一本目で食い違いとして出た。Temporal の Python 版と pydantic-graph では、冪等キーの区切りを一文字変えると注文の引当と発送の四本目で、`match` の条件から値を一つ落とすとホテルの予約の一本目で出た（2026-09-26）。エージェントでも、ASL で答えを読まない呼び出しの `Output` を落とすと agents の二本目で、ASL で入力の引数の順を逆にすると問い合わせの一本目で、TypeScript で答えから `answer` を取り出さないと Temporal の問い合わせの一本目で、Python で別のタスクの Schema を渡すと pydantic-graph の問い合わせの一本目で、既定の `Transport` で Agents SDK に空の設定を渡さないと Agents SDK の確かめの一件目で、それぞれ食い違いとして出た（同日）。Claude のエージェントでは、答えの列挙の値を直す式を ASL から落とすと agents の七本目で、TypeScript の `io.fold` を呼ばないと Temporal の agents の七本目で、Python の `io.fold` で大文字と小文字を区別すると Temporal の Python 版の agents の七本目で、既定の `Transport` が送る `max_tokens` を一つ変えると確かめの四件目で、OpenAI のクライアントのやり直しを切らないと確かめの三件目で、それぞれ食い違いとして出た（同日）。
 - 並列の回の結果の並びを逆にする誤りは、はじめ、どの出力先の突き合わせにも出なかった。シナリオの答えの値がどの呼び出しでも同じで、二回以上回ってその先まで行く実行も残っていなかったからである。値を一つずつ変え、二回以上回ったループを別に数えるようにすると、edges の十二本目で出た。この変更で、TypeScript の Temporal のランナーが、コールバックの答えのシグナルを、テスト環境が待ちの時間を飛ばしたあとに送ることがあると分かった。生成器ではなくランナーの競争だったので、ランナーを直した（5 章）。
 - Argo の突き合わせは、はじめ全部の実行を本物の Pod で走らせていて、テスト全体で 30 分余りかかった。次のように縮めた。
   - コントローラーは既定では、変化のあと 10 秒おいてワークフローを見直す（`DEFAULT_REQUEUE_TIME`。Argo 自身のテストは 1 秒にしている）。これを 1 秒にした。
@@ -429,7 +441,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
   - テスト全体が 85 秒になった（kind 0.33.0 のノードで作り直したあとは 71 秒）。コントローラーの待ちを 300 ms にすると、かえって遅くなった（ホテルの予約の一本で 48 秒が 57 秒）。
 - 演じる形でも、生成器にわざと入れた誤りは捕まる。`match` の条件から値を一つ落とす誤りと、caller が宣言したエラーで終わるときの終了コードを 3 から 1 に変える誤りは、どちらもホテルの予約の九本目で食い違いとして出た（2026-09-26）。
 - つなぐコードは、与信額の規則のベクタ 24 件、急ぎの規則のベクタ 16 件、振り分けの規則のベクタ 8 件で、rulec の期待値と一致した。Python 版の `rules.py` も同じベクタで一致した。
-- 既定の `Transport` のエージェントは、Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせると、問い合わせの 13 件と agents の 14 件のどれでも、Step Functions と同じものをモデルに渡した。空の設定を渡さないと、どちらの SDK も gpt-5.4-mini に `reasoning.effort: none` と `text.verbosity: low` を足す（走らせて確かめた）。
+- 既定の `Transport` のエージェントは、問い合わせの 15 件と agents の 40 件のどれでも、TypeScript と Python の両方で、Step Functions と同じものをモデルに渡した（Agents SDK は TypeScript 0.18.0 と Python 0.22.3、Anthropic の SDK は TypeScript 0.128.0 と Python 1.8.0）。Claude の件では、手元の Messages API の代わりが受け取った本文が Step Functions の本文と同じだった。500 を返すと、どちらの提供元も一回だけ送って失敗した。空の設定を渡さないと、どちらの Agents SDK も gpt-5.4-mini に `reasoning.effort: none` と `text.verbosity: low` を足す（走らせて確かめた）。OpenAI のクライアントのやり直しを切らないと、500 に三回送った。
 - 検査が例を書く途中で見つけたこと。チェックアウトまで待つあいだに与信の期限が切れると capture が断られる。capture のあとは `processing` を経て `requires_payment_method` に戻ることがある。`requires_action` を見てから cancel するまでに、客が認証を済ませて期限が切れると、cancel も断られる。入金がないので注文の取消を頼むあいだに、客が自分で取り消していると、倉庫はその取消依頼を断る。
 
 ## 6. 捨てたもの
@@ -452,6 +464,8 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - **Argo で、ループを再帰で回すこと。** 回の数だけ入れ子が深くなり、Argo の深さの上限 100 に当たる。
 - **Argo で、タスクの期限をテンプレートの `timeout` にすること。** 4.4 のとおり、Pod が始まる前に切れると `continueOn` が効かない。
 - **エージェントを出力先にすること**（流れそのものを Agents SDK や、OpenAI が走らせる Agents API に任せること）。次に何をするかをモデルが決めるので、流れを前もって決め、走らせる前に検査するという dandori の芯が消える。エージェントは流れの中の一手、つまりタスクの呼び方の一つにした（1.6）。
+- **Claude のエージェントを、Claude Agent SDK で走らせること。** Agent SDK は、呼び出しのたびに Claude Code の CLI を子プロセスとして起動する。答えの形も、Messages API の構造化出力のように生成を Schema で縛るのではなく、あとから確かめて合わなければ言い直させる（上限まで合わなければ `error_max_structured_output_retries`）。一回の呼び出しでモデルを何度も呼ぶことがあり、Step Functions が一回で送る要求とはそろわない。Agent SDK の文書自身も、道具を使わない一回きりの問い合わせには API を直接使うよう案内している。dandori のエージェントは道具を持たず一往復で答えるので、Anthropic の SDK で Messages API を呼ぶことにした。道具を持たせて何手も動かすエージェントを足すときには、Agent SDK が候補になる。
+- **Step Functions から、Claude を Bedrock の統合で呼ぶこと**（いまは）。IAM で認証でき、API キーを接続に置かずに済む。しかし Bedrock の構造化出力は、Claude の文書の注記では Opus 4.6・Sonnet 4.6・Sonnet 4.5・Opus 4.5・Haiku 4.5 までで、5 系のモデルが無い。
 - **Temporal で、Agents SDK との公式の統合を使うこと**（いまは）。4.2 のとおり、ツールを持たない一往復のエージェントには、タスクの `timeout` と `retry` がそのまま効く一つのアクティビティのほうが合う。
 - **Argo の突き合わせで、全部の実行を本物の Pod で走らせること。** テスト全体で 30 分余りかかった。kind のノードの containerd が負荷のもとで落ち、食い違いになることもあった。本物の Pod はフローごとに一本にし、ほかはランナーが Pod を演じる（5 章）。
 - **Argo のコントローラーの待ちを 1 秒より短くすること。** 300 ms では、かえって遅くなった。Argo のソースにも、informer が追いつかないので 1 秒より短くしないよう書いてある。
@@ -479,7 +493,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - Argo で、`break` のあとの回もノードを作ること。回の数だけ Workflow が大きくなる。
 - Python の `Transport` の既定の実装（urllib と boto3 で本当に送る部分）の確認。TypeScript の既定の実装と同じく、突き合わせでは走らない。
 - pydantic-graph の実行を、止まったあとに続けること。2.x が状態を外に置く手段を持たないので、今はプロセスの中の実行だけにしている。
-- エージェントを OpenAI の API に本当に向ける確認。Structured Outputs が生成した Schema を受け付けるか、Step Functions の HTTP Task と EventBridge の接続で呼べるか、どちらも確かめていない。
+- エージェントを OpenAI と Anthropic の API に本当に向ける確認。構造化出力が生成した Schema を受け付けるか（Claude では、文法の大きさの上限に当たらないかも）、Step Functions の HTTP Task と EventBridge の接続で呼べるか、どちらも確かめていない。
 - エージェントの断りや API のエラー（429 など）を、名前の付いたエラーとして受けること。いまは `failure` にまとめている。
 - OpenAI が走らせる Agents API（長く動くエージェント）を、コールバックで待つ呼び方。
 - エージェントにツールを持たせること、指示をファイルから読むこと、モデルの設定（推論の強さなど）を `.flow` に書くこと。

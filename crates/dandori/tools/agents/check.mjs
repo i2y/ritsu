@@ -1,18 +1,92 @@
-// Runs the agent call of the default Transport that dandori writes for TypeScript (io.ts) with
-// OpenAI's Agents SDK, and a scripted model in place of OpenAI's, so that nothing leaves the
-// machine. For each case it writes down what the model was asked (the model's name, the
-// instructions, the input, the schema of the output, the model settings, the tools) and what
-// the Transport answered, or the error it threw.
+// Runs the agent call of the default Transport that dandori writes for TypeScript (io.ts), so
+// that nothing leaves the machine: OpenAI's agents with OpenAI's Agents SDK and a scripted model
+// in place of OpenAI's, Claude's with Anthropic's SDK and a stand-in of the Messages API on
+// 127.0.0.1. For each case it writes down what the model was asked — for OpenAI's, the model's
+// name, the instructions, the input, the schema of the output, the model settings and the
+// tools; for Claude's, every request the stand-in got — and what the Transport answered, or the
+// error it threw. A case with a `status` has the stand-in answer every request with that error
+// status, to see that the SDK's client does not retry by itself; an OpenAI agent's then goes to
+// a stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL).
 //
 //   node tools/agents/check.mjs <io.ts> <cases.json> <results.json>
 //
-// cases.json: [ { "call": <AgentCall>, "text": <the model's answer> } | { "call", "refusal": <text> } ]
+// cases.json: [ { "call": <AgentCall>, "text": <the model's answer> } | { "call", "refusal": <text> }
+//               | { "call", "status": <an HTTP error status the stand-in answers with> } ]
 
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ScriptedModel, assistantMessage } from "@openai/agents/testing";
+
+/** The Messages API's answer: the text, and how the turn ended; a refusal has no content, as the API reference shows it. */
+function message(model, text, stop) {
+  const refused = stop === "refusal";
+  return {
+    id: "msg_test",
+    type: "message",
+    role: "assistant",
+    model,
+    content: refused ? [] : [{ type: "text", text }],
+    stop_reason: stop,
+    stop_sequence: null,
+    stop_details: refused ? { type: "refusal", category: null, explanation: null } : null,
+    usage: { input_tokens: 10, output_tokens: 10 },
+  };
+}
+
+/** Run `f` with the address of a stand-in of the Messages API that answers every request with `reply`. */
+async function standIn(reply, f) {
+  const asked = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => {
+      asked.push({ method: req.method, path: req.url, version: req.headers["anthropic-version"], body: body ? JSON.parse(body) : null });
+      res.writeHead(reply.status, { "content-type": "application/json" });
+      res.end(JSON.stringify(reply.body));
+    });
+  });
+  await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
+  try {
+    return { asked, out: await f(`http://127.0.0.1:${server.address().port}`) };
+  } finally {
+    server.close();
+  }
+}
+
+/** An OpenAI agent against a stand-in of the Responses API that answers with an error status. */
+async function openaiFailing(io, c) {
+  const reply = { status: c.status, body: { error: { message: "scripted", type: "server_error" } } };
+  const { asked, out } = await standIn(reply, async (url) => {
+    process.env.OPENAI_BASE_URL = `${url}/v1`;
+    process.env.OPENAI_API_KEY = "test";
+    const transport = io.transport({ agents: { tracingDisabled: true } });
+    try {
+      return { answer: await transport.agent(c.call) };
+    } catch (e) {
+      return { error: e?.constructor?.name ?? String(e) };
+    }
+  });
+  return { ...out, asked: asked.map(({ method, path }) => ({ method, path })) };
+}
+
+async function claude(io, c) {
+  const reply =
+    c.status !== undefined
+      ? { status: c.status, body: { type: "error", error: { type: "api_error", message: "scripted" } } }
+      : { status: 200, body: c.refusal !== undefined ? message(c.call.model, c.refusal, "refusal") : message(c.call.model, c.text, "end_turn") };
+  const { asked, out } = await standIn(reply, async (url) => {
+    const transport = io.transport({ claude: { baseURL: url, apiKey: "test" } });
+    try {
+      return { answer: await transport.agent(c.call) };
+    } catch (e) {
+      return { error: e?.constructor?.name ?? String(e) };
+    }
+  });
+  return { ...out, asked };
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [ioFile, casesFile, outFile] = process.argv.slice(2);
@@ -27,6 +101,14 @@ const io = await import(path.join(work, "io.ts"));
 const results = [];
 try {
   for (const c of cases) {
+    if (c.call.provider === "claude") {
+      results.push(await claude(io, c));
+      continue;
+    }
+    if (c.status !== undefined) {
+      results.push(await openaiFailing(io, c));
+      continue;
+    }
     const message =
       c.refusal !== undefined
         ? { type: "message", role: "assistant", status: "completed", content: [{ type: "refusal", refusal: c.refusal }] }
