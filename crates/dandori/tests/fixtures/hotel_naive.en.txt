@@ -1,3 +1,5 @@
+warning[W104]: tests/fixtures/hotel_naive.flow:81:1: nothing says what range `booking.nights` is in (the field `nights` of `Booking` has no range), and `nights` of the rule `hold` takes `>=1 <=30`
+    81 |   let quote = hold(room: booking.room, nights: booking.nights)
 warning[W101]: tests/fixtures/hotel_naive.flow:85:1: if `confirm_intent` fails, the workflow fails with the case `pi` in requires_payment_method, requires_confirmation, requires_action, requires_capture; 4 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
     85 |   pi <- confirm_intent(id: pi.id)
   the run that gets there:

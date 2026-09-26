@@ -105,7 +105,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
         }
         Some(Via::Agent { provider, instructions, model }) => {
             let input = agent_input(task, args);
-            let schema = task.result.as_ref().and_then(|t| agent_schema(m, t)).unwrap_or(Value::Null);
+            let schema = agent_schema(m, task).unwrap_or(Value::Null);
             match view {
                 // the HTTP Task's request; the input goes as the arguments' JSON text
                 View::Asl => {
@@ -195,29 +195,57 @@ pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value,
     }
 }
 
+/// What an agent task answers in (`answer_schema`).
+pub fn agent_schema(m: &Model, task: &TaskDef) -> Option<Value> {
+    let provider = match &task.binding {
+        Some(Binding::Agent { provider, .. }) => *provider,
+        _ => Provider::OpenAi,
+    };
+    answer_schema(m, task.result.as_ref()?, task.result_range, provider)
+}
+
 /// What an agent answers in: `{"answer": …}` with a value of the task's type inside, since
 /// OpenAI's Structured Outputs want an object at the top whatever the type is. None when
 /// the type cannot be said as such a schema (`json_schema`).
-pub fn agent_schema(m: &Model, t: &Ty) -> Option<Value> {
-    Some(json!({ "type": "object", "properties": { "answer": json_schema(m, t)? }, "required": ["answer"], "additionalProperties": false }))
+pub fn answer_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<Value> {
+    Some(json!({ "type": "object", "properties": { "answer": json_schema(m, t, rg, p)? }, "required": ["answer"], "additionalProperties": false }))
 }
 
 /// The JSON Schema of a value of type `t`, in the strict form of OpenAI's Structured
 /// Outputs: a record's fields are all required and no others are allowed, a value that may
 /// be absent is a choice with null, a timestamp has the form Step Functions' Wait takes, and
-/// a number with a unit says its unit. None when `t` holds `json`, or a record that holds
-/// itself through others, which such a schema cannot say.
-pub fn json_schema(m: &Model, t: &Ty) -> Option<Value> {
-    fn go(m: &Model, t: &Ty, within: &mut Vec<RecordId>) -> Option<Value> {
+/// a number with a unit says its unit. A number's range is its `minimum` and `maximum` for
+/// OpenAI, and words in its description for Claude, whose structured outputs take neither.
+/// None when `t` holds `json`, or a record that holds itself through others, which such a
+/// schema cannot say.
+pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<Value> {
+    fn number(unit: Option<&str>, rg: Option<Range>, p: Provider) -> Value {
+        let mut o = Map::new();
+        o.insert("type".into(), json!("integer"));
+        let words: Vec<String> = unit.map(String::from).into_iter().chain(rg.filter(|_| p == Provider::Claude).map(|r| r.show())).collect();
+        if !words.is_empty() {
+            o.insert("description".into(), json!(words.join(", ")));
+        }
+        if let (Some(r), Provider::OpenAi) = (rg, p) {
+            if let Some(lo) = r.lo {
+                o.insert("minimum".into(), json!(lo));
+            }
+            if let Some(hi) = r.hi {
+                o.insert("maximum".into(), json!(hi));
+            }
+        }
+        Value::Object(o)
+    }
+    fn go(m: &Model, t: &Ty, rg: Option<Range>, p: Provider, within: &mut Vec<RecordId>) -> Option<Value> {
         Some(match t {
-            Ty::Int => json!({ "type": "integer" }),
-            Ty::Num(unit) => json!({ "type": "integer", "description": unit }),
+            Ty::Int => number(None, rg, p),
+            Ty::Num(unit) => number(Some(unit), rg, p),
             Ty::Str => json!({ "type": "string" }),
             Ty::Bool => json!({ "type": "boolean" }),
             Ty::Timestamp => json!({ "type": "string", "pattern": TIMESTAMP_RE }),
             Ty::Enum(e) => json!({ "type": "string", "enum": m.enums[*e].values }),
-            Ty::List(x) => json!({ "type": "array", "items": go(m, x, within)? }),
-            Ty::Opt(x) => json!({ "anyOf": [go(m, x, within)?, { "type": "null" }] }),
+            Ty::List(x) => json!({ "type": "array", "items": go(m, x, rg, p, within)? }),
+            Ty::Opt(x) => json!({ "anyOf": [go(m, x, rg, p, within)?, { "type": "null" }] }),
             Ty::Json => return None,
             Ty::Record(r) => {
                 if within.contains(r) {
@@ -226,7 +254,7 @@ pub fn json_schema(m: &Model, t: &Ty) -> Option<Value> {
                 within.push(*r);
                 let mut props = Map::new();
                 for (f, ft) in &m.records[*r].fields {
-                    props.insert(f.clone(), go(m, ft, within)?);
+                    props.insert(f.clone(), go(m, ft, m.field_range(*r, f), p, within)?);
                 }
                 within.pop();
                 let required: Vec<&String> = m.records[*r].fields.iter().map(|(f, _)| f).collect();
@@ -234,7 +262,7 @@ pub fn json_schema(m: &Model, t: &Ty) -> Option<Value> {
             }
         })
     }
-    go(m, t, &mut Vec::new())
+    go(m, t, rg, p, &mut Vec::new())
 }
 
 /// A JSON value laid out for generated code: what fits in 72 characters stays on one line,
@@ -578,25 +606,30 @@ pub fn literal(e: &TExpr) -> Option<Value> {
     }
 }
 
-/// A JSONata test that `x` is a well-formed value of type `t`.
-pub fn jsonata_check(m: &Model, x: &str, t: &Ty, depth: usize) -> String {
+/// A JSONata test that `x` is a well-formed value of type `t`, and in `rg` when it is a number
+/// (or its numbers, when it is a `?` or a list).
+pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
     match t {
         Ty::List(inner) => {
             let v = format!("$dd_v{depth}");
-            format!("($type({x}) = \"array\" and $count($filter({x}, function({v}) {{ $not({}) }})) = 0)", jsonata_check(m, &v, inner, depth + 1))
+            format!("($type({x}) = \"array\" and $count($filter({x}, function({v}) {{ $not({}) }})) = 0)", jsonata_check(m, &v, inner, rg, depth + 1))
         }
-        Ty::Opt(inner) => format!("($not($exists({x})) or {x} = null or {})", jsonata_check(m, x, inner, depth)),
+        Ty::Opt(inner) => format!("($not($exists({x})) or {x} = null or {})", jsonata_check(m, x, inner, rg, depth)),
         Ty::Json => format!("$exists({x})"),
         Ty::Str => format!("$type({x}) = \"string\""),
         Ty::Bool => format!("$type({x}) = \"boolean\""),
         Ty::Timestamp => format!("($type({x}) = \"string\" and $contains({x}, /{TIMESTAMP_RE}/))"),
-        Ty::Int | Ty::Num(_) => format!("($type({x}) = \"number\" and {x} = $floor({x}))"),
+        Ty::Int | Ty::Num(_) => {
+            let mut parts = vec![format!("$type({x}) = \"number\""), format!("{x} = $floor({x})")];
+            parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());
+            format!("({})", parts.join(" and "))
+        }
         Ty::Enum(e) => format!("{x} in {}", jsonata_list(&m.enums[*e].values)),
         Ty::Record(r) => {
             let mut parts = vec![format!("$type({x}) = \"object\"")];
             if depth < 4 {
                 for (f, ft) in &m.records[*r].fields {
-                    parts.push(jsonata_check(m, &format!("{x}.{}", jsonata_field(f)), ft, depth + 1));
+                    parts.push(jsonata_check(m, &format!("{x}.{}", jsonata_field(f)), ft, m.field_range(*r, f), depth + 1));
                 }
             }
             format!("({})", parts.join(" and "))
@@ -625,20 +658,20 @@ pub fn jsonata_list(values: &[String]) -> String {
     format!("[{}]", values.iter().map(|v| jsonata_string(v)).collect::<Vec<_>>().join(", "))
 }
 
-/// Whether a JSON value is a well-formed value of type `t` (the interpreter's side of `jsonata_check`).
-pub fn value_fits(m: &Model, v: &Value, t: &Ty) -> bool {
+/// Whether a JSON value is a well-formed value of type `t`, in `rg` (the interpreter's side of `jsonata_check`).
+pub fn value_fits(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> bool {
     match t {
-        Ty::List(inner) => v.as_array().map(|a| a.iter().all(|x| value_fits(m, x, inner))).unwrap_or(false),
-        Ty::Opt(inner) => v.is_null() || value_fits(m, v, inner),
+        Ty::List(inner) => v.as_array().map(|a| a.iter().all(|x| value_fits(m, x, inner, rg))).unwrap_or(false),
+        Ty::Opt(inner) => v.is_null() || value_fits(m, v, inner, rg),
         Ty::Json => true,
         Ty::Str => v.is_string(),
         Ty::Bool => v.is_boolean(),
         Ty::Timestamp => v.as_str().map(is_timestamp).unwrap_or(false),
-        Ty::Int | Ty::Num(_) => v.as_f64().map(|f| f.fract() == 0.0).unwrap_or(false),
+        Ty::Int | Ty::Num(_) => v.as_f64().is_some_and(|f| f.fract() == 0.0 && rg.map_or(true, |r| r.lo.map_or(true, |lo| f >= lo as f64) && r.hi.map_or(true, |hi| f <= hi as f64))),
         Ty::Enum(e) => v.as_str().map(|s| m.enums[*e].values.iter().any(|x| x == s)).unwrap_or(false),
         Ty::Record(r) => match v.as_object() {
             Some(o) => m.records[*r].fields.iter().all(|(f, ft)| match o.get(f) {
-                Some(x) => value_fits(m, x, ft),
+                Some(x) => value_fits(m, x, ft, m.field_range(*r, f)),
                 None => matches!(ft, Ty::Opt(_)),
             }),
             None => false,

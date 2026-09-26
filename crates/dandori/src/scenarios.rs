@@ -39,7 +39,8 @@ struct Ex<'a> {
     made: BTreeMap<String, usize>,
     labels: BTreeSet<String>,
     vars: BTreeMap<String, Value>,
-    holes: Vec<(Ty, Option<Value>)>,
+    /// the values left open: the type, what was chosen, and the range of the numbers in it
+    holes: Vec<(Ty, Option<Value>, Option<Range>)>,
     cases: Vec<Option<usize>>,
     answers: Vec<Value>,
     in_on_failure: bool,
@@ -165,35 +166,47 @@ impl<'a> Ex<'a> {
         best
     }
 
-    fn hole(&mut self, t: &Ty) -> Value {
-        self.holes.push((t.clone(), None));
+    fn hole(&mut self, t: &Ty, rg: Option<Range>) -> Value {
+        self.holes.push((t.clone(), None, rg));
         json!(format!("{HOLE}{}", self.holes.len() - 1))
     }
 
+    /// A number in `rg` not made before in this run, as far as the range has room.
+    fn number(&mut self, rg: Option<Range>) -> Value {
+        self.made_values += 1;
+        let k = self.made_values as i128;
+        let r = rg.unwrap_or_default();
+        let n = match (r.lo.map(i128::from), r.hi.map(i128::from)) {
+            _ if r.contains(1000 + k as i64) => 1000 + k,
+            (Some(lo), Some(hi)) => lo + k % (hi - lo + 1),
+            (Some(lo), None) => lo + k,
+            (None, Some(hi)) => hi - k,
+            (None, None) => 1000 + k,
+        };
+        json!(n as i64)
+    }
+
     /// A value of type `t` with its enums, bools, optional values and lists left open, to be
-    /// chosen when read.
-    fn template(&mut self, t: &Ty, name: &str) -> Value {
+    /// chosen when read; its numbers in `rg`, and its records' in theirs.
+    fn template(&mut self, t: &Ty, name: &str, rg: Option<Range>) -> Value {
         match t {
             Ty::Str => {
                 self.made_values += 1;
                 json!(format!("{name}-{}", self.made_values))
             }
             Ty::Timestamp => json!("2026-10-01T10:00:00Z"),
-            Ty::Int | Ty::Num(_) => {
-                self.made_values += 1;
-                json!(1000 + self.made_values)
-            }
+            Ty::Int | Ty::Num(_) => self.number(rg),
             // an array, so that the targets show they keep a `json` value that is one as one item
             Ty::Json => {
                 self.made_values += 1;
                 json!([{ "note": format!("{name}-{}", self.made_values) }])
             }
-            Ty::Bool | Ty::Enum(_) | Ty::Opt(_) | Ty::List(_) => self.hole(t),
+            Ty::Bool | Ty::Enum(_) | Ty::Opt(_) | Ty::List(_) => self.hole(t, rg),
             Ty::Record(r) => {
                 let fields = self.m.records[*r].fields.clone();
                 let mut o = Map::new();
                 for (f, ft) in fields {
-                    let v = self.template(&ft, &f);
+                    let v = self.template(&ft, &f, self.m.field_range(*r, &f));
                     o.insert(f, v);
                 }
                 Value::Object(o)
@@ -203,7 +216,7 @@ impl<'a> Ex<'a> {
 
     /// A value of type `t` with nothing left open: every value that may be absent there, every
     /// list with two items, and the enums' values in turn.
-    fn full(&mut self, t: &Ty, name: &str) -> Value {
+    fn full(&mut self, t: &Ty, name: &str, rg: Option<Range>) -> Value {
         match t {
             Ty::Bool => json!(true),
             Ty::Enum(e) => {
@@ -211,18 +224,50 @@ impl<'a> Ex<'a> {
                 let values = &self.m.enums[*e].values;
                 json!(values[self.made_values % values.len()])
             }
-            Ty::Opt(inner) => self.full(inner, name),
-            Ty::List(inner) => Value::Array((1..=2).map(|i| self.full(inner, &format!("item{i}"))).collect()),
+            Ty::Opt(inner) => self.full(inner, name, rg),
+            Ty::List(inner) => Value::Array((1..=2).map(|i| self.full(inner, &format!("item{i}"), rg)).collect()),
             Ty::Record(r) => {
                 let fields = self.m.records[*r].fields.clone();
                 let mut o = Map::new();
                 for (f, ft) in fields {
-                    let v = self.full(&ft, &f);
+                    let v = self.full(&ft, &f, self.m.field_range(*r, &f));
                     o.insert(f, v);
                 }
                 Value::Object(o)
             }
-            _ => self.template(t, name),
+            _ => self.template(t, name, rg),
+        }
+    }
+
+    /// A value of type `t` with a number outside its range, the first there is: None when no
+    /// number in it has a range.
+    fn outside(&mut self, t: &Ty, rg: Option<Range>) -> Option<Value> {
+        match t {
+            Ty::Int | Ty::Num(_) => rg?.beyond().map(|n| json!(n)),
+            Ty::Opt(inner) => self.outside(inner, rg),
+            Ty::List(inner) => self.outside(inner, rg).map(|v| json!([v])),
+            Ty::Record(r) => {
+                let fields = self.m.records[*r].fields.clone();
+                let at = fields.iter().position(|(f, ft)| self.has_outside(ft, self.m.field_range(*r, f)))?;
+                let mut o = Map::new();
+                for (i, (f, ft)) in fields.iter().enumerate() {
+                    let frg = self.m.field_range(*r, f);
+                    let v = if i == at { self.outside(ft, frg)? } else { self.full(ft, f, frg) };
+                    o.insert(f.clone(), v);
+                }
+                Some(Value::Object(o))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether `outside` finds a number with a range in a value of type `t`.
+    fn has_outside(&self, t: &Ty, rg: Option<Range>) -> bool {
+        match t {
+            Ty::Int | Ty::Num(_) => rg.and_then(|r| r.beyond()).is_some(),
+            Ty::Opt(inner) | Ty::List(inner) => self.has_outside(inner, rg),
+            Ty::Record(r) => self.m.records[*r].fields.iter().any(|(f, ft)| self.has_outside(ft, self.m.field_range(*r, f))),
+            _ => false,
         }
     }
 
@@ -263,8 +308,8 @@ impl<'a> Ex<'a> {
                         } else if listed {
                             dom[c].clone()
                         } else {
-                            let v = self.template(inner, "value");
-                            v
+                            let rg = self.holes[id].2;
+                            self.template(inner, "value", rg)
                         }
                     }
                     _ => {
@@ -298,9 +343,10 @@ impl<'a> Ex<'a> {
         lengths.retain(|n| *n <= max as usize);
         lengths.push(max as usize + 1);
         let c = self.choose(at, lengths.len());
+        let rg = self.holes[id].2;
         let mut items = Vec::new();
         for i in 0..lengths[c] {
-            let v = self.template(&elem, &format!("item{}", i + 1));
+            let v = self.template(&elem, &format!("item{}", i + 1), rg);
             items.push(v);
         }
         self.holes[id].1 = Some(Value::Array(items.clone()));
@@ -375,7 +421,7 @@ impl<'a> Ex<'a> {
         }
         let inputs = self.m.inputs.clone();
         for (n, t) in &inputs {
-            let v = self.template(t, n);
+            let v = self.template(t, n, self.m.input_ranges.get(n).copied());
             self.vars.insert(n.clone(), v);
         }
         let flow = self.m.flow.clone();
@@ -642,6 +688,8 @@ impl<'a> Ex<'a> {
             Unexpected(usize),
             /// an answer that does not have the declared shape
             Malformed,
+            /// an answer with a number outside its range, in a case's state the call may lead to
+            OutOfRange(Option<usize>),
             /// a cancellation that comes while the call is out
             Cancelled,
         }
@@ -754,6 +802,11 @@ impl<'a> Ex<'a> {
         if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) {
             ways.push(("malformed".into(), Way::Malformed));
         }
+        if let (Some(ty), Some(st), true) = (&result_ty, first_ok, target.is_some()) {
+            if self.has_outside(ty, m.answer_range(callee)) {
+                ways.push(("out of range".into(), Way::OutOfRange(st)));
+            }
+        }
         // a workflow that says what to do when it is cancelled can be cancelled at any call, but not in `on cancel`
         if self.m.on_cancel.is_some() && !self.in_on_cancel {
             ways.push(("cancelled".into(), Way::Cancelled));
@@ -763,7 +816,7 @@ impl<'a> Ex<'a> {
         self.labels.insert(format!("{}:{label}", s.site));
         let ok_answer = |ex: &mut Ex, st: Option<usize>| -> Value {
             let mut v = match &result_ty {
-                Some(t) => ex.template(t, "value"),
+                Some(t) => ex.template(t, "value", m.answer_range(callee)),
                 None => Value::Null,
             };
             if let (Some(c), Some(st)) = (case, st) {
@@ -785,7 +838,7 @@ impl<'a> Ex<'a> {
                     Callee::Task(t) => *t,
                     Callee::Rule(_) => unreachable!("only an agent's answer is recased"),
                 };
-                let v = self.full(result_ty.as_ref().unwrap_or(&Ty::Json), "value");
+                let v = self.full(result_ty.as_ref().unwrap_or(&Ty::Json), "value", m.answer_range(callee));
                 self.answers.push(json!({ "ok": v, "recase": t }));
                 self.assign(target, v, st);
                 Ctl::Next
@@ -797,6 +850,15 @@ impl<'a> Ex<'a> {
             }
             Way::Malformed => {
                 self.answers.push(json!({ "ok": {} }));
+                self.halt(false)
+            }
+            Way::OutOfRange(st) => {
+                let mut v = self.outside(result_ty.as_ref().expect("an answer with a range has a type"), m.answer_range(callee)).expect("a number with a range is there");
+                if let (Some(c), Some(st)) = (case, st) {
+                    let field = m.cases[c].state_field.clone();
+                    v[field] = json!(m.machine(c).states[st]);
+                }
+                self.answers.push(json!({ "ok": v }));
                 self.halt(false)
             }
             Way::Cancelled => {

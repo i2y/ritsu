@@ -383,26 +383,32 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A test that `x` is a well-formed value of `t`.
-    fn check(&self, x: &str, t: &Ty) -> String {
+    /// A test that `x` is a well-formed value of `t`, and in `rg` when it is a number (or its
+    /// numbers, when it is a `?` or a list).
+    fn check(&self, x: &str, t: &Ty, rg: Option<Range>) -> String {
         let m = self.m;
         match t {
             Ty::Str => format!("type({x}) == \"string\""),
             Ty::Timestamp => format!("(type({x}) == \"string\" && {x} matches {})", q(&render::TIMESTAMP_RE.replace("\\\\", "\\"))),
-            Ty::Int | Ty::Num(_) => format!("(type({x}) in [\"int\", \"float\"] && {x} == int({x}))"),
+            Ty::Int | Ty::Num(_) => {
+                let mut parts = vec![format!("type({x}) in [\"int\", \"float\"]"), format!("{x} == int({x})")];
+                parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());
+                format!("({})", parts.join(" && "))
+            }
             Ty::Bool => format!("type({x}) == \"bool\""),
             Ty::Enum(e) => format!("{x} in [{}]", m.enums[*e].values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
             Ty::Json => "true".into(),
-            Ty::Opt(inner) => format!("({x} == nil || {})", self.check(x, inner)),
-            Ty::List(inner) => format!("(type({x}) == \"array\" && all({x}, {{{}}}))", self.check("#", inner)),
+            Ty::Opt(inner) => format!("({x} == nil || {})", self.check(x, inner, rg)),
+            Ty::List(inner) => format!("(type({x}) == \"array\" && all({x}, {{{}}}))", self.check("#", inner, rg)),
             Ty::Record(r) => {
                 let mut parts = vec![format!("type({x}) == \"map\"")];
                 for (f, ft) in &m.records[*r].fields {
                     let fx = format!("{x}[{}]", q(f));
+                    let frg = m.field_range(*r, f);
                     match ft {
-                        Ty::Opt(_) => parts.push(self.check(&fx, ft)),
+                        Ty::Opt(_) => parts.push(self.check(&fx, ft, frg)),
                         Ty::Json => parts.push(format!("{} in {x}", q(f))),
-                        _ => parts.push(format!("({} in {x} && {})", q(f), self.check(&fx, ft))),
+                        _ => parts.push(format!("({} in {x} && {})", q(f), self.check(&fx, ft, frg))),
                     }
                 }
                 format!("({})", parts.join(" && "))
@@ -959,7 +965,7 @@ impl<'a> Gen<'a> {
                     (Target::Case(c), Some((_, allowed))) => format!("a[{}] in [{}]", q(&m.cases[*c].state_field), allowed.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
                     _ => "true".into(),
                 };
-                (self.check("a", ty), stated)
+                (self.check("a", ty, m.answer_range(callee)), stated)
             }
             _ => ("true".into(), "true".into()),
         };
@@ -1052,7 +1058,7 @@ impl<'a> Gen<'a> {
         let input = "sprig.fromJson(inputs.parameters.input)";
         let mut checks = vec![format!("type({input}) == \"map\"")];
         for (n, t) in &m.inputs {
-            checks.push(self.check(&format!("{input}[{}]", q(n)), t));
+            checks.push(self.check(&format!("{input}[{}]", q(n)), t, m.input_ranges.get(n).copied()));
         }
         let ok = format!("({})", checks.join(" && "));
         let mut init_out: Vec<Out> = Vec::new();

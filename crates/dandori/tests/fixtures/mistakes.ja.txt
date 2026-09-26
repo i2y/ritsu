@@ -2,6 +2,8 @@
     17 | task notify(text: string) -> 通知
 エラー[E012]: tests/fixtures/mistakes.flow:22:1: ここでは `見積` はまだ値を持っていません
     22 |   match 見積.扱い
+警告[W104]: tests/fixtures/mistakes.flow:25:1: `予約.泊数` の範囲が分かりません（`予約` のフィールド `泊数` に範囲がありません）。規則 `与信` の `泊数` が受け取るのは `>=1 <=30` です
+    25 |   let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
 エラー[E012]: tests/fixtures/mistakes.flow:29:1: ここでは、`n` が値を持っていないことがあります
     29 |   let m = notify(text: n.id)
   そうなる例:

@@ -14,6 +14,7 @@ pub mod interp;
 pub mod lower;
 pub mod model;
 pub mod pydantic_graph;
+pub mod ranges;
 pub mod render;
 pub mod rulec;
 pub mod scenarios;

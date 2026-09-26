@@ -1,0 +1,52 @@
+workflow ranges v1
+description "範囲：規則の入力、タスクの引数、書き出したレコード、出力に渡す値が、その範囲に収まるか"
+
+use rule 与信 from "../rules/宿泊の与信額.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
+
+record 予約
+  客室 : 与信.客室
+  泊数 : int  range >=1 <=60
+
+record 明細
+  数量 : int  range >=1 <=99
+  単価 : money[円, incl_tax]  range >=10
+
+inputs
+  予約     : 予約
+  延長     : int
+  泊数たち : list[int]  range >=1 <=5
+
+outputs
+  合計 : money[円, incl_tax]  range <=1000000
+
+task 見積もる(客室: 与信.客室) -> int
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:estimate"
+
+task 数える() -> int  range >=0 <=10
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:count"
+
+task 請求する(額: money[円, incl_tax]  range >=50 <=99999999, 明細: 明細)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:charge"
+  idempotent
+
+flow
+  # 予約の泊数は 60 泊まで、規則が受け取るのは 30 泊まで
+  let a = 与信(客室: 予約.客室, 泊数: 予約.泊数)
+  let b = 与信(客室: standard, 泊数: 45)
+  # 範囲の書かれていない入力と答え
+  let c = 与信(客室: standard, 泊数: 延長)
+  let n = 見積もる(客室: standard)
+  let d = 与信(客室: standard, 泊数: n)
+  let k = 数える()
+  let e = 与信(客室: standard, 泊数: k)
+  # 変数の範囲は、入れるすべての値を合わせたもの
+  match a.扱い
+    自動 => let 泊 = 3
+    確認 => let 泊 = 40
+  let f = 与信(客室: standard, 泊数: 泊)
+  # リストの範囲は、その要素の範囲。与信額（12000〜1200000 円）は請求の範囲に収まる
+  for x in 泊数たち at most 5
+    let g = 与信(客室: standard, 泊数: x)
+  請求する(額: a.与信額, 明細: {数量: 100, 単価: 500})
+  succeed 合計 = a.与信額

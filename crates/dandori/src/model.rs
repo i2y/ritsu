@@ -48,6 +48,78 @@ impl Ty {
     }
 }
 
+/// The whole numbers a value may be, both ends included (`range >=1 <=30`); an end that is
+/// None is open. A range belongs to a place a value is put: an input, an output, a field of a
+/// record, a parameter or the answer of a task, an input or an output of a rule (as rulec gives
+/// it). For a `T?` or a `list[T]`, it holds the numbers inside.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Range {
+    pub lo: Option<i64>,
+    pub hi: Option<i64>,
+}
+
+impl Range {
+    pub fn exactly(n: i64) -> Range {
+        Range { lo: Some(n), hi: Some(n) }
+    }
+
+    pub fn contains(&self, n: i64) -> bool {
+        self.lo.map_or(true, |lo| n >= lo) && self.hi.map_or(true, |hi| n <= hi)
+    }
+
+    /// Whether every number of `self` is one of `outer`'s.
+    pub fn within(&self, outer: &Range) -> bool {
+        let lo = match (outer.lo, self.lo) {
+            (None, _) => true,
+            (Some(o), Some(s)) => s >= o,
+            (Some(_), None) => false,
+        };
+        let hi = match (outer.hi, self.hi) {
+            (None, _) => true,
+            (Some(o), Some(s)) => s <= o,
+            (Some(_), None) => false,
+        };
+        lo && hi
+    }
+
+    /// The smallest range that holds the numbers of both.
+    pub fn hull(&self, o: &Range) -> Range {
+        Range { lo: self.lo.zip(o.lo).map(|(a, b)| a.min(b)), hi: self.hi.zip(o.hi).map(|(a, b)| a.max(b)) }
+    }
+
+    /// A number just outside: one below the low end, else one above the high end.
+    pub fn beyond(&self) -> Option<i64> {
+        self.lo.and_then(|lo| lo.checked_sub(1)).or(self.hi.and_then(|hi| hi.checked_add(1)))
+    }
+
+    /// The tests of the ends, each made by `test(">=", 1)`, for the generated code to join.
+    pub fn tests(&self, test: impl Fn(&str, i64) -> String) -> Vec<String> {
+        self.lo.map(|lo| test(">=", lo)).into_iter().chain(self.hi.map(|hi| test("<=", hi))).collect()
+    }
+
+    /// As a `.flow` writes it: `>=1 <=30`.
+    pub fn show(&self) -> String {
+        let mut parts = vec![];
+        if let Some(lo) = self.lo {
+            parts.push(format!(">={lo}"));
+        }
+        if let Some(hi) = self.hi {
+            parts.push(format!("<={hi}"));
+        }
+        parts.join(" ")
+    }
+}
+
+impl crate::rulec::Column {
+    /// The range rulec gives the column: its schema's minimum and maximum.
+    pub fn range(&self) -> Option<Range> {
+        match &self.ty {
+            crate::rulec::RType::Num { min, max, .. } if min.is_some() || max.is_some() => Some(Range { lo: *min, hi: *max }),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct EnumDef {
     /// how the enum is written in a `.flow`: `status` for a local one, `payment_intent.status` for a rule's
@@ -66,6 +138,8 @@ pub enum RecordOrigin {
 pub struct RecordDef {
     pub name: String,
     pub fields: Vec<(String, Ty)>,
+    /// the fields that have a range
+    pub ranges: BTreeMap<String, Range>,
     pub origin: RecordOrigin,
 }
 
@@ -173,8 +247,12 @@ pub enum TaskMachine {
 pub struct TaskDef {
     pub name: String,
     pub params: Vec<(String, Ty)>,
+    /// the parameters that have a range
+    pub param_ranges: BTreeMap<String, Range>,
     /// None: the task answers nothing the workflow reads
     pub result: Option<Ty>,
+    /// the range of the answer, when the answer is a number (or a list of numbers, …)
+    pub result_range: Option<Range>,
     pub binding: Option<Binding>,
     pub connection: Option<String>,
     pub queue: Option<String>,
@@ -408,6 +486,9 @@ pub struct Model {
     pub records: Vec<RecordDef>,
     pub inputs: Vec<(String, Ty)>,
     pub outputs: Vec<(String, Ty)>,
+    /// the inputs and the outputs that have a range
+    pub input_ranges: BTreeMap<String, Range>,
+    pub output_ranges: BTreeMap<String, Range>,
     pub tasks: Vec<TaskDef>,
     pub cases: Vec<CaseDef>,
     /// every variable: the inputs, the `let`s and the cases, with its type
@@ -480,6 +561,24 @@ impl Model {
 
     pub fn field_ty(&self, rec: RecordId, field: &str) -> Option<&Ty> {
         self.records[rec].fields.iter().find(|(n, _)| n == field).map(|(_, t)| t)
+    }
+
+    pub fn field_range(&self, rec: RecordId, field: &str) -> Option<Range> {
+        self.records[rec].ranges.get(field).copied()
+    }
+
+    /// The range of what `callee` answers: a task's `-> int range …`. A rule answers a record,
+    /// whose fields have the ranges rulec gives them.
+    pub fn answer_range(&self, callee: &Callee) -> Option<Range> {
+        match callee {
+            Callee::Task(t) => self.tasks[*t].result_range,
+            Callee::Rule(_) => None,
+        }
+    }
+
+    /// The range rulec gives the input `param` of the rule.
+    pub fn rule_input_range(&self, rule: usize, param: &str) -> Option<Range> {
+        self.rules[rule].info.inputs.iter().find(|c| c.name == param).and_then(|c| c.range())
     }
 
     pub fn case_index(&self, name: &str) -> Option<usize> {

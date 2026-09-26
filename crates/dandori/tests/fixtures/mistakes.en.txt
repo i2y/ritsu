@@ -2,6 +2,8 @@ warning[W030]: tests/fixtures/mistakes.flow:17:1: `notify` is retried after a fa
     17 | task notify(text: string) -> 通知
 error[E012]: tests/fixtures/mistakes.flow:22:1: `見積` has not been set here
     22 |   match 見積.扱い
+warning[W104]: tests/fixtures/mistakes.flow:25:1: nothing says what range `予約.泊数` is in (the field `泊数` of `予約` has no range), and `泊数` of the rule `与信` takes `>=1 <=30`
+    25 |   let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
 error[E012]: tests/fixtures/mistakes.flow:29:1: `n` may not have been set here
     29 |   let m = notify(text: n.id)
   the run that gets there:

@@ -87,6 +87,16 @@ pub struct RecordDecl {
 pub struct Field {
     pub name: Name,
     pub ty: TypeExpr,
+    pub range: Option<RangeDecl>,
+}
+
+/// `range >=1 <=30`: the whole numbers a value may be, both ends included, in the unit of its
+/// type. Either end can be left out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RangeDecl {
+    pub lo: Option<i64>,
+    pub hi: Option<i64>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -158,6 +168,8 @@ pub struct TaskDecl {
     pub params: Vec<Field>,
     /// None: the task answers nothing the workflow reads
     pub result: Option<TypeExpr>,
+    /// `-> int range >=0 <=100`
+    pub result_range: Option<RangeDecl>,
     pub binding: Option<(Binding, Span)>,
     /// the model an `agent` task runs on
     pub model: Option<(String, Span)>,
@@ -355,8 +367,11 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 toks.push(Token { tok: Tok::Str(s), span });
                 continue;
             }
-            if c.is_ascii_digit() {
+            // a bound of a range: `>=-5`, and a number glued to a unit is told apart below
+            let bound = matches!(toks.last(), Some(Token { tok: Tok::Sym(">=" | "<="), .. }));
+            if c.is_ascii_digit() || (c == '-' && bound && chars.get(j + 1).is_some_and(|d| d.is_ascii_digit())) {
                 let start = j;
+                j += 1;
                 while j < chars.len() && (chars[j].is_ascii_digit() || chars[j] == '_') {
                     j += 1;
                 }
@@ -370,6 +385,15 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 }
                 let text: String = chars[start..j].iter().filter(|c| **c != '_').collect();
                 if j < chars.len() && is_ident_start(chars[j]) {
+                    if bound {
+                        let n: String = chars[start..j].iter().collect();
+                        let w: String = chars[j..].iter().take_while(|c| is_ident_continue(**c)).collect();
+                        return Err(err(
+                            span,
+                            format!("a bound of a range is a whole number in the unit of the type, written without the unit: `{n}`, not `{n}{w}`"),
+                            format!("範囲の端は、型の単位で数えた整数を、単位を付けずに書きます（`{n}{w}` ではなく `{n}`）"),
+                        ));
+                    }
                     return Err(err(span, "put a space between a number and a word", "数と語のあいだに空白を入れてください"));
                 }
                 if is_float {
@@ -395,6 +419,8 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 "->" => Some("->"),
                 "<-" => Some("<-"),
                 "=>" => Some("=>"),
+                ">=" => Some(">="),
+                "<=" => Some("<="),
                 _ => None,
             };
             if let Some(s) = sym2 {
@@ -580,7 +606,7 @@ const KEYWORDS: &[&str] = &[
     "follows", "flow", "on", "let", "match", "wait", "repeat", "break", "succeed", "fail", "leaving", "lambda", "http",
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
-    "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json",
+    "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json", "range",
 ];
 
 /// The kinds of number with a unit that rulec has: `money[円, incl_tax]`, `mass[kg]`, …
@@ -678,7 +704,32 @@ fn field(cur: &mut Cur) -> Result<Field, Diag> {
     let name = cur.ident("a field name", "フィールドの名前")?;
     cur.expect_sym(":")?;
     let ty = type_expr(cur)?;
-    Ok(Field { name, ty })
+    let range = range_decl(cur)?;
+    Ok(Field { name, ty, range })
+}
+
+/// `range >=1 <=30`, `range >=0`, `range <=100`, after a type.
+fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
+    let span = cur.span();
+    if !cur.eat_kw("range") {
+        return Ok(None);
+    }
+    let (mut lo, mut hi) = (None, None);
+    loop {
+        let end = if cur.is_sym(">=") && lo.is_none() {
+            &mut lo
+        } else if cur.is_sym("<=") && hi.is_none() {
+            &mut hi
+        } else {
+            break;
+        };
+        cur.i += 1;
+        *end = Some(cur.int("a whole number", "整数")?.0);
+    }
+    if lo.is_none() && hi.is_none() {
+        return Err(err(cur.span(), "a range is written `range >=<low> <=<high>`, with one end or both", "範囲は `range >=<下限> <=<上限>` と書きます。端は片方だけでもかまいません"));
+    }
+    Ok(Some(RangeDecl { lo, hi, span }))
 }
 
 fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
@@ -1233,12 +1284,14 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     }
                 }
                 let result = if cur.eat_sym("->") { Some(type_expr(&mut cur)?) } else { None };
+                let result_range = if result.is_some() { range_decl(&mut cur)? } else { None };
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut t = TaskDecl {
                     name,
                     params,
                     result,
+                    result_range,
                     binding: None,
                     model: None,
                     connection: None,

@@ -11,7 +11,7 @@ use rule 急ぎの見直し from "../rules/出荷の急ぎ.rule"
 record 注文
   id   : string
   会員 : bool
-  金額 : money[円, incl_tax]
+  金額 : money[円, incl_tax]  range >=0 <=1000000
 
 inputs
   注文たち : list[注文]

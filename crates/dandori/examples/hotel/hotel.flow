@@ -8,7 +8,7 @@ use rule payment_intent from "rules/payment_intent.rule"
 record Booking
   id        : string
   room      : hold.room
-  nights    : int
+  nights    : int  range >=1 <=30
   card      : string
   check_out : timestamp
 
@@ -24,7 +24,7 @@ inputs
 outputs
   outcome : Outcome
 
-task create_intent(amount: money[JPY, incl_tax], currency: string, payment_method: string, capture_method: payment_intent.capture_method) -> PaymentIntent
+task create_intent(amount: money[JPY, incl_tax] range >=50 <=99999999, currency: string, payment_method: string, capture_method: payment_intent.capture_method) -> PaymentIntent
   http POST "https://api.stripe.com/v1/payment_intents" form
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   starts payment_intent.payment then attach

@@ -160,7 +160,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let check_in = g.name("check input");
     let bad_in = g.name("bad input");
     g.states.insert(start.clone(), json!({ "Type": "Pass", "Comment": "set every variable; the inputs come from the execution's input", "Assign": assign, "Next": check_in }));
-    let conds: Vec<String> = m.inputs.iter().map(|(n, t)| jsonata_check(m, &format!("$states.input.{}", render::jsonata_field(n)), t, 0)).collect();
+    let conds: Vec<String> = m.inputs.iter().map(|(n, t)| jsonata_check(m, &format!("$states.input.{}", render::jsonata_field(n)), t, m.input_ranges.get(n).copied(), 0)).collect();
     if conds.is_empty() {
         g.states.insert(check_in.clone(), json!({ "Type": "Pass", "Next": first }));
     } else {
@@ -669,7 +669,7 @@ impl<'a> Gen<'a> {
                             .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
                             .collect();
                         let ty = task.result.as_ref().expect("the checker gives an agent an answer");
-                        let schema = render::agent_schema(m, ty).expect("the checker gives an agent an answer with a schema");
+                        let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
                         let body = render::agent_request(provider, model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
                         let mut w = Map::new();
                         w.insert("ApiEndpoint".into(), json!(render::agent_url(provider)));
@@ -759,7 +759,7 @@ impl<'a> Gen<'a> {
         st.insert("Next".into(), json!(check.clone()));
         self.states.insert(task_name.clone(), Value::Object(st));
         let x = format!("${}", asl_var(&var));
-        let typed = jsonata_check(m, &x, &ty, 0);
+        let typed = jsonata_check(m, &x, &ty, m.answer_range(callee), 0);
         let mut choices = Vec::new();
         match (target, m.monitors.get(&s.site)) {
             (Some(Target::Case(c)), Some((_, allowed))) => {

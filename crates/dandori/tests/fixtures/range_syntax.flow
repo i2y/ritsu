@@ -1,0 +1,7 @@
+workflow range_syntax v1
+
+record 請求
+  額 : money[円, incl_tax]  range >=0円 <=100万円
+
+flow
+  pass

@@ -5,7 +5,7 @@
 use crate::diag::Diag;
 use crate::model::*;
 use crate::rulec::{self, RType};
-use crate::syntax::{self, Block, Call, Expr, MachineUse, Part, Program, Span, StmtKind, TypeExpr};
+use crate::syntax::{self, Block, Call, Expr, MachineUse, Part, Program, RangeDecl, Span, StmtKind, TypeExpr};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -60,6 +60,8 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             records: vec![],
             inputs: vec![],
             outputs: vec![],
+            input_ranges: BTreeMap::new(),
+            output_ranges: BTreeMap::new(),
             tasks: vec![],
             cases: vec![],
             vars: vec![],
@@ -150,8 +152,9 @@ impl<'a> Lowerer<'a> {
                 self.m.enums.push(EnumDef { name: q, values: values.clone() });
             }
             let fields: Vec<(String, Ty)> = info.outputs.iter().map(|c| (c.name.clone(), self.rty(name, &c.ty))).collect();
+            let ranges = info.outputs.iter().filter_map(|c| Some((c.name.clone(), c.range()?))).collect();
             let rec = self.m.records.len();
-            self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, origin: RecordOrigin::RuleOutputs(ix) });
+            self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, ranges, origin: RecordOrigin::RuleOutputs(ix) });
             self.rule_ix.insert(name.clone(), ix);
             self.m.rules.push(RuleUse { name: name.clone(), info, lambda: u.lambda.clone(), local: u.local, outputs: rec, line: sp.line });
         }
@@ -196,7 +199,7 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             self.record_ix.insert(name.clone(), self.m.records.len());
-            self.m.records.push(RecordDef { name: name.clone(), fields: vec![], origin: RecordOrigin::Local });
+            self.m.records.push(RecordDef { name: name.clone(), fields: vec![], ranges: BTreeMap::new(), origin: RecordOrigin::Local });
         }
         for r in &self.prog.records {
             let ix = match self.record_ix.get(&r.name.0) {
@@ -204,6 +207,7 @@ impl<'a> Lowerer<'a> {
                 None => continue,
             };
             let mut fields = Vec::new();
+            let mut ranges = BTreeMap::new();
             for f in &r.fields {
                 if fields.iter().any(|(n, _): &(String, Ty)| *n == f.name.0) {
                     self.push(e("E006", f.name.1, format!("the field `{}` is written twice", f.name.0), format!("フィールド `{}` が二度書かれています", f.name.0)));
@@ -214,10 +218,14 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E003", f.ty.span(), "a record cannot contain itself", "レコードは自分自身を含められません"));
                         continue;
                     }
+                    if let Some(rg) = self.range(&t, f.range.as_ref()) {
+                        ranges.insert(f.name.0.clone(), rg);
+                    }
                     fields.push((f.name.0.clone(), t));
                 }
             }
             self.m.records[ix].fields = fields;
+            self.m.records[ix].ranges = ranges;
         }
     }
 
@@ -271,6 +279,28 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// The range written after a type, which only a number can have (or a `?` or a list of numbers).
+    fn range(&mut self, t: &Ty, r: Option<&RangeDecl>) -> Option<Range> {
+        let r = r?;
+        let mut inner = t;
+        while let Ty::Opt(x) | Ty::List(x) = inner {
+            inner = x;
+        }
+        if !matches!(inner, Ty::Int | Ty::Num(_)) {
+            let n = self.m.ty_name(t);
+            self.push(e("E003", r.span, format!("a range is for a number (`int` or a unit), and this is `{n}`"), format!("範囲を書けるのは数（`int` か単位の付いた数）で、これは `{n}` です")));
+            return None;
+        }
+        let rg = Range { lo: r.lo, hi: r.hi };
+        if let (Some(lo), Some(hi)) = (rg.lo, rg.hi) {
+            if lo > hi {
+                self.push(e("E003", r.span, format!("no number is in `{}`", rg.show()), format!("`{}` に入る数はありません", rg.show())));
+                return None;
+            }
+        }
+        Some(rg)
+    }
+
     fn io(&mut self) {
         let mut seen: Vec<String> = vec![];
         for f in &self.prog.inputs {
@@ -280,6 +310,9 @@ impl<'a> Lowerer<'a> {
             }
             seen.push(f.name.0.clone());
             if let Some(t) = self.ty(&f.ty) {
+                if let Some(rg) = self.range(&t, f.range.as_ref()) {
+                    self.m.input_ranges.insert(f.name.0.clone(), rg);
+                }
                 self.m.inputs.push((f.name.0.clone(), t));
             }
         }
@@ -291,6 +324,9 @@ impl<'a> Lowerer<'a> {
             }
             seen.push(f.name.0.clone());
             if let Some(t) = self.ty(&f.ty) {
+                if let Some(rg) = self.range(&t, f.range.as_ref()) {
+                    self.m.output_ranges.insert(f.name.0.clone(), rg);
+                }
                 self.m.outputs.push((f.name.0.clone(), t));
             }
         }
@@ -304,12 +340,16 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             let mut params = Vec::new();
+            let mut param_ranges = BTreeMap::new();
             for p in &t.params {
                 if params.iter().any(|(n, _): &(String, Ty)| *n == p.name.0) {
                     self.push(e("E006", p.name.1, format!("the parameter `{}` is written twice", p.name.0), format!("引数 `{}` が二度書かれています", p.name.0)));
                     continue;
                 }
                 if let Some(ty) = self.ty(&p.ty) {
+                    if let Some(rg) = self.range(&ty, p.range.as_ref()) {
+                        param_ranges.insert(p.name.0.clone(), rg);
+                    }
                     params.push((p.name.0.clone(), ty));
                 }
             }
@@ -320,6 +360,7 @@ impl<'a> Lowerer<'a> {
                 },
                 None => None,
             };
+            let result_range = result.as_ref().and_then(|r| self.range(r, t.result_range.as_ref()));
             let binding = t.binding.as_ref().map(|(b, _)| match b {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
                 syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
@@ -334,7 +375,7 @@ impl<'a> Lowerer<'a> {
                     model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default(),
                 },
             });
-            self.agent(t, result.as_ref());
+            self.agent(t, result.as_ref(), result_range);
             let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
             if let Some((syntax::Binding::Aws { service, .. }, bsp)) = &t.binding {
                 if crate::aws::exception_prefix(service).is_none() {
@@ -513,7 +554,9 @@ impl<'a> Lowerer<'a> {
             self.m.tasks.push(TaskDef {
                 name: name.clone(),
                 params,
+                param_ranges,
                 result,
+                result_range,
                 binding,
                 connection: t.connection.clone(),
                 queue: t.queue.clone(),
@@ -540,7 +583,7 @@ impl<'a> Lowerer<'a> {
     /// What an agent task must have, and what it cannot: a provider dandori knows, a model, an
     /// answer whose type the provider's structured outputs can hold the model to, and nothing that
     /// moves a case.
-    fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>) {
+    fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>, rg: Option<Range>) {
         let (provider, bsp) = match (&t.binding, &t.model) {
             (Some((syntax::Binding::Agent { provider, .. }, bsp)), _) => (provider.clone(), *bsp),
             (_, Some((_, msp))) => {
@@ -592,7 +635,7 @@ impl<'a> Lowerer<'a> {
             self.push(e("E007", bsp, "an agent answers; write the type of its answer as `-> <type>`", "エージェントは答えを返します。答えの型を `-> <型>` と書いてください"));
             return;
         };
-        let Some(schema) = crate::render::agent_schema(&self.m, r) else {
+        let Some(schema) = crate::render::answer_schema(&self.m, r, rg, provider) else {
             let (en, ja) = if has_json(&self.m, r, &mut Vec::new()) {
                 (
                     format!("{outputs_en} hold an agent's answer to a JSON Schema, and `json` has none; give the answer a type without `json`"),

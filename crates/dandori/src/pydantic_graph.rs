@@ -883,7 +883,7 @@ impl<'a> Gen<'a> {
             None => None,
         };
         if let (Some(v), Some(ty)) = (var, &result_ty) {
-            n.line(0, &format!("if not {}:", py_check(m, "dd_r", ty, "T.", 0)));
+            n.line(0, &format!("if not {}:", py_check(m, "dd_r", ty, m.answer_range(callee), "T.", 0)));
             n.line(1, &format!("raise dd.Failure(\"Dandori.BadResponse\", {})", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
             if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
                 let field = &m.cases[*c].state_field;

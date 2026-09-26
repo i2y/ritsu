@@ -87,7 +87,8 @@ flow
   only by matching an enum, a bool, or a value that may be absent (`none` / `some x`).
 - Types: `int`, units such as `money[JPY, incl_tax]`, `string`, `bool`, `timestamp`, enums,
   records, `list[T]`, `T?` for a value that may be absent, and `json` for a value that is
-  passed along without being looked into.
+  passed along without being looked into. A number can say what it may be
+  ([Ranges](#ranges)).
 - A task declares its errors, its retries, whether it is idempotent or takes an
   idempotency `key`, and what it does to a case: `starts`, `sends <event>`, `observes`.
 - Loops have a bound (`repeat at most 12 times`, `for x in xs at most 50`), so the history
@@ -100,6 +101,37 @@ flow
   platforms stop a run at once, and refuse `on cancel` with E050). The checker enters
   `on cancel` from every call and wait a cancellation can stop, and wants the cases settled
   there too.
+
+### Ranges
+
+A number can say what it may be, as a rulec rule's inputs do: `nights : int  range >=1 <=30`.
+A range goes on an input, an output, a field of a record, and a task's parameter or answer
+(`-> int  range >=0 <=10`); either end may be left out. The ends are whole numbers in the
+type's own unit, written without it (`>=0`, not `>=0JPY`), as the values travel in JSON.
+
+- What comes in is checked when the workflow runs. An input, or a task's or a rule's answer,
+  with a number outside its range fails the run with `Dandori.BadInput` or
+  `Dandori.BadResponse`, as a value of the wrong type does, on every platform. A rule's answer
+  is held to the range rulec gives it, in case the function that runs the rule is not the
+  version the workflow was checked with. An agent's answer schema carries the range:
+  `minimum` and `maximum` for OpenAI, and words in the description for Claude, whose
+  structured outputs take neither.
+- What goes out is checked before the workflow runs. A value given to a rule's input, a task's
+  parameter, a field of a record written out, or an output must fit the range there (E014).
+  A value whose range nothing says is a warning (W104), which a range where the value comes
+  from ends: that range is then checked as the value comes in.
+
+```
+error[E014]: tests/fixtures/ranges.flow:35:1: `予約.泊数` can be outside `>=1 <=30`, the range of `泊数` of the rule `与信`: it is `>=1 <=60`
+    35 |   let a = 与信(客室: 予約.客室, 泊数: 予約.泊数)
+warning[W104]: tests/fixtures/ranges.flow:38:1: nothing says what range `延長` is in (the input `延長` has no range), and `泊数` of the rule `与信` takes `>=1 <=30`
+    38 |   let c = 与信(客室: standard, 泊数: 延長)
+```
+
+A variable's range is that of every value put in it, anywhere in the flow. A `.flow` has no
+arithmetic, so a range travels as it is, from where the value comes to where it goes. On
+Temporal, adding a range or narrowing one changes what a running workflow does when its values
+fall outside, so it ships as a new version (`v2`) or through Worker Deployment Versioning.
 
 ### What a task calls
 
@@ -315,7 +347,10 @@ SDK's local test runner (`tools/durable/run.mjs`), the generated WorkflowTemplat
 Workflows v4.1.4 in a local kind cluster (`tools/argo/run.mjs`), and the generated graph
 with pydantic-graph 2.51.0 (`tools/pydantic-graph/run.py`) — and require the same calls,
 with the same arguments and idempotency keys, and the same end. No two values in a
-scenario are alike, so a target that mixes up two answers or the rounds of a loop shows it.
+scenario are alike, so a target that mixes up two answers or the rounds of a loop shows it
+(a number with a range is picked inside it, where two may meet). The scenarios also give answers
+every target must refuse: of the wrong shape, with a state the machine does not lead to, and
+with a number outside its range.
 On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are

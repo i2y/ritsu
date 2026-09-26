@@ -17,7 +17,7 @@ record Gift
 record Order
   id     : string
   member : bool
-  amount : money[JPY, incl_tax]
+  amount : money[JPY, incl_tax]  range >=0 <=1000000
   lines  : list[Line]
   gift   : Gift?
   extra  : json

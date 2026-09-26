@@ -1,0 +1,16 @@
+error[E014]: tests/fixtures/ranges.flow:35:1: `予約.泊数` can be outside `>=1 <=30`, the range of `泊数` of the rule `与信`: it is `>=1 <=60`
+    35 |   let a = 与信(客室: 予約.客室, 泊数: 予約.泊数)
+error[E014]: tests/fixtures/ranges.flow:36:1: `45` is outside `>=1 <=30`, the range of `泊数` of the rule `与信`
+    36 |   let b = 与信(客室: standard, 泊数: 45)
+warning[W104]: tests/fixtures/ranges.flow:38:1: nothing says what range `延長` is in (the input `延長` has no range), and `泊数` of the rule `与信` takes `>=1 <=30`
+    38 |   let c = 与信(客室: standard, 泊数: 延長)
+warning[W104]: tests/fixtures/ranges.flow:40:1: nothing says what range `n` is in (the answer of `見積もる` has no range), and `泊数` of the rule `与信` takes `>=1 <=30`
+    40 |   let d = 与信(客室: standard, 泊数: n)
+error[E014]: tests/fixtures/ranges.flow:42:1: `k` can be outside `>=1 <=30`, the range of `泊数` of the rule `与信`: it is `>=0 <=10`
+    42 |   let e = 与信(客室: standard, 泊数: k)
+error[E014]: tests/fixtures/ranges.flow:47:1: `泊` can be outside `>=1 <=30`, the range of `泊数` of the rule `与信`: it is `>=3 <=40`
+    47 |   let f = 与信(客室: standard, 泊数: 泊)
+error[E014]: tests/fixtures/ranges.flow:51:1: `100` is outside `>=1 <=99`, the range of the field `数量` of `明細`
+    51 |   請求する(額: a.与信額, 明細: {数量: 100, 単価: 500})
+error[E014]: tests/fixtures/ranges.flow:52:1: `a.与信額` can be outside `<=1000000`, the range of the output `合計`: it is `>=12000 <=1200000`
+    52 |   succeed 合計 = a.与信額

@@ -21,7 +21,7 @@ use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// What a flow's name cannot be in the generated Python, with an `_` after it when it is:
 /// the keywords, the builtins, and the names the generated code uses.
@@ -80,9 +80,12 @@ pub(crate) fn py_type(m: &Model, t: &Ty) -> String {
 
 /// A check that `x` is a well-formed value of `t`. `p` is how the code reaches types.py: ""
 /// inside it, "T." from the workflow.
-pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
+pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
     match t {
-        Ty::Int | Ty::Num(_) => format!("{p}is_int({x})"),
+        Ty::Int | Ty::Num(_) => match rg {
+            Some(r) => format!("({p}is_int({x}) and {})", r.tests(|op, n| format!("{x} {op} {n}")).join(" and ")),
+            None => format!("{p}is_int({x})"),
+        },
         Ty::Str => format!("isinstance({x}, str)"),
         Ty::Timestamp => format!("(isinstance({x}, str) and {p}TIMESTAMP.match({x}) is not None)"),
         Ty::Bool => format!("isinstance({x}, bool)"),
@@ -90,20 +93,20 @@ pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> Str
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");
-            format!("(isinstance({x}, list) and all({} for {v} in {x}))", py_check(m, &v, inner, p, depth + 1))
+            format!("(isinstance({x}, list) and all({} for {v} in {x}))", py_check(m, &v, inner, rg, p, depth + 1))
         }
-        Ty::Opt(inner) => format!("({x} is None or {})", py_check(m, x, inner, p, depth)),
+        Ty::Opt(inner) => format!("({x} is None or {})", py_check(m, x, inner, rg, p, depth)),
         Ty::Json => "True".into(),
     }
 }
 
 /// The checks of the fields of a dict `v`: an absent field reads as None; a `json` field must be there.
-fn field_checks(m: &Model, v: &str, fields: &[(String, Ty)], p: &str) -> Vec<String> {
+fn field_checks(m: &Model, v: &str, fields: &[(String, Ty)], ranges: &BTreeMap<String, Range>, p: &str) -> Vec<String> {
     let mut conds = vec![format!("isinstance({v}, dict)")];
     for (f, ft) in fields {
         match ft {
             Ty::Json => conds.push(format!("{} in {v}", q(f))),
-            _ => conds.push(py_check(m, &format!("{v}.get({})", q(f)), ft, p, 0)),
+            _ => conds.push(py_check(m, &format!("{v}.get({})", q(f)), ft, ranges.get(f).copied(), p, 0)),
         }
     }
     conds
@@ -138,11 +141,11 @@ pub(crate) fn types_file(m: &Model, header: &str) -> String {
             })
             .collect();
         t.push_str(&format!("\n{n} = TypedDict({}, {{{}}})\n\n\n", q(&n), fields.join(", ")));
-        t.push_str(&format!("def is_{n}(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &rd.fields, "").join("\n        and ")));
+        t.push_str(&format!("def is_{n}(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &rd.fields, &rd.ranges, "").join("\n        and ")));
     }
     let inputs: Vec<String> = m.inputs.iter().map(|(n, ty)| format!("{}: \"{}\"", q(n), hint(m, ty))).collect();
     t.push_str(&format!("\nWorkflowInput = TypedDict(\"WorkflowInput\", {{{}}})\n\n\n", inputs.join(", ")));
-    t.push_str(&format!("def is_WorkflowInput(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &m.inputs, "").join("\n        and ")));
+    t.push_str(&format!("def is_WorkflowInput(v: Any) -> bool:\n    return (\n        {}\n    )\n\n", field_checks(m, "v", &m.inputs, &m.input_ranges, "").join("\n        and ")));
     let outputs: Vec<String> = m
         .outputs
         .iter()
@@ -384,7 +387,7 @@ pub(crate) fn schemas_block(m: &Model, tasks: &[&TaskDef], p: Platform) -> Strin
     }
     let mut out = String::from("# What each agent answers in: the JSON Schema its provider's structured outputs hold the model to.\nSCHEMAS: dict[str, Any] = {\n");
     for task in agents {
-        let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
+        let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
         out.push_str(&format!("    {}: {},\n", q(&task.name), render::layout(&schema, 1, "    ", true)));
     }
     out.push_str("}\n\n\n");
@@ -1645,7 +1648,7 @@ impl<'a> Gen<'a> {
         let answer = |g: &mut Gen, d: usize| {
             // the answer: its declared type, and for a case the states it may carry
             if let (Some(v), Some(ty)) = (&var, &result_ty) {
-                g.line(d, &format!("if not {}:", py_check(m, "dd_r", ty, "T.", 0)));
+                g.line(d, &format!("if not {}:", py_check(m, "dd_r", ty, m.answer_range(callee), "T.", 0)));
                 g.line(d + 1, &format!("raise dd.fail(\"Dandori.BadResponse\", {})", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
                 if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
                     let field = &m.cases[*c].state_field;

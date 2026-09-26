@@ -136,9 +136,12 @@ fn ts_type(m: &Model, t: &Ty) -> String {
 
 /// A check that `x` is a well-formed value of `t`, as TypeScript. `p` is how the code
 /// reaches types.ts: "" inside it, "T." from the workflow.
-fn ts_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
+fn ts_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
     match t {
-        Ty::Int | Ty::Num(_) => format!("Number.isInteger({x})"),
+        Ty::Int | Ty::Num(_) => match rg {
+            Some(r) => format!("(Number.isInteger({x}) && {})", r.tests(|op, n| format!("({x} as number) {op} {n}")).join(" && ")),
+            None => format!("Number.isInteger({x})"),
+        },
         Ty::Str => format!("typeof {x} === \"string\""),
         Ty::Timestamp => format!("(typeof {x} === \"string\" && {p}TIMESTAMP.test({x}))"),
         Ty::Bool => format!("typeof {x} === \"boolean\""),
@@ -146,9 +149,9 @@ fn ts_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");
-            format!("(Array.isArray({x}) && {x}.every(({v}: unknown) => {}))", ts_check(m, &v, inner, p, depth + 1))
+            format!("(Array.isArray({x}) && {x}.every(({v}: unknown) => {}))", ts_check(m, &v, inner, rg, p, depth + 1))
         }
-        Ty::Opt(inner) => format!("({x} === undefined || {x} === null || {})", ts_check(m, x, inner, p, depth)),
+        Ty::Opt(inner) => format!("({x} === undefined || {x} === null || {})", ts_check(m, x, inner, rg, p, depth)),
         Ty::Json => format!("({x} !== undefined)"),
     }
 }
@@ -243,7 +246,7 @@ fn types_file(m: &Model, header: &str) -> String {
         t.push_str("}\n\n");
         let mut conds = vec!["typeof v === \"object\"".to_string(), "v !== null".to_string()];
         for (f, ft) in &rd.fields {
-            conds.push(ts_check(m, &format!("v[{}]", q(f)), ft, "", 0));
+            conds.push(ts_check(m, &format!("v[{}]", q(f)), ft, rd.ranges.get(f).copied(), "", 0));
         }
         t.push_str(&format!("export function is_{n}(v: any): v is {n} {{\n  return {};\n}}\n\n", conds.join(" &&\n    ")));
     }
@@ -254,7 +257,7 @@ fn types_file(m: &Model, header: &str) -> String {
     t.push_str("}\n\n");
     let mut conds = vec!["typeof v === \"object\"".to_string(), "v !== null".to_string()];
     for (n, ty) in &m.inputs {
-        conds.push(ts_check(m, &format!("v[{}]", q(n)), ty, "", 0));
+        conds.push(ts_check(m, &format!("v[{}]", q(n)), ty, m.input_ranges.get(n).copied(), "", 0));
     }
     t.push_str(&format!("export function is_WorkflowInput(v: any): v is WorkflowInput {{\n  return {};\n}}\n\n", conds.join(" &&\n    ")));
     t.push_str("export interface WorkflowOutput {\n");
@@ -516,7 +519,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         a.push_str("/** What each agent answers in: the JSON Schema its provider's structured outputs hold the model to. */\n");
         a.push_str("const SCHEMAS: Record<string, Record<string, unknown>> = {\n");
         for task in &agents {
-            let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
+            let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
             a.push_str(&format!("  {}: {},\n", q(&task.name), render::layout(&schema, 1, "  ", false)));
         }
         a.push_str("};\n\n");
@@ -2287,7 +2290,7 @@ impl<'a> Gen<'a> {
         };
         // the answer: its declared type, and for a case the states it may carry
         if let (Some(v), Some(ty)) = (var, result_ty) {
-            let check = format!("({})", ts_check(m, "dd_r", &ty, "T.", 0));
+            let check = format!("({})", ts_check(m, "dd_r", &ty, m.answer_range(callee), "T.", 0));
             self.line(d + 1, &format!("if (!{check}) throw dd.fail(\"Dandori.BadResponse\", {});", q(&format!("line {}: the answer from {} does not have the declared shape", s.line, cname))));
             if let (Some(Target::Case(c)), Some((_, allowed))) = (target, m.monitors.get(&site)) {
                 let field = &m.cases[*c].state_field;

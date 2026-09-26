@@ -134,7 +134,7 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, B
     let mut ok = true;
     for (n, t) in &m.inputs {
         let v = input.get(n).cloned().unwrap_or(Value::Null);
-        if !render::value_fits(m, &v, t) {
+        if !render::value_fits(m, &v, t, m.input_ranges.get(n).copied()) {
             ok = false;
         }
         r.vars.insert(n.clone(), v);
@@ -442,7 +442,7 @@ impl<'a> Run<'a> {
                         Callee::Task(t) => m.tasks[*t].result.clone().unwrap_or(Ty::Json),
                         Callee::Rule(r) => Ty::Record(m.rules[*r].outputs),
                     };
-                    if !render::value_fits(m, &v, &ty) {
+                    if !render::value_fits(m, &v, &ty, m.answer_range(callee)) {
                         self.fail("Dandori.BadResponse", &format!("line {}: the answer from {} does not have the declared shape", s.line, cname));
                         return Ctl::Stop;
                     }

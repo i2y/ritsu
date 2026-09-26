@@ -35,6 +35,7 @@ pub fn check_source(src: &str, path: &Path) -> Checked {
     diags.extend(fr.diags);
     model.monitors = fr.monitors;
     diags.extend(whole(&model));
+    diags.extend(crate::ranges::check(&model));
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
     let ok = !crate::diag::has_errors(&diags);
     Checked { model: if ok { Some(model) } else { None }, diags }

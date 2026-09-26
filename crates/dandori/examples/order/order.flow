@@ -8,7 +8,7 @@ use rule urgency from "rules/urgency.rule"
 record Order
   id     : string
   state  : order_state.state
-  amount : money[JPY, incl_tax]
+  amount : money[JPY, incl_tax]  range >=0 <=1000000
   member : bool
 
 record Receipt
