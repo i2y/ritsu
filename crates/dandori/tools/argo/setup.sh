@@ -2,14 +2,18 @@
 # Sets up what tools/argo/run.mjs runs the workflows on: a kind cluster `dandori` with Argo
 # Workflows, no artifact store (the tests keep nothing but parameters), a role that lets a
 # workflow start another, and the mock that serves the scenarios' answers (mock.mjs).
-# Run it again to bring the mock up to date. Needs docker, kind and kubectl.
+# Run it again to bring the mock up to date. Needs docker, kind (0.33 or later, for the node
+# image below) and kubectl.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 version=v4.1.4
 k="kubectl --context kind-dandori"
 
+# the node image of kind 0.33.0; the one of kind 0.29.0 (Kubernetes 1.33.1, containerd 2.1.1) had
+# containerd crash now and then under the tests' pods
+node=kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 if ! kind get clusters 2>/dev/null | grep -qx dandori; then
-  kind create cluster --name dandori --wait 120s
+  kind create cluster --name dandori --image "$node" --wait 120s
 fi
 for image in quay.io/argoproj/workflow-controller:$version quay.io/argoproj/argoexec:$version quay.io/argoproj/argocli:$version node:24-alpine busybox:1.37; do
   docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null

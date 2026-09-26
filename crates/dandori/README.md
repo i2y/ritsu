@@ -268,16 +268,17 @@ uv pip install --python tools/pydantic-graph/.venv/bin/python -r tools/pydantic-
 npm install --prefix tools/agents
 uv venv --python 3.13 tools/agents/.venv
 uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirements.txt
-sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind, kubectl)
+sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes about a minute and a half; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes a little over a minute; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
-ten). When the platform could not run one of a real run's pods (it ended in Error, or Unknown
-with exit code 255: containerd in the kind node was seen to crash under load), the Argo runner
-plays the run again, at most twice, and the test says so. `DANDORI_FLOW=<part of a path>`
+ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
+pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of
+kind 0.29.0 made them now and then under load), the Argo runner plays the run again, at most
+twice, and the test says so. `DANDORI_FLOW=<part of a path>`
 runs only the flows whose path has it.
 
 ## Status
