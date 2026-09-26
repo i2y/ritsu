@@ -65,8 +65,11 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         "Step Functions は実行を止めると（StopExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
     ));
     errs.extend(crate::check::history_limit(m, Platform::StepFunctions));
+    errs.extend(m.refuse_events(Platform::StepFunctions));
     for t in &m.tasks {
         match t.via(Platform::StepFunctions) {
+            // refused above
+            None if t.event => {}
             None => errs.push(Diag::error(
                 "E050",
                 t.line,
@@ -682,7 +685,7 @@ impl<'a> Gen<'a> {
                         };
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), answer, task.timeout, retry)
                     }
-                    Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) => unreachable!("not a way Step Functions calls"),
+                    Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) | Via::Event => unreachable!("not a way Step Functions calls"),
                 }
             }
         };

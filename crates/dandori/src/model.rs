@@ -149,6 +149,8 @@ pub enum Via<'a> {
     ArgoTemplate(&'a str),
     /// Temporal and durable functions: the implementation the user writes
     Own,
+    /// Temporal: nothing is called; the workflow waits for a value sent to it by name (an Update)
+    Event,
 }
 
 #[derive(Clone, Debug)]
@@ -191,18 +193,25 @@ pub struct TaskDef {
     pub machine: Option<TaskMachine>,
     pub refused_as: Option<String>,
     pub callback: bool,
+    /// Temporal: the task calls nothing; it waits for a value sent to the workflow by its id
+    /// and the task's name (an Update), which the other platforms cannot do
+    pub event: bool,
     pub line: usize,
 }
 
 impl TaskDef {
     /// A task that changes something on the other side, so that doing it twice is not the
-    /// same as doing it once, unless the task says it is. An agent only reads and answers.
+    /// same as doing it once, unless the task says it is. An agent only reads and answers;
+    /// an event only comes.
     pub fn changes_things(&self) -> bool {
-        !self.idempotent && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }))
+        !self.idempotent && !self.event && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }))
     }
 
     /// How the platform calls this task; None when it cannot (Step Functions without a way to call it).
     pub fn via(&self, p: Platform) -> Option<Via<'_>> {
+        if self.event {
+            return (p == Platform::Temporal).then_some(Via::Event);
+        }
         let bound = self.binding.as_ref().map(|b| match b {
             Binding::Lambda(f) => Via::Lambda(f),
             Binding::Http { method, url, form } => Via::Http { method, url, form: *form },
@@ -419,6 +428,35 @@ impl Model {
     /// at once and runs nothing after.
     pub fn refuse_on_cancel(&self, en: &str, ja: &str) -> Option<crate::diag::Diag> {
         self.on_cancel.as_ref().map(|_| crate::diag::Diag::error("E050", self.on_cancel_line, 1, en, ja))
+    }
+
+    /// A platform's refusal of each task that says `event` (E050): only a Temporal workflow can
+    /// be sent a value by its id and a name.
+    pub fn refuse_events(&self, p: Platform) -> Vec<crate::diag::Diag> {
+        let (en, ja) = match p {
+            Platform::Temporal => return vec![],
+            Platform::StepFunctions => (
+                "Step Functions sends a value to an execution only through the token a task hands on (`callback`)",
+                "Step Functions が実行に値を送れるのは、タスクが渡すトークンを通してだけです（`callback`）",
+            ),
+            Platform::Durable => (
+                "Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)",
+                "Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）",
+            ),
+            Platform::Argo => (
+                "dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name",
+                "Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります",
+            ),
+            Platform::Graph => (
+                "dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name",
+                "pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります",
+            ),
+        };
+        self.tasks
+            .iter()
+            .filter(|t| t.event)
+            .map(|t| crate::diag::Diag::error("E050", t.line, 1, format!("`{}` waits for an event sent to the workflow by name; {en}", t.name), format!("`{}` はワークフローに名前で送られてくる出来事を待ちます。{ja}", t.name)))
+            .collect()
     }
 
     pub fn ty_name(&self, t: &Ty) -> String {

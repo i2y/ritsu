@@ -28,7 +28,8 @@
 #              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
 #              "callbacks": [the function of each task that hands on a callback's id],
 #              "runs": [ { "id": workflow id, "input": {...},
-#                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
+#                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ],
+#                          "events": { "<the index of an answer>": the event it is for } } ] }
 #
 # Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the id
 # of the workflow that called it (a child workflow's id starts with its parent's). The tasks that
@@ -40,14 +41,18 @@
 # keeps the activity busy until the server times it out. A call during which the scenario
 # cancels the workflow asks the server to cancel it, and keeps the activity busy until the server
 # tells it that it is cancelled; a callback's answer that is a cancellation is the request to
-# cancel.
+# cancel. An event (a task that says `event`) is sent with the generated client's `send` once the
+# query dandori.status says the workflow waits for it; an event the scenario times out is not sent,
+# and is written down when the next call comes, or when the run is over. While the workflow waits
+# for one event, another it has must be refused.
 #
 # The server keeps real time, so the copy of the generated code that runs here waits far less:
 # every duration of the workflow's timers (dd.seconds) is at most 10 ms, and an activity or a
 # child workflow gets 5 seconds before it times out (2 were too few when the whole test suite
 # kept the machine busy), but for one that hands on a callback's id: the scenarios never time it
 # out, and its stand-in answers the callback and sees a second answer refused before it returns,
-# which takes a few workflow tasks. The rounds of `for … in parallel` run one at
+# which takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
+# runner to see the wait and send it. The rounds of `for … in parallel` run one at
 # a time here, so that the calls come in the order the reference interpreter makes them. A loop at
 # the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 # run, since the history counts as long from one event on here (dd.CONTINUE_AT).
@@ -70,10 +75,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from temporalio import activity
-from temporalio.client import Client, WorkflowFailureError, WorkflowUpdateFailedError
+from temporalio.client import Client, WorkflowFailureError, WorkflowUpdateFailedError, WorkflowUpdateRPCTimeoutOrCancelledError
 from temporalio.common import SearchAttributeKey
 from temporalio.exceptions import ApplicationError, CancelledError
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig, TelemetryFilter
+from temporalio.service import RPCError, RPCStatusCode
 from temporalio.client import WorkflowHistory
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
@@ -89,6 +95,8 @@ Runtime.set_default(Runtime(telemetry=TelemetryConfig(logging=LoggingConfig(filt
 # that the scenario times out keeps its activity busy.
 TIMEOUT = 5
 LATE = 10.0
+# How long an event is waited for here, at most: long enough for the runner to see the wait and send it.
+EVENT_SECONDS = 5
 
 
 def child_stand_ins(children: list[dict[str, Any]]) -> str:
@@ -163,7 +171,65 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
         wid = activity.info().workflow_id
         return runs[wid.split("/")[0]]
 
+    def times_out(ans: dict[str, Any]) -> bool:
+        return "ok" not in ans and ans.get("error") == "timeout"
+
+    def settle_events(run: dict[str, Any]) -> None:
+        """Write down the events the workflow let run out of time before the call that takes the next answer."""
+        events = run.get("events", {})
+        while str(run["next"]) in events and times_out(run["answers"][run["next"]]):
+            run["steps"].append({"call": {"event": events[str(run["next"])]}, "answer": recorded(run["answers"][run["next"]])})
+            run["next"] += 1
+
+    async def send_events(run: dict[str, Any]) -> None:
+        """Send the run's events, each once the workflow waits for it (the query's "events"): the
+        value, the error, or instead a request to cancel the workflow. Before, every other event
+        must be refused, since the workflow does not wait for it. The query may tell of a wait that
+        is just over, or of a run that is closing to go on in a new one (Continue-As-New): an event
+        that the workflow refuses so, or that finds the run closed, is sent again when it waits."""
+        assert env is not None
+
+        async def waits_for(name: str) -> bool:
+            try:
+                return name in (await client.status(env.client, run["id"]))["events"]
+            except Exception:  # noqa: BLE001 - the workflow has not answered a query yet
+                return False
+
+        async def taken(name: str, a: dict[str, Any]) -> bool:
+            """Whether the workflow took the event: not when it refused it, nor when the run it reached closed as it came."""
+            try:
+                await client.send(env.client, run["id"], name, a)
+                return True
+            except (WorkflowUpdateFailedError, WorkflowUpdateRPCTimeoutOrCancelledError):
+                return False
+            except RPCError as e:
+                if e.status == RPCStatusCode.NOT_FOUND:
+                    return False
+                raise
+
+        while not run["done"]:
+            name = run["events"].get(str(run["next"]))
+            ans = run["answers"][run["next"]] if run["next"] < len(run["answers"]) else None
+            if name is not None and ans is not None and not times_out(ans) and await waits_for(name):
+                # the answer is the event's before it goes: once the workflow takes it, the next call may come at once
+                run["next"] += 1
+                run["steps"].append({"call": {"event": name}, "answer": recorded(ans)})
+                if ans.get("cancel") is True:
+                    await env.client.get_workflow_handle(run["id"]).cancel()
+                    continue
+                a = {"ok": ans["ok"]} if "ok" in ans else {"error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
+                for other in (e for e in client.EVENTS if e != name):
+                    if await taken(other, a):
+                        raise RuntimeError(f"the workflow took the event {other} while it waited for {name}")
+                if not await taken(name, a):
+                    # not taken: the workflow still waits for it, and nothing else has come
+                    run["next"] -= 1
+                    run["steps"].pop()
+                continue
+            await asyncio.sleep(0.02)
+
     def take(run: dict[str, Any], label: str) -> dict[str, Any]:
+        settle_events(run)
         if run["next"] >= len(run["answers"]):
             raise ApplicationError(f"no answer for call {run['next'] + 1} ({label})", type="Dandori.Test.NoAnswer", non_retryable=True)
         ans = run["answers"][run["next"]]
@@ -314,7 +380,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
         served = await Client.connect(address)
         env = SimpleNamespace(client=served)  # type: ignore[assignment]
         for r in spec["runs"]:
-            runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
+            runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "events": {}, "next": 0, "steps": []}
         base = {k: v for k, v in worker.worker_options(own, transport=make_transport(spec, Run())).items() if k != "workflows"}
         async with contextlib.AsyncExitStack() as stack:
             for q in [client.TASK_QUEUE, *sorted({q for q in spec.get("queues", []) if q != client.TASK_QUEUE})]:
@@ -356,8 +422,10 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                 await stack.enter_async_context(Worker(env.client, **{**base, "task_queue": q, **(heartbeats_at_once() if by is None else {})}))
 
             async def one(r: dict[str, Any]) -> dict[str, Any]:
-                runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
+                run = {"id": r["id"], "answers": r["answers"], "events": r.get("events", {}), "next": 0, "steps": [], "done": False}
+                runs[r["id"]] = run
                 handle = await client.start(env.client, r["id"], r["input"], search_attributes=True)
+                sending = asyncio.create_task(send_events(run)) if run["events"] else None
                 end: dict[str, Any]
                 try:
                     end = {"succeed": await handle.result()}
@@ -370,6 +438,11 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                         raw = getattr(c, "failure", None)
                         message = raw.message if raw is not None else getattr(c, "message", None)
                         end = {"fail": {"error": getattr(c, "type", None) or str(c), "cause": message or None}}
+                finally:
+                    run["done"] = True
+                if sending is not None:
+                    await sending
+                settle_events(run)
                 # what the query and the search attribute say of the cases once the run is over
                 cases = (await client.status(env.client, r["id"]))["cases"]
                 shown = (await handle.describe()).typed_search_attributes.get(cases_key)
@@ -462,6 +535,10 @@ def main() -> None:
     text = text.replace(marker, marker.replace("return n", "return min(n, 0.01)"))
     assert "\nCONTINUE_AT = 10000\n" in text, "runtime.py has no CONTINUE_AT to lower"
     text = text.replace("\nCONTINUE_AT = 10000\n", "\nCONTINUE_AT = 1\n")
+    # an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event
+    event_wait = "await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=seconds(limit)))"
+    assert event_wait in text, "runtime.py has no event's wait to shorten"
+    text = text.replace(event_wait, f"await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=min(limit, {EVENT_SECONDS})))")
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     with open(os.path.join(copy, "dd_test_children.py"), "w", encoding="utf-8") as f:

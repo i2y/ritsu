@@ -282,6 +282,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
             "Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
         ));
         errs.extend(crate::check::history_limit(m, Platform::Durable));
+        errs.extend(m.refuse_events(Platform::Durable));
         for r in &called {
             if m.rules[*r].lambda.is_none() {
                 let ru = &m.rules[*r];
@@ -375,7 +376,13 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("/** A callback's answer: its value, or the error it names. */\nexport type CallbackAnswer = { ok: unknown } | { error: string; message?: string };\n\n");
     c.push_str("/**\n * Answer a callback, by the id its task handed on. The workflow says whether it took the answer:\n * it refuses one for a callback it does not wait for, and a second one (WorkflowUpdateFailedError).\n */\n");
     c.push_str("export async function answer(client: Client, callbackId: string, a: CallbackAnswer): Promise<void> {\n  const [workflowId] = JSON.parse(callbackId) as [string, string];\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.answer\", { args: [{ callback_id: callbackId, ...a }] });\n}\n\n");
-    c.push_str("/** Where the workflow is: the line of the call or the wait it is at, and each case's state (null before it starts). */\nexport interface Status {\n  at: number | null;\n  cases: Record<string, string | null>;\n}\n\n");
+    let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
+    if !events.is_empty() {
+        c.push_str(&format!("/** The events the workflow waits for (the tasks that say `event`), by name. */\nexport const EVENTS = [{}] as const;\nexport type EventName = (typeof EVENTS)[number];\n\n", events.join(", ")));
+        c.push_str("/**\n * Send an event to the workflow, by its id and the event's name: its value, or the error it\n * names. The workflow refuses an event it does not wait for now, and a second one\n * (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: `events`).\n */\n");
+        c.push_str("export async function send(client: Client, workflowId: string, event: EventName, a: CallbackAnswer): Promise<void> {\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.event\", { args: [{ event, ...a }] });\n}\n\n");
+    }
+    c.push_str("/** Where the workflow is: the line of the call or the wait it is at, each case's state (null before it starts), and the events it waits for now. */\nexport interface Status {\n  at: number | null;\n  cases: Record<string, string | null>;\n  events: string[];\n}\n\n");
     c.push_str("export async function status(client: Client, id: string): Promise<Status> {\n  return client.workflow.getHandle(id).query<Status>(\"dandori.status\");\n}\n\n");
     c.push_str("/**\n * The histories of the runs of this workflow that `query` finds, by default the ones going on:\n * replay them with new code (worker.ts: replay) before it takes them over.\n */\n");
     c.push_str("export async function* histories(client: Client, query = `WorkflowType = '${WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'`): AsyncIterable<{ workflowId: string; history: Awaited<ReturnType<WorkflowHandle[\"fetchHistory\"]>> }> {\n");
@@ -439,7 +446,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     let tasks: Vec<&TaskDef> = m
         .tasks
         .iter()
-        .filter(|t| !t.is_child(p))
+        .filter(|t| !t.is_child(p) && !t.event)
         .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. })))
         .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
@@ -468,7 +475,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     a.push_str("// - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
     match flavor {
         Flavor::Temporal => a.push_str(
-            "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n//   as the signal `dandori.callback`, with { callback_id, ok } or { callback_id, error, message }, to the\n//   workflow `io.workflowOf(callback_id)` names.\n\n",
+            "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer goes\n//   to the workflow `io.workflowOf(callback_id)` names, with client.ts's `answer` (the update\n//   `dandori.answer`, or the signal `dandori.callback`): { callback_id, ok } or { callback_id, error, message }.\n// - A task that says `event` is not here: nothing is called, and its value is sent to the workflow\n//   (client.ts: send).\n\n",
         ),
         Flavor::Argo => a.push_str(
             "// - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n//   with `argo node set <workflow> --output-parameter answer=<{\"ok\": …} or {\"error\": …, \"message\": …}>\n//   --node-field-selector inputs.parameters.callback_id.value=<callback_id>` and then `argo resume` with\n//   the same selector; the workflow is the part of the id before the first `/`.\n\n",
@@ -1389,10 +1396,65 @@ export async function awaitCallback(id: string, seconds: number): Promise<unknow
   return a.ok;
 }
 
-/** What the query `dandori.status` answers: the line of the call or the wait the workflow is at, and each case's state (null before it starts). */
+/** An event, as the update brings it: its name, and its value or the error it names. */
+export interface EventAnswer {
+  event: string;
+  ok?: unknown;
+  error?: string;
+  message?: string;
+}
+
+/**
+ * The update that brings an event, sent to the workflow by its id and the event's name (a task
+ * that says `event`; client.ts: send). The workflow refuses an event it does not wait for now,
+ * and a second one: the one who sends it learns so, and can send it again when it waits.
+ */
+export const eventUpdate = defineUpdate<void, [EventAnswer]>("dandori.event");
+
+const events = new Map<string, EventAnswer>();
+/** The events the workflow waits for now. */
+const awaited = new Set<string>();
+
+/** Take the events the workflow waits for as they come. */
+export function listenForEvents(): void {
+  setHandler(
+    eventUpdate,
+    (a: EventAnswer) => {
+      events.set(a.event, a);
+    },
+    {
+      validator: (a: EventAnswer) => {
+        if (!awaited.has(a.event)) throw new Error(`the workflow does not wait for the event ${a.event} now`);
+        if (events.has(a.event)) throw new Error(`the event ${a.event} has come already`);
+      },
+    },
+  );
+}
+
+/** Wait for the event with this name, at most `seconds`. */
+export async function awaitEvent(name: string, seconds: number): Promise<unknown> {
+  awaited.add(name);
+  let got: boolean;
+  try {
+    got = await condition(() => events.has(name), ms(seconds));
+  } finally {
+    awaited.delete(name);
+  }
+  if (!got) throw new CallbackTimeout();
+  const a = events.get(name)!;
+  events.delete(name);
+  if (typeof a.error === "string") throw new CallbackError(a.error, a.message ?? "");
+  return a.ok;
+}
+
+/**
+ * What the query `dandori.status` answers: the line of the call or the wait the workflow is at,
+ * each case's state (null before it starts), and the events it waits for now.
+ */
 export interface Status {
   at: number | null;
   cases: Record<string, string | null>;
+  events: string[];
 }
 
 export const statusQuery = defineQuery<Status>("dandori.status");
@@ -1408,7 +1470,7 @@ export function at(line: number): void {
 /** Answer the query `dandori.status`, reading the cases' states with `read`. */
 export function report(read: () => Record<string, string | null>): void {
   cases = read;
-  setHandler(statusQuery, () => ({ at: where, cases: cases() }));
+  setHandler(statusQuery, () => ({ at: where, cases: cases(), events: [...awaited].sort() }));
 }
 
 /**
@@ -1624,7 +1686,7 @@ impl<'a> Gen<'a> {
         // one proxy per task, so each has its own timeout and queue; Temporal does not retry, the
         // workflow does; the worker of the workflow heartbeats from the tasks it serves
         for t in &m.tasks {
-            if t.is_child(Platform::Temporal) {
+            if t.is_child(Platform::Temporal) || t.event {
                 continue;
             }
             let timeout = activity_timeout(t);
@@ -1655,6 +1717,9 @@ impl<'a> Gen<'a> {
         }
         if callbacks {
             self.out.push_str("  dd.listen();\n");
+        }
+        if m.tasks.iter().any(|t| t.event) {
+            self.out.push_str("  dd.listenForEvents();\n");
         }
         let args = if self.resumes() { "input, resume" } else { "input" };
         self.out.push_str(&format!("  try {{\n    return await run({args});\n  }} catch (e) {{\n    throw dd.asFailure(e);\n  }}\n}}\n\n"));
@@ -2133,6 +2198,8 @@ impl<'a> Gen<'a> {
                         }
                         format!("dd.attempt(() => executeChild({}, {{ {} }}), {retriers}, [{declared}])", q(ty), opts.join(", "))
                     }
+                    // nothing is called: the workflow waits for the event, as long as a callback
+                    Some(Via::Event) => format!("dd.attempt(() => dd.awaitEvent({}, {}), {retriers}, [{declared}])", q(&task.name), task.timeout.unwrap_or(86_400)),
                     _ if task.callback => {
                         let timeout = task.timeout.unwrap_or(86_400);
                         let mut with_id = parts.clone();

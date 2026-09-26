@@ -436,6 +436,31 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E007", c, "a child workflow answers when it ends; it is not a `callback` task", "子ワークフローは終わったときに答えるので、`callback` のタスクにはなりません"));
                 }
             }
+            if let Some(esp) = t.event {
+                // nothing is called: a value comes to the workflow, sent to it by name
+                // at the clause that calls, where there is one to point at
+                let calls = t.binding.as_ref().map(|(_, s)| *s).or(child).or(t.image.as_ref().map(|(_, s)| *s)).or(t.callback);
+                if calls.is_some() || t.queue.is_some() || t.connection.is_some() {
+                    self.push(e(
+                        "E007",
+                        calls.unwrap_or(esp),
+                        "an `event` task calls nothing: its value is sent to the workflow by name; leave out the ways of calling it (and `callback`, whose task hands on an id first)",
+                        "`event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び方の項目（と、先に ID を渡す `callback`）は外してください",
+                    ));
+                }
+                if !params.is_empty() {
+                    self.push(e("E007", *sp, "an `event` task sends nothing, so it takes no parameters", "`event` のタスクは何も送らないので、引数を取りません"));
+                }
+                if let Some(r) = &t.retry {
+                    self.push(e("E007", r.span, "an `event` task calls nothing that could be tried again; whoever sends the event sends it again", "`event` のタスクには、やり直す呼び出しがありません。送る側が送り直します"));
+                }
+                if let Some(ksp) = t.key {
+                    self.push(e("E007", ksp, "an `event` task sends nothing, so it takes no `key`", "`event` のタスクは何も送らないので、`key` は要りません"));
+                }
+                if matches!(t.machine, Some((MachineUse::Starts { .. }, _)) | Some((MachineUse::Sends { .. }, _))) {
+                    self.push(e("E007", esp, "an event can tell what a case is (`observes`), not start a case or send it an event", "`event` のタスクが案件についてできるのは、状態を知らせる（`observes`）ことだけです。案件を始めたり、出来事を送ったりはできません"));
+                }
+            }
             if let Some(ksp) = t.key {
                 if child.is_some() {
                     self.push(e("E007", ksp, "the platform starts a child workflow once for each call, so `key` does not apply to it", "子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません"));
@@ -506,6 +531,7 @@ impl<'a> Lowerer<'a> {
                 machine,
                 refused_as: t.refused_as.as_ref().map(|x| x.0.clone()),
                 callback: t.callback.is_some(),
+                event: t.event.is_some(),
                 line: sp.line,
             });
         }
@@ -1328,6 +1354,15 @@ impl<'a> Lowerer<'a> {
     fn call(&mut self, c: &Call) -> Option<(Callee, Vec<(String, TExpr)>)> {
         let (name, sp) = &c.callee;
         let (callee, params): (Callee, Vec<(String, Ty)>) = if let Some(t) = self.task_ix.get(name) {
+            if self.m.tasks[*t].event && self.par_depth > 0 {
+                self.push(e(
+                    "E009",
+                    *sp,
+                    format!("`{name}` waits for an event, which cannot be waited for inside `for … in parallel`: the rounds would wait for the same one, and it would not say which round it is for"),
+                    format!("`{name}` は出来事を待ちますが、`for … in parallel` の中では待てません。どの回も同じ出来事を待つことになり、どの回に宛てたものか分かりません"),
+                ));
+                return None;
+            }
             (Callee::Task(*t), self.m.tasks[*t].params.clone())
         } else if let Some(r) = self.rule_ix.get(name) {
             let r = *r;

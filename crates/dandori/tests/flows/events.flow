@@ -1,0 +1,59 @@
+workflow 承認と配達 v1
+description "出来事を待つ（Temporal）：注文の承認と配達の知らせを、ワークフローの ID と名前で送られてくる出来事として待つ。断りの出来事、期限切れ、ループの回ごとに待つ出来事、案件の状態を知らせる出来事も通る。ほかの出力先では E050"
+
+use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
+
+record 承認
+  承認者 : string
+
+record 注文
+  id   : string
+  状態 : 注文の状態.状態
+
+record 受付
+  id : string
+
+inputs
+  注文ID : string
+
+task 注文を見る(id: string) -> 注文
+  observes
+  idempotent
+
+# Someone approves in a tool of their own, which sends the answer to the workflow by the order's id.
+task 承認の知らせ() -> 承認
+  event
+  errors 却下
+  timeout 3 days
+
+# The carrier tells the workflow of the order what became of it, as often as it has news.
+task 配達の知らせ() -> 注文
+  event
+  observes
+  timeout 7 days
+
+task 知らせる(注文ID: string, 本文: string) -> 受付
+  key
+
+case 受注 : 注文 follows 注文の状態.注文
+  external 入金, 配達, 取消依頼
+  refused when 受理 = false
+
+flow
+  受注 <- 注文を見る(id: 注文ID)
+  let 決め = 承認の知らせ()
+    on 却下 => fail Rejected "注文 {注文ID} は却下されました" leaving 受注
+    on timeout => fail NoApproval "三日たっても承認がありません" leaving 受注
+  知らせる(注文ID: 注文ID, 本文: "{決め.承認者} さんが承認しました")
+  repeat at most 3 times
+    受注 <- 配達の知らせ()
+      on timeout => fail DeliveryLate "七日たっても配達の知らせがありません" leaving 受注
+    match 受注.状態
+      配達済, 取消 => break
+      受付, 入金済, 出荷済 => pass
+  match 受注.状態
+    配達済, 取消 => pass
+    受付, 入金済, 出荷済 => fail NotDelivered "三度の知らせのあとも配達されていません" leaving 受注
+
+on failure
+  fail Stopped "途中で止まりました" leaving 受注

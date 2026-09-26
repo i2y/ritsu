@@ -1,0 +1,10 @@
+error[E007]: tests/fixtures/events.flow:10:6: an `event` task sends nothing, so it takes no parameters
+    10 | task 承認の知らせ(id: string) -> 承認
+error[E007]: tests/fixtures/events.flow:12:3: an `event` task calls nothing: its value is sent to the workflow by name; leave out the ways of calling it (and `callback`, whose task hands on an id first)
+    12 |   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approve"
+error[E007]: tests/fixtures/events.flow:13:3: an `event` task calls nothing that could be tried again; whoever sends the event sends it again
+    13 |   retry 2 times
+error[E007]: tests/fixtures/events.flow:14:3: an `event` task sends nothing, so it takes no `key`
+    14 |   key
+error[E009]: tests/fixtures/events.flow:22:13: `待つだけ` waits for an event, which cannot be waited for inside `for … in parallel`: the rounds would wait for the same one, and it would not say which round it is for
+    22 |     let a = 待つだけ()

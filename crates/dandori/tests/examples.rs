@@ -271,7 +271,16 @@ fn plays(m: &Model, view: View, named: bool, keep: impl Fn(&[CallInfo]) -> bool)
                 }
             })
             .collect();
-        runs.push(json!({ "id": id, "input": sc["input"], "answers": script }));
+        // the answers that are an event's (Temporal), by their place among the answers
+        let events: serde_json::Map<String, Value> = reference["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s.get("call").is_some())
+            .enumerate()
+            .filter_map(|(i, s)| s["call"].get("event").map(|e| (i.to_string(), e.clone())))
+            .collect();
+        runs.push(json!({ "id": id, "input": sc["input"], "answers": script, "events": events }));
         references.push((sc, reference));
     }
     (runs, references, left_out)
@@ -356,6 +365,10 @@ fn temporal_activities_run_in_the_other_language() {
             let m = checked.model.expect("the examples pass check");
             if m.rules.iter().any(|r| r.local) {
                 eprintln!("{}: not with the other language's activities (a rule that says `local` runs in the workflow's worker)", rel(f));
+                return false;
+            }
+            if m.tasks.iter().any(|t| t.event) {
+                eprintln!("{}: not with the other language's activities (an event goes to the workflow, not to an activity)", rel(f));
                 return false;
             }
             true

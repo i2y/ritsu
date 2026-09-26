@@ -122,6 +122,8 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             }
         }
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
+        // nothing is called: the workflow waits for the event by its name
+        Some(Via::Event) => json!({ "event": task.name }),
         Some(Via::Workflow(t)) => json!({ "child_workflow": t, "args": args }),
         Some(Via::DurableFunction(f)) => json!({ "invoke": f, "payload": args }),
         Some(Via::ArgoTemplate(t)) => json!({ "workflow_template": t, "args": args }),

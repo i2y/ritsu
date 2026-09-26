@@ -28,7 +28,8 @@
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
 //              "callbacks": [the proxy of each task that hands on a callback's id],
 //              "runs": [ { "id": workflow id, "input": {...},
-//                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
+//                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ],
+//                          "events": { "<the index of an answer>": the event it is for } } ] }
 //
 // Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the
 // id of the workflow that called it (a child workflow's id starts with its parent's). The tasks
@@ -40,14 +41,18 @@
 // its stand-in keeps the activity busy until the server times it out. A call during which the
 // scenario cancels the workflow asks the server to cancel it, and keeps the activity busy until
 // the server tells it that it is cancelled; a callback's answer that is a cancellation is the
-// request to cancel.
+// request to cancel. An event (a task that says `event`) is sent with the generated client's
+// `send` once the query dandori.status says the workflow waits for it; an event the scenario
+// times out is not sent, and is written down when the next call comes, or when the run is over.
+// While the workflow waits for one event, another it has must be refused.
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
 // workflow gets 5 seconds before it times out (2 were too few when the whole test suite kept the
 // machine busy), but for one that hands on a callback's id: the scenarios never time it out, and
 // its stand-in answers the callback and sees a second answer refused before it returns, which
-// takes a few workflow tasks. The rounds of `for … in parallel` run one at a
+// takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
+// runner to see the wait and send it. The rounds of `for … in parallel` run one at a
 // time here, so that the calls come in the order the reference interpreter makes them. A loop at
 // the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 // run, since the history counts as long from one event on here (dd.CONTINUE_AT).
@@ -61,7 +66,7 @@ import { DefaultLogger, NativeConnection, Runtime, Worker } from "@temporalio/wo
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure, SearchAttributeType, defineSearchAttributeKey } from "@temporalio/common";
 import { historyFromJSON, historyToJSON } from "@temporalio/common/lib/proto-utils.js";
-import { Client, Connection, WorkflowFailedError, WorkflowUpdateFailedError } from "@temporalio/client";
+import { Client, Connection, WorkflowFailedError, WorkflowNotFoundError, WorkflowUpdateFailedError } from "@temporalio/client";
 import { spawn } from "node:child_process";
 import { makeTransport } from "../transport.mjs";
 
@@ -78,6 +83,8 @@ const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_
 
 /** How long an activity or a child workflow gets here before it times out. */
 const TIMEOUT = "5 seconds";
+/** How long an event is waited for here, at most: long enough for the runner to see the wait and send it. */
+const EVENT_MS = 5000;
 /** How long a stand-in that the scenario times out keeps its activity busy. */
 const LATE_MS = 10000;
 
@@ -105,6 +112,10 @@ for (const f of fs.readdirSync(dir)) {
     text = text.replace("return seconds * 1000;", "return Math.min(seconds * 1000, 10);");
     if (!text.includes("export const CONTINUE_AT = 10000;")) throw new Error("runtime.ts has no CONTINUE_AT to lower");
     text = text.replace("export const CONTINUE_AT = 10000;", "export const CONTINUE_AT = 1;");
+    // an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event
+    const eventWait = "got = await condition(() => events.has(name), ms(seconds));";
+    if (!text.includes(eventWait)) throw new Error("runtime.ts has no event's wait to shorten");
+    text = text.replace(eventWait, `got = await condition(() => events.has(name), Math.min(seconds * 1000, ${EVENT_MS}));`);
   }
   fs.writeFileSync(path.join(work, f), text);
 }
@@ -154,7 +165,7 @@ if (replaying) {
 
 const { makeActivities } = await import(path.join(work, "activities.ts"));
 const { workerOptions } = await import(path.join(work, "worker.ts"));
-const { start, answer, status, histories: listed, TASK_QUEUE, WORKFLOW_TYPE } = await import(path.join(work, "client.ts"));
+const { start, answer, status, send, EVENTS, histories: listed, TASK_QUEUE, WORKFLOW_TYPE } = await import(path.join(work, "client.ts"));
 const CASES = defineSearchAttributeKey("DandoriCases", SearchAttributeType.KEYWORD_LIST);
 
 /** Each run by its workflow's id: the answers it gets, the next one, and the calls it made. */
@@ -169,7 +180,71 @@ function current() {
   return run;
 }
 
+function timesOut(ans) {
+  return !("ok" in ans) && ans.error === "timeout";
+}
+
+/** Write down the events the workflow let run out of time before the call that takes the next answer. */
+function settleEvents(run) {
+  while (run.events?.[run.next] !== undefined && timesOut(run.answers[run.next])) {
+    run.steps.push({ call: { event: run.events[run.next] }, answer: recorded(run.answers[run.next]) });
+    run.next++;
+  }
+}
+
+/**
+ * Send the run's events, each once the workflow waits for it (the query's `events`): the value,
+ * the error, or instead a request to cancel the workflow. Before, every other event must be
+ * refused, since the workflow does not wait for it. The query may tell of a wait that is just
+ * over, or of a run that is closing to go on in a new one (Continue-As-New): an event that the
+ * workflow refuses so, or that finds the run closed, is sent again when it waits.
+ */
+async function sendEvents(run) {
+  const waitsFor = async (name) => {
+    try {
+      return (await status(env.client, run.id)).events.includes(name);
+    } catch {
+      return false; // the workflow has not answered a query yet
+    }
+  };
+  /** Whether the workflow took the event: not when it refused it, nor when the run it reached closed as it came. */
+  const taken = async (name, a) => {
+    try {
+      await send(env.client, run.id, name, a);
+      return true;
+    } catch (e) {
+      if (e instanceof WorkflowUpdateFailedError || e instanceof WorkflowNotFoundError) return false;
+      throw e;
+    }
+  };
+  while (!run.done) {
+    const name = run.events?.[run.next];
+    const ans = run.answers[run.next];
+    if (name !== undefined && !timesOut(ans) && (await waitsFor(name))) {
+      // the answer is the event's before it goes: once the workflow takes it, the next call may come at once
+      run.next++;
+      run.steps.push({ call: { event: name }, answer: recorded(ans) });
+      if (ans.cancel === true) {
+        await env.client.workflow.getHandle(run.id).cancel();
+        continue;
+      }
+      const a = "ok" in ans ? { ok: ans.ok } : { error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
+      for (const other of EVENTS.filter((e) => e !== name)) {
+        if (await taken(other, a)) throw new Error(`the workflow took the event ${other} while it waited for ${name}`);
+      }
+      if (!(await taken(name, a))) {
+        // not taken: the workflow still waits for it, and nothing else has come
+        run.next--;
+        run.steps.pop();
+      }
+      continue;
+    }
+    await new Promise((ok) => setTimeout(ok, 20));
+  }
+}
+
 function take(run, label) {
+  settleEvents(run);
   const ans = run.answers[run.next++];
   if (ans === undefined) throw ApplicationFailure.create({ type: "Dandori.Test.NoAnswer", message: `no answer for call ${run.next} (${label})`, nonRetryable: true });
   return ans;
@@ -306,7 +381,7 @@ if (serving) {
   const address = historiesDir;
   const connection = await NativeConnection.connect({ address });
   env = { client: new Client({ connection: await Connection.connect({ address }) }) };
-  for (const r of spec.runs) runs.set(r.id, { id: r.id, answers: r.answers, next: 0, steps: [] });
+  for (const r of spec.runs) runs.set(r.id, { id: r.id, answers: r.answers, events: {}, next: 0, steps: [] });
   const { workflowsPath: _, ...base } = workerOptions(own, { transport, workflowsPath });
   const queues = [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)];
   const workers = [];
@@ -392,8 +467,10 @@ try {
   const runAll = async () => {
     const ends = await Promise.all(
       spec.runs.map(async (r) => {
-        runs.set(r.id, { id: r.id, answers: r.answers, next: 0, steps: [] });
+        const run = { id: r.id, answers: r.answers, events: r.events ?? {}, next: 0, steps: [], done: false };
+        runs.set(r.id, run);
         const handle = await start(env.client, r.id, r.input, { searchAttributes: true });
+        const sending = Object.keys(run.events).length > 0 ? sendEvents(run) : Promise.resolve();
         let end;
         try {
           const out = await handle.result();
@@ -403,7 +480,11 @@ try {
           const c = e.cause;
           if (c instanceof CancelledFailure) end = { cancel: null };
           else end = { fail: { error: c?.type ?? String(c), cause: c?.message || null } };
+        } finally {
+          run.done = true;
         }
+        await sending;
+        settleEvents(run);
         // what the query and the search attribute say of the cases once the run is over
         const cases = (await status(env.client, r.id)).cases;
         const shown = (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;

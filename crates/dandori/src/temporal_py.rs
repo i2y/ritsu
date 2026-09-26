@@ -198,8 +198,16 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("async def answer(client: Client, callback_id: str, a: dict[str, Any]) -> None:\n");
     c.push_str("    \"\"\"Answer a callback, by the id its task handed on, with {\"ok\": value} or {\"error\": name, \"message\": text}.\n    The workflow says whether it took the answer: it refuses one for a callback it does not wait\n    for, and a second one (WorkflowUpdateFailedError).\"\"\"\n");
     c.push_str("    workflow_id = json.loads(callback_id)[0]\n    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.answer\", {\"callback_id\": callback_id, **a})\n\n\n");
+    let events: Vec<String> = m.tasks.iter().filter(|t| t.event).map(|t| q(&t.name)).collect();
+    if !events.is_empty() {
+        c.push_str(&format!("# The events the workflow waits for (the tasks that say `event`), by name.\nEVENTS = ({}{})\n\n\n", events.join(", "), if events.len() == 1 { "," } else { "" }));
+        c.push_str("async def send(client: Client, workflow_id: str, event: str, a: dict[str, Any]) -> None:\n");
+        c.push_str("    \"\"\"Send an event to the workflow, by its id and the event's name, with {\"ok\": value} or {\"error\": name,\n    \"message\": text}. The workflow refuses an event it does not wait for now, and a second one\n    (WorkflowUpdateFailedError): send it again when the workflow waits for it (status: \"events\").\"\"\"\n");
+        c.push_str("    if event not in EVENTS:\n        raise ValueError(f\"the workflow has no event {event}\")\n");
+        c.push_str("    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.event\", {\"event\": event, **a})\n\n\n");
+    }
     c.push_str("async def status(client: Client, id: str) -> dict[str, Any]:\n");
-    c.push_str("    \"\"\"Where the workflow is: {\"at\": the line of the call or the wait it is at, \"cases\": each case's state (None before it starts)}.\"\"\"\n");
+    c.push_str("    \"\"\"Where the workflow is: {\"at\": the line of the call or the wait it is at, \"cases\": each case's state\n    (None before it starts), \"events\": the events it waits for now}.\"\"\"\n");
     c.push_str("    return await client.get_workflow_handle(id).query(\"dandori.status\")\n\n\n");
     c.push_str("async def histories(client: Client, query: str | None = None) -> AsyncIterator[WorkflowHistory]:\n");
     c.push_str("    \"\"\"The histories of the runs of this workflow that `query` finds, by default the ones going on:\n    replay them with new code (worker.py: replay) before it takes them over.\"\"\"\n");
@@ -387,7 +395,7 @@ pub(crate) fn schemas_block(m: &Model, tasks: &[&TaskDef], p: Platform) -> Strin
 /// the code for the others.
 fn tasks_file(m: &Model, header: &str) -> String {
     let p = Platform::Temporal;
-    let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p)).collect();
+    let tasks: Vec<&TaskDef> = m.tasks.iter().filter(|t| !t.is_child(p) && !t.event).collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let mut a = header.to_string();
     a.push_str("# The tasks the workflow calls.\n#\n");
@@ -400,9 +408,11 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   ApplicationError(\"...\", type=\"<error>\", non_retryable=True).\n");
     a.push_str("# - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
     a.push_str("# - A task with `key` gets `idempotency_key`: pass it on to the other side as it is.\n");
-    a.push_str("# - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n");
-    a.push_str("#   as the signal `dandori.callback`, with {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"},\n");
-    a.push_str("#   to the workflow `io.workflow_of(callback_id)` names.\n\n");
+    a.push_str("# - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer goes\n");
+    a.push_str("#   to the workflow `io.workflow_of(callback_id)` names, with client.py's `answer` (the update\n");
+    a.push_str("#   `dandori.answer`, or the signal `dandori.callback`): {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\n");
+    a.push_str("# - A task that says `event` is not here: nothing is called, and its value is sent to the workflow\n");
+    a.push_str("#   (client.py: send).\n\n");
     a.push_str("from __future__ import annotations\n\nimport asyncio\nimport functools\nfrom typing import Any, Awaitable, Callable, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
     a.push_str("from . import io\nfrom . import types as T\n\n\n");
     a.push_str(&schemas_block(m, &tasks, p));
@@ -983,6 +993,22 @@ def carried(resume: dict[str, Any] | None, at: int, what: str, fresh: Callable[[
     return resume[what] if resume is not None and resume["at"] == at else fresh()
 
 
+async def await_event(events: dict[str, dict[str, Any]], awaited: set[str], name: str, limit: int) -> Any:
+    """Wait for the event with this name, which the update puts in `events`, at most `limit`
+    seconds; the workflow then waits for it no more."""
+    awaited.add(name)
+    try:
+        await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=seconds(limit)))
+    except asyncio.TimeoutError:
+        raise CallbackTimeout() from None
+    finally:
+        awaited.discard(name)
+    a = events.pop(name)
+    if isinstance(a.get("error"), str):
+        raise CallbackError(a["error"], a.get("message") or "")
+    return a.get("ok")
+
+
 def at_a_time(k: int) -> int:
     """How many rounds of `for … in parallel` run at a time: all, when the `.flow` does not say (0)."""
     return k
@@ -1173,7 +1199,7 @@ impl<'a> Gen<'a> {
         let callbacks = m.tasks.iter().any(|t| t.callback);
         // the worker of the workflow heartbeats from the tasks it serves
         for t in &m.tasks {
-            if t.is_child(Platform::Temporal) {
+            if t.is_child(Platform::Temporal) || t.event {
                 continue;
             }
             let timeout = crate::temporal::activity_timeout(t);
@@ -1203,12 +1229,20 @@ impl<'a> Gen<'a> {
         let class = py_name(&m.name);
         let ret = "dict[str, Any] | None";
         self.out.push_str(&format!("\n@workflow.defn(name={})\nclass {class}:\n", q(&crate::temporal::workflow_type(m))));
-        self.out.push_str("    def __init__(self) -> None:\n        # where the workflow is, and how its cases' states are read: the query dandori.status\n        self.dd_at: int | None = None\n        self.dd_cases: Callable[[], dict[str, str | None]] = lambda: {}\n");
+        self.out.push_str("    def __init__(self) -> None:\n        # where the workflow is, how its cases' states are read, and the events it waits for now: the query dandori.status\n        self.dd_at: int | None = None\n        self.dd_cases: Callable[[], dict[str, str | None]] = lambda: {}\n        self.dd_awaited: set[str] = set()\n");
+        let events = m.tasks.iter().any(|t| t.event);
+        if events {
+            self.out.push_str("        # the events that came, by name\n        self.dd_events: dict[str, dict[str, Any]] = {}\n");
+        }
         if callbacks {
             self.out.push_str("        # the answers of callbacks, and the ids of the callbacks the workflow waits for\n        self.dd_answers: dict[str, dict[str, Any]] = {}\n        self.dd_waiting: set[str] = set()\n");
         }
         self.out.push('\n');
-        self.out.push_str("    @workflow.query(name=\"dandori.status\")\n    def dd_status(self) -> dict[str, Any]:\n        \"\"\"Where the workflow is: the line of the call or the wait it is at, and each case's state (None before it starts).\"\"\"\n        return {\"at\": self.dd_at, \"cases\": self.dd_cases()}\n\n");
+        self.out.push_str("    @workflow.query(name=\"dandori.status\")\n    def dd_status(self) -> dict[str, Any]:\n        \"\"\"Where the workflow is: the line of the call or the wait it is at, each case's state (None before it starts), and the events it waits for now.\"\"\"\n        return {\"at\": self.dd_at, \"cases\": self.dd_cases(), \"events\": sorted(self.dd_awaited)}\n\n");
+        if events {
+            self.out.push_str("    @workflow.update(name=\"dandori.event\")\n    def dd_event(self, a: dict[str, Any]) -> None:\n        \"\"\"An event, sent to the workflow by its id and the event's name: {\"event\", \"ok\"} or {\"event\", \"error\", \"message\"}.\"\"\"\n        self.dd_events[a[\"event\"]] = a\n\n");
+            self.out.push_str("    @dd_event.validator\n    def dd_check_event(self, a: dict[str, Any]) -> None:\n        \"\"\"Refuse an event the workflow does not wait for now, and a second one.\"\"\"\n        if a.get(\"event\") not in self.dd_awaited:\n            raise ValueError(f\"the workflow does not wait for the event {a.get('event')} now\")\n        if a[\"event\"] in self.dd_events:\n            raise ValueError(f\"the event {a['event']} has come already\")\n\n");
+        }
         if callbacks {
             self.out.push_str("    @workflow.signal(name=\"dandori.callback\")\n    def dd_callback(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback: {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"}.\"\"\"\n        if a.get(\"callback_id\") in self.dd_waiting:\n            self.dd_answers[a[\"callback_id\"]] = a\n\n");
             self.out.push_str("    @workflow.update(name=\"dandori.answer\")\n    def dd_answer(self, a: dict[str, Any]) -> None:\n        \"\"\"The answer of a callback, which the one who answers learns the workflow took.\"\"\"\n        self.dd_answers[a[\"callback_id\"]] = a\n\n");
@@ -1583,6 +1617,8 @@ impl<'a> Gen<'a> {
                         }
                         format!("dd.attempt(lambda: workflow.execute_child_workflow({}, {{{}}}, {}), {retriers}, {declared})", q(ty), parts.join(", "), opts.join(", "))
                     }
+                    // nothing is called: the workflow waits for the event, as long as a callback
+                    Some(Via::Event) => format!("dd.attempt(lambda: dd.await_event(self.dd_events, self.dd_awaited, {}, {}), {retriers}, {declared})", q(&task.name), task.timeout.unwrap_or(86_400)),
                     _ if task.callback => {
                         let timeout = task.timeout.unwrap_or(86_400);
                         let mut with_id = parts.clone();

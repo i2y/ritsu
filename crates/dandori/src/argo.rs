@@ -72,8 +72,11 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
         "Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります",
     ));
     errs.extend(crate::check::history_limit(m, Platform::Argo));
+    errs.extend(m.refuse_events(Platform::Argo));
     for t in &m.tasks {
         match t.via(Platform::Argo) {
+            // refused above
+            None if t.event => {}
             None => errs.push(Diag::error(
                 "E050",
                 t.line,

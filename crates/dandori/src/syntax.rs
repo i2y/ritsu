@@ -184,6 +184,8 @@ pub struct TaskDecl {
     pub machine: Option<(MachineUse, Span)>,
     pub refused_as: Option<Name>,
     pub callback: Option<Span>,
+    /// Temporal: the task calls nothing, and waits for a value sent to the workflow by name
+    pub event: Option<Span>,
 }
 
 #[derive(Clone, Debug)]
@@ -1255,6 +1257,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     machine: None,
                     refused_as: None,
                     callback: None,
+                    event: None,
                 };
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
@@ -1499,6 +1502,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         }
         "idempotent" => t.idempotent = true,
         "callback" => t.callback = Some(sp),
+        "event" => t.event = Some(sp),
         "starts" => {
             let machine = cc.qualname()?;
             let mut then = Vec::new();
@@ -1524,8 +1528,8 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, aws, agent, model, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・agent・model・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・starts・sends・observes・refused as）"),
+                format!("`{other}` is not a task clause; expected lambda, http, aws, agent, model, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
+                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・agent・model・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
             ))
         }
     }

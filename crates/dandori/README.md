@@ -115,6 +115,7 @@ flow
 | `durable function "<arn>"` | | | invoke of another durable function | | |
 | `workflow template "<name>"` | | | | a Workflow from that WorkflowTemplate | |
 | `image "<image>"` | | | | a container of your image | |
+| `event` | cannot build (E050) | nothing is called: the workflow waits for a value sent to it by name | cannot build (E050) | cannot build (E050) | cannot build (E050) |
 | none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) | a function you write (`OwnTasks`) |
 
 The code dandori writes for Temporal, durable functions, Argo and pydantic-graph sends what
@@ -127,8 +128,18 @@ workflow: a call leaves one marker in the history, not an activity's six events,
 that decides many times in a loop, and the rule ships with that worker. Elsewhere it changes
 nothing. A
 `callback` task hands on a token (Step Functions), a callback id (durable functions), or
-an id the answer comes back with as a signal (Temporal) or through `argo node set` (Argo);
+an id the answer comes back with as an Update (Temporal) or through `argo node set` (Argo);
 with `aws sqs:sendMessage` the token travels in the message.
+
+A task that says `event` calls nothing: the workflow waits for a value sent to it by its id and
+the task's name, as an approval tool or a carrier's webhook would, knowing only the order it is
+about (`client.ts`'s `send(client, workflowId, "配達の知らせ", { ok: … })`, an Update). The
+workflow takes an event only while it waits for it, and refuses any other, so the one who sends
+it learns so and sends it again later; the query `dandori.status` says which events it waits
+for. Only Temporal can be sent a value by name, so the other platforms refuse the task (E050):
+a feature whose meaning a platform cannot keep is built only where it can be, and one that
+changes only how a thing is called (`queue`, `image`, `local`) does nothing where it does not
+apply.
 
 On Argo Workflows every task runs in a container. The code dandori writes for `lambda`,
 `http`, `aws` and `agent` goes into an image built from `caller/`; a task with `image` runs your
@@ -222,7 +233,8 @@ on durable functions, its nodes on Argo.
   build it started on. `client.ts` has `start` (which never reuses a workflow id, since the
   idempotency keys are made from it), `answer` (a callback's answer as an Update, which the
   workflow refuses for a callback it does not wait for, or a second time) and `status` (the
-  query `dandori.status`: the line the workflow waits at, and each case's state). Started with
+  query `dandori.status`: the line the workflow waits at, each case's state, and the events it
+  waits for), and `send` for the events. Started with
   `{ searchAttributes: true }`, the workflow also keeps the search attribute `DandoriCases`
   (`"pi=requires_capture"`, …) up to date, so runs can be found by their cases' states.
   To change the code of a version without Worker Deployment Versioning, give the histories

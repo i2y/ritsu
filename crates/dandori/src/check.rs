@@ -285,14 +285,16 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                     Callee::Task(t) => m.tasks[*t].retry.as_ref().map(|r| r.times as u64).unwrap_or(0),
                     Callee::Rule(_) => RULE_RETRIES as u64,
                 };
+                // an event is a wait like a callback's, with no call before it
                 let waits = match callee {
-                    Callee::Task(t) if m.tasks[*t].callback => c.callback,
+                    Callee::Task(t) if m.tasks[*t].callback || m.tasks[*t].event => c.callback,
                     _ => 0,
                 };
                 let after = (handlers.len() as u64 * c.arm + handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0)).max(c.check);
                 let shown = if matches!(target, Some(Target::Case(_))) { c.case_call } else { 0 };
                 let (call, retry) = match callee {
                     Callee::Rule(r) if m.rules[*r].local => (c.local_call, c.local_retry),
+                    Callee::Task(t) if m.tasks[*t].event => (0, 0),
                     _ => (c.call, c.retry),
                 };
                 call + waits + retries * (retry + waits) + after + shown
