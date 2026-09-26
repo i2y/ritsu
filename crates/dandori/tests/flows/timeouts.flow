@@ -1,0 +1,33 @@
+workflow 期限 v1
+description "タスクの期限切れの端の振る舞い：期限切れを受ける呼び出し、期限切れだけをやり直す呼び出し、期限を書かないタスクの期限切れ"
+
+record 在庫
+  sku : string
+  数  : int
+
+inputs
+  sku : string
+
+outputs
+  結果 : string
+
+# Retried only when it runs out of time; a failure is not retried.
+task 数える(sku: string) -> 在庫
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:count"
+  timeout 30 seconds
+  retry 1 times every 5 seconds on timeout
+  idempotent
+
+# No `timeout`: it runs as long as the platform lets an HTTP request run.
+task 確かめる(sku: string, 数: int) -> string
+  http POST "https://inventory.example.com/v1/check"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/inventory/1"
+  idempotent
+
+flow
+  let s = 数える(sku: sku)
+    on timeout => succeed 結果 = "数えるのが間に合いませんでした"
+  let r = 確かめる(sku: s.sku, 数: s.数)
+    on timeout => succeed 結果 = "{s.sku} を確かめるのが間に合いませんでした"
+    on failure => fail CheckFailed "{s.sku} を確かめられませんでした"
+  succeed 結果 = r

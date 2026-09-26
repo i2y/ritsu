@@ -1,23 +1,27 @@
-// Runs a workflow that dandori generated for Temporal, in the SDK's time-skipping test
-// environment, against scripted answers, and prints what it did in the shape the
-// reference interpreter prints for Temporal: every call with its arguments and the answer
-// it got, and how the workflow ended.
+// Runs a workflow that dandori generated for Temporal on a real Temporal server — the dev server
+// of the Temporal CLI, which the SDK's testing package starts — against scripted answers, and
+// prints what it did in the shape the reference interpreter prints for Temporal: every call with
+// its arguments and the answer it got, and how the workflow ended.
 //
 //   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json>
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
-//              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
+//              "runs": [ { "id": workflow id, "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
 //
-// The tasks that say `lambda`, `http` or `aws` run the generated code, with a Transport that
-// writes down what it would send (tools/transport.mjs). The tasks the user writes, the rules
-// and the child workflows are stand-ins that answer from the scenario. A callback's answer
-// comes as the signal the workflow waits for; a callback that the scenario times out gets
-// none, and the time-skipping environment lets its wait run out. A task's own timeout cannot
-// be scripted this way, so runs.json holds none of those.
+// Every run goes at once, each as the workflow with its own id; a stand-in finds its run by the
+// id of the workflow that called it (a child workflow's id starts with its parent's). The tasks
+// that say `lambda`, `http` or `aws` run the generated code, with a Transport that writes down
+// what it would send (tools/transport.mjs). The tasks the user writes, the rules and the child
+// workflows are stand-ins that answer from the scenario. A callback's answer comes as the signal
+// the workflow waits for, sent before the task that hands the id on returns; a callback that
+// the scenario times out gets none. A call that the scenario times out gets no answer either:
+// its stand-in keeps the activity busy until the server times it out.
 //
-// The rounds of `for … in parallel` run one at a time here, so that the calls come in the
-// order the reference interpreter makes them.
+// The server keeps real time, so the copy of the generated code that runs here waits far less:
+// every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
+// workflow gets 2 seconds before it times out. The rounds of `for … in parallel` run one at a
+// time here, so that the calls come in the order the reference interpreter makes them.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -25,7 +29,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { DefaultLogger, Runtime, Worker } from "@temporalio/worker";
-import { ApplicationFailure } from "@temporalio/common";
+import { Context } from "@temporalio/activity";
+import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { WorkflowFailedError } from "@temporalio/client";
 import { makeTransport } from "../transport.mjs";
 
@@ -36,13 +41,27 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const [dir, runsFile, outFile] = process.argv.slice(2);
 const spec = JSON.parse(fs.readFileSync(runsFile, "utf8"));
 
-// A copy of the generated code: Node runs the activities' TypeScript by stripping the types
-// and wants the extension on a relative import; the rounds of a parallel loop run one at a time.
+/** How long an activity or a child workflow gets here before it times out. */
+const TIMEOUT = "2 seconds";
+/** How long a stand-in that the scenario times out keeps its activity busy. */
+const LATE_MS = 5000;
+
+// A copy of the generated code: Node runs the activities' TypeScript by stripping the types and
+// wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
+// timers are short, and so are the activities' and the child workflows' timeouts.
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-temporal-"));
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);
-  if (f === "workflow.ts") text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
+  if (f === "workflow.ts") {
+    text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
+    text = text.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`);
+    text = text.replace(/workflowExecutionTimeout: "\d+ seconds"/g, `workflowExecutionTimeout: "${TIMEOUT}"`);
+  }
+  if (f === "runtime.ts") {
+    if (!text.includes("return seconds * 1000;")) throw new Error("runtime.ts has no ms() to shorten");
+    text = text.replace("return seconds * 1000;", "return Math.min(seconds * 1000, 10);");
+  }
   fs.writeFileSync(path.join(work, f), text);
 }
 fs.symlinkSync(path.join(here, "node_modules"), path.join(work, "node_modules"));
@@ -57,12 +76,21 @@ fs.writeFileSync(path.join(work, "workflows.ts"), children);
 
 const { makeActivities } = await import(path.join(work, "activities.ts"));
 
-let current = null;
+/** Each run by its workflow's id: the answers it gets, the next one, and the calls it made. */
+const runs = new Map();
 let env = null;
 
-function take(label) {
-  const ans = current.answers[current.next++];
-  if (ans === undefined) throw ApplicationFailure.create({ type: "Dandori.Test.NoAnswer", message: `no answer for call ${current.next} (${label})`, nonRetryable: true });
+/** The run of the activity being served: its workflow's id, or its parent's. */
+function current() {
+  const id = Context.current().info.workflowExecution.workflowId;
+  const run = runs.get(id.split("/")[0]);
+  if (!run) throw new Error(`no run for the workflow ${id}`);
+  return run;
+}
+
+function take(run, label) {
+  const ans = run.answers[run.next++];
+  if (ans === undefined) throw ApplicationFailure.create({ type: "Dandori.Test.NoAnswer", message: `no answer for call ${run.next} (${label})`, nonRetryable: true });
   return ans;
 }
 
@@ -74,10 +102,28 @@ function scripted(kind) {
   return ApplicationFailure.create({ type: kind === "failure" ? "Dandori.Test.Failure" : kind, message: "scripted", nonRetryable: true });
 }
 
+/** A call the scenario times out: keep the activity busy past its timeout, heartbeating, so that the server times it out. */
+async function late() {
+  const context = Context.current();
+  const until = Date.now() + LATE_MS;
+  while (Date.now() < until) {
+    context.heartbeat();
+    await new Promise((ok) => setTimeout(ok, 100));
+  }
+  throw ApplicationFailure.create({ type: "Dandori.Test.Late", message: "the server should have timed this out", nonRetryable: true });
+}
+
+/** The answer of a stand-in: its value, the scripted error, or no answer in time. */
+async function answer(ans) {
+  if ("ok" in ans) return ans.ok;
+  if (ans.error === "timeout") return late();
+  throw scripted(ans.error);
+}
+
 /**
  * Answer a callback with a signal to the workflow the id names, before the task that hands the
- * id on returns: then the answer is in the history before the workflow waits for it, and the
- * time-skipping environment cannot run the wait out first. A timeout gets no answer.
+ * id on returns: then the answer is in the history before the workflow waits for it, and its
+ * short wait cannot run out first. A timeout gets no answer.
  */
 async function answerLater(callbackId, ans) {
   if (!("ok" in ans) && ans.error === "timeout") return;
@@ -86,48 +132,51 @@ async function answerLater(callbackId, ans) {
   await env.client.workflow.getHandle(workflowId).signal("dandori.callback", signal);
 }
 
-// the stand-in transport writes every call down with the answer it takes
-const run = {
+// the stand-in transport writes every call down with the answer it takes; a call it times out gets none
+const transportRun = {
   take: (call) => {
-    const ans = take(JSON.stringify(call).slice(0, 80));
-    current.steps.push({ call, answer: recorded(ans) });
+    const run = current();
+    const ans = take(run, JSON.stringify(call).slice(0, 80));
+    run.steps.push({ call, answer: recorded(ans) });
     return ans;
   },
   answerLater: (id, ans) => answerLater(id, ans),
+  late,
 };
 
 const own = {};
 for (const t of spec.own ?? []) {
   own[t.method] = async (args) => {
-    const ans = take(t.method);
+    const run = current();
+    const ans = take(run, t.method);
     if (t.callback) {
       const { callback_id, ...rest } = args;
-      current.steps.push({ call: { activity: t.name, args: rest }, answer: recorded(ans) });
+      run.steps.push({ call: { activity: t.name, args: rest }, answer: recorded(ans) });
       await answerLater(callback_id, ans);
       return;
     }
-    current.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });
-    if ("ok" in ans) return ans.ok;
-    throw scripted(ans.error);
+    run.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });
+    return answer(ans);
   };
 }
-const activities = { ...makeActivities(own, makeTransport(spec, run)) };
+const activities = { ...makeActivities(own, makeTransport(spec, transportRun)) };
 for (const name of spec.rules ?? []) {
   activities[name] = async (args) => {
-    const ans = take(name);
-    current.steps.push({ call: { activity: name, args }, answer: recorded(ans) });
-    if ("ok" in ans) return ans.ok;
-    throw scripted(ans.error);
+    const run = current();
+    const ans = take(run, name);
+    run.steps.push({ call: { activity: name, args }, answer: recorded(ans) });
+    return answer(ans);
   };
 }
 activities.dd_test_child = async ({ type, args }) => {
-  const ans = take(type);
-  current.steps.push({ call: { child_workflow: type, args }, answer: recorded(ans) });
-  if ("ok" in ans) return ans.ok;
-  throw scripted(ans.error);
+  const run = current();
+  const ans = take(run, type);
+  run.steps.push({ call: { child_workflow: type, args }, answer: recorded(ans) });
+  return answer(ans);
 };
 
-env = await TestWorkflowEnvironment.createTimeSkipping();
+// the server fires a timer up to a second late unless told to shift its timers less
+env = await TestWorkflowEnvironment.createLocal({ server: { ui: false, log: { format: "pretty", level: "error" }, extraArgs: ["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'] } });
 const results = [];
 try {
   const queues = ["dandori", ...(spec.queues ?? []).filter((q) => q !== "dandori")];
@@ -152,19 +201,21 @@ try {
     );
   }
   const runAll = async () => {
-    for (const r of spec.runs) {
-      current = { answers: r.answers, next: 0, steps: [] };
-      let end;
-      try {
-        const out = await env.client.workflow.execute(spec.workflow, { args: [r.input], taskQueue: "dandori", workflowId: "test" });
-        end = { succeed: out ?? null };
-      } catch (e) {
-        if (!(e instanceof WorkflowFailedError)) throw e;
-        const c = e.cause;
-        end = { fail: { error: c?.type ?? String(c), cause: c?.message || null } };
-      }
-      results.push({ steps: current.steps, end });
-    }
+    const ends = await Promise.all(
+      spec.runs.map(async (r) => {
+        runs.set(r.id, { answers: r.answers, next: 0, steps: [] });
+        try {
+          const out = await env.client.workflow.execute(spec.workflow, { args: [r.input], taskQueue: "dandori", workflowId: r.id });
+          return { succeed: out ?? null };
+        } catch (e) {
+          if (!(e instanceof WorkflowFailedError)) throw e;
+          const c = e.cause;
+          if (c instanceof CancelledFailure) return { cancel: null };
+          return { fail: { error: c?.type ?? String(c), cause: c?.message || null } };
+        }
+      }),
+    );
+    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i] }));
   };
   // every worker runs until the runs are done
   let chain = runAll;

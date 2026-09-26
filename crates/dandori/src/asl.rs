@@ -38,6 +38,13 @@ fn claude_answer(m: &Model, t: &Ty) -> String {
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
+/// The retriers of a rule's call, the same on every target. A rule is a pure function, so any
+/// error is worth another try, a timeout too: on Temporal, it means that the worker that ran
+/// the rule went away.
+pub fn rule_retriers() -> Value {
+    json!([{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": RULE_RETRY_BACKOFF }])
+}
+
 struct Gen<'a> {
     m: &'a Model,
     /// the states of the scope being written: the state machine's, or a Map round's
@@ -581,10 +588,7 @@ impl<'a> Gen<'a> {
         let (resource, arguments, result, timeout, retry) = match callee {
             Callee::Rule(r) => {
                 let f = m.rules[*r].lambda.clone().unwrap_or_default();
-                let retry = json!([
-                    { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-                    { "ErrorEquals": ["States.ALL"], "IntervalSeconds": RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": RULE_RETRY_BACKOFF }
-                ]);
+                let retry = rule_retriers();
                 ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), None, Some(retry))
             }
             Callee::Task(t) => {

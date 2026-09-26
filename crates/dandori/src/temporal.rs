@@ -38,6 +38,40 @@ const OPENAI_CLIENT: &str = "^7.2.0";
 /// The version of Anthropic's SDK for JavaScript that the default Transport is written against.
 const ANTHROPIC_SDK: &str = "^0.128.0";
 
+/// How long an activity may run when its task says no `timeout`, in seconds. A task that the
+/// workflow's own worker serves (no `queue`) heartbeats (`HEARTBEAT_SECONDS`), so a worker that
+/// went away is noticed without a limit on the task: an HTTP request or an agent gets what Step
+/// Functions' HTTP Task gives one, a Lambda function what Lambda gives one, and anything else no
+/// limit of its own (a year). A task another worker serves may not heartbeat, and gets a minute.
+/// The task that hands a callback's id on hands it on within a minute.
+pub(crate) fn activity_timeout(t: &TaskDef) -> u64 {
+    if t.callback {
+        return 60;
+    }
+    if let Some(s) = t.timeout {
+        return s;
+    }
+    if t.queue.is_some() {
+        return 60;
+    }
+    match t.via(Platform::Temporal) {
+        Some(Via::Http { .. }) | Some(Via::Agent { .. }) => crate::asl::HTTP_TASK_SECONDS,
+        Some(Via::Lambda(_)) => LAMBDA_SECONDS,
+        _ => 365 * 86_400,
+    }
+}
+
+/// How long Lambda lets a function run.
+const LAMBDA_SECONDS: u64 = 900;
+
+/// How long Temporal waits for a heartbeat of an activity the workflow's own worker serves, and
+/// how often the activity sends one.
+pub(crate) const HEARTBEAT_SECONDS: u64 = 30;
+pub(crate) const BEAT_SECONDS: u64 = 10;
+
+/// How long a rule's activity may run: a rule is a pure function, done in no time.
+pub(crate) const RULE_SECONDS: u64 = 10;
+
 /// io.ts, with the numbers every target sends put in.
 fn io_ts() -> String {
     IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())
@@ -360,6 +394,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         ),
     }
     if flavor == Flavor::Temporal {
+        a.push_str("import { Context } from \"@temporalio/activity\";\n");
         a.push_str("import { ApplicationFailure } from \"@temporalio/common\";\n");
     }
     a.push_str("import type * as T from \"./types\";\n");
@@ -376,7 +411,13 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     }
     a.push_str("}\n\n");
     match flavor {
-        Flavor::Temporal => a.push_str("function fail(kind: string, message: string): never {\n  throw ApplicationFailure.create({ type: kind, message, nonRetryable: true });\n}\n\n"),
+        Flavor::Temporal => {
+            a.push_str("function fail(kind: string, message: string): never {\n  throw ApplicationFailure.create({ type: kind, message, nonRetryable: true });\n}\n\n");
+            a.push_str(&format!(
+                "/** Every task heartbeats while it runs, every {BEAT_SECONDS} seconds, so that Temporal notices a worker that went away. */\nfunction beating(tasks: Tasks): Tasks {{\n  const out: Record<string, (args: any) => Promise<unknown>> = {{}};\n  for (const [name, run] of Object.entries(tasks) as Array<[string, (args: any) => Promise<unknown>]>) {{\n    out[name] = async (args) => {{\n      const context = Context.current();\n      const timer = setInterval(() => context.heartbeat(), {});\n      try {{\n        return await run(args);\n      }} finally {{\n        clearInterval(timer);\n      }}\n    }};\n  }}\n  return out as unknown as Tasks;\n}}\n\n",
+                BEAT_SECONDS * 1000
+            ));
+        }
         Flavor::Durable | Flavor::Argo => a.push_str("function fail(kind: string, message: string): never {\n  const e = new Error(message);\n  e.name = kind;\n  throw e;\n}\n\n"),
     }
     let agents: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Agent { .. }))).cloned().collect();
@@ -391,7 +432,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     }
     a.push_str(&format!("/** Your tasks and the ones dandori writes: {register}. */\n"));
     a.push_str(&format!("export function {made}(own: OwnTasks, transport: io.Transport = io.transport()): Tasks {{\n"));
-    a.push_str("  return {\n");
+    a.push_str(if flavor == Flavor::Temporal { "  return beating({\n" } else { "  return {\n" });
     for task in &tasks {
         let name = ident(&task.name);
         match task.via(p) {
@@ -496,7 +537,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
             _ => {}
         }
     }
-    a.push_str("  };\n}\n");
+    a.push_str(if flavor == Flavor::Temporal { "  });\n}\n" } else { "  };\n}\n" });
     a
 }
 
@@ -1150,7 +1191,7 @@ export async function attempt<R>(call: () => Promise<R>, retriers: readonly Retr
         const r = retriers[i];
         if (r.on.includes(kind) || r.on.includes("*")) {
           if (counts[i] < r.max) {
-            await sleep(r.every * Math.pow(r.backoff, counts[i]) * 1000);
+            await sleep(ms(r.every * Math.pow(r.backoff, counts[i])));
             counts[i]++;
             again = true;
           }
@@ -1160,6 +1201,16 @@ export async function attempt<R>(call: () => Promise<R>, retriers: readonly Retr
       if (!again) throw new TaskError(kind, messageOf(e));
     }
   }
+}
+
+/** A duration of the workflow's timers, in milliseconds: every wait of the workflow goes through here. */
+export function ms(seconds: number): number {
+  return seconds * 1000;
+}
+
+/** How long it is until a moment given as an RFC 3339 string, by the workflow's clock, in milliseconds. */
+export function until(at: string): number {
+  return ms(Math.max(0, (Date.parse(at) - Date.now()) / 1000));
 }
 
 /** The idempotency key of a call: the workflow, the call's place, and the round of each loop around it. */
@@ -1199,7 +1250,7 @@ export function callbackId(site: number, rounds: readonly number[], n: number): 
 
 /** Wait for the answer of the callback with this id. */
 export async function awaitCallback(id: string, seconds: number): Promise<unknown> {
-  const got = await condition(() => answers.has(id), seconds * 1000);
+  const got = await condition(() => answers.has(id), ms(seconds));
   if (!got) throw new CallbackTimeout();
   const a = answers.get(id)!;
   answers.delete(id);
@@ -1349,21 +1400,25 @@ impl<'a> Gen<'a> {
         if callbacks {
             self.out.push_str("/** The signal that brings a callback's answer. */\nexport const callbackSignal = dd.callbackSignal;\n\n");
         }
-        // one proxy per task, so each has its own timeout and queue; Temporal does not retry, the workflow does
+        // one proxy per task, so each has its own timeout and queue; Temporal does not retry, the
+        // workflow does; the worker of the workflow heartbeats from the tasks it serves
         for t in &m.tasks {
             if t.is_child(Platform::Temporal) {
                 continue;
             }
-            let timeout = if t.callback { 60 } else { t.timeout.unwrap_or(60) };
-            let queue = t.queue.as_ref().map(|qn| format!(", taskQueue: {}", q(qn))).unwrap_or_default();
+            let timeout = activity_timeout(t);
+            let rest = match &t.queue {
+                Some(qn) => format!(", taskQueue: {}", q(qn)),
+                None => format!(", heartbeatTimeout: \"{HEARTBEAT_SECONDS} seconds\""),
+            };
             self.out.push_str(&format!(
-                "const {} = proxyActivities<Tasks>({{ startToCloseTimeout: \"{timeout} seconds\", retry: {{ maximumAttempts: 1 }}{queue} }}).{};\n",
+                "const {} = proxyActivities<Tasks>({{ startToCloseTimeout: \"{timeout} seconds\"{rest}, retry: {{ maximumAttempts: 1 }} }}).{};\n",
                 ident(&format!("task_{}", t.name)),
                 ident(&t.name)
             ));
         }
         if rules {
-            self.out.push_str("const rule_calls = proxyActivities<typeof rules>({ startToCloseTimeout: \"60 seconds\", retry: { maximumAttempts: 1 } });\n");
+            self.out.push_str(&format!("const rule_calls = proxyActivities<typeof rules>({{ startToCloseTimeout: \"{RULE_SECONDS} seconds\", retry: {{ maximumAttempts: 1 }} }});\n"));
         }
         self.out.push('\n');
         let fname = ident(&m.name);
@@ -1434,13 +1489,13 @@ impl<'a> Gen<'a> {
                 self.line(d, &format!("break loop_{site};"));
             }
             TK::Wait { seconds } => match self.flavor {
-                Flavor::Temporal => self.line(d, &format!("await sleep({});", seconds * 1000)),
+                Flavor::Temporal => self.line(d, &format!("await sleep(dd.ms({seconds}));")),
                 Flavor::Durable | Flavor::Argo => self.line(d, &format!("await {ctx}.wait({}, {{ seconds: {seconds} }});", q(&format!("{} wait", s.line)))),
             },
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
                 match self.flavor {
-                    Flavor::Temporal => self.line(d, &format!("await sleep(Math.max(0, Date.parse({x}) - Date.now()));")),
+                    Flavor::Temporal => self.line(d, &format!("await sleep(dd.until({x}));")),
                     Flavor::Durable | Flavor::Argo => {
                         // the clock is read in a step, so that a replay reads the same moment
                         let site = s.site;
@@ -1618,10 +1673,7 @@ impl<'a> Gen<'a> {
     fn retriers(&self, callee: &Callee) -> String {
         let m = self.m;
         let v: Value = match callee {
-            Callee::Rule(_) => serde_json::json!([
-                { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-                { "ErrorEquals": ["States.ALL"], "IntervalSeconds": crate::asl::RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": crate::asl::RULE_RETRY_BACKOFF }
-            ]),
+            Callee::Rule(_) => crate::asl::rule_retriers(),
             Callee::Task(t) => match &m.tasks[*t].retry {
                 Some(r) => crate::asl::retriers(m, callee, &m.tasks[*t], r),
                 None => serde_json::json!([]),

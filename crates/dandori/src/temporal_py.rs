@@ -343,7 +343,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("# - A `callback` task gets `callback_id` and returns once it has handed the id on. The answer comes\n");
     a.push_str("#   as the signal `dandori.callback`, with {\"callback_id\", \"ok\"} or {\"callback_id\", \"error\", \"message\"},\n");
     a.push_str("#   to the workflow `io.workflow_of(callback_id)` names.\n\n");
-    a.push_str("from __future__ import annotations\n\nfrom typing import Any, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
+    a.push_str("from __future__ import annotations\n\nimport asyncio\nimport functools\nfrom typing import Any, Awaitable, Callable, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
     a.push_str("from . import io\nfrom . import types as T\n\n\n");
     a.push_str(&schemas_block(m, &tasks, p));
     a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`.\"\"\"\n");
@@ -354,6 +354,11 @@ fn tasks_file(m: &Model, header: &str) -> String {
         a.push_str(&format!("\n    async def {}(self, args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n        ...\n", method(&task.name), task_doc(m, task)));
     }
     a.push_str("\n\ndef fail(kind: str, message: str) -> ApplicationError:\n    return ApplicationError(message, type=kind, non_retryable=True)\n\n\n");
+    a.push_str(&format!(
+        "def beating(run: Callable[[dict[str, Any]], Awaitable[Any]]) -> Callable[[dict[str, Any]], Awaitable[Any]]:\n    \"\"\"Every task heartbeats while it runs, every {} seconds, so that Temporal notices a worker that went away.\"\"\"\n\n    @functools.wraps(run)\n    async def beats(args: dict[str, Any]) -> Any:\n        async def beat() -> None:\n            while True:\n                await asyncio.sleep({})\n                activity.heartbeat()\n\n        b = asyncio.create_task(beat())\n        try:\n            return await run(args)\n        finally:\n            b.cancel()\n\n    return beats\n\n\n",
+        crate::temporal::BEAT_SECONDS,
+        crate::temporal::BEAT_SECONDS
+    ));
     a.push_str("def make_activities(own: OwnTasks, transport: io.Transport | None = None) -> list[Any]:\n");
     a.push_str("    \"\"\"Your tasks and the ones dandori writes: the activities to register with the worker.\"\"\"\n");
     a.push_str("    t = transport if transport is not None else io.transport()\n");
@@ -361,7 +366,7 @@ fn tasks_file(m: &Model, header: &str) -> String {
     for task in &tasks {
         let fname = method(&task.name);
         names.push(fname.clone());
-        a.push_str(&format!("\n    @activity.defn(name={})\n    async def {fname}(args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", q(&ident(&task.name)), task_doc(m, task)));
+        a.push_str(&format!("\n    @activity.defn(name={})\n    @beating\n    async def {fname}(args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", q(&ident(&task.name)), task_doc(m, task)));
         for l in task_impl(m, task, p) {
             a.push_str(&format!("        {l}\n"));
         }
@@ -826,12 +831,17 @@ async def attempt(call: Callable[[], Awaitable[Any]], retriers: Sequence[dict[st
             for i, r in enumerate(retriers):
                 if kind in r["on"] or "*" in r["on"]:
                     if counts[i] < r["max"]:
-                        await asyncio.sleep(r["every"] * r["backoff"] ** counts[i])
+                        await asyncio.sleep(seconds(r["every"] * r["backoff"] ** counts[i]))
                         counts[i] += 1
                         again = True
                     break
             if not again:
                 raise TaskError(kind, message_of(e)) from None
+
+
+def seconds(n: float) -> float:
+    """A duration of the workflow's timers, in seconds: every wait of the workflow goes through here."""
+    return n
 
 
 def key(site: int, rounds: Sequence[int]) -> str:
@@ -854,10 +864,10 @@ def callback_id(site: int, rounds: Sequence[int], n: int) -> str:
     return json.dumps([workflow.info().workflow_id, "/".join([str(site), *(str(r) for r in rounds), str(n)])], ensure_ascii=False, separators=(",", ":"))
 
 
-async def await_callback(answers: dict[str, dict[str, Any]], id: str, seconds: int) -> Any:
-    """Wait for the answer of the callback with this id, which the signal puts in `answers`."""
+async def await_callback(answers: dict[str, dict[str, Any]], id: str, limit: int) -> Any:
+    """Wait for the answer of the callback with this id, which the signal puts in `answers`, at most `limit` seconds."""
     try:
-        await workflow.wait_condition(lambda: id in answers, timeout=timedelta(seconds=seconds))
+        await workflow.wait_condition(lambda: id in answers, timeout=timedelta(seconds=seconds(limit)))
     except asyncio.TimeoutError:
         raise CallbackTimeout() from None
     a = answers.pop(id)
@@ -908,9 +918,9 @@ def text(v: Any) -> str:
 
 async def wait_until(at: str) -> None:
     """Wait until a moment given as an RFC 3339 string in UTC, by the workflow's clock."""
-    seconds = (datetime.fromisoformat(at.replace("Z", "+00:00")) - workflow.now()).total_seconds()
-    if seconds > 0:
-        await asyncio.sleep(seconds)
+    left = (datetime.fromisoformat(at.replace("Z", "+00:00")) - workflow.now()).total_seconds()
+    if left > 0:
+        await asyncio.sleep(seconds(left))
 
 
 def fail(error: str, cause: str | None) -> ApplicationError:
@@ -921,10 +931,7 @@ def fail(error: str, cause: str | None) -> ApplicationError:
 /// The retriers of a call, as the list `dd.attempt` takes: the ASL's, by the `.flow`'s kinds.
 pub(crate) fn retriers(m: &Model, callee: &Callee) -> String {
     let v: Value = match callee {
-        Callee::Rule(_) => serde_json::json!([
-            { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-            { "ErrorEquals": ["States.ALL"], "IntervalSeconds": crate::asl::RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": crate::asl::RULE_RETRY_BACKOFF }
-        ]),
+        Callee::Rule(_) => crate::asl::rule_retriers(),
         Callee::Task(t) => match &m.tasks[*t].retry {
             Some(r) => crate::asl::retriers(m, callee, &m.tasks[*t], r),
             None => serde_json::json!([]),
@@ -1041,20 +1048,27 @@ impl<'a> Gen<'a> {
         self.out.push_str("from . import runtime as dd\nfrom . import types as T\n\n");
         self.out.push_str("# Temporal tries an activity once; the workflow retries, as the `retry` of each task says\nNO_RETRY = RetryPolicy(maximum_attempts=1)\n\n");
         let callbacks = m.tasks.iter().any(|t| t.callback);
+        // the worker of the workflow heartbeats from the tasks it serves
         for t in &m.tasks {
             if t.is_child(Platform::Temporal) {
                 continue;
             }
-            let timeout = if t.callback { 60 } else { t.timeout.unwrap_or(60) };
-            let queue = t.queue.as_ref().map(|qn| format!(", task_queue={}", q(qn))).unwrap_or_default();
+            let timeout = crate::temporal::activity_timeout(t);
+            let rest = match &t.queue {
+                Some(qn) => format!(", task_queue={}", q(qn)),
+                None => format!(", heartbeat_timeout=timedelta(seconds={})", crate::temporal::HEARTBEAT_SECONDS),
+            };
             self.out.push_str(&format!(
-                "\ndef dd_task_{}(args: dict[str, Any]) -> Any:\n    return workflow.execute_activity({}, args, start_to_close_timeout=timedelta(seconds={timeout}), retry_policy=NO_RETRY{queue})\n\n",
+                "\ndef dd_task_{}(args: dict[str, Any]) -> Any:\n    return workflow.execute_activity({}, args, start_to_close_timeout=timedelta(seconds={timeout}){rest}, retry_policy=NO_RETRY)\n\n",
                 ident(&t.name),
                 q(&ident(&t.name))
             ));
         }
         if rules {
-            self.out.push_str("\ndef dd_rule(name: str, args: dict[str, Any]) -> Any:\n    return workflow.execute_activity(name, args, start_to_close_timeout=timedelta(seconds=60), retry_policy=NO_RETRY)\n\n");
+            self.out.push_str(&format!(
+                "\ndef dd_rule(name: str, args: dict[str, Any]) -> Any:\n    return workflow.execute_activity(name, args, start_to_close_timeout=timedelta(seconds={}), retry_policy=NO_RETRY)\n\n",
+                crate::temporal::RULE_SECONDS
+            ));
         }
         let class = py_name(&m.name);
         let ret = "dict[str, Any] | None";
@@ -1121,7 +1135,7 @@ impl<'a> Gen<'a> {
         match &s.kind {
             TK::Pass => {}
             TK::Break => self.line(d, "break"),
-            TK::Wait { seconds } => self.line(d, &format!("await asyncio.sleep({seconds})")),
+            TK::Wait { seconds } => self.line(d, &format!("await asyncio.sleep(dd.seconds({seconds}))")),
             TK::WaitUntil { at } => {
                 let x = self.expr(at);
                 self.line(d, &format!("await dd.wait_until({x})"));

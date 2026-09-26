@@ -861,10 +861,7 @@ fn error_name(m: &Model, callee: &Callee, kind: &str) -> String {
 
 fn retriers(m: &Model, callee: &Callee) -> Vec<(Vec<String>, u32)> {
     let v = match callee {
-        Callee::Rule(_) => json!([
-            { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-            { "ErrorEquals": ["States.ALL"], "MaxAttempts": crate::check::RULE_RETRIES }
-        ]),
+        Callee::Rule(_) => crate::asl::rule_retriers(),
         Callee::Task(t) => match &m.tasks[*t].retry {
             Some(r) => crate::asl::retriers(m, callee, &m.tasks[*t], r),
             None => json!([]),

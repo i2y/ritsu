@@ -204,7 +204,11 @@ on the PATH.
 - `build --target temporal` writes `workflow.ts`, `types.ts`, `activities.ts`
   (`makeActivities(own, transport)`: the tasks dandori writes, with the ones you write),
   `io.ts` (the `Transport`), `rules.ts` (the rules as activities around rulec's
-  TypeScript) and `runtime.ts`.
+  TypeScript) and `runtime.ts`. A task without `timeout` gets as long as the other platforms
+  would give it — 60 seconds for `http` and `agent`, as an HTTP Task has, 900 for `lambda`,
+  and no limit of its own for the rest — and every activity the workflow's worker serves
+  heartbeats, so that a worker that went away is noticed within 30 seconds. A rule's activity
+  gets 10 seconds, and is retried when it runs out.
 - `build --target temporal-python` writes the same for Temporal's Python SDK, as a package
   named after the workflow: `workflow.py` (the workflow, and `workflows` to give the
   worker), `types.py`, `activities.py` (`make_activities(own, transport)`), `io.py`,
@@ -234,7 +238,7 @@ on the PATH.
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
 of every example and run each of them seven ways — the reference interpreter, the
 generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal workflow
-in Temporal's time-skipping test environment, in TypeScript (`tools/temporal/run.mjs`)
+on a Temporal server (the Temporal CLI's dev server), in TypeScript (`tools/temporal/run.mjs`)
 and in Python (`tools/temporal-python/run.py`), the generated durable function in the
 SDK's local test runner (`tools/durable/run.mjs`), the generated WorkflowTemplate on Argo
 Workflows v4.1.4 in a local kind cluster (`tools/argo/run.mjs`), and the generated graph
@@ -246,6 +250,11 @@ On Temporal, durable functions and pydantic-graph, the tasks dandori writes run 
 Functions sends; the tasks the user writes, the rules and the child workflows are
 stand-ins that answer from the scenario. The rounds of a parallel loop run one at a time in
 the runners, so the calls come in the reference's order.
+
+On Temporal, every run of a flow goes at once, each as a workflow of its own id, which the
+idempotency keys carry. The server keeps real time, so the copy of the code the runners run
+waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the scenario times
+out is kept busy until the server times it out.
 
 On Argo, the controller runs the generated WorkflowTemplate, but the runner plays the pods:
 each pod waits for a scheduler the cluster does not have, and the runner does what its
@@ -269,9 +278,9 @@ asked what Step Functions asks for the same call, and an error status must fail 
 without a retry. Nothing goes to OpenAI or Anthropic.
 
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
-timeout are left out there. Temporal's test environment, Argo and the graph's runner cannot
-time out a task either, but a callback's timeout can be played: on Temporal and pydantic-graph by not
-answering it, on Argo by answering the wait with what its running out gives. The ASL is also validated with
+timeout are left out there. Argo and the graph's runner cannot time out a task either, but a
+callback's timeout can be played: on pydantic-graph by not answering it, on Argo by answering
+the wait with what its running out gives. On Temporal, both can. The ASL is also validated with
 asl-validator, and the code between each platform and a rule answers every vector
 `rulec vectors` produces as rulec says.
 

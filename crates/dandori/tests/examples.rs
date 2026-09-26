@@ -231,12 +231,18 @@ fn transport_spec(m: &Model, p: Platform) -> (Vec<Value>, Vec<Value>) {
 }
 
 /// The scenarios' runs for a platform: the input and the answers, and the reference's
-/// trace; `keep` says which runs the platform's test environment can play.
-fn plays(m: &Model, view: View, keep: impl Fn(&[CallInfo]) -> bool) -> (Vec<Value>, Vec<(Value, Value)>, usize) {
+/// trace; `keep` says which runs the platform's test environment can play. With `named`, the
+/// runs go at once, each as an execution named `run-<n>`, which the keys carry; else each is
+/// named `test`, one after another.
+fn plays(m: &Model, view: View, named: bool, keep: impl Fn(&[CallInfo]) -> bool) -> (Vec<Value>, Vec<(Value, Value)>, usize) {
     let mut runs = Vec::new();
     let mut references = Vec::new();
     let mut left_out = 0;
-    for sc in dandori::scenarios::generate(m) {
+    for mut sc in dandori::scenarios::generate(m) {
+        let id = format!("run-{}", runs.len() + 1);
+        if named {
+            sc["execution"] = json!(id);
+        }
         let (reference, calls) = dandori::interp::run_traced(m, &sc, view).unwrap();
         if !keep(&calls) {
             left_out += 1;
@@ -244,7 +250,7 @@ fn plays(m: &Model, view: View, keep: impl Fn(&[CallInfo]) -> bool) -> (Vec<Valu
         }
         let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
         let script: Vec<Value> = answers.iter().map(|a| if a.get("ok").is_some() { json!({ "ok": a["ok"] }) } else { json!({ "error": a["error"] }) }).collect();
-        runs.push(json!({ "input": sc["input"], "answers": script }));
+        runs.push(json!({ "id": id, "input": sc["input"], "answers": script }));
         references.push((sc, reference));
     }
     (runs, references, left_out)
@@ -291,8 +297,8 @@ fn temporal_runs_as_the_reference_says() {
         queues.sort();
         queues.dedup();
         let (http, aws) = transport_spec(&m, p);
-        // an activity's timeout cannot be scripted in the test environment; a callback's can, by not answering
-        let (runs, references, left_out) = plays(&m, View::Temporal, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+        // on a real server an activity times out as the scenario says, and a callback that gets no answer
+        let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
         let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
@@ -307,7 +313,7 @@ fn temporal_runs_as_the_reference_says() {
         assert!(out.status.success(), "{}: the Temporal runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
         compare("the Temporal workflow", &f, &references, &got);
-        eprintln!("{}: compared {} run(s) on Temporal; left out {left_out} with an activity's timeout", rel(&f), references.len());
+        eprintln!("{}: compared {} run(s) on Temporal (the dev server)", rel(&f), references.len());
     }
 }
 
@@ -345,8 +351,8 @@ fn temporal_python_runs_as_the_reference_says() {
         queues.sort();
         queues.dedup();
         let (http, aws) = transport_spec(&m, p);
-        // the same runs as with the TypeScript: an activity's timeout cannot be scripted, a callback's can
-        let (runs, references, left_out) = plays(&m, View::Temporal, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+        // the same runs as with the TypeScript
+        let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
         let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
@@ -361,7 +367,7 @@ fn temporal_python_runs_as_the_reference_says() {
         assert!(out.status.success(), "{}: the Temporal runner for Python failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
         let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
         compare("the Temporal workflow in Python", &f, &references, &got);
-        eprintln!("{}: compared {} run(s) on Temporal in Python; left out {left_out} with an activity's timeout", rel(&f), references.len());
+        eprintln!("{}: compared {} run(s) on Temporal in Python (the dev server)", rel(&f), references.len());
     }
 }
 
@@ -468,7 +474,7 @@ fn pydantic_graph_runs_as_the_reference_says() {
         let rules: Vec<Value> = m.rules.iter().map(|r| json!({ "fn": dandori::render::rule_activity(&r.name), "name": r.name })).collect();
         let (http, aws) = transport_spec(&m, p);
         // a task's own timeout cannot be scripted; a callback's can, by not answering it
-        let (runs, references, left_out) = plays(&m, View::Graph, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+        let (runs, references, left_out) = plays(&m, View::Graph, false, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
         let spec = json!({ "own": own, "rules": rules, "http": http, "aws": aws, "runs": runs });
@@ -715,7 +721,7 @@ fn durable_runs_as_the_reference_says() {
         let children: Vec<String> = m.tasks.iter().filter_map(|t| t.durable_function.clone()).collect();
         let (http, aws) = transport_spec(&m, p);
         // the local runner does not time a callback out, so the runs with a timeout are left out
-        let (runs, references, left_out) = plays(&m, View::Durable, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout")));
+        let (runs, references, left_out) = plays(&m, View::Durable, false, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout")));
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
         let spec = json!({ "own": own, "rules": rules, "children": children, "http": http, "aws": aws, "runs": runs });
@@ -789,7 +795,7 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
     let children: Vec<String> = m.tasks.iter().filter_map(|t| t.argo_template.clone()).collect();
     let (http, aws) = transport_spec(&m, p);
     // a task's own timeout cannot be scripted there; a callback's can, by the answer the runner sets
-    let (runs, references, left_out) = plays(&m, View::Argo, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+    let (runs, references, left_out) = plays(&m, View::Argo, false, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
     // the run played again with real pods: one through a declared error if there is one, else an error, else the first
     let errors = |r: &Value, declared: bool| r["answers"].as_array().unwrap().iter().any(|a| a.get("error").and_then(|e| e.as_str()).is_some_and(|e| !declared || (e != "failure" && e != "timeout")));
     let real = runs.iter().position(|r| errors(r, true)).or_else(|| runs.iter().position(|r| errors(r, false))).unwrap_or(0);

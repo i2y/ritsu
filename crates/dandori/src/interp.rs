@@ -489,10 +489,7 @@ impl<'a> Run<'a> {
     /// (errors, max attempts, interval, backoff) for each retrier, as the targets have them.
     fn retriers(&self, callee: &Callee) -> Vec<(Vec<String>, u32, u64, f64)> {
         let v = match callee {
-            Callee::Rule(_) => json!([
-                { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-                { "ErrorEquals": ["States.ALL"], "IntervalSeconds": crate::asl::RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": crate::asl::RULE_RETRY_BACKOFF }
-            ]),
+            Callee::Rule(_) => crate::asl::rule_retriers(),
             Callee::Task(t) => match &self.m.tasks[*t].retry {
                 Some(r) => crate::asl::retriers(self.m, callee, &self.m.tasks[*t], r),
                 None => json!([]),
