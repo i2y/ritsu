@@ -3,6 +3,10 @@ description "Reserve stock for each line of an order, arrange the delivery, wait
 
 use rule urgency from "../order/rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+use proto warehouse from "specs/warehouse.proto"
+  url "https://warehouse.example.com"
+use smithy sns from "specs/sns.json"
+use smithy sqs from "specs/sqs.json"
 
 enum Stock = secured | short
 
@@ -49,14 +53,14 @@ outputs
 
 # The warehouse answers every reservation: secured with its id, or short when the stock is short.
 task reserve_stock(sku: string, quantity: int) -> Reservation
-  http POST "https://warehouse.example.com/v1/reservations"
+  connect warehouse "StockService/Reserve"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
-  errors busy = 429
+  errors busy = resource_exhausted
   key
   retry 2 times every 1 second on busy
 
 task release_stock(id: string)
-  http DELETE "https://warehouse.example.com/v1/reservations/{id}"
+  connect warehouse "StockService/Release"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
   idempotent
 

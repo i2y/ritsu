@@ -1,0 +1,60 @@
+workflow apis v1
+description "API の記述との突き合わせ：OpenAPI（Stripe の写し）、Smithy（SNS の写し）、.proto と connect"
+
+use openapi stripe from "../../examples/hotel/specs/stripe.json"
+use smithy sns from "../../examples/fulfillment/specs/sns.json"
+use proto 倉庫 from "apis/warehouse.proto"
+  url "https://warehouse.example.com"
+use proto 場所の無い倉庫 from "apis/warehouse.proto"
+
+enum 取り方 = automatic | manual | later
+enum 状態 = requires_payment_method | requires_confirmation | requires_action | processing | requires_capture | succeeded
+enum 在庫 = secured | short
+
+record 支払い
+  id      : string
+  status  : 状態
+  created : timestamp
+
+record 請求
+  id            : string
+  latest_charge : string
+
+record 送信
+  MessageId : string
+
+record 引当
+  sku         : string
+  stock       : 在庫
+  id          : string
+  count       : int
+  price       : int
+  reserved_at : timestamp?
+
+inputs
+  額 : int
+
+task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+  http POST stripe "/v1/payment_intents"
+  errors 断り = 402
+
+task 金額だけで作る(amount: int) -> 請求
+  http POST stripe "/v1/payment_intents"
+
+task 無い操作(intent: string) -> 支払い
+  http POST stripe "/v1/payment_intents/{intent}/refund"
+
+task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+  aws sns:publish
+  errors 宛先が無い = NoSuchTopic
+  key ClientToken
+
+task 引き当てる(sku: string, quantity: string) -> 引当
+  connect 倉庫 "StockService/Reserve"
+  errors 忙しい = resource_exhausted, 無くなった = gone
+
+task 見張る(sku: string) -> 引当
+  connect 倉庫 "StockService/Watch"
+
+flow
+  pass

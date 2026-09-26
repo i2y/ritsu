@@ -1,0 +1,54 @@
+// The shelf-count service of tests/flows/connect.flow: an answer with every kind of field that
+// protobuf's JSON leaves out at its zero value, a message inside it, and a list of messages.
+syntax = "proto3";
+
+package shelf.v1;
+
+service ShelfService {
+  rpc Count(CountRequest) returns (CountResponse);
+  rpc Record(RecordRequest) returns (RecordResponse);
+}
+
+message CountRequest {
+  string shelf = 1;
+}
+
+enum State {
+  STATE_UNSPECIFIED = 0;
+  COUNTED = 1;
+  MISSING = 2;
+}
+
+message Item {
+  string sku = 1;
+  int32 count = 2;
+  State state = 3;
+  bool checked = 4;
+  repeated string notes = 5;
+}
+
+message Location {
+  string aisle = 1;
+  int32 level = 2;
+}
+
+message CountResponse {
+  string shelf = 1;
+  int32 total = 2;
+  repeated Item items = 3;
+  Location location = 4;
+  map<string, string> labels = 5;
+  int64 serial = 6;
+}
+
+message RecordRequest {
+  string shelf = 1;
+  int32 total = 2;
+  repeated Item items = 3;
+  string aisle = 4;
+  map<string, string> labels = 5;
+}
+
+message RecordResponse {
+  string record_id = 1;
+}

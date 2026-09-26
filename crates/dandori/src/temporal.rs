@@ -562,6 +562,9 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 if form {
                     headers.push("\"Content-Type\": \"application/x-www-form-urlencoded\"".to_string());
                 }
+                if task.connect.is_some() {
+                    headers.push("\"Connect-Protocol-Version\": \"1\"".to_string());
+                }
                 if task.key {
                     headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
                 }
@@ -577,7 +580,11 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     req.push("form: true".into());
                 }
                 let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
-                a.push_str(&format!("    {name}: async (args) => io.status(await transport.http({{ {} }}), {}, fail) as {},\n", req.join(", "), braces(&statuses), task_result(m, task)));
+                let mut answer = format!("io.status(await transport.http({{ {} }}), {}, fail)", req.join(", "), braces(&statuses));
+                if let Some(zeros) = &task.connect {
+                    answer = format!("io.fill({answer}, {zeros})");
+                }
+                a.push_str(&format!("    {name}: async (args) => {answer} as {},\n", task_result(m, task)));
             }
             Some(Via::Aws { service, action }) => {
                 let names = task.errors.iter().map(|e| format!("{}: {}", q(e.exception.as_deref().unwrap_or(&e.name)), q(&e.name))).collect::<Vec<_>>().join(", ");
@@ -1056,6 +1063,19 @@ export function fold(v: unknown, schema: any): unknown {
 export function answer(out: unknown): unknown {
   if (out !== null && typeof out === "object" && "answer" in out) return (out as { answer: unknown }).answer;
   throw new Error("the agent's answer has no `answer`");
+}
+
+/**
+ * A Connect answer with the zero values filled in that protobuf's JSON leaves out: `zeros.f` by
+ * key, and the same for the messages under `zeros.m` and the lists of messages under `zeros.l`.
+ */
+export function fill(v: unknown, zeros: { f?: Record<string, unknown>; m?: Record<string, any>; l?: Record<string, any> }): unknown {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+  const out: Record<string, unknown> = { ...(v as Record<string, unknown>) };
+  for (const [k, z] of Object.entries(zeros.f ?? {})) if (out[k] === undefined || out[k] === null) out[k] = z;
+  for (const [k, d] of Object.entries(zeros.m ?? {})) if (out[k] !== null && typeof out[k] === "object") out[k] = fill(out[k], d);
+  for (const [k, d] of Object.entries(zeros.l ?? {})) if (Array.isArray(out[k])) out[k] = (out[k] as unknown[]).map((x) => fill(x, d));
+  return out;
 }
 
 /** The body of a 2xx answer, or the declared error its status names. */

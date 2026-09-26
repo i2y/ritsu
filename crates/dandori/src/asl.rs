@@ -646,6 +646,9 @@ impl<'a> Gen<'a> {
                         if form {
                             headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
                         }
+                        if task.connect.is_some() {
+                            headers.insert("Connect-Protocol-Version".into(), json!("1"));
+                        }
                         if task.key {
                             headers.insert("Idempotency-Key".into(), json!(self.key_expr(s.site)));
                         }
@@ -659,7 +662,12 @@ impl<'a> Gen<'a> {
                         if form {
                             w.insert("Transform".into(), json!({ "RequestBodyEncoding": "URL_ENCODED" }));
                         }
-                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), "$states.result.ResponseBody".to_string(), task.timeout, retry)
+                        // a Connect answer's JSON leaves out the zero values, which protobuf reads as there
+                        let result = match &task.connect {
+                            Some(zeros) => render::jsonata_fill("$states.result.ResponseBody", zeros),
+                            None => "$states.result.ResponseBody".to_string(),
+                        };
+                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), result, task.timeout, retry)
                     }
                     Via::Agent { provider, instructions, model } => {
                         // the input is the arguments' JSON text, in the order of the parameters

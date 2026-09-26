@@ -305,6 +305,9 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
             if form {
                 headers.push("\"Content-Type\": \"application/x-www-form-urlencoded\"".to_string());
             }
+            if task.connect.is_some() {
+                headers.push("\"Connect-Protocol-Version\": \"1\"".to_string());
+            }
             if task.key {
                 headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
             }
@@ -320,7 +323,11 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 req.push("\"form\": True".into());
             }
             let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
-            vec![format!("return io.status(await t.http({{{}}}), {{{statuses}}}, fail)", req.join(", "))]
+            let answer = format!("io.status(await t.http({{{}}}), {{{statuses}}}, fail)", req.join(", "));
+            match &task.connect {
+                Some(zeros) => vec![format!("return io.fill({answer}, {})", render::layout(zeros, 0, "", true).replace('\n', ""))],
+                None => vec![format!("return {answer}")],
+            }
         }
         Some(Via::Aws { service, action }) => {
             let names = task.errors.iter().map(|e| format!("{}: {}", q(e.exception.as_deref().unwrap_or(&e.name)), q(&e.name))).collect::<Vec<_>>().join(", ");
@@ -829,6 +836,24 @@ def answer(out: Any) -> Any:
     if isinstance(out, dict) and "answer" in out:
         return out["answer"]
     raise ValueError("the agent's answer has no \"answer\"")
+
+
+def fill(v: Any, zeros: dict[str, Any]) -> Any:
+    """A Connect answer with the zero values filled in that protobuf's JSON leaves out: zeros["f"]
+    by key, and the same for the messages under zeros["m"] and the lists of messages under zeros["l"]."""
+    if not isinstance(v, dict):
+        return v
+    out = dict(v)
+    for k, z in zeros.get("f", {}).items():
+        if out.get(k) is None:
+            out[k] = z
+    for k, d in zeros.get("m", {}).items():
+        if isinstance(out.get(k), dict):
+            out[k] = fill(out[k], d)
+    for k, d in zeros.get("l", {}).items():
+        if isinstance(out.get(k), list):
+            out[k] = [fill(x, d) for x in out[k]]
+    return out
 
 
 def status(r: dict[str, Any], names: dict[str, str], fail: Callable[[str, str], Exception]) -> Any:

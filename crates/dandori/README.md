@@ -55,8 +55,8 @@ flow
   match quote.handling
     review => succeed outcome = awaiting_review
     auto => pi <- create_intent(amount: quote.amount, currency: "jpy", payment_method: booking.card, capture_method: manual)
-  pi <- confirm_intent(id: pi.id)
-    on card_declined => pi <- get_intent(id: pi.id)
+  pi <- confirm_intent(intent: pi.id)
+    on card_declined => pi <- get_intent(intent: pi.id)
   …
 ```
 
@@ -157,12 +157,65 @@ durable functions still need the ARN the child is deployed as (`state machine`, 
 function`). A flow that runs itself, directly or through others, is refused: there is no
 recursion.
 
+### API descriptions
+
+When the API a task calls is described, the `.flow` reads the description and the checker holds
+the task to it (E016):
+
+```
+use openapi stripe from "specs/stripe.json"
+use smithy sns from "specs/sns.json"
+use proto warehouse from "specs/warehouse.proto"
+  url "https://warehouse.example.com"
+
+task confirm_intent(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/confirm"
+
+task notify(TopicArn: string, Message: string) -> Sent
+  aws sns:publish
+  errors no_recipient = NotFoundException
+
+task reserve_stock(sku: string, quantity: int) -> Reservation
+  connect warehouse "StockService/Reserve"
+  errors busy = resource_exhausted
+```
+
+- An OpenAPI 3 document (JSON) gives an `http` task its operation: the URL is the document's
+  server and the path, and the document says whether the body is URL-encoded.
+- An AWS API's Smithy model (the JSON AST AWS publishes) is used by the service's name, so
+  `aws sns:publish` is held to the model of SNS's `Publish`.
+- A `.proto` (proto3) gives `connect` its method, called by the Connect protocol with JSON: a
+  POST to `<url>/<package>.<Service>/<Method>` with `Connect-Protocol-Version: 1`. A Connect
+  error is declared by its code (`not_found`) and told apart by the code's HTTP status.
+
+The task passes no parameter the operation does not take and every one it requires, of a type
+and in a range it takes; it reads the answer into a type the answer fits, with `T?` for a field
+the answer may leave out or send as null, and an enum with every value the answer may have; and
+its errors are ones the operation answers with. An AWS API's `key <parameter>` must be the
+operation's idempotency token.
+
+```
+error[E016]: tests/fixtures/apis.flow:37:1: what `stripe` POST /v1/payment_intents answers is not `支払い`: in `created`, an integer is not `timestamp`
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+```
+
+protobuf's JSON leaves out a field without presence when it holds its zero value (an empty
+string, 0, false, an enum's first value, an empty list or map), and whoever reads it with
+protobuf reads the zero value there. A `connect` task's answer is read the same way on every
+platform: the code dandori writes fills the zero values in from the `.proto` — in the answer,
+in its messages, and in the messages of its lists — before the answer's type is checked. The
+checker reads a description only as far as the task's types go, so Stripe's 8 MB document
+costs what is looked at; the examples keep cut-down copies ([tools/specs/trim.py](tools/specs/trim.py)).
+
 ### What a task calls
 
 | The task says | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |
 |---|---|---|---|---|---|
 | `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function | a container running the code dandori writes | a function dandori writes, invoking the function |
 | `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
+| `connect <api> "<Service>/<Method>"` ([API descriptions](#api-descriptions)) | HTTP Task, Connect's JSON | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
 | `agent "<instructions>"` and `model "<model>"` | HTTP Task to OpenAI's Responses API | an activity dandori writes, with OpenAI's Agents SDK | a step dandori writes, with the Agents SDK | the same, with the Agents SDK | the same, with the Agents SDK for Python |
 | `agent claude "<instructions>"` and `model "<model>"` | HTTP Task to Claude's Messages API | an activity dandori writes, with Anthropic's SDK | a step dandori writes, with Anthropic's SDK | the same, with Anthropic's SDK | the same, with Anthropic's SDK for Python |
@@ -265,9 +318,9 @@ brought in the way the platform does.
 
 | Example | For AWS (Step Functions, and every platform) | For Temporal | For pydantic-graph |
 |---|---|---|---|
-| a hotel booking that holds a card and captures at check-out | [hotel](examples/hotel/hotel.flow) | [temporal](examples/hotel/temporal/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
+| a hotel booking that holds a card and captures at check-out (held to Stripe's OpenAPI document) | [hotel](examples/hotel/hotel.flow) | [temporal](examples/hotel/temporal/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
 | an order in a warehouse's system, reminded, shipped, delivered | [order](examples/order/order.flow) | [temporal](examples/order/temporal/order.flow) | [pydantic-graph](examples/order/pydantic-graph/order.flow) |
-| reserving the lines of an order side by side, packing, delivery (a child flow, [arrange_delivery](examples/fulfillment/arrange_delivery.flow), which each version runs) | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
+| reserving the lines of an order side by side, packing, delivery (a child flow, [arrange_delivery](examples/fulfillment/arrange_delivery.flow), which each version runs; the warehouse called by Connect, and SNS and SQS held to their Smithy models) | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
 | agents that read an inquiry and draft a reply, and a rule that routes it | [inquiry](examples/inquiry/inquiry.flow) | [temporal](examples/inquiry/temporal/inquiry.flow) | [pydantic-graph](examples/inquiry/pydantic-graph/inquiry.flow) |
 | an application scored by other workers, and a person's approval | [review](examples/review/review.flow) | [temporal](examples/review/temporal/review.flow) | [pydantic-graph](examples/review/pydantic-graph/review.flow) |
 
@@ -472,8 +525,8 @@ runs only the flows whose path has it.
 
 ## Status
 
-Early. Not yet: Parallel with different branches, types of AWS API calls read from the
-published Smithy models (the parameters and answers are declared by hand, as for HTTP),
+Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
+encoding and Connect's streams,
 cases the workflow holds itself, a rule's preconditions checked at the task that produced
 the value, runs on AWS and on a Temporal server, the caller image run against real
 Lambda, HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The design, the decisions and what is

@@ -1,0 +1,39 @@
+// The warehouse's stock service, which examples/fulfillment calls by the Connect protocol, as
+// JSON over HTTP (`connect warehouse "StockService/Reserve"`). Written for the example.
+syntax = "proto3";
+
+package warehouse.v1;
+
+service StockService {
+  // Reserve stock for one line of an order. A line the stock is short of is answered with
+  // `short` and no id; a warehouse too busy to answer says resource_exhausted.
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+  // Let a reservation go.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+}
+
+message ReserveRequest {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+// Named as the workflow names them. The zero value is what an answer that leaves the field out
+// reads as; the workflow's enum does not have it, so such an answer fails the call.
+enum Stock {
+  unspecified = 0;
+  secured = 1;
+  short = 2;
+}
+
+message ReserveResponse {
+  string sku = 1;
+  Stock stock = 2;
+  // there when the stock was secured
+  optional string id = 3;
+}
+
+message ReleaseRequest {
+  string id = 1;
+}
+
+message ReleaseResponse {}

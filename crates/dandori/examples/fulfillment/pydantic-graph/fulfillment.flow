@@ -2,6 +2,8 @@ workflow fulfillment v1
 description "The fulfillment of examples/fulfillment, written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, which send with the standard library; the arrangement of the delivery, the packing request, the notice and the audit log are functions you write; and the packing crew's answer comes to the callback in the same process. The wait for the packing holds the process, and a run the process loses is lost"
 
 use rule urgency from "../../order/rules/urgency.rule"
+use proto warehouse from "../specs/warehouse.proto"
+  url "https://warehouse.example.com"
 
 enum Stock = secured | short
 
@@ -45,13 +47,13 @@ outputs
 
 # The warehouse answers every reservation: secured with its id, or short when the stock is short.
 task reserve_stock(sku: string, quantity: int) -> Reservation
-  http POST "https://warehouse.example.com/v1/reservations"
-  errors busy = 429
+  connect warehouse "StockService/Reserve"
+  errors busy = resource_exhausted
   key
   retry 2 times every 1 second on busy
 
 task release_stock(id: string)
-  http DELETE "https://warehouse.example.com/v1/reservations/{id}"
+  connect warehouse "StockService/Release"
   idempotent
 
 # Arranging the delivery is a function you write: the graph of arrange_delivery.flow, or a call to

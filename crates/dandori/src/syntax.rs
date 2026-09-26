@@ -50,6 +50,8 @@ pub struct Program {
     pub description: Option<String>,
     pub kind: Kind,
     pub uses: Vec<UseRule>,
+    /// `use openapi|smithy|proto <name> from "<path>"`: the descriptions of the APIs the tasks call
+    pub apis: Vec<UseApi>,
     pub enums: Vec<EnumDecl>,
     pub records: Vec<RecordDecl>,
     pub inputs: Vec<Field>,
@@ -69,6 +71,15 @@ pub struct UseRule {
     pub lambda: Option<String>,
     /// Temporal: the rule is called as a local activity
     pub local: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct UseApi {
+    pub kind: crate::apis::ApiKind,
+    pub name: Name,
+    pub path: String,
+    /// `url "<base>"`: where the API is, in place of an OpenAPI document's server (a `.proto` needs it)
+    pub url: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -129,7 +140,12 @@ impl TypeExpr {
 #[derive(Clone, Debug)]
 pub enum Binding {
     Lambda(String),
-    Http { method: String, url: String, form: bool },
+    /// `http POST "<url>"`, or `http POST stripe "/v1/…"`: an operation of an OpenAPI document,
+    /// whose server and path make the URL
+    Http { method: String, url: String, form: bool, api: Option<Name> },
+    /// `connect warehouse "StockService/Reserve"`: a method of a `.proto`'s service, called by
+    /// the Connect protocol with JSON
+    Connect { api: Name, method: String },
     /// an AWS API call, as Step Functions' AWS SDK integrations name it: `sns:publish`
     Aws { service: String, action: String },
     /// an agent that reads the arguments and answers in the task's type, told what to do by
@@ -610,6 +626,7 @@ const KEYWORDS: &[&str] = &[
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
     "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json", "range",
+    "openapi", "smithy", "proto", "connect", "url",
 ];
 
 /// The kinds of number with a unit that rulec has: `money[円, incl_tax]`, `mass[kg]`, …
@@ -1159,6 +1176,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         description: None,
         kind: Kind::Standard,
         uses: vec![],
+        apis: vec![],
         enums: vec![],
         records: vec![],
         inputs: vec![],
@@ -1209,6 +1227,37 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 };
                 cur.expect_end()?;
                 p.pos += 1;
+            }
+            "use" if !cur.is_kw("rule") => {
+                let ksp = cur.span();
+                let (k, _) = cur.ident("`rule`, `openapi`, `smithy` or `proto`", "`rule`・`openapi`・`smithy`・`proto` のどれか")?;
+                let kind = match k.as_str() {
+                    "openapi" => crate::apis::ApiKind::OpenApi,
+                    "smithy" => crate::apis::ApiKind::Smithy,
+                    "proto" => crate::apis::ApiKind::Proto,
+                    _ => return Err(err(ksp, "write `use rule`, `use openapi`, `use smithy` or `use proto`", "`use rule`・`use openapi`・`use smithy`・`use proto` のどれかを書きます")),
+                };
+                let name = cur.ident("the API's name", "API の名前")?;
+                cur.expect_kw("from")?;
+                let (path, _) = cur.string("the path of the API's description", "API の記述のパス")?;
+                cur.expect_end()?;
+                p.pos += 1;
+                let mut url = None;
+                while let Some(cl) = p.cur_line() {
+                    if cl.indent == 0 {
+                        break;
+                    }
+                    let cl = cl.clone();
+                    let mut cc = Cur::new(&cl);
+                    if cc.eat_kw("url") {
+                        url = Some(cc.string("where the API is", "API の場所")?.0);
+                        cc.expect_end()?;
+                    } else {
+                        return Err(err(cc.span(), "only `url \"<where the API is>\"` can be written under `use openapi`, `use smithy` and `use proto`", "`use openapi`・`use smithy`・`use proto` の下に書けるのは `url \"<API の場所>\"` だけです"));
+                    }
+                    p.pos += 1;
+                }
+                prog.apis.push(UseApi { kind, name, path, url });
             }
             "use" => {
                 cur.expect_kw("rule")?;
@@ -1427,14 +1476,14 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
 fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
     let sp = cc.span();
     let (kw, _) = cc.ident("a task clause", "タスクの項目")?;
-    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent") {
+    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect") {
         if let Some((_, first)) = &t.binding {
             return Err(Diag::error(
                 "E007",
                 sp.line,
                 sp.col,
-                format!("the task is already called another way (line {}); a task is called by one of lambda, http, aws and agent", first.line),
-                format!("このタスクの呼び方はもう書かれています（{} 行目）。呼び方は lambda・http・aws・agent のどれか一つです", first.line),
+                format!("the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws and agent", first.line),
+                format!("このタスクの呼び方はもう書かれています（{} 行目）。呼び方は lambda・http・connect・aws・agent のどれか一つです", first.line),
             ));
         }
     }
@@ -1481,9 +1530,18 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             if !["GET", "POST", "PUT", "PATCH", "DELETE"].contains(&method.as_str()) {
                 return Err(err(msp, "the method is GET, POST, PUT, PATCH or DELETE", "メソッドは GET・POST・PUT・PATCH・DELETE のどれかです"));
             }
-            let url = cc.string("the URL", "URL")?.0;
+            let api = match cc.peek() {
+                Some(Tok::Ident(_)) => Some(cc.ident("the API", "API")?),
+                _ => None,
+            };
+            let url = cc.string(if api.is_some() { "the operation's path" } else { "the URL" }, if api.is_some() { "操作のパス" } else { "URL" })?.0;
             let form = cc.eat_kw("form");
-            t.binding = Some((Binding::Http { method, url, form }, sp));
+            t.binding = Some((Binding::Http { method, url, form, api }, sp));
+        }
+        "connect" => {
+            let api = cc.ident("the API (`use proto`)", "API（`use proto` の名前）")?;
+            let method = cc.string("the method, as `Service/Method`", "メソッド（`Service/Method`）")?.0;
+            t.binding = Some((Binding::Connect { api, method }, sp));
         }
         "agent" => {
             let provider = match cc.peek() {

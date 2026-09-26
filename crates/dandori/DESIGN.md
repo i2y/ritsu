@@ -155,6 +155,7 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
 
 ### 1.4 宣言
 
+- `use openapi|smithy|proto <名前> from "<パス>"`：呼ぶ API の記述を読む（1.10）。下に `url "<場所>"` を書くと、API の場所になる。
 - `use rule <名前> from "<パス>"`：規則を読む。Step Functions と durable functions から呼ぶなら、下に `lambda "<関数>"` を書く。下に `local` を書くと、Temporal ではローカルアクティビティとして呼ぶ（4.2）。ほかの出力先では何も変わらない。
 - `task <名前>(<引数>) [-> <型>]`：外の相手への呼び出し。`->` を書かないタスクは何も答えない（答えは読まない）。下に次の項目を書く。
   - 呼び方（1.6）：`lambda "<関数>"`、`http <メソッド> "<URL>" [form]` と `connection "<EventBridge の接続>"`、`aws <サービス>:<操作>`、`agent [openai | claude] "<指示>"` と `model "<モデル>"`（1.7。Step Functions では `connection` も）のどれか一つ。子ワークフローとして呼ぶなら、出力先ごとに `workflow "<型>"`（Temporal）、`state machine "<ARN>"`（Step Functions）、`durable function "<関数>"`（durable functions）、`workflow template "<名前>"`（Argo）。子も dandori で書いたなら `flow "<パス>"`（1.9）。Temporal では `queue "<タスクキュー>"` で送り先のキューを選べる。Argo で利用者のコンテナを動かすなら `image "<イメージ>"`。
@@ -195,6 +196,7 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
 |---|---|---|---|---|---|
 | `lambda` | Lambda の Task | dandori が書くアクティビティが関数を呼ぶ | dandori が書く step の中で関数を呼ぶ | dandori が書く実装をコンテナで動かす | dandori が書く関数が関数を呼ぶ |
 | `http` | HTTP Task | dandori が書くアクティビティが `fetch` で送る | dandori が書く step の中で `fetch` で送る | 同じく、コンテナで `fetch` | 同じく、urllib で |
+| `connect`（1.10） | HTTP Task（Connect の JSON） | dandori が書くアクティビティが `fetch` で送る | dandori が書く step の中で `fetch` で送る | 同じく、コンテナで `fetch` | 同じく、urllib で |
 | `aws` | AWS SDK 統合 | dandori が書くアクティビティが AWS SDK で呼ぶ | dandori が書く step の中で AWS SDK で呼ぶ | 同じく、コンテナで AWS SDK | 同じく、boto3 で |
 | `agent` | HTTP Task で OpenAI の Responses API を呼ぶ（Claude なら Messages API） | dandori が書くアクティビティが OpenAI の Agents SDK で呼ぶ（Claude なら Anthropic の SDK） | dandori が書く step の中で、同じ SDK で呼ぶ | 同じく、コンテナで | 同じく、Python の Agents SDK か Anthropic の SDK で |
 | `state machine` | 入れ子の実行（`startExecution.sync:2`） | | | | |
@@ -302,6 +304,50 @@ task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: str
 - pydantic-graph：ほかの子ワークフローと同じく、利用者が書く関数になる（子のグラフを走らせる関数など）。契約の検査は同じにかかる。
 - 子の `fail` の名前を宣言したエラーとして受けられるのは、Temporal（子の `fail` は、その名前の `ApplicationFailure` で子ワークフローを終える）と durable functions（`ErrorData` に名前が入る。4.3）。Step Functions と Argo では、子のエラーを宣言したタスクは、これまでどおり E050。
 
+### 1.10 API の記述
+
+呼ぶ API に記述があれば、`use` で読み、タスクをそれに合わせる（E016）。
+
+```
+use openapi stripe from "specs/stripe.json"
+use smithy sns from "specs/sns.json"
+use proto warehouse from "specs/warehouse.proto"
+  url "https://warehouse.example.com"
+
+task confirm_intent(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/confirm"
+
+task notify(TopicArn: string, Message: string) -> Sent
+  aws sns:publish
+  errors no_recipient = NotFoundException
+
+task reserve_stock(sku: string, quantity: int) -> Reservation
+  connect warehouse "StockService/Reserve"
+  errors busy = resource_exhausted
+```
+
+- **OpenAPI**（OpenAPI 3 の JSON）：`http <メソッド> <API> "<パス>"` は、記述のその操作を呼ぶ。URL は記述の最初のサーバー（`use` の下に `url` を書けば置き換わる）とパスで、本文を URL エンコードするかは記述が言う（`form` は書かない。書けば E007）。
+- **Smithy**（AWS が公開している API モデルの JSON AST）：`aws <サービス>:<操作>` は、サービスの名前で `use smithy` した記述があれば、その操作に合わせる（`publish` は `Publish`）。
+- **protobuf**（proto3 の `.proto`）：`connect <API> "<サービス>/<メソッド>"` は、そのメソッドを Connect のプロトコルで、JSON で呼ぶ。`.proto` はサービスの場所を言わないので、`use proto` の下に `url` を書く（無ければ E016）。
+
+合わせるもの。
+
+- **引数**：操作が受け取らない名前は書けない。操作が必ず要るものは渡す（無いことがある値では足りない）。型と範囲は、値の渡る向きに比べる（1.9 と同じ）。GET と DELETE では、パスに入らない引数をクエリの引数と比べ、ほかでは本文と比べる。
+- **答え**：タスクの答えの型は、操作の答えの形に合わなければならない。レコードのフィールドは答えにあるもので、答えが省くことがあるもの（必須でないもの、null のことがあるもの）は `T?` にする。列挙は、操作が答えうる値をすべて持つ。答えのレコードの食い違いは、フィールドごとに一つずつ言う。
+- **エラー**：OpenAPI では、宣言したエラーのステータスで操作が答えること（`4XX` や `default` も見る）。Smithy では、宣言した例外が、操作かサービスのエラーにあること。Connect では、エラーを Connect のコード（`not_found` など 16 個）で書き、コードの HTTP ステータスで見分ける（Connect のプロトコルの文書の対応表のとおり）。同じステータスになるコードを二つ宣言すると（`invalid_argument`・`failed_precondition`・`out_of_range` はどれも 400）、ほかの HTTP のタスクと同じく E007。
+- **Smithy の `key <引数>`**：その引数が、操作の冪等トークン（`@idempotencyToken`）であること。
+
+記述ごとの読み方。
+
+- OpenAPI：`$ref` は、記述の中を指すものだけを読む。`anyOf` と `oneOf` は、送る値はどれか一つに合えばよく、答えはどれに合っても読めなければならない。Stripe の展開できるフィールド（`x-expansionResources`。ID か、展開したオブジェクトのどちらか）は、展開を頼まないので ID として読む。YAML の記述は読まない（JSON に直して渡す）。
+- Smithy：AWS のモデルは、答えのメンバーが必ずあるとはほとんど言わない。だから答えのメンバーを `T?` にしろとは言わない（無ければ、走らせたときに答えの検査が断る）。SQS の `sendMessage` の `MessageBody` には、レコードや `json` を渡せる（Step Functions も dandori が書く実装も、JSON の文字列にして送る）。コールバックのタスクの答えは、コールバックが持ってくるものなので、操作の答えとは比べない。
+- protobuf：答えの JSON の名前は、フィールドの名前を lowerCamelCase にしたもの（`json_name` があればそれ）なので、タスクの答えのレコードもその名前で書く（別の名前なら、JSON の名前を示して E016）。送るときは、フィールドの名前でも JSON の名前でもよい（protobuf の JSON を読む側はどちらも読む）。64 ビットの整数は JSON では文字列で来るので `string` で、小数は dandori に型が無いので `json` で読む。ストリームのメソッドは呼べない。
+- 読むのは、タスクの型がたどるところだけで、記述の全体を型にはしない。8 MB ある Stripe の記述でも、見るところだけの手間で済む。
+
+**protobuf の JSON が省く既定値。** proto3 のフィールドのうち、値があるかどうかを持たないもの（`optional` でも、メッセージでも、`oneof` の一つでもないもの）は、既定値（空の文字列、0、false、列挙の最初の値、空のリストとマップ）のとき JSON から省かれる。protobuf で読む側は、省かれたフィールドを既定値として読む。dandori も同じに読む。`connect` のタスクの答えは、省かれた（または null の）フィールドを既定値で埋めてから型を確かめる。答えの中のメッセージと、メッセージのリストの中でも埋める。埋める表は `.proto` から作って生成するコードに書き込み、Step Functions では答えを読む JSONata の式で、ほかでは `io.fill` で埋める。値があるかを持つフィールドは埋めない（タスクの答えでは `T?` にする）。列挙の最初の値（慣わしでは `…_UNSPECIFIED`）は、タスクの列挙に無くてもよい。そのときは、その値の答えを答えの検査が `Dandori.BadResponse` で断る。
+
+**Connect の呼び出し。** POST で `<url>/<パッケージ>.<サービス>/<メソッド>` に、JSON の本文とヘッダ `Connect-Protocol-Version: 1` を送る。Step Functions の HTTP Task も、dandori が書く実装も同じものを送る（5 章で比べる）。`key` は、ほかの HTTP のタスクと同じく `Idempotency-Key` ヘッダで送る。
+
 ## 2. 案件とステートマシン
 
 ### 2.1 案件の状態を追う
@@ -368,7 +414,7 @@ on cancel
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則を rulec で読めなかった |
 | E006 | 二度の宣言 |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び方と `image`、ステータスの付け忘れ、同じステータスの二つのエラー、呼び方の重なり、`aws` の `key` の引数、`callback` にできない呼び方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない答え・知らない提供元・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び方・`retry`・`key`・案件を始めることなど） |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び方の重なり、`aws` の `key` の引数、`callback` にできない呼び方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない答え・知らない提供元・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び方・`retry`・`key`・案件を始めることなど） |
 | E008 | 案件の宣言や、案件に何をするかの誤り |
 | E009 | 文の置き場所の誤り（`yield`、並列の回の中の `break`・`succeed`・案件の呼び出し・出来事の待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` に行き先の無い値がある |
@@ -377,6 +423,7 @@ on cancel
 | E013 | 始まっていない案件にタスクを呼んだ、始まった案件をもう一度始めた |
 | E014 | 範囲のあるところ（規則の入力、タスクの引数、書き出したレコードのフィールド、出力）に、範囲を外れることのある値を渡した |
 | E015 | ほかの `.flow` を走らせるタスクが、子と合わない（引数と入力、答えと出力、宣言したエラーと子の `fail`。子を読めない、子が検査を通らない、自分を走らせるフローも） |
+| E016 | タスクが API の記述と合わない（無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、答えが省くフィールドを `T?` にしていない、答えないステータス、無い例外、冪等トークンでない `key`、ストリームのメソッド。記述を読めない、`.proto` に `url` が無いときも） |
 | E020 | 終わりでない状態の案件を残して終わる（`on cancel` が終わってキャンセルで終わるときも） |
 | E021 | どの状態でも断られる出来事を送った |
 | E022 | 断られることがある出来事の断りを受けていない |
@@ -532,7 +579,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 ## 5. 確かめ方
 
 - **参照インタプリタ**（`dandori run`）：シナリオ（入力と、呼び出しが受け取る答えの並び）に沿って型を付けた構文木を実行し、呼び出しを出力先から見える形（Lambda の関数と payload、HTTP のメソッドと URL とヘッダと本文、AWS の API と引数、エージェントの名前・提供元・モデル・指示・引数・Schema（Step Functions では Responses API か Messages API への HTTP の要求）、入れ子の実行・子ワークフロー・invoke の先と入力、Temporal のアクティビティと引数、durable functions の step と引数・コールバックの submit）で書き出す。並列の回は、リストの順に一つずつ回す。
-- **シナリオの自動生成**（`dandori scenarios`）：選んだ答えの記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。答えの検査に落ちる答え（型の合わない答え、ありえない状態、範囲の外の数を持つ答え）も入れる。Claude のエージェントの答えには、列挙の値の大文字と小文字を変えた答え（どのリストにも項目が二つあり、無いことがある値もある形）も入れる。`on cancel` のあるワークフローでは、`on cancel` の外のどの呼び出しにも、答えの代わりにキャンセル（`{"cancel": true}`）を選べる。並列の回の一つが失敗したあとに別の回でキャンセルが届く実行も、別のところとして数える。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。無いことがある値は `match` が読むときに、無い場合とある場合を選ぶ。二回以上回ったループと、一回だけのループを別のところとして数えるので、二つの回が済んでその先の終わりまで行く実行も残る。答えと入力の文字列と数は、一つの実行の中でどれも違う値にする（`id-5`、`id-6`、`1003` など）。同じ値ばかりだと、出力先が二つの答えや並列の回の結果を取り違えても、突き合わせに出ない。範囲のある数は範囲の中から選ぶ（範囲が狭ければ、同じ数になることもある）。
+- **シナリオの自動生成**（`dandori scenarios`）：選んだ答えの記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。答えの検査に落ちる答え（型の合わない答え、ありえない状態、範囲の外の数を持つ答え）も入れる。Connect の答えには、既定値のフィールドを省いた答え（答えの中、中のメッセージ、メッセージのリストのどこでも）も入れ、どの出力先も既定値を埋めて読むことを確かめる。Claude のエージェントの答えには、列挙の値の大文字と小文字を変えた答え（どのリストにも項目が二つあり、無いことがある値もある形）も入れる。`on cancel` のあるワークフローでは、`on cancel` の外のどの呼び出しにも、答えの代わりにキャンセル（`{"cancel": true}`）を選べる。並列の回の一つが失敗したあとに別の回でキャンセルが届く実行も、別のところとして数える。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。無いことがある値は `match` が読むときに、無い場合とある場合を選ぶ。二回以上回ったループと、一回だけのループを別のところとして数えるので、二つの回が済んでその先の終わりまで行く実行も残る。答えと入力の文字列と数は、一つの実行の中でどれも違う値にする（`id-5`、`id-6`、`1003` など）。同じ値ばかりだと、出力先が二つの答えや並列の回の結果を取り違えても、突き合わせに出ない。範囲のある数は範囲の中から選ぶ（範囲が狭ければ、同じ数になることもある）。
 - **Step Functions の突き合わせ**：生成した ASL を `tools/asl-run.mjs` が JSONata 2.0.6 で実行し、参照インタプリタと同じ形で書き出す。Map の回は一つずつ回し、回の中で外の変数に値を入れたら失敗させる（Step Functions の規則）。全シナリオで一致を見る。定義は asl-validator 4.0.0 にも通す。呼び方を持たないタスクのあるワークフロー（Temporal と durable functions 向けのもの）は、E050 を表示して外す。
 - **Temporal の突き合わせ**：生成した TypeScript を `tools/temporal/run.mjs` が SDK 1.24.0 で、本物の Temporal サーバーの上で実行する。サーバーは、SDK のテスト用のパッケージが立てる Temporal CLI の dev server（1.9.1、Server 1.32.0）。
   - dandori が書くアクティビティは本物を走らせ、`Transport` だけを、送るものを書き出してシナリオどおりに答える代わり（`tools/transport.mjs`）に差し替える。だから Step Functions が送るものと一字ずつ比べられる。利用者のタスク、規則、子ワークフローは、シナリオどおりに答える代わりを置く（子ワークフローは、答えをアクティビティに聞く小さなワークフロー）。
@@ -576,23 +623,24 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 
 ### 5.1 走らせた（2026-09-26）
 
-- 例は五つで、それぞれ AWS 向け・Temporal 向け・pydantic-graph 向けの三通り（5 章）。ホテルの予約（Stripe の PaymentIntent）、倉庫の注文の出荷（rulec の規則 `order_state`）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、HTTP・SNS・SQS のコールバック・子ワークフロー。子は dandori で書いた `arrange_delivery.flow` で、Temporal 向けの版は、子が翌日便の車を取れなかったとき（子の `fail NoVan`）に通常便で頼み直す）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値・範囲のある数を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直し、列挙の値を大文字と小文字を変えて答える Claude のエージェントを通り、`tests/flows/timeouts.flow` が、期限切れを受ける呼び出し、期限切れだけをやり直す呼び出し、`timeout` を書かないタスクの期限切れを通り、`tests/flows/local_rules.flow` が、`local` の規則（期限切れを受けてタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認の出来事とその断りと期限切れ、一番外のループの回ごとに待つ、案件の状態を知らせる配達の出来事）を通る（Temporal だけ）。
-- シナリオは 50 本・38 本・19 本・13 本・10 本と、引当と発送の子の 9 本、edges の 12 本、agents の 17 本、timeouts の 7 本、local_rules の 12 本、events の 12 本。Step Functions では、審査と events を除く 177 本すべてが参照インタプリタと一致した。Temporal では、dev server の上で、`on cancel` を持つ cancel の 32 本、events の 12 本、例の Temporal 向けの版の 160 本（ホテルの予約と倉庫の出荷は、`on cancel` のキャンセルのシナリオを加えて 62 本と 49 本、引当と発送は子の `NoVan` を受けるところを加えて 26 本）を加えた 391 本すべてが一致した（アクティビティのタイムアウトはサーバーが期限切れにし、コールバックのタイムアウトは答えを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 391 本すべてが一致した。どちらの言語でも、このうち 33 本（倉庫の出荷の 11 本と、その Temporal 向けの版の 13 本、引当と発送とその Temporal 向けの版の 1 本ずつ、edges と local_rules の 2 本ずつ、events の 3 本）が一番外のループの回で新しい実行に続き、続きの実行は合わせて 50 本だった（倉庫の出荷の 7 本と、その Temporal 向けの版の 8 本と、events の 2 本は、三つの実行にまたがる）。Lambda durable functions では、タイムアウトを含む 17 本を除く 170 本すべてが一致した。pydantic-graph では、タスクのタイムアウトを含む 5 本を除く 312 本（例の pydantic-graph 向けの版の 130 本を含む）すべてが一致した。agents の 17 本のうち 2 本は、Claude のエージェントが列挙の値の大文字と小文字を変えて答える（どちらも `Normal` と、`urgent` と `Low` のリスト）。どの出力先も、それを宣言した値として読んだ。
-- Argo Workflows（v4.1.4、kind の上）では、タスクのタイムアウトを含む 5 本を除く 182 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（十本）も一致した。コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こした。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 115 個（177 個）、審査が 74 個（136 個）、timeouts が 49 個（87 個）、local_rules が 117 個（272 個）、引当と発送の子が 44 個（76 個）で、どれも見積もりの中に収まった。テスト全体は 2 分前後で終わる（118〜142 秒。範囲を足したあとの二回は 126 秒と 136 秒、子の `.flow` を足したあとは 108〜138 秒。例の版を足す前は 96〜128 秒だった。Argo だけで 76〜88 秒、Temporal の突き合わせは TypeScript が 24 秒、Python が 17 秒、言語をまたぐアクティビティが 15 秒、durable functions が 16 秒。kind のノードは、何も走らせていなくても CPU を 3 割ほど使っていて、Argo の時間はそれに左右される）。
+- 例は五つで、それぞれ AWS 向け・Temporal 向け・pydantic-graph 向けの三通り（5 章）。ホテルの予約（Stripe の PaymentIntent。Stripe の OpenAPI の記述に合わせる）、倉庫の注文の出荷（rulec の規則 `order_state`）、注文の引当と発送（リスト、並列の回、無いことがある値、`json`、Connect で呼ぶ倉庫、Smithy のモデルに合わせた SNS と SQS、SQS のコールバック、子ワークフロー。子は dandori で書いた `arrange_delivery.flow` で、Temporal 向けの版は、子が翌日便の車を取れなかったとき（子の `fail NoVan`）に通常便で頼み直す）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、`queue` と利用者のコールバック。Temporal、durable functions、Argo（`image`）向け）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・無いことがある値・範囲のある数を持つエージェントの答え、答えを読まないエージェントの呼び出し、並列の回の中のエージェントとそのやり直し、列挙の値を大文字と小文字を変えて答える Claude のエージェントを通り、`tests/flows/timeouts.flow` が、期限切れを受ける呼び出し、期限切れだけをやり直す呼び出し、`timeout` を書かないタスクの期限切れを通り、`tests/flows/local_rules.flow` が、`local` の規則（期限切れを受けてタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認の出来事とその断りと期限切れ、一番外のループの回ごとに待つ、案件の状態を知らせる配達の出来事）を通る（Temporal だけ）。`tests/flows/connect.flow` は、Connect の答えが省く既定値（空の文字列、0、false、列挙の最初の値、空のリストとマップ、文字列の 64 ビットの整数）を、答えの中、中のメッセージ、メッセージのリストで埋めて読み、次の呼び出しに渡す。
+- シナリオは 50 本・38 本・20 本・13 本・10 本と、引当と発送の子の 9 本、connect の 7 本、edges の 12 本、agents の 17 本、timeouts の 7 本、local_rules の 12 本、events の 12 本。Step Functions では、審査と events を除く 185 本すべてが参照インタプリタと一致した。Temporal では、dev server の上で、`on cancel` を持つ cancel の 32 本、events の 12 本、例の Temporal 向けの版の 161 本（ホテルの予約と倉庫の出荷は、`on cancel` のキャンセルのシナリオを加えて 62 本と 49 本、引当と発送は子の `NoVan` を受けるところを加えて 27 本）を加えた 400 本すべてが一致した（アクティビティのタイムアウトはサーバーが期限切れにし、コールバックのタイムアウトは答えを送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 400 本すべてが一致した。どちらの言語でも、このうち 33 本（倉庫の出荷の 11 本と、その Temporal 向けの版の 13 本、引当と発送とその Temporal 向けの版の 1 本ずつ、edges と local_rules の 2 本ずつ、events の 3 本）が一番外のループの回で新しい実行に続き、続きの実行は合わせて 50 本だった（倉庫の出荷の 7 本と、その Temporal 向けの版の 8 本と、events の 2 本は、三つの実行にまたがる）。Lambda durable functions では、タイムアウトを含む 17 本を除く 178 本すべてが一致した。pydantic-graph では、タスクのタイムアウトを含む 5 本を除く 321 本（例の pydantic-graph 向けの版の 131 本を含む）すべてが一致した。agents の 17 本のうち 2 本は、Claude のエージェントが列挙の値の大文字と小文字を変えて答える（どちらも `Normal` と、`urgent` と `Low` のリスト）。どの出力先も、それを宣言した値として読んだ。
+- Argo Workflows（v4.1.4、kind の上）では、タスクのタイムアウトを含む 5 本を除く 190 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（十一本）も一致した。コールバックのタイムアウトは、待ちの出力に期限切れのときの値を入れて起こした。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 115 個（177 個）、審査が 74 個（136 個）、timeouts が 49 個（87 個）、local_rules が 117 個（272 個）、引当と発送の子が 44 個（76 個）で、どれも見積もりの中に収まった。テスト全体は 2 分前後で終わる（118〜142 秒。範囲を足したあとの二回は 126 秒と 136 秒、子の `.flow` を足したあとは 108〜138 秒、API の記述を足したあとは 175 秒。例の版を足す前は 96〜128 秒だった。Argo だけで 76〜88 秒、Temporal の突き合わせは TypeScript が 24 秒、Python が 17 秒、言語をまたぐアクティビティが 15 秒、durable functions が 16 秒。kind のノードは、何も走らせていなくても CPU を 3 割ほど使っていて、Argo の時間はそれに左右される）。
 - 同じ日の昼、Argo の突き合わせがときどき食い違った。呼び出しは参照と同じで、終わり方だけが違い、その回の Pod が init の失敗（Error）や `Unknown (exit code 255)` で終わっていた。kind のノードの中の containerd（2.1.1）が SEGV で落ちては立ち上がり直していて、落ちた時刻が食い違いと重なった。落ちたときに動いていたコンテナは、どれもこう終わる。生成したワークフローは、その Pod の失敗を `failure` として正しく扱っていた。そこでランナーは、プラットフォームが動かせなかった Pod のある回を、名前を変えて二度まで走らせ直し、そのことを出力するようにした。いまはこれが本物の Pod の回にだけかかわる（次の項）。クラスタを kind 0.33.0 のノード（Kubernetes 1.37.0、containerd 2.3.4）で作り直してからは、containerd は一度も落ちていない。テスト全体を通したときも、ホテルの予約の 49 本すべてを本物の Pod で同時に走らせたとき（375 秒）も SEGV は無く、本物の Pod の 49 本は演じた回と一本残らず一致した。
 - 生成器にわざと誤りを入れると（ASL の冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とす、durable functions の冪等キーの呼び出しの場所をずらす）、どれも一本目のシナリオで食い違いとして出た（2026-09-25）。Argo の生成器でも、冪等キーの区切りを一文字変える、`match` の条件から値を一つ落とすと、どちらもホテルの予約の一本目で食い違いとして出た。Temporal の Python 版と pydantic-graph では、冪等キーの区切りを一文字変えると注文の引当と発送の四本目で、`match` の条件から値を一つ落とすとホテルの予約の一本目で出た（2026-09-26）。エージェントでも、ASL で答えを読まない呼び出しの `Output` を落とすと agents の二本目で、ASL で入力の引数の順を逆にすると問い合わせの一本目で、TypeScript で答えから `answer` を取り出さないと Temporal の問い合わせの一本目で、Python で別のタスクの Schema を渡すと pydantic-graph の問い合わせの一本目で、既定の `Transport` で Agents SDK に空の設定を渡さないと Agents SDK の確かめの一件目で、それぞれ食い違いとして出た（同日）。Claude のエージェントでは、答えの列挙の値を直す式を ASL から落とすと agents の七本目で、TypeScript の `io.fold` を呼ばないと Temporal の agents の七本目で、Python の `io.fold` で大文字と小文字を区別すると Temporal の Python 版の agents の七本目で、既定の `Transport` が送る `max_tokens` を一つ変えると確かめの四件目で、OpenAI のクライアントのやり直しを切らないと確かめの三件目で、それぞれ食い違いとして出た（同日）。
 - 範囲（1.3）：シナリオには、範囲の外の数を持つ答えも入る（ホテルの予約では、与信額の規則が 11,999 円と答える 4 本目）。どの出力先も、それを `Dandori.BadResponse` で断り、参照インタプリタと一致した。生成器の範囲の比べをわざと落とすと、JSONata では、その答えを通して次の呼び出し（答えの用意されていない `create_intent`）に進み、TypeScript（Temporal）、Python（Temporal と pydantic-graph）、Argo の式では、終わり方の食い違いとして、どれもホテルの予約の 4 本目で出た（2026-09-26）。エージェントの答えの Schema の範囲（OpenAI の `minimum` と `maximum`、Claude の説明）は、既定の `Transport` の確かめで、Agents SDK からも Anthropic の SDK からも、Step Functions と同じ形で送られた。
+- API の記述（1.10）：ホテルの予約の三つの版は、Stripe の OpenAPI の記述（spec3.json、API の版 2026-09-30.endive）の PaymentIntent の五つの操作に、引当と発送は SNS と SQS の Smithy のモデルと倉庫の `.proto` に合い、`tests/fixtures/apis.flow` の食い違い（受け取らない引数、要る引数の不足、受け取らない列挙の値、答えうる値を持たない列挙、整数を `timestamp` で読む、null のことがあるフィールド、無い操作、無い例外、冪等トークンでない `key`、64 ビットの整数と小数、JSON の名前の違い、ストリームのメソッド）はどれも E016 になった。生成器から既定値の埋め方をわざと落とすと、TypeScript（Temporal）、Python（Temporal）、JSONata のどれでも、connect の 6 本目（既定値を省いた答え）で食い違いとして出た（2026-09-26）。JSONata の埋め方は、はじめ答えの null の項目を消していて、ほかの言語（null を残し、既定値のあるものだけ埋める）と違ったので、そろえた。
 - 子の `.flow`（1.9）：`tests/children` の受付と査定は、TypeScript どうし、Python どうし、TypeScript の親と Python の子、その逆の四通りのどれでも、三本（個人・法人・団体の申込）すべてが参照インタプリタと一致した。法人の申込では、子の `fail 要確認` が、親の宣言したエラーとして `on 要確認` に届き、団体の申込では、親が宣言していない `対象外` が `failure` として届いた。親が子ワークフローの失敗から子の `fail` の名前を読むところを、TypeScript と Python で一つずつ落とすと、どちらも同じ言語どうしの二本目（法人）で食い違いとして出た（2026-09-26）。子の `arrange_delivery.flow` を例に足したあと、Argo の突き合わせが一度、子の本物の Pod の回で `failed to resolve {{workflow.labels.dandori-parent}}` と食い違った。Argo のテストはすべてのフローを一つのクラスタで同時に走らせる。引当と発送のランナーが子の代わりに置く WorkflowTemplate と、子のフロー自身の WorkflowTemplate が同じ名前（`arrange-delivery`）で、先に置いたほうを上書きしていた。ランナーは子の代わりに自分の名前を付け、親のテンプレートの参照もそれに書き換えるようにした（生成したテンプレートは変えていない）。
 - `on cancel` を持つ `tests/flows/cancel.flow` の 32 本（うち 13 本でキャンセルが届く）は、Temporal の TypeScript と Python の dev server の上で、すべて参照インタプリタと一致した（2026-09-26）。生成器にわざと誤りを入れると、`dd.attempt` がキャンセルをタスクのエラーに直すと九本目で、`on cancel` を `CancellationScope.nonCancellable` の外で走らせると十一本目で、Python の `dd.attempt` がキャンセルをタスクのエラーに直すと九本目で、`dd.rounds` がキャンセルより前の回の失敗を先に投げると 23 本目で、食い違いとして出た。最後の誤りは、はじめ捕まらなかった。回が失敗したあとに別の回でキャンセルが届く実行がシナリオに無かったので、それを別のところとして数えるようにした。
 - `event` の生成にわざと誤りを入れると、validator が待っていない出来事も受け取るようにした TypeScript と Python は、ランナーが送ったほかの出来事を受け取ったことで止まった。Python で出来事の待ちの期限切れを答えなしとして通すと events の一本目で、TypeScript で出来事が送ってきたエラーを値として読むと events の二本目で、食い違いとして出た（2026-09-26）。ランナーを作る途中では、出来事の待ちを写しで 10 ms に縮めていてランナーが送る前に期限が来たこと、同じ名前の出来事を次の回ですぐに待つので「待ちが終わるまで待つ」ランナーが止まったこと、送った出来事の答えを書き留める前に次のアクティビティがその答えを取ったことを、順に直した。
 - Continue-As-New の生成にわざと誤りを入れると、TypeScript と Python のどちらでも、続きの実行が回を 0 から数え直すと倉庫の出荷の 15 本目で、ループより前の文を飛ばさないと同じ 15 本目で、変数を受け取らないと一本目で、クエリが答える案件の状態が参照と違うこととして出た。`yield` した値を渡さないと、edges の 10 本目で呼び出しの食い違いとして出た。続ける回を一つずらすと、残した倉庫の出荷の履歴の二つ目の実行が、再生で非決定的と言われた（2026-09-26）。
-- Temporal の突き合わせは、生成した `worker` と `client` を通しても、TypeScript と Python の両方で 391 本すべてが一致し、どの実行でも、終わりのクエリ `dandori.status` と search attribute `DandoriCases` が参照インタプリタの案件の状態と同じだった。コールバックへの二度目の答えと、待っていない ID への答えは、Update がすべて断った（2026-09-26）。
-- 既定の `Transport` では、シナリオの呼び出しのうち 442 件（HTTP が 394 件で、うち 142 件はエラーのステータス、Lambda が 45 件で、うち 18 件は関数のエラー、SNS と SQS が 3 件。例の三通りの版のものを含む）を、TypeScript と Python の両方から手元の代わりに送り、すべて呼び出しのとおりに届き、差し替えの `Transport` と同じものが返った（2026-09-26）。はじめ、Python の既定の実装が三か所で食い違った。
+- Temporal の突き合わせは、生成した `worker` と `client` を通しても、TypeScript と Python の両方で 400 本すべてが一致し、どの実行でも、終わりのクエリ `dandori.status` と search attribute `DandoriCases` が参照インタプリタの案件の状態と同じだった。コールバックへの二度目の答えと、待っていない ID への答えは、Update がすべて断った（2026-09-26）。
+- 既定の `Transport` では、シナリオの呼び出しのうち 456 件（HTTP が 408 件で、うち 146 件はエラーのステータス、Connect の呼び出しは 50 件でうち 17 件がエラー、Lambda が 45 件で、うち 18 件は関数のエラー、SNS と SQS が 3 件。例の三通りの版のものを含む）を、TypeScript と Python の両方から手元の代わりに送り、すべて呼び出しのとおりに届き、差し替えの `Transport` と同じものが返った（2026-09-26）。はじめ、Python の既定の実装が三か所で食い違った。
   - AWS のエラーを、線の上の符号（`NotFound`、`AWS.SimpleQueueService.NonExistentQueue`）で返していた。TypeScript の SDK と、タスクが宣言する名前は、API のモデルの名前（`NotFoundException`、`QueueDoesNotExist`）である。boto3 が投げる例外のクラスの名前がモデルの名前なので、それを返すようにした。
   - URL のパスに ASCII でない文字があると（例を英語にする前の倉庫の出荷の `/v1/orders/注文ID-1`。いまは `tests/flows/timeouts.flow` の `/v1/items/品番-2/check` で確かめる）、urllib が `UnicodeEncodeError` で送れなかった。fetch と同じく、UTF-8 でパーセントエンコードしてから送るようにした。
   - JSON の本文（HTTP の本文、Lambda の payload、SQS のメッセージ）を、`json.dumps` の既定のまま、空白を入れ、日本語を `\u` でエスケープして書いていた。値は同じだが、TypeScript と Step Functions の書き方（空白なし、文字はそのまま）にそろえた。
-- 言語をまたぐアクティビティでは、TypeScript のワークフローと Python のアクティビティ、Python のワークフローと TypeScript のアクティビティの両方で、`local` の規則や `event` を持つフローを除く 243 本（例の Temporal 向けの版の引当と発送と審査を含む）すべてが参照インタプリタと一致した（コールバックの答え、キャンセル、タイムアウト、エージェントの呼び出しも、もう一方の言語を通った）。Python のアクティビティの名前に一字足すと、TypeScript のワークフローの側だけが食い違いとして出た（2026-09-26）。
-- Temporal の再生は、TypeScript と Python の両方で、391 本すべて（続きの実行も）が同じコードで再生でき、`tests/histories` の十四の履歴も再生できた。Worker Deployment Versioning では、A で始まった実行が B を current にしたあとも、新しい実行で始まった二回目の回まで A のコードで終わり、B で始めた実行は B のコードで走った（TypeScript と Python。ビルド ID は、TypeScript が `dandori-c98507328717f2f4` と `dandori-5fe7c15ba38debcf`）。生成するワーカーの既定の振る舞いを PINNED から AUTO_UPGRADE にすると、どちらの言語でも A の実行が B のコードで終わり、食い違いとして出た（2026-09-26）。
+- 言語をまたぐアクティビティでは、TypeScript のワークフローと Python のアクティビティ、Python のワークフローと TypeScript のアクティビティの両方で、`local` の規則や `event` を持つフローを除く 252 本（例の Temporal 向けの版の引当と発送と審査を含む）すべてが参照インタプリタと一致した（コールバックの答え、キャンセル、タイムアウト、エージェントの呼び出しも、もう一方の言語を通った）。Python のアクティビティの名前に一字足すと、TypeScript のワークフローの側だけが食い違いとして出た（2026-09-26）。
+- Temporal の再生は、TypeScript と Python の両方で、400 本すべて（続きの実行も）が同じコードで再生でき、`tests/histories` の十四の履歴も再生できた。Worker Deployment Versioning では、A で始まった実行が B を current にしたあとも、新しい実行で始まった二回目の回まで A のコードで終わり、B で始めた実行は B のコードで走った（TypeScript と Python。ビルド ID は、TypeScript が `dandori-c98507328717f2f4` と `dandori-5fe7c15ba38debcf`）。生成するワーカーの既定の振る舞いを PINNED から AUTO_UPGRADE にすると、どちらの言語でも A の実行が B のコードで終わり、食い違いとして出た（2026-09-26）。
 - TypeScript の実行の履歴を Python のコードで再生すると、cancel の 32 本のうち 27 本が再生でき、Python の履歴を TypeScript で再生すると 31 本が再生できた。再生できなかったのは、キャンセルやタイムアウトやコールバックの待ちを通る実行で、タイマーとアクティビティの順か番号が二つの言語で違っていた。同じ言語の中では決定的なので、どちらかの言語のワーカーだけで一つのワークフローを持つかぎり問題は無い。二つの言語のワーカーを同じキューに混ぜると、こうした実行で止まる。
 - 生成した TypeScript を `tsc --strict` に通すと、走らせても出なかった誤りが三つ見つかった。出力を持つフローの `run` の終わりの `return null`（出力の型に合わない。検査がそこへ来ないと言うので、失敗を投げるようにした）、値を入れる前は null で宣言している変数の読み（`!` を付けた）、rulec の TypeScript の単位の付いた数（ブランドの付いた bigint で、`BigInt(…)` をそのまま渡せない。rulec 自身のランナーと同じく `as` で型を付けた）。直したあとは、25 のビルドすべてが通る。
 - 並列の回の結果の並びを逆にする誤りは、はじめ、どの出力先の突き合わせにも出なかった。シナリオの答えの値がどの呼び出しでも同じで、二回以上回ってその先まで行く実行も残っていなかったからである。値を一つずつ変え、二回以上回ったループを別に数えるようにすると、edges の十二本目で出た。この変更で、TypeScript の Temporal のランナーが、コールバックの答えのシグナルを、テスト環境が待ちの時間を飛ばしたあとに送ることがあると分かった。生成器ではなくランナーの競争だったので、ランナーを直した（5 章）。
@@ -648,7 +696,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 ## 7. まだやっていないこと
 
 - 別々の本体を同時に走らせる Parallel。案件を二つの枝から同時に動かすことは、並行の問題になるので断る予定。
-- AWS が公開している Smithy の API モデルからの、`aws` のタスクの型の取り込み（いまは利用者が書く）。
+- API の記述（1.10）の、まだ読まないところ。OpenAPI の YAML と、記述の外を指す `$ref`、文字列の長さや `pattern`（Smithy の `@length` や `@pattern` も）、Stripe の `expand` で展開を頼んだときの答え、protobuf のバイナリの符号化と、Connect の GET とストリーム、Connect のエラーの `details`。記述から型を作ること（いまはタスクの型を書き、記述に合わせる）。
 - 入れ子の実行が宣言したエラーを、Step Functions で見分けること（AWS の上で Cause の形を確かめてから）。
 - ワークフローが自分で持つ案件（rulec の生成した関数を呼んで次の状態を得る形）。
 - 規則の前提（rulec の `preconditions`）を、判断に渡す値を作ったタスクの直後で確かめること。

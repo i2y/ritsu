@@ -14,6 +14,8 @@ const TYPE_HINT_JA: &str = "型は int・string・bool・timestamp・json・mone
 
 pub struct Lowerer<'a> {
     prog: &'a Program,
+    /// the descriptions of the APIs the tasks call, by the name `use` gives them
+    apis: BTreeMap<String, (crate::apis::ApiKind, crate::apis::Api)>,
     /// the directory of the `.flow`, which the paths of rules and child flows start from
     dir: std::path::PathBuf,
     pub diags: Vec<Diag>,
@@ -50,6 +52,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     };
     let mut lw = Lowerer {
         prog,
+        apis: BTreeMap::new(),
         dir: file.parent().unwrap_or(Path::new(".")).to_path_buf(),
         diags: vec![],
         m: Model {
@@ -88,6 +91,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     };
     let base = file.parent().unwrap_or(Path::new("."));
     lw.rules(base);
+    lw.apis(base);
     lw.local_types();
     lw.io();
     lw.tasks();
@@ -129,6 +133,47 @@ impl<'a> Lowerer<'a> {
 
     // -----------------------------------------------------------------------
     // Declarations
+
+    /// Read the descriptions of the APIs (E016 when one cannot be read).
+    fn apis(&mut self, base: &Path) {
+        for u in &self.prog.apis {
+            let (name, sp) = &u.name;
+            if self.apis.contains_key(name) {
+                self.push(e("E006", *sp, format!("the API `{name}` is used twice"), format!("API `{name}` が二度読み込まれています")));
+                continue;
+            }
+            match crate::apis::load(u.kind, &base.join(&u.path)) {
+                Ok(doc) => {
+                    if u.kind == crate::apis::ApiKind::Proto && u.url.is_none() {
+                        self.push(e(
+                            "E016",
+                            *sp,
+                            format!("a `.proto` does not say where the service is; write `url \"<where it is>\"` under `use proto {name}`"),
+                            format!("`.proto` はサービスの場所を言いません。`use proto {name}` の下に `url \"<場所>\"` を書いてください"),
+                        ));
+                    }
+                    self.apis.insert(name.clone(), (u.kind, crate::apis::Api { name: name.clone(), doc, url: u.url.clone() }));
+                }
+                Err(msg) => self.push(e("E016", *sp, format!("could not read the API `{}`", u.path), format!("API `{}` を読めませんでした", u.path)).note(msg.clone(), msg)),
+            }
+        }
+    }
+
+    /// The API a binding names, which must be of `kind`.
+    fn api(&mut self, (name, sp): &syntax::Name, kind: crate::apis::ApiKind, what_en: &str, what_ja: &str) -> Option<crate::apis::Api> {
+        match self.apis.get(name) {
+            Some((k, a)) if *k == kind => Some(a.clone()),
+            Some((k, _)) => {
+                let k = k.word();
+                self.push(e("E016", *sp, format!("`{name}` is described by `use {k}`, and {what_en}"), format!("`{name}` は `use {k}` で読んだものですが、{what_ja}")));
+                None
+            }
+            None => {
+                self.push(e("E002", *sp, format!("there is no API `{name}`; name one read by `use {}`", kind.word()), format!("API `{name}` はありません。`use {}` で読んだものを書きます", kind.word())));
+                None
+            }
+        }
+    }
 
     fn rules(&mut self, base: &Path) {
         for u in &self.prog.uses {
@@ -392,9 +437,57 @@ impl<'a> Lowerer<'a> {
                 None => None,
             };
             let result_range = result.as_ref().and_then(|r| self.range(r, t.result_range.as_ref()));
+            // an operation of an API's description: its URL and body come from there
+            let mut described: Option<(crate::apis::Api, syntax::Binding)> = None;
+            let mut connect = None;
+            let mut spec_url = None;
+            match &t.binding {
+                Some((b @ syntax::Binding::Http { method, url, form, api: Some(a) }, bsp)) => {
+                    if let Some(api) = self.api(a, crate::apis::ApiKind::OpenApi, "`http` calls an operation of an OpenAPI document (`use openapi`)", "`http` で呼べるのは OpenAPI の記述（`use openapi`）の操作です") {
+                        match crate::apis::openapi_op(&api, method, url) {
+                            Ok(op) => {
+                                if *form {
+                                    self.push(e("E007", *bsp, "the OpenAPI document says how the body is written; leave out `form`", "本文の書き方は OpenAPI の記述が言うので、`form` は外してください"));
+                                }
+                                match api.base_url() {
+                                    Some(base) => spec_url = Some((format!("{base}{url}"), op.form)),
+                                    None => self.push(e("E016", *bsp, format!("`{}` names no server; write `url \"<where it is>\"` under `use openapi {}`", a.0, a.0), format!("`{}` はサーバーを言いません。`use openapi {}` の下に `url \"<場所>\"` を書いてください", a.0, a.0))),
+                                }
+                                described = Some((api.clone(), b.clone()));
+                            }
+                            Err((en, ja)) => self.push(e("E016", *bsp, en, ja)),
+                        }
+                    }
+                }
+                Some((b @ syntax::Binding::Connect { api: a, method }, bsp)) => {
+                    if let Some(api) = self.api(a, crate::apis::ApiKind::Proto, "`connect` calls a method of a `.proto` (`use proto`)", "`connect` で呼べるのは `.proto`（`use proto`）のメソッドです") {
+                        match crate::apis::proto_op(&api, method) {
+                            Ok(op) => {
+                                connect = op.zeros();
+                                if let (Some(base), Some(proc_)) = (api.url.as_deref(), &op.procedure) {
+                                    spec_url = Some((format!("{}/{proc_}", base.trim_end_matches('/')), false));
+                                }
+                                described = Some((api.clone(), b.clone()));
+                            }
+                            Err((en, ja)) => self.push(e("E016", *bsp, en, ja)),
+                        }
+                    }
+                }
+                Some((b @ syntax::Binding::Aws { service, .. }, _)) => {
+                    if let Some((crate::apis::ApiKind::Smithy, api)) = self.apis.get(service) {
+                        described = Some((api.clone(), b.clone()));
+                    }
+                }
+                _ => {}
+            }
             let binding = t.binding.as_ref().map(|(b, _)| match b {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
-                syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
+                syntax::Binding::Http { method, url, form, api: None } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
+                syntax::Binding::Http { method, url, api: Some(_), .. } => {
+                    let (url, form) = spec_url.clone().unwrap_or((url.clone(), false));
+                    Binding::Http { method: method.clone(), url, form }
+                }
+                syntax::Binding::Connect { .. } => Binding::Http { method: "POST".into(), url: spec_url.clone().map(|(u, _)| u).unwrap_or_default(), form: false },
                 syntax::Binding::Aws { service, action } => Binding::Aws { service: service.clone(), action: action.clone() },
                 syntax::Binding::Agent { provider, instructions } => Binding::Agent {
                     // an unknown provider is refused in `agent` below
@@ -448,7 +541,28 @@ impl<'a> Lowerer<'a> {
                     ));
                     continue;
                 }
-                match (&binding, er.status, &er.exception) {
+                // a Connect error is named by its code, and comes back with the code's HTTP status
+                let (status, exception) = if matches!(t.binding, Some((syntax::Binding::Connect { .. }, _))) {
+                    match (er.status, er.exception.as_deref().map(|c| (c, crate::apis::connect_status(c)))) {
+                        (None, Some((code, Some(st)))) => (Some(st), Some(code.to_string())),
+                        (None, Some((code, None))) => {
+                            self.push(e(
+                                "E007",
+                                *esp,
+                                format!("`{code}` is not a Connect error code; the codes are canceled, unknown, invalid_argument, deadline_exceeded, not_found, already_exists, permission_denied, resource_exhausted, failed_precondition, aborted, out_of_range, unimplemented, internal, unavailable, data_loss and unauthenticated"),
+                                format!("`{code}` は Connect のエラーコードではありません。コードは canceled・unknown・invalid_argument・deadline_exceeded・not_found・already_exists・permission_denied・resource_exhausted・failed_precondition・aborted・out_of_range・unimplemented・internal・unavailable・data_loss・unauthenticated です"),
+                            ));
+                            continue;
+                        }
+                        _ => {
+                            self.push(e("E007", *esp, format!("a Connect error is named by its code, as `{en} = not_found`"), format!("Connect のエラーは、`{en} = not_found` のようにコードで書きます")));
+                            continue;
+                        }
+                    }
+                } else {
+                    (er.status, er.exception.clone())
+                };
+                match (&binding, status, &exception) {
                     (Some(Binding::Http { .. }), None, _) => {
                         self.push(e("E007", *esp, format!("give `{en}` the HTTP status it comes back with, as `{en} = 402`"), format!("`{en}` が返ってくるときの HTTP ステータスを `{en} = 402` のように書きます")));
                     }
@@ -469,7 +583,7 @@ impl<'a> Lowerer<'a> {
                     // refused above
                     (Some(Binding::Agent { .. }), _, _) => {}
                 }
-                if let Some(st) = er.status {
+                if let Some(st) = status {
                     if let Some(other) = errors.iter().find(|x| x.status == Some(st)) {
                         let other = other.name.clone();
                         self.push(e(
@@ -481,7 +595,7 @@ impl<'a> Lowerer<'a> {
                         continue;
                     }
                 }
-                errors.push(ErrDef { name: en.clone(), status: er.status, exception: er.exception.clone() });
+                errors.push(ErrDef { name: en.clone(), status, exception });
             }
             if let Some((syntax::Binding::Http { url, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
                 for ph in placeholders(url) {
@@ -618,11 +732,40 @@ impl<'a> Lowerer<'a> {
                 callback: t.callback.is_some(),
                 event: t.event.is_some(),
                 flow,
+                connect,
                 line: sp.line,
             });
             let task = self.m.tasks.last().expect("just pushed");
             let held = task.flow.as_ref().map(|c| crate::contract::check(&self.m, task, &c.model)).unwrap_or_default();
             self.diags.extend(held);
+            // the operation of the API's description the task calls: what it takes, answers and fails with
+            if let Some((api, b)) = &described {
+                let op = match b {
+                    syntax::Binding::Http { method, url, .. } => crate::apis::openapi_op(api, method, url),
+                    syntax::Binding::Connect { method, .. } => crate::apis::proto_op(api, method),
+                    syntax::Binding::Aws { action, .. } => crate::apis::smithy_op(api, action),
+                    _ => unreachable!("an API's operation"),
+                };
+                let bsp = t.binding.as_ref().map(|(_, s)| *s).unwrap_or(*sp);
+                match op {
+                    Ok(op) => {
+                        let task = self.m.tasks.last().expect("just pushed");
+                        let path_params = match b {
+                            syntax::Binding::Http { url, .. } => placeholders(url),
+                            _ => vec![],
+                        };
+                        let found = op.check(&self.m, task, &path_params);
+                        for (en, ja) in found {
+                            self.push(e("E016", Span { line: sp.line, col: 1 }, en, ja));
+                        }
+                    }
+                    Err((en, ja)) => {
+                        if !matches!(b, syntax::Binding::Http { .. } | syntax::Binding::Connect { .. }) {
+                            self.push(e("E016", bsp, en, ja));
+                        }
+                    }
+                }
+            }
         }
     }
 

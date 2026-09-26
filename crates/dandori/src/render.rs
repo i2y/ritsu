@@ -81,6 +81,9 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             if form {
                 headers.insert("Content-Type".into(), json!("application/x-www-form-urlencoded"));
             }
+            if task.connect.is_some() {
+                headers.insert("Connect-Protocol-Version".into(), json!("1"));
+            }
             if let Some(k) = key {
                 headers.insert("Idempotency-Key".into(), json!(k));
             }
@@ -604,6 +607,18 @@ pub fn literal(e: &TExpr) -> Option<Value> {
         TExpr::List { items, .. } => items.iter().map(literal).collect::<Option<Vec<_>>>().map(Value::Array),
         TExpr::Var { .. } | TExpr::Interp(_) => None,
     }
+}
+
+/// A JSONata expression for `x` with the zero values filled in that protobuf's JSON leaves out
+/// (`apis::fill`): what a `connect` task's answer reads as.
+pub fn jsonata_fill(x: &str, zeros: &Value) -> String {
+    format!(
+        "($dd_fill := function($v, $z) {{ $type($v) = \"object\" ? ($d := $z.f ? $sift($z.f, function($x, $k) {{ $not($exists($lookup($v, $k))) or $lookup($v, $k) = null }}) : {{}}; $o := $merge([$v, $d ? $d : {{}}]); \
+$m := $z.m ? $merge($each($z.m, function($d, $k) {{ $type($lookup($o, $k)) = \"object\" ? {{ $k: $dd_fill($lookup($o, $k), $d) }} : {{}} }})) : {{}}; \
+$l := $z.l ? $merge($each($z.l, function($d, $k) {{ $type($lookup($o, $k)) = \"array\" ? {{ $k: [$map($lookup($o, $k), function($i) {{ $dd_fill($i, $d) }})] }} : {{}} }})) : {{}}; \
+$merge([$o, $m, $l])) : $v }}; $dd_fill({x}, {}))",
+        zeros
+    )
 }
 
 /// A JSONata test that `x` is a well-formed value of type `t`, and in `rg` when it is a number

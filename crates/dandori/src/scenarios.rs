@@ -690,6 +690,8 @@ impl<'a> Ex<'a> {
             Malformed,
             /// an answer with a number outside its range, in a case's state the call may lead to
             OutOfRange(Option<usize>),
+            /// a Connect answer whose fields are at their zero values, which its JSON leaves out
+            Zeros,
             /// a cancellation that comes while the call is out
             Cancelled,
         }
@@ -807,6 +809,13 @@ impl<'a> Ex<'a> {
                 ways.push(("out of range".into(), Way::OutOfRange(st)));
             }
         }
+        let zeros = match callee {
+            Callee::Task(t) => m.tasks[*t].connect.clone(),
+            Callee::Rule(_) => None,
+        };
+        if let (Some(_), Some(_), true, None) = (&zeros, first_ok, target.is_some(), case) {
+            ways.push(("zero values".into(), Way::Zeros));
+        }
         // a workflow that says what to do when it is cancelled can be cancelled at any call, but not in `on cancel`
         if self.m.on_cancel.is_some() && !self.in_on_cancel {
             ways.push(("cancelled".into(), Way::Cancelled));
@@ -849,8 +858,18 @@ impl<'a> Ex<'a> {
                 self.halt(false)
             }
             Way::Malformed => {
-                self.answers.push(json!({ "ok": {} }));
+                // protobuf reads {} as a message at its zero values, so a Connect answer that does not fit is a list
+                self.answers.push(json!({ "ok": if zeros.is_some() { json!([]) } else { json!({}) } }));
                 self.halt(false)
+            }
+            Way::Zeros => {
+                // every part there, lists with items, so that fields are left out at every depth
+                let z = zeros.as_ref().expect("a Connect task");
+                let v = self.full(result_ty.as_ref().expect("an answer to read"), "value", m.answer_range(callee));
+                let wire = crate::apis::sparse(&v, z);
+                self.answers.push(json!({ "ok": wire }));
+                self.assign(target, crate::apis::fill(&wire, z), None);
+                Ctl::Next
             }
             Way::OutOfRange(st) => {
                 let mut v = self.outside(result_ty.as_ref().expect("an answer with a range has a type"), m.answer_range(callee)).expect("a number with a range is there");

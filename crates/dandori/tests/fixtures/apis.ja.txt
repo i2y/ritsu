@@ -1,0 +1,38 @@
+エラー[E016]: tests/fixtures/apis.flow:8:11: `.proto` はサービスの場所を言いません。`use proto 場所の無い倉庫` の下に `url "<場所>"` を書いてください
+     8 | use proto 場所の無い倉庫 from "apis/warehouse.proto"
+エラー[E016]: tests/fixtures/apis.flow:37:1: 引数 `capture_method` は、`stripe` の POST /v1/payment_intents が受け取るものと合いません。`取り方` の `later` は、受け取る値（automatic・automatic_async・manual）にありません
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents は `amout` を受け取りません
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents の答えは `支払い` に合いません。`status` で、`canceled` のことがありますが、`状態` にその値はありません
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents の答えは `支払い` に合いません。`created` で、整数は `timestamp` ではありません
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+エラー[E016]: tests/fixtures/apis.flow:41:1: `stripe` の POST /v1/payment_intents には `currency` が要りますが、`金額だけで作る` はそれを渡しません
+    41 | task 金額だけで作る(amount: int) -> 請求
+エラー[E016]: tests/fixtures/apis.flow:41:1: `stripe` の POST /v1/payment_intents の答えは `請求` に合いません。`latest_charge` は null のことがあります。`string?` にしてください
+    41 | task 金額だけで作る(amount: int) -> 請求
+エラー[E016]: tests/fixtures/apis.flow:45:3: `stripe` に POST /v1/payment_intents/{intent}/refund はありません（あるのは /v1/payment_intents/{intent}・/v1/payment_intents/{intent}/confirm・/v1/payment_intents/{intent}/capture・/v1/payment_intents/{intent}/cancel）
+    45 |   http POST stripe "/v1/payment_intents/{intent}/refund"
+エラー[E016]: tests/fixtures/apis.flow:47:1: `sns` の Publish には `Message` が要りますが、引数は無いことがあります
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+エラー[E016]: tests/fixtures/apis.flow:47:1: `sns` の Publish は `Subjekt` を受け取りません
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+エラー[E016]: tests/fixtures/apis.flow:47:1: `sns` の Publish にエラー `NoSuchTopic` はありません（エラーは AuthorizationErrorException・EndpointDisabledException・InternalErrorException・InvalidParameterException・InvalidParameterValueException・InvalidSecurityException・KMSAccessDeniedException・KMSDisabledException・KMSInvalidStateException・KMSNotFoundException・KMSOptInRequired・KMSThrottlingException・NotFoundException・PlatformApplicationDisabledException・ValidationException）
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+エラー[E016]: tests/fixtures/apis.flow:47:1: `ClientToken` は `sns` の Publish の冪等トークンではありません。この操作は冪等トークンを受け取りません
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+エラー[E016]: tests/fixtures/apis.flow:52:1: 引数 `quantity` は、`倉庫` の StockService/Reserve が受け取るものと合いません。`string` は整数ではありません
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve の答えは `引当` に合いません。`id` は無いことがあります。`string?` にしてください
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve の答えは `引当` に合いません。`count` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve の答えは `引当` に合いません。`price` で、小数のことがあり、dandori にはその型がありません。`json` にしてください
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve の答えは `引当` に合いません。答えでは `reserved_at` は `reservedAt` という名前です
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+エラー[E007]: tests/fixtures/apis.flow:54:36: `gone` は Connect のエラーコードではありません。コードは canceled・unknown・invalid_argument・deadline_exceeded・not_found・already_exists・permission_denied・resource_exhausted・failed_precondition・aborted・out_of_range・unimplemented・internal・unavailable・data_loss・unauthenticated です
+    54 |   errors 忙しい = resource_exhausted, 無くなった = gone
+エラー[E016]: tests/fixtures/apis.flow:56:1: `倉庫` の StockService/Watch はストリームです。`connect` で呼べるのは、一つ受け取って一つ答えるメソッドです
+    56 | task 見張る(sku: string) -> 引当

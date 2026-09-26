@@ -4,6 +4,7 @@ description "When a stay is booked, hold an amount on the card, and capture it o
 use rule hold from "rules/hold_amount.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
 use rule payment_intent from "rules/payment_intent.rule"
+use openapi stripe from "specs/stripe.json"
 
 record Booking
   id        : string
@@ -25,22 +26,22 @@ outputs
   outcome : Outcome
 
 task create_intent(amount: money[JPY, incl_tax] range >=50 <=99999999, currency: string, payment_method: string, capture_method: payment_intent.capture_method) -> PaymentIntent
-  http POST "https://api.stripe.com/v1/payment_intents" form
+  http POST stripe "/v1/payment_intents"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   starts payment_intent.payment then attach
   key
   retry 2 times every 2 seconds
 
-task confirm_intent(id: string) -> PaymentIntent
-  http POST "https://api.stripe.com/v1/payment_intents/{id}/confirm" form
+task confirm_intent(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/confirm"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   sends confirm
   errors card_declined = 402, unexpected_state = 400
   refused as unexpected_state
   key
 
-task capture_intent(id: string) -> PaymentIntent
-  http POST "https://api.stripe.com/v1/payment_intents/{id}/capture" form
+task capture_intent(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/capture"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   sends capture
   errors unexpected_state = 400
@@ -48,16 +49,16 @@ task capture_intent(id: string) -> PaymentIntent
   key
   retry 2 times every 5 seconds
 
-task cancel_intent(id: string) -> PaymentIntent
-  http POST "https://api.stripe.com/v1/payment_intents/{id}/cancel" form
+task cancel_intent(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/cancel"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   sends cancel
   errors unexpected_state = 400
   refused as unexpected_state
   key
 
-task get_intent(id: string) -> PaymentIntent
-  http GET "https://api.stripe.com/v1/payment_intents/{id}"
+task get_intent(intent: string) -> PaymentIntent
+  http GET stripe "/v1/payment_intents/{intent}"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/stripe/0a1b2c3d"
   observes
   idempotent
@@ -82,28 +83,28 @@ flow
   match quote.handling
     review => succeed outcome = awaiting_review
     auto => pi <- create_intent(amount: quote.amount, currency: "jpy", payment_method: booking.card, capture_method: manual)
-  pi <- confirm_intent(id: pi.id)
-    on card_declined => pi <- get_intent(id: pi.id)
+  pi <- confirm_intent(intent: pi.id)
+    on card_declined => pi <- get_intent(intent: pi.id)
   match pi.status
     requires_action =>
       pi <- wait_for_customer(id: pi.id)
-        on timeout => pi <- get_intent(id: pi.id)
+        on timeout => pi <- get_intent(intent: pi.id)
     requires_capture, requires_payment_method, requires_confirmation, canceled => pass
   match pi.status
     requires_capture => wait until booking.check_out
     requires_payment_method, requires_confirmation, requires_action =>
-      pi <- cancel_intent(id: pi.id)
+      pi <- cancel_intent(intent: pi.id)
         on unexpected_state => pass
       fail CardDeclined "The card could not be held"
     canceled => fail PaymentCanceled "The PaymentIntent was canceled"
-  pi <- capture_intent(id: pi.id)
+  pi <- capture_intent(intent: pi.id)
     on unexpected_state => fail HoldExpired "The hold had expired by check-out"
   match pi.status
     succeeded => succeed outcome = stayed
     processing =>
       repeat at most 12 times
         wait 1 hour
-        pi <- get_intent(id: pi.id)
+        pi <- get_intent(intent: pi.id)
         match pi.status
           processing => pass
           succeeded, requires_payment_method => break
@@ -115,7 +116,7 @@ on failure
   match pi.status
     none, succeeded, canceled => pass
     requires_payment_method, requires_confirmation, requires_action, requires_capture =>
-      pi <- cancel_intent(id: pi.id)
+      pi <- cancel_intent(intent: pi.id)
         on unexpected_state => pass
         on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
     processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi

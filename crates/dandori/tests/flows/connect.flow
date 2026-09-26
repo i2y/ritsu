@@ -1,0 +1,58 @@
+workflow 棚卸し v1
+description "Connect で呼ぶ棚の数え直し：protobuf の JSON が既定値で省く項目（空の文字列、0、false、列挙の最初の値、空のリストとマップ、文字列の 64 ビットの整数）を、答えの中、中のメッセージ、メッセージのリストで埋めて読み、次の呼び出しに渡す"
+
+use proto 棚 from "protos/shelf.proto"
+  url "https://shelf.example.com"
+
+enum 状態 = STATE_UNSPECIFIED | COUNTED | MISSING
+
+record 品
+  sku     : string
+  count   : int
+  state   : 状態
+  checked : bool
+  notes   : list[string]
+
+record 場所
+  aisle : string
+  level : int
+
+record 数え
+  shelf    : string
+  total    : int
+  items    : list[品]
+  location : 場所?
+  labels   : json
+  serial   : string
+
+record 記録
+  recordId : string
+
+inputs
+  棚 : string
+
+outputs
+  合計 : int
+  通路 : string
+  記録 : string
+  番号 : string
+
+task 数える(shelf: string) -> 数え
+  connect 棚 "ShelfService/Count"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/shelf/4d5e6f"
+  errors 棚が無い = not_found, 混んでいる = unavailable
+  retry 2 times every 1 second on 混んでいる
+
+task 記す(shelf: string, total: int, items: list[品], aisle: string, labels: json) -> 記録
+  connect 棚 "ShelfService/Record"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/shelf/4d5e6f"
+  key
+
+flow
+  let r = 数える(shelf: 棚)
+    on 棚が無い => fail 無い棚 "棚 {棚} はありません"
+  match r.location
+    some l => let 通路 = l.aisle
+    none => let 通路 = "不明"
+  let rec = 記す(shelf: r.shelf, total: r.total, items: r.items, aisle: 通路, labels: r.labels)
+  succeed 合計 = r.total, 通路 = 通路, 記録 = rec.recordId, 番号 = r.serial

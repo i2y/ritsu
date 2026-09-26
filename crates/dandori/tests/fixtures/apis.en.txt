@@ -1,0 +1,38 @@
+error[E016]: tests/fixtures/apis.flow:8:11: a `.proto` does not say where the service is; write `url "<where it is>"` under `use proto 場所の無い倉庫`
+     8 | use proto 場所の無い倉庫 from "apis/warehouse.proto"
+error[E016]: tests/fixtures/apis.flow:37:1: the parameter `capture_method` is not what `stripe` POST /v1/payment_intents takes: `later` of `取り方` is not one of the values it takes (automatic, automatic_async, manual)
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+error[E016]: tests/fixtures/apis.flow:37:1: `stripe` POST /v1/payment_intents takes no `amout`
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+error[E016]: tests/fixtures/apis.flow:37:1: what `stripe` POST /v1/payment_intents answers is not `支払い`: in `status`, it may be `canceled`, which `状態` has no value for
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+error[E016]: tests/fixtures/apis.flow:37:1: what `stripe` POST /v1/payment_intents answers is not `支払い`: in `created`, an integer is not `timestamp`
+    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
+error[E016]: tests/fixtures/apis.flow:41:1: `stripe` POST /v1/payment_intents needs `currency`, which `金額だけで作る` does not pass
+    41 | task 金額だけで作る(amount: int) -> 請求
+error[E016]: tests/fixtures/apis.flow:41:1: what `stripe` POST /v1/payment_intents answers is not `請求`: `latest_charge` may be null; declare it `string?`
+    41 | task 金額だけで作る(amount: int) -> 請求
+error[E016]: tests/fixtures/apis.flow:45:3: `stripe` has no POST /v1/payment_intents/{intent}/refund (it has /v1/payment_intents/{intent}, /v1/payment_intents/{intent}/confirm, /v1/payment_intents/{intent}/capture, /v1/payment_intents/{intent}/cancel)
+    45 |   http POST stripe "/v1/payment_intents/{intent}/refund"
+error[E016]: tests/fixtures/apis.flow:47:1: `sns` Publish needs `Message`, and the parameter may be absent
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+error[E016]: tests/fixtures/apis.flow:47:1: `sns` Publish takes no `Subjekt`
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+error[E016]: tests/fixtures/apis.flow:47:1: `sns` Publish has no error `NoSuchTopic` (its errors are AuthorizationErrorException, EndpointDisabledException, InternalErrorException, InvalidParameterException, InvalidParameterValueException, InvalidSecurityException, KMSAccessDeniedException, KMSDisabledException, KMSInvalidStateException, KMSNotFoundException, KMSOptInRequired, KMSThrottlingException, NotFoundException, PlatformApplicationDisabledException, ValidationException)
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+error[E016]: tests/fixtures/apis.flow:47:1: `ClientToken` is not the idempotency token of `sns` Publish: it takes none
+    47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
+error[E016]: tests/fixtures/apis.flow:52:1: the parameter `quantity` is not what `倉庫` StockService/Reserve takes: `string` is not an integer
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: `id` may be left out; declare it `string?`
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: in `price`, it may have a fraction, which dandori has no type for; declare it `json`
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: the answer names `reserved_at` `reservedAt`
+    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E007]: tests/fixtures/apis.flow:54:36: `gone` is not a Connect error code; the codes are canceled, unknown, invalid_argument, deadline_exceeded, not_found, already_exists, permission_denied, resource_exhausted, failed_precondition, aborted, out_of_range, unimplemented, internal, unavailable, data_loss and unauthenticated
+    54 |   errors 忙しい = resource_exhausted, 無くなった = gone
+error[E016]: tests/fixtures/apis.flow:56:1: `倉庫` StockService/Watch streams; `connect` calls a method that takes one message and answers one
+    56 | task 見張る(sku: string) -> 引当

@@ -2,6 +2,8 @@ workflow fulfillment v1
 description "The fulfillment of examples/fulfillment, written for Temporal. The warehouse's calls are activities dandori writes; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow); and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
 
 use rule urgency from "../../order/rules/urgency.rule"
+use proto warehouse from "../specs/warehouse.proto"
+  url "https://warehouse.example.com"
 
 enum Stock = secured | short
 
@@ -45,13 +47,13 @@ outputs
 
 # The warehouse answers every reservation: secured with its id, or short when the stock is short.
 task reserve_stock(sku: string, quantity: int) -> Reservation
-  http POST "https://warehouse.example.com/v1/reservations"
-  errors busy = 429
+  connect warehouse "StockService/Reserve"
+  errors busy = resource_exhausted
   key
   retry 2 times every 1 second on busy
 
 task release_stock(id: string)
-  http DELETE "https://warehouse.example.com/v1/reservations/{id}"
+  connect warehouse "StockService/Release"
   idempotent
 
 # The delivery team's workflow arranges the delivery, on the workers of its own task queue. It is

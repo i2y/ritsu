@@ -4,6 +4,7 @@
 //! (TypeScript or Python), to AWS Lambda durable functions (TypeScript), to Argo Workflows
 //! (a WorkflowTemplate) and to pydantic-graph (Python). The rules themselves are written in rulec and read through its CLI.
 
+pub mod apis;
 pub mod argo;
 pub mod asl;
 pub mod aws;
@@ -14,6 +15,7 @@ pub mod flow;
 pub mod interp;
 pub mod lower;
 pub mod model;
+pub mod proto;
 pub mod pydantic_graph;
 pub mod ranges;
 pub mod render;

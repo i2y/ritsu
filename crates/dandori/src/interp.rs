@@ -397,7 +397,12 @@ impl<'a> Run<'a> {
             self.callees.push(CallInfo { task, callback, kind: ans.get("error").and_then(|e| e.as_str()).map(String::from) });
             if let Some(v) = ans.get("ok") {
                 self.steps.push(json!({ "call": wire, "answer": { "ok": v } }));
-                break Ok(v.clone());
+                // a Connect answer is read as protobuf reads it: the zero values its JSON leaves out are there
+                let zeros = match callee {
+                    Callee::Task(t) => m.tasks[*t].connect.as_ref(),
+                    Callee::Rule(_) => None,
+                };
+                break Ok(zeros.map(|z| crate::apis::fill(v, z)).unwrap_or_else(|| v.clone()));
             }
             let kind = ans["error"].as_str().unwrap_or("failure").to_string();
             let err = self.error_of(callee, &kind);

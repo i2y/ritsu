@@ -284,6 +284,9 @@ pub struct TaskDef {
     pub event: bool,
     /// the child workflow is this `.flow`
     pub flow: Option<Box<ChildFlow>>,
+    /// `connect`: the task is an HTTP call by the Connect protocol, and this names the zero values
+    /// its answer's JSON may leave out (`apis::Op::zeros`), which the generated code fills in
+    pub connect: Option<serde_json::Value>,
     pub line: usize,
 }
 
