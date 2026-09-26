@@ -329,28 +329,81 @@ fn temporal_all(python: Option<PathBuf>) {
     std::thread::scope(|scope| {
         for f in runnable() {
             let python = python.clone();
-            scope.spawn(move || temporal_one(&f, python.as_deref()));
+            scope.spawn(move || temporal_one(&f, python.as_deref(), None));
         }
     });
 }
 
-fn temporal_one(f: &Path, python: Option<&Path>) {
+/// The workflow in one language, and its activities in the other: the workers of the build that
+/// runs the workflow run nothing else, and the other build's runner serves the activities on the
+/// same server (`--serve`). The flows whose rules say `local` are left out: a local activity runs
+/// in the worker of the workflow, so it is in the workflow's language.
+#[test]
+fn temporal_activities_run_in_the_other_language() {
+    need_rulec!();
+    let python = match (temporal_available(), temporal_python()) {
+        (true, Some(p)) => p,
+        _ => {
+            eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+            return;
+        }
+    };
+    let _turn = heavy();
+    let flows: Vec<PathBuf> = runnable()
+        .into_iter()
+        .filter(|f| {
+            let (_, checked) = dandori::check::check_file(f).unwrap();
+            let m = checked.model.expect("the examples pass check");
+            if m.rules.iter().any(|r| r.local) {
+                eprintln!("{}: not with the other language's activities (a rule that says `local` runs in the workflow's worker)", rel(f));
+                return false;
+            }
+            true
+        })
+        .collect();
+    std::thread::scope(|scope| {
+        for f in &flows {
+            let python = &python;
+            scope.spawn(move || temporal_one(f, None, Some(python)));
+            scope.spawn(move || temporal_one(f, Some(python), Some(Path::new("node"))));
+        }
+    });
+}
+
+/// One flow on Temporal: the TypeScript build, or with `python`, the Python build. With
+/// `activities_by` (the other language's program: Python, or Node), the activities are that
+/// language's, served by its runner.
+fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
     let (_, checked) = dandori::check::check_file(f).unwrap();
     let m = checked.model.expect("the examples pass check");
-    let lang = if python.is_some() { "python-" } else { "" };
+    let lang = match (python.is_some(), activities_by.is_some()) {
+        (false, false) => "",
+        (true, false) => "python-",
+        (false, true) => "ts-py-",
+        (true, true) => "py-ts-",
+    };
     let dir = scratch(&format!("temporal-{lang}{}", dandori::render::ident(&m.name)));
-    let files = match python {
+    let mut files = match python {
         Some(_) => dandori::temporal_py::build(&m),
         None => dandori::temporal::build(&m),
     }
     .unwrap_or_else(|d| panic!("{} does not build: {}", rel(f), d[0].en));
+    if activities_by.is_some() {
+        // the other language's build, whose runner serves the activities
+        files.extend(match python {
+            Some(_) => dandori::temporal::build(&m),
+            None => dandori::temporal_py::build(&m),
+        }.unwrap());
+    }
     for (name, text) in &files {
         let p = dir.join(name);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(&p, text).unwrap();
     }
     let p = Platform::Temporal;
-    let method = |t: &str| if python.is_some() { dandori::temporal_py::method(t) } else { dandori::render::ident(t) };
+    // the stand-ins of the tasks the user writes are methods of the language that serves the activities
+    let activities_in_python = python.is_some() != activities_by.is_some();
+    let method = |t: &str| if activities_in_python { dandori::temporal_py::method(t) } else { dandori::render::ident(t) };
     let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": method(&t.name), "callback": t.callback })).collect();
     let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
     let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
@@ -362,15 +415,46 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
     let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
-    let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
+    // the tasks that hand on a callback's id, by the name of their proxy in the workflow's code
+    let callbacks: Vec<String> = m
+        .tasks
+        .iter()
+        .filter(|t| t.callback && !t.is_child(p))
+        .map(|t| if python.is_some() { format!("dd_task_{}", dandori::render::ident(&t.name)) } else { dandori::render::ident(&format!("task_{}", t.name)) })
+        .collect();
+    let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "callbacks": callbacks, "runs": runs });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
     let histories = dir.join("histories");
     let _ = std::fs::remove_dir_all(&histories);
-    let out = match python {
-        Some(py) => Command::new(py).arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&runs_file).arg(&results_file).arg(&histories).output().unwrap(),
-        None => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).arg(&histories).output().unwrap(),
+    let mut run = match python {
+        Some(py) => {
+            let mut c = Command::new(py);
+            c.arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m)));
+            c
+        }
+        None => {
+            let mut c = Command::new("node");
+            c.arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name)));
+            c
+        }
     };
-    let what = if python.is_some() { "the Temporal workflow in Python" } else { "the Temporal workflow" };
+    run.arg(&runs_file).arg(&results_file).arg(&histories);
+    if let Some(by) = activities_by {
+        let serve: Vec<String> = match python {
+            Some(_) => vec![by.display().to_string(), root().join("tools/temporal/run.mjs").display().to_string(), "--serve".into(), dir.join(dandori::render::ident(&m.name)).display().to_string()],
+            None => vec![by.display().to_string(), root().join("tools/temporal-python/run.py").display().to_string(), "--serve".into(), dir.join(dandori::temporal_py::package(&m)).display().to_string()],
+        };
+        let mut serve = serve;
+        serve.push(runs_file.display().to_string());
+        run.env("DANDORI_ACTIVITIES_BY", serde_json::to_string(&serve).unwrap());
+    }
+    let out = run.output().unwrap();
+    let what = match (python.is_some(), activities_by.is_some()) {
+        (false, false) => "the Temporal workflow",
+        (true, false) => "the Temporal workflow in Python",
+        (false, true) => "the Temporal workflow with its activities in Python",
+        (true, true) => "the Temporal workflow in Python with its activities in TypeScript",
+    };
     assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
     // what the query dandori.status and the search attribute DandoriCases say of the cases at the end
@@ -406,9 +490,15 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
         }
         assert!(markers > 0, "{}: no run called a rule that says `local` as a local activity", rel(f));
     }
-    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
+    let how = match (python.is_some(), activities_by.is_some()) {
+        (false, false) => "",
+        (true, false) => " in Python",
+        (false, true) => ", the activities in Python,",
+        (true, true) => " in Python, the activities in TypeScript,",
+    };
+    eprintln!("{}: compared {} run(s) on Temporal{how} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len());
     // with DANDORI_BLESS, the history of the run with the most calls is kept for the replay test
-    if std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
+    if activities_by.is_none() && std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
         let longest = references.iter().enumerate().max_by_key(|(_, (_, r))| r["steps"].as_array().map(|a| a.len()).unwrap_or(0)).map(|(i, _)| i).unwrap();
         let keep = recorded_dir(&m, python.is_some());
         let _ = std::fs::remove_dir_all(&keep);

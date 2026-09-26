@@ -289,10 +289,13 @@ replayed with the code dandori writes now, so a change of the generator that wou
 running workflow shows. Two builds that differ in one text run as versions of one deployment
 under Worker Deployment Versioning, and a run that started on the first ends on it, the
 round it goes on to in a new run too. The server keeps real time, so the copy of the code the
-runners run waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the
+runners run waits at most 10 ms on a timer and gives an activity 5 seconds, and a call the
 scenario times out is kept busy until the server times it out. The copy also counts every
 history as long, so a loop at the top of the flow goes on in a new run at every round but the
-first of a run, and the runners follow each run to the next to replay them all. In a flow with `on cancel`, the scenarios
+first of a run, and the runners follow each run to the next to replay them all. Every flow
+also runs with its workflow in one language and its activities in the other, both ways: the
+other language's runner serves the activities on the same server, and answers the callbacks
+with its own client. In a flow with `on cancel`, the scenarios
 also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
 its activity until the server cancels that too.
 
@@ -341,7 +344,7 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes a minute and a half to two minutes; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes a minute and a half to a little over two minutes; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of

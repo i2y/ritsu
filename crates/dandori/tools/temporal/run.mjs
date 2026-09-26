@@ -8,6 +8,14 @@
 //
 //   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json> [<histories dir>]
 //   node tools/temporal/run.mjs --replay <generated dir> <histories dir> <results.json>
+//   node tools/temporal/run.mjs --serve <generated dir> <runs.json> <steps.json> <server address>
+//
+// With DANDORI_ACTIVITIES_BY set to a command (a JSON list), the workers here run only the
+// workflows, and the activities are the other language's: the command, with <steps.json> and
+// the server's address added, serves them (tools/temporal-python/run.py --serve) until its
+// input closes, and then writes the calls each run made to <steps.json>. With --serve, this
+// runner is that command for the Python one: it serves the activities of the generated code,
+// with the stand-ins, on the server at the address.
 //
 // Once the runs are over, the history of each is replayed with the same code, which must not
 // find it nondeterministic; with a histories directory, the histories are also written there as
@@ -18,6 +26,7 @@
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
+//              "callbacks": [the proxy of each task that hands on a callback's id],
 //              "runs": [ { "id": workflow id, "input": {...},
 //                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
 //
@@ -35,7 +44,10 @@
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
-// workflow gets 2 seconds before it times out. The rounds of `for … in parallel` run one at a
+// workflow gets 5 seconds before it times out (2 were too few when the whole test suite kept the
+// machine busy), but for one that hands on a callback's id: the scenarios never time it out, and
+// its stand-in answers the callback and sees a second answer refused before it returns, which
+// takes a few workflow tasks. The rounds of `for … in parallel` run one at a
 // time here, so that the calls come in the order the reference interpreter makes them. A loop at
 // the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 // run, since the history counts as long from one event on here (dd.CONTINUE_AT).
@@ -45,11 +57,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
-import { DefaultLogger, Runtime, Worker } from "@temporalio/worker";
+import { DefaultLogger, NativeConnection, Runtime, Worker } from "@temporalio/worker";
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure, SearchAttributeType, defineSearchAttributeKey } from "@temporalio/common";
 import { historyFromJSON, historyToJSON } from "@temporalio/common/lib/proto-utils.js";
-import { WorkflowFailedError, WorkflowUpdateFailedError } from "@temporalio/client";
+import { Client, Connection, WorkflowFailedError, WorkflowUpdateFailedError } from "@temporalio/client";
+import { spawn } from "node:child_process";
 import { makeTransport } from "../transport.mjs";
 
 // the worker's log goes to stderr; the results go to a file
@@ -57,13 +70,16 @@ Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.wr
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const replaying = process.argv[2] === "--replay";
-const [dir, runsFile, outFile, historiesDir] = replaying ? [process.argv[3], null, process.argv[5], process.argv[4]] : process.argv.slice(2);
+const serving = process.argv[2] === "--serve";
+const [dir, runsFile, outFile, historiesDir] = replaying ? [process.argv[3], null, process.argv[5], process.argv[4]] : serving ? process.argv.slice(3) : process.argv.slice(2);
 const spec = replaying ? JSON.parse(fs.readFileSync(path.join(historiesDir, "spec.json"), "utf8")) : JSON.parse(fs.readFileSync(runsFile, "utf8"));
+/** The other language's runner, serving the activities: the command, when the workers here run only the workflows. */
+const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_BY ?? "null");
 
 /** How long an activity or a child workflow gets here before it times out. */
-const TIMEOUT = "2 seconds";
+const TIMEOUT = "5 seconds";
 /** How long a stand-in that the scenario times out keeps its activity busy. */
-const LATE_MS = 5000;
+const LATE_MS = 10000;
 
 // A copy of the generated code: Node runs the activities' TypeScript by stripping the types and
 // wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
@@ -77,7 +93,11 @@ for (const f of fs.readdirSync(dir)) {
   if (f === "rules.ts") text = "export const rules = {};\n";
   if (f === "workflow.ts") {
     text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
-    text = text.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`);
+    const keep = (l) => (spec.callbacks ?? []).some((c) => l.startsWith(`const ${c} = `));
+    text = text
+      .split("\n")
+      .map((l) => (keep(l) ? l : l.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`)))
+      .join("\n");
     text = text.replace(/workflowExecutionTimeout: "\d+ seconds"/g, `workflowExecutionTimeout: "${TIMEOUT}"`);
   }
   if (f === "runtime.ts") {
@@ -281,6 +301,56 @@ activities.dd_test_child = async ({ type, args }) => {
   return reply(run, ans);
 };
 
+if (serving) {
+  // the activities alone, on the server at the address, until the input closes; then the calls of each run
+  const address = historiesDir;
+  const connection = await NativeConnection.connect({ address });
+  env = { client: new Client({ connection: await Connection.connect({ address }) }) };
+  for (const r of spec.runs) runs.set(r.id, { id: r.id, answers: r.answers, next: 0, steps: [] });
+  const { workflowsPath: _, ...base } = workerOptions(own, { transport, workflowsPath });
+  const queues = [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)];
+  const workers = [];
+  for (const taskQueue of queues) {
+    workers.push(
+      await Worker.create({
+        ...base,
+        connection,
+        taskQueue,
+        activities: { ...base.activities, ...activities },
+        defaultHeartbeatThrottleInterval: "100 milliseconds",
+        maxHeartbeatThrottleInterval: "100 milliseconds",
+      }),
+    );
+  }
+  const closed = new Promise((done) => {
+    process.stdin.on("end", done);
+    process.stdin.resume();
+  });
+  process.stdout.write("serving\n");
+  await Promise.all(workers.map((w) => w.runUntil(closed)));
+  fs.writeFileSync(outFile, JSON.stringify(Object.fromEntries([...runs].map(([id, r]) => [id, r.steps])), null, 2) + "\n");
+  await connection.close();
+  fs.rmSync(work, { recursive: true, force: true });
+  process.exit(0);
+}
+
+/** Start the other language's runner, serving the activities; `done` closes its input, waits for it, and reads the calls of each run. */
+async function serveActivities(address) {
+  const stepsFile = path.join(work, "steps.json");
+  const child = spawn(activitiesBy[0], [...activitiesBy.slice(1), stepsFile, address], { stdio: ["pipe", "pipe", "inherit"] });
+  const exited = new Promise((ok, fail) => child.on("exit", (code) => (code === 0 ? ok() : fail(new Error(`the activities' runner exited with ${code}`)))));
+  // its workers poll before the first run starts, so that no activity waits for them
+  await new Promise((ok, fail) => {
+    child.stdout.on("data", (d) => String(d).includes("serving") && ok());
+    exited.catch(fail);
+  });
+  return async () => {
+    child.stdin.end();
+    await exited;
+    return JSON.parse(fs.readFileSync(stepsFile, "utf8"));
+  };
+}
+
 /** The histories of a workflow's runs, from the first: a run that went on in a new one (Continue-As-New) is followed by that one. */
 async function runsOf(workflowId, firstRunId) {
   const out = [];
@@ -300,7 +370,10 @@ env = await TestWorkflowEnvironment.createLocal({
 const results = [];
 try {
   const base = workerOptions(own, { transport, workflowsPath });
-  const queues = [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)];
+  // with the other language's activities, a worker here serves the workflow and the child workflows' stand-ins only
+  const served = activitiesBy === null ? null : await serveActivities(env.address);
+  const queues =
+    served === null ? [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)] : [TASK_QUEUE, ...new Set((spec.children ?? []).map((c) => c.queue).filter((q) => q && q !== TASK_QUEUE))];
   const workers = [];
   for (const taskQueue of queues) {
     workers.push(
@@ -308,7 +381,7 @@ try {
         ...base,
         connection: env.nativeConnection,
         taskQueue,
-        activities: { ...base.activities, ...activities },
+        activities: served === null ? { ...base.activities, ...activities } : {},
         // heartbeats go out at once, so that a held activity hears soon that it is over
         defaultHeartbeatThrottleInterval: "100 milliseconds",
         maxHeartbeatThrottleInterval: "100 milliseconds",
@@ -347,6 +420,10 @@ try {
     chain = () => w.runUntil(inner);
   }
   await chain();
+  if (served !== null) {
+    const steps = await served();
+    for (const [i, r] of spec.runs.entries()) results[i].steps = steps[r.id];
+  }
   // the generated client finds every run by the workflow's type, the ones that went on in a new run too (the server lists them a moment late)
   for (let tries = 0; ; tries++) {
     const found = [];

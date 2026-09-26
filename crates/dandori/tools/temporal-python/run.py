@@ -8,6 +8,14 @@
 #
 #   .venv/bin/python run.py <generated package> <runs.json> <results.json> [<histories dir>]
 #   .venv/bin/python run.py --replay <generated package> <histories dir> <results.json>
+#   .venv/bin/python run.py --serve <generated package> <runs.json> <steps.json> <server address>
+#
+# With DANDORI_ACTIVITIES_BY set to a command (a JSON list), the workers here run only the
+# workflows, and the activities are the other language's: the command, with <steps.json> and
+# the server's address added, serves them (../temporal/run.mjs --serve) until its input closes,
+# and then writes the calls each run made to <steps.json>. With --serve, this runner is that
+# command for the TypeScript one: it serves the activities of the generated code, with the
+# stand-ins, on the server at the address.
 #
 # Once the runs are over, the history of each is replayed with the same code, which must not find
 # it nondeterministic; with a histories directory, the histories are also written there as JSON,
@@ -18,6 +26,7 @@
 #
 # runs.json: { "workflow": type, "own": [ { "name", "method", "callback" } ], "rules": [activity],
 #              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
+#              "callbacks": [the function of each task that hands on a callback's id],
 #              "runs": [ { "id": workflow id, "input": {...},
 #                          "answers": [ {"ok": value} | {"error": kind} | {"cancel": true} ] } ] }
 #
@@ -35,7 +44,10 @@
 #
 # The server keeps real time, so the copy of the generated code that runs here waits far less:
 # every duration of the workflow's timers (dd.seconds) is at most 10 ms, and an activity or a
-# child workflow gets 2 seconds before it times out. The rounds of `for … in parallel` run one at
+# child workflow gets 5 seconds before it times out (2 were too few when the whole test suite
+# kept the machine busy), but for one that hands on a callback's id: the scenarios never time it
+# out, and its stand-in answers the callback and sees a second answer refused before it returns,
+# which takes a few workflow tasks. The rounds of `for … in parallel` run one at
 # a time here, so that the calls come in the order the reference interpreter makes them. A loop at
 # the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 # run, since the history counts as long from one event on here (dd.CONTINUE_AT).
@@ -54,10 +66,11 @@ import sys
 import tempfile
 import time
 from datetime import timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from temporalio import activity
-from temporalio.client import WorkflowFailureError, WorkflowUpdateFailedError
+from temporalio.client import Client, WorkflowFailureError, WorkflowUpdateFailedError
 from temporalio.common import SearchAttributeKey
 from temporalio.exceptions import ApplicationError, CancelledError
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig, TelemetryFilter
@@ -74,8 +87,8 @@ Runtime.set_default(Runtime(telemetry=TelemetryConfig(logging=LoggingConfig(filt
 
 # How long an activity or a child workflow gets here before it times out, and how long a stand-in
 # that the scenario times out keeps its activity busy.
-TIMEOUT = 2
-LATE = 5.0
+TIMEOUT = 5
+LATE = 10.0
 
 
 def child_stand_ins(children: list[dict[str, Any]]) -> str:
@@ -134,7 +147,9 @@ async def replay(package: str, histories: list[Any]) -> dict[str, str | None]:
     return {h.workflow_id: why.get(h.workflow_id) for h in histories}
 
 
-async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None) -> list[dict[str, Any]]:
+async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None, serve_at: tuple[str, str] | None = None) -> list[dict[str, Any]]:
+    """Run every scenario, and tell what each did; with `serve_at` (<steps.json>, the server's
+    address), only serve the activities there until the input closes, and write each run's calls."""
     children = importlib.import_module(f"{package}.dd_test_children").children
     worker = importlib.import_module(f"{package}.worker")
     client = importlib.import_module(f"{package}.client")
@@ -290,6 +305,26 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None)
 
     activities.append(test_child)
 
+    def heartbeats_at_once() -> dict[str, Any]:
+        # heartbeats go out at once, so that a held activity hears soon that it is over
+        return {"max_concurrent_activities": 200, "default_heartbeat_throttle_interval": timedelta(milliseconds=100), "max_heartbeat_throttle_interval": timedelta(milliseconds=100)}
+
+    if serve_at is not None:
+        steps_file, address = serve_at
+        served = await Client.connect(address)
+        env = SimpleNamespace(client=served)  # type: ignore[assignment]
+        for r in spec["runs"]:
+            runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
+        base = {k: v for k, v in worker.worker_options(own, transport=make_transport(spec, Run())).items() if k != "workflows"}
+        async with contextlib.AsyncExitStack() as stack:
+            for q in [client.TASK_QUEUE, *sorted({q for q in spec.get("queues", []) if q != client.TASK_QUEUE})]:
+                await stack.enter_async_context(Worker(served, **{**base, "task_queue": q, "activities": [*base["activities"], *activities], **heartbeats_at_once()}))
+            print("serving", flush=True)
+            await asyncio.get_running_loop().run_in_executor(None, sys.stdin.read)
+        with open(steps_file, "w", encoding="utf-8") as f:
+            json.dump({rid: r["steps"] for rid, r in runs.items()}, f, ensure_ascii=False)
+        return []
+
     # the server fires a timer up to a second late unless told to shift its timers less
     env = await WorkflowEnvironment.start_local(
         ui=False,
@@ -298,27 +333,27 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None)
         search_attributes=[cases_key],
     )
     results = []
+    other: asyncio.subprocess.Process | None = None
     try:
         base = worker.worker_options(own, transport=make_transport(spec, Run()))
         base["workflows"] = [*base["workflows"], *children]
         base["activities"] = [*base["activities"], *activities]
         queues = [client.TASK_QUEUE, *sorted({q for q in spec.get("queues", []) if q != client.TASK_QUEUE})]
+        by = json.loads(os.environ.get("DANDORI_ACTIVITIES_BY", "null"))
+        steps_file = os.path.join(tempfile.mkdtemp(prefix="dandori-steps-"), "steps.json")
+        if by is not None:
+            # the other language's runner serves the activities; a worker here serves the workflow and the child workflows' stand-ins only
+            other = await asyncio.create_subprocess_exec(*by, steps_file, env.client.service_client.config.target_host, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+            assert other.stdout is not None
+            while b"serving" not in await other.stdout.readline():
+                if other.stdout.at_eof():
+                    raise RuntimeError("the activities' runner ended before it served")
+            del base["activities"]
+            queues = [client.TASK_QUEUE, *sorted({c["queue"] for c in spec.get("children", []) if c.get("queue") and c["queue"] != client.TASK_QUEUE})]
         async with contextlib.AsyncExitStack() as stack:
             # every worker runs until the runs are done
             for q in queues:
-                # heartbeats go out at once, so that a held activity hears soon that it is over
-                await stack.enter_async_context(
-                    Worker(
-                        env.client,
-                        **{
-                            **base,
-                            "task_queue": q,
-                            "max_concurrent_activities": 200,
-                            "default_heartbeat_throttle_interval": timedelta(milliseconds=100),
-                            "max_heartbeat_throttle_interval": timedelta(milliseconds=100),
-                        },
-                    )
-                )
+                await stack.enter_async_context(Worker(env.client, **{**base, "task_queue": q, **(heartbeats_at_once() if by is None else {})}))
 
             async def one(r: dict[str, Any]) -> dict[str, Any]:
                 runs[r["id"]] = {"id": r["id"], "answers": r["answers"], "next": 0, "steps": []}
@@ -341,6 +376,16 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None)
                 return {"end": end, "cases": cases, "shown": list(shown) if shown is not None else None, "histories": await runs_of(env.client, r["id"], handle.first_execution_run_id)}
 
             ends = await asyncio.gather(*(one(r) for r in spec["runs"]))
+            if other is not None:
+                # the calls each run made, as the other language's runner saw them
+                assert other.stdin is not None
+                other.stdin.close()
+                if await other.wait() != 0:
+                    raise RuntimeError(f"the activities' runner exited with {other.returncode}")
+                with open(steps_file, encoding="utf-8") as f:
+                    steps = json.load(f)
+                for r in spec["runs"]:
+                    runs[r["id"]]["steps"] = steps[r["id"]]
             histories = []
             for got in ends:
                 for n, h in enumerate(got.pop("histories")):
@@ -367,15 +412,23 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None)
             with open(os.path.join(histories_dir, "spec.json"), "w", encoding="utf-8") as f:
                 json.dump({"children": spec.get("children", [])}, f, ensure_ascii=False)
     finally:
+        if other is not None and other.returncode is None:
+            other.kill()
         await env.shutdown()
     return results
 
 
 def main() -> None:
     replaying = sys.argv[1] == "--replay"
+    serve_at: tuple[str, str] | None = None
     if replaying:
         package_dir, histories_dir, out_file = sys.argv[2:5]
         with open(os.path.join(histories_dir, "spec.json"), encoding="utf-8") as f:
+            spec = json.load(f)
+    elif sys.argv[1] == "--serve":
+        package_dir, runs_file, steps_file, address = sys.argv[2:6]
+        histories_dir, out_file, serve_at = None, os.devnull, (steps_file, address)
+        with open(runs_file, encoding="utf-8") as f:
             spec = json.load(f)
     else:
         package_dir, runs_file, out_file = sys.argv[1:4]
@@ -392,7 +445,12 @@ def main() -> None:
     path = os.path.join(copy, "workflow.py")
     with open(path, encoding="utf-8") as f:
         text = re.sub(r"dd\.at_a_time\(\d+\)", "dd.at_a_time(1)", f.read())
-    text = re.sub(r"start_to_close_timeout=timedelta\(seconds=\d+\)", f"start_to_close_timeout=timedelta(seconds={TIMEOUT})", text)
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        # a task that hands on a callback's id is a function of two lines: its `def`, and the call
+        if not any(i > 0 and lines[i - 1].startswith(f"def {c}(") for c in spec.get("callbacks", [])):
+            lines[i] = re.sub(r"start_to_close_timeout=timedelta\(seconds=\d+\)", f"start_to_close_timeout=timedelta(seconds={TIMEOUT})", line)
+    text = "\n".join(lines)
     text = re.sub(r"execution_timeout=timedelta\(seconds=\d+\)", f"execution_timeout=timedelta(seconds={TIMEOUT})", text)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
@@ -423,7 +481,7 @@ def main() -> None:
             got = asyncio.run(replay(package, histories))
             results: Any = [{"file": name, "error": got.get(workflow_id_of(name), "not replayed")} for name in files]
         else:
-            results = asyncio.run(run_all(package, spec, histories_dir))
+            results = asyncio.run(run_all(package, spec, histories_dir, serve_at))
     finally:
         shutil.rmtree(work, ignore_errors=True)
     with open(out_file, "w", encoding="utf-8") as f:
