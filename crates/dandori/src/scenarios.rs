@@ -51,6 +51,9 @@ struct Ex<'a> {
     pending: Option<bool>,
     /// the `for` loops that went through a list with something in it, in this run
     done_loops: Vec<String>,
+    /// how many values have been made in this run, so that no two are alike and a target
+    /// that mixes up the rounds of a loop, or two answers, shows it
+    made_values: usize,
 }
 
 pub fn generate(m: &Model) -> Vec<Value> {
@@ -86,6 +89,7 @@ pub fn generate(m: &Model) -> Vec<Value> {
             par_depth: 0,
             pending: None,
             done_loops: vec![],
+            made_values: 0,
         };
         ex.run();
         counts = std::mem::take(&mut ex.counts);
@@ -154,11 +158,20 @@ impl<'a> Ex<'a> {
     /// chosen when read.
     fn template(&mut self, t: &Ty, name: &str) -> Value {
         match t {
-            Ty::Str => json!(format!("{name}-1")),
+            Ty::Str => {
+                self.made_values += 1;
+                json!(format!("{name}-{}", self.made_values))
+            }
             Ty::Timestamp => json!("2026-10-01T10:00:00Z"),
-            Ty::Int | Ty::Num(_) => json!(1000),
+            Ty::Int | Ty::Num(_) => {
+                self.made_values += 1;
+                json!(1000 + self.made_values)
+            }
             // an array, so that the targets show they keep a `json` value that is one as one item
-            Ty::Json => json!([{ "note": format!("{name}-1") }]),
+            Ty::Json => {
+                self.made_values += 1;
+                json!([{ "note": format!("{name}-{}", self.made_values) }])
+            }
             Ty::Bool | Ty::Enum(_) | Ty::Opt(_) | Ty::List(_) => self.hole(t),
             Ty::Record(r) => {
                 let fields = self.m.records[*r].fields.clone();
@@ -376,6 +389,7 @@ impl<'a> Ex<'a> {
                 let mut out = Vec::new();
                 match parallel {
                     None => {
+                        let mut ran = 0;
                         for it in items.iter() {
                             self.vars.insert(var.clone(), it.clone());
                             let c = self.block(body);
@@ -386,7 +400,9 @@ impl<'a> Ex<'a> {
                                 }
                                 Ctl::Stop => return Ctl::Stop,
                                 Ctl::Next => {
-                                    let l = format!("{}:ran", s.site);
+                                    ran += 1;
+                                    // a round, and more than one: where the rounds' order shows
+                                    let l = if ran > 1 { format!("{}:ran again", s.site) } else { format!("{}:ran", s.site) };
                                     self.labels.insert(l.clone());
                                     if !self.done_loops.contains(&l) {
                                         self.done_loops.push(l);
@@ -436,7 +452,8 @@ impl<'a> Ex<'a> {
                             return self.halt(false);
                         }
                         if !items.is_empty() {
-                            let l = format!("{}:every round done", s.site);
+                            // every round, and more than one: where the order of what they yield shows
+                            let l = if items.len() > 1 { format!("{}:every one of several rounds done", s.site) } else { format!("{}:every round done", s.site) };
                             self.labels.insert(l.clone());
                             if !self.done_loops.contains(&l) {
                                 self.done_loops.push(l);

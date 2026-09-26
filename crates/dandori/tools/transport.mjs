@@ -8,7 +8,7 @@
 //
 // A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
 // message); the call is written down without it, `take` gets the id, and `run.answerLater(id,
-// answer)` is called with the answer the scenario gives the callback.
+// answer)` is called (and awaited) with the answer the scenario gives the callback.
 
 export function makeTransport(spec, run) {
   const httpTasks = (spec.http ?? []).map((t) => ({
@@ -26,7 +26,7 @@ export function makeTransport(spec, run) {
       const { callback_id, ...rest } = payload;
       const ans = await run.take({ lambda: fn, payload: rest }, callback_id);
       if (callback_id !== undefined) {
-        run.answerLater(callback_id, ans);
+        await run.answerLater(callback_id, ans);
         return { ok: null };
       }
       if ("ok" in ans) return { ok: ans.ok };
@@ -51,7 +51,7 @@ export function makeTransport(spec, run) {
       }
       const ans = await run.take({ aws: api, args }, callbackId);
       if (callbackId !== undefined) {
-        run.answerLater(callbackId, ans);
+        await run.answerLater(callbackId, ans);
         return { ok: { MessageId: "message-1" } };
       }
       if ("ok" in ans) return { ok: ans.ok };

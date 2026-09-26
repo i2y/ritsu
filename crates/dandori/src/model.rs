@@ -101,6 +101,8 @@ pub enum Platform {
     Temporal,
     Durable,
     Argo,
+    /// pydantic-graph: a graph that runs in the process that calls it
+    Graph,
 }
 
 /// How a platform calls a task.
@@ -186,6 +188,8 @@ impl TaskDef {
             Platform::Durable => Some(self.durable_function.as_deref().map(Via::DurableFunction).or(bound).unwrap_or(Via::Own)),
             // a task of the user's is a container of their image; the others run the code dandori writes
             Platform::Argo => self.argo_template.as_deref().map(Via::ArgoTemplate).or(self.image.as_deref().map(Via::Image)).or(bound),
+            // a task that is a workflow elsewhere is a function the user writes here
+            Platform::Graph => Some(bound.unwrap_or(Via::Own)),
         }
     }
 

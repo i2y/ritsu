@@ -54,17 +54,17 @@ pub fn package(m: &Model) -> String {
     ident(&m.name)
 }
 
-fn type_name(name: &str) -> String {
+pub(crate) fn type_name(name: &str) -> String {
     py_name(&name.replace('.', "_"))
 }
 
 /// A Python string literal (JSON's is one).
-fn q(s: &str) -> String {
+pub(crate) fn q(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
 
 /// The Python type of `t`, as a hint in the workflow and the tasks (`T.` for types.py).
-fn py_type(m: &Model, t: &Ty) -> String {
+pub(crate) fn py_type(m: &Model, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "int".into(),
         Ty::Str | Ty::Timestamp => "str".into(),
@@ -79,7 +79,7 @@ fn py_type(m: &Model, t: &Ty) -> String {
 
 /// A check that `x` is a well-formed value of `t`. `p` is how the code reaches types.py: ""
 /// inside it, "T." from the workflow.
-fn py_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
+pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, p: &str, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => format!("{p}is_int({x})"),
         Ty::Str => format!("isinstance({x}, str)"),
@@ -108,7 +108,7 @@ fn field_checks(m: &Model, v: &str, fields: &[(String, Ty)], p: &str) -> Vec<Str
     conds
 }
 
-fn types_file(m: &Model, header: &str) -> String {
+pub(crate) fn types_file(m: &Model, header: &str) -> String {
     let (enums, recs) = crate::temporal::used_types(m);
     let mut t = header.to_string();
     t.push_str(&format!("# The records and enums of {} v{}, and a check for each.\n\n", m.name, m.version));
@@ -169,13 +169,13 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/workflow.py"), wf),
     ];
     if !called.is_empty() {
-        files.push((format!("{dir}/rules.py"), rules_file(m, &header, &called)));
+        files.push((format!("{dir}/rules.py"), rules_file(m, &header, &called, true)));
     }
     Ok(files)
 }
 
 /// What a task's code gets, as a docstring: its arguments, the key, a callback's id, and the answer.
-fn task_doc(m: &Model, task: &TaskDef) -> String {
+pub(crate) fn task_doc(m: &Model, task: &TaskDef) -> String {
     let mut params: Vec<String> = task.params.iter().map(|(p, pt)| format!("{}: {}", q(p), py_type(m, pt))).collect();
     if task.key {
         params.push("\"idempotency_key\": str".into());
@@ -192,6 +192,89 @@ fn task_doc(m: &Model, task: &TaskDef) -> String {
         }
     };
     format!("args: {{{}}}. Answers {answer}.", params.join(", "))
+}
+
+/// The body of the function that runs a task, as lines: the user's own (`own`), or the call
+/// that dandori writes for `lambda`, `http` and `aws` through the Transport `t`. A declared
+/// error is raised as `fail(kind, message)`.
+pub(crate) fn task_impl(task: &TaskDef, p: Platform) -> Vec<String> {
+    let fname = method(&task.name);
+    match task.via(p) {
+        Some(Via::Own) => vec![format!("return await own.{fname}(args)")],
+        Some(Via::Lambda(f)) => {
+            let names = task.errors.iter().map(|e| format!("{}: {}", q(&e.name), q(&e.name))).collect::<Vec<_>>().join(", ");
+            let call = format!("io.value(await t.lambda_({}, args), {{{names}}}, fail)", q(f));
+            if task.callback {
+                vec![call, "return None".into()]
+            } else {
+                vec![format!("return {call}")]
+            }
+        }
+        Some(Via::Http { method: hm, url, form }) => {
+            let used = crate::lower::placeholders(url);
+            let mut url_parts: Vec<String> = Vec::new();
+            let mut rest = url;
+            while let Some(i) = rest.find('{') {
+                let j = match rest[i..].find('}') {
+                    Some(j) => i + j,
+                    None => break,
+                };
+                if i > 0 {
+                    url_parts.push(q(&rest[..i]));
+                }
+                url_parts.push(format!("io.text(args.get({}))", q(&rest[i + 1..j])));
+                rest = &rest[j + 1..];
+            }
+            if !rest.is_empty() || url_parts.is_empty() {
+                url_parts.push(q(rest));
+            }
+            let mut req = vec![format!("\"http\": {}", q(hm)), format!("\"url\": {}", url_parts.join(" + "))];
+            let mut headers = Vec::new();
+            if form {
+                headers.push("\"Content-Type\": \"application/x-www-form-urlencoded\"".to_string());
+            }
+            if task.key {
+                headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
+            }
+            if !headers.is_empty() {
+                req.push(format!("\"headers\": {{{}}}", headers.join(", ")));
+            }
+            let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
+            if !rest_args.is_empty() {
+                let place = if hm == "GET" || hm == "DELETE" { "query" } else { "body" };
+                req.push(format!("\"{place}\": {{{}}}", rest_args.join(", ")));
+            }
+            if form {
+                req.push("\"form\": True".into());
+            }
+            let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
+            vec![format!("return io.status(await t.http({{{}}}), {{{statuses}}}, fail)", req.join(", "))]
+        }
+        Some(Via::Aws { service, action }) => {
+            let names = task.errors.iter().map(|e| format!("{}: {}", q(e.exception.as_deref().unwrap_or(&e.name)), q(&e.name))).collect::<Vec<_>>().join(", ");
+            let mut input: Vec<String> = task
+                .params
+                .iter()
+                .map(|(p, _)| {
+                    if task.callback && p == "MessageBody" {
+                        format!("{}: {{**args[{}], \"callback_id\": args[\"callback_id\"]}}", q(p), q(p))
+                    } else {
+                        format!("{}: args.get({})", q(p), q(p))
+                    }
+                })
+                .collect();
+            if let (true, Some(kp)) = (task.key, &task.key_param) {
+                input.push(format!("{}: args[\"idempotency_key\"]", q(kp)));
+            }
+            let call = format!("io.value(await t.aws({}, {}, {{{}}}), {{{names}}}, fail)", q(service), q(action), input.join(", "));
+            if task.callback {
+                vec![call, "return None".into()]
+            } else {
+                vec![format!("return {call}")]
+            }
+        }
+        _ => vec!["raise NotImplementedError".into()],
+    }
 }
 
 /// activities.py: every task the workflow calls as an activity, the ones the user writes, and
@@ -229,91 +312,28 @@ fn tasks_file(m: &Model, header: &str) -> String {
         let fname = method(&task.name);
         names.push(fname.clone());
         a.push_str(&format!("\n    @activity.defn(name={})\n    async def {fname}(args: dict[str, Any]) -> Any:\n        \"\"\"{}\"\"\"\n", q(&ident(&task.name)), task_doc(m, task)));
-        match task.via(p) {
-            Some(Via::Own) => a.push_str(&format!("        return await own.{fname}(args)\n")),
-            Some(Via::Lambda(f)) => {
-                let names = task.errors.iter().map(|e| format!("{}: {}", q(&e.name), q(&e.name))).collect::<Vec<_>>().join(", ");
-                if task.callback {
-                    a.push_str(&format!("        io.value(await t.lambda_({}, args), {{{names}}}, fail)\n        return None\n", q(f)));
-                } else {
-                    a.push_str(&format!("        return io.value(await t.lambda_({}, args), {{{names}}}, fail)\n", q(f)));
-                }
-            }
-            Some(Via::Http { method: hm, url, form }) => {
-                let used = crate::lower::placeholders(url);
-                let mut url_parts: Vec<String> = Vec::new();
-                let mut rest = url;
-                while let Some(i) = rest.find('{') {
-                    let j = match rest[i..].find('}') {
-                        Some(j) => i + j,
-                        None => break,
-                    };
-                    if i > 0 {
-                        url_parts.push(q(&rest[..i]));
-                    }
-                    url_parts.push(format!("io.text(args.get({}))", q(&rest[i + 1..j])));
-                    rest = &rest[j + 1..];
-                }
-                if !rest.is_empty() || url_parts.is_empty() {
-                    url_parts.push(q(rest));
-                }
-                let mut req = vec![format!("\"http\": {}", q(hm)), format!("\"url\": {}", url_parts.join(" + "))];
-                let mut headers = Vec::new();
-                if form {
-                    headers.push("\"Content-Type\": \"application/x-www-form-urlencoded\"".to_string());
-                }
-                if task.key {
-                    headers.push("\"Idempotency-Key\": args[\"idempotency_key\"]".to_string());
-                }
-                if !headers.is_empty() {
-                    req.push(format!("\"headers\": {{{}}}", headers.join(", ")));
-                }
-                let rest_args: Vec<String> = task.params.iter().filter(|(p, _)| !used.contains(p)).map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
-                if !rest_args.is_empty() {
-                    let place = if hm == "GET" || hm == "DELETE" { "query" } else { "body" };
-                    req.push(format!("\"{place}\": {{{}}}", rest_args.join(", ")));
-                }
-                if form {
-                    req.push("\"form\": True".into());
-                }
-                let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
-                a.push_str(&format!("        return io.status(await t.http({{{}}}), {{{statuses}}}, fail)\n", req.join(", ")));
-            }
-            Some(Via::Aws { service, action }) => {
-                let names = task.errors.iter().map(|e| format!("{}: {}", q(e.exception.as_deref().unwrap_or(&e.name)), q(&e.name))).collect::<Vec<_>>().join(", ");
-                let mut input: Vec<String> = task
-                    .params
-                    .iter()
-                    .map(|(p, _)| {
-                        if task.callback && p == "MessageBody" {
-                            format!("{}: {{**args[{}], \"callback_id\": args[\"callback_id\"]}}", q(p), q(p))
-                        } else {
-                            format!("{}: args.get({})", q(p), q(p))
-                        }
-                    })
-                    .collect();
-                if let (true, Some(kp)) = (task.key, &task.key_param) {
-                    input.push(format!("{}: args[\"idempotency_key\"]", q(kp)));
-                }
-                let call = format!("t.aws({}, {}, {{{}}})", q(service), q(action), input.join(", "));
-                if task.callback {
-                    a.push_str(&format!("        io.value(await {call}, {{{names}}}, fail)\n        return None\n"));
-                } else {
-                    a.push_str(&format!("        return io.value(await {call}, {{{names}}}, fail)\n"));
-                }
-            }
-            _ => a.push_str("        raise NotImplementedError\n"),
+        for l in task_impl(task, p) {
+            a.push_str(&format!("        {l}\n"));
         }
     }
     a.push_str(&format!("\n    return [{}]\n", names.join(", ")));
     a
 }
 
-fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
+/// rules.py: every rule the flow calls, around the Python rulec generates; as Temporal
+/// activities, or as plain functions.
+pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, activities: bool) -> String {
     let mut t = header.to_string();
-    t.push_str("# The rules the workflow calls, as activities around the Python rulec generates.\n");
+    if activities {
+        t.push_str("# The rules the workflow calls, as activities around the Python rulec generates.\n");
+    } else {
+        t.push_str("# The rules the graph calls, as functions around the Python rulec generates.\n");
+    }
     t.push_str("# `rulec gen <rule> --out <this package>/rulec` writes the modules these imports read.\n\n");
-    t.push_str("from __future__ import annotations\n\nfrom typing import Any\n\nfrom temporalio import activity\n\n");
+    t.push_str("from __future__ import annotations\n\nfrom typing import Any\n\n");
+    if activities {
+        t.push_str("from temporalio import activity\n\n");
+    }
     for r in called {
         let py = &m.rules[*r].info.api["python"];
         let module = py["module"].as_str().unwrap_or("rule");
@@ -364,9 +384,9 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             outs.push(format!("        {}: {v},", q(name)));
         }
         let act = render::rule_activity(&ru.name);
+        let decorator = if activities { format!("@activity.defn(name={})\n", q(&act)) } else { String::new() };
         t.push_str(&format!(
-            "\n\n@activity.defn(name={})\nasync def {act}(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"The rule {} v{}.\"\"\"\n    out = {}({})\n    return {{\n{}\n    }}\n",
-            q(&act),
+            "\n\n{decorator}async def {act}(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"The rule {} v{}.\"\"\"\n    out = {}({})\n    return {{\n{}\n    }}\n",
             ru.info.rule,
             ru.info.version,
             py["function"].as_str().unwrap_or("rule"),
@@ -379,7 +399,7 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     t
 }
 
-const IO: &str = r#"# How the tasks that say `lambda`, `http` or `aws` reach the other side. They go through a
+pub(crate) const IO: &str = r#"# How the tasks that say `lambda`, `http` or `aws` reach the other side. They go through a
 # Transport, so that the credentials, the clients and a test's stand-in are yours to set; the
 # default one uses the standard library for HTTP and boto3 (the AWS SDK for Python) for the
 # rest, imported when first needed.
@@ -716,6 +736,55 @@ def fail(error: str, cause: str | None) -> ApplicationError:
     return ApplicationError(cause or "", type=error, non_retryable=True)
 "#;
 
+/// The retriers of a call, as the list `dd.attempt` takes: the ASL's, by the `.flow`'s kinds.
+pub(crate) fn retriers(m: &Model, callee: &Callee) -> String {
+    let v: Value = match callee {
+        Callee::Rule(_) => serde_json::json!([
+            { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
+            { "ErrorEquals": ["States.ALL"], "IntervalSeconds": crate::asl::RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": crate::asl::RULE_RETRY_BACKOFF }
+        ]),
+        Callee::Task(t) => match &m.tasks[*t].retry {
+            Some(r) => crate::asl::retriers(m, callee, &m.tasks[*t], r),
+            None => serde_json::json!([]),
+        },
+    };
+    let mut out = Vec::new();
+    for r in v.as_array().unwrap() {
+        let kinds: Vec<String> = r["ErrorEquals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| {
+                let n = x.as_str().unwrap();
+                if n == "States.ALL" {
+                    "*".to_string()
+                } else if n == "States.Timeout" {
+                    "timeout".to_string()
+                } else {
+                    match callee {
+                        Callee::Task(t) => m.tasks[*t]
+                            .errors
+                            .iter()
+                            .find(|e| render::asl_error(m, callee, &HErr::Declared(e.name.clone())).iter().any(|a| a == n))
+                            .map(|e| e.name.clone())
+                            .unwrap_or_else(|| n.to_string()),
+                        Callee::Rule(_) => n.to_string(),
+                    }
+                }
+            })
+            .collect();
+        let backoff = r["BackoffRate"].as_f64().unwrap_or(2.0);
+        out.push(format!(
+            "{{\"on\": [{}], \"max\": {}, \"every\": {}, \"backoff\": {}}}",
+            kinds.iter().map(|k| q(k)).collect::<Vec<_>>().join(", "),
+            r["MaxAttempts"].as_u64().unwrap_or(3),
+            r["IntervalSeconds"].as_u64().unwrap_or(1),
+            if backoff.fract() == 0.0 { format!("{backoff:.1}") } else { backoff.to_string() }
+        ));
+    }
+    format!("[{}]", out.join(", "))
+}
+
 struct Gen<'a> {
     m: &'a Model,
     out: String,
@@ -1001,55 +1070,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn retriers(&self, callee: &Callee) -> String {
-        let m = self.m;
-        let v: Value = match callee {
-            Callee::Rule(_) => serde_json::json!([
-                { "ErrorEquals": ["States.Timeout"], "MaxAttempts": 0 },
-                { "ErrorEquals": ["States.ALL"], "IntervalSeconds": crate::asl::RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": crate::asl::RULE_RETRY_BACKOFF }
-            ]),
-            Callee::Task(t) => match &m.tasks[*t].retry {
-                Some(r) => crate::asl::retriers(m, callee, &m.tasks[*t], r),
-                None => serde_json::json!([]),
-            },
-        };
-        let mut out = Vec::new();
-        for r in v.as_array().unwrap() {
-            let kinds: Vec<String> = r["ErrorEquals"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|x| {
-                    let n = x.as_str().unwrap();
-                    if n == "States.ALL" {
-                        "*".to_string()
-                    } else if n == "States.Timeout" {
-                        "timeout".to_string()
-                    } else {
-                        match callee {
-                            Callee::Task(t) => m.tasks[*t]
-                                .errors
-                                .iter()
-                                .find(|e| render::asl_error(m, callee, &HErr::Declared(e.name.clone())).iter().any(|a| a == n))
-                                .map(|e| e.name.clone())
-                                .unwrap_or_else(|| n.to_string()),
-                            Callee::Rule(_) => n.to_string(),
-                        }
-                    }
-                })
-                .collect();
-            let backoff = r["BackoffRate"].as_f64().unwrap_or(2.0);
-            out.push(format!(
-                "{{\"on\": [{}], \"max\": {}, \"every\": {}, \"backoff\": {}}}",
-                kinds.iter().map(|k| q(k)).collect::<Vec<_>>().join(", "),
-                r["MaxAttempts"].as_u64().unwrap_or(3),
-                r["IntervalSeconds"].as_u64().unwrap_or(1),
-                if backoff.fract() == 0.0 { format!("{backoff:.1}") } else { backoff.to_string() }
-            ));
-        }
-        format!("[{}]", out.join(", "))
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, args: &[(String, TExpr)], handlers: &[THandler], d: usize) {
         let m = self.m;
@@ -1068,7 +1088,7 @@ impl<'a> Gen<'a> {
                 parts.push(format!("\"idempotency_key\": dd.key({site}, {})", self.rounds_expr()));
             }
         }
-        let retriers = self.retriers(callee);
+        let retriers = retriers(m, callee);
         let declared = format!("[{}]", declared.join(", "));
         self.line(d, &format!("# line {}: {cname}", s.line));
         let invocation = match callee {

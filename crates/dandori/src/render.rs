@@ -16,6 +16,8 @@ pub enum View {
     Durable,
     /// Argo Workflows: a task is a container, a rule a container of dandori's code
     Argo,
+    /// pydantic-graph: a task is a function the graph calls, a rule a function around rulec's Python
+    Graph,
 }
 
 impl View {
@@ -25,6 +27,7 @@ impl View {
             View::Temporal => Platform::Temporal,
             View::Durable => Platform::Durable,
             View::Argo => Platform::Argo,
+            View::Graph => Platform::Graph,
         }
     }
 }
@@ -58,7 +61,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                 View::Temporal => json!({ "activity": rule_activity(&ru.name), "args": args }),
                 View::Durable => json!({ "invoke": ru.lambda.clone().unwrap_or_default(), "payload": args }),
                 View::Asl => json!({ "lambda": ru.lambda.clone().unwrap_or_default(), "payload": args }),
-                View::Argo => json!({ "rule": ru.name, "args": args }),
+                View::Argo | View::Graph => json!({ "rule": ru.name, "args": args }),
             };
         }
         Callee::Task(t) => &m.tasks[*t],

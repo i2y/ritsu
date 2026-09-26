@@ -74,17 +74,16 @@ function scripted(kind) {
   return ApplicationFailure.create({ type: kind === "failure" ? "Dandori.Test.Failure" : kind, message: "scripted", nonRetryable: true });
 }
 
-/** Answer a callback with a signal to the workflow the id names; a timeout gets no answer. */
-function answerLater(callbackId, ans) {
+/**
+ * Answer a callback with a signal to the workflow the id names, before the task that hands the
+ * id on returns: then the answer is in the history before the workflow waits for it, and the
+ * time-skipping environment cannot run the wait out first. A timeout gets no answer.
+ */
+async function answerLater(callbackId, ans) {
   if (!("ok" in ans) && ans.error === "timeout") return;
   const [workflowId] = JSON.parse(callbackId);
   const signal = "ok" in ans ? { callback_id: callbackId, ok: ans.ok } : { callback_id: callbackId, error: ans.error === "failure" ? "Dandori.Test.Failure" : ans.error, message: "scripted" };
-  setTimeout(() => {
-    env.client.workflow
-      .getHandle(workflowId)
-      .signal("dandori.callback", signal)
-      .catch((e) => process.stderr.write(`could not answer the callback: ${e}\n`));
-  }, 0);
+  await env.client.workflow.getHandle(workflowId).signal("dandori.callback", signal);
 }
 
 // the stand-in transport writes every call down with the answer it takes
@@ -104,7 +103,7 @@ for (const t of spec.own ?? []) {
     if (t.callback) {
       const { callback_id, ...rest } = args;
       current.steps.push({ call: { activity: t.name, args: rest }, answer: recorded(ans) });
-      answerLater(callback_id, ans);
+      await answerLater(callback_id, ans);
       return;
     }
     current.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });

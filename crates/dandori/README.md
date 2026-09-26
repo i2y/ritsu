@@ -4,8 +4,8 @@ A small typed language for workflows that call business rules. A `.flow` is chec
 before it runs — types, every arm of every match, every state a case can be left in,
 retries that could repeat a change, how long the execution history can grow — and
 compiled to **AWS Step Functions** (ASL with JSONata), to **Temporal** (TypeScript or
-Python), to **AWS Lambda durable functions** (TypeScript) and to **Argo Workflows** (a
-WorkflowTemplate).
+Python), to **AWS Lambda durable functions** (TypeScript), to **Argo Workflows** (a
+WorkflowTemplate) and to **pydantic-graph** (a graph that runs in the process that calls it).
 
 The decisions themselves are written in [rulec](https://github.com/i2y/rulec): tables
 that rulec proves complete and free of overlaps. dandori reads them through rulec's
@@ -96,20 +96,22 @@ flow
 
 ### What a task calls
 
-| The task says | Step Functions | Temporal | Lambda durable functions | Argo Workflows |
-|---|---|---|---|---|
-| `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function | a container running the code dandori writes |
-| `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` |
-| `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK |
-| `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | |
-| `workflow "<type>"` | | child workflow | | |
-| `durable function "<arn>"` | | | invoke of another durable function | |
-| `workflow template "<name>"` | | | | a Workflow from that WorkflowTemplate |
-| `image "<image>"` | | | | a container of your image |
-| none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) |
+| The task says | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |
+|---|---|---|---|---|---|
+| `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function | a container running the code dandori writes | a function dandori writes, invoking the function |
+| `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
+| `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
+| `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
+| `workflow "<type>"` | | child workflow | | | |
+| `durable function "<arn>"` | | | invoke of another durable function | | |
+| `workflow template "<name>"` | | | | a Workflow from that WorkflowTemplate | |
+| `image "<image>"` | | | | a container of your image | |
+| none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) | a function you write (`OwnTasks`) |
 
-The code dandori writes for Temporal, durable functions and Argo sends what Step Functions
-sends, through a `Transport` (`io.ts`) whose credentials and clients are yours to set.
+The code dandori writes for Temporal, durable functions, Argo and pydantic-graph sends what
+Step Functions sends, through a `Transport` (`io.ts`, `io.py`) whose credentials and clients
+are yours to set. On pydantic-graph, a task that another platform runs as a workflow is a
+function you write.
 `queue "<name>"` sends a Temporal activity or child workflow to that task queue. A
 `callback` task hands on a token (Step Functions), a callback id (durable functions), or
 an id the answer comes back with as a signal (Temporal) or through `argo node set` (Argo);
@@ -133,9 +135,9 @@ and so is for Temporal, durable functions and Argo (with `image`). The design, i
 
 ```
 dandori check <file.flow>...
-dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]
+dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target asl|temporal|temporal-python|durable|argo]
+dandori run <file.flow> --scenario <file.json> [--target asl|temporal|temporal-python|durable|argo|pydantic-graph]
 ```
 
 `--lang ja` prints the messages in Japanese. rulec is found through `DANDORI_RULEC`, else
@@ -160,6 +162,13 @@ on the PATH.
   input as the parameter `input` and leaves the outputs in the global parameter
   `dd_output`, and `caller/`: the program that runs the `lambda`, `http` and `aws` tasks and
   the rules in the workflow's containers, with its `package.json` and `Dockerfile`.
+- `build --target pydantic-graph` writes a package with `graph.py` (`graph`, and its
+  `State` and `Deps`), `types.py`, `tasks.py` (`make_tasks(own, transport)`), `io.py`,
+  `rules.py` and `runtime.py`. Every statement is a node, and the return type of each node
+  names where the flow can go, so `graph.render()` draws the flow. The run lives in the
+  process that runs it: the waits sleep by `Deps.clock`, a callback's answer comes to
+  `Deps.callbacks`, and pydantic-graph 2.x keeps nothing anywhere else, so a run the process
+  loses is lost.
 - `scenarios` writes inputs and scripted answers that together take every arm, every
   handler, every way a case can move, and lists that are empty, short, and longer than
   their loop takes; `run` plays one through the reference interpreter.
@@ -167,14 +176,16 @@ on the PATH.
 ## How the output is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
-of every example and run each of them six ways — the reference interpreter, the
+of every example and run each of them seven ways — the reference interpreter, the
 generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal workflow
 in Temporal's time-skipping test environment, in TypeScript (`tools/temporal/run.mjs`)
 and in Python (`tools/temporal-python/run.py`), the generated durable function in the
-SDK's local test runner (`tools/durable/run.mjs`), and the generated WorkflowTemplate on
-Argo Workflows v4.1.4 in a local kind cluster (`tools/argo/run.mjs`) — and require the
-same calls, with the same arguments and idempotency keys, and the same end.
-On Temporal and durable functions, the tasks dandori writes run with a stand-in
+SDK's local test runner (`tools/durable/run.mjs`), the generated WorkflowTemplate on Argo
+Workflows v4.1.4 in a local kind cluster (`tools/argo/run.mjs`), and the generated graph
+with pydantic-graph 2.51.0 (`tools/pydantic-graph/run.py`) — and require the same calls,
+with the same arguments and idempotency keys, and the same end. No two values in a
+scenario are alike, so a target that mixes up two answers or the rounds of a loop shows it.
+On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are
 stand-ins that answer from the scenario. On Argo, the caller runs in the pods with such a
@@ -183,9 +194,9 @@ containers that ask a mock in the cluster for the scenario's answer. The rounds 
 parallel loop run one at a time in the runners, so the calls come in the reference's order.
 
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
-timeout are left out there. Temporal's test environment and Argo cannot time out a task
-either, but a callback's timeout can be played: on Temporal by not answering it, on Argo
-by answering the wait with what its running out gives. The ASL is also validated with
+timeout are left out there. Temporal's test environment, Argo and the graph's runner cannot
+time out a task either, but a callback's timeout can be played: on Temporal and pydantic-graph by not
+answering it, on Argo by answering the wait with what its running out gives. The ASL is also validated with
 asl-validator, and the code between each platform and a rule answers every vector
 `rulec vectors` produces as rulec says.
 
@@ -195,6 +206,8 @@ npm install --prefix tools/temporal
 npm install --prefix tools/durable
 uv venv --python 3.13 tools/temporal-python/.venv
 uv pip install --python tools/temporal-python/.venv/bin/python -r tools/temporal-python/requirements.txt
+uv venv --python 3.13 tools/pydantic-graph/.venv
+uv pip install --python tools/pydantic-graph/.venv/bin/python -r tools/pydantic-graph/requirements.txt
 sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```

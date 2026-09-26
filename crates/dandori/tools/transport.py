@@ -1,16 +1,19 @@
-# A Transport for the Python dandori writes for Temporal, in place of Lambda, HTTP and the AWS
-# APIs: every call goes to `run.take(call, callback_id)` as Step Functions would send it, which
-# writes it down and gives the scenario's answer. The Python twin of ../transport.mjs.
+# A Transport for the Python dandori writes (for Temporal and for pydantic-graph), in place of
+# Lambda, HTTP and the AWS APIs: every call goes to `run.take(call, callback_id)` as Step
+# Functions would send it, which writes it down and gives the scenario's answer. The Python
+# twin of transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
 #
 # spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders})
 # spec["aws"]:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 #
 # A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
 # message); the call is written down without it, `take` gets the id, and
-# `run.answer_later(id, answer)` is called with the answer the scenario gives the callback.
+# `run.answer_later(id, answer)` is called (and awaited, when it gives something to await) with
+# the answer the scenario gives the callback.
 
 from __future__ import annotations
 
+import inspect
 import re
 from typing import Any
 
@@ -31,7 +34,9 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
             callback_id = payload.get("callback_id")
             ans = run.take({"lambda": fn, "payload": rest}, callback_id)
             if callback_id is not None:
-                run.answer_later(callback_id, ans)
+                answered = run.answer_later(callback_id, ans)
+                if inspect.isawaitable(answered):
+                    await answered
                 return {"ok": None}
             if "ok" in ans:
                 return {"ok": ans["ok"]}
@@ -55,7 +60,9 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
                 args = {**input, "MessageBody": {k: v for k, v in body.items() if k != "callback_id"}}
             ans = run.take({"aws": api, "args": args}, callback_id)
             if callback_id is not None:
-                run.answer_later(callback_id, ans)
+                answered = run.answer_later(callback_id, ans)
+                if inspect.isawaitable(answered):
+                    await answered
                 return {"ok": {"MessageId": "message-1"}}
             if "ok" in ans:
                 return {"ok": ans["ok"]}

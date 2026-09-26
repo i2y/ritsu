@@ -414,7 +414,58 @@ fn rule_glue_answers_the_rulec_vectors() {
     }
 }
 
-/// rules.py of the Python build answers every vector rulec generates for each rule the flow calls.
+/// The Python of tools/pydantic-graph/.venv, where pydantic-graph is.
+fn pydantic_graph_python() -> Option<PathBuf> {
+    let py = root().join("tools/pydantic-graph/.venv/bin/python");
+    py.exists().then_some(py)
+}
+
+#[test]
+fn pydantic_graph_runs_as_the_reference_says() {
+    need_rulec!();
+    let python = match pydantic_graph_python() {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: tools/pydantic-graph/.venv is missing; make it as tools/pydantic-graph/requirements.txt says");
+            return;
+        }
+    };
+    for f in runnable() {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the examples pass check");
+        let dir = scratch(&format!("pydantic-graph-{}", dandori::render::ident(&m.name)));
+        let files = dandori::pydantic_graph::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
+        for (name, text) in &files {
+            let p = dir.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+        let p = Platform::Graph;
+        let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::temporal_py::method(&t.name), "callback": t.callback })).collect();
+        let rules: Vec<Value> = m.rules.iter().map(|r| json!({ "fn": dandori::render::rule_activity(&r.name), "name": r.name })).collect();
+        let (http, aws) = transport_spec(&m, p);
+        // a task's own timeout cannot be scripted; a callback's can, by not answering it
+        let (runs, references, left_out) = plays(&m, View::Graph, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
+        let runs_file = dir.join("runs.json");
+        let results_file = dir.join("results.json");
+        let spec = json!({ "own": own, "rules": rules, "http": http, "aws": aws, "runs": runs });
+        std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+        let out = Command::new(&python)
+            .arg(root().join("tools/pydantic-graph/run.py"))
+            .arg(dir.join(dandori::pydantic_graph::package(&m)))
+            .arg(&runs_file)
+            .arg(&results_file)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}: the pydantic-graph runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+        compare("the pydantic-graph graph", &f, &references, &got);
+        eprintln!("{}: compared {} run(s) on pydantic-graph; left out {left_out} with a task's timeout", rel(&f), references.len());
+    }
+}
+
+/// rules.py of the Python builds — the activities for Temporal and the functions for
+/// pydantic-graph — answers every vector rulec generates for each rule the flow calls.
 #[test]
 fn python_rules_answer_the_rulec_vectors() {
     need_rulec!();
@@ -428,37 +479,38 @@ fn python_rules_answer_the_rulec_vectors() {
     for f in flows(&root().join("examples")) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let files = dandori::temporal_py::build(&m).unwrap();
-        let rules_py = match files.iter().find(|(n, _)| n.ends_with("/rules.py")) {
-            Some((_, t)) => t.clone(),
-            None => continue,
-        };
-        let dir = scratch(&format!("glue-python-{}", dandori::render::ident(&m.name)));
-        let pkg = dir.join("glue");
-        std::fs::create_dir_all(&pkg).unwrap();
-        std::fs::write(pkg.join("__init__.py"), "").unwrap();
-        std::fs::write(pkg.join("rules.py"), &rules_py).unwrap();
-        let mut called: Vec<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
-        called.sort();
-        called.dedup();
-        for r in &called {
-            let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(pkg.join("rulec")).output().unwrap();
-            assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
-        }
-        for r in &called {
-            let ru = &m.rules[*r];
-            let vectors = Command::new(rulec_bin()).arg("vectors").arg(&ru.info.path).output().unwrap();
-            std::fs::write(dir.join("vectors.jsonl"), &vectors.stdout).unwrap();
-            let expected: Vec<Value> = String::from_utf8_lossy(&vectors.stdout).lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
-            let script = format!(
-                "import asyncio, json, sys\nsys.path.insert(0, '.')\nimport glue.rules as R\nf = getattr(R, {})\nasync def main():\n    return [await f(json.loads(l)['in']) for l in open('vectors.jsonl', encoding='utf-8')]\nprint(json.dumps(asyncio.run(main()), ensure_ascii=False))\n",
-                serde_json::to_string(&dandori::render::rule_activity(&ru.name)).unwrap()
-            );
-            let out = Command::new(&python).arg("-c").arg(script).current_dir(&dir).output().unwrap();
-            assert!(out.status.success(), "rules.py failed: {}", String::from_utf8_lossy(&out.stderr));
-            let got: Value = serde_json::from_slice(&out.stdout).unwrap();
-            assert_eq!(norm(&got), norm(&json!(expected)), "the Python activity of {} differs from rulec's vectors", ru.name);
-            eprintln!("{}: rules.py answers the {} vector(s) of {} as rulec does", rel(&f), expected.len(), ru.name);
+        for (label, files) in [("Temporal", dandori::temporal_py::build(&m).unwrap()), ("pydantic-graph", dandori::pydantic_graph::build(&m).unwrap())] {
+            let rules_py = match files.iter().find(|(n, _)| n.ends_with("/rules.py")) {
+                Some((_, t)) => t.clone(),
+                None => continue,
+            };
+            let dir = scratch(&format!("glue-python-{}-{}", label, dandori::render::ident(&m.name)));
+            let pkg = dir.join("glue");
+            std::fs::create_dir_all(&pkg).unwrap();
+            std::fs::write(pkg.join("__init__.py"), "").unwrap();
+            std::fs::write(pkg.join("rules.py"), &rules_py).unwrap();
+            let mut called: Vec<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+            called.sort();
+            called.dedup();
+            for r in &called {
+                let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(pkg.join("rulec")).output().unwrap();
+                assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+            }
+            for r in &called {
+                let ru = &m.rules[*r];
+                let vectors = Command::new(rulec_bin()).arg("vectors").arg(&ru.info.path).output().unwrap();
+                std::fs::write(dir.join("vectors.jsonl"), &vectors.stdout).unwrap();
+                let expected: Vec<Value> = String::from_utf8_lossy(&vectors.stdout).lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
+                let script = format!(
+                    "import asyncio, json, sys\nsys.path.insert(0, '.')\nimport glue.rules as R\nf = getattr(R, {})\nasync def main():\n    return [await f(json.loads(l)['in']) for l in open('vectors.jsonl', encoding='utf-8')]\nprint(json.dumps(asyncio.run(main()), ensure_ascii=False))\n",
+                    serde_json::to_string(&dandori::render::rule_activity(&ru.name)).unwrap()
+                );
+                let out = Command::new(&python).arg("-c").arg(script).current_dir(&dir).output().unwrap();
+                assert!(out.status.success(), "rules.py failed: {}", String::from_utf8_lossy(&out.stderr));
+                let got: Value = serde_json::from_slice(&out.stdout).unwrap();
+                assert_eq!(norm(&got), norm(&json!(expected)), "rules.py for {label} of {} differs from rulec's vectors", ru.name);
+                eprintln!("{}: rules.py for {label} answers the {} vector(s) of {} as rulec does", rel(&f), expected.len(), ru.name);
+            }
         }
     }
 }

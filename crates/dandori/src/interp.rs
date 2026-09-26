@@ -457,7 +457,7 @@ impl<'a> Run<'a> {
     /// The name the target gives an error of this kind from this callee.
     fn error_of(&self, callee: &Callee, kind: &str) -> CallError {
         let target_name = match self.view {
-            View::Temporal | View::Durable | View::Argo => kind.to_string(),
+            View::Temporal | View::Durable | View::Argo | View::Graph => kind.to_string(),
             View::Asl => match kind {
                 "timeout" => "States.Timeout".to_string(),
                 "failure" => TEST_FAILURE.to_string(),

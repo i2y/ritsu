@@ -10,7 +10,7 @@
 #              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
 #
 # The tasks that say `lambda`, `http` or `aws` run the generated code, with a Transport that
-# writes down what it would send (transport.py). The tasks the user writes, the rules and the
+# writes down what it would send (../transport.py). The tasks the user writes, the rules and the
 # child workflows are stand-ins that answer from the scenario. A callback's answer comes as the
 # signal the workflow waits for; a callback that the scenario times out gets none, and the
 # time-skipping environment lets its wait run out. A task's own timeout cannot be scripted this
@@ -40,7 +40,7 @@ from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig, Telemetr
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from transport import make_transport  # noqa: E402
 
 # the workers' log goes quiet but for errors; the results go to a file
@@ -86,7 +86,6 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
     children = importlib.import_module(f"{package}.dd_test_children").children
     current: dict[str, Any] = {}
     env: WorkflowEnvironment | None = None
-    signals: set[asyncio.Task[Any]] = set()
 
     def take(label: str) -> dict[str, Any]:
         if current["next"] >= len(current["answers"]):
@@ -101,8 +100,10 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
     def scripted(kind: str) -> ApplicationError:
         return ApplicationError("scripted", type="Dandori.Test.Failure" if kind == "failure" else kind, non_retryable=True)
 
-    def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
-        """Answer a callback with a signal to the workflow the id names; a timeout gets no answer."""
+    async def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
+        """Answer a callback with a signal to the workflow the id names, before the task that
+        hands the id on returns: then the answer is in the history before the workflow waits for
+        it, and the time-skipping environment cannot run the wait out first. A timeout gets no answer."""
         if "ok" not in ans and ans["error"] == "timeout":
             return
         workflow_id = json.loads(callback_id)[0]
@@ -110,17 +111,8 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             signal = {"callback_id": callback_id, "ok": ans["ok"]}
         else:
             signal = {"callback_id": callback_id, "error": "Dandori.Test.Failure" if ans["error"] == "failure" else ans["error"], "message": "scripted"}
-
-        async def send() -> None:
-            try:
-                assert env is not None
-                await env.client.get_workflow_handle(workflow_id).signal("dandori.callback", signal)
-            except Exception as e:  # noqa: BLE001
-                print(f"could not answer the callback: {e}", file=sys.stderr)
-
-        task = asyncio.get_running_loop().create_task(send())
-        signals.add(task)
-        task.add_done_callback(signals.discard)
+        assert env is not None
+        await env.client.get_workflow_handle(workflow_id).signal("dandori.callback", signal)
 
     class Run:
         """The stand-in transport writes every call down with the answer it takes."""
@@ -130,8 +122,8 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             current["steps"].append({"call": call, "answer": recorded(ans)})
             return ans
 
-        def answer_later(self, callback_id: str, ans: dict[str, Any]) -> None:
-            answer_later(callback_id, ans)
+        def answer_later(self, callback_id: str, ans: dict[str, Any]) -> Any:
+            return answer_later(callback_id, ans)
 
     class Own:
         pass
@@ -145,7 +137,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
                 if t["callback"]:
                     rest = {k: v for k, v in args.items() if k != "callback_id"}
                     current["steps"].append({"call": {"activity": t["name"], "args": rest}, "answer": recorded(ans)})
-                    answer_later(args["callback_id"], ans)
+                    await answer_later(args["callback_id"], ans)
                     return None
                 current["steps"].append({"call": {"activity": t["name"], "args": args}, "answer": recorded(ans)})
                 if "ok" in ans:

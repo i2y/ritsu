@@ -7,10 +7,11 @@ const USAGE: &str = "dandori — a small typed language for workflows that call 
 
 Usage:
   dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries, history size
-  dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]
+  dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
                                                   compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript or Python),
-                                                  to AWS Lambda durable functions (TypeScript), or to Argo Workflows (YAML)
-  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo]
+                                                  to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML),
+                                                  or to pydantic-graph (Python)
+  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
                                                   run the workflow in the reference interpreter against scripted answers,
                                                   and print the trace as the target would show it
   dandori scenarios <file.flow> [--out <dir>]     write scenarios that take every arm and every way a case can move
@@ -48,7 +49,7 @@ fn parse_args() -> Result<Args, String> {
                 _ => return Err("--format takes json or text".into()),
             },
             "--lang" => lang_flag = Some(it.next().ok_or("--lang takes ja or en")?),
-            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, durable, argo or reference")?),
+            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, durable, argo, pydantic-graph or reference")?),
             "--out" => a.out = Some(PathBuf::from(it.next().ok_or("--out takes a directory")?)),
             "--scenario" => a.scenario = Some(PathBuf::from(it.next().ok_or("--scenario takes a file")?)),
             "--help" | "-h" => return Err(USAGE.to_string()),
@@ -131,7 +132,7 @@ fn cmd_build(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo [--out <dir>]");
+            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]");
             return 2;
         }
     };
@@ -147,8 +148,9 @@ fn cmd_build(a: &Args) -> u8 {
         Some("temporal-python") => dandori::temporal_py::build(&model),
         Some("durable") => dandori::temporal::build_flavor(&model, dandori::temporal::Flavor::Durable),
         Some("argo") => dandori::argo::build(&model),
+        Some("pydantic-graph") => dandori::pydantic_graph::build(&model),
         _ => {
-            eprintln!("--target takes asl, temporal, temporal-python, durable or argo");
+            eprintln!("--target takes asl, temporal, temporal-python, durable, argo or pydantic-graph");
             return 2;
         }
     };
@@ -183,7 +185,7 @@ fn cmd_run(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo]");
+            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]");
             return 2;
         }
     };
@@ -211,6 +213,7 @@ fn cmd_run(a: &Args) -> u8 {
         Some("temporal") | Some("temporal-python") => dandori::render::View::Temporal,
         Some("durable") => dandori::render::View::Durable,
         Some("argo") => dandori::render::View::Argo,
+        Some("pydantic-graph") => dandori::render::View::Graph,
         Some(o) => {
             eprintln!("unknown target {o}");
             return 2;
