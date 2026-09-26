@@ -37,6 +37,7 @@ nav = [
     { "Generated code" = "generated-code.md" },
     { "Other targets" = "backends.md" },
     { Formats = "formats.md" },
+    { Compatibility = "compatibility.md" },
   ] },
 ]
 

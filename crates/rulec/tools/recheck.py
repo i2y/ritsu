@@ -2004,6 +2004,10 @@ def main(argv):
         for line in (l for l in text.splitlines() if l.strip()):
             try:
                 cert = json.loads(line)
+                # The shape this program reads is version 1. A certificate of another shape
+                # says so in `v`, and is refused rather than read as something it is not.
+                if cert.get("v", 1) != 1:
+                    raise ValueError(f"its format version is {cert['v']!r}; this program reads version 1")
                 lines, ok = check(cert)
             except (ValueError, KeyError, TypeError) as e:
                 print(f"{where}: not a certificate this program can read: {e}", file=sys.stderr)

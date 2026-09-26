@@ -18,7 +18,7 @@ fn read(rel: &str) -> String {
 }
 
 const BUNDLED: &[&str] =
-    &["SKILL.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "examples.md"];
+    &["SKILL.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "examples.md", "compatibility.md"];
 
 /// The same assembly `skills/sync.sh` does, in one place so the two cannot disagree.
 fn built_skill_md() -> String {
@@ -48,6 +48,7 @@ fn スキルはいまの文書から組み立てたものと同じ() {
     for (bundled, source) in [
         ("formats.md", "docs/formats.md"),
         ("generated-code.md", "docs/generated-code.md"),
+        ("compatibility.md", "docs/compatibility.md"),
     ] {
         assert_eq!(
             read(&format!("skills/rulec/{bundled}")),

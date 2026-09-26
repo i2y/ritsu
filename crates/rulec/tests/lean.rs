@@ -542,3 +542,22 @@ fn 数の集合の箱は証明付きの検査器でも組み直される() {
     assert_eq!(code, 1, "広げた箱が通ってしまった:\n{said}");
     assert!(said.contains("is not the one its cell describes"), "{said}");
 }
+
+/// A certificate of a shape other than the one the proofs are about is refused, not read
+/// (§15.156). `tests/cert.rs` holds `tools/recheck.py` to the same.
+#[test]
+fn 知らない形式の版の証明書は証明付きの検査器でも断る() {
+    let Some(bin) = checker() else {
+        eprintln!("skip: proofs/ が build されていない");
+        return;
+    };
+    let (c, cert) = rulec(&["certificate", "tests/corpus/健康保険料.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let later = cert.replacen(r#"{"v":1,"#, r#"{"v":2,"#, 1);
+    assert_ne!(later, cert, "証明書が形式の版を名乗らない");
+    let (code, said) = lean(&bin, &later, None);
+    assert_eq!(code, 1, "版 2 の証明書を読んでしまった\n{said}");
+    assert!(said.contains("format version"), "{said}");
+    let unmarked = cert.replacen(r#"{"v":1,"#, "{", 1);
+    assert_eq!(lean(&bin, &unmarked, None).0, 0, "v の無い証明書を版 1 として読まない");
+}

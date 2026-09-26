@@ -19,7 +19,7 @@ fn root() -> PathBuf {
 /// The pages `website/sync.sh` copies in. They are gitignored, so a page may be
 /// linked or listed in the nav without being on disk in a fresh checkout.
 const SYNCED: &[&str] =
-    &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md"];
+    &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md", "compatibility.md"];
 
 /// The pages written for the site itself, in both languages.
 const AUTHORED: &[&str] = &[

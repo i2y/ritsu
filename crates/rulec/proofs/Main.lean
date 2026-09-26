@@ -950,6 +950,11 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
   match Json.parse text with
   | .error e => IO.println s!"FAILED: the certificate is not JSON: {e}"; return 1
   | .ok cert =>
+    -- The shape this program reads is version 1. A certificate of another shape says so in
+    -- `v`, and is refused here rather than read as something it is not.
+    if (field cert "v").isSome && fieldNat cert "v" != some 1 then
+      IO.println "FAILED: the certificate's format version (`v`) is not 1, the one this program reads"
+      return 1
     let mut r : Report := {}
     r := r.say s!"{fieldStr cert "rule"} ({fieldStr cert "rulec"}), re-checked against the Lean proofs"
     let (r', reachOf) := checkValues cert r

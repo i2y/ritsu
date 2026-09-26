@@ -29,6 +29,7 @@ const RESOURCES: &[(&str, &str, &str, &str)] = &[
     ("rulec://docs/formats.md", "formats", "Every machine-readable format: --format json, vectors, fixtures, the manifest, the adapter protocol.", include_str!("../docs/formats.md")),
     ("rulec://docs/generated-code.md", "generated-code", "The shape and guarantees of the generated code in each language, and how to call it.", include_str!("../docs/generated-code.md")),
     ("rulec://docs/backends.md", "backends", "Targeting a language rulec does not generate, without losing the comparison.", include_str!("../docs/backends.md")),
+    ("rulec://docs/compatibility.md", "compatibility", "What every 1.x release keeps — the language, the answers, the calls, the CLI, the codes, the formats — and what it may change.", include_str!("../docs/compatibility.md")),
 ];
 
 pub fn serve(limit: std::time::Duration) -> ExitCode {

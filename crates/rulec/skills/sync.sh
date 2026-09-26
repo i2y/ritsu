@@ -35,6 +35,7 @@ sed -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
     ../docs/reference.md > rulec/reference.md
 cp ../docs/formats.md        rulec/formats.md
 cp ../docs/generated-code.md rulec/generated-code.md
+cp ../docs/compatibility.md  rulec/compatibility.md
 # The worked example points at a rule in this repository; inside someone else's project
 # that path leads nowhere, so the link becomes the plain name of the rule.
 sed -e 's|\[`tests/corpus/ec261.rule`\](../tests/corpus/ec261.rule)|`ec261.rule`|g' \

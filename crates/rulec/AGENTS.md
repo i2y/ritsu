@@ -462,6 +462,7 @@ overrule them will see them.
 | [docs/formats.md](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
 | [docs/generated-code.md](docs/generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | [docs/backends.md](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
+| [docs/compatibility.md](docs/compatibility.md) | what every 1.x release keeps — the language, the answers, the calls, the CLI, the codes, the formats — and what it may change |
 | `proofs/` (Lean 4) | what a table means, the checks a certificate has to pass, and the theorems that a `true` from each one settles the matching claim. `lake build` checks them; the program it builds re-checks certificates |
 | `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
 | `README.md` | the worked example, the excerpts of generated code, and how to run the suite |

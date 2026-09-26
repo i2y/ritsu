@@ -19,6 +19,11 @@ Three rules hold everywhere.
 Exit codes are unchanged by `--format json`: 0 notes only, 1 findings, 2 bad arguments or an
 internal failure. **Read the exit code, not the emptiness of the output.**
 
+**Skip a key you do not know.** From 1.0 a release adds fields and never removes one or
+changes what one means ([compatibility.md](compatibility.md)). Where an object carries `v`, it
+is the version of its shape — `check` is at 2 and the certificate at 1 — and one without `v`
+is at 1.
+
 ---
 
 ## `check`
@@ -572,7 +577,7 @@ produces runs those very functions, so what it prints is the theorems applied to
 document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
-{"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.20.0",
+{"v":1,"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.20.0",
  "ranges":{"合計":["0","1000000"],"割引A":["0","100000"],"残高A":["-100000","1000000"]},
  "constraints":[],
  "values":[{"name":"残高A","expr":{"op":"-","l":{"name":"合計"},"r":{"name":"割引A"}},
@@ -602,6 +607,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 
 | field | meaning |
 |---|---|
+| `v` | the version of this shape, `1`. A re-checker refuses a certificate whose `v` it was not written for rather than checking something else, as both of the ones here do; an absent `v` is `1` |
 | `types` | every name's declared type, and `groups` every group's members. A row's box and a value's type are **derived** from these by the re-checker, not taken from the certificate |
 | `enums` | every enum's values, which is what a contract's strings are held to |
 | `ranges` | every name's declared range, as exact rationals (`"7/2"`, an open end `null`). The int64 claim is re-checked from these |

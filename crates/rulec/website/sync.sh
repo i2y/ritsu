@@ -30,6 +30,7 @@ sed 's|](../tests/corpus/ec261.rule)|](https://github.com/i2y/rulec/blob/main/te
 # test in the repository holds it to that, so it is copied rather than
 # regenerated (the site build needs no Rust toolchain).
 cp "$root/docs/codes.md"                            docs/codes.md
+cp "$root/docs/compatibility.md"                    docs/compatibility.md
 
 # ---- Japanese: the ledger has a Japanese rendering of its own; the
 # other five are English by the project's own rule (the first reader of
@@ -37,12 +38,13 @@ cp "$root/docs/codes.md"                            docs/codes.md
 # leaving a reader wondering whether a translation was lost.
 mkdir -p docs-ja/stylesheets docs-ja/images
 cp "$root/docs/codes.ja.md"                         docs-ja/codes.md
+cp "$root/docs/compatibility.ja.md"                 docs-ja/compatibility.md
 
 banner() {
   cat <<'MD'
 !!! note "この資料は英語です"
 
-    リファレンス（文法・形式・生成物・エージェント向けの手順）は、第一の読み手がエージェントなので英語で書いています。日本語で読めるのは、ホーム・インストール・表を書く・何を証明するか・生成して呼ぶ・突き合わせと再生・例で見る・自分のルールが入るか、そして**診断コードの台帳**です。
+    リファレンス（文法・形式・生成物・エージェント向けの手順）は、第一の読み手がエージェントなので英語で書いています。日本語で読めるのは、ホーム・インストール・表を書く・何を証明するか・生成して呼ぶ・突き合わせと再生・例で見る・自分のルールが入るか、そして**診断コードの台帳**と**互換性**です。
 
 MD
 }
@@ -60,4 +62,4 @@ cp docs/images/*.svg docs/images/*.png docs-ja/images/
 # images do, and `rulec.wasm` is committed once, on the English side.
 mkdir -p docs-ja/playground
 cp docs/playground/playground.js docs/playground/playground.css docs/playground/rulec.wasm docs-ja/playground/
-echo "synced: agents, reference, formats, generated-code, backends, codes, playground (en + ja)"
+echo "synced: agents, reference, formats, generated-code, backends, codes, compatibility, playground (en + ja)"

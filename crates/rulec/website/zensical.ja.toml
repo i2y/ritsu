@@ -37,6 +37,7 @@ nav = [
     { "生成物" = "generated-code.md" },
     { "ほかの言語へ生成する" = "backends.md" },
     { "形式" = "formats.md" },
+    { "互換性" = "compatibility.md" },
   ] },
 ]
 

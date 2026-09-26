@@ -272,9 +272,10 @@ $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and p
 | [`docs/formats.md`](docs/formats.md) | every machine-readable format: `--format json`, vectors, fixtures, manifests, the adapter protocol |
 | [`docs/generated-code.md`](docs/generated-code.md) | the shape of the output, its guarantees, and how to call it |
 | [`docs/backends.md`](docs/backends.md) | targeting a language rulec does not generate, without losing the comparison |
+| [`docs/compatibility.md`](docs/compatibility.md) / [`docs/compatibility.ja.md`](docs/compatibility.ja.md) | what every 1.x release keeps, what it may change, and what is not covered |
 | `DESIGN.md` | why each decision was made and what was discarded with it (Japanese) |
 
-The five references under `docs/` are carried into the site verbatim: holding the same text
+The references under `docs/` are carried into the site verbatim: holding the same text
 twice is how one of the copies goes stale.
 
 ## About the design

@@ -650,3 +650,23 @@ fn 数の集合の箱は値から組み直される() {
     let (code, said) = recheck(&wide);
     assert_eq!(code, 1, "広げた箱が通ってしまった:\n{said}");
 }
+
+/// The certificate says which shape it is, and a re-checker refuses one it was not written for
+/// rather than checking something else (§15.156). An absent `v` is the first shape, as it is
+/// for every output of rulec.
+#[test]
+fn 知らない形式の版の証明書は断る() {
+    if !have_python() {
+        eprintln!("skip: python3 が無い");
+        return;
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.starts_with(r#"{"v":1,"#), "証明書が形式の版を名乗らない: {}", &cert[..60.min(cert.len())]);
+    let later = cert.replacen(r#"{"v":1,"#, r#"{"v":2,"#, 1);
+    let (code, said) = recheck(&later);
+    assert_eq!(code, 2, "版 2 の証明書を読んでしまった\n{said}");
+    assert!(said.contains("format version"), "{said}");
+    let unmarked = cert.replacen(r#"{"v":1,"#, "{", 1);
+    assert_eq!(recheck(&unmarked).0, 0, "v の無い証明書を版 1 として読まない");
+}

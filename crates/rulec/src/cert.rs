@@ -184,6 +184,9 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         ranges = ranges.raw(n, format!("[{},{}]", end(lo), end(hi)));
     }
     Obj::new()
+        // The version of this shape. A program that re-checks a certificate reads it first and
+        // refuses one it was not written for, rather than checking something else (§15.156).
+        .int("v", 1)
         .str("rule", &f.name.text)
         .str("alias", f.name.ascii.as_deref().unwrap_or(&f.name.text))
         .str("version", &f.version)
