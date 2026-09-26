@@ -1,0 +1,7 @@
+build --target asl:
+error[E050]: tests/fixtures/agent_targets.flow:10:1: Step Functions calls the agent `読む` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the OpenAI API key
+    10 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/agent_targets.flow:10:1: Step Functions ends an HTTP Task's request after 60 seconds, so the `timeout` of `読む` can be at most that
+    10 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/agent_targets.flow:15:1: Step Functions ends an HTTP Task's request after 60 seconds, so the `timeout` of `送る` can be at most that
+    15 | task 送る(本文: string)

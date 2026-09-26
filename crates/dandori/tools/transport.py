@@ -1,7 +1,8 @@
 # A Transport for the Python dandori writes (for Temporal and for pydantic-graph), in place of
-# Lambda, HTTP and the AWS APIs: every call goes to `run.take(call, callback_id)` as Step
-# Functions would send it, which writes it down and gives the scenario's answer. The Python
-# twin of transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
+# Lambda, HTTP, the AWS APIs and OpenAI's agents: every call goes to `run.take(call,
+# callback_id)` as Step Functions would send it (an agent's, as the generated code hands it
+# over), which writes it down and gives the scenario's answer. The Python twin of
+# transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
 #
 # spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders})
 # spec["aws"]:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
@@ -10,6 +11,9 @@
 # message); the call is written down without it, `take` gets the id, and
 # `run.answer_later(id, answer)` is called (and awaited, when it gives something to await) with
 # the answer the scenario gives the callback.
+#
+# An agent answers {"answer": <the scenario's value>}, as the model would under the schema; its
+# failure is raised, as the Agents SDK raises a refusal.
 
 from __future__ import annotations
 
@@ -68,5 +72,11 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
                 return {"ok": ans["ok"]}
             task = next((t for t in aws_tasks if t["api"] == api), None)
             return {"error": (task or {}).get("errors", {}).get(ans["error"], error_name(ans["error"])), "message": "scripted"}
+
+        async def agent(self, call: dict[str, Any]) -> Any:
+            ans = run.take(call, None)
+            if "ok" in ans:
+                return {"answer": ans["ok"]}
+            raise RuntimeError("scripted")
 
     return StandIn()

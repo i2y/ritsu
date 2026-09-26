@@ -1,5 +1,5 @@
 //! Argo Workflows: a WorkflowTemplate, and `caller/`, the program that runs the tasks dandori
-//! writes (`lambda`, `http`, `aws`) and the rules, in containers of the workflow.
+//! writes (`lambda`, `http`, `aws`, `agent`) and the rules, in containers of the workflow.
 //!
 //! Argo has no variables, no step that ends the workflow early, and no names for errors, so
 //! the workflow keeps its own state in its global output parameters:
@@ -73,8 +73,8 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `image`, `lambda`, `http`, `aws` or `workflow template` to run on Argo Workflows", t.name),
-                format!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`workflow template` のどれかが要ります", t.name),
+                format!("`{}` needs `image`, `lambda`, `http`, `aws`, `agent` or `workflow template` to run on Argo Workflows", t.name),
+                format!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`workflow template` のどれかが要ります", t.name),
             )),
             Some(Via::ArgoTemplate(_)) if !t.errors.is_empty() => errs.push(Diag::error(
                 "E050",

@@ -17,6 +17,14 @@ use crate::render::{self, asl_var, jsonata_check, jsonata_expr, jsonata_list, js
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 
+/// How long Step Functions lets an HTTP Task's request take.
+pub const HTTP_TASK_SECONDS: u64 = 60;
+
+/// An agent's answer, read from the Responses API's: the text of the message, parsed, and
+/// the value under `answer`. When the model refuses, there is no text, and `$error` fails the
+/// Task with States.QueryEvaluationError, which its Retry and Catch take as `failure`.
+const AGENT_ANSWER: &str = "($dd_text := ($states.result.ResponseBody.output[type = \"message\"].content[type = \"output_text\"].text)[0]; $exists($dd_text) ? $parse($dd_text).answer : $error(\"the agent gave no answer to read; the model may have refused\"))";
+
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
@@ -41,10 +49,18 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `lambda`, `http`, `aws` or `state machine` to run on Step Functions", t.name),
-                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`state machine` のどれかが要ります", t.name),
+                format!("`{}` needs `lambda`, `http`, `aws`, `agent` or `state machine` to run on Step Functions", t.name),
+                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`state machine` のどれかが要ります", t.name),
             )),
             Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
+            Some(Via::Agent { .. }) if t.connection.is_none() => errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("Step Functions calls the agent `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds the OpenAI API key", t.name),
+                format!("Step Functions はエージェント `{}` を HTTP Task で呼ぶので、OpenAI の API キーを持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
+            )),
+
             Some(Via::StateMachine(_)) if !t.errors.is_empty() => errs.push(Diag::error(
                 "E050",
                 t.line,
@@ -53,6 +69,15 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 format!("Step Functions は入れ子の実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で受けてください", t.name),
             )),
             _ => {}
+        }
+        if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. })) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {
+            errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("Step Functions ends an HTTP Task's request after {HTTP_TASK_SECONDS} seconds, so the `timeout` of `{}` can be at most that", t.name),
+                format!("Step Functions は HTTP Task のリクエストを {HTTP_TASK_SECONDS} 秒で打ち切るので、`{}` の `timeout` はそれより長くできません", t.name),
+            ));
         }
     }
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
@@ -608,6 +633,23 @@ impl<'a> Gen<'a> {
                         }
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), "$states.result.ResponseBody".to_string(), task.timeout, retry)
                     }
+                    Via::Agent { instructions, model } => {
+                        // the input is the arguments' JSON text, in the order of the parameters
+                        let input: Vec<String> = task
+                            .params
+                            .iter()
+                            .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
+                            .collect();
+                        let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
+                        let body = render::agent_request(model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
+                        let w = json!({
+                            "ApiEndpoint": render::AGENT_URL,
+                            "Method": "POST",
+                            "InvocationConfig": { "ConnectionArn": task.connection.clone().unwrap_or_default() },
+                            "RequestBody": body
+                        });
+                        ("arn:aws:states:::http:invoke".to_string(), w, AGENT_ANSWER.to_string(), task.timeout, retry)
+                    }
                     Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) => unreachable!("not a way Step Functions calls"),
                 }
             }
@@ -620,6 +662,9 @@ impl<'a> Gen<'a> {
         st.insert("Arguments".into(), arguments);
         if !var.is_empty() {
             st.insert("Assign".into(), json!({ asl_var(&var): format!("{{% {result} %}}") }));
+        } else if result == AGENT_ANSWER {
+            // an agent's answer is read even when the flow does not keep it, so that a refusal fails the call
+            st.insert("Output".into(), json!(format!("{{% {result} %}}")));
         }
         if let Some(t) = timeout {
             st.insert("TimeoutSeconds".into(), json!(t));

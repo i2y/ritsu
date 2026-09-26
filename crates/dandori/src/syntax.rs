@@ -118,6 +118,8 @@ pub enum Binding {
     Http { method: String, url: String, form: bool },
     /// an AWS API call, as Step Functions' AWS SDK integrations name it: `sns:publish`
     Aws { service: String, action: String },
+    /// an agent that reads the arguments and answers in the task's type, told what to do by `instructions`
+    Agent { instructions: String },
 }
 
 #[derive(Clone, Debug)]
@@ -152,6 +154,8 @@ pub struct TaskDecl {
     /// None: the task answers nothing the workflow reads
     pub result: Option<TypeExpr>,
     pub binding: Option<(Binding, Span)>,
+    /// the model an `agent` task runs on
+    pub model: Option<(String, Span)>,
     pub connection: Option<String>,
     /// Temporal: the task queue of the activity or the child workflow
     pub queue: Option<String>,
@@ -1224,6 +1228,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     params,
                     result,
                     binding: None,
+                    model: None,
                     connection: None,
                     queue: None,
                     workflow: None,
@@ -1342,14 +1347,14 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
 fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
     let sp = cc.span();
     let (kw, _) = cc.ident("a task clause", "タスクの項目")?;
-    if matches!(kw.as_str(), "lambda" | "http" | "aws") {
+    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent") {
         if let Some((_, first)) = &t.binding {
             return Err(Diag::error(
                 "E007",
                 sp.line,
                 sp.col,
-                format!("the task is already called another way (line {}); a task is called by one of lambda, http and aws", first.line),
-                format!("このタスクの呼び方はもう書かれています（{} 行目）。呼び方は lambda・http・aws のどれか一つです", first.line),
+                format!("the task is already called another way (line {}); a task is called by one of lambda, http, aws and agent", first.line),
+                format!("このタスクの呼び方はもう書かれています（{} 行目）。呼び方は lambda・http・aws・agent のどれか一つです", first.line),
             ));
         }
     }
@@ -1400,6 +1405,11 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let form = cc.eat_kw("form");
             t.binding = Some((Binding::Http { method, url, form }, sp));
         }
+        "agent" => {
+            let instructions = cc.string("what the agent is to do", "エージェントへの指示")?.0;
+            t.binding = Some((Binding::Agent { instructions }, sp));
+        }
+        "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
         "connection" => t.connection = Some(cc.string("the EventBridge connection", "EventBridge の接続")?.0),
         "errors" => loop {
             let name = cc.ident("an error name", "エラーの名前")?;
@@ -1490,8 +1500,8 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, aws, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・starts・sends・observes・refused as）"),
+                format!("`{other}` is not a task clause; expected lambda, http, aws, agent, model, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, starts, sends, observes or refused as"),
+                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・agent・model・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・starts・sends・observes・refused as）"),
             ))
         }
     }

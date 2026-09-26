@@ -312,7 +312,9 @@ impl<'a> Lowerer<'a> {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
                 syntax::Binding::Http { method, url, form } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
                 syntax::Binding::Aws { service, action } => Binding::Aws { service: service.clone(), action: action.clone() },
+                syntax::Binding::Agent { instructions } => Binding::Agent { instructions: instructions.clone(), model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default() },
             });
+            self.agent(t, result.as_ref());
             let child = t.workflow.as_ref().or(t.state_machine.as_ref()).or(t.durable_function.as_ref()).or(t.argo_template.as_ref()).map(|(_, s)| *s);
             if let Some((syntax::Binding::Aws { service, .. }, bsp)) = &t.binding {
                 if crate::aws::exception_prefix(service).is_none() {
@@ -335,6 +337,15 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E006", *esp, format!("the error `{en}` is written twice"), format!("エラー `{en}` が二度書かれています")));
                     continue;
                 }
+                if matches!(binding, Some(Binding::Agent { .. })) {
+                    self.push(e(
+                        "E007",
+                        *esp,
+                        "an agent declares no errors of its own: when the model refuses or the call fails it is `failure`, and past its time `timeout`",
+                        "エージェントのタスクにはエラーを宣言できません。モデルが断ったときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります",
+                    ));
+                    continue;
+                }
                 match (&binding, er.status, &er.exception) {
                     (Some(Binding::Http { .. }), None, _) => {
                         self.push(e("E007", *esp, format!("give `{en}` the HTTP status it comes back with, as `{en} = 402`"), format!("`{en}` が返ってくるときの HTTP ステータスを `{en} = 402` のように書きます")));
@@ -353,6 +364,8 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", *esp, format!("`{en} = …` says how an HTTP or AWS call names the error; this task has neither `http` nor `aws`"), format!("`{en} = …` は HTTP や AWS の呼び出しでのエラーの表し方です。このタスクには `http` も `aws` もありません")));
                     }
                     (Some(Binding::Http { .. }), Some(_), Some(_)) => {}
+                    // refused above
+                    (Some(Binding::Agent { .. }), _, _) => {}
                 }
                 if let Some(st) = er.status {
                     if let Some(other) = errors.iter().find(|x| x.status == Some(st)) {
@@ -379,7 +392,7 @@ impl<'a> Lowerer<'a> {
                 let ok = match &binding {
                     None | Some(Binding::Lambda(_)) => true,
                     Some(Binding::Aws { service, action }) => service == "sqs" && action == "sendMessage",
-                    Some(Binding::Http { .. }) => false,
+                    Some(Binding::Http { .. }) | Some(Binding::Agent { .. }) => false,
                 };
                 if !ok {
                     self.push(e(
@@ -408,6 +421,7 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E007", ksp, "the platform starts a child workflow once for each call, so `key` does not apply to it", "子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません"));
                 }
                 match (&binding, &t.key_param) {
+                    (Some(Binding::Agent { .. }), _) => self.push(e("E007", ksp, "an agent changes nothing on the other side, so it takes no `key`", "エージェントは相手の側を何も変えないので、`key` は要りません")),
                     (Some(Binding::Aws { .. }), None) => self.push(e(
                         "E007",
                         ksp,
@@ -474,6 +488,68 @@ impl<'a> Lowerer<'a> {
                 callback: t.callback.is_some(),
                 line: sp.line,
             });
+        }
+    }
+
+    /// What an agent task must have, and what it cannot: a model, an answer whose type OpenAI's
+    /// Structured Outputs can hold the model to, and nothing that moves a case.
+    fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>) {
+        let bsp = match (&t.binding, &t.model) {
+            (Some((syntax::Binding::Agent { .. }, bsp)), _) => *bsp,
+            (_, Some((_, msp))) => {
+                self.push(e("E007", *msp, "`model` says which model an agent uses; this task has no `agent`", "`model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません"));
+                return;
+            }
+            _ => return,
+        };
+        if t.model.is_none() {
+            self.push(e("E007", bsp, "an agent needs the model it uses; write it as `model \"gpt-5.4-mini\"`", "エージェントには、使うモデルを `model \"gpt-5.4-mini\"` のように書いてください"));
+        }
+        if let Some((_, msp)) = &t.machine {
+            self.push(e(
+                "E007",
+                *msp,
+                "an agent reads what it is given and answers; it has no case on the other side to start, move or look at",
+                "エージェントは渡されたものを読んで答えるだけで、相手の側の案件を始めたり動かしたり見たりはしません",
+            ));
+        }
+        let Some(r) = result else {
+            self.push(e("E007", bsp, "an agent answers; write the type of its answer as `-> <type>`", "エージェントは答えを返します。答えの型を `-> <型>` と書いてください"));
+            return;
+        };
+        let Some(schema) = crate::render::agent_schema(&self.m, r) else {
+            let (en, ja) = if has_json(&self.m, r, &mut Vec::new()) {
+                (
+                    "OpenAI's Structured Outputs hold an agent's answer to a JSON Schema, and `json` has none; give the answer a type without `json`",
+                    "エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください",
+                )
+            } else {
+                (
+                    "OpenAI's Structured Outputs hold an agent's answer to a JSON Schema written out in full, and a record that holds itself through others has no end; give the answer a type without it",
+                    "エージェントの答えは、OpenAI の Structured Outputs で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください",
+                )
+            };
+            self.push(e("E007", bsp, en, ja));
+            return;
+        };
+        let (depth, props, values) = crate::render::schema_size(&schema);
+        let mut over: Vec<(String, String)> = Vec::new();
+        if depth > 10 {
+            over.push((format!("its objects nest {depth} deep (at most 10)"), format!("オブジェクトの入れ子が {depth} 段（10 段まで）")));
+        }
+        if props > 5000 {
+            over.push((format!("it has {props} properties (at most 5,000)"), format!("プロパティが {props} 個（5,000 個まで）")));
+        }
+        if values > 1000 {
+            over.push((format!("it has {values} enum values (at most 1,000)"), format!("列挙の値が {values} 個（1,000 個まで）")));
+        }
+        if !over.is_empty() {
+            self.push(e(
+                "E007",
+                bsp,
+                format!("the answer's JSON Schema, in `{{\"answer\": …}}`, is larger than OpenAI's Structured Outputs take: {}", over.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join(", ")),
+                format!("答えの JSON Schema（`{{\"answer\": …}}` に包んだもの）が、OpenAI の Structured Outputs の受け付ける大きさを超えています。{}", over.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("、")),
+            ));
         }
     }
 
@@ -1568,4 +1644,22 @@ pub fn placeholders(url: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Whether a value of type `t` can hold `json` somewhere inside.
+fn has_json(m: &Model, t: &Ty, within: &mut Vec<RecordId>) -> bool {
+    match t {
+        Ty::Json => true,
+        Ty::List(x) | Ty::Opt(x) => has_json(m, x, within),
+        Ty::Record(r) => {
+            if within.contains(r) {
+                return false;
+            }
+            within.push(*r);
+            let found = m.records[*r].fields.iter().any(|(_, ft)| has_json(m, ft, within));
+            within.pop();
+            found
+        }
+        _ => false,
+    }
 }

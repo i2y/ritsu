@@ -10,7 +10,9 @@ WorkflowTemplate) and to **pydantic-graph** (a graph that runs in the process th
 The decisions themselves are written in [rulec](https://github.com/i2y/rulec): tables
 that rulec proves complete and free of overlaps. dandori reads them through rulec's
 command line, and uses a rule's state machine as the type of the thing a workflow
-drives — a Stripe PaymentIntent, an order in a warehouse.
+drives — a Stripe PaymentIntent, an order in a warehouse. Reading and writing — pulling
+the fields out of a customer's message, drafting a reply — can go to an OpenAI agent,
+whose answer comes back in a declared type ([Agents](#agents)).
 
 The name comes from 段取り (dandori), arranging the steps of a job beforehand.
 
@@ -101,6 +103,7 @@ flow
 | `lambda "<function>"` | Lambda Task | an activity dandori writes, invoking the function | a step dandori writes, invoking the function | a container running the code dandori writes | a function dandori writes, invoking the function |
 | `http POST "<url>"` | HTTP Task | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
+| `agent "<instructions>"` and `model "<model>"` | HTTP Task to OpenAI's Responses API | an activity dandori writes, with OpenAI's Agents SDK | a step dandori writes, with the Agents SDK | the same, with the Agents SDK | the same, with the Agents SDK for Python |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
 | `workflow "<type>"` | | child workflow | | | |
 | `durable function "<arn>"` | | | invoke of another durable function | | |
@@ -118,18 +121,56 @@ an id the answer comes back with as a signal (Temporal) or through `argo node se
 with `aws sqs:sendMessage` the token travels in the message.
 
 On Argo Workflows every task runs in a container. The code dandori writes for `lambda`,
-`http` and `aws` goes into an image built from `caller/`; a task with `image` runs your
+`http`, `aws` and `agent` goes into an image built from `caller/`; a task with `image` runs your
 image, which reads the call from `DANDORI_CALL`, writes the answer to
 `/tmp/dandori/answer.json`, and for a declared error writes `{"error", "message"}` to
 `/tmp/dandori/error.json` and exits with 3. The WorkflowTemplate keeps the flow's variables
 in global output parameters, and the YAML starts with a comment that names each
 variable's parameter.
 
+### Agents
+
+An `agent` task gives a model its arguments and takes back a value of the task's type. The
+model reads and writes; the rules decide. [examples/inquiry](examples/inquiry/inquiry.flow)
+reads a customer's message with one agent, routes it with a rulec rule, and drafts the reply
+with another:
+
+```
+task 読み取る(本文: string) -> 読み取り
+  agent "お客さまからの問い合わせの本文を読み、種類を一つ選び、注文番号が書かれていれば取り出し、…"
+  model "gpt-5.4-mini"
+  connection "arn:aws:events:…:connection/openai/…"
+  timeout 60 seconds
+  retry 2 times every 10 seconds
+
+flow
+  let 読 = 読み取る(本文: 問い合わせ.本文)
+    on failure => …
+  let 判定 = 振り分け(種類: 読.種類, 会員: 問い合わせ.会員)
+```
+
+- The answer's type becomes a JSON Schema in the strict form of OpenAI's Structured Outputs —
+  every field of a record required, `T?` a choice with null, an enum its values — around
+  `{"answer": …}`, since the top must be an object. The answer is then checked against the
+  type like any other.
+- Every target asks the model the same thing: the instructions, the arguments as the same
+  JSON text, and the schema, and no model settings — dandori adds none, and keeps the Agents
+  SDK from adding its defaults. Step Functions sends it to the Responses API from an HTTP
+  Task, with the API key in the EventBridge connection. The code dandori writes for the other targets runs it with
+  OpenAI's Agents SDK through the `Transport`, which reads `OPENAI_API_KEY`, or takes a run
+  configuration of your own (another model provider, for one).
+- An agent changes nothing on the other side, so it takes no `key`, and retrying it is
+  always safe. It declares no errors: a refusal, or a call that fails, is `failure`.
+- The checker refuses an answer the schema cannot say (`json`, a record that contains itself
+  through others) or one larger than Structured Outputs take (E007). Step Functions refuses an
+  agent without `connection`, and an HTTP Task whose `timeout` is over the 60 seconds it
+  gives a request (E050).
+
 The complete examples are in [examples/hotel](examples/hotel/hotel.flow),
 [examples/order](examples/order/order.flow), [examples/fulfillment](examples/fulfillment/fulfillment.flow),
-and [examples/review](examples/review/review.flow), which calls only tasks the user writes
-and so is for Temporal, durable functions and Argo (with `image`). The design, in Japanese, is in
-[DESIGN.md](DESIGN.md).
+[examples/inquiry](examples/inquiry/inquiry.flow), and [examples/review](examples/review/review.flow),
+which calls only tasks the user writes and so is for Temporal, durable functions and Argo
+(with `image`). The design, in Japanese, is in [DESIGN.md](DESIGN.md).
 
 ## Commands
 
@@ -160,8 +201,8 @@ on the PATH.
   Lambda handler as `asl`, which the durable function invokes.
 - `build --target argo` writes `<workflow>.argo.yaml`, a WorkflowTemplate that takes the
   input as the parameter `input` and leaves the outputs in the global parameter
-  `dd_output`, and `caller/`: the program that runs the `lambda`, `http` and `aws` tasks and
-  the rules in the workflow's containers, with its `package.json` and `Dockerfile`.
+  `dd_output`, and `caller/`: the program that runs the `lambda`, `http`, `aws` and `agent`
+  tasks and the rules in the workflow's containers, with its `package.json` and `Dockerfile`.
 - `build --target pydantic-graph` writes a package with `graph.py` (`graph`, and its
   `State` and `Deps`), `types.py`, `tasks.py` (`make_tasks(own, transport)`), `io.py`,
   `rules.py` and `runtime.py`. Every statement is a node, and the return type of each node
@@ -193,6 +234,14 @@ stand-ins that answer from the scenario. On Argo, the caller runs in the pods wi
 containers that ask a mock in the cluster for the scenario's answer. The rounds of a
 parallel loop run one at a time in the runners, so the calls come in the reference's order.
 
+An agent's call is recorded as the `Transport` gets it, and the stand-in answers
+`{"answer": …}` as the model would. The ASL runner answers an HTTP Task to the Responses API
+with a response of the API's shape, and plays a failure as the model refusing, so the state
+machine's reading of the answer is what fails the Task. The agent call of the default
+`Transport` itself, in TypeScript and in Python, runs with OpenAI's Agents SDK and a scripted
+model in place of OpenAI's (`tools/agents`), and the model must be asked what Step Functions
+asks for the same call; nothing goes to OpenAI.
+
 The durable functions test runner cannot time a call out on cue, so the scenarios with a
 timeout are left out there. Temporal's test environment, Argo and the graph's runner cannot
 time out a task either, but a callback's timeout can be played: on Temporal and pydantic-graph by not
@@ -208,18 +257,24 @@ uv venv --python 3.13 tools/temporal-python/.venv
 uv pip install --python tools/temporal-python/.venv/bin/python -r tools/temporal-python/requirements.txt
 uv venv --python 3.13 tools/pydantic-graph/.venv
 uv pip install --python tools/pydantic-graph/.venv/bin/python -r tools/pydantic-graph/requirements.txt
+npm install --prefix tools/agents
+uv venv --python 3.13 tools/agents/.venv
+uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirements.txt
 sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind, kubectl)
 DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The runs on Argo take about half an hour.
+`SKIP:` line. The runs on Argo take about half an hour. When the platform could not run one
+of a run's pods (it ended in Error, or Unknown with exit code 255: containerd in the kind node
+was seen to crash under load), the Argo runner plays the run again, at most twice, and the
+test says so. `DANDORI_FLOW=<part of a path>` runs only the flows whose path has it.
 
 ## Status
 
 Early. Not yet: Parallel with different branches, types of AWS API calls read from the
 published Smithy models (the parameters and answers are declared by hand, as for HTTP),
 cases the workflow holds itself, a rule's preconditions checked at the task that produced
-the value, runs on AWS and on a Temporal server, and the caller image run against real
-Lambda, HTTP and AWS endpoints from Argo. The design, the decisions and what is
+the value, runs on AWS and on a Temporal server, the caller image run against real
+Lambda, HTTP and AWS endpoints from Argo, and agents run against OpenAI itself. The design, the decisions and what is
 left are in [DESIGN.md](DESIGN.md).

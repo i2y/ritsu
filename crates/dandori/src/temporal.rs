@@ -5,9 +5,9 @@
 //!
 //! Temporal:
 //! - `types.ts`: the records and enums, and a check for each (`is_<Type>`)
-//! - `activities.ts`: the tasks' interface; the tasks that say `lambda`, `http` or `aws`
-//!   are written there, the others (`OwnTasks`) are yours
-//! - `io.ts`: how those tasks reach Lambda, HTTP and the AWS APIs (a `Transport`)
+//! - `activities.ts`: the tasks' interface; the tasks that say `lambda`, `http`, `aws` or
+//!   `agent` are written there, the others (`OwnTasks`) are yours
+//! - `io.ts`: how those tasks reach Lambda, HTTP, the AWS APIs and OpenAI's agents (a `Transport`)
 //! - `rules.ts`: the rules as activities, around the TypeScript rulec generates
 //! - `runtime.ts`: what the workflow code shares — retries, error kinds, keys, callbacks
 //! - `workflow.ts`: the workflow
@@ -26,7 +26,10 @@ use crate::diag::Diag;
 use crate::model::*;
 use crate::render::{self, ident};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// The version of OpenAI's Agents SDK for JavaScript that the default Transport is written against.
+const AGENTS_SDK: &str = "^0.18.0";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flavor {
@@ -307,7 +310,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         .tasks
         .iter()
         .filter(|t| !t.is_child(p))
-        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. })))
+        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. })))
         .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let mut a = header.to_string();
@@ -319,6 +322,8 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     a.push_str("// The tasks the workflow calls.\n//\n");
     a.push_str("// - A task that says `lambda`, `http` or `aws` is written here: it sends what Step Functions\n");
     a.push_str("//   would send, through a Transport (io.ts), where the credentials and the clients are yours to set.\n");
+    a.push_str("// - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
+    a.push_str("//   Functions, and answers { \"answer\": … } in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("// - The others are yours to write (OwnTasks). ");
     match flavor {
         Flavor::Temporal => a.push_str("A declared error is thrown as\n//   ApplicationFailure.create({ type: \"<error>\", nonRetryable: true }).\n"),
@@ -351,7 +356,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
     }
     a.push_str("}\n\n");
-    a.push_str("/** The tasks you write: the ones that say neither `lambda`, `http` nor `aws`. */\n");
+    a.push_str("/** The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`. */\n");
     a.push_str("export interface OwnTasks {\n");
     for task in &own {
         a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
@@ -360,6 +365,16 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     match flavor {
         Flavor::Temporal => a.push_str("function fail(kind: string, message: string): never {\n  throw ApplicationFailure.create({ type: kind, message, nonRetryable: true });\n}\n\n"),
         Flavor::Durable | Flavor::Argo => a.push_str("function fail(kind: string, message: string): never {\n  const e = new Error(message);\n  e.name = kind;\n  throw e;\n}\n\n"),
+    }
+    let agents: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Agent { .. }))).cloned().collect();
+    if !agents.is_empty() {
+        a.push_str("/** What each agent answers in: the JSON Schema OpenAI's Structured Outputs hold its model to. */\n");
+        a.push_str("const SCHEMAS: Record<string, Record<string, unknown>> = {\n");
+        for task in &agents {
+            let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
+            a.push_str(&format!("  {}: {},\n", q(&task.name), render::layout(&schema, 1, "  ", false)));
+        }
+        a.push_str("};\n\n");
     }
     a.push_str(&format!("/** Your tasks and the ones dandori writes: {register}. */\n"));
     a.push_str(&format!("export function {made}(own: OwnTasks, transport: io.Transport = io.transport()): Tasks {{\n"));
@@ -439,6 +454,18 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     a.push_str(&format!("    {name}: async (args) => io.value(await {call}, {}, fail) as {},\n", braces(&names), task_result(m, task)));
                 }
             }
+            Some(Via::Agent { instructions, model }) => {
+                let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
+                a.push_str(&format!(
+                    "    {name}: async (args) =>\n      io.answer(\n        await transport.agent({{\n          agent: {},\n          model: {},\n          instructions: {},\n          input: {{ {} }},\n          schema: SCHEMAS[{}],\n        }}),\n      ) as {},\n",
+                    q(&task.name),
+                    q(model),
+                    q(instructions),
+                    input.join(", "),
+                    q(&task.name),
+                    task_result(m, task)
+                ));
+            }
             _ => {}
         }
     }
@@ -456,7 +483,7 @@ fn braces(inner: &str) -> String {
 }
 
 /// The program that runs, in a container of an Argo workflow, the tasks dandori writes (the
-/// ones that say `lambda`, `http` or `aws`) and the rules: `caller/` in the Argo build.
+/// ones that say `lambda`, `http`, `aws` or `agent`) and the rules: `caller/` in the Argo build.
 pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
     // Node runs these directly, stripping the types, and wants the extension on a relative import
@@ -482,7 +509,7 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     }
     let mut declared = Vec::new();
     for t in &m.tasks {
-        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. })) {
+        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. })) {
             declared.push(format!("  {}: [{}],", q(&ident(&t.name)), t.errors.iter().map(|e| q(&e.name)).collect::<Vec<_>>().join(", ")));
         }
     }
@@ -505,21 +532,25 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     call.push_str("  fs.writeFileSync(\"/tmp/dandori/error.json\", JSON.stringify({ error: kind, message }));\n");
     call.push_str("  if ((DECLARED[name] ?? []).includes(kind)) {\n    try {\n      fs.writeFileSync(\"/dev/termination-log\", kind);\n    } catch {\n      // not in a container\n    }\n    process.exit(3);\n  }\n  process.stderr.write(`${kind}: ${message}\\n`);\n  process.exit(1);\n}\n");
     files.push(("caller/call.ts".to_string(), call));
-    let mut deps: BTreeSet<&str> = BTreeSet::new();
+    // the packages the default Transport loads, with the versions they are written against
+    let mut deps: BTreeMap<&str, &str> = BTreeMap::new();
     for t in &m.tasks {
         match t.via(Platform::Argo) {
             Some(Via::Lambda(_)) => {
-                deps.insert("@aws-sdk/client-lambda");
+                deps.insert("@aws-sdk/client-lambda", "^3");
             }
             Some(Via::Aws { service, .. }) => {
                 if let Some((_, pkg, _)) = crate::aws::SDK_CLIENTS.iter().find(|(s, _, _)| *s == service) {
-                    deps.insert(pkg);
+                    deps.insert(pkg, "^3");
                 }
+            }
+            Some(Via::Agent { .. }) => {
+                deps.insert("@openai/agents", AGENTS_SDK);
             }
             _ => {}
         }
     }
-    let deps_json = deps.iter().map(|d| format!("    {}: \"^3\"", q(d))).collect::<Vec<_>>().join(",\n");
+    let deps_json = deps.iter().map(|(d, v)| format!("    {}: {}", q(d), q(v))).collect::<Vec<_>>().join(",\n");
     files.push((
         "caller/package.json".to_string(),
         format!("{{\n  \"name\": {},\n  \"private\": true,\n  \"type\": \"module\",\n  \"description\": \"Runs the tasks and rules dandori writes for the Argo workflow {} v{}\",\n  \"dependencies\": {{\n{deps_json}\n  }}\n}}\n", q(&format!("dandori-caller-{}", ident(&m.name).to_lowercase())), m.name, m.version),
@@ -601,9 +632,10 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     rules_ts
 }
 
-const IO: &str = r#"// How the tasks that say `lambda`, `http` or `aws` reach the other side. They go through a
-// Transport, so that the credentials, the clients and a test's stand-in are yours to set; the
-// default one uses fetch and the AWS SDK for JavaScript v3, loaded when first needed.
+const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
+// through a Transport, so that the credentials, the clients and a test's stand-in are yours to
+// set; the default one uses fetch, the AWS SDK for JavaScript v3 and OpenAI's Agents SDK
+// (@openai/agents, which reads OPENAI_API_KEY), each loaded when first needed.
 
 /** What Lambda or an AWS API answered: the value, or an error by the name the other side gives it. */
 export type Answer = { ok: unknown } | { error: string; message: string };
@@ -618,6 +650,17 @@ export interface HttpRequest {
   form?: boolean;
 }
 
+/** A call of an agent: the model is told `instructions`, reads `input` as JSON text, and answers in `schema`. */
+export interface AgentCall {
+  /** the task's name */
+  agent: string;
+  model: string;
+  instructions: string;
+  input: Record<string, unknown>;
+  /** the answer's JSON Schema, { "answer": … }, in the strict form of OpenAI's Structured Outputs */
+  schema: Record<string, unknown>;
+}
+
 export interface Transport {
   /** Invoke a Lambda function; an error the function throws comes back by its type. */
   lambda(fn: string, payload: Record<string, unknown>): Promise<Answer>;
@@ -625,6 +668,8 @@ export interface Transport {
   http(req: HttpRequest): Promise<{ status: number; body: unknown }>;
   /** Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name. */
   aws(service: string, action: string, input: Record<string, unknown>): Promise<Answer>;
+  /** Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal throws. */
+  agent(call: AgentCall): Promise<unknown>;
 }
 
 export interface Options {
@@ -632,6 +677,8 @@ export interface Options {
   headers?: (url: string) => Record<string, string> | Promise<Record<string, string>>;
   /** The configuration of the AWS SDK clients, such as the region. */
   aws?: Record<string, unknown>;
+  /** The Agents SDK's run configuration, such as { modelProvider } for models other than OpenAI's. */
+  agents?: Record<string, unknown>;
 }
 
 /** The package and the client of the AWS SDK for each service the default transport knows. */
@@ -723,6 +770,19 @@ export function transport(options: Options = {}): Transport {
         throw e;
       }
     },
+    async agent(call) {
+      const sdk: any = await import("@openai/agents");
+      // no model settings of the SDK's own, so that the model gets what Step Functions sends
+      const agent = new sdk.Agent({
+        name: call.agent,
+        instructions: call.instructions,
+        model: call.model,
+        modelSettings: {},
+        outputType: { type: "json_schema", name: "answer", strict: true, schema: call.schema },
+      });
+      const result = await new sdk.Runner(options.agents ?? {}).run(agent, JSON.stringify(call.input));
+      return result.finalOutput;
+    },
   };
 }
 
@@ -736,6 +796,12 @@ export function value(a: Answer, names: Record<string, string>, fail: (kind: str
   if ("ok" in a) return a.ok;
   const kind = names[a.error];
   return fail(kind ?? `Dandori.Failure.${a.error}`, a.message);
+}
+
+/** What an agent answered: the value under `answer`. An answer without it fails the call. */
+export function answer(out: unknown): unknown {
+  if (out !== null && typeof out === "object" && "answer" in out) return (out as { answer: unknown }).answer;
+  throw new Error("the agent's answer has no `answer`");
 }
 
 /** The body of a 2xx answer, or the declared error its status names. */

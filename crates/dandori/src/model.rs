@@ -84,6 +84,8 @@ pub enum Binding {
     Http { method: String, url: String, form: bool },
     /// an AWS API, named as Step Functions' AWS SDK integrations name it: `sns` and `publish`
     Aws { service: String, action: String },
+    /// an OpenAI agent: the model, told what to do, reads the arguments and answers in the task's type
+    Agent { instructions: String, model: String },
 }
 
 /// A declared error, and how the other side says it: an HTTP status, or an AWS API's exception.
@@ -111,6 +113,8 @@ pub enum Via<'a> {
     Lambda(&'a str),
     Http { method: &'a str, url: &'a str, form: bool },
     Aws { service: &'a str, action: &'a str },
+    /// an OpenAI agent: the Responses API on Step Functions, the Agents SDK in the code dandori writes
+    Agent { instructions: &'a str, model: &'a str },
     /// Step Functions: a nested execution of another state machine
     StateMachine(&'a str),
     /// Temporal: a child workflow
@@ -170,9 +174,9 @@ pub struct TaskDef {
 
 impl TaskDef {
     /// A task that changes something on the other side, so that doing it twice is not the
-    /// same as doing it once, unless the task says it is.
+    /// same as doing it once, unless the task says it is. An agent only reads and answers.
     pub fn changes_things(&self) -> bool {
-        !self.idempotent && !matches!(self.machine, Some(TaskMachine::Observes))
+        !self.idempotent && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }))
     }
 
     /// How the platform calls this task; None when it cannot (Step Functions without a way to call it).
@@ -181,6 +185,7 @@ impl TaskDef {
             Binding::Lambda(f) => Via::Lambda(f),
             Binding::Http { method, url, form } => Via::Http { method, url, form: *form },
             Binding::Aws { service, action } => Via::Aws { service, action },
+            Binding::Agent { instructions, model } => Via::Agent { instructions, model },
         });
         match p {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),

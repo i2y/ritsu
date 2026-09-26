@@ -1,0 +1,24 @@
+workflow agent_targets v1
+description "check には通るが、Step Functions には出せないもの：接続の無いエージェント、HTTP Task の 60 秒を超える timeout"
+
+inputs
+  本文 : string
+
+outputs
+  要点 : string
+
+task 読む(本文: string) -> string
+  agent "読んで、要点を一文で答えてください。"
+  model "gpt-5.4-mini"
+  timeout 2 minutes
+
+task 送る(本文: string)
+  http POST "https://example.com/v1/messages"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/example/1"
+  timeout 90 seconds
+  idempotent
+
+flow
+  let 要点 = 読む(本文: 本文)
+  送る(本文: 要点)
+  succeed 要点 = 要点

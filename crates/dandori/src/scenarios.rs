@@ -800,7 +800,7 @@ impl<'a> Ex<'a> {
 fn error_name(m: &Model, callee: &Callee, kind: &str) -> String {
     match kind {
         "timeout" => "States.Timeout".into(),
-        "failure" => crate::interp::TEST_FAILURE.into(),
+        "failure" => crate::interp::asl_failure(m, callee).into(),
         other => render::asl_error(m, callee, &HErr::Declared(other.to_string())).into_iter().next().unwrap_or_else(|| other.to_string()),
     }
 }

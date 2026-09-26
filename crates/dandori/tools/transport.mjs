@@ -1,7 +1,8 @@
 // A Transport for the code dandori writes for Temporal, durable functions and Argo, in place of
-// Lambda, HTTP and the AWS APIs: every call goes to `run.take(call, callbackId)` as Step
-// Functions would send it, which writes it down and gives the scenario's answer. Shared by
-// tools/temporal/run.mjs, tools/durable/run.mjs, and the pods of tools/argo/run.mjs.
+// Lambda, HTTP, the AWS APIs and OpenAI's agents: every call goes to `run.take(call, callbackId)`
+// as Step Functions would send it (an agent's, as the generated code hands it over), which
+// writes it down and gives the scenario's answer. Shared by tools/temporal/run.mjs,
+// tools/durable/run.mjs, and the pods of tools/argo/run.mjs.
 //
 // spec.http: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders})
 // spec.aws:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
@@ -9,6 +10,9 @@
 // A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
 // message); the call is written down without it, `take` gets the id, and `run.answerLater(id,
 // answer)` is called (and awaited) with the answer the scenario gives the callback.
+//
+// An agent answers { "answer": <the scenario's value> }, as the model would under the schema;
+// its failure is thrown, as the Agents SDK throws a refusal.
 
 export function makeTransport(spec, run) {
   const httpTasks = (spec.http ?? []).map((t) => ({
@@ -57,6 +61,13 @@ export function makeTransport(spec, run) {
       if ("ok" in ans) return { ok: ans.ok };
       const task = awsTasks.find((t) => t.api === api);
       return { error: task?.errors?.[ans.error] ?? errorName(ans.error), message: "scripted" };
+    },
+    async agent(call) {
+      const ans = await run.take(call);
+      if ("ok" in ans) return { answer: ans.ok };
+      const e = new Error("scripted");
+      e.name = errorName(ans.error);
+      throw e;
     },
   };
 }

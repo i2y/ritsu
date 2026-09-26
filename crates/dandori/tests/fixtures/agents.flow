@@ -1,0 +1,78 @@
+workflow agents v1
+description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント"
+
+record 甲
+  乙 : 乙?
+
+record 乙
+  甲 : 甲?
+
+record 箱
+  中身 : json
+
+record 一
+  二 : 二
+record 二
+  三 : 三
+record 三
+  四 : 四
+record 四
+  五 : 五
+record 五
+  六 : 六
+record 六
+  七 : 七
+record 七
+  八 : 八
+record 八
+  九 : 九
+record 九
+  十 : 十
+record 十
+  名前 : string
+
+task モデルが無い(本文: string) -> string
+  agent "読んでください。"
+
+task エージェントが無い(本文: string) -> string
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:read"
+  model "gpt-5.4-mini"
+
+task 宣言する(本文: string) -> string
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+  errors 断った
+
+task 待つ(本文: string) -> string
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+  callback
+
+task 鍵を持つ(本文: string) -> string
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+  key
+
+task 答えない(本文: string)
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+
+task 中身を返す(本文: string) -> 箱
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+
+task 巡る(本文: string) -> 甲
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+
+task 深い(本文: string) -> 一
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+
+task 見る(本文: string) -> 十
+  agent "読んでください。"
+  model "gpt-5.4-mini"
+  observes
+
+flow
+  pass

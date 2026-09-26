@@ -103,6 +103,15 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             };
             json!({ "aws": format!("{service}:{action}"), "args": a })
         }
+        Some(Via::Agent { instructions, model }) => {
+            let input = agent_input(task, args);
+            let schema = task.result.as_ref().and_then(|t| agent_schema(m, t)).unwrap_or(Value::Null);
+            match view {
+                // the HTTP Task's request; the input goes as the arguments' JSON text
+                View::Asl => json!({ "http": "POST", "url": AGENT_URL, "body": agent_request(model, instructions, json!(Value::Object(input).to_string()), schema) }),
+                _ => json!({ "agent": task.name, "model": model, "instructions": instructions, "input": input, "schema": schema }),
+            }
+        }
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
         Some(Via::Workflow(t)) => json!({ "child_workflow": t, "args": args }),
         Some(Via::DurableFunction(f)) => json!({ "invoke": f, "payload": args }),
@@ -119,6 +128,131 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
         }
         None => json!({ "task": task.name, "args": args }),
     }
+}
+
+/// Where Step Functions sends an agent's call: OpenAI's Responses API.
+pub const AGENT_URL: &str = "https://api.openai.com/v1/responses";
+
+/// What an agent reads: the arguments, in the order of the task's parameters. Every target
+/// gives it to the model as this object's JSON text.
+pub fn agent_input(task: &TaskDef, args: &Map<String, Value>) -> Map<String, Value> {
+    task.params.iter().filter_map(|(p, _)| args.get(p).map(|v| (p.clone(), v.clone()))).collect()
+}
+
+/// The Responses API's request for an agent's call, as Step Functions sends it: the model,
+/// what it is to do, the input as text, and the JSON Schema its answer is held to.
+pub fn agent_request(model: &str, instructions: &str, input: Value, schema: Value) -> Value {
+    json!({
+        "model": model,
+        "instructions": instructions,
+        "input": input,
+        "text": { "format": { "type": "json_schema", "name": "answer", "strict": true, "schema": schema } }
+    })
+}
+
+/// What an agent answers in: `{"answer": …}` with a value of the task's type inside, since
+/// OpenAI's Structured Outputs want an object at the top whatever the type is. None when
+/// the type cannot be said as such a schema (`json_schema`).
+pub fn agent_schema(m: &Model, t: &Ty) -> Option<Value> {
+    Some(json!({ "type": "object", "properties": { "answer": json_schema(m, t)? }, "required": ["answer"], "additionalProperties": false }))
+}
+
+/// The JSON Schema of a value of type `t`, in the strict form of OpenAI's Structured
+/// Outputs: a record's fields are all required and no others are allowed, a value that may
+/// be absent is a choice with null, a timestamp has the form Step Functions' Wait takes, and
+/// a number with a unit says its unit. None when `t` holds `json`, or a record that holds
+/// itself through others, which such a schema cannot say.
+pub fn json_schema(m: &Model, t: &Ty) -> Option<Value> {
+    fn go(m: &Model, t: &Ty, within: &mut Vec<RecordId>) -> Option<Value> {
+        Some(match t {
+            Ty::Int => json!({ "type": "integer" }),
+            Ty::Num(unit) => json!({ "type": "integer", "description": unit }),
+            Ty::Str => json!({ "type": "string" }),
+            Ty::Bool => json!({ "type": "boolean" }),
+            Ty::Timestamp => json!({ "type": "string", "pattern": TIMESTAMP_RE }),
+            Ty::Enum(e) => json!({ "type": "string", "enum": m.enums[*e].values }),
+            Ty::List(x) => json!({ "type": "array", "items": go(m, x, within)? }),
+            Ty::Opt(x) => json!({ "anyOf": [go(m, x, within)?, { "type": "null" }] }),
+            Ty::Json => return None,
+            Ty::Record(r) => {
+                if within.contains(r) {
+                    return None;
+                }
+                within.push(*r);
+                let mut props = Map::new();
+                for (f, ft) in &m.records[*r].fields {
+                    props.insert(f.clone(), go(m, ft, within)?);
+                }
+                within.pop();
+                let required: Vec<&String> = m.records[*r].fields.iter().map(|(f, _)| f).collect();
+                json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false })
+            }
+        })
+    }
+    go(m, t, &mut Vec::new())
+}
+
+/// A JSON value laid out for generated code: what fits in 72 characters stays on one line,
+/// the rest goes one entry a line, `unit` deeper at each level. With `py`, in Python's words
+/// (`None`, `True`, `False`).
+pub fn layout(v: &Value, depth: usize, unit: &str, py: bool) -> String {
+    fn scalar(v: &Value, py: bool) -> String {
+        match (v, py) {
+            (Value::Null, true) => "None".into(),
+            (Value::Bool(true), true) => "True".into(),
+            (Value::Bool(false), true) => "False".into(),
+            _ => v.to_string(),
+        }
+    }
+    fn one_line(v: &Value, py: bool) -> String {
+        let (open, close) = if py { ("{", "}") } else { ("{ ", " }") };
+        match v {
+            Value::Array(a) => format!("[{}]", a.iter().map(|x| one_line(x, py)).collect::<Vec<_>>().join(", ")),
+            Value::Object(o) if o.is_empty() => "{}".into(),
+            Value::Object(o) => format!("{open}{}{close}", o.iter().map(|(k, x)| format!("{}: {}", Value::String(k.clone()), one_line(x, py))).collect::<Vec<_>>().join(", ")),
+            _ => scalar(v, py),
+        }
+    }
+    let flat = one_line(v, py);
+    if flat.chars().count() <= 72 || !(v.is_array() || v.is_object()) {
+        return flat;
+    }
+    let pad = unit.repeat(depth + 1);
+    let end = unit.repeat(depth);
+    match v {
+        Value::Array(a) => format!("[\n{}{end}]", a.iter().map(|x| format!("{pad}{},\n", layout(x, depth + 1, unit, py))).collect::<String>()),
+        Value::Object(o) => format!("{{\n{}{end}}}", o.iter().map(|(k, x)| format!("{pad}{}: {},\n", Value::String(k.clone()), layout(x, depth + 1, unit, py))).collect::<String>()),
+        _ => flat,
+    }
+}
+
+/// How deep the objects of a JSON Schema nest, how many properties it has, and how many enum
+/// values: OpenAI's Structured Outputs take at most 10, 5,000 and 1,000.
+pub fn schema_size(s: &Value) -> (usize, usize, usize) {
+    let mut depth = 0;
+    let (mut props, mut values) = (0, 0);
+    if let Some(e) = s.get("enum").and_then(|e| e.as_array()) {
+        values += e.len();
+    }
+    let mut inner: Vec<&Value> = Vec::new();
+    if let Some(p) = s.get("properties").and_then(|p| p.as_object()) {
+        props += p.len();
+        inner.extend(p.values());
+    }
+    inner.extend(s.get("items"));
+    if let Some(a) = s.get("anyOf").and_then(|a| a.as_array()) {
+        inner.extend(a.iter());
+    }
+    for x in inner {
+        let (d, p, v) = schema_size(x);
+        depth = depth.max(d);
+        props += p;
+        values += v;
+    }
+    if s.get("type").and_then(|t| t.as_str()) == Some("object") {
+        depth += 1;
+    }
+    (depth, props, values)
 }
 
 /// `https://…/{id}/confirm` with `id` put in; the arguments the URL did not take.

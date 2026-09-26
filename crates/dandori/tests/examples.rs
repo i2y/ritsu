@@ -66,10 +66,14 @@ fn flows(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// The flows every platform runs: the examples, and the ones in tests/flows that exercise
-/// the corners of the language.
+/// the corners of the language. `DANDORI_FLOW=<part of a path>` runs only the flows whose
+/// path has it, to look at one flow on a slow platform.
 fn runnable() -> Vec<PathBuf> {
     let mut out = flows(&root().join("examples"));
     out.extend(flows(&root().join("tests/flows")));
+    if let Ok(part) = std::env::var("DANDORI_FLOW") {
+        out.retain(|f| rel(f).contains(&part));
+    }
     out
 }
 
@@ -111,8 +115,27 @@ fn diagnostics_match_the_golden_files() {
     let mut failures = Vec::new();
     for f in flows(&root().join("tests/fixtures")) {
         let (src, checked) = dandori::check::check_file(&f).unwrap();
+        // a fixture that passes check has its builds' refusals (E050) in the golden file too
+        let refusals: Vec<(&str, Vec<dandori::diag::Diag>)> = match &checked.model {
+            Some(m) => [
+                ("asl", dandori::asl::build(m)),
+                ("temporal", dandori::temporal::build(m)),
+                ("temporal-python", dandori::temporal_py::build(m)),
+                ("durable", dandori::temporal::build_flavor(m, dandori::temporal::Flavor::Durable)),
+                ("argo", dandori::argo::build(m)),
+                ("pydantic-graph", dandori::pydantic_graph::build(m)),
+            ]
+            .into_iter()
+            .filter_map(|(target, built)| built.err().map(|d| (target, d)))
+            .collect(),
+            None => vec![],
+        };
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
-            let text: String = checked.diags.iter().map(|d| d.render(&rel(&f), &src, lang)).collect();
+            let mut text: String = checked.diags.iter().map(|d| d.render(&rel(&f), &src, lang)).collect();
+            for (target, diags) in &refusals {
+                text.push_str(&format!("build --target {target}:\n"));
+                text.extend(diags.iter().map(|d| d.render(&rel(&f), &src, lang)));
+            }
             let golden = f.with_extension(format!("{tag}.txt"));
             if bless {
                 std::fs::write(&golden, &text).unwrap();
@@ -464,6 +487,113 @@ fn pydantic_graph_runs_as_the_reference_says() {
     }
 }
 
+/// The agent call of the default Transport — io.ts, which Temporal, durable functions and
+/// Argo's caller share, and io.py, which Temporal's Python SDK and pydantic-graph share — run
+/// with OpenAI's Agents SDK and a scripted model in place of OpenAI's (tools/agents), so that
+/// nothing goes to OpenAI. For every agent call of the scenarios, the model must be asked what
+/// Step Functions asks for the same call: the model, the instructions, the arguments as the
+/// same JSON text, and the answer's schema, with no settings of the SDK's own and no tools.
+/// The Transport must give back what the model answered, and throw when the model refuses.
+#[test]
+fn agents_sdk_is_asked_what_step_functions_asks() {
+    need_rulec!();
+    let node = root().join("tools/agents/node_modules/@openai/agents").exists() && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    let python = root().join("tools/agents/.venv/bin/python");
+    if !node {
+        eprintln!("SKIP: tools/agents/node_modules is missing; run `npm install --prefix tools/agents`");
+    }
+    if !python.exists() {
+        eprintln!("SKIP: tools/agents/.venv is missing; make it as tools/agents/requirements.txt says");
+    }
+    for f in runnable() {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the examples pass check");
+        if !m.tasks.iter().any(|t| matches!(t.via(Platform::Temporal), Some(Via::Agent { .. }))) {
+            continue;
+        }
+        // every agent call the scenarios make, as the Transport gets it and as Step Functions sends it
+        let mut cases = Vec::new();
+        let mut expected = Vec::new();
+        let mut refused: Vec<String> = Vec::new();
+        for sc in dandori::scenarios::generate(&m) {
+            let calls = |view: View| -> Vec<(Value, Value)> {
+                let r = dandori::interp::run(&m, &sc, view).unwrap();
+                r["steps"].as_array().unwrap().iter().filter(|s| s["call"].get("agent").is_some() || s["call"]["url"] == json!(dandori::render::AGENT_URL)).map(|s| (s["call"].clone(), s["answer"].clone())).collect()
+            };
+            for ((call, answer), (sent, _)) in calls(View::Temporal).into_iter().zip(calls(View::Asl)) {
+                let asked = json!({
+                    "models": [call["model"]],
+                    "calls": 1,
+                    "instructions": call["instructions"],
+                    "input": sent["body"]["input"],
+                    "outputType": { "type": "json_schema", "name": "answer", "strict": true, "schema": call["schema"] },
+                    "modelSettings": {},
+                    "tools": []
+                });
+                if let Some(ok) = answer.get("ok") {
+                    cases.push(json!({ "call": call, "text": json!({ "answer": ok }).to_string() }));
+                    expected.push(json!({ "answer": { "answer": ok }, "asked": asked }));
+                }
+                let name = call["agent"].as_str().unwrap().to_string();
+                if !refused.contains(&name) {
+                    refused.push(name);
+                    cases.push(json!({ "call": call, "refusal": "I can't help with that." }));
+                    expected.push(json!({ "error": "ModelRefusalError", "asked": asked }));
+                }
+            }
+        }
+        let dir = scratch(&format!("agents-{}", dandori::render::ident(&m.name)));
+        let cases_file = dir.join("cases.json");
+        std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
+        // the SDKs hand the model the input as a user message; its text is what is compared
+        let read = |file: &Path| -> Vec<Value> {
+            let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+            for g in got.iter_mut() {
+                if let Some(text) = g["asked"]["input"][0].get("content").cloned() {
+                    g["asked"]["input"] = text;
+                }
+            }
+            got
+        };
+        let check = |what: &str, got: Vec<Value>| {
+            assert_eq!(got.len(), expected.len(), "{}: {what} answered {} case(s) of {}", rel(&f), got.len(), expected.len());
+            for (i, (g, e)) in got.iter().zip(&expected).enumerate() {
+                assert!(
+                    norm(g) == norm(e),
+                    "{} case {}: {what} differs\n--- case\n{}\n--- expected\n{}\n--- got\n{}",
+                    rel(&f),
+                    i + 1,
+                    serde_json::to_string_pretty(&cases[i]).unwrap(),
+                    serde_json::to_string_pretty(e).unwrap(),
+                    serde_json::to_string_pretty(g).unwrap()
+                );
+            }
+        };
+        if node {
+            let files = dandori::temporal::build(&m).unwrap();
+            let io = files.iter().find(|(n, _)| n.ends_with("/io.ts")).unwrap();
+            let io_file = dir.join("io.ts");
+            std::fs::write(&io_file, &io.1).unwrap();
+            let results = dir.join("results-ts.json");
+            let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: tools/agents/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("the Agents SDK for TypeScript", read(&results));
+            eprintln!("{}: the Agents SDK for TypeScript was asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
+        }
+        if python.exists() {
+            let files = dandori::temporal_py::build(&m).unwrap();
+            let io = files.iter().find(|(n, _)| n.ends_with("/io.py")).unwrap();
+            let io_file = dir.join("io.py");
+            std::fs::write(&io_file, &io.1).unwrap();
+            let results = dir.join("results-py.json");
+            let out = Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: tools/agents/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("the Agents SDK for Python", read(&results));
+            eprintln!("{}: the Agents SDK for Python was asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
+        }
+    }
+}
+
 /// rules.py of the Python builds — the activities for Temporal and the functions for
 /// pydantic-graph — answers every vector rulec generates for each rule the flow calls.
 #[test]
@@ -642,9 +772,13 @@ fn argo_runs_as_the_reference_says() {
         // the nodes each run made, against what E040 reckons with
         let bound = dandori::check::bound(&m, &dandori::check::ARGO_COST);
         let mut most = 0;
-        for g in got.iter_mut() {
+        for (i, g) in got.iter_mut().enumerate() {
             let nodes = g.as_object_mut().unwrap().remove("nodes").and_then(|n| n.as_u64()).expect("the runner counts the nodes");
             most = most.max(nodes);
+            // a pod the platform could not run: the runner played the run again
+            for e in g.as_object_mut().unwrap().remove("platform").and_then(|p| p.as_array().cloned()).unwrap_or_default() {
+                eprintln!("{} run {}: played again, since the platform could not run a pod ({})", rel(&f), i + 1, e.as_str().unwrap_or_default());
+            }
         }
         assert!(most <= bound, "{}: a run on Argo made {most} nodes, more than the {bound} E040 reckons with", rel(&f));
         compare("the Argo workflow", &f, &references, &got);

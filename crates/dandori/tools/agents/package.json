@@ -1,0 +1,10 @@
+{
+  "name": "dandori-agents-check",
+  "private": true,
+  "type": "module",
+  "description": "OpenAI's Agents SDK, which tools/agents/check.mjs runs the default Transport of the generated TypeScript with, against a scripted model",
+  "dependencies": {
+    "@openai/agents": "0.18.0",
+    "zod": "4.6.5"
+  }
+}

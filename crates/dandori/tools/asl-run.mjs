@@ -7,6 +7,11 @@
 // A Map's rounds run one after another. A round reads the variables outside it and keeps
 // its own; assigning a variable an outer scope has is refused, as Step Functions refuses it.
 //
+// A Task whose Assign or Output cannot be evaluated fails with States.QueryEvaluationError,
+// which its Retry and Catch take, as on Step Functions. An HTTP Task to OpenAI's Responses API
+// (an `agent` task) gets its answer as the API gives it, { "answer": <value> } as the message's
+// text; a failure is played as the model refusing, with no text to read.
+//
 //   node tools/asl-run.mjs <definition.asl.json> <run.json> [execution name]
 //
 // run.json: { "input": {...}, "answers": [ {"ok": value} | {"error": kind, "as": ASL error name} ] }
@@ -29,13 +34,20 @@ class Stop extends Error {
   }
 }
 
+// $parse is Step Functions' own function
+function expression(text) {
+  const x = jsonata(text);
+  x.registerFunction("parse", (s) => JSON.parse(s), "<s:x>");
+  return x;
+}
+
 async function evaluate(v, states) {
   if (typeof v === "string") {
     const m = /^\{%([\s\S]*)%\}$/.exec(v);
     if (!m) return v;
     let r;
     try {
-      r = await jsonata(m[1]).evaluate({}, { ...vars, states });
+      r = await expression(m[1]).evaluate({}, { ...vars, states });
     } catch (e) {
       throw new Stop({ fail: { error: "States.QueryEvaluationError", cause: String(e.message ?? e) } });
     }
@@ -66,9 +78,17 @@ function plain(x) {
 let outer = new Set();
 
 async function assign(block, states) {
-  // every expression reads the values as they were on entry; then all are set
-  const values = {};
-  for (const [k, x] of Object.entries(block)) values[k] = await evaluate(x, states);
+  set(await values(block, states));
+}
+
+// every expression reads the values as they were on entry; then all are set
+async function values(block, states) {
+  const out = {};
+  for (const [k, x] of Object.entries(block)) out[k] = await evaluate(x, states);
+  return out;
+}
+
+function set(values) {
   for (const k of Object.keys(values)) {
     if (outer.has(k)) throw new Stop({ fail: { error: "States.Runtime", cause: `a Map round assigns ${k}, a variable of an outer scope` } });
   }
@@ -106,7 +126,31 @@ function wire(resource, args) {
   return { resource, args };
 }
 
-function wrap(resource, answer) {
+const AGENT_URL = "https://api.openai.com/v1/responses";
+
+function isAgent(resource, args) {
+  return resource === "arn:aws:states:::http:invoke" && args.ApiEndpoint === AGENT_URL;
+}
+
+// the Responses API's answer: a reasoning item, then the message, whose content is `content`
+function response(content) {
+  return {
+    ResponseBody: {
+      id: "resp_test",
+      object: "response",
+      status: "completed",
+      output: [
+        { id: "rs_test", type: "reasoning", summary: [] },
+        { id: "msg_test", type: "message", role: "assistant", status: "completed", content: [content] },
+      ],
+    },
+    StatusCode: 200,
+    StatusText: "OK",
+  };
+}
+
+function wrap(resource, args, answer) {
+  if (isAgent(resource, args)) return response({ type: "output_text", text: JSON.stringify({ answer }), annotations: [] });
   if (resource === "arn:aws:states:::lambda:invoke") return { Payload: answer, StatusCode: 200 };
   if (resource === "arn:aws:states:::http:invoke") return { ResponseBody: answer, StatusCode: 200 };
   if (resource === "arn:aws:states:::states:startExecution.sync:2") return { Output: answer, Status: "SUCCEEDED" };
@@ -188,19 +232,27 @@ async function runStates(all, start, input, context, top) {
         const w = wire(st.Resource, args);
         const retriers = st.Retry ?? [];
         const counts = retriers.map(() => 0);
-        let result;
         let error = null;
+        let done;
         for (;;) {
           const ans = run.answers[next++];
           if (ans === undefined) throw new Error(`no answer for call ${next} (${name})`);
-          if ("ok" in ans) {
-            steps.push({ call: w, answer: { ok: ans.ok } });
-            result = wrap(st.Resource, ans.ok);
-            error = null;
-            break;
+          let result;
+          if ("ok" in ans) result = wrap(st.Resource, args, ans.ok);
+          else if (isAgent(st.Resource, args) && ans.error === "failure") result = response({ type: "refusal", refusal: "scripted" });
+          error = "ok" in ans || result !== undefined ? null : ans.as;
+          if (result !== undefined) {
+            // the answer is read into the variables and the output, or the Task fails
+            try {
+              const s2 = { ...states, result };
+              done = { values: st.Assign ? await values(st.Assign, s2) : {}, output: st.Output !== undefined ? await evaluate(st.Output, s2) : result };
+            } catch (e) {
+              if (!(e instanceof Stop) || e.end.fail?.error !== "States.QueryEvaluationError") throw e;
+              error = "States.QueryEvaluationError";
+            }
           }
-          steps.push({ call: w, answer: { error: ans.error, as: ans.as } });
-          error = ans.as;
+          steps.push({ call: w, answer: "ok" in ans ? { ok: ans.ok } : { error: ans.error, as: error } });
+          if (error === null) break;
           let again = false;
           for (let i = 0; i < retriers.length; i++) {
             const r = retriers[i];
@@ -217,9 +269,8 @@ async function runStates(all, start, input, context, top) {
           if (!again) break;
         }
         if (error === null) {
-          const s2 = { ...states, result };
-          if (st.Assign) await assign(st.Assign, s2);
-          output = st.Output !== undefined ? await evaluate(st.Output, s2) : result;
+          set(done.values);
+          output = done.output;
           name = st.Next;
         } else {
           const errorOutput = { Error: error, Cause: "scripted" };

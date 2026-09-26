@@ -19,6 +19,17 @@ use std::collections::BTreeMap;
 
 pub const SCRIPTED_CAUSE: &str = "scripted";
 pub const TEST_FAILURE: &str = "Dandori.Test.Failure";
+/// An agent's failure as Step Functions sees it when the model refuses: the answer has no
+/// text, and reading it fails the Task. The ASL runner plays an agent's failure this way.
+pub const AGENT_REFUSED: &str = "States.QueryEvaluationError";
+
+/// The name Step Functions gives a failure of this callee in a scenario.
+pub fn asl_failure(m: &Model, callee: &Callee) -> &'static str {
+    match callee {
+        Callee::Task(t) if matches!(m.tasks[*t].via(Platform::StepFunctions), Some(Via::Agent { .. })) => AGENT_REFUSED,
+        _ => TEST_FAILURE,
+    }
+}
 
 enum Ctl {
     Next,
@@ -460,7 +471,7 @@ impl<'a> Run<'a> {
             View::Temporal | View::Durable | View::Argo | View::Graph => kind.to_string(),
             View::Asl => match kind {
                 "timeout" => "States.Timeout".to_string(),
-                "failure" => TEST_FAILURE.to_string(),
+                "failure" => asl_failure(self.m, callee).to_string(),
                 other => render::asl_error(self.m, callee, &HErr::Declared(other.to_string())).into_iter().next().unwrap_or_else(|| other.to_string()),
             },
         };

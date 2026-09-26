@@ -5,9 +5,10 @@
 //!
 //! A package named after the workflow:
 //! - `types.py`: the records and enums, and a check for each (`is_<Type>`)
-//! - `activities.py`: the tasks; the ones that say `lambda`, `http` or `aws` are written there,
-//!   the others (`OwnTasks`) are yours; `make_activities(own, transport)` gives the activities
-//! - `io.py`: how those tasks reach Lambda, HTTP and the AWS APIs (a `Transport`)
+//! - `activities.py`: the tasks; the ones that say `lambda`, `http`, `aws` or `agent` are
+//!   written there, the others (`OwnTasks`) are yours; `make_activities(own, transport)` gives
+//!   the activities
+//! - `io.py`: how those tasks reach Lambda, HTTP, the AWS APIs and OpenAI's agents (a `Transport`)
 //! - `rules.py`: the rules as activities, around the Python rulec generates
 //! - `runtime.py`: what the workflow code shares — retries, error kinds, keys, callbacks
 //! - `workflow.py`: the workflow, and `workflows`, the list to give the worker
@@ -195,8 +196,8 @@ pub(crate) fn task_doc(m: &Model, task: &TaskDef) -> String {
 }
 
 /// The body of the function that runs a task, as lines: the user's own (`own`), or the call
-/// that dandori writes for `lambda`, `http` and `aws` through the Transport `t`. A declared
-/// error is raised as `fail(kind, message)`.
+/// that dandori writes for `lambda`, `http`, `aws` and `agent` through the Transport `t`. A
+/// declared error is raised as `fail(kind, message)`.
 pub(crate) fn task_impl(task: &TaskDef, p: Platform) -> Vec<String> {
     let fname = method(&task.name);
     match task.via(p) {
@@ -273,8 +274,39 @@ pub(crate) fn task_impl(task: &TaskDef, p: Platform) -> Vec<String> {
                 vec![format!("return {call}")]
             }
         }
+        Some(Via::Agent { instructions, model }) => {
+            let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
+            vec![
+                "return io.answer(".into(),
+                "    await t.agent(".into(),
+                "        {".into(),
+                format!("            \"agent\": {},", q(&task.name)),
+                format!("            \"model\": {},", q(model)),
+                format!("            \"instructions\": {},", q(instructions)),
+                format!("            \"input\": {{{}}},", input.join(", ")),
+                format!("            \"schema\": SCHEMAS[{}],", q(&task.name)),
+                "        }".into(),
+                "    )".into(),
+                ")".into(),
+            ]
+        }
         _ => vec!["raise NotImplementedError".into()],
     }
+}
+
+/// What each agent answers in, as a Python dict of the JSON Schemas: nothing when no task is an agent.
+pub(crate) fn schemas_block(m: &Model, tasks: &[&TaskDef], p: Platform) -> String {
+    let agents: Vec<&&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Agent { .. }))).collect();
+    if agents.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("# What each agent answers in: the JSON Schema OpenAI's Structured Outputs hold its model to.\nSCHEMAS: dict[str, Any] = {\n");
+    for task in agents {
+        let schema = task.result.as_ref().and_then(|t| render::agent_schema(m, t)).expect("the checker gives an agent an answer with a schema");
+        out.push_str(&format!("    {}: {},\n", q(&task.name), render::layout(&schema, 1, "    ", true)));
+    }
+    out.push_str("}\n\n\n");
+    out
 }
 
 /// activities.py: every task the workflow calls as an activity, the ones the user writes, and
@@ -287,6 +319,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("# The tasks the workflow calls.\n#\n");
     a.push_str("# - A task that says `lambda`, `http` or `aws` is written here: it sends what Step Functions\n");
     a.push_str("#   would send, through a Transport (io.py), where the credentials and the clients are yours to set.\n");
+    a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
+    a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("# - The others are yours to write (OwnTasks). A declared error is raised as\n");
     a.push_str("#   ApplicationError(\"...\", type=\"<error>\", non_retryable=True).\n");
     a.push_str("# - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
@@ -296,7 +330,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   to the workflow `io.workflow_of(callback_id)` names.\n\n");
     a.push_str("from __future__ import annotations\n\nfrom typing import Any, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
     a.push_str("from . import io\nfrom . import types as T\n\n\n");
-    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http` nor `aws`.\"\"\"\n");
+    a.push_str(&schemas_block(m, &tasks, p));
+    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`.\"\"\"\n");
     if own.is_empty() {
         a.push('\n');
     }
@@ -399,10 +434,11 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     t
 }
 
-pub(crate) const IO: &str = r#"# How the tasks that say `lambda`, `http` or `aws` reach the other side. They go through a
-# Transport, so that the credentials, the clients and a test's stand-in are yours to set; the
-# default one uses the standard library for HTTP and boto3 (the AWS SDK for Python) for the
-# rest, imported when first needed.
+pub(crate) const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
+# through a Transport, so that the credentials, the clients and a test's stand-in are yours to
+# set; the default one uses the standard library for HTTP, boto3 (the AWS SDK for Python) for
+# Lambda and the AWS APIs, and OpenAI's Agents SDK (openai-agents, which reads OPENAI_API_KEY)
+# for the agents, each imported when first needed.
 
 from __future__ import annotations
 
@@ -422,6 +458,11 @@ Answer = dict
 # "body", "query", "form"}; `form` asks for a URL-encoded body.
 HttpRequest = dict
 
+# A call of an agent: {"agent": the task's name, "model", "instructions", "input", "schema"}.
+# The model is told `instructions`, reads `input` as JSON text, and answers in `schema`, the
+# JSON Schema of {"answer": …} in the strict form of OpenAI's Structured Outputs.
+AgentCall = dict
+
 
 class Transport(Protocol):
     async def lambda_(self, fn: str, payload: dict[str, Any]) -> Answer:
@@ -434,6 +475,10 @@ class Transport(Protocol):
 
     async def aws(self, service: str, action: str, input: dict[str, Any]) -> Answer:
         """Call an AWS API, named as Step Functions names it (`sns`, `publish`); an exception comes back by its name."""
+        ...
+
+    async def agent(self, call: AgentCall) -> Any:
+        """Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal raises."""
         ...
 
 
@@ -463,11 +508,14 @@ def encode(o: dict[str, Any], prefix: str = "") -> str:
 
 
 class DefaultTransport:
-    def __init__(self, headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None) -> None:
+    def __init__(self, headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None, agents: Any = None) -> None:
         """`headers`: what to add to an HTTP request, such as the credentials the other side
-        wants; `aws`: the keyword arguments of boto3's clients, such as `region_name`."""
+        wants; `aws`: the keyword arguments of boto3's clients, such as `region_name`;
+        `agents`: the Agents SDK's RunConfig, such as one whose model_provider serves models
+        other than OpenAI's."""
         self._headers = headers
         self._aws = aws or {}
+        self._agents = agents
         self._clients: dict[str, Any] = {}
 
     def _client(self, service: str) -> Any:
@@ -539,9 +587,36 @@ class DefaultTransport:
 
         return await asyncio.to_thread(call)
 
+    async def agent(self, call: AgentCall) -> Any:
+        from agents import Agent, AgentOutputSchemaBase, ModelBehaviorError, ModelSettings, Runner
 
-def transport(headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None) -> Transport:
-    return DefaultTransport(headers, aws)
+        class Answer(AgentOutputSchemaBase):
+            def is_plain_text(self) -> bool:
+                return False
+
+            def name(self) -> str:
+                return "answer"
+
+            def json_schema(self) -> dict[str, Any]:
+                return call["schema"]
+
+            def is_strict_json_schema(self) -> bool:
+                return True
+
+            def validate_json(self, json_str: str) -> Any:
+                try:
+                    return json.loads(json_str)
+                except ValueError as e:
+                    raise ModelBehaviorError(f"the agent's answer is not JSON: {e}") from e
+
+        # no model settings of the SDK's own, so that the model gets what Step Functions sends
+        agent = Agent(name=call["agent"], instructions=call["instructions"], model=call["model"], model_settings=ModelSettings(), output_type=Answer())
+        result = await Runner.run(agent, text(call["input"]), run_config=self._agents)
+        return result.final_output
+
+
+def transport(headers: Callable[[str], dict[str, str]] | None = None, aws: dict[str, Any] | None = None, agents: Any = None) -> Transport:
+    return DefaultTransport(headers, aws, agents)
 
 
 def workflow_of(callback_id: str) -> str:
@@ -555,6 +630,13 @@ def value(a: Answer, names: dict[str, str], fail: Callable[[str, str], Exception
         return a["ok"]
     kind = names.get(a["error"])
     raise fail(kind if kind is not None else f"Dandori.Failure.{a['error']}", a.get("message", ""))
+
+
+def answer(out: Any) -> Any:
+    """What an agent answered: the value under "answer". An answer without it fails the call."""
+    if isinstance(out, dict) and "answer" in out:
+        return out["answer"]
+    raise ValueError("the agent's answer has no \"answer\"")
 
 
 def status(r: dict[str, Any], names: dict[str, str], fail: Callable[[str, str], Exception]) -> Any:

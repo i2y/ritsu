@@ -1,7 +1,9 @@
 // Runs a workflow that dandori generated for Argo Workflows on the kind cluster that
 // tools/argo/setup.sh sets up, against scripted answers, and prints what it did in the shape
 // the reference interpreter prints for Argo: every call with its arguments and the answer it
-// got, and how the workflow ended; and with each run, how many nodes its Workflow made.
+// got, and how the workflow ended; and with each run, how many nodes its Workflow made, and the
+// pods the platform could not run (a run with such a pod is played again under a new name, at
+// most twice).
 //
 //   node tools/argo/run.mjs <generated dir> <runs.json> <results.json>
 //
@@ -86,10 +88,20 @@ async function mock(pathname, body) {
 }
 
 // how many nodes a workflow made; Argo compresses the list when the Workflow grows large
-function nodeCount(w) {
-  if (w.status?.nodes) return Object.keys(w.status.nodes).length;
-  if (w.status?.compressedNodes) return Object.keys(JSON.parse(zlib.gunzipSync(Buffer.from(w.status.compressedNodes, "base64")).toString("utf8"))).length;
-  return 0;
+function nodesOf(w) {
+  if (w.status?.nodes) return w.status.nodes;
+  if (w.status?.compressedNodes) return JSON.parse(zlib.gunzipSync(Buffer.from(w.status.compressedNodes, "base64")).toString("utf8"));
+  return {};
+}
+
+// The pods the platform could not run: a pod whose init or wait container failed is Error, and a
+// container the runtime lost ends Unknown with exit code 255 (containerd in the kind node was seen
+// to crash under load, and every container running then ended so). The containers of ours exit
+// with 0, 1 or 3. A run with such a pod did not play its scenario.
+function podErrors(w) {
+  return Object.values(nodesOf(w))
+    .filter((n) => n.type === "Pod" && (n.phase === "Error" || /Unknown \(exit code 255\)/.test(n.message ?? "")))
+    .map((n) => `${w.metadata.name} ${n.displayName}: ${n.message ?? ""}`);
 }
 
 const wt = spec.template;
@@ -160,10 +172,13 @@ for (const child of spec.children ?? []) {
   await kubectl(["apply", "-f", "-"], JSON.stringify(stub));
 }
 
-// the runs, a few at a time
+// the runs, a few at a time; a run with a pod Argo could not run is played again, at most twice
 const names = spec.runs.map((_, i) => `dd-${name}-${suffix}-${i + 1}`.slice(0, 60));
+const made = [...names];
 const ends = new Array(spec.runs.length);
 const nodes = new Array(spec.runs.length).fill(0);
+const platform = spec.runs.map(() => []);
+const again = [];
 const waiting = [];
 let nextRun = 0;
 const running = new Set();
@@ -193,8 +208,8 @@ async function answer(wf, callbackId, ans) {
 }
 
 const started = Date.now();
-while (running.size > 0 || nextRun < spec.runs.length) {
-  while (running.size < 12 && nextRun < spec.runs.length) await submit(nextRun++);
+while (running.size > 0 || again.length > 0 || nextRun < spec.runs.length) {
+  while (running.size < 12 && (again.length > 0 || nextRun < spec.runs.length)) await submit(again.length > 0 ? again.shift() : nextRun++);
   await new Promise((r) => setTimeout(r, 1500));
   const list = JSON.parse(await kubectl(["get", "workflows", "-o", "json"]));
   for (const w of list.items) {
@@ -203,7 +218,16 @@ while (running.size > 0 || nextRun < spec.runs.length) {
     const phase = w.status?.phase;
     if (phase === "Succeeded" || phase === "Failed" || phase === "Error") {
       running.delete(i);
-      nodes[i] = nodeCount(w);
+      const errors = podErrors(w);
+      if (errors.length > 0 && platform[i].length < 2) {
+        platform[i].push(...errors);
+        const tag = `-r${platform[i].length}`;
+        names[i] = `dd-${name}-${suffix}-${i + 1}`.slice(0, 60 - tag.length) + tag;
+        made.push(names[i]);
+        again.push(i);
+        continue;
+      }
+      nodes[i] = Object.keys(nodesOf(w)).length;
       const params = Object.fromEntries((w.status.outputs?.parameters ?? []).map((p) => [p.name, p.value]));
       if (phase === "Succeeded") ends[i] = { succeed: JSON.parse(params.dd_output ?? "null") };
       else if (params.dd_error && params.dd_error !== "null") {
@@ -239,13 +263,13 @@ for (let i = 0; i < spec.runs.length; i++) {
   const state = await mock(`/state?workflow=${encodeURIComponent(names[i])}`);
   // the keys carry the workflow's name; the reference names the execution "test"
   const steps = JSON.parse(JSON.stringify(state.steps).split(`"${names[i]}/`).join('"test/'));
-  results.push({ steps, end: ends[i], nodes: nodes[i] });
+  results.push({ steps, end: ends[i], nodes: nodes[i], platform: platform[i] });
 }
 // DANDORI_ARGO_KEEP=1 keeps the workflows, to look at them
 if (!process.env.DANDORI_ARGO_KEEP) {
-  for (const wf of names) await argoCli(["delete", wf]).catch(() => {});
+  for (const wf of made) await argoCli(["delete", wf]).catch(() => {});
   // and the workflows their tasks started
-  if ((spec.children ?? []).length > 0) await kubectl(["delete", "workflows", "-l", `dandori-parent in (${names.join(",")})`]).catch(() => {});
+  if ((spec.children ?? []).length > 0) await kubectl(["delete", "workflows", "-l", `dandori-parent in (${made.join(",")})`]).catch(() => {});
 }
 proxy?.kill();
 fs.rmSync(code, { recursive: true, force: true });
