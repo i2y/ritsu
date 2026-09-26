@@ -5,6 +5,63 @@ release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64),
 with the SHA-256 of each beside it, on the
 [releases page](https://github.com/i2y/rulec/releases). The Linux ones are
 statically linked; the macOS ones link only the system library every Mac has.
+The same binaries come through Homebrew and as `.deb` and `.rpm` packages, so
+rulec can arrive the way everything else on the machine did.
+
+## Homebrew
+
+On macOS and on Linux:
+
+```console
+$ brew install i2y/tap/rulec
+$ rulec --version
+rulec 0.21.0
+```
+
+The formula installs the release archive for your platform, held to its line in
+`SHA256SUMS`. Each release rewrites it, and only after brew has installed it and
+run its test on macOS and on Linux; `brew upgrade rulec` takes the next one.
+
+## Debian, Ubuntu, Fedora, RHEL
+
+Every release carries a `.deb` and an `.rpm` for x64 and arm64. They hold the
+same static binary as the archives, so they depend on nothing:
+
+```console
+$ v=0.21.0; a=amd64                  # arm64 on ARM
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec_$v-1_$a.deb"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec_$v-1_$a.deb" | sha256sum -c
+rulec_0.21.0-1_amd64.deb: OK
+$ sudo apt install "./rulec_$v-1_$a.deb"
+```
+
+```console
+$ v=0.21.0; a=x86_64                 # aarch64 on ARM
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec-$v-1.$a.rpm"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec-$v-1.$a.rpm" | sha256sum -c
+rulec-0.21.0-1.x86_64.rpm: OK
+$ sudo dnf install "./rulec-$v-1.$a.rpm"
+```
+
+The packages are not signed: as with the archives, their line in `SHA256SUMS`
+is the check. No package repository stands behind them, so `apt upgrade` and
+`dnf upgrade` do not see a new release — install the next one the same way.
+
+<!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, uncomment this
+section and say "and through Cargo" in the first paragraph again.
+
+## Cargo
+
+```console
+$ cargo install rulec          # builds it; there is nothing else to fetch
+$ cargo binstall rulec         # takes the release archive instead of building
+```
+
+`cargo install` needs a recent stable Rust and nothing more, because rulec has
+no dependencies. `cargo binstall` downloads the archive the releases page
+offers — on Linux the static binary, which runs on glibc and musl alike — but
+does not hold it to `SHA256SUMS`, as Homebrew and the steps on this page do.
+-->
 
 ## The release binary
 
@@ -87,7 +144,7 @@ The folder is what makes the skill findable, so keep it whole. To have
 it in every project rather than one, put it in `~/.claude/skills/`
 instead.
 
-The only thing it needs is `rulec` on the path — the section above.
+The only thing it needs is `rulec` on the path, whichever way above put it there.
 
 Ask for something it covers ("write a `.rule` for this tariff", "fix this
 E101") and it usually applies on its own. **To be certain, name it: "use

@@ -1,6 +1,52 @@
 # インストール
 
-rulec はランタイムも外部依存も持たない一つのバイナリです。リリースごとに macOS（arm64、x64）と Linux（x64、arm64）のバイナリを、それぞれの SHA-256 と一緒に[リリースのページ](https://github.com/i2y/rulec/releases)に置いています。Linux 版は静的にリンクしてあり、macOS 版がリンクするのは、どの Mac にもあるシステムのライブラリだけです。
+rulec はランタイムも外部依存も持たない一つのバイナリです。リリースごとに macOS（arm64、x64）と Linux（x64、arm64）のバイナリを、それぞれの SHA-256 と一緒に[リリースのページ](https://github.com/i2y/rulec/releases)に置いています。Linux 版は静的にリンクしてあり、macOS 版がリンクするのは、どの Mac にもあるシステムのライブラリだけです。同じバイナリを Homebrew と、`.deb`・`.rpm` のパッケージからも入れられるので、その機械でふだん使っている入れ方を選べます。
+
+## Homebrew
+
+macOS でも Linux でも使えます。
+
+```console
+$ brew install i2y/tap/rulec
+$ rulec --version
+rulec 0.21.0
+```
+
+formula が入れるのは、その環境向けのリリースのアーカイブで、`SHA256SUMS` の行と突き合わせてから入れます。formula はリリースのたびに書き換わります。書き換えるのは、brew が macOS と Linux の両方で実際に入れて、formula のテストが通ったあとです。次のリリースは `brew upgrade rulec` で入ります。
+
+## Debian・Ubuntu・Fedora・RHEL
+
+リリースごとに、x64 と arm64 の `.deb` と `.rpm` も置いています。中身はアーカイブと同じ静的リンクのバイナリなので、依存するパッケージはありません。
+
+```console
+$ v=0.21.0; a=amd64                  # ARM なら arm64
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec_$v-1_$a.deb"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec_$v-1_$a.deb" | sha256sum -c
+rulec_0.21.0-1_amd64.deb: OK
+$ sudo apt install "./rulec_$v-1_$a.deb"
+```
+
+```console
+$ v=0.21.0; a=x86_64                 # ARM なら aarch64
+$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec-$v-1.$a.rpm"
+$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec-$v-1.$a.rpm" | sha256sum -c
+rulec-0.21.0-1.x86_64.rpm: OK
+$ sudo dnf install "./rulec-$v-1.$a.rpm"
+```
+
+パッケージに署名はしていません。アーカイブと同じく、`SHA256SUMS` の行との突き合わせが検証の全部です。パッケージのリポジトリは用意していないので、`apt upgrade` や `dnf upgrade` では新しいリリースは入りません。次のリリースも同じ手順で入れてください。
+
+<!-- crates.io は保留中（DESIGN §15.158）。クレートを出したら、この節のコメントを外し、最初の段落の入れ方に Cargo を戻す。
+
+## Cargo
+
+```console
+$ cargo install rulec          # ビルドする。ほかに取りに行くものは無い
+$ cargo binstall rulec         # ビルドせずに、リリースのアーカイブを取る
+```
+
+`cargo install` に要るのは新しめの stable な Rust だけです。rulec は依存を持たないからです。`cargo binstall` はリリースのページと同じアーカイブを取ってきます（Linux では静的リンクのバイナリなので、glibc でも musl でも動きます）。ただし `SHA256SUMS` との突き合わせはしません。Homebrew とこのページのほかの手順は突き合わせます。
+-->
 
 ## リリースのバイナリ
 
@@ -62,7 +108,7 @@ $ cp -r /tmp/rulec/skills/rulec .claude/skills/
 
 `.claude/skills/rulec/` の下に `SKILL.md` と五つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`~/.claude/skills/` に置きます。
 
-要るのは `rulec` が PATH にあることだけです（上の節のとおり）。
+要るのは `rulec` が PATH にあることだけです（上のどの入れ方でも構いません）。
 
 あとは「この運賃表から `.rule` を書いて」「この E101 を直して」のように頼めば、たいていはスキルが自動で使われます。**確実に使わせたいときは「rulec のスキルを使って」と名指しで頼んでください。**
 

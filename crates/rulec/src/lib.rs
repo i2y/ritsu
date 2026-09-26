@@ -1,6 +1,10 @@
 //! rulec — checks decision tables of business rules and generates code for every target
 //! [`backend::ALL`] names.
 //! The design is in DESIGN.md.
+//!
+//! The modules are public so that the tests, the playground and `rulec mcp` can reach them,
+//! not as an interface: they change with the tool, and docs/compatibility.md leaves them out
+//! of what 1.x keeps. Use the command line, `rulec mcp`, or the generated code.
 
 /// A user-facing sentence in both languages: `tr!("日本語", "English")`.
 ///

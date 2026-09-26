@@ -31,14 +31,18 @@ the same thing, and its generated code is called the same way and answers the sa
    marked as retired, and its number is never given to anything else.
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
-   tools with their arguments and resources, the GitHub Action's inputs, and the names of
-   the release archives keep every field they have at 1.0, with the same meaning. A 1.x may
-   add a field, and may add a value to a set of values the documentation lists — a new
-   diagnostic code, a new `what` in the `domain` of `diff`. **A reader should skip a key it
-   does not know, and treat a value it does not know as it treats an unknown key.** Where a
-   format carries `v`, that is the version of its shape: `check` is at 2 and the certificate
-   at 1, and an output without `v` is at 1. A re-checker of certificates refuses a `v` it was
-   not written for, as `tools/recheck.py` and the Lean program in `proofs/` do.
+   tools with their arguments and resources, the GitHub Action's inputs, and the names of the
+   release archives and of the packages beside them (`i2y/tap/rulec` in Homebrew, the `.deb`
+   and the `.rpm`) keep every field they have at 1.0, with the same meaning. A 1.x may add a
+   field, and may add a value to a set of values the documentation lists — a new diagnostic
+   code, a new `what` in the `domain` of `diff`. **A reader should skip a key it does not know,
+   and treat a value it does not know as it treats an unknown key.** Where a format carries
+   `v`, that is the version of its shape: `check` is at 2 and the certificate at 1, and an
+   output without `v` is at 1. A re-checker of certificates refuses a `v` it was not written
+   for, as `tools/recheck.py` and the Lean program in `proofs/` do.
+
+<!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, name it in item 7
+as well: "the crate `rulec`", after `i2y/tap/rulec` in Homebrew. -->
 
 ## What a 1.x may change
 

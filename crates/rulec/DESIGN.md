@@ -1226,7 +1226,7 @@ error[E112]: 導出の範囲が、実際に到達しうる値を含んでいま�
 
 ## 12. 実装言語と配布形態
 
-**決定**：rulec は Rust で書く。配布は単一静的バイナリ（macOS arm64/x64、Linux x64/arm64 は musl 静的リンク）を GitHub Releases に置き、CI では sha256 を固定してダウンロードする。
+**決定**：rulec は Rust で書く。配布は単一静的バイナリ（macOS arm64/x64、Linux x64/arm64 は musl 静的リンク）を GitHub Releases に置き、CI では sha256 を固定してダウンロードする。同じバイナリを Homebrew と、`.deb`・`.rpm` からも入れられるようにする。crates.io は用意だけして保留している（§15.158）。
 
 理由。
 この道具の本体はコンパイラ（AST、型付け、領域代数、正確な有理数演算、決まった順で入力を作ること）であり、直和型とパターンマッチが実装の正しさに直接効く。
@@ -1251,7 +1251,7 @@ replay は fixtures を持つ環境だけの別ジョブとし、`rulec replay` 
 `--lang` はどのコマンドにも付けられる。CI では言語を明示する（環境に `RULEC_LANG` を置くか、各行に `--lang`）。生成物と PR コメントの文面が機械で変わらないためである（§11 原則 7）。
 レポート整形まで rulec が持ち、投稿は CI の一行に任せて CI ベンダ非依存を保つ。
 
-配布は `.github/workflows/release.yml` が担う。`v*` のタグを押すと四つの静的バイナリを作り、タグが Cargo.toml の版と一致することを確かめ、`SHA256SUMS` と一緒に GitHub Releases に置く。リポジトリ直下の `action.yml` は、その一つを `SHA256SUMS` と突き合わせて runner の PATH に置くだけの composite action で、`uses: i2y/rulec@v0.1.0` の一行で入る（§15.42）。
+配布は `.github/workflows/release.yml` が担う。`v*` のタグを押すと四つの静的バイナリを作り、タグが Cargo.toml の版と一致することを確かめ、`SHA256SUMS` と一緒に GitHub Releases に置く。リポジトリ直下の `action.yml` は、その一つを `SHA256SUMS` と突き合わせて runner の PATH に置くだけの composite action で、`uses: i2y/rulec@v0.1.0` の一行で入る（§15.42）。リリースが出たあと、同じワークフローが Homebrew の formula を書いて tap に置く（§15.158）。
 
 **捨てたもの**：
 
@@ -4553,3 +4553,37 @@ SyntaxError: Identifier 'rows' has already been declared
 - リリースノートはまだ定型文だけで、「答えが変わる修正」と「緑が赤になる修正」を書く場所が無い。1.0 までに要る。
 - サイトは main への push で配信されるので、1.0 のあとは、まだ出ていない機能の説明がサイトと SKILL.md に先に載る。
 - 記録は、書いた規則の版を持たない（§15.145）。読む側が知らないトップレベルのキーを無視するので、1.x で足しても互換である。
+
+### 15.158 パッケージマネージャから入れる（2026-09-26）
+
+**きっかけ**：入れる手段は三つだった。リリースのアーカイブを手で取って `SHA256SUMS` と突き合わせる、Rust の toolchain で `cargo install --path .` する、CI で Action を使う。どれも正しいが、macOS で Homebrew、Linux で apt や dnf を使う人にとっては、ふだんの入れ方ではない。更新も削除も、そのパッケージマネージャに任せられない。§12 は pip と npm のラッパを、§15.42 は Windows を「要望が出てから」とした。いまのリリースの形（四つの静的バイナリと `SHA256SUMS`）を変えずに、同じバイナリを同じ確かさで届けられるのは、どのパッケージマネージャか。
+
+**決定**：Homebrew と、`.deb`・`.rpm` の二つを足し、crates.io は用意だけして保留した。どれもリリースのアーカイブと同じバイナリを届け、アーカイブの名前は変えない。
+
+1. **Homebrew。** 作者の tap（`i2y/homebrew-tap`）に formula を置く。入れ方は `brew install i2y/tap/rulec`。formula はビルドせず、その環境向けのアーカイブを取って `sha256` で固定するだけである。macOS と Linux、arm64 と x64 の四つを `on_macos`・`on_linux`・`on_arm`・`on_intel` で分ける。`packaging/homebrew.sh` が、公開した `SHA256SUMS` から formula を書く。release.yml は、書いた formula を macOS と Linux の runner で `brew audit --strict --online`・`brew install`・`brew test` にかけ、両方が通ってから tap へ push する。push には、tap のリポジトリにだけ書ける deploy key を使う（secret は `HOMEBREW_TAP_KEY`）。formula のテストは、`--version` を見たあと、二つの値を持つ enum の規則が検査を通ることと、その行を一つ消した規則に `check` が穴の入力（`dest = overseas`）を返すことを見る。
+2. **.deb と .rpm。** Linux の二つのバイナリを nfpm で `.deb` と `.rpm` にして、アーカイブと並べて置き、同じ `SHA256SUMS` に載せる。入るのは `/usr/bin/rulec` とライセンスの二つだけで、依存は無い。`packaging/linux.sh` がパッケージを作り、Debian と Fedora のコンテナで、入れる・`--version`・コーパスの検査・消す、を通してから残す。このスクリプトは、release.yml の Linux の二つのジョブと、ci.yml が push ごとに走らせる `packages` ジョブの両方で走る。nfpm はイメージのダイジェストで固定した。
+3. **crates.io（保留）。** クレート `rulec` として出す用意をした。送るのは `src/`、`rulec mcp` が埋め込む文書六つ、README とライセンスだけで（`include`）、テスト・サイト・DESIGN.md は送らない。ci.yml の `packages` ジョブが push ごとに `cargo package` を走らせ、送る中身だけでビルドできることを確かめる。保留の間もこれは続け、出すときに中身がずれていないようにする。`[package.metadata.binstall]` を書いたので、出せば `cargo binstall rulec` はビルドせずにリリースのアーカイブを取る。Linux には musl の静的バイナリしか無いので、glibc の target も musl のアーカイブに向けた。`src/lib.rs` の API が約束の外であること（§15.157）は、クレートの説明にも書いた。公開は release.yml の `crates` ジョブが trusted publishing で行い、トークンをどこにも置かない形に書いた。その版がもうあれば、ジョブは何もしない。ただし crates.io は最初の版を手で出すことを求め、それはこの決定の範囲に入れていない。そこでジョブをコメントにして止め、README と install のページの Cargo の節、互換の約束に書いたクレートの名前もコメントにして残し、スキルの冒頭からは `cargo install rulec` を外した。出すときは、最初の版を手で出し、crates.io に trusted publisher（i2y/rulec の release.yml）を登録してから、これらを戻す。
+
+互換の約束（§15.157）の「リリースのアーカイブの名前」に、パッケージの名前（`i2y/tap/rulec`、`.deb` と `.rpm`）を足した。クレートの `rulec` は、出すまでコメントにしてある。
+
+理由。三つとも、いまのリリースをそのまま材料にできる。新しいバイナリを作らず、アーカイブの名前も変えないので、Action、手で取る手順、互換の約束に書いたものは何も動かない。formula はアーカイブを `sha256` で固定するので、Homebrew から入れても、`SHA256SUMS` と突き合わせたのと同じ確かさになる。Homebrew は macOS と Linux の両方に効き、`.deb` と `.rpm` は Debian 系と Red Hat 系をまかない、crates.io は Rust の toolchain があればどこでも使える。
+どの形も、公開か push の前に、そのパッケージマネージャで実際に入れて走らせる。書いたとおりに入るかどうかは、その道具に通すまで分からないからである。書いている間にも二つ見つかった。`brew audit` は、URL から読める版を `version` で重ねて書くと落とす。Debian の `sh`（dash）の `command -v` は、消したあとのコマンドも覚えていた場所から答えるので、消えたかどうかはファイルで確かめる。
+
+**走らせた**：v0.21.0 の実物で確かめた。formula は手元の使い捨ての tap に置き、macOS（arm64）と Linux（arm64、`homebrew/brew` のコンテナ）で audit・install・test が通った。入ったバイナリは、アーカイブの中のものとバイト単位で同じである。`.deb` と `.rpm` は arm64 と x64（x64 はエミュレーション）で Debian と Fedora に入れ、コーパスを検査して、消した。binstall は `--manifest-path` で、Debian（glibc）と Alpine（musl）の arm64 に v0.21.0 のアーカイブを入れた。`cargo package` は 70 ファイル、圧縮して 966 KiB で、送る中身だけからビルドできた。
+
+**捨てたもの**：
+- **Homebrew の本家（homebrew-core）**。本家はソースからのビルドと、知られていること（GitHub のフォーク 30・ウォッチ 30・スター 75 のどれか、作者自身が出すならその三倍）を求める。いまのスターは 1 である。届いたら、`cargo install` でビルドする formula を出せばよい。依存が無いのでビルドは短い。
+- **rulec だけの tap（`i2y/homebrew-rulec`）**。作者の tap がすでにあり、一人の作者に一つの tap がふつうの形である。
+- **tap を手で更新する**。手で書いた formula には、公開した `SHA256SUMS` と食い違う余地が残る。ワークフローが書き、brew が通したものだけを置く。
+- **tap の側から新しいリリースを定期的に見にいく**（鍵が要らない）。反映が遅れるうえ、GitHub は動きの無いリポジトリの定期実行を止める。
+- **個人アクセストークン**。deploy key なら書けるのは tap のリポジトリだけで、作るのも `gh` で済む。
+- **apt や dnf のリポジトリ**（Pages に置く、COPR、PPA、外のホスティング）。署名の鍵か外のアカウントが要る。ファイルを置くだけでも、パッケージマネージャで入れて消せる。更新は入れ直しになるので、install のページにそう書いた。
+- **パッケージへの署名**。鍵の置き場が要るうえ、確かさは `SHA256SUMS` と変わらない。
+- **Alpine の .apk、Arch の AUR、Nix、Snap**。Alpine では静的バイナリがそのまま動く。AUR と Snap は外のアカウントが要る。Nix は flake をリポジトリに置けば済むが、この機械に Nix が無く、確かめが CI だけになる。要望が出てから。
+- **pip と npm のラッパ**（§12 のまま）。MCP のクライアントに `uvx rulec mcp` や `npx rulec mcp` と書ける利点はあるが、アカウントと包み方の保守が二つ増える。要望が出てから。
+- **Windows**（§15.42 のまま）。Scoop も winget も Windows のバイナリが要る。`cargo install` が Windows で通るかは確かめていない。
+- **binstall 向けの署名**。binstall は minisign の署名を確かめられるが、鍵の置き場が要る。install のページの Cargo の節（いまはコメント）には、binstall は `SHA256SUMS` と突き合わせないと書いた。
+
+**見つけて直していないもの**：
+- tap への push には、tap のリポジトリの deploy key と、rulec の側の secret が要る。無ければ tap のジョブだけが落ち、リリースそのものは出る。
+- サイトは main への push で配信されるので、`.deb`・`.rpm` の節は、それらを出すリリースと続けて push する。

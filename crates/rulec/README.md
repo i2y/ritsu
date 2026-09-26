@@ -166,9 +166,22 @@ What is **not** proved matters just as much.
 
 ## Install
 
-One binary, no runtime. Every release publishes a binary for macOS (arm64, x64) and Linux
-(x64, arm64), with the SHA-256 of each beside it. The Linux ones are statically linked; the
-macOS ones link only the system library every Mac has:
+One binary, no runtime. On macOS or Linux, with Homebrew:
+
+```console
+$ brew install i2y/tap/rulec
+```
+
+Every release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/rulec/install/)).
+
+<!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, this replaces the line above:
+`cargo install rulec` builds it, `cargo binstall rulec` takes the release binary, and every
+release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/rulec/install/)).
+-->
+
+By hand: every release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64), with
+the SHA-256 of each beside it. The Linux ones are statically linked; the macOS ones link only
+the system library every Mac has:
 
 ```console
 $ v=v0.21.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl

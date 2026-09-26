@@ -333,3 +333,34 @@ jobs:
 
       - name: The corpus passes both re-checkers, and nothing is left open
         run: cargo test --release --locked --test lean
+
+  # What release.yml sends to the package managers (DESIGN §15.158), exercised on every push
+  # so that a release is not the first time it runs: the crate has to build from exactly the
+  # files crates.io would be sent (kept ready while crates.io is on hold), and the .deb and
+  # the .rpm have to install, run and uninstall on Debian and on Fedora. The Homebrew
+  # formula needs a published release to download, so brew tests it in release.yml, before
+  # the tap is touched.
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: musl linker
+        run: sudo apt-get update -q && sudo apt-get install -y -q musl-tools
+
+      - name: The crate builds from what crates.io would receive
+        run: cargo package --locked
+
+      - name: The .deb and the .rpm install, run and uninstall
+        run: |
+          set -eu
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          sh packaging/linux.sh "$v" x86_64-unknown-linux-musl target/x86_64-unknown-linux-musl/release/rulec "$RUNNER_TEMP/dist"
