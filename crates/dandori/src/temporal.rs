@@ -372,7 +372,10 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("/**\n * Answer a callback, by the id its task handed on. The workflow says whether it took the answer:\n * it refuses one for a callback it does not wait for, and a second one (WorkflowUpdateFailedError).\n */\n");
     c.push_str("export async function answer(client: Client, callbackId: string, a: CallbackAnswer): Promise<void> {\n  const [workflowId] = JSON.parse(callbackId) as [string, string];\n  await client.workflow.getHandle(workflowId).executeUpdate(\"dandori.answer\", { args: [{ callback_id: callbackId, ...a }] });\n}\n\n");
     c.push_str("/** Where the workflow is: the line of the call or the wait it is at, and each case's state (null before it starts). */\nexport interface Status {\n  at: number | null;\n  cases: Record<string, string | null>;\n}\n\n");
-    c.push_str("export async function status(client: Client, id: string): Promise<Status> {\n  return client.workflow.getHandle(id).query<Status>(\"dandori.status\");\n}\n");
+    c.push_str("export async function status(client: Client, id: string): Promise<Status> {\n  return client.workflow.getHandle(id).query<Status>(\"dandori.status\");\n}\n\n");
+    c.push_str("/**\n * The histories of the runs of this workflow that `query` finds, by default the ones going on:\n * replay them with new code (worker.ts: replay) before it takes them over.\n */\n");
+    c.push_str("export async function* histories(client: Client, query = `WorkflowType = '${WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'`): AsyncIterable<{ workflowId: string; history: Awaited<ReturnType<WorkflowHandle[\"fetchHistory\"]>> }> {\n");
+    c.push_str("  for await (const w of client.workflow.list({ query })) {\n    yield { workflowId: w.workflowId, history: await client.workflow.getHandle(w.workflowId, w.runId).fetchHistory() };\n  }\n}\n");
     c
 }
 
@@ -380,7 +383,7 @@ fn client_file(m: &Model, header: &str) -> String {
 fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     let mut w = header.to_string();
     w.push_str(&format!("// The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
-    w.push_str("import { NativeConnection, Worker, type WorkerOptions } from \"@temporalio/worker\";\n");
+    w.push_str("import { NativeConnection, Worker, type ReplayHistoriesIterable, type ReplayWorkerOptions, type WorkerOptions } from \"@temporalio/worker\";\n");
     w.push_str("import { makeActivities, type OwnTasks } from \"./activities\";\n");
     w.push_str("import { TASK_QUEUE } from \"./client\";\n");
     w.push_str("import * as io from \"./io\";\n");
@@ -395,7 +398,11 @@ fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     w.push_str("export function workerOptions(own: OwnTasks, config: WorkerConfig = {}): Omit<WorkerOptions, \"connection\"> {\n  return {\n    namespace: config.namespace ?? \"default\",\n    taskQueue: TASK_QUEUE,\n    workflowsPath: config.workflowsPath ?? require.resolve(\"./workflow\"),\n");
     w.push_str(&format!("    activities: {{ ...makeActivities(own, config.transport){} }},\n", if rules { ", ...rules" } else { "" }));
     w.push_str("    ...(config.deployment === undefined\n      ? {}\n      : { workerDeploymentOptions: { useWorkerVersioning: true, version: { deploymentName: config.deployment, buildId: BUILD_ID }, defaultVersioningBehavior: \"PINNED\" } }),\n  };\n}\n\n");
-    w.push_str("/** The worker, on the connection given or on one to the local server. */\nexport async function makeWorker(own: OwnTasks, config: WorkerConfig & { connection?: NativeConnection } = {}): Promise<Worker> {\n  const connection = config.connection ?? (await NativeConnection.connect({}));\n  return Worker.create({ ...workerOptions(own, config), connection });\n}\n");
+    w.push_str("/** The worker, on the connection given or on one to the local server. */\nexport async function makeWorker(own: OwnTasks, config: WorkerConfig & { connection?: NativeConnection } = {}): Promise<Worker> {\n  const connection = config.connection ?? (await NativeConnection.connect({}));\n  return Worker.create({ ...workerOptions(own, config), connection });\n}\n\n");
+    w.push_str("/**\n * Replay histories (client.ts: histories) with this code, and tell the runs it finds\n * nondeterministic, with why: before this code takes over runs that are going on, none may be.\n */\n");
+    w.push_str("export async function replay(histories: ReplayHistoriesIterable, options: Partial<ReplayWorkerOptions> = {}): Promise<Array<{ workflowId: string; error: string }>> {\n");
+    w.push_str("  const failed: Array<{ workflowId: string; error: string }> = [];\n  const workflowsPath = options.workflowsPath ?? require.resolve(\"./workflow\");\n");
+    w.push_str("  for await (const r of Worker.runReplayHistories({ ...options, workflowsPath }, histories)) {\n    if (r.error) failed.push({ workflowId: r.workflowId, error: `${r.error.name}: ${r.error.message}` });\n  }\n  return failed;\n}\n");
     w
 }
 

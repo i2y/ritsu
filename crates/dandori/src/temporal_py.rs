@@ -183,8 +183,8 @@ fn client_file(m: &Model, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
     let mut c = header.to_string();
     c.push_str(&format!("# Starting {} v{}, answering its callbacks, and asking where it is.\n\n", m.name, m.version));
-    c.push_str("from __future__ import annotations\n\nimport json\nfrom typing import Any\n\n");
-    c.push_str("from temporalio.client import Client, WorkflowHandle\nfrom temporalio.common import WorkflowIDReusePolicy\n\n");
+    c.push_str("from __future__ import annotations\n\nimport json\nfrom typing import Any, AsyncIterator\n\n");
+    c.push_str("from temporalio.client import Client, WorkflowHandle, WorkflowHistory\nfrom temporalio.common import WorkflowIDReusePolicy\n\n");
     c.push_str(&format!("# The workflow's type. The `.flow`'s version is in it, so that a new version is a new workflow.\nWORKFLOW_TYPE = {}\n\n", q(&ty)));
     c.push_str(&format!("# The task queue of the workflow and its activities (the tasks that say `queue` go to theirs).\nTASK_QUEUE = {}\n\n", q(&ty)));
     c.push('\n');
@@ -197,7 +197,11 @@ fn client_file(m: &Model, header: &str) -> String {
     c.push_str("    workflow_id = json.loads(callback_id)[0]\n    await client.get_workflow_handle(workflow_id).execute_update(\"dandori.answer\", {\"callback_id\": callback_id, **a})\n\n\n");
     c.push_str("async def status(client: Client, id: str) -> dict[str, Any]:\n");
     c.push_str("    \"\"\"Where the workflow is: {\"at\": the line of the call or the wait it is at, \"cases\": each case's state (None before it starts)}.\"\"\"\n");
-    c.push_str("    return await client.get_workflow_handle(id).query(\"dandori.status\")\n");
+    c.push_str("    return await client.get_workflow_handle(id).query(\"dandori.status\")\n\n\n");
+    c.push_str("async def histories(client: Client, query: str | None = None) -> AsyncIterator[WorkflowHistory]:\n");
+    c.push_str("    \"\"\"The histories of the runs of this workflow that `query` finds, by default the ones going on:\n    replay them with new code (worker.py: replay) before it takes them over.\"\"\"\n");
+    c.push_str("    async for w in client.list_workflows(query or f\"WorkflowType = '{WORKFLOW_TYPE}' AND ExecutionStatus = 'Running'\"):\n");
+    c.push_str("        yield await client.get_workflow_handle(w.id, run_id=w.run_id).fetch_history()\n");
     c
 }
 
@@ -205,8 +209,8 @@ fn client_file(m: &Model, header: &str) -> String {
 fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     let mut w = header.to_string();
     w.push_str(&format!("# The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
-    w.push_str("from __future__ import annotations\n\nfrom typing import Any\n\n");
-    w.push_str("from temporalio.client import Client\nfrom temporalio.common import VersioningBehavior, WorkerDeploymentVersion\nfrom temporalio.worker import Worker, WorkerDeploymentConfig\n\n");
+    w.push_str("from __future__ import annotations\n\nfrom typing import Any, AsyncIterable, Iterable\n\n");
+    w.push_str("from temporalio.client import Client, WorkflowHistory\nfrom temporalio.common import VersioningBehavior, WorkerDeploymentVersion\nfrom temporalio.worker import Replayer, Worker, WorkerDeploymentConfig\n\n");
     w.push_str("from . import io\nfrom .activities import OwnTasks, make_activities\nfrom .client import TASK_QUEUE\n");
     if rules {
         w.push_str("from .rules import rules\n");
@@ -219,7 +223,12 @@ fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     w.push_str("    if deployment is not None:\n        options[\"deployment_config\"] = WorkerDeploymentConfig(\n            version=WorkerDeploymentVersion(deployment_name=deployment, build_id=BUILD_ID),\n            use_worker_versioning=True,\n            default_versioning_behavior=VersioningBehavior.PINNED,\n        )\n    return options\n\n\n");
     w.push_str("def make_worker(client: Client, own: OwnTasks, *, transport: io.Transport | None = None, deployment: str | None = None, **more: Any) -> Worker:\n");
     w.push_str("    \"\"\"The worker, with `more` of the worker's keyword arguments of your own.\"\"\"\n");
-    w.push_str("    return Worker(client, **{**worker_options(own, transport=transport, deployment=deployment), **more})\n");
+    w.push_str("    return Worker(client, **{**worker_options(own, transport=transport, deployment=deployment), **more})\n\n\n");
+    w.push_str("async def replay(histories: Iterable[WorkflowHistory] | AsyncIterable[WorkflowHistory]) -> list[tuple[str, str]]:\n");
+    w.push_str("    \"\"\"Replay histories (client.py: histories) with this code, and tell the runs it finds\n    nondeterministic, with why: before this code takes over runs that are going on, none may be.\"\"\"\n");
+    w.push_str("    replayer = Replayer(workflows=workflows)\n    failed: list[tuple[str, str]] = []\n\n");
+    w.push_str("    async def one(h: WorkflowHistory) -> None:\n        try:\n            await replayer.replay_workflow(h)\n        except Exception as e:  # noqa: BLE001 - why it failed is what is told\n            failed.append((h.workflow_id, f\"{type(e).__name__}: {e}\"))\n\n");
+    w.push_str("    if isinstance(histories, AsyncIterable):\n        async for h in histories:\n            await one(h)\n    else:\n        for h in histories:\n            await one(h)\n    return failed\n");
     w
 }
 

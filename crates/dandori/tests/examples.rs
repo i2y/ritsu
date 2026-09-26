@@ -364,9 +364,11 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
     let results_file = dir.join("results.json");
     let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "runs": runs });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+    let histories = dir.join("histories");
+    let _ = std::fs::remove_dir_all(&histories);
     let out = match python {
-        Some(py) => Command::new(py).arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&runs_file).arg(&results_file).output().unwrap(),
-        None => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).output().unwrap(),
+        Some(py) => Command::new(py).arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&runs_file).arg(&results_file).arg(&histories).output().unwrap(),
+        None => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&runs_file).arg(&results_file).arg(&histories).output().unwrap(),
     };
     let what = if python.is_some() { "the Temporal workflow in Python" } else { "the Temporal workflow" };
     assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
@@ -383,7 +385,131 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
         assert_eq!(shown, listed, "{} run {}: the search attribute says {shown}, and the reference's cases {listed}", rel(f), i + 1);
     }
     compare(what, f, &references, &got);
-    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server), with the query and the search attribute", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
+    eprintln!("{}: compared {} run(s) on Temporal{} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
+    // with DANDORI_BLESS, the history of the run with the most calls is kept for the replay test
+    if std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
+        let longest = references.iter().enumerate().max_by_key(|(_, (_, r))| r["steps"].as_array().map(|a| a.len()).unwrap_or(0)).map(|(i, _)| i).unwrap();
+        let keep = recorded_dir(&m, python.is_some());
+        let _ = std::fs::remove_dir_all(&keep);
+        std::fs::create_dir_all(&keep).unwrap();
+        let name = format!("run-{}.json", longest + 1);
+        std::fs::copy(histories.join(&name), keep.join(&name)).unwrap();
+        std::fs::copy(histories.join("spec.json"), keep.join("spec.json")).unwrap();
+    }
+}
+
+/// Worker Deployment Versioning, through the generated worker, on the dev server: two builds of
+/// examples/review (without its queues) whose code differs in one text, A and B, as versions of
+/// one deployment. A run
+/// that starts on A and waits for its approval while B becomes the current version ends on A's
+/// code; a run that starts after runs on B's. The build id is a hash of the code: the same for
+/// the same code, and another for B.
+#[test]
+fn temporal_worker_versioning_keeps_a_run_on_its_build() {
+    need_rulec!();
+    if !temporal_available() {
+        eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
+        return;
+    }
+    let _turn = heavy();
+    // every task on the workflow's own queue, so that one worker a build serves them all
+    let text: String = std::fs::read_to_string(root().join("examples/review/review.flow")).unwrap().lines().filter(|l| !l.trim_start().starts_with("queue ")).map(|l| format!("{l}\n")).collect();
+    let changed = text.replace("さんが申込 {申込.id} を承認しました\")", "さんが申込 {申込.id} を承認しました（新しいビルド）\")");
+    assert_ne!(text, changed, "examples/review/review.flow no longer has the text the test changes");
+    let dir = scratch("versions");
+    let python = temporal_python();
+    for (lang, py) in [("TypeScript", None), ("Python", python.as_ref())] {
+        if lang == "Python" && py.is_none() {
+            eprintln!("SKIP: tools/temporal-python/.venv is missing; Worker Deployment Versioning is not tried in Python");
+            continue;
+        }
+        let mut built = Vec::new();
+        for (name, flow) in [("a", &text), ("b", &changed), ("again", &text)] {
+            let d = dir.join(format!("{}-{name}", lang.to_lowercase()));
+            std::fs::create_dir_all(&d).unwrap();
+            let f = d.join("review.flow");
+            std::fs::write(&f, flow).unwrap();
+            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            let m = checked.model.unwrap();
+            let files = if py.is_some() { dandori::temporal_py::build(&m) } else { dandori::temporal::build(&m) }.unwrap();
+            for (n, t) in &files {
+                let p = d.join(n);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, t).unwrap();
+            }
+            let worker = files.iter().find(|(n, _)| n.ends_with("/worker.ts") || n.ends_with("/worker.py")).unwrap();
+            let id = worker.1.lines().find(|l| l.contains("BUILD_ID =")).unwrap().split('"').nth(1).unwrap().to_string();
+            built.push((d.join(dandori::render::ident(&m.name)), id));
+        }
+        assert_eq!(built[0].1, built[2].1, "the same code has two build ids");
+        assert_ne!(built[0].1, built[1].1, "two builds of different code have one build id");
+        let results = dir.join(format!("{}-results.json", lang.to_lowercase()));
+        let out = match py {
+            Some(py) => Command::new(py).arg(root().join("tools/temporal-python/versions.py")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
+            None => Command::new("node").arg(root().join("tools/temporal/versions.mjs")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
+        };
+        assert!(out.status.success(), "the Worker Deployment Versioning run in {lang} failed:\n{}", String::from_utf8_lossy(&out.stderr));
+        let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
+        let a_says = json!(["a さんが申込 申込-1 を承認しました"]);
+        let b_says = json!(["b さんが申込 申込-1 を承認しました（新しいビルド）"]);
+        assert_eq!(got["notified"]["run-a"], a_says, "{lang}: the run that started on A did not end on A's code: {}", got["notified"]);
+        assert_eq!(got["notified"]["run-b"], b_says, "{lang}: the run that started on B did not run B's code: {}", got["notified"]);
+        eprintln!("{lang}: a run pinned to build {} ended on it after {} became the current version", built[0].1, built[1].1);
+    }
+}
+
+/// The flows whose histories are kept in tests/histories: one run of each, the one with the most
+/// calls, recorded by the Temporal runners with DANDORI_BLESS=1.
+const RECORDED: [&str; 4] = ["examples/hotel/hotel.flow", "examples/fulfillment/fulfillment.flow", "examples/review/review.flow", "tests/flows/cancel.flow"];
+
+fn recorded_dir(m: &Model, python: bool) -> PathBuf {
+    root().join("tests/histories").join(if python { "python" } else { "typescript" }).join(dandori::render::ident(&m.name))
+}
+
+/// The kept histories replay with the code dandori writes now: a change of the generator that
+/// would make a running workflow of an unchanged `.flow` nondeterministic shows here. A change
+/// that has to do so is made with DANDORI_BLESS=1, which records the histories anew; runs that
+/// are going on need the version of the `.flow` raised, or Worker Deployment Versioning.
+#[test]
+fn temporal_replays_the_recorded_histories() {
+    need_rulec!();
+    let python = temporal_python();
+    if !temporal_available() || python.is_none() {
+        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        return;
+    }
+    let mut replayed = 0;
+    for r in RECORDED {
+        let f = root().join(r);
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        for py in [false, true] {
+            let kept = recorded_dir(&m, py);
+            if !kept.exists() {
+                panic!("{r}: no histories kept in {}; record them with DANDORI_BLESS=1", rel(&kept));
+            }
+            let dir = scratch(&format!("replay-{}-{}", if py { "python" } else { "typescript" }, dandori::render::ident(&m.name)));
+            let files = if py { dandori::temporal_py::build(&m) } else { dandori::temporal::build(&m) }.unwrap();
+            for (name, text) in &files {
+                let p = dir.join(name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, text).unwrap();
+            }
+            let results = dir.join("replayed.json");
+            let out = if py {
+                Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--replay").arg(dir.join(dandori::temporal_py::package(&m))).arg(&kept).arg(&results).output().unwrap()
+            } else {
+                Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--replay").arg(dir.join(dandori::render::ident(&m.name))).arg(&kept).arg(&results).output().unwrap()
+            };
+            assert!(out.status.success(), "{r}: the replay failed:\n{}", String::from_utf8_lossy(&out.stderr));
+            let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
+            for g in &got {
+                assert!(g["error"].is_null(), "{r}: the kept history {} does not replay with the code dandori writes now ({}): {}", g["file"], if py { "Python" } else { "TypeScript" }, g["error"]);
+                replayed += 1;
+            }
+        }
+    }
+    eprintln!("replayed {replayed} kept history(ies) with the code dandori writes now");
 }
 
 /// The TypeScript dandori writes — for Temporal, for durable functions, and Argo's caller —

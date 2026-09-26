@@ -217,7 +217,9 @@ on the PATH.
   workflow refuses for a callback it does not wait for, or a second time) and `status` (the
   query `dandori.status`: the line the workflow waits at, and each case's state). Started with
   `{ searchAttributes: true }`, the workflow also keeps the search attribute `DandoriCases`
-  (`"pi=requires_capture"`, …) up to date, so runs can be found by their cases' states. A task without `timeout` gets as long as the other platforms
+  (`"pi=requires_capture"`, …) up to date, so runs can be found by their cases' states.
+  To change the code of a version without Worker Deployment Versioning, give the histories
+  of the runs that are going on (`client.ts`'s `histories`) to `worker.ts`'s `replay` first. A task without `timeout` gets as long as the other platforms
   would give it — 60 seconds for `http` and `agent`, as an HTTP Task has, 900 for `lambda`,
   and no limit of its own for the rest — and every activity the workflow's worker serves
   heartbeats, so that a worker that went away is noticed within 30 seconds. A rule's activity
@@ -268,7 +270,11 @@ the runners, so the calls come in the reference's order.
 On Temporal, every run of a flow goes at once, each as a workflow of its own id, which the
 idempotency keys carry. The runners make their workers and start their runs with the generated
 `worker` and `client`, answer callbacks with its Update (and see that a second answer is
-refused), and check what the query and the search attribute say of the cases at the end. The server keeps real time, so the copy of the code the runners run
+refused), check what the query and the search attribute say of the cases at the end, and
+replay every run's history with the same code. Histories kept in `tests/histories` are
+replayed with the code dandori writes now, so a change of the generator that would break a
+running workflow shows. Two builds that differ in one text run as versions of one deployment
+under Worker Deployment Versioning, and a run that started on the first ends on it. The server keeps real time, so the copy of the code the runners run
 waits at most 10 ms on a timer and gives an activity 2 seconds, and a call the scenario times
 out is kept busy until the server times it out. In a flow with `on cancel`, the scenarios
 also cancel the workflow during a call: the stand-in asks the server to cancel it, and holds
@@ -319,7 +325,7 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes about two minutes; `tools/argo/setup.sh`
+`SKIP:` line. The whole `cargo test` takes a minute and a half to two minutes; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of

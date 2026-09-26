@@ -13,5 +13,8 @@
   },
   "devDependencies": {
     "typescript": "7.0.2"
+  },
+  "overrides": {
+    "protobufjs": "8.8.0"
   }
 }

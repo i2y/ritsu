@@ -6,7 +6,13 @@
 // DandoriCases (`shown`). The workers, the starts, the callbacks' answers and the query go
 // through the generated worker.ts and client.ts.
 //
-//   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json>
+//   node tools/temporal/run.mjs <generated dir> <runs.json> <results.json> [<histories dir>]
+//   node tools/temporal/run.mjs --replay <generated dir> <histories dir> <results.json>
+//
+// Once the runs are over, the history of each is replayed with the same code, which must not
+// find it nondeterministic; with a histories directory, the histories are also written there as
+// JSON, one file a run. With --replay, it only replays the histories of a directory (written by
+// this runner, or by the Python one) with the code, and writes for each file the error, or null.
 //
 // runs.json: { "workflow": name, "own": [ { "method", "callback" } ], "rules": [activity],
 //              "children": [ { "type", "queue" } ], "queues": [queue], "http": [...], "aws": [...],
@@ -38,6 +44,7 @@ import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { DefaultLogger, Runtime, Worker } from "@temporalio/worker";
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure, SearchAttributeType, defineSearchAttributeKey } from "@temporalio/common";
+import { historyFromJSON, historyToJSON } from "@temporalio/common/lib/proto-utils.js";
 import { WorkflowFailedError, WorkflowUpdateFailedError } from "@temporalio/client";
 import { makeTransport } from "../transport.mjs";
 
@@ -45,8 +52,9 @@ import { makeTransport } from "../transport.mjs";
 Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.write(`${entry.level} ${entry.message}\n`)) });
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const [dir, runsFile, outFile] = process.argv.slice(2);
-const spec = JSON.parse(fs.readFileSync(runsFile, "utf8"));
+const replaying = process.argv[2] === "--replay";
+const [dir, runsFile, outFile, historiesDir] = replaying ? [process.argv[3], null, process.argv[5], process.argv[4]] : process.argv.slice(2);
+const spec = replaying ? JSON.parse(fs.readFileSync(path.join(historiesDir, "spec.json"), "utf8")) : JSON.parse(fs.readFileSync(runsFile, "utf8"));
 
 /** How long an activity or a child workflow gets here before it times out. */
 const TIMEOUT = "2 seconds";
@@ -83,9 +91,38 @@ for (const c of spec.children ?? []) {
 }
 fs.writeFileSync(path.join(work, "workflows.ts"), children);
 
+// the bundler loses its way when the path goes through a symbolic link (/var on macOS)
+const workflowsPath = path.join(fs.realpathSync(work), "workflows.ts");
+const bundlerOptions = {
+  webpackConfigHook: (config) => {
+    config.resolve = config.resolve ?? {};
+    config.resolve.modules = [...(config.resolve.modules ?? ["node_modules"]), path.join(here, "node_modules")];
+    config.resolve.extensionAlias = { ".js": [".ts", ".js"] };
+    return config;
+  },
+};
+
+// the rules are stand-ins here, so the worker needs none of rulec's modules
+const rulesFile = path.join(work, "rules.ts");
+if (fs.existsSync(rulesFile)) fs.writeFileSync(rulesFile, "export const rules = {};\n");
+const { replay } = await import(path.join(work, "worker.ts"));
+
+if (replaying) {
+  // the generated worker's replay, which tells the runs it finds nondeterministic
+  const files = fs.readdirSync(historiesDir).filter((f) => f.endsWith(".json") && f !== "spec.json").sort();
+  const failed = await replay(
+    files.map((f) => ({ workflowId: f.replace(/\.json$/, ""), history: historyFromJSON(JSON.parse(fs.readFileSync(path.join(historiesDir, f), "utf8"))) })),
+    { workflowsPath, bundlerOptions },
+  );
+  const why = new Map(failed.map((x) => [x.workflowId, x.error]));
+  fs.writeFileSync(outFile, JSON.stringify(files.map((f) => ({ file: f, error: why.get(f.replace(/\.json$/, "")) ?? null })), null, 2) + "\n");
+  fs.rmSync(work, { recursive: true, force: true });
+  process.exit(0);
+}
+
 const { makeActivities } = await import(path.join(work, "activities.ts"));
 const { workerOptions } = await import(path.join(work, "worker.ts"));
-const { start, answer, status, TASK_QUEUE } = await import(path.join(work, "client.ts"));
+const { start, answer, status, histories: listed, TASK_QUEUE, WORKFLOW_TYPE } = await import(path.join(work, "client.ts"));
 const CASES = defineSearchAttributeKey("DandoriCases", SearchAttributeType.KEYWORD_LIST);
 
 /** Each run by its workflow's id: the answers it gets, the next one, and the calls it made. */
@@ -233,13 +270,13 @@ activities.dd_test_child = async ({ type, args }) => {
 };
 
 // the server fires a timer up to a second late unless told to shift its timers less
+let histories = [];
 env = await TestWorkflowEnvironment.createLocal({
   server: { ui: false, log: { format: "pretty", level: "error" }, extraArgs: ["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'], searchAttributes: [CASES] },
 });
 const results = [];
 try {
-  // the bundler loses its way when the path goes through a symbolic link (/var on macOS)
-  const base = workerOptions(own, { transport, workflowsPath: path.join(fs.realpathSync(work), "workflows.ts") });
+  const base = workerOptions(own, { transport, workflowsPath });
   const queues = [TASK_QUEUE, ...(spec.queues ?? []).filter((q) => q !== TASK_QUEUE)];
   const workers = [];
   for (const taskQueue of queues) {
@@ -252,14 +289,7 @@ try {
         // heartbeats go out at once, so that a held activity hears soon that it is over
         defaultHeartbeatThrottleInterval: "100 milliseconds",
         maxHeartbeatThrottleInterval: "100 milliseconds",
-        bundlerOptions: {
-          webpackConfigHook: (config) => {
-            config.resolve = config.resolve ?? {};
-            config.resolve.modules = [...(config.resolve.modules ?? ["node_modules"]), path.join(here, "node_modules")];
-            config.resolve.extensionAlias = { ".js": [".ts", ".js"] };
-            return config;
-          },
-        },
+        bundlerOptions,
       }),
     );
   }
@@ -281,10 +311,11 @@ try {
         // what the query and the search attribute say of the cases once the run is over
         const cases = (await status(env.client, r.id)).cases;
         const shown = (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;
-        return { end, cases, shown };
+        return { end, cases, shown, history: await handle.fetchHistory() };
       }),
     );
-    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, ...ends[i] }));
+    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i].end, cases: ends[i].cases, shown: ends[i].shown }));
+    histories = spec.runs.map((r, i) => ({ workflowId: r.id, history: ends[i].history }));
   };
   // every worker runs until the runs are done
   let chain = runAll;
@@ -293,6 +324,22 @@ try {
     chain = () => w.runUntil(inner);
   }
   await chain();
+  // the generated client finds every run by the workflow's type (the server lists them a moment late)
+  for (let tries = 0; ; tries++) {
+    const found = [];
+    for await (const h of listed(env.client, `WorkflowType = '${WORKFLOW_TYPE}'`)) found.push(h.workflowId);
+    if (found.length === spec.runs.length) break;
+    if (tries === 50) throw new Error(`the client's histories found ${found.length} run(s) of ${spec.runs.length}`);
+    await new Promise((ok) => setTimeout(ok, 100));
+  }
+  // the same code, replaying what it did with the generated worker's replay, must find it deterministic
+  const failed = await replay(histories, { workflowsPath, bundlerOptions });
+  if (failed.length > 0) throw new Error(`replaying with the same code: ${failed.map((x) => `${x.workflowId}: ${x.error}`).join("; ")}`);
+  if (historiesDir) {
+    fs.mkdirSync(historiesDir, { recursive: true });
+    for (const h of histories) fs.writeFileSync(path.join(historiesDir, `${h.workflowId}.json`), historyToJSON(h.history) + "\n");
+    fs.writeFileSync(path.join(historiesDir, "spec.json"), JSON.stringify({ children: spec.children ?? [] }) + "\n");
+  }
 } finally {
   await env.teardown();
   fs.rmSync(work, { recursive: true, force: true });
