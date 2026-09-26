@@ -153,7 +153,7 @@ impl<'a> Lowerer<'a> {
             let rec = self.m.records.len();
             self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, origin: RecordOrigin::RuleOutputs(ix) });
             self.rule_ix.insert(name.clone(), ix);
-            self.m.rules.push(RuleUse { name: name.clone(), info, lambda: u.lambda.clone(), outputs: rec, line: sp.line });
+            self.m.rules.push(RuleUse { name: name.clone(), info, lambda: u.lambda.clone(), local: u.local, outputs: rec, line: sp.line });
         }
     }
 

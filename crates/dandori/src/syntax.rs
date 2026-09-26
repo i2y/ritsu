@@ -67,6 +67,8 @@ pub struct UseRule {
     pub name: Name,
     pub path: String,
     pub lambda: Option<String>,
+    /// Temporal: the rule is called as a local activity
+    pub local: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1160,6 +1162,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut lambda = None;
+                let mut local = false;
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
                         break;
@@ -1169,12 +1172,15 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     if cc.eat_kw("lambda") {
                         lambda = Some(cc.string("the Lambda function", "Lambda 関数")?.0);
                         cc.expect_end()?;
+                    } else if cc.eat_kw("local") {
+                        local = true;
+                        cc.expect_end()?;
                     } else {
-                        return Err(err(cc.span(), "only `lambda \"<function>\"` can be written under `use rule`", "`use rule` の下に書けるのは `lambda \"<関数>\"` だけです"));
+                        return Err(err(cc.span(), "only `lambda \"<function>\"` and `local` can be written under `use rule`", "`use rule` の下に書けるのは `lambda \"<関数>\"` と `local` だけです"));
                     }
                     p.pos += 1;
                 }
-                prog.uses.push(UseRule { name, path, lambda });
+                prog.uses.push(UseRule { name, path, lambda, local });
             }
             "enum" => {
                 let name = cur.ident("the enum's name", "列挙の名前")?;

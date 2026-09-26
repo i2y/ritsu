@@ -1,0 +1,9 @@
+build --target asl:
+エラー[E040]: tests/fixtures/history_local.flow:1:1: Step Functions では、このワークフローの一回の実行が実行履歴を最大でおよそ 32016 件書きます。上限の 25000 件を超えます。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow decide_all v1
+build --target durable:
+エラー[E040]: tests/fixtures/history_local.flow:1:1: Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ 18001 回使います。上限の 3000 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow decide_all v1
+build --target argo:
+エラー[E040]: tests/fixtures/history_local.flow:1:1: Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ 56051 個作ります。目安の 10000 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください
+     1 | workflow decide_all v1

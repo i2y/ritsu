@@ -121,7 +121,11 @@ The code dandori writes for Temporal, durable functions, Argo and pydantic-graph
 Step Functions sends, through a `Transport` (`io.ts`, `io.py`) whose credentials and clients
 are yours to set. On pydantic-graph, a task that another platform runs as a workflow is a
 function you write.
-`queue "<name>"` sends a Temporal activity or child workflow to that task queue. A
+`queue "<name>"` sends a Temporal activity or child workflow to that task queue, and `local`
+under `use rule` has Temporal call the rule as a local activity, in the worker that runs the
+workflow: a call leaves one marker in the history, not an activity's six events, for a flow
+that decides many times in a loop, and the rule ships with that worker. Elsewhere it changes
+nothing. A
 `callback` task hands on a token (Step Functions), a callback id (durable functions), or
 an id the answer comes back with as a signal (Temporal) or through `argo node set` (Argo);
 with `aws sqs:sendMessage` the token travels in the message.

@@ -729,10 +729,12 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     let mut rules_ts = header.to_string();
     rules_ts.push_str("// The rules the workflow calls, as activities around the TypeScript rulec generates.\n");
     rules_ts.push_str("// `rulec gen <rule> --out rulec` writes the modules these imports read.\n\n");
+    // one import a module: two rules of the flow may be the same rule
+    let mut imports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for r in called {
         let ts = &m.rules[*r].info.api["typescript"];
         let module = ts["module"].as_str().unwrap_or("rule").trim_end_matches(".ts").to_string();
-        let mut names: BTreeSet<String> = BTreeSet::new();
+        let names = imports.entry(module).or_default();
         names.insert(ts["function"].as_str().unwrap_or("rule").to_string());
         let enum_aliases: Vec<&str> = ts["enums"].as_array().map(|a| a.iter().filter_map(|e| e["alias"].as_str()).collect()).unwrap_or_default();
         for alias in &enum_aliases {
@@ -747,6 +749,8 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
                 names.insert(format!("type {ty}"));
             }
         }
+    }
+    for (module, names) in imports {
         rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.into_iter().collect::<Vec<_>>().join(", ")));
     }
     rules_ts.push_str("\nexport const rules = {\n");
@@ -1260,15 +1264,18 @@ export interface Retrier {
   backoff: number;
 }
 
-/** The kind of an error from an activity, a child workflow or a callback: a declared error, "timeout", or "failure". */
+/**
+ * The kind of an error from an activity, a child workflow or a callback: a declared error,
+ * "timeout", or "failure". A local activity's failure comes as it is, not in an
+ * ActivityFailure; so does its timeout when the workflow is replayed, though it came wrapped
+ * the first time. Both ways read alike here, or a replay would go another way.
+ */
 export function kindOf(e: unknown, declared: readonly string[]): string {
   if (e instanceof CallbackTimeout) return "timeout";
   if (e instanceof CallbackError) return declared.includes(e.kind) ? e.kind : "failure";
-  if (e instanceof ActivityFailure || e instanceof ChildWorkflowFailure) {
-    const c = e.cause;
-    if (c instanceof TimeoutFailure) return "timeout";
-    if (c instanceof ApplicationFailure && c.type && declared.includes(c.type)) return c.type;
-  }
+  const c = e instanceof ActivityFailure || e instanceof ChildWorkflowFailure ? e.cause : e;
+  if (c instanceof TimeoutFailure) return "timeout";
+  if (c instanceof ApplicationFailure && c.type && declared.includes(c.type)) return c.type;
   return "failure";
 }
 
@@ -1588,7 +1595,13 @@ impl<'a> Gen<'a> {
         }
         let callbacks = m.tasks.iter().any(|t| t.callback);
         let children = m.tasks.iter().any(|t| t.is_child(Platform::Temporal));
+        let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+        let local_rules = called.iter().any(|r| m.rules[*r].local);
+        let other_rules = called.iter().any(|r| !m.rules[*r].local);
         let mut names = vec!["proxyActivities", "sleep"];
+        if local_rules {
+            names.insert(1, "proxyLocalActivities");
+        }
         if self.resumes() {
             names.insert(0, "continueAsNew");
         }
@@ -1625,8 +1638,12 @@ impl<'a> Gen<'a> {
                 ident(&t.name)
             ));
         }
-        if rules {
+        if rules && other_rules {
             self.out.push_str(&format!("const rule_calls = proxyActivities<typeof rules>({{ startToCloseTimeout: \"{RULE_SECONDS} seconds\", retry: {{ maximumAttempts: 1 }} }});\n"));
+        }
+        if rules && local_rules {
+            // the rules that say `local` run in the worker that runs the workflow; the history keeps each answer as a marker
+            self.out.push_str(&format!("const local_rule_calls = proxyLocalActivities<typeof rules>({{ startToCloseTimeout: \"{RULE_SECONDS} seconds\", retry: {{ maximumAttempts: 1 }} }});\n"));
         }
         self.out.push('\n');
         let fname = workflow_type(m);
@@ -2094,7 +2111,10 @@ impl<'a> Gen<'a> {
         let i = "  ".repeat(d + 2);
         let invocation = match (self.flavor, callee) {
             (Flavor::Argo, _) => unreachable!("the Argo build writes no workflow code in TypeScript"),
-            (Flavor::Temporal, Callee::Rule(r)) => format!("dd.attempt(() => rule_calls.{}({{ {} }}), {retriers}, [])", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
+            (Flavor::Temporal, Callee::Rule(r)) => {
+                let calls = if m.rules[*r].local { "local_rule_calls" } else { "rule_calls" };
+                format!("dd.attempt(() => {calls}.{}({{ {} }}), {retriers}, [])", render::rule_activity(&m.rules[*r].name), parts.join(", "))
+            }
             (Flavor::Durable, Callee::Rule(r)) => {
                 let arn = q(m.rules[*r].lambda.as_deref().unwrap_or(""));
                 format!("dd.attempt({ctx}, {op}, () => {ctx}.invoke({op}, {arn}, {{ {} }}), {retriers}, [])", parts.join(", "))

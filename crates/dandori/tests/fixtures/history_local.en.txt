@@ -1,0 +1,9 @@
+build --target asl:
+error[E040]: tests/fixtures/history_local.flow:1:1: on Step Functions, an execution of this workflow can write up to about 32016 history events, past the limit of 25000; lower the loop counts, or start a new execution to continue
+     1 | workflow decide_all v1
+build --target durable:
+error[E040]: tests/fixtures/history_local.flow:1:1: on Lambda durable functions, an execution of this workflow can take up to about 18001 durable operations, past the limit of 3000; lower the loop counts, or start a new execution to continue
+     1 | workflow decide_all v1
+build --target argo:
+error[E040]: tests/fixtures/history_local.flow:1:1: on Argo Workflows, an execution of this workflow can make up to about 56051 nodes, past 10000; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue
+     1 | workflow decide_all v1

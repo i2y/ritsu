@@ -74,6 +74,9 @@ pub struct RuleUse {
     pub name: String,
     pub info: RuleInfo,
     pub lambda: Option<String>,
+    /// Temporal: called as a local activity, in the worker that runs the workflow; the other
+    /// platforms call it as they call any rule
+    pub local: bool,
     pub outputs: RecordId,
     pub line: usize,
 }

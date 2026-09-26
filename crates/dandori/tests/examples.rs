@@ -385,6 +385,27 @@ fn temporal_one(f: &Path, python: Option<&Path>) {
         assert_eq!(shown, listed, "{} run {}: the search attribute says {shown}, and the reference's cases {listed}", rel(f), i + 1);
     }
     compare(what, f, &references, &got);
+    // a rule that says `local` runs as a local activity: a marker in the history, never an activity task
+    let locals: Vec<String> = m.rules.iter().filter(|r| r.local).map(|r| dandori::render::rule_activity(&r.name)).collect();
+    if !locals.is_empty() {
+        let mut markers = 0;
+        for e in std::fs::read_dir(&histories).unwrap() {
+            let path = e.unwrap().path();
+            if path.file_name().unwrap() == "spec.json" {
+                continue;
+            }
+            let h: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            for ev in h["events"].as_array().unwrap() {
+                if let Some(name) = ev["activityTaskScheduledEventAttributes"]["activityType"]["name"].as_str() {
+                    assert!(!locals.iter().any(|l| l == name), "{}: the rule activity {name} says `local`, and ran as an activity task ({})", rel(f), path.display());
+                }
+                if ev["markerRecordedEventAttributes"]["markerName"] == "core_local_activity" {
+                    markers += 1;
+                }
+            }
+        }
+        assert!(markers > 0, "{}: no run called a rule that says `local` as a local activity", rel(f));
+    }
     eprintln!("{}: compared {} run(s) on Temporal{} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len(), if python.is_some() { " in Python" } else { "" });
     // with DANDORI_BLESS, the history of the run with the most calls is kept for the replay test
     if std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {

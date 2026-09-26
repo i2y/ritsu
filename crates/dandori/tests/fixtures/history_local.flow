@@ -1,0 +1,19 @@
+workflow decide_all v1
+
+use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+  local
+
+record 注文
+  会員 : bool
+  金額 : money[円, incl_tax]
+
+inputs
+  注文たち : list[注文]
+
+# On Temporal, a call of a rule that says `local` leaves a marker in the history, not an
+# activity's six events, so two thousand rounds of it fit in one run, retries and all; without
+# `local`, they would not.
+flow
+  for 注文 in 注文たち at most 2000 in parallel
+    let 判定 = 急ぎ(会員: 注文.会員, 金額: 注文.金額)

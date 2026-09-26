@@ -449,10 +449,12 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     if activities {
         t.push_str("from temporalio import activity\n\n");
     }
+    // one import a module: two rules of the flow may be the same rule
+    let mut imports: std::collections::BTreeMap<String, BTreeSet<String>> = std::collections::BTreeMap::new();
     for r in called {
         let py = &m.rules[*r].info.api["python"];
         let module = py["module"].as_str().unwrap_or("rule");
-        let mut names: BTreeSet<String> = BTreeSet::new();
+        let names = imports.entry(module.to_string()).or_default();
         names.insert(py["function"].as_str().unwrap_or("rule").to_string());
         let enums: Vec<String> = py["enums"].as_array().map(|a| a.iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
         for p in py["params"].as_array().unwrap_or(&vec![]) {
@@ -461,6 +463,8 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
                 names.insert(ty.to_string());
             }
         }
+    }
+    for (module, names) in imports {
         t.push_str(&format!("from .rulec.python.{module} import {}\n", names.into_iter().collect::<Vec<_>>().join(", ")));
     }
     let mut acts = Vec::new();
@@ -857,17 +861,19 @@ class CallbackError(Exception):
 
 
 def kind_of(e: BaseException, declared: Sequence[str]) -> str:
-    """The kind of an error from an activity, a child workflow or a callback: a declared error, "timeout", or "failure"."""
+    """The kind of an error from an activity, a child workflow or a callback: a declared error,
+    "timeout", or "failure". A local activity's failure comes as it is, not in an ActivityError;
+    so does its timeout when the workflow is replayed, though it came wrapped the first time.
+    Both ways read alike here, or a replay would go another way."""
     if isinstance(e, CallbackTimeout):
         return "timeout"
     if isinstance(e, CallbackError):
         return e.kind if e.kind in declared else "failure"
-    if isinstance(e, (ActivityError, ChildWorkflowError)):
-        c = e.cause
-        if isinstance(c, TemporalTimeout):
-            return "timeout"
-        if isinstance(c, ApplicationError) and c.type and c.type in declared:
-            return c.type
+    c = e.cause if isinstance(e, (ActivityError, ChildWorkflowError)) else e
+    if isinstance(c, TemporalTimeout):
+        return "timeout"
+    if isinstance(c, ApplicationError) and c.type and c.type in declared:
+        return c.type
     return "failure"
 
 
@@ -892,7 +898,8 @@ async def attempt(call: Callable[[], Awaitable[Any]], retriers: Sequence[dict[st
     while True:
         try:
             return await call()
-        except (ActivityError, ChildWorkflowError, CallbackTimeout, CallbackError) as e:
+        except (ActivityError, ChildWorkflowError, ApplicationError, TemporalTimeout, CallbackTimeout, CallbackError) as e:
+            # a local activity's error comes as it is (kind_of)
             if cancelled(e):
                 raise
             kind = kind_of(e, declared)
@@ -1170,9 +1177,16 @@ impl<'a> Gen<'a> {
                 q(&ident(&t.name))
             ));
         }
-        if rules {
+        let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+        if rules && called.iter().any(|r| !m.rules[*r].local) {
             self.out.push_str(&format!(
                 "\ndef dd_rule(name: str, args: dict[str, Any]) -> Any:\n    return workflow.execute_activity(name, args, start_to_close_timeout=timedelta(seconds={}), retry_policy=NO_RETRY)\n\n",
+                crate::temporal::RULE_SECONDS
+            ));
+        }
+        if rules && called.iter().any(|r| m.rules[*r].local) {
+            self.out.push_str(&format!(
+                "\ndef dd_local_rule(name: str, args: dict[str, Any]) -> Any:\n    \"\"\"A rule that says `local`: in the worker that runs the workflow; the history keeps each answer as a marker.\"\"\"\n    return workflow.execute_local_activity(name, args, start_to_close_timeout=timedelta(seconds={}), retry_policy=NO_RETRY)\n\n",
                 crate::temporal::RULE_SECONDS
             ));
         }
@@ -1540,7 +1554,10 @@ impl<'a> Gen<'a> {
         self.line(d, &format!("# line {}: {cname}", s.line));
         self.line(d, &format!("self.dd_at = {}", s.line));
         let invocation = match callee {
-            Callee::Rule(r) => format!("dd.attempt(lambda: dd_rule({}, {{{}}}), {retriers}, [])", q(&render::rule_activity(&m.rules[*r].name)), parts.join(", ")),
+            Callee::Rule(r) => {
+                let call = if m.rules[*r].local { "dd_local_rule" } else { "dd_rule" };
+                format!("dd.attempt(lambda: {call}({}, {{{}}}), {retriers}, [])", q(&render::rule_activity(&m.rules[*r].name)), parts.join(", "))
+            }
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
                 let f = format!("dd_task_{}", ident(&task.name));
