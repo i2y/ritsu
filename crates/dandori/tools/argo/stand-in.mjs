@@ -2,6 +2,8 @@
 // workflow a task with `workflow template` starts: it writes the call down at the mock
 // (tools/argo/mock.mjs), takes the scenario's answer, and ends the way the container
 // protocol says (answer.json and exit 0; error.json and exit 3 for a declared error; exit 1).
+// When the runner plays the pod on this machine, DANDORI_MOCK says where the mock is and
+// DANDORI_OUT and DANDORI_TERMINATION where the answer and the termination message go.
 //
 //   node stand-in.mjs task|callback|rule|child <name>
 
@@ -26,7 +28,9 @@ if (kind === "callback") {
   view = { task: name, args: call };
 }
 
-const res = await fetch("http://dandori-mock.argo.svc/call", {
+const out = process.env.DANDORI_OUT ?? "/tmp/dandori";
+const termination = process.env.DANDORI_TERMINATION ?? "/dev/termination-log";
+const res = await fetch(`${process.env.DANDORI_MOCK ?? "http://dandori-mock.argo.svc"}/call`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ workflow, call: view, callback_id: callbackId ?? null }),
@@ -37,20 +41,20 @@ if (!res.ok) {
   process.exit(2);
 }
 const ans = got.answer;
-fs.mkdirSync("/tmp/dandori", { recursive: true });
+fs.mkdirSync(out, { recursive: true });
 if (kind === "callback" || "ok" in ans) {
-  fs.writeFileSync("/tmp/dandori/answer.json", JSON.stringify(kind === "callback" ? null : ans.ok));
+  fs.writeFileSync(`${out}/answer.json`, JSON.stringify(kind === "callback" ? null : ans.ok));
   process.exit(0);
 }
 const declared = spec.declared?.[name] ?? [];
 if (declared.includes(ans.error)) {
-  fs.writeFileSync("/tmp/dandori/error.json", JSON.stringify({ error: ans.error, message: "scripted" }));
+  fs.writeFileSync(`${out}/error.json`, JSON.stringify({ error: ans.error, message: "scripted" }));
   try {
-    fs.writeFileSync("/dev/termination-log", ans.error);
+    fs.writeFileSync(termination, ans.error);
   } catch {
     // not in a container
   }
   process.exit(3);
 }
-fs.writeFileSync("/tmp/dandori/error.json", JSON.stringify({ error: "Dandori.Test.Failure", message: "scripted" }));
+fs.writeFileSync(`${out}/error.json`, JSON.stringify({ error: "Dandori.Test.Failure", message: "scripted" }));
 process.exit(1);

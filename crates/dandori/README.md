@@ -229,10 +229,18 @@ scenario are alike, so a target that mixes up two answers or the rounds of a loo
 On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are
-stand-ins that answer from the scenario. On Argo, the caller runs in the pods with such a
-`Transport`, and the other tasks, the rules and the workflows a task starts are stand-in
-containers that ask a mock in the cluster for the scenario's answer. The rounds of a
-parallel loop run one at a time in the runners, so the calls come in the reference's order.
+stand-ins that answer from the scenario. The rounds of a parallel loop run one at a time in
+the runners, so the calls come in the reference's order.
+
+On Argo, the controller runs the generated WorkflowTemplate, but the runner plays the pods:
+each pod waits for a scheduler the cluster does not have, and the runner does what its
+container and Argo's executor would do. It runs the generated caller (with the stand-in
+`Transport`) or a stand-in for the other tasks, the rules and the workflows a task starts,
+reports the outputs the template declares as a WorkflowTaskResult, and ends the pod with the
+exit code and the termination message the container would leave. No container starts, so every
+run of every flow goes at once. One run of each flow is played again with real pods — the
+caller and the stand-ins in node:24-alpine, answered by a mock in the cluster — so that the
+containers' side is run too.
 
 An agent's call is recorded as the `Transport` gets it, and the stand-in answers
 `{"answer": …}` as the model would. The ASL runner answers an HTTP Task to the Responses API
@@ -265,10 +273,12 @@ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
 A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The runs on Argo take about half an hour. When the platform could not run one
-of a run's pods (it ended in Error, or Unknown with exit code 255: containerd in the kind node
-was seen to crash under load), the Argo runner plays the run again, at most twice, and the
-test says so. `DANDORI_FLOW=<part of a path>` runs only the flows whose path has it.
+`SKIP:` line. The whole `cargo test` takes about a minute and a half; `tools/argo/setup.sh`
+sets Argo's controller up for it (it looks at a workflow again a second after a change, not
+ten). When the platform could not run one of a real run's pods (it ended in Error, or Unknown
+with exit code 255: containerd in the kind node was seen to crash under load), the Argo runner
+plays the run again, at most twice, and the test says so. `DANDORI_FLOW=<part of a path>`
+runs only the flows whose path has it.
 
 ## Status
 

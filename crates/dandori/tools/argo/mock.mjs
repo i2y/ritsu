@@ -1,16 +1,17 @@
-// The scenarios' answers, served inside the cluster to the pods of the workflows under test.
-// Each workflow (by name) takes the answers of its scenario in order; every call is written
-// down with the answer it took, and a callback's answer waits here until the runner hands it
-// to the workflow.
+// The scenarios' answers, served to the calls of the workflows under test: inside the cluster to
+// the pods (node mock.mjs listens on 8080), and on this machine to the pods the runner plays
+// (it serves `mock()` itself). Each workflow (by name) takes the answers of its scenario in
+// order; every call is written down with the answer it took, and a callback's answer waits here
+// until the runner hands it to the workflow.
 //
 //   POST /scenario { workflow, answers }        set a workflow's answers
 //   POST /call { workflow, call, callback_id }  write a call down and take the next answer
 //   GET  /state?workflow=<name>                 { steps, pending: { <callback_id>: answer } }
 //   POST /answered { workflow, callback_id }    the runner has answered the callback
 
+import fs from "node:fs";
 import http from "node:http";
-
-const runs = new Map();
+import { fileURLToPath } from "node:url";
 
 function recorded(ans) {
   return "ok" in ans ? { ok: ans.ok } : { error: ans.error, as: ans.error };
@@ -30,8 +31,10 @@ function body(req) {
   });
 }
 
-http
-  .createServer(async (req, res) => {
+/** The mock: its request handler, and the runs it keeps, by workflow. */
+export function mock() {
+  const runs = new Map();
+  const handle = async (req, res) => {
     const url = new URL(req.url, "http://mock");
     const send = (code, v) => {
       res.writeHead(code, { "content-type": "application/json" });
@@ -67,5 +70,11 @@ http
     } catch (e) {
       send(500, { error: String(e) });
     }
-  })
-  .listen(8080);
+  };
+  return { handle, runs };
+}
+
+// run as a program (in the cluster, from a ConfigMap whose files are links), not imported
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
+  http.createServer(mock().handle).listen(8080);
+}

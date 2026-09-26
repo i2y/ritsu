@@ -17,7 +17,8 @@ for image in quay.io/argoproj/workflow-controller:$version quay.io/argoproj/argo
 done
 
 $k create namespace argo --dry-run=client -o yaml | $k apply -f - >/dev/null
-$k apply --server-side -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/$version/quick-start-minimal.yaml" >/dev/null
+# the settings below come back after this, which a run again would otherwise refuse
+$k apply --server-side --force-conflicts -n argo -f "https://github.com/argoproj/argo-workflows/releases/download/$version/quick-start-minimal.yaml" >/dev/null
 $k -n argo patch configmap workflow-controller-configmap --type json -p '[{"op":"remove","path":"/data/artifactRepository"}]' >/dev/null 2>&1 || true
 # the runner reads every workflow's end, so none is deleted before it has; a task's workflow
 # must be able to start while the workflows that wait for it run
@@ -25,6 +26,14 @@ $k -n argo patch configmap workflow-controller-configmap --type json -p '[{"op":
 $k -n argo patch configmap workflow-controller-configmap --type json -p '[{"op":"remove","path":"/data/namespaceParallelism"}]' >/dev/null 2>&1 || true
 $k -n argo delete configmap artifact-repositories --ignore-not-found >/dev/null
 $k -n argo delete deploy minio httpbin --ignore-not-found >/dev/null
+# the tests start every run at once, and the runner plays most pods itself (run.mjs): the
+# controller looks at a workflow again a second after a change (what Argo's own tests use, not
+# ten), may make pods and call the API server fast enough for all of them, and writes no events
+$k -n argo patch configmap workflow-controller-configmap --type merge -p '{"data":{"resourceRateLimit":"limit: 200\nburst: 400\n","nodeEvents":"enabled: false\n","workflowEvents":"enabled: false\n"}}' >/dev/null
+$k -n argo patch deploy workflow-controller --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args","value":["--qps=200","--burst=400","--workflow-workers=64","--loglevel=warn"]}]' >/dev/null
+$k -n argo set env deploy/workflow-controller DEFAULT_REQUEUE_TIME=1s >/dev/null
+# the UI's server watches every workflow, and the tests do not use it
+$k -n argo scale deploy argo-server --replicas=0 >/dev/null
 $k -n argo rollout restart deploy/workflow-controller >/dev/null
 $k -n argo rollout status deploy/workflow-controller --timeout=180s >/dev/null
 
