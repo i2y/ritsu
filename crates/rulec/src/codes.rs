@@ -478,6 +478,20 @@ const X_E054: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\nenum s(s) = p(p) 
 const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
 /// E056: a `held` line naming an output.
 const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  x(x)   : bool\n\noutputs\n  nx(nx) : s\n  r(r)   : bool\n\ntable m(m)\npolicy unique\n| st | x     | -> nx(nx) : s | r(r) : bool |\n| p  | true  | q             | true        |\n| p  | false | p             | false       |\n| q  | -     | q             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  held    r\n  initial p\n  final   q\n";
+/// E058: a `derive` line with nothing after the word — the line that used to hang the parser.
+const X_E058: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\nderive\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
+/// E059: two values with no operator between them, which used to read as the first alone.
+const X_E059: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n  b(b) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\ndefine s(s) : money[\u{5186}] = a b\n\nresult o = s\n";
+/// E060: a rounding grid of zero, which passed and divided by zero in the generated code.
+const X_E060: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round up(0\u{5186})\n\nresult o = a\n";
+/// E061: a range whose ends are the wrong way round, which passed with nothing in it.
+const X_E061: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=10\u{5186} <=0\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\nresult o = a\n";
+/// E062: a date with the shape of one and no such day, which the checker counted on from.
+const X_E062: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range >=2026-01-01 <=2026-12-31\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d            | -> r(r) : bool |\n| <=2026-02-30 | true           |\n| >2026-02-30  | false          |\n";
+/// E063: a comparison with something after it, which used to read as the comparison alone.
+const X_E063: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a             | -> r(r) : bool |\n| <=100\u{5186} + 1\u{5186} | true           |\n| >100\u{5186}        | false          |\n";
+/// E064: a row one cell short of its header, which used to be read as it stood.
+const X_E064: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  |\n| false | true           |\n";
 /// E057: an input with a name and nothing after it.
 const X_E057: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n  b(b)\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
 const X_E124: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   b, c\n";
@@ -527,8 +541,8 @@ pub fn ledger() -> Vec<Entry> {
             "E003",
             tr!("ファイルが `rule` の行で始まっていません", "The file does not start with a `rule` line"),
             tr!(
-                "一つの `.rule` は一つの規則で、先頭行が規則名と版です。空行とコメントより前に他の宣言があるとき。",
-                "One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it."
+                "一つの `.rule` は一つの規則で、先頭行が規則名と版です。空行とコメントより前に他の宣言があるとき、または `rule` の行に名前が無いとき。名前の無い `rule` の行は、いままで何も言われずに、中身の無い規則として検査を通っていました。",
+                "One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it."
             ),
             tr!(
                 "先頭に `rule 規則名(alias) v1` の一行を足してください。",
@@ -752,14 +766,14 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E019",
-            tr!("例が制約を破っています", "An example breaks a constraint"),
+            tr!("例が、生成コードが入口で断る入力です", "An example is an input the generated code refuses at its door"),
             tr!(
-                "例の入力が `constraint` を満たしていないとき。制約は「この組み合わせは起きない」という宣言で、完全性の検査はそれを信じて、その組み合わせには行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。",
-                "An example's inputs do not satisfy a `constraint`. The constraint declares that the combination does not happen, the completeness check believed it and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for."
+                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。範囲の外の例は、いままで検査を通り、その例から作ったベクタが生成コードに断られていました。",
+                "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code."
             ),
             tr!(
-                "例の値を直してください。その組み合わせが本当に起きるなら、制約のほうが間違っているので消します。",
-                "Correct the example's values — or, if that combination really does happen, the constraint is what is wrong and it goes."
+                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消します。",
+                "Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint."
             ),
             X_E019,
             &["E017", "E018", "E101"],
@@ -1289,8 +1303,8 @@ pub fn ledger() -> Vec<Entry> {
             "E057",
             tr!("宣言に型がありません", "The declaration has no type"),
             tr!(
-                "`inputs`・`outputs`・`elements` の行に、名前だけがあって型が無いとき。この行は、いままで黙って捨てられていました。規則は書いた人の思うより入力が一つ少ないまま検査を通り、例やベクタがその名前を渡すと、知らない名前として断られていました。",
-                "A line under `inputs`, `outputs` or `elements` has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared."
+                "`inputs`・`outputs`・`elements` の行、または `define`・`derive` の行に、名前だけがあって型が無いとき。この行は、いままで黙って捨てられていました。規則は書いた人の思うより入力が一つ少ないまま検査を通り、例やベクタがその名前を渡すと、知らない名前として断られていました。",
+                "A line under `inputs`, `outputs` or `elements`, or a `define` or `derive` line, has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared."
             ),
             tr!(
                 "`<名前>(<別名>) : <型>` の形で型を書いてください（`: money[円, incl_tax]`、`: 都道府県`、`: bool`）。数の型なら `range` も要ります。",
@@ -1298,6 +1312,104 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E057,
             &["E011", "E047", "E012"],
+        ),
+        err(
+            "E058",
+            tr!("宣言の行を読めません", "A declaration line cannot be read"),
+            tr!(
+                "`define`・`derive`・`result`・`enum`・`group`・`table` のような宣言の語で始まる行を、その宣言として読めないとき。名前が無い、`=` の前に余分な語がある、などです。こういう行は、いままで何も言われずに捨てられていました。`derive` の行は捨てられもせず、検査が終わらなくなっていました。",
+                "A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished."
+            ),
+            tr!(
+                "診断の注記にある形に書き直してください（`define 大口(bulk) : bool = 注文金額 >= 3万円`）。どの宣言の形も docs/reference.md にあります。",
+                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30000円`). Every declaration's shape is in docs/reference.md."
+            ),
+            X_E058,
+            &["E006", "E057", "E059", "E005"],
+        ),
+        err(
+            "E059",
+            tr!("式を読めません", "The expression cannot be read"),
+            tr!(
+                "`=` などの右に書いた式を、最後の語まで読めないとき。演算子の右が空（`x +`）、`(` が閉じていない、値が二つ演算子なしで並んでいる（`金額 税`）、符号が数にくっついている（`金額 -100円`）、などです。いままでは読めたところまでを式にして、残りを黙って捨てていました。`金額 税` は `金額` と読まれて検査を通り、`x +` は宣言ごと消えていました。",
+                "An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100円`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it."
+            ),
+            tr!(
+                "抜けている演算子や括弧を補ってください。引くときは `金額 - 100円` のように、記号の後ろを空けます。記号と数字がくっついていると、負の数として読まれます。",
+                "Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100円`: a sign touching the digits makes a negative number."
+            ),
+            X_E059,
+            &["E058", "E118", "E115"],
+        ),
+        err(
+            "E060",
+            tr!("刻みが正の値ではありません", "A step is not positive"),
+            tr!(
+                "型の刻み（`rate[step 0%]`）、出力の丸めの刻み（`round up(0円)`）、式の中の丸めの刻み（`down(x, 0円)`）が 0 か負の数のとき。刻み 0 の丸めは検査を通り、生成コードの中で 0 で割って、実行時に止まっていました（Python なら ZeroDivisionError）。刻み 0 の型は、黙って刻み 1 として読まれていました。",
+                "The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0円)`) or of a rounding call (`down(x, 0円)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one."
+            ),
+            tr!(
+                "0 より大きい刻みを書いてください（`round up(1円)`、`rate[step 0.1%]`）。",
+                "Write a step greater than zero (`round up(1円)`, `rate[step 0.1%]`)."
+            ),
+            X_E060,
+            &["E104", "E114", "E106"],
+        ),
+        err(
+            "E061",
+            tr!("範囲が空です", "The range is empty"),
+            tr!(
+                "`range` に入る値が一つも無いとき。下の端が上の端を超えている（`range >=10円 <=0円`）か、両端が同じ値で片方が `>` か `<` のときです。こういう範囲は、いままで何も言われずに通っていました。完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも断っていました。",
+                "No value lies in a `range`: the lower end is past the upper one (`range >=10円 <=0円`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
+            ),
+            tr!(
+                "書き間違えた端を直してください（`range >=0円 <=10円`）。",
+                "Correct the end that was mistyped (`range >=0円 <=10円`)."
+            ),
+            X_E061,
+            &["E112", "E103", "E060"],
+        ),
+        err(
+            "E062",
+            tr!("ありえない日付です", "There is no such date"),
+            tr!(
+                "日付の形（`2026-04-01`）をしているのに、月が 1〜12 の外か、日がその月の日数を超えるとき（`2026-02-30`、`2026-01-99`）。こういう日付は、いままで形だけを見て読まれていました。検査器は日の通し番号として数え（1 月 99 日は 4 月 9 日）、生成した Python は実行時に止まり、JavaScript の `Date` は黙って次の月へ繰り越すので、言語ごとに答えが割れていました。",
+                "A literal has the shape of a date (`2026-04-01`) but no such day: the month is outside 1 to 12, or the day is past the end of its month (`2026-02-30`, `2026-01-99`). Such a date used to be read by its shape alone: the checker counted on from the first of the month (January 99th was April 9th), the generated Python stopped at run time, and JavaScript's `Date` would have rolled it over quietly, so the languages disagreed."
+            ),
+            tr!(
+                "ある日付に直してください。月末を言いたいなら、その月の最後の日を書きます（`2026-02-28`）。",
+                "Write a day that exists. For the end of a month, write its last day (`2026-02-28`)."
+            ),
+            X_E062,
+            &["E002", "E103"],
+        ),
+        err(
+            "E063",
+            tr!("セルを読めません", "The cell cannot be read"),
+            tr!(
+                "表・例・並びのセルに、セルとして読めない語があるとき。比較の後ろの余分な語（`<=0円 + false`）、値の後ろの語（`false 0円`）、値でない語（`+`）、見出しの列に名前が無い、などです。いままでは読めたところまでをセルにして、残りを捨てていました。読めないセルは丸ごと捨てていたので、後ろのセルが一つずつ左の列へずれていました。",
+                "A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0円 + false`), a word after a value (`false 0円`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left."
+            ),
+            tr!(
+                "セルに書けるのは、値一つ、`-`、`none`、比較、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。一つの列に二つの条件を書くなら、比較を並べます（`>=1 <10`）。",
+                "A cell holds one value, `-`, `none`, a comparison, a set of values separated by commas, `not:` with a set, or `starts_with` with a string. Two conditions on one column are two comparisons side by side (`>=1 <10`)."
+            ),
+            X_E063,
+            &["E008", "E010", "E014", "E064"],
+        ),
+        err(
+            "E064",
+            tr!("行が見出しと合いません", "The row does not fit the header"),
+            tr!(
+                "表・並び・手順の例・例の行のセルの数が、見出しの列の数と違うとき。または、最後の `|` の後ろに語があるとき（行を閉じる `|` の書き忘れ）。いままでは、閉じていない行の最後のセルが黙って捨てられ、セルの数の合わない行もそのまま読まれていました。参照評価器と生成コードがその行を別々に読み、答えが割れていました。例の表では、見出しに出力の列が無いか行の期待値が足りなければ E111、並びの列が無ければ E025 が、どの列かを先に言います。",
+                "A row of a table, of a sequence, of a scenario or of the examples has a different number of cells from the header's columns, or words follow its last `|` — the closing bar was left off. The last cell of such a row used to be dropped with nothing said, and a row whose cells did not match was read as it stood; the reference evaluator and the generated code then read the row two different ways and answered differently. In the examples, a header without a column for an output, or a row short of an expected value, is E111, and a header without the sequence's column is E025: each names the column first."
+            ),
+            tr!(
+                "一つの列に一つのセルを書き、行を `|` で閉じてください。どの値でもよい列には `-` を書きます。",
+                "Write one cell per column and close the row with `|`. A column that takes any value gets `-`."
+            ),
+            X_E064,
+            &["E063", "E008", "E111"],
         ),
         err(
             "E101",
@@ -1498,10 +1610,10 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E115",
-            tr!("変数では割れません", "Cannot divide by a variable"),
+            tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"),
             tr!(
-                "`÷` の右が定数でないとき。割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
-                "The right of `÷` is not a constant. A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."
+                "`÷` の右が、正の整数の定数でも、同じ単位の正の金額・数量の定数でもないとき。変数、0、負の数、小数がこれに当たります（§2.3）。",
+                "The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction (§2.3)."
             ),
             tr!(
                 "割る数が業務のデータなら、率として入力に取るか、定数を引く表として書いてください。刻みが静的に決まらないと生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います（§7.1）。",

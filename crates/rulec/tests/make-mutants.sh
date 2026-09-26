@@ -228,7 +228,9 @@ awk '{ sub(/^result 送料 =/, "result 大口 ="); print }'                     
 # An example that does not say which sequence it walks
 awk '/^\| 運賃行   \| -> 運賃 \|$/ { print "| -> 運賃 |"; next } /^\| 近い一件 \|/ { print "| 800円   |"; next } /^\| 空       \|/ { print "| 0円     |"; next } { print }' "$f" > "$M/m_e025.rule"
 # A `sequence` whose header does not name the element's fields
-awk '{ sub(/^\| 行ゾーン \| 閾値   \| 行運賃 \|$/, "| 行ゾーン | 閾値 |"); print }'    "$f" > "$M/m_e026.rule"
+# The column goes from the rows as well as the header: rows one cell longer than their header
+# are E064, which would stop the check before E026 is reached (§15.156).
+awk '{ sub(/^\| 行ゾーン \| 閾値   \| 行運賃 \|$/, "| 行ゾーン | 閾値 |"); sub(/^\| 近畿圏   \| 500円  \| 800円  \|$/, "| 近畿圏   | 500円  |"); sub(/^\| 近畿圏   \| 2000円 \| 1500円 \|$/, "| 近畿圏   | 2000円 |"); print }'    "$f" > "$M/m_e026.rule"
 # A verdict no element can land on
 awk '{ sub(/^\| 遠隔地   \| <=1000円 \| スキップ                    \|/, "| 遠隔地   | <=1000円 | 打ち切り                    |"); print }' "$f" > "$M/m_w115.rule"
 # `overrides` pointing at a table that defines a different output
@@ -272,7 +274,9 @@ awk '{ sub(/^  会員\(member\)    : 会員区分$/, "  会員(member)"); print 
 # A column of a type the region IR cannot hold. It takes two edits — the type and the cells
 # that read it — because either alone is a different error; §11 calls E110 the internal
 # breakwater, and what is confirmed here is that it fires before anything is skipped.
-awk '{ sub(/^  キャビン\(cabin\)                : キャビン/, "  キャビン(cabin) : string"); gsub(/\| basic_economy/, "| \"basic_economy\""); gsub(/\| economy/, "| \"economy\""); gsub(/\| business/, "| \"business\""); print }' "$C/予約取消可否.rule" > "$M/m_e110.rule"
+# Only the rows get quoted: the `enum` line had its values quoted too, and a line that did not
+# read used to vanish in silence (§15.156). The column is a string now, so the enum goes.
+awk '/^enum キャビン\(cabin\)/ { next } { sub(/^  キャビン\(cabin\)                : キャビン/, "  キャビン(cabin) : string") } /^\|/ { gsub(/\| basic_economy/, "| \"basic_economy\""); gsub(/\| economy/, "| \"economy\""); gsub(/\| business/, "| \"business\"") } { print }' "$C/予約取消可否.rule" > "$M/m_e110.rule"
 
 # A share with nothing to bound it: the line saying the running total stays within the
 # whole is taken out, and `allocate` is no longer an allocation (§15.102).

@@ -214,6 +214,11 @@ impl<'a> Env<'a> {
                     _ => rv,
                 };
                 match (lv, rv) {
+                    // A divisor of zero is E115's to report; the typing refuses every divisor
+                    // that is not a positive constant. The evaluator still runs on a rule that
+                    // has errors (to describe an unrounded output, say), and `÷ 0` there
+                    // panicked the whole of `rulec check` before E115 was printed (§15.156).
+                    (Val::Num(_), Val::Num(b)) if *op == Div && b.cmp_to(Rat::zero()) == std::cmp::Ordering::Equal => None,
                     (Val::Num(a), Val::Num(b)) => Some(match op {
                         Add => Val::Num(a.add(b)),
                         Sub => Val::Num(a.sub(b)),
@@ -741,6 +746,53 @@ pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row)
     env
 }
 
+/// The first value of an example that lies outside what the generated code takes at its
+/// door: an input, or a field of an element of the sequence, beyond its range — the declared
+/// one, or the one a rate has without a declaration. Returned with the value and its type.
+fn outside_range(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Option<(String, Val, Ty)> {
+    let doors: Vec<&str> = f
+        .inputs
+        .iter()
+        .chain(f.elements.iter().flat_map(|e| e.fields.iter()))
+        .map(|d| d.name.text.as_str())
+        .collect();
+    let out = |name: &str, v: &Val| -> Option<(String, Val, Ty)> {
+        if !doors.contains(&name) {
+            return None;
+        }
+        let (lo, hi) = c.ranges.get(name)?;
+        let x = match v {
+            Val::Num(x) => *x,
+            Val::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
+            _ => return None,
+        };
+        let below = lo.is_some_and(|l| x.cmp_to(l) == std::cmp::Ordering::Less);
+        let above = hi.is_some_and(|h| x.cmp_to(h) == std::cmp::Ordering::Greater);
+        (below || above).then(|| (name.to_string(), v.clone(), c.ty_of(name).unwrap_or(Ty::Unknown)))
+    };
+    let mut names: Vec<&String> = env.keys().collect();
+    names.sort();
+    for name in names {
+        match &env[name] {
+            Val::Seq(elements) => {
+                for el in elements {
+                    for (k, v) in el {
+                        if let Some(hit) = out(k, v) {
+                            return Some(hit);
+                        }
+                    }
+                }
+            }
+            v => {
+                if let Some(hit) = out(name, v) {
+                    return Some(hit);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn check_examples(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     // Every section runs, each held to its own header (§15.149).
     f.examples.iter().flat_map(|ex| check_example_table(f, c, path, ex)).collect()
@@ -790,9 +842,57 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
     if out.iter().any(|d| d.code == "E111") {
         return out;
     }
+    // With every column in the header, a row with a cell more than it has columns is a slip
+    // of its own; the extra value used to be ignored (§15.156). A header short of a column
+    // is E111 above, or E025 for the sequence, and never reaches here.
+    for row in &ex.rows {
+        let cells = row.cells.len() + row.outs.len();
+        let cols = ex.inputs.len() + ex.outputs.len();
+        if cells > cols {
+            out.push(
+                Diag::error("E064", tr!("行が見出しと合いません", "The row does not fit the header"))
+                    .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .mark(row.span.clone(), tr!("この行のセルは {cells} 個で、見出しの列は {cols} 個です", "this row has {cells} cells, and the header {cols} columns"))
+                    .note(tr!(
+                        "一つの列に一つのセルを書きます。どの値でもよい列には `-` を書きます。",
+                        "Write one cell per column; a column that takes any value gets `-`."
+                    )),
+            );
+        }
+    }
+    if out.iter().any(|d| d.code == "E064") {
+        return out;
+    }
 
     for row in &ex.rows {
         let env = example_env(f, c, ex, row);
+        // The declared range is the door as well: the generated code refuses a value outside
+        // it, the elements of a sequence field by field. An example there passed the check,
+        // and its vector then failed against the generated code (§15.156).
+        if let Some((name, v, ty)) = outside_range(f, c, &env) {
+            let (lo, hi) = c.ranges.get(&name).copied().unwrap_or((None, None));
+            let end = |x: Option<Rat>| x.map(|x| Val::Num(x).show(&ty)).unwrap_or_else(|| "…".into());
+            let shown = v.show(&ty);
+            let range = if matches!(ty, Ty::Date) {
+                tr!("宣言した範囲", "the declared range")
+            } else {
+                format!(">={} <={}", end(lo), end(hi))
+            };
+            out.push(
+                Diag::error("E019", tr!("例の値が、宣言した範囲の外です", "An example's value is outside the declared range"))
+                    .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .mark(row.span.clone(), tr!("{name} = {shown} は {range} の外です", "{name} = {shown} is outside {range}"))
+                    .note(tr!(
+                        "範囲の外の入力は、生成コードが入口で断ります。例はその入力に答えがあると言っていることになり、検査もその入力には行を求めていません。",
+                        "The generated code refuses an input outside the range at its door. The example claims an answer for it, and the checks never asked a row to cover it."
+                    ))
+                    .note(tr!(
+                        "例の値を直すか、その値が本当に来るなら範囲のほうを広げてください。",
+                        "Correct the example's value, or widen the range if that value really arrives."
+                    )),
+            );
+            continue;
+        }
         // An example is a case the rule is claimed to answer, so it has to be a case the rule
         // can receive. A `constraint` says which combinations exist (§15.55); an example
         // outside them would be asserting an answer for an input the generated code refuses

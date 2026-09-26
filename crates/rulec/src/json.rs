@@ -82,12 +82,20 @@ impl fmt::Display for Json {
 struct P<'a> {
     b: &'a [u8],
     i: usize,
+    /// How many arrays and objects are open.
+    depth: usize,
 }
+
+/// The deepest nesting read. The reader is recursive, and a line of some twenty thousand `[`
+/// ran it out of stack: the process aborted, and `rulec mcp` with it on one such request
+/// (§15.156). Nothing rulec reads comes near this — an e-Gov reply wraps the law's XML in one
+/// string, and a JSON Schema nests a few levels per field.
+pub const MAX_DEPTH: usize = 256;
 
 /// Read one line. Anything other than the value left at the end is an error (the first half
 /// is never read silently on its own).
 pub fn parse(src: &str) -> Result<Json, String> {
-    let mut p = P { b: src.as_bytes(), i: 0 };
+    let mut p = P { b: src.as_bytes(), i: 0, depth: 0 };
     let v = p.value()?;
     p.ws();
     if p.i != p.b.len() {
@@ -116,8 +124,19 @@ impl P<'_> {
             return Err(tr!("値がありません", "missing value"));
         };
         match c {
-            b'{' => self.obj(),
-            b'[' => self.arr(),
+            b'{' | b'[' => {
+                if self.depth == MAX_DEPTH {
+                    return Err(tr!(
+                        "{} 文字目: 入れ子が {MAX_DEPTH} 段を超えています",
+                        "character {}: nested deeper than {MAX_DEPTH} levels",
+                        self.i + 1
+                    ));
+                }
+                self.depth += 1;
+                let v = if c == b'{' { self.obj() } else { self.arr() };
+                self.depth -= 1;
+                v
+            }
             b'"' => self.string().map(Json::Str),
             b't' | b'f' | b'n' => self.word(),
             _ => self.number(),

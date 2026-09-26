@@ -175,7 +175,9 @@ fn 変異は決めたコードだけを出す() {
         // sixty-line table. Where a seed cascades it is pinned as it is: a lexer error does
         // leave the rest of the file headless, and pretending otherwise would be the fiction.
         ("m_e001.rule", &[("E001", 1)], "文字列を閉じなかった"),
-        ("m_e002.rule", &[("E002", 1), ("E004", 5)], "識別子を始められない文字を置いた"),
+        // The `policy` line does not lex, so the table under it is left with nothing: E058
+        // says the table is gone, which used to go unsaid (§15.156).
+        ("m_e002.rule", &[("E002", 1), ("E004", 5), ("E058", 1)], "識別子を始められない文字を置いた"),
         ("m_e003.rule", &[("E003", 1)], "一行目が `rule` でない"),
         ("m_e004.rule", &[("E004", 1), ("E005", 1)], "行の先頭に語が無い"),
         ("m_e005.rule", &[("E005", 1)], "その位置に書けない語を置いた"),

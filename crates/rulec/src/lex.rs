@@ -281,6 +281,16 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
         if c.is_ascii_digit() {
             // A date is `NNNN-NN-NN` with no spaces, which is why it is tried first.
             if let Some((y, m, d, len)) = try_date(&text[i..]) {
+                // The shape alone let `2026-01-99` through: the checker counted it as a day
+                // number (the ninety-ninth day from January 1st), and the generated Python
+                // stopped at run time where JavaScript's `Date` would have rolled it over
+                // (§15.156). The token stays, so the rest of the line is still read.
+                if !is_date(y, m, d) {
+                    soft.push(
+                        Diag::error("E062", tr!("`{}` という日付はありません", "There is no such date as `{}`", &text[i..i + len]))
+                            .mark(Span::new(line_no, start, len), tr!("月は 1〜12、日はその月の日数までです", "a month is 1 to 12, a day at most the days of its month")),
+                    );
+                }
                 push(Kind::Date(y, m, d), len, &mut out);
                 i += len;
                 continue;
@@ -340,6 +350,19 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
         i += n;
     }
     Ok((out, soft))
+}
+
+/// Whether the day exists in the proleptic Gregorian calendar, from year 1.
+pub fn is_date(y: i32, m: u32, d: u32) -> bool {
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let days = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => 0,
+    };
+    y >= 1 && (1..=days).contains(&d)
 }
 
 fn try_date(s: &str) -> Option<(i32, u32, u32, usize)> {

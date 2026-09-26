@@ -11,6 +11,7 @@
 
 use super::{commands, global_flags, Cmd};
 use rulec::json::{self, Json, Obj};
+use rulec::tr;
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
@@ -30,7 +31,7 @@ const RESOURCES: &[(&str, &str, &str, &str)] = &[
     ("rulec://docs/backends.md", "backends", "Targeting a language rulec does not generate, without losing the comparison.", include_str!("../docs/backends.md")),
 ];
 
-pub fn serve() -> ExitCode {
+pub fn serve(limit: std::time::Duration) -> ExitCode {
     let cmds = commands();
     let stdin = std::io::stdin();
     let mut out = std::io::stdout().lock();
@@ -56,7 +57,7 @@ pub fn serve() -> ExitCode {
             "initialize" => Ok(initialize(params)),
             "ping" => Ok("{}".to_string()),
             "tools/list" => Ok(tools_list(&cmds)),
-            "tools/call" => tools_call(&cmds, params),
+            "tools/call" => tools_call(&cmds, params, limit),
             "resources/list" => Ok(resources_list()),
             "resources/read" => resources_read(params),
             "prompts/list" => Ok("{\"prompts\":[]}".to_string()),
@@ -208,7 +209,7 @@ fn tools_list(cmds: &[Cmd]) -> String {
 /// Run the command this binary would run for the same arguments, and hand back what it
 /// printed. The exit code travels as the last piece of text, since an agent is told to read
 /// it rather than the emptiness of the output.
-fn tools_call(cmds: &[Cmd], params: Option<&Json>) -> Result<String, (i64, String)> {
+fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -> Result<String, (i64, String)> {
     let name = params.and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
     let Some(c) = name.strip_prefix("rulec_").and_then(|n| cmds.iter().find(|c| c.name == n)) else {
         return Err((-32602, format!("unknown tool: {name}")));
@@ -277,24 +278,94 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>) -> Result<String, (i64, Strin
         }
     }
     let exe = std::env::current_exe().map_err(|e| (-32603, format!("cannot find rulec itself: {e}")))?;
-    let o = std::process::Command::new(exe)
-        .args(&argv)
-        .output()
-        .map_err(|e| (-32603, format!("cannot run rulec: {e}")))?;
-    let code = o.status.code().unwrap_or(2);
-    let mut body = String::from_utf8_lossy(&o.stdout).into_owned();
-    let err = String::from_utf8_lossy(&o.stderr);
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(&argv);
+    let ran = run_limited(cmd, limit).map_err(|e| (-32603, format!("cannot run rulec: {e}")))?;
+    let mut body = String::from_utf8_lossy(&ran.stdout).into_owned();
+    let err = String::from_utf8_lossy(&ran.stderr);
     if !err.trim().is_empty() {
         if !body.is_empty() && !body.ends_with('\n') {
             body.push('\n');
         }
         body.push_str(&err);
     }
+    // 0 and 1 are answers (§11 principle 6); anything else is the call failing, and a call
+    // that did not finish, or was stopped by a signal, is not reported as a bad argument.
+    let (status, failed) = match ran.code {
+        _ if ran.timed_out => (
+            tr!(
+                "止めました: rulec {} が上限の {} 秒を過ぎても終わりませんでした（上限は `rulec mcp --timeout <秒>` で変えられます）",
+                "stopped: rulec {} ran past the limit of {} s (`rulec mcp --timeout <seconds>` sets it)",
+                c.name,
+                limit.as_secs()
+            ),
+            true,
+        ),
+        Some(code) => (format!("exit code {code}"), !matches!(code, 0 | 1)),
+        None => (tr!("シグナルで止まりました", "stopped by a signal"), true),
+    };
     let content = vec![
         Obj::new().str("type", "text").str("text", &body).finish(),
-        Obj::new().str("type", "text").str("text", &format!("exit code {code}")).finish(),
+        Obj::new().str("type", "text").str("text", &status).finish(),
     ];
-    Ok(Obj::new().raw("content", json::arr(&content)).bool("isError", code == 2).finish())
+    Ok(Obj::new().raw("content", json::arr(&content)).bool("isError", failed).finish())
+}
+
+/// What one run of rulec left behind.
+struct Ran {
+    code: Option<i32>,
+    timed_out: bool,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// Run one command and wait for it at most `limit`. A command that does not finish is
+/// killed and its call answered as failed: before this, one call that never finished held the
+/// server for good, and every call after it waited behind it (§15.156).
+///
+/// The output goes to two files rather than pipes. `rulec test` starts compilers of its own,
+/// and one still running after its parent was killed would hold a pipe open, and a read of it
+/// would wait for that compiler instead.
+fn run_limited(mut cmd: std::process::Command, limit: std::time::Duration) -> std::io::Result<Ran> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let base = std::env::temp_dir().join(format!("rulec-mcp-{}-{n}", std::process::id()));
+    let (out_path, err_path) = (base.with_extension("out"), base.with_extension("err"));
+    let out = std::fs::File::create(&out_path)?;
+    let err = std::fs::File::create(&err_path)?;
+    // A group of its own, so that what it started — an adapter `verify` stood up, a compiler
+    // `test` ran — is stopped with it, not left running on its own.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let mut child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(out))
+        .stderr(std::process::Stdio::from(err))
+        .spawn()?;
+    let start = std::time::Instant::now();
+    let (code, timed_out) = loop {
+        if let Some(s) = child.try_wait()? {
+            break (s.code(), false);
+        }
+        if start.elapsed() >= limit {
+            #[cfg(unix)]
+            let _ = std::process::Command::new("kill")
+                .args(["-KILL", "--", &format!("-{}", child.id())])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            let _ = child.kill();
+            let _ = child.wait();
+            break (None, true);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    let stdout = std::fs::read(&out_path).unwrap_or_default();
+    let stderr = std::fs::read(&err_path).unwrap_or_default();
+    let _ = std::fs::remove_file(&out_path);
+    let _ = std::fs::remove_file(&err_path);
+    Ok(Ran { code, timed_out, stdout, stderr })
 }
 
 fn resources_list() -> String {

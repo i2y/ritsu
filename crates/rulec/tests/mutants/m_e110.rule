@@ -1,7 +1,6 @@
 rule 予約取消可否(cancel_verdict) v1
 description "予約を取り消せるか、断るか、担当者に回すか。出典: τ²-bench airline policy（Sierra Research、MIT）の Cancel flight。規約は乗客に理由を三択（予定変更・航空会社の取消・その他）で訊けと言い、別の節で保険が効くのは健康か天候の理由だけだと言う。表にするには理由の列に健康と天候が要り、航空会社が取り消したかは乗客の申告ではなく便の状態から取る。その二つが転記で決めたこと"
 
-enum キャビン(cabin) = basic_economy default | "economy" default | "business"
 enum 理由(reason) = 予定変更(change_of_plan) default | 健康(health) | 天候(weather) | その他(other) default
 enum 判定(verdict) = 取消可(allowed) | 取消不可(refused) | 担当者へ(transfer)
 

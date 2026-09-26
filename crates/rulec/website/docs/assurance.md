@@ -178,7 +178,7 @@ proved correct**. What stands in for a proof is evidence, and it is kept deliber
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
   held to the corpus files they came from. A page that drifts is a failing test.
-- **Every diagnostic is in the ledger**: 102 codes, each with a smallest reproduction that is
+- **Every diagnostic is in the ledger**: 109 codes, each with a smallest reproduction that is
   run on every commit to check it still produces that code.
 
 ## 9. The source a rule was transcribed from

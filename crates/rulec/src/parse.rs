@@ -70,6 +70,86 @@ fn span_of(ts: &[Token]) -> Span {
     }
 }
 
+/// The words whose line declares one thing. A block heading (`inputs`, `examples`, …) is not
+/// among them: its heading alone is complete, and its rows speak for themselves.
+const DECLARING: &[&str] = &[
+    crate::kw::ENUM,
+    crate::kw::GROUP,
+    crate::kw::DERIVE,
+    crate::kw::DEFINE,
+    crate::kw::SHAPE,
+    crate::kw::SOURCE,
+    crate::kw::APPLY,
+    crate::kw::COUNT,
+    crate::kw::SUM,
+    crate::kw::FOLD,
+    crate::kw::CONSTRAINT,
+    crate::kw::TABLE,
+    crate::kw::CLAUSE,
+    crate::kw::RESULT,
+    crate::kw::MACHINE,
+];
+
+/// How many declarations the file holds so far. A line that leaves this and the diagnostics
+/// as they were has been read into nothing.
+fn declared(f: &RuleFile) -> usize {
+    f.imports.len()
+        + f.enum_imports.len()
+        + f.sources.len()
+        + f.applies.len()
+        + f.enums.len()
+        + f.groups.len()
+        + f.inputs.len()
+        + f.outputs.len()
+        + f.items.len()
+        + f.examples.len()
+        + f.constraints.len()
+        + f.shapes.len()
+        + f.sequences.len()
+        + f.scenarios.len()
+        + usize::from(f.description.is_some())
+        + usize::from(f.result.is_some())
+        + usize::from(f.elements.is_some())
+        + usize::from(f.fold.is_some())
+        + usize::from(f.machine.is_some())
+}
+
+/// How a line that starts with `word` is written, for the note under E058.
+fn line_shape(word: &str) -> String {
+    match word {
+        crate::kw::DESCRIPTION => tr!("`description \"<説明>\"`", "`description \"<one line>\"`"),
+        crate::kw::ENUM => tr!("`enum <名前>(<別名>) = <値>(<別名>) | …`", "`enum <name>(<alias>) = <value>(<alias>) | …`"),
+        crate::kw::GROUP => tr!("`group <名前>(<別名>) = <値>, …`", "`group <name>(<alias>) = <value>, …`"),
+        crate::kw::DERIVE => tr!("`derive <名前>(<別名>) : <型> = <式>  range >=… <=…`", "`derive <name>(<alias>) : <type> = <expression>  range >=… <=…`"),
+        crate::kw::DEFINE => tr!("`define <名前>(<別名>) : <型> = <式>`", "`define <name>(<alias>) : <type> = <expression>`"),
+        crate::kw::RESULT => tr!("`result <出力> = <式>`", "`result <output> = <expression>`"),
+        crate::kw::SHAPE => tr!("`shape <名前>(<別名>) = jsonschema \"<ファイル>\" \"<ポインタ>\"`", "`shape <name>(<alias>) = jsonschema \"<file>\" \"<pointer>\"`"),
+        crate::kw::SOURCE => tr!("`source <名前> = law \"<法令番号>\" asof <日付>` か `source <名前> = file \"<ファイル>\" sha256:<ハッシュ>`", "`source <name> = law \"<law id>\" asof <date>` or `source <name> = file \"<file>\" sha256:<digest>`"),
+        crate::kw::APPLY => tr!("`apply <名前>(<別名>) = \"<規則のファイル>\" sha256:<ハッシュ>` と、その下に入力ごとの読み替え", "`apply <name>(<alias>) = \"<rule file>\" sha256:<digest>`, with one binding per input under it"),
+        crate::kw::COUNT => tr!("`count <名前>(<別名>) over <並び> where <列> = <値>  range >=… <=…`", "`count <name>(<alias>) over <sequence> where <column> = <value>  range >=… <=…`"),
+        crate::kw::SUM => tr!("`sum <名前>(<別名>) over <並び> of <列>  range >=… <=…`", "`sum <name>(<alias>) over <sequence> of <column>  range >=… <=…`"),
+        crate::kw::FOLD => tr!("`fold <判定の列> over <並び>`", "`fold <verdict column> over <sequence>`"),
+        crate::kw::CONSTRAINT => tr!("`constraint <入力> <= <入力>`", "`constraint <input> <= <input>`"),
+        crate::kw::TABLE => tr!("`table <名前>(<別名>)` と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
+        crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` と、その下に `when …` と `then …`", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
+        crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` と、その下に `carry`・`initial`・`final`", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
+        _ => format!("`{word} …`"),
+    }
+}
+
+/// E058: a line that starts with a word of the vocabulary and cannot be read as what that
+/// word declares. Such a line used to be dropped with nothing said.
+fn unreadable(word: &str, line: &[Token], what: String, at: String) -> Diag {
+    Diag::error("E058", tr!("`{word}` の行を読めません", "The `{word}` line cannot be read"))
+        .at(at)
+        .mark(span_of(line), what)
+        .note(tr!("形は {} です。", "The shape is {}.", line_shape(word)))
+        .note(tr!(
+            "読めない行を飛ばして検査を続けると、書いた規則とは別の規則を検査することになります。",
+            "Skipping a line that cannot be read would check a rule other than the one written."
+        ))
+}
+
 impl P {
     fn cur(&self) -> Option<&Vec<Token>> {
         self.lines.get(self.i)
@@ -102,7 +182,15 @@ impl P {
             );
             return None;
         }
-        let (name, mut k) = self.name_at(&head, 1)?;
+        // A `rule` line with no name used to end the parse with nothing said, and the file
+        // passed the check with no declarations in it (§15.156).
+        let Some((name, mut k)) = self.name_at(&head, 1) else {
+            self.err(
+                Diag::error("E003", tr!("`{}` の行に規則の名前がありません", "The `{}` line has no name", crate::kw::RULE))
+                    .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE)),
+            );
+            return None;
+        };
         let version = head
             .get(k)
             .and_then(|t| t.ident())
@@ -147,10 +235,18 @@ impl P {
                 self.i += 1;
                 continue;
             };
+            // Two guards hold around every line that starts with a word. The parser always
+            // moves on: a handler that returned without consuming its line read that line
+            // for ever, and a malformed `derive` did exactly that (§15.156). And a line that
+            // declares nothing is never dropped in silence: if it added nothing to the file
+            // and said nothing about why, E058 says it.
+            let start = self.i;
+            let before = (self.diags.len(), declared(&f));
             match word.as_str() {
                 crate::kw::DESCRIPTION => {
-                    if let Some(Kind::Str(s)) = line.get(1).map(|t| t.kind.clone()) {
-                        f.description = Some(s);
+                    match line.get(1).map(|t| t.kind.clone()) {
+                        Some(Kind::Str(s)) if line.len() == 2 => f.description = Some(s),
+                        _ => self.err(unreadable(&word, &line, tr!("`{}` の後には文字列を一つだけ書きます", "`{}` takes one string and nothing else", crate::kw::DESCRIPTION), self.at(span_of(&line).line))),
                     }
                     self.i += 1;
                 }
@@ -331,7 +427,7 @@ impl P {
                     self.ctx = tr!("並び", "a named sequence");
                     // A block with no rows is the empty sequence, which is a case of its own
                     // (`empty ->`), so the header alone is a complete declaration.
-                    let (cols, outs, rows) = self.grid(false).unwrap_or_default();
+                    let (cols, outs, rows) = self.grid(false, false).unwrap_or_default();
                     self.ctx.clear();
                     if let Some(o) = outs.first() {
                         self.err(
@@ -344,8 +440,13 @@ impl P {
                                 )),
                         );
                     }
-                    if let Some(name) = name {
-                        f.sequences.push(crate::ast::SeqDecl { name, cols, rows, span });
+                    match name {
+                        Some(name) => f.sequences.push(crate::ast::SeqDecl { name, cols, rows, span }),
+                        None => self.err(
+                            Diag::error("E026", tr!("`sequence` に名前がありません", "The `sequence` line has no name"))
+                                .at(self.at(span.line))
+                                .mark(span, tr!("`sequence 近い一件(near)` の形です", "the shape is `sequence near(near)`")),
+                        ),
                     }
                 }
                 crate::kw::EXAMPLES => {
@@ -381,7 +482,7 @@ impl P {
                         Some(n) => tr!("手順の例 {}", "scenario {}", n.text),
                         None => tr!("手順の例", "a scenario"),
                     };
-                    let grid = self.grid(false);
+                    let grid = self.grid(false, false);
                     self.ctx.clear();
                     match (named, grid) {
                         (Some(name), Some((inputs, outputs, rows))) => f.scenarios.push(ScenarioDecl {
@@ -425,6 +526,20 @@ impl P {
                     self.i += 1;
                 }
             }
+            if self.i == start {
+                self.i += 1;
+            }
+            if DECLARING.contains(&word.as_str()) && (self.diags.len(), declared(&f)) == before {
+                let at = self.at(span_of(&line).line);
+                // A heading with lines under it (a table, a clause, a machine, an apply) is
+                // lost when those lines are: one that did not lex leaves the heading alone.
+                let what = if matches!(word.as_str(), crate::kw::TABLE | crate::kw::CLAUSE | crate::kw::MACHINE | crate::kw::APPLY) {
+                    tr!("この見出しの下の行を読めず、何も宣言されていません", "nothing under this heading could be read, so nothing is declared")
+                } else {
+                    tr!("この行は何も宣言していません", "this line declares nothing")
+                };
+                self.err(unreadable(&word, &line, what, at));
+            }
         }
         Some(f)
     }
@@ -457,7 +572,7 @@ impl P {
     }
 
     fn enum_decl(&mut self, line: &[Token]) -> Option<EnumDecl> {
-        let (name, mut k) = self.name_at(line, 1)?;
+        let (name, mut k) = self.decl_name(line, crate::kw::ENUM)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
             self.err(Diag::error("E006", tr!("型の宣言に `=` がありません", "Missing `=` in the type declaration")).mark(span_of(line), ""));
             return None;
@@ -531,7 +646,7 @@ impl P {
     }
 
     fn group_decl(&mut self, line: &[Token]) -> Option<GroupDecl> {
-        let (name, mut k) = self.name_at(line, 1)?;
+        let (name, mut k) = self.decl_name(line, crate::kw::GROUP)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
             self.err(Diag::error("E006", tr!("グループの宣言に `=` がありません", "Missing `=` in the group declaration")).mark(span_of(line), ""));
             return None;
@@ -543,7 +658,11 @@ impl P {
                 k += 1;
                 continue;
             }
-            let (v, nk) = self.name_at(line, k)?;
+            let Some((v, nk)) = self.name_at(line, k) else {
+                let at = self.at(line[k].span.line);
+                self.err(unreadable(crate::kw::GROUP, &line[k..=k], tr!("グループの値として読めません", "this cannot be read as a value of the group"), at));
+                return None;
+            };
             members.push(v);
             k = nk;
         }
@@ -742,6 +861,12 @@ impl P {
             if ts.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
                 j += 1;
             }
+            // `where chilled` with nothing to compare it to used to reach `cell` with no tokens
+            // at all, and index past the end of them (§15.156).
+            if j >= ts.len() {
+                self.err(shape().mark(ts[j - 1].span.clone(), tr!("`where` の後に比べる値がありません", "`where` names a field and nothing to compare it to")));
+                return None;
+            }
             let c = self.cell(&ts[j..])?;
             Some((field, c))
         } else {
@@ -917,29 +1042,86 @@ impl P {
     }
 
     fn derived(&mut self, line: &[Token]) -> Option<DerivedDecl> {
-        let (name, k) = self.name_at(line, 1)?;
-        let (ty, k) = self.type_ref(line, k)?;
-        let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
+        // The line is consumed before anything can go wrong. This function used to move on
+        // only when the line read, so a malformed `derive` was read again for ever (§15.156).
+        self.i += 1;
+        // §11's E112 example puts `range` on the next line; accept both. The next line belongs
+        // to this one whether or not this one reads, so it is taken here too.
+        let has_range = line.iter().any(|t| t.ident() == Some(crate::kw::RANGE));
+        let cont = match self.cur() {
+            Some(l) if !has_range && l.first().and_then(|t| t.ident()) == Some(crate::kw::RANGE) => Some(l.clone()),
+            _ => None,
+        };
+        if cont.is_some() {
+            self.i += 1;
+        }
+        let (name, k) = self.decl_name(line, crate::kw::DERIVE)?;
+        let (ty, k) = self.decl_type(line, k, &name, crate::kw::DERIVE)?;
+        let eq = self.decl_eq(line, k, crate::kw::DERIVE)?;
         // The expression runs to `range` on the same line, if present.
         let stop = line[eq + 1..]
             .iter()
             .position(|t| t.ident() == Some(crate::kw::RANGE))
             .map(|p| eq + 1 + p)
             .unwrap_or(line.len());
-        let expr = self.expr(&line[eq + 1..stop])?;
+        let expr = self.expr_of(line, eq, &line[eq + 1..stop])?;
         let (mut range, _) = self.tail_range(line, k.max(eq));
         self.tail_junk(line, stop);
-        self.i += 1;
-        // §11's E112 example puts `range` on the next line; accept both.
-        if range.is_none()
-            && self.cur().is_some_and(|l| l.first().and_then(|t| t.ident()) == Some(crate::kw::RANGE))
-        {
-            let cont = self.cur().cloned().unwrap();
-            let (r, _) = self.tail_range(&cont, 0);
-            range = r;
-            self.i += 1;
+        if let Some(c) = cont {
+            range = self.tail_range(&c, 0).0;
         }
         Some(DerivedDecl { cite: None, name, ty, expr, range, span: span_of(line) })
+    }
+
+    /// The name that follows the word starting a declaration line (E058 when there is none).
+    fn decl_name(&mut self, line: &[Token], word: &str) -> Option<(Name, usize)> {
+        let got = self.name_at(line, 1);
+        if got.is_none() {
+            let at = self.at(span_of(line).line);
+            self.err(unreadable(word, line, tr!("`{word}` の後に名前がありません", "there is no name after `{word}`"), at));
+        }
+        got
+    }
+
+    /// The type of a `define` or a `derive` — E057, the code a line under `inputs` gets for
+    /// the same slip.
+    fn decl_type(&mut self, line: &[Token], k: usize, name: &Name, word: &str) -> Option<(TypeRef, usize)> {
+        let got = self.type_ref(line, k);
+        // A token after the name that is neither the `:` of a type nor the `=` is not a type
+        // left out: it is something the name did not take (`derive 合算) : …`).
+        if got.is_none() && line.get(k).is_some_and(|t| !t.is(&Kind::Colon) && !t.is(&Kind::Eq)) {
+            let at = self.at(line[k].span.line);
+            self.err(unreadable(word, &line[k..=k], tr!("名前の後のこの語は読まれません", "this is not read after the name"), at));
+        } else if got.is_none() {
+            self.err(
+                Diag::error("E057", tr!("宣言に型がありません", "The declaration has no type"))
+                    .at(self.at(name.span.line))
+                    .mark(name.span.clone(), tr!("{} の型が書かれていません", "{} is not given a type", name.text))
+                    .note(tr!("形は {} です。", "The shape is {}.", line_shape(word))),
+            );
+        }
+        got
+    }
+
+    /// The `=` right after the name (and the type, where there is one). E006 when there is
+    /// none; E058 when something stands before it, which used to be skipped in silence — a
+    /// `range` written before the `=` was never read.
+    fn decl_eq(&mut self, line: &[Token], k: usize, word: &str) -> Option<usize> {
+        let at = self.at(span_of(line).line);
+        let Some(eq) = line.iter().position(|t| t.is(&Kind::Eq)) else {
+            self.err(
+                Diag::error("E006", tr!("宣言に `=` がありません", "The declaration has no `=`"))
+                    .at(at)
+                    .mark(span_of(line), tr!("名前と中身を `=` で分けます", "`=` separates the name from the body"))
+                    .note(tr!("形は {} です。", "The shape is {}.", line_shape(word))),
+            );
+            return None;
+        };
+        if eq > k {
+            self.err(unreadable(word, &line[k..eq], tr!("`=` の前にあるこの語は読まれません", "this is not read: nothing stands between the declaration and its `=`"), at));
+            return None;
+        }
+        Some(eq)
     }
 
     /// ```text
@@ -1001,10 +1183,10 @@ impl P {
     }
 
     fn define(&mut self, line: &[Token]) -> Option<DefineDecl> {
-        let (name, k) = self.name_at(line, 1)?;
-        let (ty, _k) = self.type_ref(line, k)?;
-        let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
-        let expr = self.expr(&line[eq + 1..])?;
+        let (name, k) = self.decl_name(line, crate::kw::DEFINE)?;
+        let (ty, k) = self.decl_type(line, k, &name, crate::kw::DEFINE)?;
+        let eq = self.decl_eq(line, k, crate::kw::DEFINE)?;
+        let expr = self.expr_of(line, eq, &line[eq + 1..])?;
         Some(DefineDecl { cite: None, name, ty, expr, span: span_of(line) })
     }
 
@@ -1069,25 +1251,25 @@ impl P {
             let rest = &l[a + 1..];
             let word = rest.first().and_then(|t| t.ident()).unwrap_or("");
             match name.text.as_str() {
-                crate::kw::EMPTY => empty = self.expr(rest),
-                crate::kw::EXHAUSTED => exhausted = self.expr(rest),
+                crate::kw::EMPTY => empty = self.expr_after(&l[a], rest),
+                crate::kw::EXHAUSTED => exhausted = self.expr_after(&l[a], rest),
                 _ => {
                     let arm = match word {
                         crate::kw::NEXT => Some(Arm::Next),
                         crate::kw::STOP => {
                             if rest.get(1).and_then(|t| t.ident()) == Some(crate::kw::WITH) {
-                                self.expr(&rest[2..]).map(|e| Arm::Stop(Some(e)))
+                                self.expr_after(&rest[1], &rest[2..]).map(|e| Arm::Stop(Some(e)))
                             } else {
                                 Some(Arm::Stop(None))
                             }
                         }
                         crate::kw::TAKE_UNIQUE | crate::kw::TAKE_FIRST => self
-                            .expr(&rest[1..])
+                            .expr_after(&rest[0], &rest[1..])
                             .map(|e| Arm::Take { expr: e, unique: word == crate::kw::TAKE_UNIQUE }),
                         crate::kw::KEEP_MAX => {
                             let by = rest.iter().position(|t| t.ident() == Some(crate::kw::BY));
                             match by {
-                                Some(b) => match (self.expr(&rest[1..b]), self.expr(&rest[b + 1..])) {
+                                Some(b) => match (self.expr_after(&rest[0], &rest[1..b]), self.expr_after(&rest[b], &rest[b + 1..])) {
                                     (Some(expr), Some(key)) => Some(Arm::KeepMax { expr, key }),
                                     _ => None,
                                 },
@@ -1368,9 +1550,13 @@ impl P {
     }
 
     fn result(&mut self, line: &[Token]) -> Option<ResultDecl> {
-        let name = line.get(1)?.ident()?.to_string();
-        let eq = line.iter().position(|t| t.is(&Kind::Eq))?;
-        let expr = self.expr(&line[eq + 1..])?;
+        let Some(name) = line.get(1).and_then(|t| t.ident()).map(str::to_string) else {
+            let at = self.at(span_of(line).line);
+            self.err(unreadable(crate::kw::RESULT, line, tr!("`result` の後に出力の名前がありません", "there is no output named after `result`"), at));
+            return None;
+        };
+        let eq = self.decl_eq(line, 2, crate::kw::RESULT)?;
+        let expr = self.expr_of(line, eq, &line[eq + 1..])?;
         Some(ResultDecl { name, expr, span: span_of(line) })
     }
 
@@ -1755,7 +1941,8 @@ impl P {
     }
 
     fn table(&mut self, head: &[Token]) -> Option<Table> {
-        let name = self.name_at(head, 1).map(|(n, _)| n);
+        let named = self.name_at(head, 1);
+        let name = named.as_ref().map(|(n, _)| n.clone());
         let span = span_of(head);
         self.i += 1;
         let mut policy = Policy::Unique; // §4: the default is unique.
@@ -1788,8 +1975,24 @@ impl P {
             Some(n) => tr!("表 {}", "table {}", n.text),
             None => String::new(),
         };
-        let (inputs, outputs, rows) = self.grid(true)?;
+        let (inputs, outputs, rows) = self.grid(true, false)?;
         self.ctx.clear();
+        // A table is named, and nothing else stands on its line. One with no name was read as
+        // an anonymous table, the word after `table` dropped, and the code generated for it
+        // lost the scale of its output — a rate of 0.6% came back a thousand times too large
+        // (§15.156). The rows are read first, so that they are not reported line by line.
+        let at = self.at(span.line);
+        match named {
+            None => {
+                self.err(unreadable(crate::kw::TABLE, head, tr!("`table` の後に名前がありません", "there is no name after `table`"), at));
+                return None;
+            }
+            Some((_, k)) if k < head.len() => {
+                self.err(unreadable(crate::kw::TABLE, &head[k..], tr!("名前の後のこの語は読まれません", "this is not read after the name"), at));
+                return None;
+            }
+            _ => {}
+        }
         Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None, applied: None })
     }
 
@@ -2019,7 +2222,7 @@ impl P {
 
     fn example_table(&mut self) -> Option<Table> {
         self.ctx = tr!("例", "examples");
-        let (inputs, outputs, rows) = self.grid(false)?;
+        let (inputs, outputs, rows) = self.grid(false, true)?;
         self.ctx.clear();
         Some(Table {
             name: None,
@@ -2039,7 +2242,11 @@ impl P {
     /// word before its first bar, which names the row (§2.1 of the statute draft); the rows of
     /// `examples` and of a `sequence` have no use for a name, so there a leading word ends the
     /// block as any statement does.
-    fn grid(&mut self, labels: bool) -> Option<(Vec<(String, Span)>, Vec<OutCol>, Vec<Row>)> {
+    /// The rows under a heading. `examples` is set for the examples: their rows are held to the
+    /// header after typing (`eval::check_examples`), where E111 and E025 can first name a
+    /// column the header is missing — a row one cell longer than such a header is its
+    /// symptom, not its cause.
+    fn grid(&mut self, labels: bool, examples: bool) -> Option<(Vec<(String, Span)>, Vec<OutCol>, Vec<Row>)> {
         let mut raw_rows: Vec<Vec<Token>> = Vec::new();
         let is_row = |l: &[Token]| -> bool {
             match l.first() {
@@ -2056,6 +2263,9 @@ impl P {
             return None;
         }
         let header = split_cells(&raw_rows[0]);
+        // A header that cannot be read is said once, and the rows are then not held to it: a
+        // row counted against a broken header would be reported for the header's fault.
+        let mut header_ok = self.closed(&raw_rows[0]);
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         // `→` marks the boundary between inputs and outputs once. Every column after it is an
@@ -2068,12 +2278,37 @@ impl P {
             if in_outputs {
                 let (nm, k) = match self.name_at(cell, usize::from(arrow)) {
                     Some(v) => v,
-                    None => continue,
+                    // A blank heading in the examples leaves an output without its column,
+                    // which E111 names.
+                    None if examples && cell.is_empty() => continue,
+                    None => {
+                        let what = tr!("出力の列に名前がありません", "this output column has no name");
+                        self.bad_cell(cell, &raw_rows[0], what);
+                        header_ok = false;
+                        continue;
+                    }
                 };
                 let ty = self.type_ref(cell, k).map(|(t, _)| t);
                 outputs.push(OutCol { name: nm, ty, span: span_of(cell) });
-            } else if let Some(w) = cell.first().and_then(|t| t.ident()) {
-                inputs.push((w.to_string(), span_of(cell)));
+            } else {
+                // One name per input column. A heading that is not a name used to be skipped,
+                // and every cell under it moved one column to the left.
+                match cell.first().and_then(|t| t.ident()) {
+                    Some(w) if cell.len() == 1 => inputs.push((w.to_string(), span_of(cell))),
+                    Some(_) => match self.name_at(cell, 0) {
+                        Some((nm, k)) if k == cell.len() => inputs.push((nm.text, span_of(cell))),
+                        _ => {
+                            let what = tr!("列の名前の後ろに、読めない語があります", "something follows the column's name");
+                            self.bad_cell(cell, &raw_rows[0], what);
+                            header_ok = false;
+                        }
+                    },
+                    None => {
+                        let what = tr!("列の名前がありません", "this column has no name");
+                        self.bad_cell(cell, &raw_rows[0], what);
+                        header_ok = false;
+                    }
+                }
             }
         }
         let ncol = inputs.len();
@@ -2082,6 +2317,21 @@ impl P {
             let (rt, cite) = self.split_cite(rt);
             let rt = &rt;
             let cells_t = split_cells(rt);
+            // One cell per column, and a bar at the end. A row one cell short, or with its last
+            // bar left off (and its last cell with it), passed: the reference evaluator and the
+            // generated code then read the row two different ways (§15.156).
+            if self.closed(rt) && header_ok && !examples && cells_t.len() != header.len() {
+                let at = self.at(rt[0].span.line);
+                self.err(
+                    Diag::error("E064", tr!("行が見出しと合いません", "The row does not fit the header"))
+                        .at(at)
+                        .mark(span_of(rt), tr!("この行のセルは {} 個で、見出しの列は {} 個です", "this row has {} cells, and the header {} columns", cells_t.len(), header.len()))
+                        .note(tr!(
+                            "一つの列に一つのセルを書きます。どの値でもよい列には `-` を書きます。",
+                            "Write one cell per column; a column that takes any value gets `-`."
+                        )),
+                );
+            }
             let mut cells = Vec::new();
             let mut cell_spans = Vec::new();
             let mut outs = Vec::new();
@@ -2099,16 +2349,23 @@ impl P {
                             .mark(cspan.clone(), col)
                             .note(tr!("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません。§3）", "Write `-` to match any value (an empty cell cannot be told apart from an omission; §3)")),
                     );
+                    // The place is kept, so that the cells after it stay under their own
+                    // headings; the error has already stopped the rule.
+                    if ci < ncol {
+                        cells.push(Cell::DontCare);
+                        cell_spans.push(cspan.clone());
+                    } else {
+                        outs.push(OutCell::Name(String::new()));
+                        out_spans.push(cspan.clone());
+                    }
                     continue;
                 }
                 if ci < ncol {
-                    match self.cell(ct) {
-                        Some(c) => {
-                            cells.push(c);
-                            cell_spans.push(cspan.clone());
-                        }
-                        None => continue,
-                    }
+                    // A cell that cannot be read keeps its place too: dropping it moved every
+                    // cell after it one column to the left.
+                    let c = self.cell(ct).unwrap_or(Cell::DontCare);
+                    cells.push(c);
+                    cell_spans.push(cspan.clone());
                 } else {
                     outs.push(self.out_cell(ct));
                     out_spans.push(cspan.clone());
@@ -2134,6 +2391,11 @@ impl P {
     }
 
     fn cell(&mut self, ts: &[Token]) -> Option<Cell> {
+        // Every caller hands over at least one token; an empty cell is E008's, reported where
+        // the row is split.
+        if ts.is_empty() {
+            return None;
+        }
         if let Some(t) = ts.iter().find(|t| t.is(&Kind::DotDot)) {
             let at = self.at(t.span.line);
             self.err(
@@ -2148,6 +2410,9 @@ impl P {
             return Some(Cell::DontCare);
         }
         if ts[0].ident() == Some(crate::kw::NONE) {
+            if ts.len() > 1 {
+                return self.cell_junk(&ts[1..]);
+            }
             return Some(Cell::Nothing);
         }
         if ts[0].ident() == Some(crate::kw::STARTS_WITH) {
@@ -2176,6 +2441,9 @@ impl P {
         }
         if ts[0].ident() == Some(crate::kw::NOT) {
             let rest = if ts.get(1).is_some_and(|t| t.is(&Kind::Colon)) { &ts[2..] } else { &ts[1..] };
+            if let Some(bad) = rest.iter().find(|t| !t.is(&Kind::Comma) && lit_of(t).is_none()) {
+                return self.cell_junk(std::slice::from_ref(bad));
+            }
             return Some(Cell::Not(lits(rest)));
         }
         if matches!(ts[0].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt) {
@@ -2193,12 +2461,62 @@ impl P {
                 v.push((op, l));
                 k += 2;
             }
+            // `<=0円 + false` read as `<=0円`, the rest dropped (§15.156).
+            if k < ts.len() {
+                return self.cell_junk(&ts[k..]);
+            }
             return Some(Cell::Cmp(v));
         }
         if ts.iter().any(|t| t.is(&Kind::Comma)) {
+            if let Some(bad) = ts.iter().find(|t| !t.is(&Kind::Comma) && lit_of(t).is_none()) {
+                return self.cell_junk(std::slice::from_ref(bad));
+            }
             return Some(Cell::Set(lits(ts)));
         }
-        lit_of(&ts[0]).map(Cell::Lit)
+        // One value: `false 0円` read as `false`, and `+` as nothing at all.
+        match lit_of(&ts[0]) {
+            Some(l) if ts.len() == 1 => Some(Cell::Lit(l)),
+            Some(_) => self.cell_junk(&ts[1..]),
+            None => self.cell_junk(&ts[..1]),
+        }
+    }
+
+    /// E063 for what a cell holds and cannot be read.
+    fn cell_junk(&mut self, junk: &[Token]) -> Option<Cell> {
+        let at = self.at(junk[0].span.line);
+        self.err(
+            Diag::error("E063", tr!("セルを読めません", "The cell cannot be read"))
+                .at(at)
+                .mark(span_of(junk), tr!("ここはセルとして読めません", "this is not read as part of the cell"))
+                .note(tr!(
+                    "セルに書けるのは、値一つ、`-`、`none`、比較（`<=2000g`、`>=1 <10`）、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です（§3）。",
+                    "A cell holds one value, `-`, `none`, a comparison (`<=2000g`, `>=1 <10`), a set of values separated by commas, `not:` with a set, or `starts_with` with a string (§3)."
+                )),
+        );
+        None
+    }
+
+    /// E063 for a header cell, at the header's line.
+    fn bad_cell(&mut self, cell: &[Token], header: &[Token], what: String) {
+        let at = self.at(header.first().map(|t| t.span.line).unwrap_or(1));
+        let span = if cell.is_empty() { span_of(header) } else { span_of(cell) };
+        self.err(Diag::error("E063", tr!("セルを読めません", "The cell cannot be read")).at(at).mark(span, what));
+    }
+
+    /// Whether the row ends with its bar. E064 when words follow the last one: they were a
+    /// cell whose closing bar was left off, and they were dropped with it.
+    fn closed(&mut self, row: &[Token]) -> bool {
+        let Some(last_bar) = row.iter().rposition(|t| t.is(&Kind::Pipe)) else { return true };
+        if last_bar + 1 == row.len() {
+            return true;
+        }
+        let at = self.at(row[0].span.line);
+        self.err(
+            Diag::error("E064", tr!("行が見出しと合いません", "The row does not fit the header"))
+                .at(at)
+                .mark(span_of(&row[last_bar + 1..]), tr!("最後の `|` の後ろにあります。行を `|` で閉じてください", "this follows the last `|`; close the row with a `|`")),
+        );
+        false
     }
 
     fn out_cell(&mut self, ts: &[Token]) -> OutCell {
@@ -2230,16 +2548,56 @@ impl P {
                 OutCell::Name(w)
             }
             Some(l) => OutCell::Lit(l),
-            None => OutCell::Name(String::new()),
+            None => {
+                self.cell_junk(&ts[..1]);
+                OutCell::Name(String::new())
+            }
         }
     }
 
+    /// The expression after `anchor` — the `=` of a declaration, the `->` of an arm, the
+    /// `with` of a stop. E059 when nothing follows it.
+    fn expr_after(&mut self, anchor: &Token, ts: &[Token]) -> Option<Expr> {
+        if ts.is_empty() {
+            let what = match &anchor.kind {
+                Kind::Ident(w) => tr!("`{w}` の右に式がありません", "there is no expression after `{w}`"),
+                k => tr!("`{}` の右に式がありません", "there is no expression after `{}`", op_text(k)),
+            };
+            self.err(bad_expr(std::slice::from_ref(anchor), what, self.at(anchor.span.line)));
+            return None;
+        }
+        self.expr(ts)
+    }
+
+    /// `expr_after` for a declaration line, whose anchor is its `=`.
+    fn expr_of(&mut self, line: &[Token], eq: usize, ts: &[Token]) -> Option<Expr> {
+        self.expr_after(&line[eq], ts)
+    }
+
     /// Precedence: comparison < additive < multiplicative.
+    ///
+    /// Every token is read or E059 says which one was not. This used to return nothing, or
+    /// return what it had read so far, whenever it met something it did not expect: `金額 税`
+    /// (a `+` forgotten) was read as `金額`, `x +` and `(x + 1` made the whole declaration
+    /// vanish, and a malformed `derive` hung the parser (§15.156). An empty slice is the
+    /// caller's to report, since only the caller knows what it follows.
     fn expr(&mut self, ts: &[Token]) -> Option<Expr> {
         if ts.is_empty() {
             return None;
         }
         self.expr_cmp(ts)
+    }
+
+    /// E059 for an operator with nothing on one side.
+    fn missing_side(&mut self, op: &Token, left: bool) -> Option<Expr> {
+        let o = op_text(&op.kind);
+        let what = if left {
+            tr!("`{o}` の左に値がありません", "there is nothing on the left of `{o}`")
+        } else {
+            tr!("`{o}` の右に値がありません", "there is nothing on the right of `{o}`")
+        };
+        self.err(bad_expr(std::slice::from_ref(op), what, self.at(op.span.line)));
+        None
     }
 
     fn expr_cmp(&mut self, ts: &[Token]) -> Option<Expr> {
@@ -2251,6 +2609,12 @@ impl P {
                 Kind::Gt => BinOp::Gt,
                 _ => BinOp::Eq,
             };
+            if p == 0 {
+                return self.missing_side(&ts[p], true);
+            }
+            if p + 1 == ts.len() {
+                return self.missing_side(&ts[p], false);
+            }
             let l = self.expr_add(&ts[..p])?;
             let r = self.expr_add(&ts[p + 1..])?;
             return Some(Expr::Bin(Box::new(l), op, Box::new(r), span_of(ts)));
@@ -2259,8 +2623,12 @@ impl P {
     }
 
     fn expr_add(&mut self, ts: &[Token]) -> Option<Expr> {
+        // `top_pos_last` never answers the first token, so the left side is never empty.
         if let Some(p) = top_pos_last(ts, |k| matches!(k, Kind::Plus | Kind::Minus)) {
             let op = if ts[p].is(&Kind::Plus) { BinOp::Add } else { BinOp::Sub };
+            if p + 1 == ts.len() {
+                return self.missing_side(&ts[p], false);
+            }
             let l = self.expr_add(&ts[..p])?;
             let r = self.expr_mul(&ts[p + 1..])?;
             return Some(Expr::Bin(Box::new(l), op, Box::new(r), span_of(ts)));
@@ -2271,6 +2639,9 @@ impl P {
     fn expr_mul(&mut self, ts: &[Token]) -> Option<Expr> {
         if let Some(p) = top_pos_last(ts, |k| matches!(k, Kind::Star | Kind::Slash)) {
             let op = if ts[p].is(&Kind::Star) { BinOp::Mul } else { BinOp::Div };
+            if p + 1 == ts.len() {
+                return self.missing_side(&ts[p], false);
+            }
             let l = self.expr_mul(&ts[..p])?;
             let r = self.expr_atom(&ts[p + 1..])?;
             return Some(Expr::Bin(Box::new(l), op, Box::new(r), span_of(ts)));
@@ -2278,29 +2649,125 @@ impl P {
         self.expr_atom(ts)
     }
 
-    fn expr_atom(&mut self, ts: &[Token]) -> Option<Expr> {
-        if ts.is_empty() {
-            return None;
+    /// E059 for what is left after a complete value: `金額 税`, `(x + 1) y`, `x -1`.
+    fn trailing(&mut self, extra: &[Token]) -> Option<Expr> {
+        let mut d = bad_expr(
+            extra,
+            tr!("ここから先を式として読めません", "this is not read as part of the expression"),
+            self.at(extra[0].span.line),
+        )
+        .note(tr!(
+            "値が二つ、演算子を挟まずに並んでいます。`+` か `×` が抜けていないか見てください。",
+            "Two values stand side by side with no operator between them. Look for a missing `+` or `×`."
+        ));
+        if let Kind::Num(n) = &extra[0].kind
+            && n.neg
+        {
+            let abs = n.raw.trim_start_matches(['-', '−']);
+            d = d.note(tr!(
+                "`{}` は、記号と数字がくっついているので負の数として読まれています。引くのなら `- {abs}` のように間を空けてください。",
+                "`{}` is read as a negative number, the sign touching the digits. To subtract, leave a space: `- {abs}`.",
+                n.raw
+            ));
         }
-        if ts[0].is(&Kind::LParen) {
-            let close = matching(ts, 0)?;
+        self.err(d);
+        None
+    }
+
+    fn expr_atom(&mut self, ts: &[Token]) -> Option<Expr> {
+        // An empty slice only arrives here from `()`, which the branch below reports.
+        let first = ts.first()?;
+        if first.is(&Kind::LParen) {
+            let Some(close) = matching(ts, 0) else {
+                self.err(bad_expr(std::slice::from_ref(first), tr!("この `(` が閉じていません", "this `(` is never closed"), self.at(first.span.line)));
+                return None;
+            };
+            if close == 1 {
+                self.err(bad_expr(&ts[..=1], tr!("括弧の中が空です", "there is nothing between the parentheses"), self.at(first.span.line)));
+                return None;
+            }
+            if close + 1 < ts.len() {
+                return self.trailing(&ts[close + 1..]);
+            }
             return self.expr(&ts[1..close]);
         }
-        if let Some(name) = ts[0].ident() {
+        if let Some(name) = first.ident() {
             if ts.get(1).is_some_and(|t| t.is(&Kind::LParen)) {
-                let close = matching(ts, 1)?;
+                let Some(close) = matching(ts, 1) else {
+                    self.err(bad_expr(&ts[1..=1], tr!("この `(` が閉じていません", "this `(` is never closed"), self.at(ts[1].span.line)));
+                    return None;
+                };
+                if close + 1 < ts.len() {
+                    return self.trailing(&ts[close + 1..]);
+                }
                 let mut args = Vec::new();
                 for part in split_top(&ts[2..close], Kind::Comma) {
-                    if let Some(e) = self.expr(&part) {
-                        args.push(e);
+                    if part.is_empty() {
+                        self.err(bad_expr(&ts[1..=close], tr!("引数が一つ抜けています", "an argument is missing here"), self.at(ts[1].span.line)));
+                        return None;
                     }
+                    args.push(self.expr(&part)?);
                 }
                 return Some(Expr::Call(name.to_string(), args, span_of(ts)));
             }
-            return Some(Expr::Name(name.to_string(), ts[0].span.clone()));
+            if ts.len() > 1 {
+                return self.trailing(&ts[1..]);
+            }
+            return Some(Expr::Name(name.to_string(), first.span.clone()));
         }
-        lit_of(&ts[0]).map(|l| Expr::Lit(l, ts[0].span.clone()))
+        match lit_of(first) {
+            Some(_) if ts.len() > 1 => self.trailing(&ts[1..]),
+            Some(l) => Some(Expr::Lit(l, first.span.clone())),
+            None => {
+                let what = match op_text(&first.kind) {
+                    "" => tr!("これは式の中に書けません", "this cannot appear in an expression"),
+                    o => tr!("`{o}` は、ここには書けません", "`{o}` cannot stand here"),
+                };
+                self.err(bad_expr(std::slice::from_ref(first), what, self.at(first.span.line)));
+                None
+            }
+        }
     }
+}
+
+/// How an operator or a mark is written, for a diagnostic that names it.
+fn op_text(k: &Kind) -> &'static str {
+    match k {
+        Kind::Plus => "+",
+        Kind::Minus => "-",
+        Kind::Star => "×",
+        Kind::Slash => "÷",
+        Kind::Le => "<=",
+        Kind::Ge => ">=",
+        Kind::Lt => "<",
+        Kind::Gt => ">",
+        Kind::Eq => "=",
+        Kind::Arrow => "->",
+        Kind::Comma => ",",
+        Kind::LParen => "(",
+        Kind::RParen => ")",
+        Kind::LBracket => "[",
+        Kind::RBracket => "]",
+        Kind::Question => "?",
+        Kind::Pipe => "|",
+        Kind::Colon => ":",
+        Kind::At => "@",
+        Kind::Dot => ".",
+        Kind::DotDot => "..",
+        _ => "",
+    }
+}
+
+/// E059: an expression that cannot be read to its end. Reading what could be read and
+/// dropping the rest would check an expression other than the one written.
+fn bad_expr(at_tokens: &[Token], what: String, at: String) -> Diag {
+    Diag::error("E059", tr!("式を読めません", "The expression cannot be read"))
+        .at(at)
+        .mark(span_of(at_tokens), what)
+        .note(tr!(
+            "式に書けるのは、名前、数と金額、`+` `-` `×` `÷`、比較、括弧、`min(a, b)` のような呼び出しです。",
+            "An expression is made of names, numbers and amounts, `+` `-` `×` `÷`, comparisons, parentheses, and calls such as `min(a, b)`."
+        ))
 }
 
 fn lit_of(t: &Token) -> Option<Lit> {

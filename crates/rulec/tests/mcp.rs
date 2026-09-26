@@ -13,9 +13,15 @@ fn root() -> PathBuf {
 
 /// Send the requests, one per line, and read one answer per request that carries an id.
 fn talk(requests: &[&str]) -> Vec<rulec::json::Json> {
+    talk_with(&[], requests)
+}
+
+/// `talk`, with flags for `rulec mcp` itself.
+fn talk_with(flags: &[&str], requests: &[&str]) -> Vec<rulec::json::Json> {
     let mut child = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .current_dir(root())
         .arg("mcp")
+        .args(flags)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -189,4 +195,29 @@ fn サブコマンドは選択肢として渡る() {
     let e = a[3].get("error").expect("選択肢に無いサブコマンドを通している");
     assert!(s(e, "message").contains("subcommand"), "{e:?}");
     let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn 終わらない呼び出しは上限で止め_次の呼び出しに答える() {
+    // One call that never finished used to hold the server for good, and every call after it
+    // waited behind it (§15.156). The adapter here never answers.
+    let a = talk_with(
+        &["--timeout", "1"],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"rulec_verify","arguments":{"file":"tests/corpus/決済手数料.rule","adapter":"sleep 30"}}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"rulec_check","arguments":{"files":["tests/corpus/決済手数料.rule"]}}}"#,
+        ],
+    );
+    assert_eq!(a.len(), 2, "{a:?}");
+    let stopped = a[0].get("result").expect("result が無い");
+    assert_eq!(stopped.get("isError"), Some(&rulec::json::Json::Bool(true)), "{stopped:?}");
+    let said = s(arr(stopped, "content").last().unwrap(), "text");
+    assert!(said.contains("--timeout"), "上限の変え方を言わない: {said}");
+    let next = a[1].get("result").expect("result が無い");
+    assert_eq!(next.get("isError"), Some(&rulec::json::Json::Bool(false)), "{next:?}");
+    // A limit that is not a number of seconds is refused before anything is served.
+    for bad in ["0", "ten"] {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(["mcp", "--timeout", bad]).stdin(Stdio::null()).output().unwrap();
+        assert_eq!(o.status.code(), Some(2), "--timeout {bad}");
+    }
 }

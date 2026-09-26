@@ -802,6 +802,74 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         );
     }
 
+    // E060: a step or a rounding grid of zero or less. `round up(0円)` passed the check and the
+    // generated code divided by it at run time — Python stopped with ZeroDivisionError — and
+    // `rate[step 0%]` was read as a step of one (§15.156). Every type a declaration writes is
+    // looked at, the table headers' too.
+    {
+        let mut typed: Vec<&TypeRef> = Vec::new();
+        typed.extend(f.inputs.iter().map(|i| &i.ty));
+        typed.extend(f.outputs.iter().map(|o| &o.ty));
+        if let Some(el) = &f.elements {
+            typed.extend(el.fields.iter().map(|i| &i.ty));
+        }
+        for it in &f.items {
+            match it {
+                Item::Derived(d) => typed.push(&d.ty),
+                Item::Define(d) => typed.push(&d.ty),
+                Item::Table(t) => typed.extend(t.outputs.iter().filter_map(|oc| oc.ty.as_ref())),
+                Item::Agg(_) => {}
+            }
+        }
+        for t in typed {
+            let ty = c.resolve(t);
+            for a in &t.args {
+                if let TypeArg::Scaled(w, n) = a
+                    && w == crate::kw::STEP
+                    && lit_value_in(n, &ty).is_some_and(|v| v.num <= 0)
+                {
+                    c.diags.push(nonpositive(n, t.span.clone(), at(t.span.line), tr!("型の刻み", "the step of a type")));
+                }
+            }
+        }
+        for o in &f.outputs {
+            if let Some(rd) = &o.rounding {
+                let ty = c.resolve(&o.ty);
+                if lit_value_in(&rd.grid, &ty).is_some_and(|v| v.num <= 0) {
+                    c.diags.push(nonpositive(&rd.grid, rd.span.clone(), at(rd.span.line), tr!("丸めの刻み", "the rounding grid")));
+                }
+            }
+        }
+        // E061: a range with no value in it. The completeness proof answered "complete" over
+        // the empty set, and the generated code's entry guard refused every call (§15.156).
+        let mut ranged: Vec<(&crate::ast::Range, Ty)> = Vec::new();
+        for i in f.inputs.iter().chain(f.elements.iter().flat_map(|el| el.fields.iter())) {
+            if let Some(r) = &i.range {
+                ranged.push((r, c.resolve(&i.ty)));
+            }
+        }
+        for it in &f.items {
+            match it {
+                Item::Derived(d) => {
+                    if let Some(r) = &d.range {
+                        ranged.push((r, c.resolve(&d.ty)));
+                    }
+                }
+                Item::Agg(d) => {
+                    if let Some(r) = &d.range {
+                        ranged.push((r, Ty::Unknown));
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (r, ty) in ranged {
+            if let Some(d) = empty_range(r, &ty, at(r.span.line)) {
+                c.diags.push(d);
+            }
+        }
+    }
+
     // §1.1 fixes each keyword to a single spelling. When a name collides with a keyword,
     // the line-oriented parser reads the declaration as the start of a section and silently
     // drops it. Silent dropping is the worst outcome, so it is the name that gets rejected.
@@ -1937,7 +2005,28 @@ impl Checked {
                 }
                 match name.as_str() {
                     crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN | crate::kw::HALF_DOWN => {
-                        ats.first().cloned().unwrap_or(Ty::Unknown)
+                        let t = ats.first().cloned().unwrap_or(Ty::Unknown);
+                        // The grid of a rounding call, held to what an output's `round` is
+                        // held to: a constant (a name passed the check and the generated code
+                        // divided by it, zero included, at run time), and a positive one
+                        // (E060) (§15.156).
+                        match args.get(1) {
+                            Some(Expr::Lit(Lit::Num(n), gsp)) => {
+                                if lit_value_in(n, &t).or_else(|| lit_value_in(n, &lit_ty(n))).is_some_and(|v| v.num <= 0) {
+                                    self.diags.push(nonpositive(n, gsp.clone(), format!("{path}:{}", gsp.line), tr!("丸めの刻み", "the rounding grid")));
+                                }
+                            }
+                            _ => self.diags.push(
+                                Diag::error("E118", tr!("`{name}` の刻みは定数で書きます", "The grid of `{name}` is a constant"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(sp.clone(), tr!("二つめの引数が定数ではありません", "the second argument is not a constant"))
+                                    .note(tr!(
+                                        "`{name}(<値>, 10円)` のように、丸める刻みを数か金額で書いてください。値によって変わる刻みは、0 になった呼び出しで生成コードが 0 で割ります。",
+                                        "Write the grid as a number or an amount, as in `{name}(<value>, 10円)`. A grid that moves with the input makes the generated code divide by zero on the call where it is zero."
+                                    )),
+                            ),
+                        }
+                        t
                     }
                     // `allocate(T, C, S)` is `floor(T × C ÷ S)` — one operation, so the
                     // scale stays decidable where a bare `÷ S` would not (§2.3, E115).
@@ -2138,10 +2227,18 @@ impl Checked {
                         // have to fall back on a language's own division — Python rounds
                         // toward -inf and Go toward zero, so the two would disagree.
                         if const_value(r).is_none() {
+                            // A literal that is not a positive whole number (`÷ 0`, `÷ -2`,
+                            // `÷ 0.5`) is not a variable, and saying so sent the reader looking
+                            // for one.
+                            let mark = if matches!(r.as_ref(), Expr::Lit(..)) {
+                                tr!("割る数が正の整数ではありません", "the divisor is not a positive whole number")
+                            } else {
+                                tr!("割る数が定数ではありません", "the divisor is not a constant")
+                            };
                             self.diags.push(
-                                Diag::error("E115", tr!("変数では割れません", "Cannot divide by a variable"))
+                                Diag::error("E115", tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"))
                                     .at(format!("{path}:{}", sp.line))
-                                    .mark(sp.clone(), tr!("割る数が定数ではありません", "the divisor is not a constant"))
+                                    .mark(sp.clone(), mark)
                                     .note(tr!(
                                         "割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
                                         "A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."
@@ -3585,7 +3682,12 @@ impl Checked {
                         let (tl, th) = self.interval(t, ty)?;
                         let (cl, _) = self.interval(cc, ty)?;
                         let (sl, sh) = self.interval(ss, ty)?;
-                        if sl.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater {
+                        // Both ends: a range written upside down (`>=1円 <=0円`) has a
+                        // positive lower end and a zero upper one, and the division below
+                        // panicked on it before the range itself was reported (§15.156).
+                        if sl.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater
+                            || sh.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater
+                        {
                             return None;
                         }
                         // Without the guarantee there is no bound worth stating: E117 has
@@ -3678,6 +3780,51 @@ fn missing_step(name: &crate::ast::Name, tr: &TypeRef, ty: &Ty, line: usize, pat
                 "The step is not taken from the literals in the table: adding a single row would then change what the integer the caller passes means."
             )),
     )
+}
+
+/// E061 when no value satisfies the range: the lower end above the upper, or the two equal
+/// with one of them strict. A bound that cannot be read is E103's, and is not looked at here.
+fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String) -> Option<Diag> {
+    let (mut lo, mut hi) = (None, None);
+    for (op, l) in &r.bounds {
+        let v = match l {
+            Lit::Num(n) => lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n)))?,
+            Lit::Date(y, m, d) => date_ord(*y, *m, *d),
+            _ => continue,
+        };
+        match op {
+            CmpOp::Ge => lo = Some((v, true)),
+            CmpOp::Gt => lo = Some((v, false)),
+            CmpOp::Le => hi = Some((v, true)),
+            CmpOp::Lt => hi = Some((v, false)),
+        }
+    }
+    let ((l, l_in), (h, h_in)) = (lo?, hi?);
+    let empty = match l.cmp_to(h) {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Equal => !(l_in && h_in),
+        std::cmp::Ordering::Less => false,
+    };
+    empty.then(|| {
+        Diag::error("E061", tr!("範囲が空です", "The range is empty"))
+            .at(at)
+            .mark(r.span.clone(), tr!("この範囲に入る値は一つもありません", "no value lies in this range"))
+            .note(tr!(
+                "下の端が上の端を超えています。取りうる値が無いと、完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも断ります。",
+                "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
+            ))
+    })
+}
+
+/// E060 for a step or a rounding grid of zero or less.
+fn nonpositive(n: &crate::lex::Num, span: Span, at: String, what: String) -> Diag {
+    Diag::error("E060", tr!("刻み `{}` が正の値ではありません", "The step `{}` is not positive", n.raw))
+        .at(at)
+        .mark(span, tr!("{what}は 0 より大きい値です", "{what} has to be greater than zero"))
+        .note(tr!(
+            "刻みは、実行時の整数が何を 1 と数えるか、どこへ丸めるかを決めます。刻み 0 の丸めは生成コードの中で 0 で割り、実行時に止まっていました。刻み 0 の型は、黙って刻み 1 として読まれていました。",
+            "A step decides what one unit of the runtime integer counts, or where a value is rounded to. A rounding grid of zero made the generated code divide by zero at run time, and a step of zero was quietly read as a step of one."
+        ))
 }
 
 /// The step, when it is written and cannot be read as a value of the type it steps. It fell

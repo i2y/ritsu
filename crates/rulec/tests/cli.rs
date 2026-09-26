@@ -382,6 +382,47 @@ fn 知らないフラグは黙殺せず2で止まる() {
 }
 
 #[test]
+fn 一文字のフラグは何もせずに2で止まる() {
+    // `-o` was taken for a file, after the file before it had been worked on: `gen` wrote into
+    // `generated/` and `fmt` rewrote a file it was asked only to look at, and then both said
+    // they could not read `-o` (§15.156).
+    let dir = std::env::temp_dir().join(format!("rulec-short-flag-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rule = dir.join("r.rule");
+    std::fs::copy(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/決済手数料.rule"), &rule).unwrap();
+    // A file fmt would change, so that a rewrite would show.
+    let before = std::fs::read_to_string(&rule).unwrap().replacen("->", "→", 1);
+    std::fs::write(&rule, &before).unwrap();
+    let err_of = |args: &[&str]| {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().unwrap();
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stderr).into_owned())
+    };
+    let (code, err) = err_of(&["gen", "r.rule", "-o", "out"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("`-o`") && err.contains("--out"), "打ち間違いと、そのつもりだったフラグを言わない: {err}");
+    assert!(!dir.join("generated").exists() && !dir.join("out").exists(), "止める前に書いている");
+    let (code, err) = err_of(&["fmt", "r.rule", "-c"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("--check"), "{err}");
+    assert_eq!(std::fs::read_to_string(&rule).unwrap(), before, "止める前にファイルを書き換えている");
+    for c in subcommands() {
+        let (code, _, err) = run(&[&c, "-x"]);
+        assert_eq!(code, 2, "`rulec {c} -x` が 2 でない");
+        assert!(err.contains("`-x`") && err.contains(&format!("rulec {c} --help")), "{err}");
+    }
+    // `-h` is `--help`, as §12.1 keeps it.
+    let (code, out, _) = run(&["gen", "-h"]);
+    assert_eq!(code, 0);
+    assert!(out.starts_with("rulec gen"), "{out}");
+    // A slip in a long flag is named with the flag it was most likely meant to be.
+    let (code, _, err) = run(&["gen", "tests/corpus/決済手数料.rule", "--outt", "x"]);
+    assert_eq!(code, 2);
+    assert!(err.contains("`--out`"), "{err}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn 値を取るフラグは値なしで止まる() {
     let (code, _, err) = run(&["check", "tests/corpus/送料.rule", "--diff-base"]);
     assert_eq!(code, 2, "{err}");

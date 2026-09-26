@@ -24,7 +24,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E016](#e016) | error | There can be only one `result` |
 | [E017](#e017) | error | A `constraint` is not shaped like this |
 | [E018](#e018) | error | A `constraint` relates two inputs |
-| [E019](#e019) | error | An example breaks a constraint |
+| [E019](#e019) | error | An example is an input the generated code refuses at its door |
 | [E020](#e020) | error | The `elements` declaration is not right |
 | [E021](#e021) | error | The `fold` is not written correctly |
 | [E022](#e022) | error | The answer for a sequence with no elements is not declared |
@@ -63,6 +63,13 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E055](#e055) | error | A `scenario` is not shaped right |
 | [E056](#e056) | error | The `held` line does not fit the declarations |
 | [E057](#e057) | error | The declaration has no type |
+| [E058](#e058) | error | A declaration line cannot be read |
+| [E059](#e059) | error | The expression cannot be read |
+| [E060](#e060) | error | A step is not positive |
+| [E061](#e061) | error | The range is empty |
+| [E062](#e062) | error | There is no such date |
+| [E063](#e063) | error | The cell cannot be read |
+| [E064](#e064) | error | The row does not fit the header |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -77,7 +84,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E112](#e112) | error | The range of a derived value does not contain the values it can reach |
 | [E113](#e113) | error | The condition of a boolean definition is neither of the two allowed forms |
 | [E114](#e114) | error | A value does not sit on the declared step |
-| [E115](#e115) | error | Cannot divide by a variable |
+| [E115](#e115) | error | The divisor is not a positive constant |
 | [E116](#e116) | error | A row's amount is not in the copy it cites, or is under another heading there |
 | [E117](#e117) | error | A share without what a share needs |
 | [E118](#e118) | error | The call is not written correctly |
@@ -149,7 +156,7 @@ Related codes: [E001](#e001), [E009](#e009)
 
 `error` — **The file does not start with a `rule` line**
 
-**When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it.
+**When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it.
 
 **Fix.** Add `rule 規則名(alias) v1` as the first line.
 
@@ -538,11 +545,11 @@ Related codes: [E017](#e017), [W111](#w111)
 
 ## E019
 
-`error` — **An example breaks a constraint**
+`error` — **An example is an input the generated code refuses at its door**
 
-**When.** An example's inputs do not satisfy a `constraint`. The constraint declares that the combination does not happen, the completeness check believed it and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for.
+**When.** An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code.
 
-**Fix.** Correct the example's values — or, if that combination really does happen, the constraint is what is wrong and it goes.
+**Fix.** Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint.
 
 **Smallest reproduction**:
 
@@ -1913,7 +1920,7 @@ Related codes: [E050](#e050), [E051](#e051), [W126](#w126)
 
 `error` — **The declaration has no type**
 
-**When.** A line under `inputs`, `outputs` or `elements` has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared.
+**When.** A line under `inputs`, `outputs` or `elements`, or a `define` or `derive` line, has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared.
 
 **Fix.** Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too.
 
@@ -1937,6 +1944,195 @@ policy unique
 ```
 
 Related codes: [E011](#e011), [E047](#e047), [E012](#e012)
+
+## E058
+
+`error` — **A declaration line cannot be read**
+
+**When.** A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished.
+
+**Fix.** Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30000円`). Every declaration's shape is in docs/reference.md.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  r(r) : bool
+
+derive
+
+table j(j)
+policy unique
+| a     | -> r(r) : bool |
+| true  | false          |
+| false | true           |
+```
+
+Related codes: [E006](#e006), [E057](#e057), [E059](#e059), [E005](#e005)
+
+## E059
+
+`error` — **The expression cannot be read**
+
+**When.** An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100円`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it.
+
+**Fix.** Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100円`: a sign touching the digits makes a negative number.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円]  range >=0円 <=100円
+  b(b) : money[円]  range >=0円 <=100円
+
+outputs
+  o(o) : money[円]  round down(1円)
+
+define s(s) : money[円] = a b
+
+result o = s
+```
+
+Related codes: [E058](#e058), [E118](#e118), [E115](#e115)
+
+## E060
+
+`error` — **A step is not positive**
+
+**When.** The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0円)`) or of a rounding call (`down(x, 0円)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one.
+
+**Fix.** Write a step greater than zero (`round up(1円)`, `rate[step 0.1%]`).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円]  range >=0円 <=100円
+
+outputs
+  o(o) : money[円]  round up(0円)
+
+result o = a
+```
+
+Related codes: [E104](#e104), [E114](#e114), [E106](#e106)
+
+## E061
+
+`error` — **The range is empty**
+
+**When.** No value lies in a `range`: the lower end is past the upper one (`range >=10円 <=0円`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered "complete" over nothing, and the generated code's entry refused every call.
+
+**Fix.** Correct the end that was mistyped (`range >=0円 <=10円`).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円]  range >=10円 <=0円
+
+outputs
+  o(o) : money[円]  round down(1円)
+
+result o = a
+```
+
+Related codes: [E112](#e112), [E103](#e103), [E060](#e060)
+
+## E062
+
+`error` — **There is no such date**
+
+**When.** A literal has the shape of a date (`2026-04-01`) but no such day: the month is outside 1 to 12, or the day is past the end of its month (`2026-02-30`, `2026-01-99`). Such a date used to be read by its shape alone: the checker counted on from the first of the month (January 99th was April 9th), the generated Python stopped at run time, and JavaScript's `Date` would have rolled it over quietly, so the languages disagreed.
+
+**Fix.** Write a day that exists. For the end of a month, write its last day (`2026-02-28`).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d            | -> r(r) : bool |
+| <=2026-02-30 | true           |
+| >2026-02-30  | false          |
+```
+
+Related codes: [E002](#e002), [E103](#e103)
+
+## E063
+
+`error` — **The cell cannot be read**
+
+**When.** A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0円 + false`), a word after a value (`false 0円`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left.
+
+**Fix.** A cell holds one value, `-`, `none`, a comparison, a set of values separated by commas, `not:` with a set, or `starts_with` with a string. Two conditions on one column are two comparisons side by side (`>=1 <10`).
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : money[円]  range >=0円 <=1000円
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a             | -> r(r) : bool |
+| <=100円 + 1円 | true           |
+| >100円        | false          |
+```
+
+Related codes: [E008](#e008), [E010](#e010), [E014](#e014), [E064](#e064)
+
+## E064
+
+`error` — **The row does not fit the header**
+
+**When.** A row of a table, of a sequence, of a scenario or of the examples has a different number of cells from the header's columns, or words follow its last `|` — the closing bar was left off. The last cell of such a row used to be dropped with nothing said, and a row whose cells did not match was read as it stood; the reference evaluator and the generated code then read the row two different ways and answered differently. In the examples, a header without a column for an output, or a row short of an expected value, is E111, and a header without the sequence's column is E025: each names the column first.
+
+**Fix.** Write one cell per column and close the row with `|`. A column that takes any value gets `-`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a     | -> r(r) : bool |
+| true  |
+| false | true           |
+```
+
+Related codes: [E063](#e063), [E008](#e008), [E111](#e111)
 
 ## E101
 
@@ -2359,9 +2555,9 @@ Related codes: [E103](#e103), [E106](#e106)
 
 ## E115
 
-`error` — **Cannot divide by a variable**
+`error` — **The divisor is not a positive constant**
 
-**When.** The right of `÷` is not a constant. A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3).
+**When.** The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction (§2.3).
 
 **Fix.** If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree (§7.1).
 

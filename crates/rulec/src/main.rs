@@ -611,11 +611,22 @@ fn commands() -> Vec<Cmd> {
                 "serve over stdio as an MCP server: every command above as a tool, the documents as resources"
             ),
             params: vec![],
-            flags: vec![],
-            exits: vec![(0, tr!("stdin が閉じた", "stdin was closed"))],
+            flags: vec![flag(
+                "--timeout",
+                Some("<seconds>"),
+                tr!(
+                    "ツールの呼び出し一回を待つ上限の秒数。超えたら止めて、失敗として答える（`rulec test` のように長くかかるものに合わせて大きくできる）",
+                    "the most seconds one tool call may run; past it the call is stopped and answered as failed (raise it for long runs such as `rulec test`)"
+                ),
+            )
+            .default("600")],
+            exits: vec![
+                (0, tr!("stdin が閉じた", "stdin was closed")),
+                (2, tr!("引数の誤り", "bad arguments")),
+            ],
             examples: vec![
                 "rulec mcp".into(),
-                "rulec mcp --lang ja".into(),
+                "rulec mcp --lang ja --timeout 1800".into(),
             ],
             codes: vec![],
         },
@@ -787,7 +798,21 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
     let mut i = 0;
     while i < argv.len() {
         let a = &argv[i];
-        if !a.starts_with("--") {
+        // `-h` is one of the two one-letter spellings §12.1 keeps; `-V` is the other, and only
+        // the top level reads it.
+        if a == "-h" {
+            if let Some(f) = find("--help") {
+                out.got.push((f.name, String::new()));
+            }
+            i += 1;
+            continue;
+        }
+        // Any other word that starts with one `-` is a flag rulec does not have. It used to be
+        // taken for a file, after the files before it had been worked on: `gen x.rule -o out`
+        // wrote into `generated/` and then said it could not read `-o`, and `fmt x.rule -c`
+        // rewrote the file it was asked only to look at (§15.156). A lone `-` is left to be a
+        // path.
+        if !a.starts_with('-') || a == "-" {
             out.pos.push(a.clone());
             i += 1;
             continue;
@@ -797,9 +822,15 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
             None => (a.clone(), None),
         };
         let Some(f) = find(&name) else {
+            let names: Vec<&str> = c.flags.iter().chain(globals.iter()).map(|f| f.name).collect();
+            let hint = match nearest_flag(&name, &names) {
+                Some(n) => tr!("（`{n}` のことですか）", " (did you mean `{n}`?)"),
+                None if !name.starts_with("--") => tr!("（rulec のフラグは長い形だけです）", " (rulec spells every flag out in full)"),
+                None => String::new(),
+            };
             return Err(tr!(
-                "知らないフラグ `{name}` です。`rulec {} --help` を読んでください",
-                "unknown flag `{name}`; run `rulec {} --help`",
+                "知らないフラグ `{name}` です{hint}。`rulec {} --help` を読んでください",
+                "unknown flag `{name}`{hint}; run `rulec {} --help`",
                 c.name
             ));
         };
@@ -858,6 +889,37 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
         i += 1;
     }
     Ok(out)
+}
+
+/// The flag an unknown one was most likely meant to be. `-o` is taken as the start of a long
+/// name (`--out`); `--outt` as a slip of at most two letters. Only an answer that is the one
+/// best is given — two equally near would be a guess.
+fn nearest_flag<'a>(typed: &str, names: &[&'a str]) -> Option<&'a str> {
+    if !typed.starts_with("--") {
+        let head = typed.trim_start_matches('-');
+        let hits: Vec<&str> = names.iter().copied().filter(|n| n.trim_start_matches('-').starts_with(head)).collect();
+        return (hits.len() == 1).then(|| hits[0]);
+    }
+    fn distance(a: &str, b: &str) -> usize {
+        let b: Vec<char> = b.chars().collect();
+        let mut row: Vec<usize> = (0..=b.len()).collect();
+        for (i, ca) in a.chars().enumerate() {
+            let mut prev = row[0];
+            row[0] = i + 1;
+            for (j, cb) in b.iter().enumerate() {
+                let here = row[j + 1];
+                row[j + 1] = (prev + usize::from(ca != *cb)).min(row[j] + 1).min(here + 1);
+                prev = here;
+            }
+        }
+        row[b.len()]
+    }
+    let mut best: Vec<(usize, &str)> = names.iter().map(|n| (distance(typed, n), *n)).filter(|(d, _)| *d <= 2).collect();
+    best.sort();
+    match best.as_slice() {
+        [(d, n), rest @ ..] if rest.first().is_none_or(|(e, _)| e > d) => Some(n),
+        _ => None,
+    }
 }
 
 /// Stop before doing anything, and say which command's help explains it.
@@ -1109,7 +1171,16 @@ fn main() -> ExitCode {
             }
         }
         "vectors" => vectors(&files, a.get("--out")),
-        "mcp" => mcp::serve(),
+        "mcp" => {
+            let t = a.get("--timeout").unwrap_or("600");
+            match t.parse::<u64>() {
+                Ok(n) if n > 0 => mcp::serve(std::time::Duration::from_secs(n)),
+                _ => refuse(tr!(
+                    "`--timeout {t}` は秒数ではありません。1 以上の整数で書いてください",
+                    "`--timeout {t}` is not a number of seconds; write a whole number of 1 or more"
+                )),
+            }
+        }
         "import" => {
             let kind = files.first().map(|s| s.as_str()).unwrap_or("");
             if !matches!(kind, "csv" | "xlsx") || files.len() != 2 {
