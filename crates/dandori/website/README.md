@@ -36,6 +36,9 @@ other by hand.
   pages that say how many there are say the right number.
 - `tools/flowlexer.py`'s `KEYWORDS` are `src/syntax.rs`'s, word for word.
 
+The agent skill (`skills/dandori`) carries copies of the English pages. After changing one, run
+`skills/sync.sh`; `tests/skill.rs` fails until the copies match.
+
 ## Build and preview
 
 ```console

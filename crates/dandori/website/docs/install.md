@@ -54,6 +54,20 @@ examples/review/temporal/review.flow: ok
 
 `--lang ja` (or `DANDORI_LANG=ja`) prints the checker's messages in Japanese.
 
+## The agent skill
+
+`skills/dandori` in the repository is an [Agent Skill](https://agentskills.io) for AI coding agents
+such as Claude Code: when to use dandori, the loop from a first draft to a build, the language on
+one page, what to ask a person, and the fix for each diagnostic. The pages of this site that it
+refers to come with it.
+
+```console
+$ cp -r skills/dandori ~/.claude/skills/                  # every project on this machine
+$ cp -r skills/dandori <your-project>/.claude/skills/     # one project, committed with it
+```
+
+The skill runs `dandori` from the PATH, and `rulec` for a workflow that uses rules.
+
 ## What the output needs
 
 The code a build writes imports each platform's own SDK, and nothing of dandori's:

@@ -93,6 +93,13 @@ it with `brew install i2y/tap/rulec`, or take a binary from its
 A workflow without rules is checked and built without rulec, but its branches can only match what
 its tasks answer, and it has no cases, since a case follows a rule's state machine.
 
+## For AI agents
+
+[skills/dandori](skills/dandori) is an [Agent Skill](https://agentskills.io) for using dandori: the
+loop from a first draft to a build, the language on one page, what to ask a person, and the fix for
+each diagnostic, with the reference pages it needs. Copy it into `~/.claude/skills/`, or into a
+project's `.claude/skills/`; [skills/README.md](skills/README.md) says more.
+
 ## Commands
 
 ```

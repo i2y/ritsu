@@ -1,8 +1,9 @@
-//! The README and the site (website/docs, website/docs-ja) show what the tool does: every
-//! diagnostic on them is word for word in a golden file of tests/fixtures, which the fixtures
-//! test holds to the checker; every line of `.flow` on them is a line of an example or a test
-//! flow; the codes pages list every code the checker has, and no other; and the highlighter of
-//! the site knows the keywords of the language as src/syntax.rs has them.
+//! The README, the site (website/docs, website/docs-ja) and the agent skill (skills/dandori) show
+//! what the tool does: every diagnostic on them is word for word in a golden file of
+//! tests/fixtures, which the fixtures test holds to the checker; every line of `.flow` on them is
+//! a line of an example or a test flow; the codes pages list every code the checker has, and no
+//! other; and the highlighter of the site knows the keywords of the language as src/syntax.rs
+//! has them.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -36,6 +37,7 @@ fn pages() -> Vec<(String, Vec<PathBuf>)> {
         ("README.md".into(), vec![root().join("README.md")]),
         ("website/docs".into(), files(&root().join("website/docs"), "md")),
         ("website/docs-ja".into(), files(&root().join("website/docs-ja"), "md")),
+        ("skills/dandori".into(), files(&root().join("skills/dandori"), "md")),
     ]
 }
 

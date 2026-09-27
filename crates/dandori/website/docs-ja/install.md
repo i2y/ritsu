@@ -43,6 +43,17 @@ examples/review/temporal/review.flow: ok
 
 `--lang ja`（または `DANDORI_LANG=ja`）を付けると、検査のメッセージが日本語になります。
 
+## AI エージェント向けのスキル
+
+リポジトリの `skills/dandori` は、Claude Code のような AI コーディングエージェント向けの [Agent Skill](https://agentskills.io) です。dandori を使う場面、下書きからビルドまでの手順、言語の要点、人に聞くべきこと、診断ごとの直し方をまとめてあり、参照するサイトのページも一緒に入っています。
+
+```console
+$ cp -r skills/dandori ~/.claude/skills/                  # この機械のすべてのプロジェクトで使う
+$ cp -r skills/dandori <your-project>/.claude/skills/     # 一つのプロジェクトで使い、一緒にコミットする
+```
+
+スキルは PATH にある `dandori` を動かします。規則を使うワークフローでは `rulec` も動かします。
+
 ## 生成したコードを動かすのに要るもの
 
 生成したコードが使うのは各プラットフォームの SDK だけで、dandori のライブラリは要りません。
