@@ -23,7 +23,7 @@ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|
 | `--scenario <file.json>` | the scenario `run` plays |
 | `--format json` | the diagnostics of `check` as JSON, for tools |
 | `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, else English |
-| `DANDORI_RULEC` | the rulec binary; else `rulec` on the PATH |
+| `DANDORI_RULEC` | the rulec binary, run only for a workflow that uses rules; else `rulec` on the PATH |
 
 ## Exit codes
 

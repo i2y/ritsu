@@ -23,7 +23,7 @@ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|
 | `--scenario <file.json>` | `run` が動かすシナリオ |
 | `--format json` | `check` の診断を、ツール向けの JSON で出す |
 | `--lang ja` か `--lang en` | メッセージの言語。無ければ `DANDORI_LANG`、それも無ければ英語 |
-| `DANDORI_RULEC` | rulec の実行ファイル。無ければ PATH の `rulec` |
+| `DANDORI_RULEC` | rulec の実行ファイル。規則を使うワークフローのときだけ動かす。無ければ PATH の `rulec` |
 
 ## 終了コード
 

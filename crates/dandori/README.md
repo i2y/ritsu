@@ -82,13 +82,16 @@ one too. [Write a workflow](https://i2y.github.io/dandori/tour/) reads the whole
 $ git clone https://github.com/i2y/dandori
 $ cd dandori
 $ cargo install --path .
-$ brew install i2y/tap/rulec
 ```
 
-dandori builds with a recent stable Rust, and its one dependency is serde_json. It reads the rules
-through rulec, found through `DANDORI_RULEC`, else on the PATH; rulec's
-[releases](https://github.com/i2y/rulec/releases) have binaries too. dandori is tested with rulec
-0.20.0 and 0.21.1.
+dandori builds with a recent stable Rust, and its one dependency is serde_json.
+
+rulec is needed only for a workflow that uses rules (`use rule`): dandori reads them through rulec,
+found through `DANDORI_RULEC`, else on the PATH, and `rulec gen` writes the code of each rule. Install
+it with `brew install i2y/tap/rulec`, or take a binary from its
+[releases](https://github.com/i2y/rulec/releases); dandori is tested with rulec 0.20.0 and 0.21.1.
+A workflow without rules is checked and built without rulec, but its branches can only match what
+its tasks answer, and it has no cases, since a case follows a rule's state machine.
 
 ## Commands
 

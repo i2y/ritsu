@@ -1,6 +1,6 @@
 # インストール
 
-dandori は実行ファイル一つです。規則を rulec で読むので、rulec も一緒に入れます。
+dandori は実行ファイル一つです。rulec が要るのは、ワークフローが規則を使う（`use rule` がある）ときだけです。規則を使わないワークフローなら、検査もビルドもシナリオの実行も、rulec が無くてもできます。生成したコードにも rulec のものは入りません。
 
 ## dandori
 
@@ -14,13 +14,15 @@ $ cargo install --path .
 
 ## rulec
 
-規則を読むのは rulec です。dandori は `DANDORI_RULEC` で指定した rulec を動かし、指定が無ければ PATH から探します。macOS か Linux で Homebrew を使っているなら、次の一行で入ります。
+規則を使うワークフローでは、dandori が rulec を動かして規則を読みます。生成したコードが呼ぶ規則のコードも、`rulec gen` が書き出します。dandori は `DANDORI_RULEC` で指定した rulec を動かし、指定が無ければ PATH から探します。macOS か Linux で Homebrew を使っているなら、次の一行で入ります。
 
 ```console
 $ brew install i2y/tap/rulec
 ```
 
 rulec の[リリース](https://github.com/i2y/rulec/releases)から実行ファイルをダウンロードしてもかまいません。dandori は rulec 0.20.0 と 0.21.1 でテストしています。
+
+規則を使わない場合、できないことが二つあります。一つは、金額や日付を比べて分岐することです。`.flow` には比較も計算も無いので、分岐はタスクの答え（列挙、bool、無いことがある値）の `match` だけになります。もう一つは案件です。案件は規則のステートマシンに従うので、規則が無ければ書けず、案件にかかわる検査（E013、E020〜E022、E030、W101〜W103）も働きません。審査の例（`examples/review`）は規則を使わずに書いてあり、申し込みに点を付けるタスクが `approve`、`reject`、`hold` のどれかを答え、フローはそれで分かれます。
 
 ## 動くか確かめる
 
@@ -30,6 +32,13 @@ rulec の[リリース](https://github.com/i2y/rulec/releases)から実行ファ
 $ dandori check examples/hotel/temporal/hotel.flow
 examples/hotel/temporal/hotel.flow: ok
 $ dandori build examples/hotel/temporal/hotel.flow --target temporal --out out/hotel
+```
+
+ホテルの予約の例は規則を使います。rulec を入れていなければ、代わりに審査の例を検査してみてください。
+
+```console
+$ dandori check examples/review/temporal/review.flow
+examples/review/temporal/review.flow: ok
 ```
 
 `--lang ja`（または `DANDORI_LANG=ja`）を付けると、検査のメッセージが日本語になります。
