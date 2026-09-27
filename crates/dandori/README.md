@@ -220,6 +220,7 @@ costs what is looked at; the examples keep cut-down copies ([tools/specs/trim.py
 | `connect <api> "<Service>/<Method>"` ([API descriptions](#api-descriptions)) | HTTP Task, Connect's JSON | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
 | `agent "<instructions>"` and `model "<model>"` | HTTP Task to OpenAI's Responses API | an activity dandori writes, with OpenAI's Agents SDK | a step dandori writes, with the Agents SDK | the same, with the Agents SDK | the same, with the Agents SDK for Python |
+| `agent "<instructions>"`, `model "<model>"` and `url "<server>"` | HTTP Task to that server's Open Responses API | an activity dandori writes, sending the same request over HTTP | a step dandori writes, the same | the same | the same, with urllib |
 | `agent claude "<instructions>"` and `model "<model>"` | HTTP Task to Claude's Messages API | an activity dandori writes, with Anthropic's SDK | a step dandori writes, with Anthropic's SDK | the same, with Anthropic's SDK | the same, with Anthropic's SDK for Python |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
 | `flow "<path>"` ([Child flows](#child-flows)) | nested execution, with `state machine` | child workflow `<name>_v<n>` on the child's task queue | invoke, with `durable function` | a Workflow from the child's WorkflowTemplate | a function you write |
@@ -265,13 +266,14 @@ variable's parameter.
 
 An `agent` task gives a model its arguments and takes back a value of the task's type. The
 model reads and writes; the rules decide. [examples/inquiry](examples/inquiry/temporal/inquiry.flow)
-reads a customer's message with an OpenAI agent, routes it with a rulec rule, and drafts the
-reply with a Claude one:
+reads a customer's message with a model the company runs on its own Ollama, routes it with a
+rulec rule, and drafts the reply with Claude:
 
 ```
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
-  model "gpt-5.4-mini"
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
@@ -297,6 +299,15 @@ flow
   version for AWS). The code dandori writes for the other targets runs it with
   OpenAI's Agents SDK through the `Transport`, which reads `OPENAI_API_KEY`, or takes a run
   configuration of your own (another model provider, for one).
+- An agent that is not Claude's speaks Open Responses: the open specification of OpenAI's
+  Responses API, which OpenAI, Hugging Face, OpenRouter, Ollama, vLLM, LM Studio and Vercel
+  took up in January 2026. Without `url`, the agent's call goes to OpenAI. With
+  `url "<base>"`, it goes to `<base>/responses` on that server — Ollama, vLLM, LM Studio,
+  OpenRouter, Hugging Face — as the same request Step Functions sends, which the code dandori
+  writes sends over HTTP (`fetch`, urllib) with no SDK, since an SDK may send what the
+  specification does not have. The server's credentials come from the `Transport`'s `headers`,
+  as an HTTP task's do. Its limits on a schema are its own, so the checker holds the answer
+  to OpenAI's only when the call goes to OpenAI; the answer's check tells the rest.
 - A Claude agent gets the instructions as the system prompt, the arguments' JSON text as the
   user's message, and the schema as `output_config.format`, with `max_tokens` 16000 (the
   Messages API wants one) — from an HTTP Task on Step Functions, with the key in the connection
@@ -309,8 +320,11 @@ flow
   always safe. It declares no errors: a refusal, or a call that fails, is `failure`.
 - The checker refuses an answer the schema cannot say (`json`, a record that contains itself
   through others) or one larger than the provider takes (E007): for Claude, more than 16 values
-  that may be absent. Step Functions refuses an agent without `connection`, and an HTTP Task
-  whose `timeout` is over the 60 seconds it gives a request (E050).
+  that may be absent. Step Functions refuses an agent without `connection`, an HTTP Task
+  whose `timeout` is over the 60 seconds it gives a request, and one that is not sent over
+  HTTPS: the HTTP Task calls a server under a public name with a publicly trusted certificate,
+  a private one too (E050). A connection always holds a key, so give it one even for a server
+  that wants none.
 
 ## Examples
 
@@ -486,7 +500,11 @@ the values. The agent call of the default `Transport` itself, in TypeScript and 
 with OpenAI's Agents SDK and a scripted model in place of OpenAI's, and with Anthropic's SDK
 against a stand-in of the Messages API on this machine (`tools/agents`): the model must be
 asked what Step Functions asks for the same call, and an error status must fail the call
-without a retry. Nothing goes to OpenAI or Anthropic.
+without a retry. An agent on another server of Open Responses goes to a stand-in of that server
+on this machine, which must get the very request Step Functions sends. Nothing goes to OpenAI or
+Anthropic. When Ollama runs on this machine, one call of each such agent also goes to it for
+real, from both languages, and each answer must fit the task's type (`DANDORI_OLLAMA` names
+where it is, `DANDORI_OLLAMA_MODEL` the model; else the smallest one it has).
 
 The rest of the default `Transport` — `fetch` and the AWS SDK in TypeScript, the standard
 library and boto3 in Python — sends every HTTP, Lambda and AWS call of the scenarios to

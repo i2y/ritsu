@@ -497,6 +497,7 @@ impl<'a> Lowerer<'a> {
                     },
                     instructions: instructions.clone(),
                     model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default(),
+                    url: t.url.as_ref().map(|x| x.0.clone()),
                 },
             });
             self.agent(t, result.as_ref(), result_range);
@@ -773,6 +774,14 @@ impl<'a> Lowerer<'a> {
     /// answer whose type the provider's structured outputs can hold the model to, and nothing that
     /// moves a case.
     fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>, rg: Option<Range>) {
+        if let (Some((_, usp)), false) = (&t.url, matches!(t.binding, Some((syntax::Binding::Agent { .. }, _)))) {
+            self.push(e(
+                "E007",
+                *usp,
+                "`url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)",
+                "`url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書きます）",
+            ));
+        }
         let (provider, bsp) = match (&t.binding, &t.model) {
             (Some((syntax::Binding::Agent { provider, .. }, bsp)), _) => (provider.clone(), *bsp),
             (_, Some((_, msp))) => {
@@ -795,10 +804,23 @@ impl<'a> Lowerer<'a> {
                 return;
             }
         };
-        let (outputs_en, outputs_ja) = match provider {
+        if let Some((u, usp)) = &t.url {
+            if provider == Provider::Claude {
+                self.push(e(
+                    "E007",
+                    *usp,
+                    "`url` names a server of Open Responses (OpenAI's Responses API, as others serve it); a Claude agent is called on Anthropic's Messages API, which is not among them",
+                    "`url` は Open Responses（OpenAI の Responses API を、ほかのサーバーも同じ形で出すもの）のサーバーを書くところです。Claude のエージェントは Anthropic の Messages API で呼び、それは Open Responses ではありません",
+                ));
+            } else if !(u.starts_with("https://") || u.starts_with("http://")) {
+                self.push(e("E007", *usp, format!("`{u}` is not an http:// or https:// URL"), format!("`{u}` は http:// や https:// の URL ではありません")));
+            }
+        }
+        let (outputs_en, outputs_ja) = match (provider, &t.url) {
             // with a space before the Japanese that follows an English word
-            Provider::OpenAi => ("OpenAI's Structured Outputs", "OpenAI の Structured Outputs "),
-            Provider::Claude => ("Claude's structured outputs", "Claude の構造化出力"),
+            (Provider::OpenAi, None) => ("OpenAI's Structured Outputs", "OpenAI の Structured Outputs "),
+            (Provider::OpenAi, Some(_)) => ("the structured outputs of Open Responses", "Open Responses の構造化出力"),
+            (Provider::Claude, _) => ("Claude's structured outputs", "Claude の構造化出力"),
         };
         if t.model.is_none() {
             let example = match provider {
@@ -841,6 +863,8 @@ impl<'a> Lowerer<'a> {
         };
         let mut over: Vec<(String, String)> = Vec::new();
         match provider {
+            // another server's limits are its own, and unknown here: its answer's check tells
+            Provider::OpenAi if t.url.is_some() => {}
             Provider::OpenAi => {
                 let (depth, props, values) = crate::render::schema_size(&schema);
                 if depth > 10 {

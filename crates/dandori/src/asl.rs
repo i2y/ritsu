@@ -78,10 +78,11 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`state machine` のどれかが要ります", t.name),
             )),
             Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
-            Some(Via::Agent { provider, .. }) if t.connection.is_none() => {
-                let (whose_en, whose_ja) = match provider {
-                    Provider::OpenAi => ("the OpenAI API key", "OpenAI の API キー"),
-                    Provider::Claude => ("the Claude API key (as the header x-api-key)", "Claude の API キー（ヘッダ x-api-key）"),
+            Some(Via::Agent { provider, url, .. }) if t.connection.is_none() => {
+                let (whose_en, whose_ja) = match (provider, url) {
+                    (Provider::OpenAi, None) => ("the OpenAI API key", "OpenAI の API キー"),
+                    (Provider::OpenAi, Some(_)) => ("the key of the server (an EventBridge connection has one, even for a server that wants none)", "サーバーの鍵（EventBridge の接続はいつも鍵を持つので、鍵の要らないサーバーでも何かを入れる）"),
+                    (Provider::Claude, _) => ("the Claude API key (as the header x-api-key)", "Claude の API キー（ヘッダ x-api-key）"),
                 };
                 errs.push(Diag::error(
                     "E050",
@@ -100,6 +101,21 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 format!("Step Functions は入れ子の実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で受けてください", t.name),
             )),
             _ => {}
+        }
+        // the HTTP Task calls HTTPS APIs only, private ones too
+        let endpoint = match t.via(Platform::StepFunctions) {
+            Some(Via::Http { url, .. }) => Some(url.to_string()),
+            Some(Via::Agent { provider, url, .. }) => Some(render::agent_url(provider, url)),
+            _ => None,
+        };
+        if let Some(u) = endpoint.filter(|u| !u.starts_with("https://")) {
+            errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `{}` sends to `{u}`", t.name),
+                format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送り先は `{u}` です", t.name),
+            ));
         }
         if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. })) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {
             errs.push(Diag::error(
@@ -669,7 +685,7 @@ impl<'a> Gen<'a> {
                         };
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), result, task.timeout, retry)
                     }
-                    Via::Agent { provider, instructions, model } => {
+                    Via::Agent { provider, instructions, model, url } => {
                         // the input is the arguments' JSON text, in the order of the parameters
                         let input: Vec<String> = task
                             .params
@@ -680,7 +696,7 @@ impl<'a> Gen<'a> {
                         let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
                         let body = render::agent_request(provider, model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
                         let mut w = Map::new();
-                        w.insert("ApiEndpoint".into(), json!(render::agent_url(provider)));
+                        w.insert("ApiEndpoint".into(), json!(render::agent_url(provider, url)));
                         w.insert("Method".into(), json!("POST"));
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
                         if let Some(h) = render::agent_headers(provider) {

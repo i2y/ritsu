@@ -9,7 +9,7 @@
 
 use dandori::diag::Lang;
 use dandori::interp::CallInfo;
-use dandori::model::{Callee, Model, Platform, Provider, Via, TK};
+use dandori::model::{Callee, Model, Platform, Via, TK};
 use dandori::render::View;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -1261,7 +1261,6 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
     if !python.exists() {
         eprintln!("SKIP: tools/agents/.venv is missing; make it as tools/agents/requirements.txt says");
     }
-    let agent_url = |u: &Value| [Provider::OpenAi, Provider::Claude].iter().any(|p| *u == json!(dandori::render::agent_url(*p)));
     for f in runnable() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
@@ -1273,15 +1272,35 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
         let mut expected = Vec::new();
         let mut refused: Vec<String> = Vec::new();
         for sc in dandori::scenarios::generate(&m) {
+            // every call, in order, as each view has it: the Transport's, and Step Functions' HTTP Task
             let calls = |view: View| -> Vec<(Value, Value)> {
                 let r = dandori::interp::run(&m, &sc, view).unwrap();
-                r["steps"].as_array().unwrap().iter().filter(|s| s["call"].get("agent").is_some() || agent_url(&s["call"]["url"])).map(|s| (s["call"].clone(), s["answer"].clone())).collect()
+                r["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| (s["call"].clone(), s["answer"].clone())).collect()
             };
             for ((call, answer), (sent, _)) in calls(View::Temporal).into_iter().zip(calls(View::Asl)) {
+                if call.get("agent").is_none() {
+                    continue;
+                }
                 let name = call["agent"].as_str().unwrap().to_string();
                 let first = !refused.contains(&name);
                 if first {
                     refused.push(name);
+                }
+                if let Some(url) = call["url"].as_str() {
+                    // a server of Open Responses gets what Step Functions sends it, once
+                    let path = format!("{}/responses", url.split("://").nth(1).and_then(|r| r.find('/').map(|i| &r[i..])).unwrap_or("").trim_end_matches('/'));
+                    let asked = json!([{ "method": "POST", "path": path, "body": sent["body"] }]);
+                    if let Some(ok) = answer.get("ok") {
+                        cases.push(json!({ "call": call, "text": json!({ "answer": ok }).to_string() }));
+                        expected.push(json!({ "answer": { "answer": ok }, "asked": asked }));
+                    }
+                    if first {
+                        cases.push(json!({ "call": call, "refusal": "I can't help with that." }));
+                        expected.push(json!({ "error": "AgentStopped", "asked": asked }));
+                        cases.push(json!({ "call": call, "status": 500 }));
+                        expected.push(json!({ "error": "AgentHttpError", "asked": asked }));
+                    }
+                    continue;
                 }
                 if call["provider"] == json!("claude") {
                     // the one request the stand-in of the Messages API must get
@@ -1370,6 +1389,100 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             eprintln!("{}: the default Transport in Python asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
         }
     }
+}
+
+/// The agents on a server of Open Responses (`url`), sent for real to Ollama on this machine by
+/// the default Transport of both languages: for each such agent, the arguments of the first call
+/// the scenarios answer, with the model swapped for one Ollama has. Each answer must fit the
+/// task's type. Skipped when no Ollama answers at DANDORI_OLLAMA (http://127.0.0.1:11434) or it
+/// has no model; DANDORI_OLLAMA_MODEL picks the model, else the smallest there is.
+#[test]
+fn open_responses_agents_answer_on_ollama() {
+    need_rulec!();
+    let base = std::env::var("DANDORI_OLLAMA").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
+    let get = |path: &str| -> Option<Value> {
+        let out = Command::new("curl").args(["-s", "-m", "3", &format!("{base}{path}")]).output().ok()?;
+        serde_json::from_slice(&out.stdout).ok()
+    };
+    let (Some(version), Some(tags)) = (get("/api/version"), get("/api/tags")) else {
+        eprintln!("SKIP: no Ollama answers at {base}; the agents on a server of Open Responses are not sent to a real one");
+        return;
+    };
+    let mut models: Vec<(u64, String)> = tags["models"].as_array().into_iter().flatten().filter_map(|m| Some((m["size"].as_u64().unwrap_or(u64::MAX), m["name"].as_str()?.to_string()))).collect();
+    models.sort();
+    let model = match std::env::var("DANDORI_OLLAMA_MODEL").ok().or(models.first().map(|m| m.1.clone())) {
+        Some(m) => m,
+        None => {
+            eprintln!("SKIP: Ollama at {base} has no model; pull one, or name one with DANDORI_OLLAMA_MODEL");
+            return;
+        }
+    };
+    let node = root().join("tools/agents/node_modules/@openai/agents").exists();
+    let python = root().join("tools/agents/.venv/bin/python");
+    let mut sent = 0;
+    for f in runnable() {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        // the first answered call of each agent on a server of Open Responses, sent to Ollama
+        let mut cases = Vec::new();
+        let mut tasks = Vec::new();
+        for sc in dandori::scenarios::generate(&m) {
+            let r = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
+            for s in r["steps"].as_array().unwrap() {
+                let (call, answer) = (&s["call"], &s["answer"]);
+                let Some(name) = call["agent"].as_str() else { continue };
+                if call.get("url").is_none() || answer.get("ok").is_none() || tasks.iter().any(|t: &&dandori::model::TaskDef| t.name == name) {
+                    continue;
+                }
+                let mut live = call.clone();
+                live["url"] = json!(format!("{base}/v1"));
+                live["model"] = json!(model);
+                cases.push(json!({ "call": live, "live": true }));
+                tasks.push(m.tasks.iter().find(|t| t.name == name).unwrap());
+            }
+        }
+        if cases.is_empty() {
+            continue;
+        }
+        let dir = scratch(&format!("ollama-{}", key(&f)));
+        let cases_file = dir.join("cases.json");
+        std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
+        let check = |lang: &str, results: &Path| {
+            let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(results).unwrap()).unwrap();
+            for (g, t) in got.iter().zip(&tasks) {
+                let answer = &g["answer"]["answer"];
+                assert!(
+                    g.get("error").is_none() && dandori::render::value_fits(&m, answer, t.result.as_ref().unwrap(), t.result_range),
+                    "{}: `{}` on Ollama ({model}), from the default Transport in {lang}, answered what its type does not take: {}",
+                    rel(&f),
+                    t.name,
+                    serde_json::to_string(g).unwrap()
+                );
+            }
+        };
+        if node {
+            let files = dandori::temporal::build(&m).unwrap();
+            let io_file = dir.join("io.ts");
+            std::fs::write(&io_file, &files.iter().find(|(n, _)| n.ends_with("/io.ts")).unwrap().1).unwrap();
+            let results = dir.join("results-ts.json");
+            let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: tools/agents/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("TypeScript", &results);
+            sent += cases.len();
+        }
+        if python.exists() {
+            let files = dandori::temporal_py::build(&m).unwrap();
+            let io_file = dir.join("io.py");
+            std::fs::write(&io_file, &files.iter().find(|(n, _)| n.ends_with("/io.py")).unwrap().1).unwrap();
+            let results = dir.join("results-py.json");
+            let out = Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: tools/agents/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("Python", &results);
+            sent += cases.len();
+        }
+        eprintln!("{}: {} agent(s) on a server of Open Responses answered from Ollama {} ({model}) as their types say, from the default Transport of TypeScript and of Python", rel(&f), cases.len(), version["version"].as_str().unwrap_or("?"));
+    }
+    assert!(sent > 0, "no agent on a server of Open Responses was sent to Ollama");
 }
 
 /// rules.py of the Python builds — the activities for Temporal and the functions for

@@ -106,7 +106,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             };
             json!({ "aws": format!("{service}:{action}"), "args": a })
         }
-        Some(Via::Agent { provider, instructions, model }) => {
+        Some(Via::Agent { provider, instructions, model, url }) => {
             let input = agent_input(task, args);
             let schema = agent_schema(m, task).unwrap_or(Value::Null);
             match view {
@@ -114,14 +114,20 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                 View::Asl => {
                     let mut w = Map::new();
                     w.insert("http".into(), json!("POST"));
-                    w.insert("url".into(), json!(agent_url(provider)));
+                    w.insert("url".into(), json!(agent_url(provider, url)));
                     if let Some(h) = agent_headers(provider) {
                         w.insert("headers".into(), h);
                     }
                     w.insert("body".into(), agent_request(provider, model, instructions, json!(Value::Object(input).to_string()), schema));
                     Value::Object(w)
                 }
-                _ => json!({ "agent": task.name, "provider": provider.name(), "model": model, "instructions": instructions, "input": input, "schema": schema }),
+                _ => {
+                    let mut c = json!({ "agent": task.name, "provider": provider.name(), "model": model, "instructions": instructions, "input": input, "schema": schema });
+                    if let Some(u) = url {
+                        c["url"] = json!(u);
+                    }
+                    c
+                }
             }
         }
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
@@ -144,11 +150,13 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
     }
 }
 
-/// Where Step Functions sends an agent's call: OpenAI's Responses API, or Claude's Messages API.
-pub fn agent_url(p: Provider) -> &'static str {
-    match p {
-        Provider::OpenAi => "https://api.openai.com/v1/responses",
-        Provider::Claude => "https://api.anthropic.com/v1/messages",
+/// Where every target sends an agent's call over HTTP: OpenAI's Responses API, or that of the
+/// server `url` names (Open Responses, whose path is the same), or Claude's Messages API.
+pub fn agent_url(p: Provider, url: Option<&str>) -> String {
+    match (p, url) {
+        (Provider::OpenAi, Some(u)) => format!("{}/responses", u.trim_end_matches('/')),
+        (Provider::OpenAi, None) => "https://api.openai.com/v1/responses".into(),
+        (Provider::Claude, _) => "https://api.anthropic.com/v1/messages".into(),
     }
 }
 

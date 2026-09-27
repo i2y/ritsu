@@ -129,8 +129,12 @@ function wire(resource, args) {
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const CLAUDE_URL = "https://api.anthropic.com/v1/messages";
 
+// an agent's call: to OpenAI's Responses API or Claude's Messages API, or to another server of
+// Open Responses, whose request is the Responses API's (a body with text.format)
 function isAgent(resource, args) {
-  return resource === "arn:aws:states:::http:invoke" && (args.ApiEndpoint === OPENAI_URL || args.ApiEndpoint === CLAUDE_URL);
+  if (resource !== "arn:aws:states:::http:invoke") return false;
+  const openResponses = String(args.ApiEndpoint).endsWith("/responses") && args.RequestBody?.text?.format?.type === "json_schema";
+  return args.ApiEndpoint === OPENAI_URL || args.ApiEndpoint === CLAUDE_URL || openResponses;
 }
 
 // the Responses API's answer: a reasoning item, then the message, whose content is `content`

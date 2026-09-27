@@ -1,5 +1,5 @@
 workflow inquiry v1
-description "An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (OpenAI's reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, which run on OpenAI's and Anthropic's SDKs with the keys the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
+description "An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (a model the company runs itself reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
 
 use rule routing from "../rules/inquiry_routing.rule"
   local
@@ -24,10 +24,12 @@ outputs
   ticket_id : string
   desk      : routing.desk
 
-# The model reads the text; the schema of Reading holds its answer to one of the rule's kinds.
+# A model on the company's own Ollama reads the text, through Open Responses; the schema of
+# Reading holds its answer to one of the rule's kinds.
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, and sum up its point in one sentence. If no order number is written, give null."
-  model "gpt-5.4-mini"
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds
 

@@ -609,12 +609,12 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     a.push_str(&format!("    {name}: async (args) => io.value(await {call}, {}, fail) as {},\n", braces(&names), task_result(m, task)));
                 }
             }
-            Some(Via::Agent { provider, instructions, model }) => {
+            Some(Via::Agent { provider, instructions, model, url }) => {
                 let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
                 // Claude may answer an enum's value in another case: it is taken as the value
                 let fold = provider == Provider::Claude && !render::enums_of(m, task.result.as_ref().unwrap_or(&Ty::Json)).is_empty();
                 let i = if fold { "          " } else { "        " };
-                let call = [
+                let mut call = vec![
                     "await transport.agent({".to_string(),
                     format!("  agent: {},", q(&task.name)),
                     format!("  provider: {},", q(provider.name())),
@@ -622,8 +622,12 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     format!("  instructions: {},", q(instructions)),
                     format!("  input: {{ {} }},", input.join(", ")),
                     format!("  schema: SCHEMAS[{}],", q(&task.name)),
-                    "}),".into(),
-                ]
+                ];
+                if let Some(u) = url {
+                    call.push(format!("  url: {},", q(u)));
+                }
+                call.push("}),".into());
+                let call = call
                 .iter()
                 .map(|l| format!("{i}{l}\n"))
                 .collect::<String>();
@@ -849,6 +853,8 @@ export interface AgentCall {
   input: Record<string, unknown>;
   /** the answer's JSON Schema, { "answer": … }, in the strict form of OpenAI's Structured Outputs, which Claude's take too */
   schema: Record<string, unknown>;
+  /** an OpenAI agent's server of Open Responses, other than OpenAI's: its base URL, to which `/responses` is added */
+  url?: string;
 }
 
 export interface Transport {
@@ -865,7 +871,17 @@ export interface Transport {
 /** The most a Claude agent's answer may take, thinking included, as every target asks for. */
 export const CLAUDE_MAX_TOKENS = {{CLAUDE_MAX_TOKENS}};
 
-/** A Claude agent that did not end its turn with an answer: it refused, or stopped at the limit. */
+/** An agent's server that answered with an error status. */
+export class AgentHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, body: unknown) {
+    super(`the agent's server answered ${status}: ${typeof body === "string" ? body : JSON.stringify(body)}`);
+    this.status = status;
+    this.name = "AgentHttpError";
+  }
+}
+
+/** An agent that did not end with an answer: it refused, or stopped at the limit. */
 export class AgentStopped extends Error {
   readonly reason: string;
   constructor(reason: string) {
@@ -876,7 +892,7 @@ export class AgentStopped extends Error {
 }
 
 export interface Options {
-  /** Headers to add to an HTTP request, such as the credentials the other side wants. */
+  /** Headers to add to an HTTP request, such as the credentials the other side wants (for a server of Open Responses too). */
   headers?: (url: string) => Record<string, string> | Promise<Record<string, string>>;
   /** The configuration of the AWS SDK clients, such as the region. */
   aws?: Record<string, unknown>;
@@ -923,6 +939,30 @@ function encode(o: Record<string, unknown>, prefix = ""): string {
 }
 
 export function transport(options: Options = {}): Transport {
+  async function http(req: HttpRequest): Promise<{ status: number; body: unknown }> {
+    let url = req.url;
+    if (req.query) url += (url.includes("?") ? "&" : "?") + encode(req.query);
+    const headers: Record<string, string> = { ...(req.headers ?? {}), ...(options.headers ? await options.headers(req.url) : {}) };
+    let body: string | undefined;
+    if (req.body !== undefined) {
+      if (req.form) body = encode(req.body);
+      else {
+        body = JSON.stringify(req.body);
+        if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      }
+    }
+    const res = await fetch(url, { method: req.http, headers, body });
+    const text = await res.text();
+    let parsed: unknown = text;
+    if ((res.headers.get("content-type") ?? "").includes("json")) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = text;
+      }
+    }
+    return { status: res.status, body: parsed };
+  }
   const clients = new Map<string, any>();
   let openai: any;
   let claude: any;
@@ -946,30 +986,7 @@ export function transport(options: Options = {}): Transport {
       if (out.FunctionError) return { error: String(body?.errorType ?? out.FunctionError), message: String(body?.errorMessage ?? "") };
       return { ok: body };
     },
-    async http(req) {
-      let url = req.url;
-      if (req.query) url += (url.includes("?") ? "&" : "?") + encode(req.query);
-      const headers: Record<string, string> = { ...(req.headers ?? {}), ...(options.headers ? await options.headers(req.url) : {}) };
-      let body: string | undefined;
-      if (req.body !== undefined) {
-        if (req.form) body = encode(req.body);
-        else {
-          body = JSON.stringify(req.body);
-          if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
-        }
-      }
-      const res = await fetch(url, { method: req.http, headers, body });
-      const text = await res.text();
-      let parsed: unknown = text;
-      if ((res.headers.get("content-type") ?? "").includes("json")) {
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          parsed = text;
-        }
-      }
-      return { status: res.status, body: parsed };
-    },
+    http,
     async aws(service, action, input) {
       const c = await client(service);
       let args = input;
@@ -985,6 +1002,27 @@ export function transport(options: Options = {}): Transport {
       }
     },
     async agent(call) {
+      if (call.url !== undefined) {
+        // a server of Open Responses: what Step Functions sends it, over HTTP, and no SDK, which
+        // may send what the specification does not have
+        const res = await http({
+          http: "POST",
+          url: `${call.url.replace(/\/+$/, "")}/responses`,
+          body: {
+            model: call.model,
+            instructions: call.instructions,
+            input: JSON.stringify(call.input),
+            text: { format: { type: "json_schema", name: "answer", strict: true, schema: call.schema } },
+          },
+        });
+        if (res.status < 200 || res.status >= 300) throw new AgentHttpError(res.status, res.body);
+        // the answer's text, as Step Functions reads it: the first output_text of the messages
+        const out: any = res.body;
+        const content = (Array.isArray(out?.output) ? out.output : []).filter((o: any) => o?.type === "message").flatMap((o: any) => o.content ?? []);
+        const text = content.find((c: any) => c?.type === "output_text")?.text;
+        if (typeof text !== "string") throw new AgentStopped(content.some((c: any) => c?.type === "refusal") ? "refusal" : String(out?.status ?? "no answer"));
+        return JSON.parse(text);
+      }
       if (call.provider === "claude") {
         if (!claude) {
           const mod: any = await import("@anthropic-ai/sdk");

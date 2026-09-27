@@ -1,5 +1,5 @@
 workflow agents v1
-description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント、知らない提供元、Claude で null との選択が多すぎる答え、Claude で大文字と小文字だけが違う列挙の値"
+description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント、知らない提供元、Claude で null との選択が多すぎる答え、Claude で大文字と小文字だけが違う列挙の値、送り先（url）の誤り：エージェントの無い url、Claude の url、http でも https でもない url。Open Responses のほかのサーバーには、OpenAI の Schema の大きさの上限を当てない"
 
 enum 大小 = low | Low | high
 
@@ -117,6 +117,25 @@ task 大きさ(本文: string) -> list[大小]
 task オープンエーアイの大きさ(本文: string) -> list[大小]
   agent openai "読んでください。"
   model "gpt-5.4-mini"
+
+task 手元で深く読む(本文: string) -> 一
+  agent "読んでください。"
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
+
+task 送り先だけ(本文: string) -> string
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:read"
+  url "http://ollama.internal:11434/v1"
+
+task クロードの送り先(本文: string) -> string
+  agent claude "読んでください。"
+  model "claude-sonnet-5"
+  url "http://ollama.internal:11434"
+
+task 送り先の形(本文: string) -> string
+  agent "読んでください。"
+  model "gpt-oss:20b"
+  url "ollama.internal:11434/v1"
 
 flow
   pass

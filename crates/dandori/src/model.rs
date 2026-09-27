@@ -161,14 +161,17 @@ pub enum Binding {
     Http { method: String, url: String, form: bool },
     /// an AWS API, named as Step Functions' AWS SDK integrations name it: `sns` and `publish`
     Aws { service: String, action: String },
-    /// an agent: the model, told what to do, reads the arguments and answers in the task's type
-    Agent { provider: Provider, instructions: String, model: String },
+    /// an agent: the model, told what to do, reads the arguments and answers in the task's type;
+    /// `url` is the server of an Open Responses API other than OpenAI's
+    Agent { provider: Provider, instructions: String, model: String, url: Option<String> },
 }
 
 /// Whose models an agent runs on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
-    /// OpenAI: the Responses API on Step Functions, OpenAI's Agents SDK in the code dandori writes
+    /// OpenAI: the Responses API on Step Functions, OpenAI's Agents SDK in the code dandori writes;
+    /// with `url`, any server of the Responses API as Open Responses specifies it, which every
+    /// target calls over HTTP
     OpenAi,
     /// Claude: the Messages API on Step Functions, Anthropic's SDK in the code dandori writes
     Claude,
@@ -209,8 +212,9 @@ pub enum Via<'a> {
     Lambda(&'a str),
     Http { method: &'a str, url: &'a str, form: bool },
     Aws { service: &'a str, action: &'a str },
-    /// an agent of OpenAI's or Claude's (see `Provider`)
-    Agent { provider: Provider, instructions: &'a str, model: &'a str },
+    /// an agent of OpenAI's or Claude's (see `Provider`), or on another server that speaks
+    /// OpenAI's Responses API as Open Responses specifies it (`url`)
+    Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str> },
     /// Step Functions: a nested execution of another state machine
     StateMachine(&'a str),
     /// Temporal: a child workflow
@@ -307,7 +311,7 @@ impl TaskDef {
             Binding::Lambda(f) => Via::Lambda(f),
             Binding::Http { method, url, form } => Via::Http { method, url, form: *form },
             Binding::Aws { service, action } => Via::Aws { service, action },
-            Binding::Agent { provider, instructions, model } => Via::Agent { provider: *provider, instructions, model },
+            Binding::Agent { provider, instructions, model, url } => Via::Agent { provider: *provider, instructions, model, url: url.as_deref() },
         });
         match p {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),

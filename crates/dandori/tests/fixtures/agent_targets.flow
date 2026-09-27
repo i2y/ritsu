@@ -1,5 +1,5 @@
 workflow agent_targets v1
-description "check には通るが、Step Functions には出せないもの：接続の無いエージェント（OpenAI と Claude）、HTTP Task の 60 秒を超える timeout"
+description "check には通るが、Step Functions には出せないもの：接続の無いエージェント（OpenAI と Claude）、HTTP Task の 60 秒を超える timeout、HTTPS でない送り先（Open Responses のサーバーのエージェントと HTTP のタスク）"
 
 inputs
   本文 : string
@@ -22,8 +22,21 @@ task 送る(本文: string)
   timeout 90 seconds
   idempotent
 
+task 手元で読む(本文: string) -> string
+  agent "読んで、要点を一文で答えてください。"
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/ollama/2"
+
+task 平文で送る(本文: string)
+  http POST "http://example.com/v1/notes"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/example/1"
+  idempotent
+
 flow
   let 要点 = 読む(本文: 本文)
   let 返事 = 書く(要点: 要点)
   送る(本文: 返事)
+  let 手元の要点 = 手元で読む(本文: 本文)
+  平文で送る(本文: 手元の要点)
   succeed 要点 = 要点

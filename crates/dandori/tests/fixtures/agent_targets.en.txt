@@ -7,3 +7,7 @@ error[E050]: tests/fixtures/agent_targets.flow:15:1: Step Functions calls the ag
     15 | task 書く(要点: string) -> string
 error[E050]: tests/fixtures/agent_targets.flow:19:1: Step Functions ends an HTTP Task's request after 60 seconds, so the `timeout` of `送る` can be at most that
     19 | task 送る(本文: string)
+error[E050]: tests/fixtures/agent_targets.flow:25:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `手元で読む` sends to `http://ollama.internal:11434/v1/responses`
+    25 | task 手元で読む(本文: string) -> string
+error[E050]: tests/fixtures/agent_targets.flow:31:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `平文で送る` sends to `http://example.com/v1/notes`
+    31 | task 平文で送る(本文: string)

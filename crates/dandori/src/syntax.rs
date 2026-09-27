@@ -189,6 +189,8 @@ pub struct TaskDecl {
     pub binding: Option<(Binding, Span)>,
     /// the model an `agent` task runs on
     pub model: Option<(String, Span)>,
+    /// `url "<base>"`: the server an agent's Open Responses API is on, in place of OpenAI's
+    pub url: Option<(String, Span)>,
     pub connection: Option<String>,
     /// Temporal: the task queue of the activity or the child workflow
     pub queue: Option<String>,
@@ -1346,6 +1348,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     result_range,
                     binding: None,
                     model: None,
+                    url: None,
                     connection: None,
                     queue: None,
                     workflow: None,
@@ -1552,6 +1555,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             t.binding = Some((Binding::Agent { provider, instructions }, sp));
         }
         "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
+        "url" => t.url = Some((cc.string("where the agent's server is", "エージェントのサーバーの場所")?.0, sp)),
         "connection" => t.connection = Some(cc.string("the EventBridge connection", "EventBridge の接続")?.0),
         "errors" => loop {
             let name = cc.ident("an error name", "エラーの名前")?;

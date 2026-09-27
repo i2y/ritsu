@@ -6,12 +6,16 @@
 // tools; for Claude's, every request the stand-in got — and what the Transport answered, or the
 // error it threw. A case with a `status` has the stand-in answer every request with that error
 // status, to see that the SDK's client does not retry by itself; an OpenAI agent's then goes to
-// a stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL).
+// a stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL). An
+// agent on another server of Open Responses (a call with `url`) goes to a stand-in of that
+// server on 127.0.0.1, at the same path, which writes down every request; a case that says
+// `live` goes to the server the call names, as it is (a model on Ollama on this machine).
 //
 //   node tools/agents/check.mjs <io.ts> <cases.json> <results.json>
 //
 // cases.json: [ { "call": <AgentCall>, "text": <the model's answer> } | { "call", "refusal": <text> }
-//               | { "call", "status": <an HTTP error status the stand-in answers with> } ]
+//               | { "call", "status": <an HTTP error status the stand-in answers with> }
+//               | { "call", "live": true } ]
 
 import fs from "node:fs";
 import http from "node:http";
@@ -72,6 +76,36 @@ async function openaiFailing(io, c) {
   return { ...out, asked: asked.map(({ method, path }) => ({ method, path })) };
 }
 
+/** The Responses API's answer, as a server of Open Responses gives it: a message whose content is `content`. */
+function response(model, content) {
+  return {
+    id: "resp_test",
+    object: "response",
+    status: "completed",
+    model,
+    output: [{ id: "msg_test", type: "message", role: "assistant", status: "completed", content: [content] }],
+  };
+}
+
+/** An agent on a server of Open Responses: a stand-in of it at the call's path, or, `live`, the server itself. */
+async function openResponses(io, c) {
+  const transport = io.transport();
+  const run = async (call) => {
+    try {
+      return { answer: await transport.agent(call) };
+    } catch (e) {
+      return { error: e?.constructor?.name ?? String(e) };
+    }
+  };
+  if (c.live) return run(c.call);
+  const reply =
+    c.status !== undefined
+      ? { status: c.status, body: { error: { message: "scripted", type: "server_error" } } }
+      : { status: 200, body: c.refusal !== undefined ? response(c.call.model, { type: "refusal", refusal: c.refusal }) : response(c.call.model, { type: "output_text", text: c.text, annotations: [] }) };
+  const { asked, out } = await standIn(reply, (url) => run({ ...c.call, url: url + new URL(c.call.url).pathname }));
+  return { ...out, asked: asked.map(({ method, path, body }) => ({ method, path, body })) };
+}
+
 async function claude(io, c) {
   const reply =
     c.status !== undefined
@@ -101,6 +135,10 @@ const io = await import(path.join(work, "io.ts"));
 const results = [];
 try {
   for (const c of cases) {
+    if (c.call.url !== undefined) {
+      results.push(await openResponses(io, c));
+      continue;
+    }
     if (c.call.provider === "claude") {
       results.push(await claude(io, c));
       continue;

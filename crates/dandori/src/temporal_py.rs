@@ -352,9 +352,9 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 vec![format!("return {call}")]
             }
         }
-        Some(Via::Agent { provider, instructions, model }) => {
+        Some(Via::Agent { provider, instructions, model, url }) => {
             let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
-            let call = vec![
+            let mut call = vec![
                 "await t.agent(".to_string(),
                 "    {".into(),
                 format!("        \"agent\": {},", q(&task.name)),
@@ -363,9 +363,12 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 format!("        \"instructions\": {},", q(instructions)),
                 format!("        \"input\": {{{}}},", input.join(", ")),
                 format!("        \"schema\": SCHEMAS[{}],", q(&task.name)),
-                "    }".into(),
-                ")".into(),
             ];
+            if let Some(u) = url {
+                call.push(format!("        \"url\": {},", q(u)));
+            }
+            call.push("    }".into());
+            call.push(")".into());
             // Claude may answer an enum's value in another case: it is taken as the value
             let fold = provider == Provider::Claude && !render::enums_of(m, task.result.as_ref().unwrap_or(&Ty::Json)).is_empty();
             let mut out = vec!["return io.answer(".to_string()];
@@ -572,15 +575,24 @@ HttpRequest = dict
 # "schema"}. The provider is "openai" (run with the Agents SDK) or "claude" (with Anthropic's
 # SDK). The model is told `instructions`, reads `input` as JSON text, and answers in `schema`,
 # the JSON Schema of {"answer": …} in the strict form of OpenAI's Structured Outputs, which
-# Claude's take too.
+# Claude's take too. An OpenAI agent's "url" is a server of Open Responses other than OpenAI's:
+# its base URL, to which /responses is added.
 AgentCall = dict
 
 # The most a Claude agent's answer may take, thinking included, as every target asks for.
 CLAUDE_MAX_TOKENS = {{CLAUDE_MAX_TOKENS}}
 
 
+class AgentHttpError(Exception):
+    """An agent's server that answered with an error status."""
+
+    def __init__(self, status: int, body: Any) -> None:
+        super().__init__(f"the agent's server answered {status}: {body if isinstance(body, str) else json_text(body)}")
+        self.status = status
+
+
 class AgentStopped(Exception):
-    """A Claude agent that did not end its turn with an answer: it refused, or stopped at the limit."""
+    """An agent that did not end with an answer: it refused, or stopped at the limit."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(f"the model stopped with {reason}, not with an answer")
@@ -644,7 +656,7 @@ class DefaultTransport:
         claude: dict[str, Any] | None = None,
     ) -> None:
         """`headers`: what to add to an HTTP request, such as the credentials the other side
-        wants; `aws`: the keyword arguments of boto3's clients, such as `region_name`;
+        wants (a server of Open Responses too); `aws`: the keyword arguments of boto3's clients, such as `region_name`;
         `agents`: the Agents SDK's RunConfig, such as one whose model_provider serves models
         other than OpenAI's (without one, OpenAI's agents run through a client that does not
         retry by itself); `claude`: the keyword arguments of Anthropic's client for the
@@ -732,6 +744,8 @@ class DefaultTransport:
         return await asyncio.to_thread(call)
 
     async def agent(self, call: AgentCall) -> Any:
+        if call.get("url") is not None:
+            return await self._open_responses(call)
         if call.get("provider") == "claude":
             return await self._claude_agent(call)
         from agents import Agent, AgentOutputSchemaBase, ModelBehaviorError, ModelSettings, Runner
@@ -767,6 +781,31 @@ class DefaultTransport:
             self._agents = run_config
         result = await Runner.run(agent, text(call["input"]), run_config=run_config)
         return result.final_output
+
+    async def _open_responses(self, call: AgentCall) -> Any:
+        """An agent on a server of Open Responses: what Step Functions sends it, over HTTP, and
+        no SDK, which may send what the specification does not have."""
+        res = await self.http(
+            {
+                "http": "POST",
+                "url": call["url"].rstrip("/") + "/responses",
+                "body": {
+                    "model": call["model"],
+                    "instructions": call["instructions"],
+                    "input": json_text(call["input"]),
+                    "text": {"format": {"type": "json_schema", "name": "answer", "strict": True, "schema": call["schema"]}},
+                },
+            }
+        )
+        if not 200 <= res["status"] < 300:
+            raise AgentHttpError(res["status"], res["body"])
+        # the answer's text, as Step Functions reads it: the first output_text of the messages
+        out = res["body"] if isinstance(res["body"], dict) else {}
+        content = [c for o in out.get("output") or [] if isinstance(o, dict) and o.get("type") == "message" for c in o.get("content") or [] if isinstance(c, dict)]
+        texts = [c.get("text") for c in content if c.get("type") == "output_text" and isinstance(c.get("text"), str)]
+        if not texts:
+            raise AgentStopped("refusal" if any(c.get("type") == "refusal" for c in content) else str(out.get("status", "no answer")))
+        return json.loads(texts[0])
 
     async def _claude_agent(self, call: AgentCall) -> Any:
         if self._claude is None:

@@ -3,8 +3,10 @@
 # place of OpenAI's, Claude's with Anthropic's SDK and a stand-in of the Messages API on
 # 127.0.0.1. A case with a `status` has the stand-in answer every request with that error
 # status, to see that the SDK's client does not retry by itself; an OpenAI agent's then goes to a
-# stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL). The
-# Python twin of check.mjs: the same cases, and the results in the same shape.
+# stand-in of the Responses API, through the client the Transport makes (OPENAI_BASE_URL). An agent
+# on another server of Open Responses (a call with "url") goes to a stand-in of that server on
+# 127.0.0.1, at the same path; a case that says "live" goes to the server the call names, as it
+# is. The Python twin of check.mjs: the same cases, and the results in the same shape.
 #
 #   .venv/bin/python check.py <io.py> <cases.json> <results.json>
 #
@@ -21,6 +23,7 @@ import json
 import os
 import sys
 import threading
+import urllib.parse
 from typing import Any
 
 from agents import Model, ModelProvider, RunConfig
@@ -101,6 +104,47 @@ async def openai_failing(io: Any, c: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def response(model: str, content: dict[str, Any]) -> dict[str, Any]:
+    """The Responses API's answer, as a server of Open Responses gives it: a message whose content is `content`."""
+    return {
+        "id": "resp_test",
+        "object": "response",
+        "status": "completed",
+        "model": model,
+        "output": [{"id": "msg_test", "type": "message", "role": "assistant", "status": "completed", "content": [content]}],
+    }
+
+
+async def open_responses(io: Any, c: dict[str, Any]) -> dict[str, Any]:
+    """An agent on a server of Open Responses: a stand-in of it at the call's path, or, `live`, the server itself."""
+    transport = io.transport()
+
+    async def run(call: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return {"answer": await transport.agent(call)}
+        except Exception as e:  # noqa: BLE001 - the error's name is what is compared
+            return {"error": type(e).__name__}
+
+    call = c["call"]
+    if c.get("live"):
+        return await run(call)
+    if "status" in c:
+        reply: tuple[int, Any] = (c["status"], {"error": {"message": "scripted", "type": "server_error"}})
+    elif "refusal" in c:
+        reply = (200, response(call["model"], {"type": "refusal", "refusal": c["refusal"]}))
+    else:
+        reply = (200, response(call["model"], {"type": "output_text", "text": c["text"], "annotations": []}))
+    server = StandIn(reply)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = await run({**call, "url": f"http://127.0.0.1:{server.server_address[1]}" + urllib.parse.urlsplit(call["url"]).path})
+    finally:
+        server.shutdown()
+        server.server_close()
+    out["asked"] = [{"method": a["method"], "path": a["path"], "body": a["body"]} for a in server.asked]
+    return out
+
+
 async def claude(io: Any, c: dict[str, Any]) -> dict[str, Any]:
     call = c["call"]
     if "status" in c:
@@ -140,6 +184,9 @@ async def main() -> None:
         cases = json.load(f)
     results = []
     for c in cases:
+        if c["call"].get("url") is not None:
+            results.append(await open_responses(io, c))
+            continue
         if c["call"].get("provider") == "claude":
             results.append(await claude(io, c))
             continue

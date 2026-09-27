@@ -1,5 +1,5 @@
 workflow 経費 v1
-description "エージェントの端の振る舞い：リスト・単位・時刻・無いことがある値・範囲のある数を持つ答え、答えを読まない呼び出し、並列の回の中のエージェント、大文字と小文字の違う列挙の値で答える Claude のエージェント"
+description "エージェントの端の振る舞い：リスト・単位・時刻・無いことがある値・範囲のある数を持つ答え、答えを読まない呼び出し、並列の回の中のエージェント、大文字と小文字の違う列挙の値で答える Claude のエージェント、OpenAI のほかの Open Responses のサーバーで読むエージェント"
 
 enum 区分 = 交通 | 飲食 | 宿泊 | その他
 enum 急ぎ = low | normal | Urgent
@@ -33,10 +33,12 @@ task 確かめる(写したち: list[string]) -> bool
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
   timeout 30 seconds
 
+# the receipts are read by a model on a server of Open Responses other than OpenAI's
 task 読み取る(写し: string) -> 領収書
   agent "領収書の文字起こしを読み、店の名前、税込の金額（円）、日時（UTC）、区分、品目、但し書きを取り出してください。但し書きが無ければ null にします。"
-  model "gpt-5.4-mini"
-  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
+  model "gpt-oss:20b"
+  url "https://llm.example.com/v1"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/llm/7b8c9d0e"
   retry 1 times every 5 seconds
 
 # Claude may answer `Urgent` as `urgent`, or `low` as `Low`: it is taken as the enum's value
