@@ -1417,6 +1417,18 @@ fn open_responses_agents_answer_on_ollama() {
             return;
         }
     };
+    // Ollama keeps a model it loads for five minutes, more than 8 GB for one of 8B parameters: the
+    // test lets go of the model when it is done, unless the model was loaded before
+    struct LetGo(Option<(String, String)>);
+    impl Drop for LetGo {
+        fn drop(&mut self) {
+            if let Some((base, model)) = &self.0 {
+                let _ = Command::new("curl").args(["-s", "-m", "10", &format!("{base}/api/generate"), "-d", &json!({ "model": model, "keep_alive": 0 }).to_string()]).output();
+            }
+        }
+    }
+    let loaded = get("/api/ps").is_some_and(|ps| ps["models"].as_array().into_iter().flatten().any(|x| x["name"].as_str() == Some(model.as_str())));
+    let _let_go = LetGo((!loaded).then(|| (base.clone(), model.clone())));
     let node = root().join("tools/agents/node_modules/@openai/agents").exists();
     let python = root().join("tools/agents/.venv/bin/python");
     let mut sent = 0;
