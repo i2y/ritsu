@@ -233,7 +233,7 @@ async function runStates(all, start, input, context, top) {
         break;
       }
       case "Succeed": {
-        const out = st.Output !== undefined ? await evaluate(st.Output, states) : top ? null : input;
+        const out = st.Output !== undefined ? await evaluate(st.Output, states) : input;
         if (top) throw new Stop({ succeed: out });
         return out;
       }

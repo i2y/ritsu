@@ -35,6 +35,11 @@ fn claude_answer(m: &Model, t: &Ty) -> String {
     format!("($dd_body := $states.result.ResponseBody; $dd_text := $join($dd_body.content[type = \"text\"].text, \"\"); ($dd_body.stop_reason = \"end_turn\" and $exists($dd_text)) ? {folded} : $error(\"the agent gave no answer to read; the model may have refused, or stopped at the limit\"))")
 }
 
+/// The output of an execution that gives no outputs: null, as on the other targets. A Succeed
+/// state without `Output` hands on its input, the output of the state before it (the last
+/// call's answer, say). It is written as JSONata, since asl-validator refuses a literal null.
+const NO_OUTPUT: &str = "{% null %}";
+
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
@@ -141,7 +146,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false, round_failed: None };
     // the end states first, so that everything can point at them
     let done = g.name("done");
-    g.states.insert(done.clone(), json!({ "Type": "Succeed" }));
+    g.states.insert(done.clone(), json!({ "Type": "Succeed", "Output": NO_OUTPUT }));
     if let Some(block) = &m.on_failure {
         let rethrow = g.name("on failure end");
         g.states.insert(
@@ -364,7 +369,9 @@ impl<'a> Gen<'a> {
                 let mut st = Map::new();
                 st.insert("Type".into(), json!("Succeed"));
                 st.insert("Comment".into(), json!(format!("line {}", s.line)));
-                if !fields.is_empty() {
+                if fields.is_empty() {
+                    st.insert("Output".into(), json!(NO_OUTPUT));
+                } else {
                     let mut out = Map::new();
                     for (f, e) in fields {
                         out.insert(f.clone(), arg_value(e));
