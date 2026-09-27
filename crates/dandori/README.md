@@ -10,11 +10,11 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
 - **Built for five platforms.** Temporal (TypeScript or Python), AWS Step Functions (ASL with
   JSONata), AWS Lambda durable functions, Argo Workflows and pydantic-graph. What each of them
   runs is played against one reference interpreter, on every scenario the tests generate.
-- **The decisions stay in [rulec](https://github.com/i2y/rulec)**, in tables that rulec proves
-  complete and free of overlaps. dandori reads them through rulec's command line, and uses a
-  rule's state machine as the type of the thing a workflow drives. Reading and writing can go to
-  an agent (OpenAI's models, Claude, or any Open Responses endpoint) whose answer comes back in a
-  declared type.
+- **Decisions come from outside the workflow.** A `.flow` branches only on what a rule or a task
+  answered: an API, an agent (OpenAI's models, Claude, or any Open Responses endpoint) whose
+  answer comes back in a declared type, your own code, a person's approval. A decision that must
+  have no gaps can be a table in [rulec](https://github.com/i2y/rulec), which proves it complete
+  and free of overlaps, and a rule's state machine can be the type of the thing a workflow drives.
 
 **Documentation: <https://i2y.github.io/dandori/>**, in English and Japanese. The pages are also
 readable here, in [website/docs](website/docs) and [website/docs-ja](website/docs-ja).
@@ -71,7 +71,7 @@ flow
 ```
 
 A `.flow` has no comparison or arithmetic. It branches only by matching an enum, a bool, or a
-value that may be absent, and the conditions live in rulec rules. A task says how it is called,
+value that may be absent, which a rule or a task answered. A task says how it is called,
 the errors it comes back with, how it is retried, whether it takes an idempotency `key`, and what
 it does to a case (`starts`, `sends`, `observes`). Every loop has a bound, so a run's history has
 one too. [Write a workflow](https://i2y.github.io/dandori/tour/) reads the whole example.

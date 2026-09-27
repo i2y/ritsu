@@ -1,6 +1,6 @@
 # エージェント
 
-`agent` のタスクは、モデルにタスクの引数を渡し、答えの型の値を受け取ります。読んだり書いたりするのはモデルで、判断するのは規則です。
+`agent` のタスクは、モデルにタスクの引数を渡し、答えの型の値を受け取ります。答えは、ほかのタスクの答えと同じく `match` で分岐に使うことも、規則に渡すこともできます。問い合わせの例は、読むことと書くことをモデルに、振り分けを規則に任せています。
 [examples/inquiry](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow)
 は、お客さんからの問い合わせを、社内の Open Responses のエンドポイント（この例では Ollama）で動くモデルに読ませ、rulec の規則で振り分けて、返事の下書きを Claude に書かせます。
 

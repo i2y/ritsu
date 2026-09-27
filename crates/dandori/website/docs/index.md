@@ -70,13 +70,14 @@ flow
 </div>
 <div markdown>
 
-### The rules decide, and the workflow drives
+### Decisions come from outside the workflow
 
-The decisions are written in [rulec](https://github.com/i2y/rulec): tables that rulec proves
-complete and free of overlaps. dandori reads them through rulec's command line, and a rule's state
-machine becomes the type of what the workflow drives, here Stripe's PaymentIntent. A `.flow` has no
-comparison and no arithmetic of its own. It branches only by matching an enum, a bool, or a value
-that may be absent.
+A `.flow` has no comparison and no arithmetic of its own. It branches only by matching an enum, a
+bool, or a value that may be absent, which a rule or a task answered: an API, an agent, your own
+code, a person's approval. A decision that must have no gaps can be written in
+[rulec](https://github.com/i2y/rulec), as a table that rulec proves complete and free of overlaps,
+and a rule's state machine becomes the type of what the workflow drives, here Stripe's
+PaymentIntent.
 
 </div>
 </div>
@@ -158,11 +159,12 @@ task read_inquiry(text: string) -> Reading
 </div>
 <div markdown>
 
-### Agents read and write; the rules decide
+### Agents read, write and choose
 
 A task can be an agent: a model that gets the task's arguments and gives back a value of the
-task's type, checked like any other answer. OpenAI's models, Claude, and any Open Responses
-endpoint (Ollama, vLLM, LM Studio, OpenRouter, …) can be called.
+task's type, checked like any other answer. The flow can match that answer, or hand it to a rule
+to decide. OpenAI's models, Claude, and any Open Responses endpoint (Ollama, vLLM, LM Studio,
+OpenRouter, …) can be called.
 [Agents](agents.md)
 
 </div>

@@ -64,9 +64,9 @@ flow
 </div>
 <div markdown>
 
-### 判断は規則が、進行はワークフローが受け持つ
+### 判断はワークフローの外に置く
 
-判断は [rulec](https://github.com/i2y/rulec) の表で書きます。表に抜けも重なりも無いことは、rulec が証明します。dandori は rulec のコマンドを通して規則を読み、規則に書いたステートマシンを、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型として使います。`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・無いことがある値の `match` だけです。
+`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・無いことがある値の `match` だけで、その値は規則の答えか、タスクの答え（API、エージェント、自分で書くコード、人の承認）です。抜けがあると困る判断は、[rulec](https://github.com/i2y/rulec) の表で書けます。表に抜けも重なりも無いことは rulec が証明し、表に書いたステートマシンは、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型になります。
 
 </div>
 </div>
@@ -140,9 +140,9 @@ task read_inquiry(text: string) -> Reading
 </div>
 <div markdown>
 
-### 読み書きはエージェント、判断は規則
+### エージェントに読ませ、書かせ、選ばせる
 
-タスクをエージェントにすることもできます。モデルはタスクの引数を受け取り、タスクの型の値を返します。その答えも、ほかの答えと同じく型で確かめます。OpenAI のモデル、Claude、Open Responses のエンドポイント（Ollama、vLLM、LM Studio、OpenRouter など）を呼べます。[エージェント](agents.md)
+タスクをエージェントにすることもできます。モデルはタスクの引数を受け取り、タスクの型の値を返します。その答えも、ほかの答えと同じく型で確かめます。答えはそのまま `match` で分岐に使うことも、規則に渡して判断させることもできます。OpenAI のモデル、Claude、Open Responses のエンドポイント（Ollama、vLLM、LM Studio、OpenRouter など）を呼べます。[エージェント](agents.md)
 
 </div>
 </div>

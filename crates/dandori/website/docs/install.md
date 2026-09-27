@@ -27,7 +27,9 @@ Or take a binary from rulec's [releases](https://github.com/i2y/rulec/releases).
 with rulec 0.20.0 and 0.21.1.
 
 Without rules, a workflow gives up two things. Its branches can only match what its tasks answer (an
-enum, a bool, a value that may be absent), since a `.flow` neither compares nor computes. And it has
+enum, a bool, a value that may be absent), since a `.flow` neither compares nor computes: comparing
+an amount or a date is left to a task, such as an API, an agent or your own code, and nothing proves
+the decision has no gaps. And it has
 no cases, since a case follows a rule's state machine, so the checks of cases (E013, E020 to E022,
 E030, W101 to W103) have nothing to look at. The review example (`examples/review`) is written without
 rules: the task that scores an application answers `approve`, `reject` or `hold`, and the flow

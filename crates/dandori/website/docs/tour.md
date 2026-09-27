@@ -142,7 +142,8 @@ flow
 - `match` branches on an enum, a bool, or a value that may be absent (`none`, `some x`). Every value
   must have an arm, and there is no default arm: a value no arm names is refused by the checker
   (E010), and at run time fails with `Dandori.UnexpectedValue` rather than slip into the last arm.
-  A `.flow` has no comparison and no arithmetic; a condition is a rule's.
+  A `.flow` has no comparison and no arithmetic: a condition is a rule's, or a task answers it (an
+  API, an agent, your own code).
 - `on <error> =>` handles a declared error of the call above it; `on failure =>` handles any failure,
   and `on timeout =>` a timeout.
 - `wait 1 hour` and `wait until booking.check_out` wait. `succeed outcome = …` ends the run with its
