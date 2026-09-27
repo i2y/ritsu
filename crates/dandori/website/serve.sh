@@ -10,9 +10,12 @@
 # every link a page writes from the site root — so `/dandori/` is served here too, and `/`
 # redirects to it.
 #
+# The port is 8002 unless one is given, so that rulec's preview, which takes 8001, can stay up
+# beside it.
+#
 #   $ website/serve.sh [port]
-exec python3 - "${1:-8001}" <<'PY'
-import functools, http.server, socketserver, sys
+exec python3 - "${1:-8002}" <<'PY'
+import errno, functools, http.server, socketserver, sys
 
 BASE = "/dandori"
 
@@ -42,7 +45,13 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
 port = int(sys.argv[1])
 handler = functools.partial(NoCache, directory="build")
 socketserver.TCPServer.allow_reuse_address = True
-with socketserver.TCPServer(("", port), handler) as httpd:
+try:
+    httpd = socketserver.TCPServer(("", port), handler)
+except OSError as e:
+    if e.errno != errno.EADDRINUSE:
+        raise
+    sys.exit(f"port {port} is in use; give another: website/serve.sh <port>")
+with httpd:
     print(f"serving build/ on http://localhost:{port}{BASE}/  (no-store)", flush=True)
     httpd.serve_forever()
 PY

@@ -42,7 +42,7 @@ other by hand.
 $ cd website
 $ uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python zensical
 $ ./build.sh      # build/ (English) and build/ja (Japanese)
-$ ./serve.sh      # http://localhost:8001/dandori/
+$ ./serve.sh      # http://localhost:8002/dandori/ (./serve.sh <port> for another port)
 ```
 
 The English build cleans `build/`, so building only English silently drops `build/ja`: always go
