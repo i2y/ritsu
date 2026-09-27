@@ -1,0 +1,104 @@
+[project]
+site_name = "dandori"
+site_url = "https://i2y.github.io/dandori/ja/"
+site_description = "業務ルールを呼ぶワークフローのための、型のある小さな言語。ワークフローは動かす前に検査され、Temporal・AWS Step Functions・Lambda durable functions・Argo Workflows・pydantic-graph 向けにビルドされる。"
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+repo_url = "https://github.com/i2y/dandori"
+repo_name = "i2y/dandori"
+edit_uri = "edit/main/website/docs-ja"
+
+docs_dir = "docs-ja"
+site_dir = "build/ja"
+use_directory_urls = true
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { "ホーム" = "index.md" },
+  { "インストール" = "install.md" },
+  { "ワークフローを書く" = "tour.md" },
+  { "タスクが呼ぶもの" = "tasks.md" },
+  { "エージェント" = "agents.md" },
+  { "何を検査するか" = "checks.md" },
+  { "プラットフォーム別のビルド" = "platforms.md" },
+  { "例で見る" = "examples.md" },
+  { "どうやって確かめているか" = "assurance.md" },
+  { "設計" = "design.md" },
+  { "リファレンス" = [
+    { "コマンド" = "reference/commands.md" },
+    { "診断コード" = "reference/codes.md" },
+  ] },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/dandori/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/dandori/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+# Search, the copy button, previous / next and "edit this page" come from the theme's own
+# Japanese pack; without this, the chrome stays English.
+language = "ja"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page, so the site reads in order
+# navigation.top        a back-to-top button on long pages
+# navigation.tracking   the address bar follows the section being read
+# content.code.copy     a copy button on every code block
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "teal"
+toggle.icon = "lucide/moon"
+toggle.name = "ダークモードにする"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "teal"
+toggle.icon = "lucide/sun"
+toggle.name = "ライトモードにする"
+
+# Unicode-preserving heading anchors, so that a Japanese heading gets the anchor GitHub gives it.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+# Colours a ```flow fence. Naming the module here is how it gets imported, and importing it is
+# what registers the lexer with Pygments; build.sh puts tools/ on PYTHONPATH.
+[project.markdown_extensions.flowlexer]
+
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

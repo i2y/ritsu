@@ -1,0 +1,34 @@
+# コマンド
+
+```text
+dandori check <file.flow>...
+dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
+dandori scenarios <file.flow> [--out <dir>]
+dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+```
+
+| コマンド | すること |
+|---|---|
+| `check` | 一つ以上の `.flow` を検査する。型、すべての行き先、案件が残りうる状態、やり直しを見て、診断をそこへ至る実行の例付きで出す。通ったファイルには `ok` と出す |
+| `build` | 一つのプラットフォーム向けのコードを `--out`（無ければ `out/`）に書き出し、書き出したファイルのパスを出す。プラットフォームにできないこと（E050）と、一回の実行がプラットフォームの上限を超えうるワークフロー（E040）は断る。[プラットフォーム別のビルド](../platforms.md) |
+| `scenarios` | シナリオ（入力と、呼び出しが受け取る答え）を書き出す。全部を合わせると、すべての行き先とエラーを受けるすべての箇所を通り、案件の状態の変わり方もすべて試す。`--out` があれば一つずつファイルに書き、無ければ全部を JSON で標準出力に出す |
+| `run` | シナリオを一つ参照インタプリタで動かし、呼び出しをターゲットが出す形で、待ちと終わり方と一緒に出す |
+
+## フラグと環境変数
+
+| フラグ・環境変数 | 意味 |
+|---|---|
+| `--target <ターゲット>` | ビルドするプラットフォーム。`run` では、呼び出しをどのターゲットの形で出すか（既定は `reference`） |
+| `--out <dir>` | `build`（既定は `out/`）と `scenarios` の書き出し先 |
+| `--scenario <file.json>` | `run` が動かすシナリオ |
+| `--format json` | `check` の診断を、ツール向けの JSON で出す |
+| `--lang ja` か `--lang en` | メッセージの言語。無ければ `DANDORI_LANG`、それも無ければ英語 |
+| `DANDORI_RULEC` | rulec の実行ファイル。無ければ PATH の `rulec` |
+
+## 終了コード
+
+| コード | 意味 |
+|---|---|
+| 0 | エラーなし（警告だけか、何も無い） |
+| 1 | エラーがある |
+| 2 | 引数が正しくないか、ファイルが読めない |

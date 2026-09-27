@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img">
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8a9aa0"/></marker></defs>
+<rect x="20" y="30" width="330" height="250" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="40" y="62" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#0d8a77" text-anchor="start" xml:space="preserve">.flow</text>
+<text x="40" y="96" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">task confirm_intent(intent: string)</text>
+<text x="40" y="121" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">  http POST stripe &quot;…/confirm&quot;</text>
+<text x="40" y="146" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">  sends payment_intent.confirm</text>
+<text x="40" y="171" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">flow</text>
+<text x="40" y="196" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">  let quote = hold(nights: …)</text>
+<text x="40" y="221" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">  match quote.handling</text>
+<text x="40" y="246" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">    auto =&gt; pi &lt;- create_intent(…)</text>
+<rect x="20" y="300" width="330" height="140" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="40" y="332" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="18" font-weight="700" fill="#0d8a77" text-anchor="start" xml:space="preserve">規則 · rulec</text>
+<text x="40" y="362" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">hold_amount.rule</text>
+<text x="40" y="386" font-family="'M PLUS 1 Code', Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#22313a" text-anchor="start" xml:space="preserve">payment_intent.rule</text>
+<text x="40" y="422" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">抜けと重なりが無いことを rulec が証明</text>
+<rect x="405" y="30" width="360" height="250" rx="12" fill="#ffffff" stroke="#0d8a77" stroke-width="1.5"/>
+<text x="425" y="62" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="18" font-weight="700" fill="#0d8a77" text-anchor="start" xml:space="preserve">検査</text>
+<circle cx="431" cy="93" r="3" fill="#0d8a77"/>
+<text x="443" y="98" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">型と、match のすべての行き先</text>
+<circle cx="431" cy="124" r="3" fill="#0d8a77"/>
+<text x="443" y="129" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">案件が最後に残りうるすべての状態</text>
+<circle cx="431" cy="155" r="3" fill="#0d8a77"/>
+<text x="443" y="160" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">外部のデータを変える呼び出しのやり直し</text>
+<circle cx="431" cy="186" r="3" fill="#0d8a77"/>
+<text x="443" y="191" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">プラットフォームごとの実行履歴の大きさ</text>
+<circle cx="431" cy="217" r="3" fill="#0d8a77"/>
+<text x="443" y="222" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">範囲、子の .flow、API の記述</text>
+<circle cx="431" cy="248" r="3" fill="#0d8a77"/>
+<text x="443" y="253" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">プラットフォームにできること、できないこと</text>
+<rect x="405" y="300" width="360" height="140" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="425" y="332" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="17" font-weight="700" fill="#0d8a77" text-anchor="start" xml:space="preserve">参照インタプリタ · シナリオ</text>
+<text x="425" y="364" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">意味を一つに決める。どの行き先も</text>
+<text x="425" y="388" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#10161a" text-anchor="start" xml:space="preserve">どのエラーも通るシナリオを作る</text>
+<path d="M350 155 C377.5 155, 377.5 155, 405 155" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M350 370 C377.5 370, 377.5 200, 405 200" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M585 280 C585.0 280, 585.0 300, 585 300" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<text x="815" y="22" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="600" fill="#56646a" text-anchor="start" xml:space="preserve">ビルド</text>
+<rect x="815" y="30" width="365" height="70" rx="12" fill="#ffffff" stroke="#0d8a77" stroke-width="1.5"/>
+<text x="833" y="59" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">Temporal</text>
+<rect x="1118" y="42" width="46" height="22" rx="11" fill="#0d8a77"/>
+<text x="1141" y="58" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle" xml:space="preserve">主</text>
+<text x="833" y="83" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">ワークフロー一式（TypeScript か Python）</text>
+<rect x="815" y="112" width="365" height="70" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="833" y="141" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">AWS Step Functions</text>
+<text x="833" y="165" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">JSONata で書いた ASL のステートマシン</text>
+<rect x="815" y="194" width="365" height="70" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="833" y="223" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">Lambda durable functions</text>
+<text x="833" y="247" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">TypeScript のハンドラー</text>
+<rect x="815" y="276" width="365" height="70" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="833" y="305" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">Argo Workflows</text>
+<text x="833" y="329" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">WorkflowTemplate と、呼び出し用のイメージ</text>
+<rect x="815" y="358" width="365" height="70" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
+<text x="833" y="387" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">pydantic-graph</text>
+<text x="833" y="411" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">Python のプロセスの中で動くグラフ</text>
+<path d="M765 155 C790.0 155, 790.0 65, 815 65" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M765 155 C790.0 155, 790.0 147, 815 147" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M765 155 C790.0 155, 790.0 229, 815 229" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M765 155 C790.0 155, 790.0 311, 815 311" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M765 155 C790.0 155, 790.0 393, 815 393" fill="none" stroke="#8a9aa0" stroke-width="2" marker-end="url(#head)"/>
+<path d="M765 400 C785.0 400, 785.0 440, 805 440" fill="none" stroke="#8a9aa0" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#head)"/>
+<text x="997" y="462" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="middle" xml:space="preserve">どれもシナリオごとに走らせ、参照と突き合わせる</text>
+</svg>

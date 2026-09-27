@@ -1,0 +1,10 @@
+build/
+.venv/
+.cache/
+
+# Copied in from docs/ by sync.sh: both languages show the same pictures and stylesheet.
+docs-ja/images/
+docs-ja/stylesheets/
+
+# Left behind by the scripts in tools/.
+tools/__pycache__/
