@@ -1,0 +1,71 @@
+name: docs
+
+# Build the two Zensical sites and deploy them to GitHub Pages as one
+# artifact on every push to main that touches the site. Pages must be
+# enabled with "GitHub Actions" as the source in the repository settings.
+#
+#   website/docs/     -> https://i2y.github.io/dandori/
+#   website/docs-ja/  -> https://i2y.github.io/dandori/ja/
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+
+      # build.sh copies the pictures and the stylesheet into docs-ja/, then
+      # builds both languages in the one order that works: English cleans
+      # build/, Japanese then writes build/ja. Nothing but Zensical is needed:
+      # the pictures are committed, and tools/flowlexer.py is plain Python.
+      # The pages are held to the tool by tests/docs.rs, which `cargo test` runs.
+      - name: Build both languages
+        run: |
+          cd website
+          uv venv .venv
+          uv pip install --python .venv/bin/python zensical
+          ./build.sh
+
+      - name: Check the tree is complete
+        run: |
+          test -f website/build/index.html
+          test -f website/build/ja/index.html
+          test -f website/build/reference/codes/index.html
+          test -f website/build/ja/reference/codes/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -65,6 +65,7 @@ $ .venv/bin/python tools/make_overview.py
 
 ## Publishing
 
-Not set up yet. The site is meant for GitHub Pages at `https://i2y.github.io/dandori/`, deployed
-by a workflow like rulec's `docs.yml` (build both languages with `build.sh`, upload `build/`),
-once the repository is public or on a plan whose private repositories have Pages.
+`.github/workflows/docs.yml` builds both languages with `build.sh` and deploys `build/` to GitHub
+Pages, at <https://i2y.github.io/dandori/>, on every push to main that touches `website/` or the
+workflow, and by hand from the Actions tab. Pages takes its source from "GitHub Actions" in the
+repository's settings.
