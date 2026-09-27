@@ -103,7 +103,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 t.line,
                 1,
                 format!("Step Functions reports a nested execution's failure as States.TaskFailed, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
-                format!("Step Functions は入れ子の実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で受けてください", t.name),
+                format!("Step Functions はネストした実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", t.name),
             )),
             _ => {}
         }
@@ -119,7 +119,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 t.line,
                 1,
                 format!("Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `{}` sends to `{u}`", t.name),
-                format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送り先は `{u}` です", t.name),
+                format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送信先は `{u}` です", t.name),
             ));
         }
         if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. })) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {

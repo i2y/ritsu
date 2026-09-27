@@ -46,7 +46,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         None => {
             return (
                 None,
-                vec![Diag::error("E001", 1, 1, "a .flow starts with `workflow <name> v<n>`", ".flow は `workflow <名前> v<版>` で始めます")],
+                vec![Diag::error("E001", 1, 1, "a .flow starts with `workflow <name> v<n>`", ".flow は `workflow <名前> v<番号>` で始めます")],
             )
         }
     };
@@ -538,7 +538,7 @@ impl<'a> Lowerer<'a> {
                         "E007",
                         *esp,
                         "an agent declares no errors of its own: when the model refuses or the call fails it is `failure`, and past its time `timeout`",
-                        "エージェントのタスクにはエラーを宣言できません。モデルが断ったときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります",
+                        "エージェントのタスクにはエラーを宣言できません。モデルが応答を拒否したときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります",
                     ));
                     continue;
                 }
@@ -630,7 +630,7 @@ impl<'a> Lowerer<'a> {
                     }
                 }
                 if let Some(c) = child {
-                    self.push(e("E007", c, "a child workflow answers when it ends; it is not a `callback` task", "子ワークフローは終わったときに答えるので、`callback` のタスクにはなりません"));
+                    self.push(e("E007", c, "a child workflow answers when it ends; it is not a `callback` task", "子ワークフローは終わったときに結果を返すので、`callback` のタスクにはなりません"));
                 }
             }
             if let Some(esp) = t.event {
@@ -642,20 +642,20 @@ impl<'a> Lowerer<'a> {
                         "E007",
                         calls.unwrap_or(esp),
                         "an `event` task calls nothing: its value is sent to the workflow by name; leave out the ways of calling it (and `callback`, whose task hands on an id first)",
-                        "`event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び方の項目（と、先に ID を渡す `callback`）は外してください",
+                        "`event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び出し方の項目（と、先に ID を渡す `callback`）は外してください",
                     ));
                 }
                 if !params.is_empty() {
                     self.push(e("E007", *sp, "an `event` task sends nothing, so it takes no parameters", "`event` のタスクは何も送らないので、引数を取りません"));
                 }
                 if let Some(r) = &t.retry {
-                    self.push(e("E007", r.span, "an `event` task calls nothing that could be tried again; whoever sends the event sends it again", "`event` のタスクには、やり直す呼び出しがありません。送る側が送り直します"));
+                    self.push(e("E007", r.span, "an `event` task calls nothing that could be tried again; whoever sends the event sends it again", "`event` のタスクには、リトライする呼び出しがありません。送る側が送り直します"));
                 }
                 if let Some(ksp) = t.key {
                     self.push(e("E007", ksp, "an `event` task sends nothing, so it takes no `key`", "`event` のタスクは何も送らないので、`key` は要りません"));
                 }
                 if matches!(t.machine, Some((MachineUse::Starts { .. }, _)) | Some((MachineUse::Sends { .. }, _))) {
-                    self.push(e("E007", esp, "an event can tell what a case is (`observes`), not start a case or send it an event", "`event` のタスクが案件についてできるのは、状態を知らせる（`observes`）ことだけです。案件を始めたり、出来事を送ったりはできません"));
+                    self.push(e("E007", esp, "an event can tell what a case is (`observes`), not start a case or send it an event", "`event` のタスクが案件についてできるのは、状態を知らせる（`observes`）ことだけです。案件を始めたり、イベントを送ったりはできません"));
                 }
             }
             if let Some(ksp) = t.key {
@@ -701,10 +701,10 @@ impl<'a> Lowerer<'a> {
                 MachineUse::Observes => Some(TaskMachine::Observes),
             });
             if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
-                self.push(e("E007", t.refused_as.as_ref().unwrap().1, "`refused as` belongs to a task that `sends` an event", "`refused as` は出来事を `sends` するタスクに書きます"));
+                self.push(e("E007", t.refused_as.as_ref().unwrap().1, "`refused as` belongs to a task that `sends` an event", "`refused as` はイベントを `sends` するタスクに書きます"));
             }
             if machine.is_some() && result.is_none() {
-                self.push(e("E008", *sp, format!("`{name}` moves a case, so it answers with the case's record; write `-> <record>`"), format!("`{name}` は案件を動かすので、案件のレコードを答えます。`-> <レコード>` を書いてください")));
+                self.push(e("E008", *sp, format!("`{name}` moves a case, so it answers with the case's record; write `-> <record>`"), format!("`{name}` は案件を動かすので、案件のレコードを返します。`-> <レコード>` を書いてください")));
             }
             self.task_ix.insert(name.clone(), self.m.tasks.len());
             self.m.tasks.push(TaskDef {
@@ -839,23 +839,23 @@ impl<'a> Lowerer<'a> {
                 "E007",
                 *msp,
                 "an agent reads what it is given and answers; it has no case on the other side to start, move or look at",
-                "エージェントは渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません",
+                "エージェントは渡されたものを読んで応答するだけで、案件を始めたり動かしたり見たりはしません",
             ));
         }
         let Some(r) = result else {
-            self.push(e("E007", bsp, "an agent answers; write the type of its answer as `-> <type>`", "エージェントは答えを返します。答えの型を `-> <型>` と書いてください"));
+            self.push(e("E007", bsp, "an agent answers; write the type of its answer as `-> <type>`", "エージェントは応答を返します。応答の型を `-> <型>` と書いてください"));
             return;
         };
         let Some(schema) = crate::render::answer_schema(&self.m, r, rg, provider) else {
             let (en, ja) = if has_json(&self.m, r, &mut Vec::new()) {
                 (
                     format!("{outputs_en} hold an agent's answer to a JSON Schema, and `json` has none; give the answer a type without `json`"),
-                    format!("エージェントの答えは、{outputs_ja}で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください"),
+                    format!("エージェントの応答は、{outputs_ja}で JSON Schema に合わせて返させます。`json` は Schema に書けないので、`json` を含まない型にしてください"),
                 )
             } else {
                 (
                     format!("{outputs_en} hold an agent's answer to a JSON Schema written out in full, and a record that holds itself through others has no end; give the answer a type without it"),
-                    format!("エージェントの答えは、{outputs_ja}で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください"),
+                    format!("エージェントの応答は、{outputs_ja}で JSON Schema に合わせて返させます。ほかのレコードを通して自分を含むレコードは Schema に書き切れないので、それを含まない型にしてください"),
                 )
             };
             self.push(e("E007", bsp, en, ja));
@@ -868,7 +868,7 @@ impl<'a> Lowerer<'a> {
             Provider::OpenAi => {
                 let (depth, props, values) = crate::render::schema_size(&schema);
                 if depth > 10 {
-                    over.push((format!("its objects nest {depth} deep (at most 10)"), format!("オブジェクトの入れ子が {depth} 段（10 段まで）")));
+                    over.push((format!("its objects nest {depth} deep (at most 10)"), format!("オブジェクトのネストが {depth} 段（10 段まで）")));
                 }
                 if props > 5000 {
                     over.push((format!("it has {props} properties (at most 5,000)"), format!("プロパティが {props} 個（5,000 個まで）")));
@@ -882,7 +882,7 @@ impl<'a> Lowerer<'a> {
                 if unions > crate::render::CLAUDE_UNIONS {
                     over.push((
                         format!("it has {unions} values that may be absent, each a choice with null (at most {})", crate::render::CLAUDE_UNIONS),
-                        format!("無いことがある値（null との選択）が {unions} 個（{} 個まで）", crate::render::CLAUDE_UNIONS),
+                        format!("オプショナルな値（`T?`）が {unions} 個（{} 個まで）", crate::render::CLAUDE_UNIONS),
                     ));
                 }
             }
@@ -892,7 +892,7 @@ impl<'a> Lowerer<'a> {
                 "E007",
                 bsp,
                 format!("the answer's JSON Schema, in `{{\"answer\": …}}`, is larger than {outputs_en} take: {}", over.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join(", ")),
-                format!("答えの JSON Schema（`{{\"answer\": …}}` に包んだもの）が、{outputs_ja}の受け付ける大きさを超えています。{}", over.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("、")),
+                format!("応答の JSON Schema（`{{\"answer\": …}}` に包んだもの）が、{outputs_ja}の受け付ける大きさを超えています。{}", over.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("、")),
             ));
         }
         if provider == Provider::Claude {
@@ -907,7 +907,7 @@ impl<'a> Lowerer<'a> {
                             "E007",
                             bsp,
                             format!("Claude may answer an enum's value in another case, and dandori takes it as the value it matches without regard to case, so `{b}` and `{a}` of `{name}` would be the same; give them names that differ in more than case"),
-                            format!("Claude は列挙の値の大文字と小文字を変えて答えることがあり、dandori は大文字と小文字を区別せずに値を読みます。このため `{name}` の `{b}` と `{a}` は同じ値になります。大文字と小文字のほかにも違いのある名前にしてください"),
+                            format!("Claude は列挙の値の大文字と小文字を変えて返すことがあり、dandori は大文字と小文字を区別せずに値を読みます。このため `{name}` の `{b}` と `{a}` は同じ値になります。大文字と小文字のほかにも違いのある名前にしてください"),
                         ));
                     }
                 }
@@ -1024,7 +1024,7 @@ impl<'a> Lowerer<'a> {
                 let axes = mc.axes_with_value(ev);
                 match axes.len() {
                     1 => external.push((axes[0], mc.axes[axes[0]].coords.iter().position(|x| x == ev).unwrap(), ev.clone())),
-                    0 => self.push(e("E008", *esp, format!("no input of the machine has the event `{ev}`"), format!("ステートマシンのどの入力にも出来事 `{ev}` はありません"))),
+                    0 => self.push(e("E008", *esp, format!("no input of the machine has the event `{ev}`"), format!("ステートマシンのどの入力にもイベント `{ev}` はありません"))),
                     _ => self.push(e("E008", *esp, format!("more than one input has the value `{ev}`"), format!("値 `{ev}` を持つ入力が二つ以上あります"))),
                 }
             }
@@ -1221,7 +1221,7 @@ impl<'a> Lowerer<'a> {
                 let result = match result {
                     Some(r) => r,
                     None => {
-                        self.push(e("E003", call.callee.1, format!("`{}` answers nothing to keep; call it without `let`", call.callee.0), format!("`{}` は何も答えません。`let` を付けずに呼んでください", call.callee.0)));
+                        self.push(e("E003", call.callee.1, format!("`{}` answers nothing to keep; call it without `let`", call.callee.0), format!("`{}` は何も返しません。`let` を付けずに呼んでください", call.callee.0)));
                         return None;
                     }
                 };
@@ -1229,7 +1229,7 @@ impl<'a> Lowerer<'a> {
                     let want = self.ty(te)?;
                     if !result.fits(&want) {
                         let (a, b) = (self.m.ty_name(&result), self.m.ty_name(&want));
-                        self.push(e("E003", call.callee.1, format!("`{}` answers `{a}`, which is not `{b}`", call.callee.0), format!("`{}` が答えるのは `{a}` で、`{b}` ではありません", call.callee.0)));
+                        self.push(e("E003", call.callee.1, format!("`{}` answers `{a}`, which is not `{b}`", call.callee.0), format!("`{}` が返すのは `{a}` で、`{b}` ではありません", call.callee.0)));
                         return None;
                     }
                 }
@@ -1259,7 +1259,7 @@ impl<'a> Lowerer<'a> {
             StmtKind::Call { call, handlers } => {
                 let (callee, args) = self.call(call)?;
                 if let Callee::Rule(_) = callee {
-                    self.push(e("E009", call.callee.1, "a rule only answers; keep its answer with `let`", "規則は答えを返すだけです。`let` で答えを受けてください"));
+                    self.push(e("E009", call.callee.1, "a rule only answers; keep its answer with `let`", "規則は結果を返すだけです。`let` で結果を受け取ってください"));
                     return None;
                 }
                 let hs = self.handlers(&callee, handlers);
@@ -1428,7 +1428,7 @@ impl<'a> Lowerer<'a> {
                     return None;
                 }
                 if self.par_depth > 0 {
-                    self.push(e("E009", s.span, "the workflow cannot `succeed` from inside `for … in parallel`, where other rounds may still run", "ほかの回がまだ動いていることがあるので、`for … in parallel` の中からは `succeed` できません"));
+                    self.push(e("E009", s.span, "the workflow cannot `succeed` from inside `for … in parallel`, where other rounds may still run", "ほかのイテレーションがまだ動いていることがあるので、`for … in parallel` の中からは `succeed` できません"));
                     return None;
                 }
                 let mut out = Vec::new();
@@ -1495,7 +1495,7 @@ impl<'a> Lowerer<'a> {
                     "E009",
                     expr.span(),
                     format!("`match` works on an enum, a bool, or a value that may be absent (`T?`); this is `{n}`"),
-                    format!("`match` に渡せるのは列挙・bool・無いことがある値（`T?`）です。これは `{n}` です"),
+                    format!("`match` に渡せるのは列挙・bool・オプショナルな値（`T?`）です。これは `{n}` です"),
                 ));
                 return None;
             }
@@ -1511,11 +1511,11 @@ impl<'a> Lowerer<'a> {
         for a in arms {
             if let Some((v, vsp)) = &a.some {
                 if !optional {
-                    self.push(e("E003", *vsp, "`some` is written when matching a value that may be absent (`T?`)", "`some` を書けるのは、無いことがある値（`T?`）で分けるときだけです"));
+                    self.push(e("E003", *vsp, "`some` is written when matching a value that may be absent (`T?`)", "`some` を書けるのは、オプショナルな値（`T?`）で分けるときだけです"));
                     continue;
                 }
                 if seen.iter().any(|x| x == "some") {
-                    self.push(e("E011", a.span, "`some` already has an arm above", "`some` の行き先は上にもう書かれています"));
+                    self.push(e("E011", a.span, "`some` already has an arm above", "`some` の分岐は上にもう書かれています"));
                     continue;
                 }
                 if has_values {
@@ -1535,7 +1535,7 @@ impl<'a> Lowerer<'a> {
             let mut none = false;
             for (v, vsp) in &a.values {
                 if seen.contains(v) {
-                    self.push(e("E011", *vsp, format!("`{v}` already has an arm above"), format!("`{v}` の行き先は上にもう書かれています")));
+                    self.push(e("E011", *vsp, format!("`{v}` already has an arm above"), format!("`{v}` の分岐は上にもう書かれています")));
                     continue;
                 }
                 seen.push(v.clone());
@@ -1543,13 +1543,13 @@ impl<'a> Lowerer<'a> {
                     if is_case_state || optional {
                         none = true;
                     } else {
-                        self.push(e("E003", *vsp, "`none` is written when matching a case's state, or a value that may be absent (`T?`)", "`none` を書けるのは、案件の状態か、無いことがある値（`T?`）で分けるときだけです"));
+                        self.push(e("E003", *vsp, "`none` is written when matching a case's state, or a value that may be absent (`T?`)", "`none` を書けるのは、案件の状態か、オプショナルな値（`T?`）で分けるときだけです"));
                     }
                     continue;
                 }
                 if optional && domain.is_empty() {
                     let n = self.m.ty_name(&ty);
-                    self.push(e("E003", *vsp, format!("`{}` is `{n}`; its arms are `none` and `some <name>`", te.show()), format!("`{}` は `{n}` です。行き先は `none` と `some <名前>` です", te.show())));
+                    self.push(e("E003", *vsp, format!("`{}` is `{n}`; its arms are `none` and `some <name>`", te.show()), format!("`{}` は `{n}` です。分岐は `none` と `some <名前>` です", te.show())));
                     continue;
                 }
                 if !domain.contains(v) {
@@ -1577,7 +1577,7 @@ impl<'a> Lowerer<'a> {
             let mut errs = Vec::new();
             for (n, sp) in &h.errors {
                 if seen.contains(n) {
-                    self.push(e("E011", *sp, format!("`{n}` is handled above already"), format!("`{n}` は上ですでに受けています")));
+                    self.push(e("E011", *sp, format!("`{n}` is handled above already"), format!("`{n}` は上ですでに処理しています")));
                     continue;
                 }
                 seen.push(n.clone());
@@ -1598,7 +1598,7 @@ impl<'a> Lowerer<'a> {
         let mut after_failure = false;
         for (i, h) in hs.iter().enumerate() {
             if after_failure {
-                self.push(e("E011", h.span, "this arm comes after `on failure`, which already takes every error", "この行き先は、すべてのエラーを受ける `on failure` のあとにあります"));
+                self.push(e("E011", h.span, "this arm comes after `on failure`, which already takes every error", "この分岐は、すべてのエラーを処理する `on failure` のあとにあります"));
             }
             if out.get(i).map(|x| x.errors.contains(&HErr::Failure)).unwrap_or(false) {
                 after_failure = true;
@@ -1615,7 +1615,7 @@ impl<'a> Lowerer<'a> {
                     "E009",
                     *sp,
                     format!("`{name}` waits for an event, which cannot be waited for inside `for … in parallel`: the rounds would wait for the same one, and it would not say which round it is for"),
-                    format!("`{name}` は出来事を待ちますが、`for … in parallel` の中では待てません。どの回も同じ出来事を待つことになり、どの回に宛てたものか分かりません"),
+                    format!("`{name}` はイベントを待ちますが、`for … in parallel` の中では待てません。どのイテレーションも同じイベントを待つことになり、どのイテレーションに宛てたものか分かりません"),
                 ));
                 return None;
             }
@@ -1688,7 +1688,7 @@ impl<'a> Lowerer<'a> {
                                 let (en, ja) = if matches!(t, Ty::Opt(_)) {
                                     (
                                         format!("`{}` is `{n}` and may be absent, so it cannot be put in a string as it is; `match` it with `none` and `some <name>` first", x.show()),
-                                        format!("`{}` は `{n}` で、無いことがあるので、そのままでは文字列に入れられません。先に `none` と `some <名前>` で `match` してください", x.show()),
+                                        format!("`{}` は `{n}` で、値が無いことがあるので、そのままでは文字列に入れられません。先に `none` と `some <名前>` で `match` してください", x.show()),
                                     )
                                 } else {
                                     (format!("`{}` is `{n}`, which cannot be put in a string", x.show()), format!("`{}` は `{n}` なので、文字列に入れられません", x.show()))
@@ -1790,7 +1790,7 @@ impl<'a> Lowerer<'a> {
                         Some(t @ Ty::Opt(_)) => return Some(TExpr::None(t.clone())),
                         Some(Ty::Json) => return Some(TExpr::None(Ty::Opt(Box::new(Ty::Json)))),
                         _ => {
-                            self.push(e("E003", parts[0].1, "`none` is given only where a value may be absent (`T?`)", "`none` を渡せるのは、無いことがある値（`T?`）のところだけです"));
+                            self.push(e("E003", parts[0].1, "`none` is given only where a value may be absent (`T?`)", "`none` を渡せるのは、オプショナルな値（`T?`）のところだけです"));
                             return None;
                         }
                     }
@@ -1806,7 +1806,7 @@ impl<'a> Lowerer<'a> {
                 let (en, ja) = if matches!(got, Ty::Opt(_)) && got.inner().fits(want) {
                     (
                         format!("expected `{a}` here, but this is `{b}`, which may be absent; `match` it with `none` and `some <name>` first"),
-                        format!("ここには `{a}` が要りますが、これは無いことがある `{b}` です。先に `none` と `some <名前>` で `match` してください"),
+                        format!("ここには `{a}` が要りますが、これは `none` になりうる `{b}` です。先に `none` と `some <名前>` で `match` してください"),
                     )
                 } else {
                     (format!("expected `{a}` here, but this is `{b}`"), format!("ここには `{a}` が要りますが、これは `{b}` です"))

@@ -163,7 +163,7 @@ fn variables(m: &Model) -> BTreeMap<String, Est> {
             match &s.kind {
                 TK::Call { target: Some(Target::Let(x)), callee: Callee::Task(t), .. } => {
                     let t = &m.tasks[*t];
-                    put(x, Est::or(t.result_range, format!("the answer of `{}`", t.name), format!("`{}` の答え", t.name)));
+                    put(x, Est::or(t.result_range, format!("the answer of `{}`", t.name), format!("`{}` の結果", t.name)));
                 }
                 TK::Assign { name, expr } => put(name, estimate(m, &vars, expr)),
                 TK::For { var, list, result, .. } => {

@@ -1,10 +1,10 @@
 エラー[E007]: tests/fixtures/events.flow:10:6: `event` のタスクは何も送らないので、引数を取りません
     10 | task 承認の知らせ(id: string) -> 承認
-エラー[E007]: tests/fixtures/events.flow:12:3: `event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び方の項目（と、先に ID を渡す `callback`）は外してください
+エラー[E007]: tests/fixtures/events.flow:12:3: `event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び出し方の項目（と、先に ID を渡す `callback`）は外してください
     12 |   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approve"
-エラー[E007]: tests/fixtures/events.flow:13:3: `event` のタスクには、やり直す呼び出しがありません。送る側が送り直します
+エラー[E007]: tests/fixtures/events.flow:13:3: `event` のタスクには、リトライする呼び出しがありません。送る側が送り直します
     13 |   retry 2 times
 エラー[E007]: tests/fixtures/events.flow:14:3: `event` のタスクは何も送らないので、`key` は要りません
     14 |   key
-エラー[E009]: tests/fixtures/events.flow:22:13: `待つだけ` は出来事を待ちますが、`for … in parallel` の中では待てません。どの回も同じ出来事を待つことになり、どの回に宛てたものか分かりません
+エラー[E009]: tests/fixtures/events.flow:22:13: `待つだけ` はイベントを待ちますが、`for … in parallel` の中では待てません。どのイテレーションも同じイベントを待つことになり、どのイテレーションに宛てたものか分かりません
     22 |     let a = 待つだけ()

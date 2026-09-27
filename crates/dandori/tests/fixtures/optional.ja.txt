@@ -1,4 +1,4 @@
-エラー[E010]: tests/fixtures/optional.flow:22:1: `match` に none の行き先がありません。ここで `贈り物.宛名` はその値を取りえます
+エラー[E010]: tests/fixtures/optional.flow:22:1: `match` に none の分岐がありません。ここで `贈り物.宛名` はその値を取りえます
     22 |   match 贈り物.宛名
 エラー[E012]: tests/fixtures/optional.flow:26:1: ここでは `r` はまだ値を持っていません
     26 |   let b = 送る(本文: r.id)

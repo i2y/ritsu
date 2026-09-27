@@ -17,11 +17,11 @@
 <rect x="405" y="30" width="360" height="250" rx="12" fill="#141b1f" stroke="#36c4aa" stroke-width="1.5"/>
 <text x="425" y="62" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="18" font-weight="700" fill="#36c4aa" text-anchor="start" xml:space="preserve">検査</text>
 <circle cx="431" cy="93" r="3" fill="#36c4aa"/>
-<text x="443" y="98" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">型と、match のすべての行き先</text>
+<text x="443" y="98" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">型と、match のすべての分岐</text>
 <circle cx="431" cy="124" r="3" fill="#36c4aa"/>
 <text x="443" y="129" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">案件が最後に残りうるすべての状態</text>
 <circle cx="431" cy="155" r="3" fill="#36c4aa"/>
-<text x="443" y="160" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">外部のデータを変える呼び出しのやり直し</text>
+<text x="443" y="160" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">外部のデータを変える呼び出しのリトライ</text>
 <circle cx="431" cy="186" r="3" fill="#36c4aa"/>
 <text x="443" y="191" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">プラットフォームごとの実行履歴の大きさ</text>
 <circle cx="431" cy="217" r="3" fill="#36c4aa"/>
@@ -30,7 +30,7 @@
 <text x="443" y="253" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">プラットフォームにできること、できないこと</text>
 <rect x="405" y="300" width="360" height="140" rx="12" fill="#141b1f" stroke="#2a363c" stroke-width="1.5"/>
 <text x="425" y="332" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="17" font-weight="700" fill="#36c4aa" text-anchor="start" xml:space="preserve">参照インタプリタ · シナリオ</text>
-<text x="425" y="364" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">意味を一つに決める。どの行き先も</text>
+<text x="425" y="364" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">意味を一つに決める。どの分岐も</text>
 <text x="425" y="388" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#e6ecee" text-anchor="start" xml:space="preserve">どのエラーも通るシナリオを作る</text>
 <path d="M350 155 C377.5 155, 377.5 155, 405 155" fill="none" stroke="#5f7078" stroke-width="2" marker-end="url(#head)"/>
 <path d="M350 370 C377.5 370, 377.5 200, 405 200" fill="none" stroke="#5f7078" stroke-width="2" marker-end="url(#head)"/>

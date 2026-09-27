@@ -1,6 +1,6 @@
 警告[W104]: tests/fixtures/hotel_naive.flow:81:1: `booking.nights` の範囲が分かりません（`Booking` のフィールド `nights` に範囲がありません）。規則 `hold` の `nights` が受け取るのは `>=1 <=30` です
     81 |   let quote = hold(room: booking.room, nights: booking.nights)
-警告[W101]: tests/fixtures/hotel_naive.flow:85:1: `confirm_intent` が失敗すると、案件 `pi` が requires_payment_method, requires_confirmation, requires_action, requires_capture のままワークフローが失敗します。そうなる呼び出しは 4 か所です。呼び出しでエラーを受けるか、`on failure` を足して案件を片付けてください
+警告[W101]: tests/fixtures/hotel_naive.flow:85:1: `confirm_intent` が失敗すると、案件 `pi` が requires_payment_method, requires_confirmation, requires_action, requires_capture のままワークフローが失敗します。そうなる呼び出しは 4 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
     85 |   pi <- confirm_intent(id: pi.id)
   そうなる例:
       81  quote = hold(…)
@@ -8,7 +8,7 @@
       84  create_intent: pi が requires_confirmation で始まる
       85  confirm_intent: pi が requires_confirmation → requires_payment_method
       85  confirm_intent が失敗する（timeout・failure）
-エラー[E010]: tests/fixtures/hotel_naive.flow:87:1: `match` に requires_confirmation の行き先がありません。ここで `pi.status` はその値を取りえます
+エラー[E010]: tests/fixtures/hotel_naive.flow:87:1: `match` に requires_confirmation の分岐がありません。ここで `pi.status` はその値を取りえます
     87 |   match pi.status
   そうなる例:
       81  quote = hold(…)
@@ -35,7 +35,7 @@
       88  match pi.status: requires_action
           外部のサービスで `authenticate` が起きる: pi requires_action → requires_payment_method
       89  wait_for_customer: pi は requires_payment_method
-      93  capture_intent: capture が断られる（unexpected_state）
+      93  capture_intent: capture が拒否される（unexpected_state）
       94  fail HoldExpired
 エラー[E020]: tests/fixtures/hotel_naive.flow:95:1: 案件 `pi` が requires_payment_method, processing のまま、ここでワークフローが終わることがあります（終わりの状態は succeeded, canceled）
     95 |   succeed outcome = stayed

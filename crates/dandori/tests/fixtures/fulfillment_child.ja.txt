@@ -1,4 +1,4 @@
 エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: 引数 `carrier` は、`arrange_delivery` が入力 `carrier` として受け取るものと合いません。`Carrier` の `drone` は `carrier` の値にありません
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
-エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` が答える `tracking_number` は、`Delivery` のフィールド `tracking_number` と合いません。`string` は `int` ではありません
+エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` が返す `tracking_number` は、`Delivery` のフィールド `tracking_number` と合いません。`string` は `int` ではありません
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery

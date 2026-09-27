@@ -39,7 +39,7 @@ pub fn check(pm: &Model, task: &TaskDef, cm: &Model) -> Vec<Diag> {
                 match cm.outputs.iter().find(|(o, _)| o == f) {
                     Some((_, ot)) => {
                         if let Err((en, ja)) = fits(cm, ot, cm.output_ranges.get(f).copied(), pm, ft, rd.ranges.get(f).copied(), &mut vec![]) {
-                            push((format!("`{child}` answers `{f}` with what the field `{f}` of `{}` does not take: {en}", rd.name), format!("`{child}` が答える `{f}` は、`{}` のフィールド `{f}` と合いません。{ja}", rd.name)));
+                            push((format!("`{child}` answers `{f}` with what the field `{f}` of `{}` does not take: {en}", rd.name), format!("`{child}` が返す `{f}` は、`{}` のフィールド `{f}` と合いません。{ja}", rd.name)));
                         }
                     }
                     None if matches!(ft, Ty::Opt(_)) => {}
@@ -49,7 +49,7 @@ pub fn check(pm: &Model, task: &TaskDef, cm: &Model) -> Vec<Diag> {
         }
         Some(t) => push((
             format!("`{child}` answers with its outputs, a record, and the answer of `{}` is `{}`", task.name, pm.ty_name(t)),
-            format!("`{child}` は出力をレコードとして答えますが、`{}` の答えは `{}` です", task.name, pm.ty_name(t)),
+            format!("`{child}` は出力をレコードとして返しますが、`{}` の結果の型は `{}` です", task.name, pm.ty_name(t)),
         )),
     }
     // the errors: each is one the child fails with

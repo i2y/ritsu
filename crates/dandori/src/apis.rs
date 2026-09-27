@@ -257,7 +257,7 @@ impl<'a> Op<'a> {
         let api = &self.api.name;
         let op = &self.label;
         if self.streams {
-            out.push((format!("`{api}` {op} streams; `connect` calls a method that takes one message and answers one"), format!("`{api}` の {op} はストリームです。`connect` で呼べるのは、一つ受け取って一つ答えるメソッドです")));
+            out.push((format!("`{api}` {op} streams; `connect` calls a method that takes one message and answers one"), format!("`{api}` の {op} はストリームです。`connect` で呼べるのは、一つ受け取って一つ返すメソッドです")));
             return out;
         }
         // what goes: the path's and the query's parameters, and the body's
@@ -306,7 +306,7 @@ impl<'a> Op<'a> {
                 _ => self.reads(o, m, t, task.result_range, &mut vec![]).err().into_iter().collect(),
             };
             for (en, ja) in found {
-                out.push((format!("what `{api}` {op} answers is not `{}`: {en}", m.ty_name(t)), format!("`{api}` の {op} の答えは `{}` に合いません。{ja}", m.ty_name(t))));
+                out.push((format!("what `{api}` {op} answers is not `{}`: {en}", m.ty_name(t)), format!("`{api}` の {op} のレスポンスは `{}` に合いません。{ja}", m.ty_name(t))));
             }
         }
         // the errors it answers with, and the idempotency token
@@ -317,7 +317,7 @@ impl<'a> Op<'a> {
                         let s = st.to_string();
                         let class = format!("{}XX", &s[..1]);
                         if !self.errors.iter().any(|x| *x == s || x.eq_ignore_ascii_case(&class) || x == "default") {
-                            out.push((format!("`{api}` {op} does not answer with {st} (`{}`)", e.name), format!("`{api}` の {op} は {st} で答えません（`{}`）", e.name)));
+                            out.push((format!("`{api}` {op} does not answer with {st} (`{}`)", e.name), format!("`{api}` の {op} は {st} を返しません（`{}`）", e.name)));
                         }
                     }
                 }
@@ -463,8 +463,8 @@ impl<'a> Op<'a> {
             let Some(mb) = ms.iter().find(|x| x.name == *f) else {
                 let other = ms.iter().find(|x| x.alias.as_deref() == Some(f));
                 out.push(match other {
-                    Some(o) => (format!("the answer names `{f}` `{}`", o.name), format!("答えでは `{f}` は `{}` という名前です", o.name)),
-                    None => (format!("the answer has no `{f}` (a field of `{}`)", rd.name), format!("答えに `{f}`（`{}` のフィールド）はありません", rd.name)),
+                    Some(o) => (format!("the answer names `{f}` `{}`", o.name), format!("レスポンスでは `{f}` は `{}` という名前です", o.name)),
+                    None => (format!("the answer has no `{f}` (a field of `{}`)", rd.name), format!("レスポンスに `{f}`（`{}` のフィールド）はありません", rd.name)),
                 });
                 continue;
             };

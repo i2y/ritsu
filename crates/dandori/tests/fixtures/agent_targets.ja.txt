@@ -7,7 +7,7 @@ build --target asl:
     15 | task 書く(要点: string) -> string
 エラー[E050]: tests/fixtures/agent_targets.flow:19:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`送る` の `timeout` はそれより長くできません
     19 | task 送る(本文: string)
-エラー[E050]: tests/fixtures/agent_targets.flow:25:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`手元で読む` の送り先は `http://ollama.internal:11434/v1/responses` です
+エラー[E050]: tests/fixtures/agent_targets.flow:25:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`手元で読む` の送信先は `http://ollama.internal:11434/v1/responses` です
     25 | task 手元で読む(本文: string) -> string
-エラー[E050]: tests/fixtures/agent_targets.flow:31:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`平文で送る` の送り先は `http://example.com/v1/notes` です
+エラー[E050]: tests/fixtures/agent_targets.flow:31:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`平文で送る` の送信先は `http://example.com/v1/notes` です
     31 | task 平文で送る(本文: string)

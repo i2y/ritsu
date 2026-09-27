@@ -1007,7 +1007,7 @@ impl Parser {
             self.pos += 1;
             let child = match self.cur_line() {
                 Some(c) if c.indent > indent => c.indent,
-                _ => return Err(err(sp, "`match` needs its arms indented under it", "`match` の下に、字下げした行き先が要ります")),
+                _ => return Err(err(sp, "`match` needs its arms indented under it", "`match` の下に、字下げした分岐が要ります")),
             };
             let mut arms = Vec::new();
             while let Some(al) = self.cur_line() {
@@ -1030,7 +1030,7 @@ impl Parser {
                 let arrow = ac.expect_sym("=>")?;
                 self.pos += 1;
                 let body = if ac.at_end() {
-                    self.child_block(child, "a match arm", "match の行き先", arrow)?
+                    self.child_block(child, "a match arm", "match の分岐", arrow)?
                 } else {
                     let k = simple_stmt(&mut ac)?;
                     ac.expect_end()?;
@@ -1205,11 +1205,11 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
             "workflow" => {
                 let name = cur.ident("the workflow's name", "ワークフローの名前")?;
                 let vsp = cur.span();
-                let (v, _) = cur.ident("a version such as v1", "v1 のような版")?;
+                let (v, _) = cur.ident("a version such as v1", "v1 のようなバージョン")?;
                 let n = v.strip_prefix('v').and_then(|s| s.parse::<u32>().ok());
                 match n {
                     Some(n) => prog.version = n,
-                    None => return Err(err(vsp, "write the version as v1, v2, ...", "版は v1、v2 のように書きます")),
+                    None => return Err(err(vsp, "write the version as v1, v2, ...", "バージョンは v1、v2 のように書きます")),
                 }
                 cur.expect_end()?;
                 prog.name = Some(name);
@@ -1414,7 +1414,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                         };
                         c.held.push((n, v));
                     } else if cc.eat_kw("external") {
-                        c.external.extend(cc.names("an event", "出来事")?);
+                        c.external.extend(cc.names("an event", "イベント")?);
                     } else if cc.eat_kw("state") {
                         c.state_field = Some(cc.ident("a field", "フィールド")?);
                     } else if cc.eat_kw("refused") {
@@ -1486,7 +1486,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                 sp.line,
                 sp.col,
                 format!("the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws and agent", first.line),
-                format!("このタスクの呼び方はもう書かれています（{} 行目）。呼び方は lambda・http・connect・aws・agent のどれか一つです", first.line),
+                format!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent のどれか一つです", first.line),
             ));
         }
     }
@@ -1584,7 +1584,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             }
         },
         "retry" => {
-            let (n, nsp) = cc.int("a number of retries", "やり直す回数")?;
+            let (n, nsp) = cc.int("a number of retries", "リトライの回数")?;
             if n < 1 {
                 return Err(err(nsp, "retry at least once, or leave `retry` out", "一回以上を書くか、`retry` を書かないでください"));
             }
@@ -1627,14 +1627,14 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let machine = cc.qualname()?;
             let mut then = Vec::new();
             if cc.eat_kw("then") {
-                then = cc.names("an event", "出来事")?;
+                then = cc.names("an event", "イベント")?;
             }
             t.machine = Some((MachineUse::Starts { machine, then }, sp));
         }
         "sends" => {
-            let first = cc.ident("an event", "出来事")?;
+            let first = cc.ident("an event", "イベント")?;
             if cc.eat_sym("=") {
-                let v = cc.ident("an event", "出来事")?;
+                let v = cc.ident("an event", "イベント")?;
                 t.machine = Some((MachineUse::Sends { event: v, column: Some(first) }, sp));
             } else {
                 t.machine = Some((MachineUse::Sends { event: first, column: None }, sp));

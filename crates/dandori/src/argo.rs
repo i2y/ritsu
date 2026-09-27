@@ -89,7 +89,7 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 t.line,
                 1,
                 format!("Argo reports a workflow's failure without its error, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
-                format!("Argo はワークフローの失敗をそのエラーなしで伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で受けてください", t.name),
+                format!("Argo はワークフローの失敗をそのエラーなしで伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", t.name),
             )),
             _ => {}
         }
@@ -99,7 +99,7 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 t.line,
                 1,
                 format!("Argo would retry only the step that hands the id of `{}` on, not the wait for its answer; leave out `retry`", t.name),
-                format!("Argo でやり直せるのは `{}` の ID を渡すステップだけで、答えを待つところはやり直せません。`retry` を外してください", t.name),
+                format!("Argo でリトライできるのは `{}` の ID を渡すステップだけで、応答を待つところはリトライできません。`retry` を外してください", t.name),
             ));
         }
     }

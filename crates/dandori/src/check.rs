@@ -88,7 +88,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                 let starts_or_sends = matches!(t.machine, Some(TaskMachine::Starts { .. }) | Some(TaskMachine::Sends { .. }));
                 let (en, ja) = (
                     format!("`{}` is retried after a failure or a timeout, when the first try may have gone through on the other side; give it `key` so the other side can tell a retry from a new request, or mark it `idempotent` if doing it twice is the same as once", t.name),
-                    format!("`{}` は失敗やタイムアウトのあとにやり直されますが、最初の一回が外部のサービスではもう通っていることがあります。やり直しだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
+                    format!("`{}` は失敗やタイムアウトのあとにリトライされますが、最初の一回が外部のサービスではもう通っていることがあります。リトライだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
                 );
                 if starts_or_sends {
                     out.push(Diag::error("E030", t.line, 1, en, ja));
@@ -109,7 +109,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                     t.line,
                     1,
                     format!("an Express workflow cannot wait for a nested execution to end (`{}`)", t.name),
-                    format!("Express のワークフローは、入れ子の実行が終わるのを待てません（`{}`）", t.name),
+                    format!("Express のワークフローは、ネストした実行が終わるのを待てません（`{}`）", t.name),
                 ));
             }
             if t.changes_things() && !t.key {

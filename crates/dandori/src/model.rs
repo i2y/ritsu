@@ -553,7 +553,7 @@ impl Model {
         self.tasks
             .iter()
             .filter(|t| t.event)
-            .map(|t| crate::diag::Diag::error("E050", t.line, 1, format!("`{}` waits for an event sent to the workflow by name; {en}", t.name), format!("`{}` はワークフローに名前で送られてくる出来事を待ちます。{ja}", t.name)))
+            .map(|t| crate::diag::Diag::error("E050", t.line, 1, format!("`{}` waits for an event sent to the workflow by name; {en}", t.name), format!("`{}` はワークフローに名前で送られてくるイベントを待ちます。{ja}", t.name)))
             .collect()
     }
 

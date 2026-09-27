@@ -14,11 +14,11 @@ hide:
 <p class="dd-hero__tag">ワークフローを書く。検査する。ビルドする。</p>
 
 <p class="dd-hero__lede">
-<strong>業務ルールを呼び出すワークフローを書くための、型付きの小さな言語です。</strong>ホテルの予約を受けてカードの与信を取る、注文の明細ごとに在庫を引き当てる、問い合わせに返事を書く、といった処理を書きます。ワークフローは API や規則を呼び出し、途中で待ち、失敗すればやり直します。Stripe の PaymentIntent のように、呼び出すたびに外部のサービスの中で状態が変わっていくものも扱えます。
+<strong>業務ルールを呼び出すワークフローを書くための、型付きの小さな言語です。</strong>ホテルの予約を受けてカードの与信を取る、注文の明細ごとに在庫を引き当てる、問い合わせに返事を書く、といった処理を書きます。ワークフローは API や規則を呼び出し、途中で待ち、失敗すればリトライします。Stripe の PaymentIntent のように、呼び出すたびに外部のサービスの中で状態が変わっていくものも扱えます。
 </p>
 
 <p class="dd-hero__lede">
-<strong>動かす前に検査します。</strong>型や match の行き先の漏れだけでなく、ワークフローが終わったときに支払いや注文が中途半端な状態で残らないか、やり直しで同じ変更を二度加えてしまわないか、実行履歴がプラットフォームの上限を超えないかまで調べます。
+<strong>動かす前に検査します。</strong>型や match の分岐の漏れだけでなく、ワークフローが終わったときに支払いや注文が中途半端な状態で残らないか、リトライで同じ変更を二度加えてしまわないか、実行履歴がプラットフォームの上限を超えないかまで調べます。
 </p>
 
 <p class="dd-hero__lede">
@@ -34,8 +34,8 @@ hide:
 </div>
 
 <div class="dd-overview" markdown>
-![.flow と、それが呼ぶ rulec の規則を検査に通す。検査は、型と match のすべての行き先、案件が最後に残りうるすべての状態、外部のデータを変える呼び出しのやり直し、プラットフォームごとの実行履歴の大きさ、範囲・子の .flow・API の記述、プラットフォームにできることとできないことを見る。参照インタプリタが意味を一つに決め、シナリオはどの行き先もどのエラーも通る。ビルドは Temporal（主なプラットフォーム）、AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにコードを生成し、どれもシナリオごとに走らせて参照と突き合わせる](images/overview-ja.svg#only-dark)
-![.flow と、それが呼ぶ rulec の規則を検査に通す。検査は、型と match のすべての行き先、案件が最後に残りうるすべての状態、外部のデータを変える呼び出しのやり直し、プラットフォームごとの実行履歴の大きさ、範囲・子の .flow・API の記述、プラットフォームにできることとできないことを見る。参照インタプリタが意味を一つに決め、シナリオはどの行き先もどのエラーも通る。ビルドは Temporal（主なプラットフォーム）、AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにコードを生成し、どれもシナリオごとに走らせて参照と突き合わせる](images/overview-ja-light.svg#only-light)
+![.flow と、それが呼ぶ rulec の規則を検査に通す。検査は、型と match のすべての分岐、案件が最後に残りうるすべての状態、外部のデータを変える呼び出しのリトライ、プラットフォームごとの実行履歴の大きさ、範囲・子の .flow・API の記述、プラットフォームにできることとできないことを見る。参照インタプリタが意味を一つに決め、シナリオはどの分岐もどのエラーも通る。ビルドは Temporal（主なプラットフォーム）、AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにコードを生成し、どれもシナリオごとに走らせて参照と突き合わせる](images/overview-ja.svg#only-dark)
+![.flow と、それが呼ぶ rulec の規則を検査に通す。検査は、型と match のすべての分岐、案件が最後に残りうるすべての状態、外部のデータを変える呼び出しのリトライ、プラットフォームごとの実行履歴の大きさ、範囲・子の .flow・API の記述、プラットフォームにできることとできないことを見る。参照インタプリタが意味を一つに決め、シナリオはどの分岐もどのエラーも通る。ビルドは Temporal（主なプラットフォーム）、AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにコードを生成し、どれもシナリオごとに走らせて参照と突き合わせる](images/overview-ja-light.svg#only-light)
 </div>
 
 ---
@@ -66,7 +66,7 @@ flow
 
 ### 判断はワークフローの外に置く
 
-`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・無いことがある値の `match` だけで、その値は規則の答えか、タスクの答え（API、エージェント、自分で書くコード、人の承認）です。抜けがあると困る判断は、[rulec](https://github.com/i2y/rulec) の表で書けます。表に抜けも重なりも無いことは rulec が証明し、表に書いたステートマシンは、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型になります。
+`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・オプショナルな値の `match` だけで、その値は規則の結果か、タスクの結果（API、エージェント、自分で書くコード、人の承認）です。抜けがあると困る判断は、[rulec](https://github.com/i2y/rulec) の表で書けます。表に抜けも重なりも無いことは rulec が証明し、表に書いたステートマシンは、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型になります。
 
 </div>
 </div>
@@ -120,7 +120,7 @@ dandori build hotel.flow --target pydantic-graph
 
 ### 一つの .flow から、使っているプラットフォーム向けに
 
-主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript か Python で生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じ要求を送ります。プラットフォームにできないことは、ビルドが断ります。[プラットフォーム別のビルド](platforms.md)
+主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript か Python で生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドが断ります。[プラットフォーム別のビルド](platforms.md)
 
 </div>
 </div>
@@ -142,7 +142,7 @@ task read_inquiry(text: string) -> Reading
 
 ### エージェントに読ませ、書かせ、選ばせる
 
-タスクをエージェントにすることもできます。モデルはタスクの引数を受け取り、タスクの型の値を返します。その答えも、ほかの答えと同じく型で確かめます。答えはそのまま `match` で分岐に使うことも、規則に渡して判断させることもできます。OpenAI のモデル、Claude、Open Responses のエンドポイント（Ollama、vLLM、LM Studio、OpenRouter など）を呼べます。[エージェント](agents.md)
+タスクをエージェントにすることもできます。モデルはタスクの引数を受け取り、タスクの型の値を返します。その応答も、ほかのタスクの結果と同じく型で確かめます。応答はそのまま `match` で分岐に使うことも、規則に渡して判断させることもできます。OpenAI のモデル、Claude、Open Responses のエンドポイント（Ollama、vLLM、LM Studio、OpenRouter など）を呼べます。[エージェント](agents.md)
 
 </div>
 </div>

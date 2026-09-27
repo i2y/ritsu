@@ -366,7 +366,7 @@ impl<'a> Flow<'a> {
                 match axes.len() {
                     1 => Some(axes[0]),
                     0 => {
-                        self.push(Diag::error("E008", line, 1, format!("no input of the machine `{}` has the event `{event}`", mc.name), format!("ステートマシン `{}` のどの入力にも出来事 `{event}` はありません", mc.name)));
+                        self.push(Diag::error("E008", line, 1, format!("no input of the machine `{}` has the event `{event}`", mc.name), format!("ステートマシン `{}` のどの入力にもイベント `{event}` はありません", mc.name)));
                         None
                     }
                     _ => {
@@ -643,7 +643,7 @@ impl<'a> Flow<'a> {
                     }
                     Settling::No => (
                         format!("if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
-                        format!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを受けるか、`on failure` を足して案件を片付けてください"),
+                        format!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください"),
                     ),
                 };
                 self.push(Diag::warning("W101", line, 1, en, ja).with_path(path));
@@ -701,7 +701,7 @@ impl<'a> Flow<'a> {
                                 for o in self.m.machine(c).outcomes(*st, &fixed) {
                                     if self.is_refused(c, &o) {
                                         let sn = self.state_name(c, *st).to_string();
-                                        self.push(Diag::error("E021", s.line, 1, format!("the machine refuses `{ev}` in {sn}, so `{}` cannot start the case with it", t.name), format!("ステートマシンは {sn} で `{ev}` を断るので、`{}` はそれで案件を始められません", t.name)));
+                                        self.push(Diag::error("E021", s.line, 1, format!("the machine refuses `{ev}` in {sn}, so `{}` cannot start the case with it", t.name), format!("ステートマシンは {sn} で `{ev}` を拒否するので、`{}` はそれで案件を始められません", t.name)));
                                         continue;
                                     }
                                     next.entry(o.next).or_insert_with(|| p.clone());
@@ -725,7 +725,7 @@ impl<'a> Flow<'a> {
                                 s.line,
                                 1,
                                 format!("if `{}` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one", t.name),
-                                format!("外部のサービスで案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。やり直したときに同じ案件が返るよう、タスクに `key` を付けてください", t.name),
+                                format!("外部のサービスで案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。リトライしたときに同じ案件が返るよう、タスクに `key` を付けてください", t.name),
                             ));
                         }
                     }
@@ -766,7 +766,7 @@ impl<'a> Flow<'a> {
                         if next.is_empty() {
                             let names = self.names(c, now.keys().cloned()).join(", ");
                             let p = now.values().next().cloned().unwrap_or_default();
-                            self.push(Diag::error("E021", s.line, 1, format!("`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them"), format!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を断ります")).with_path(p));
+                            self.push(Diag::error("E021", s.line, 1, format!("`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them"), format!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します")).with_path(p));
                             ok = Abs::dead();
                         } else {
                             self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(next.keys().cloned());
@@ -784,7 +784,7 @@ impl<'a> Flow<'a> {
                                         s.line,
                                         1,
                                         format!("the machine may refuse `{event}` here (when `{cn}` is in {names}), but `{}` does not say how a refusal comes back; write `refused as <error>` under the task", t.name),
-                                        format!("ここではステートマシンが `{event}` を断ることがあります（`{cn}` が {names} のとき）。`{}` には断られたときの返り方が書かれていません。タスクの下に `refused as <エラー>` を書いてください", t.name),
+                                        format!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`{}` には拒否されたときの返り方が書かれていません。タスクの下に `refused as <エラー>` を書いてください", t.name),
                                     )
                                     .with_path(p),
                                 ),
@@ -796,21 +796,21 @@ impl<'a> Flow<'a> {
                                                 s.line,
                                                 1,
                                                 format!("the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`"),
-                                                format!("ここではステートマシンが `{event}` を断ることがあります（`{cn}` が {names} のとき）。`on {err} =>` で受けてください"),
+                                                format!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください"),
                                             )
                                             .with_path(p),
                                         );
                                     }
                                     let mut r = a.clone();
                                     r.cases[c].states = refusing.clone();
-                                    refused = Some(r.step(Step::new(s.line, format!("{}: {event} is refused ({err})", t.name), format!("{}: {event} が断られる（{err}）", t.name))));
+                                    refused = Some(r.step(Step::new(s.line, format!("{}: {event} is refused ({err})", t.name), format!("{}: {event} が拒否される（{err}）", t.name))));
                                 }
                             }
                         } else if let Some(err) = &refused_err {
                             let only_refusal = handlers.iter().any(|h| h.errors.len() == 1 && h.errors[0] == HErr::Declared(err.clone()));
                             if only_refusal {
                                 let names = self.names(c, now.keys().cloned()).join(", ");
-                                self.push(Diag::warning("W102", s.line, 1, format!("`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused"), format!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は断られません")));
+                                self.push(Diag::warning("W102", s.line, 1, format!("`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused"), format!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は拒否されません")));
                             }
                         }
                         // any other error: the event may or may not have happened on the other side
@@ -1002,9 +1002,9 @@ impl<'a> Flow<'a> {
                 if !possible.contains_key(v) {
                     if narrowed || (v == "none" && !optional) {
                         let (en, ja) = if v == "none" {
-                            (format!("the arm `none` can never be taken: the case `{name}` has been started on every run that gets here"), format!("行き先 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています"))
+                            (format!("the arm `none` can never be taken: the case `{name}` has been started on every run that gets here"), format!("分岐 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています"))
                         } else {
-                            (format!("the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join(", ")), format!("行き先 `{v}` は通りません。ここで `{key}` は {} のどれかです", listed.join("・")))
+                            (format!("the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join(", ")), format!("分岐 `{v}` は通りません。ここで `{key}` は {} のどれかです", listed.join("・")))
                         };
                         let why = if v == "none" { a.path.clone() } else { possible.values().next().cloned().unwrap_or_else(|| a.path.clone()) };
                         self.push(Diag::error("E011", arm.line, 1, en, ja).with_path(why));
@@ -1063,7 +1063,7 @@ impl<'a> Flow<'a> {
             let names: Vec<String> = missing.iter().map(|(v, _)| v.clone()).collect();
             let (en, ja) = (
                 format!("`match` has no arm for {}, which `{key}` can be here", names.join(", ")),
-                format!("`match` に {} の行き先がありません。ここで `{key}` はその値を取りえます", names.join("・")),
+                format!("`match` に {} の分岐がありません。ここで `{key}` はその値を取りえます", names.join("・")),
             );
             let path = missing[0].1.clone();
             self.push(Diag::error("E010", s.line, 1, en, ja).with_path(path));
