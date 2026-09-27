@@ -88,7 +88,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                 let starts_or_sends = matches!(t.machine, Some(TaskMachine::Starts { .. }) | Some(TaskMachine::Sends { .. }));
                 let (en, ja) = (
                     format!("`{}` is retried after a failure or a timeout, when the first try may have gone through on the other side; give it `key` so the other side can tell a retry from a new request, or mark it `idempotent` if doing it twice is the same as once", t.name),
-                    format!("`{}` は失敗やタイムアウトのあとにやり直されますが、最初の一回が相手の側で通っていることがあります。相手がやり直しを見分けられるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
+                    format!("`{}` は失敗やタイムアウトのあとにやり直されますが、最初の一回が外部のサービスではもう通っていることがあります。やり直しだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
                 );
                 if starts_or_sends {
                     out.push(Diag::error("E030", t.line, 1, en, ja));
@@ -118,7 +118,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                     t.line,
                     1,
                     format!("an asynchronous Express workflow may run twice, and `{}` changes things without `key`", t.name),
-                    format!("非同期の Express のワークフローは二度走ることがあり、`{}` は `key` を持たずに相手の側を変えます", t.name),
+                    format!("非同期の Express のワークフローは二度走ることがあり、`{}` は `key` を持たずに外部のデータを変えます", t.name),
                 ));
             }
         }

@@ -663,7 +663,7 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E007", ksp, "the platform starts a child workflow once for each call, so `key` does not apply to it", "子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません"));
                 }
                 match (&binding, &t.key_param) {
-                    (Some(Binding::Agent { .. }), _) => self.push(e("E007", ksp, "an agent changes nothing on the other side, so it takes no `key`", "エージェントは相手の側を何も変えないので、`key` は要りません")),
+                    (Some(Binding::Agent { .. }), _) => self.push(e("E007", ksp, "an agent changes nothing on the other side, so it takes no `key`", "エージェントは外部のデータを何も変えないので、`key` は要りません")),
                     (Some(Binding::Aws { .. }), None) => self.push(e(
                         "E007",
                         ksp,
@@ -839,7 +839,7 @@ impl<'a> Lowerer<'a> {
                 "E007",
                 *msp,
                 "an agent reads what it is given and answers; it has no case on the other side to start, move or look at",
-                "エージェントは渡されたものを読んで答えるだけで、相手の側の案件を始めたり動かしたり見たりはしません",
+                "エージェントは渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません",
             ));
         }
         let Some(r) = result else {

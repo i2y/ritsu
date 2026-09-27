@@ -1,4 +1,4 @@
-警告[W030]: tests/fixtures/mistakes.flow:17:1: `notify` は失敗やタイムアウトのあとにやり直されますが、最初の一回が相手の側で通っていることがあります。相手がやり直しを見分けられるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください
+警告[W030]: tests/fixtures/mistakes.flow:17:1: `notify` は失敗やタイムアウトのあとにやり直されますが、最初の一回が外部のサービスではもう通っていることがあります。やり直しだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください
     17 | task notify(text: string) -> 通知
 エラー[E012]: tests/fixtures/mistakes.flow:22:1: ここでは `見積` はまだ値を持っていません
     22 |   match 見積.扱い

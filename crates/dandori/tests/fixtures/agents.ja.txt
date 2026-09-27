@@ -6,7 +6,7 @@
     65 |   errors 断った
 エラー[E007]: tests/fixtures/agents.flow:70:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
     70 |   callback
-エラー[E007]: tests/fixtures/agents.flow:75:3: エージェントは相手の側を何も変えないので、`key` は要りません
+エラー[E007]: tests/fixtures/agents.flow:75:3: エージェントは外部のデータを何も変えないので、`key` は要りません
     75 |   key
 エラー[E007]: tests/fixtures/agents.flow:78:3: エージェントは答えを返します。答えの型を `-> <型>` と書いてください
     78 |   agent "読んでください。"
@@ -16,7 +16,7 @@
     86 |   agent "読んでください。"
 エラー[E007]: tests/fixtures/agents.flow:90:3: 答えの JSON Schema（`{"answer": …}` に包んだもの）が、OpenAI の Structured Outputs の受け付ける大きさを超えています。オブジェクトの入れ子が 11 段（10 段まで）
     90 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:96:3: エージェントは渡されたものを読んで答えるだけで、相手の側の案件を始めたり動かしたり見たりはしません
+エラー[E007]: tests/fixtures/agents.flow:96:3: エージェントは渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません
     96 |   observes
 エラー[E007]: tests/fixtures/agents.flow:99:9: `gemini` は dandori の知らないエージェントです。`agent openai "…"`（`agent "…"` だけでも同じ）か `agent claude "…"` と書いてください
     99 |   agent gemini "読んでください。"

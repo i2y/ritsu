@@ -1,6 +1,6 @@
 エラー[E031]: tests/fixtures/express.flow:1:1: Express のワークフローは五分までしか動けませんが、これはそれより長く待つことがあります
      1 | workflow quick v1
-エラー[E031]: tests/fixtures/express.flow:7:1: 非同期の Express のワークフローは二度走ることがあり、`charge` は `key` を持たずに相手の側を変えます
+エラー[E031]: tests/fixtures/express.flow:7:1: 非同期の Express のワークフローは二度走ることがあり、`charge` は `key` を持たずに外部のデータを変えます
      7 | task charge(amount: int) -> 結果
 エラー[E031]: tests/fixtures/express.flow:10:1: Express のワークフローはコールバックを待てません（`approval`）
     10 | task approval(id: string) -> 結果

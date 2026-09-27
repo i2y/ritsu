@@ -33,7 +33,7 @@
       84  create_intent: pi が requires_confirmation で始まる
       85  confirm_intent: pi が requires_confirmation → requires_action
       88  match pi.status: requires_action
-          相手の側で `authenticate` が起きる: pi requires_action → requires_payment_method
+          外部のサービスで `authenticate` が起きる: pi requires_action → requires_payment_method
       89  wait_for_customer: pi は requires_payment_method
       93  capture_intent: capture が断られる（unexpected_state）
       94  fail HoldExpired
@@ -47,5 +47,5 @@
       90  match pi.status: requires_capture
       90  booking.check_out まで待つ
       93  capture_intent: pi が requires_capture → processing
-          相手の側で `settle` が起きる: pi processing → requires_payment_method
+          外部のサービスで `settle` が起きる: pi processing → requires_payment_method
       95  succeed

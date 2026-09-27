@@ -87,7 +87,7 @@ flow
       90  match pi.status: requires_capture
       90  booking.check_out まで待つ
       93  capture_intent: pi が requires_capture → processing
-          相手の側で `settle` が起きる: pi processing → requires_payment_method
+          外部のサービスで `settle` が起きる: pi processing → requires_payment_method
       95  succeed
 ```
 

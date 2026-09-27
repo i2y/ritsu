@@ -310,7 +310,7 @@ impl<'a> Flow<'a> {
                     np.push(Step::new(
                         0,
                         format!("`{ev}` happens on the other side: {} {from} → {to}", case.name),
-                        format!("相手の側で `{ev}` が起きる: {} {from} → {to}", case.name),
+                        format!("外部のサービスで `{ev}` が起きる: {} {from} → {to}", case.name),
                     ));
                     out.insert(o.next, np);
                     work.push(o.next);
@@ -725,7 +725,7 @@ impl<'a> Flow<'a> {
                                 s.line,
                                 1,
                                 format!("if `{}` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one", t.name),
-                                format!("相手の側で案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。やり直したときに同じ案件が返るよう、タスクに `key` を付けてください", t.name),
+                                format!("外部のサービスで案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。やり直したときに同じ案件が返るよう、タスクに `key` を付けてください", t.name),
                             ));
                         }
                     }
