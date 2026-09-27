@@ -244,6 +244,168 @@ fn asl_runs_as_the_reference_says() {
     eprintln!("compared {compared} scenario(s) between the state machines and the reference interpreter");
 }
 
+/// The last image of LocalStack's community edition, which starts without an account; the
+/// images after it ask for an auth token.
+const LOCALSTACK_IMAGE: &str = "localstack/localstack:4.14.0";
+
+fn localstack_ready() -> Result<(), String> {
+    let out = Command::new("docker").args(["image", "inspect", "--format", "{{.Id}}", LOCALSTACK_IMAGE]).output().map_err(|_| "docker is missing".to_string())?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let err = String::from_utf8_lossy(&out.stderr);
+    if err.contains("No such image") {
+        Err(format!("{LOCALSTACK_IMAGE} is not pulled; run `docker pull {LOCALSTACK_IMAGE}`"))
+    } else {
+        Err(format!("docker does not answer: {}", err.trim()))
+    }
+}
+
+/// A retry wait on LocalStack is timed from the history (it really waits), from the end of one
+/// try to the start of the next. It counts as the reference's wait when it is no shorter, give
+/// or take the 50 ms of the history's clock, and longer by less than 0.9 s or a quarter of it,
+/// whichever is more, which a loaded machine adds, and a wait of a backoff one step off (twice
+/// or half as long) does not. The intervals themselves are the definition's, which
+/// tools/asl-run.mjs reads to the second. Gives how much longer the longest was.
+fn timed(reference: &Value, got: &mut Value) -> f64 {
+    let mut over: f64 = 0.0;
+    let (Some(want), Some(steps)) = (reference["steps"].as_array(), got["steps"].as_array_mut()) else {
+        return over;
+    };
+    for (w, g) in want.iter().zip(steps.iter_mut()) {
+        if let (Some(a), Some(b)) = (w.get("retry_wait").and_then(|x| x.as_f64()), g.get("retry_wait").and_then(|x| x.as_f64())) {
+            if b >= a - 0.05 && b < a + (a / 4.0).max(0.9) {
+                over = over.max(b - a);
+                g["retry_wait"] = w["retry_wait"].clone();
+            }
+        }
+    }
+    over
+}
+
+/// Whether a run differs from the reference in its retry waits alone, which came out longer.
+fn late(reference: &Value, got: &Value) -> bool {
+    let (Some(want), Some(steps)) = (reference["steps"].as_array(), got["steps"].as_array()) else {
+        return false;
+    };
+    if want.len() != steps.len() || norm(&reference["end"]) != norm(&got["end"]) {
+        return false;
+    }
+    let mut late = false;
+    for (w, g) in want.iter().zip(steps) {
+        if norm(w) == norm(g) {
+            continue;
+        }
+        match (w.get("retry_wait").and_then(|x| x.as_f64()), g.get("retry_wait").and_then(|x| x.as_f64())) {
+            (Some(a), Some(b)) if b > a => late = true,
+            _ => return false,
+        }
+    }
+    late
+}
+
+/// The flows' runs on LocalStack, by tools/localstack/run.mjs: each flow's `runs` and `http`.
+fn on_localstack(dir: &Path, name: &str, flows: &[Value]) -> Vec<Value> {
+    let spec = dir.join(format!("{name}.json"));
+    let results = dir.join(format!("{name}-results.json"));
+    std::fs::write(&spec, serde_json::to_string(&json!({ "image": LOCALSTACK_IMAGE, "flows": flows })).unwrap()).unwrap();
+    let out = Command::new("node").arg(root().join("tools/localstack/run.mjs")).arg(&spec).arg(&results).output().unwrap();
+    assert!(out.status.success(), "the LocalStack runner failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
+    got["flows"].as_array().unwrap().clone()
+}
+
+/// The same state machines on LocalStack's Step Functions (its JSONata is the Java one), with
+/// every call's answer mocked; tools/localstack/run.mjs says how. A run whose calls and end are
+/// the reference's, but a retry wait of which came out longer than `timed` takes, is played once
+/// more in a new container: at the start of the whole test suite, the machine is loaded enough to
+/// wake LocalStack's threads a second late.
+#[test]
+fn localstack_runs_as_the_reference_says() {
+    need_rulec!();
+    need_node!();
+    if let Err(why) = localstack_ready() {
+        eprintln!("SKIP: {why}");
+        return;
+    }
+    let mut flows = Vec::new();
+    let mut compared = Vec::new();
+    for f in runnable_on(Platform::StepFunctions) {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        let files = match dandori::asl::build(&m) {
+            Ok(files) => files,
+            Err(d) if d.iter().all(|x| x.code == "E050") => continue,
+            Err(d) => panic!("{} does not build: {}", rel(&f), d[0].en),
+        };
+        let definition: Value = serde_json::from_str(&files[0].1).unwrap();
+        // every run is an execution named run-<n>, which the idempotency keys carry
+        let mut runs = Vec::new();
+        let mut references = Vec::new();
+        for (i, mut sc) in dandori::scenarios::generate(&m).into_iter().enumerate() {
+            let id = format!("run-{}", i + 1);
+            sc["execution"] = json!(id);
+            let reference = dandori::interp::run(&m, &sc, View::Asl).unwrap_or_else(|e| panic!("{} scenario {}: {e}", rel(&f), i + 1));
+            let answers: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter(|s| s.get("call").is_some()).map(|s| s["answer"].clone()).collect();
+            runs.push(json!({ "id": id, "input": sc["input"], "answers": answers }));
+            references.push((sc, reference));
+        }
+        flows.push(json!({ "name": key(&f), "definition": definition, "runs": runs }));
+        compared.push((f, references));
+    }
+    let dir = scratch("localstack");
+    let mut got = on_localstack(&dir, "spec", &flows);
+    let mut over = vec![0.0f64; flows.len()];
+    let mut again: Vec<Vec<usize>> = vec![Vec::new(); flows.len()];
+    for (fi, (_, references)) in compared.iter().enumerate() {
+        for (ri, (_, reference)) in references.iter().enumerate() {
+            let run = &mut got[fi]["runs"][ri];
+            over[fi] = over[fi].max(timed(reference, run));
+            if late(reference, run) {
+                again[fi].push(ri);
+            }
+        }
+    }
+    if again.iter().any(|a| !a.is_empty()) {
+        let replay: Vec<Value> = flows
+            .iter()
+            .zip(&again)
+            .filter(|(_, a)| !a.is_empty())
+            .map(|(flow, a)| {
+                let mut flow = flow.clone();
+                flow["runs"] = json!(a.iter().map(|ri| flow["runs"][*ri].clone()).collect::<Vec<_>>());
+                flow
+            })
+            .collect();
+        let replayed = on_localstack(&dir, "again", &replay);
+        let mut next = replayed.iter();
+        for (fi, a) in again.iter().enumerate().filter(|(_, a)| !a.is_empty()) {
+            let played = next.next().unwrap();
+            for (k, ri) in a.iter().enumerate() {
+                let reference = &compared[fi].1[*ri].1;
+                let mut run = played["runs"][k].clone();
+                over[fi] = over[fi].max(timed(reference, &mut run));
+                eprintln!("{} run {}: played again, since one of its retry waits came out longer than the reference's by more than the allowance", rel(&compared[fi].0), ri + 1);
+                got[fi]["runs"][*ri] = run;
+            }
+        }
+    }
+    let mut total = 0;
+    for (fi, ((f, references), g)) in compared.iter().zip(&got).enumerate() {
+        compare("the state machine on LocalStack", f, references, g["runs"].as_array().unwrap());
+        let http = g["http"].as_u64().unwrap_or(0);
+        eprintln!(
+            "{}: compared {} run(s) on LocalStack's Step Functions{}; the retry waits took at most {:.3} s longer than the reference's",
+            rel(f),
+            references.len(),
+            if http > 0 { format!(" ({http} HTTP Task(s) with another resource)") } else { String::new() },
+            over[fi]
+        );
+        total += references.len();
+    }
+    eprintln!("compared {total} scenario(s) between the state machines on LocalStack and the reference interpreter");
+}
+
 fn temporal_available() -> bool {
     root().join("tools/temporal/node_modules/@temporalio/testing").exists() && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }

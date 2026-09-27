@@ -440,8 +440,9 @@ on durable functions, its nodes on Argo.
 ## How the output is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
-of every example and run each of them seven ways — the reference interpreter, the
-generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`), the generated Temporal workflow
+of every example and run each of them eight ways — the reference interpreter, the
+generated ASL under JSONata 2.0.6 (`tools/asl-run.mjs`) and on LocalStack's Step Functions
+(`tools/localstack/run.mjs`), the generated Temporal workflow
 on a Temporal server (the Temporal CLI's dev server), in TypeScript (`tools/temporal/run.mjs`)
 and in Python (`tools/temporal-python/run.py`), the generated durable function in the
 SDK's local test runner (`tools/durable/run.mjs`), the generated WorkflowTemplate on Argo
@@ -480,6 +481,19 @@ child ([tests/children](tests/children)) also runs with the child's generated wo
 a stand-in, on one server, with the two in one language and in the two crossed: each run must end
 as the reference interpreter says when it is given the child's end, which the reference
 interpreter decides too, from the input the parent passes.
+
+On LocalStack, the community image of 4.14.0 in Docker (the last that starts without an account),
+the generated state machines run on its Step Functions, whose JSONata is the Java one, with every
+call's answer mocked: each run is a test case of LocalStack's mocked service integrations, and
+the calls, the waits and the end are read from the execution's history. The rounds of a Map run
+one at a time, a Wait goes on at once and keeps what it would have waited for in a variable of its
+own, and a retry really waits, timed from the history (a run whose retry waits alone came out long, as
+they do on a loaded machine, is played once more). That version knows neither the HTTP Task
+nor its errors, and its mock file cannot throw Step Functions' own errors. So the runner gives an
+HTTP Task the resource of an AWS SDK integration whose answers LocalStack hands on as they are, and
+throws Step Functions' errors under another name, which the Retry and the Catch use too: a
+timeout, an HTTP Task's error, and the `States.QueryEvaluationError` that an agent's refusal fails
+its Task with (that version would fail the whole execution with `States.Runtime` instead).
 
 On Argo, the controller runs the generated WorkflowTemplate, but the runner plays the pods:
 each pod waits for a scheduler the cluster does not have, and the runner does what its
@@ -537,11 +551,12 @@ npm install --prefix tools/wire
 uv venv --python 3.13 tools/wire/.venv
 uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
 sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
+docker pull localstack/localstack:4.14.0
 DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
-A test that cannot find rulec, Node, the tools, the cluster or the `argo` command prints a
-`SKIP:` line. The whole `cargo test` takes about two minutes; `tools/argo/setup.sh`
+A test that cannot find rulec, Node, the tools, the cluster, the `argo` command or the image of
+LocalStack prints a `SKIP:` line. The whole `cargo test` takes about two minutes; `tools/argo/setup.sh`
 sets Argo's controller up for it (it looks at a workflow again a second after a change, not
 ten) on the node image of kind 0.33.0. When the platform could not run one of a real run's
 pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of
