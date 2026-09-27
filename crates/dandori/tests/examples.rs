@@ -712,11 +712,29 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
         for e in std::fs::read_dir(&histories).unwrap() {
             let name = e.unwrap().file_name().into_string().unwrap();
             if name == format!("{id}.json") || (name.starts_with(&format!("{id}.")) && name[id.len() + 1..].trim_end_matches(".json").parse::<u32>().is_ok()) {
-                std::fs::copy(histories.join(&name), keep.join(&name)).unwrap();
+                std::fs::write(keep.join(&name), neutral(&std::fs::read_to_string(histories.join(&name)).unwrap())).unwrap();
             }
         }
         std::fs::copy(histories.join("spec.json"), keep.join("spec.json")).unwrap();
     }
+}
+
+/// A kept history is made neutral of the machine it was recorded on: the workers' identities and
+/// sticky task queues (`<pid>@<host>`) and the paths in stack traces (this tree, the temporary
+/// directory) name it. The replay reads none of them.
+fn neutral(text: &str) -> String {
+    let mut t = text.to_string();
+    let tmp = std::env::temp_dir().display().to_string();
+    let tmp = tmp.trim_end_matches('/');
+    t = t.replace(&format!("/private{tmp}/"), "/tmp/").replace(&format!("{tmp}/"), "/tmp/");
+    t = t.replace(&format!("{}/", root().display()), "/work/dandori/");
+    if let Ok(out) = Command::new("hostname").output() {
+        let host = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !host.is_empty() {
+            t = t.replace(&format!("@{host}"), "@localhost");
+        }
+    }
+    t
 }
 
 /// Worker Deployment Versioning, through the generated worker, on the dev server: two builds of
