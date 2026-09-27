@@ -1,0 +1,4 @@
+error[E016]: tests/fixtures/api_calls.flow:23:1: what `stripe` POST /v1/payment_intents answers is not `PaymentIntent`: in `created`, an integer is not `timestamp`
+    23 | task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
+error[E016]: tests/fixtures/api_calls.flow:26:1: what `warehouse` StockService/Reserve answers is not `Reservation`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
+    26 | task reserve_stock(sku: string, quantity: int) -> Reservation

@@ -1,0 +1,4 @@
+error[E015]: tests/fixtures/fulfillment_child.flow:18:1: the parameter `carrier` is not what `arrange_delivery` takes as its input `carrier`: `drone` of `Carrier` is not a value of `carrier`
+    18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
+error[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` answers `tracking_number` with what the field `tracking_number` of `Delivery` does not take: `string` is not `int`
+    18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery

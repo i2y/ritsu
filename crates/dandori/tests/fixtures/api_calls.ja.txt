@@ -1,0 +1,4 @@
+エラー[E016]: tests/fixtures/api_calls.flow:23:1: `stripe` の POST /v1/payment_intents の答えは `PaymentIntent` に合いません。`created` で、整数は `timestamp` ではありません
+    23 | task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
+エラー[E016]: tests/fixtures/api_calls.flow:26:1: `warehouse` の StockService/Reserve の答えは `Reservation` に合いません。`count` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+    26 | task reserve_stock(sku: string, quantity: int) -> Reservation

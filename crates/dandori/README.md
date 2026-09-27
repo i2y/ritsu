@@ -123,11 +123,14 @@ type's own unit, written without it (`>=0`, not `>=0JPY`), as the values travel 
   A value whose range nothing says is a warning (W104), which a range where the value comes
   from ends: that range is then checked as the value comes in.
 
+In a draft of the hotel booking whose stays run longer than the rule for the hold takes
+([tests/fixtures/hotel_ranges.flow](tests/fixtures/hotel_ranges.flow)):
+
 ```
-error[E014]: tests/fixtures/ranges.flow:35:1: `予約.泊数` can be outside `>=1 <=30`, the range of `泊数` of the rule `与信`: it is `>=1 <=60`
-    35 |   let a = 与信(客室: 予約.客室, 泊数: 予約.泊数)
-warning[W104]: tests/fixtures/ranges.flow:38:1: nothing says what range `延長` is in (the input `延長` has no range), and `泊数` of the rule `与信` takes `>=1 <=30`
-    38 |   let c = 与信(客室: standard, 泊数: 延長)
+error[E014]: tests/fixtures/hotel_ranges.flow:20:1: `booking.nights` can be outside `>=1 <=30`, the range of `nights` of the rule `hold`: it is `>=1 <=60`
+    20 |   let quote = hold(room: booking.room, nights: booking.nights)
+warning[W104]: tests/fixtures/hotel_ranges.flow:21:1: nothing says what range `extension` is in (the input `extension` has no range), and `nights` of the rule `hold` takes `>=1 <=30`
+    21 |   let longer = hold(room: booking.room, nights: extension)
 ```
 
 A variable's range is that of every value put in it, anywhere in the flow. A `.flow` has no
@@ -145,11 +148,14 @@ the child fails with. The two files declare their records and enums each on thei
 types are compared by shape: a record by its fields, an enum by its values, a range by what it
 holds, in the direction the values go.
 
+In a draft of the fulfillment whose delivery task does not fit its child
+([tests/fixtures/fulfillment_child.flow](tests/fixtures/fulfillment_child.flow)):
+
 ```
-error[E015]: tests/fixtures/children.flow:46:1: the parameter `申込` is not what `査定` takes as its input `申込`: in the field `区分` of `申込`, `団体` of `区分たち` is not a value of `区分`
-    46 | task 値の多い(申込: 団体もある申込) -> 結果
-error[E015]: tests/fixtures/children.flow:52:1: `査定` answers `点` with what the field `点` of `狭い結果` does not take: it is `>=0 <=100`, and `>=0 <=50` is taken
-    52 | task 答えの合わない(申込: 申込) -> 狭い結果
+error[E015]: tests/fixtures/fulfillment_child.flow:18:1: the parameter `carrier` is not what `arrange_delivery` takes as its input `carrier`: `drone` of `Carrier` is not a value of `carrier`
+    18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
+error[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` answers `tracking_number` with what the field `tracking_number` of `Delivery` does not take: `string` is not `int`
+    18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
 ```
 
 The child's names come from its `.flow`: on Temporal the task starts the child's workflow type
@@ -196,11 +202,14 @@ the answer may leave out or send as null, and an enum with every value the answe
 its errors are ones the operation answers with. An AWS API's `key <parameter>` must be the
 operation's idempotency token.
 
+In a draft of calls to Stripe and to a stock service
+([tests/fixtures/api_calls.flow](tests/fixtures/api_calls.flow)):
+
 ```
-error[E016]: tests/fixtures/apis.flow:37:1: what `stripe` POST /v1/payment_intents answers is not `支払い`: in `created`, an integer is not `timestamp`
-    37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
-error[E016]: tests/fixtures/apis.flow:52:1: what `倉庫` StockService/Reserve answers is not `引当`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
-    52 | task 引き当てる(sku: string, quantity: string) -> 引当
+error[E016]: tests/fixtures/api_calls.flow:23:1: what `stripe` POST /v1/payment_intents answers is not `PaymentIntent`: in `created`, an integer is not `timestamp`
+    23 | task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
+error[E016]: tests/fixtures/api_calls.flow:26:1: what `warehouse` StockService/Reserve answers is not `Reservation`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
+    26 | task reserve_stock(sku: string, quantity: int) -> Reservation
 ```
 
 protobuf's JSON leaves out a field without presence when it holds its zero value (an empty
@@ -370,6 +379,14 @@ the API descriptions (`specs/`). Each version is played by the runners of the pl
 written for; the versions for AWS and the flows beside them by every platform. The design, in
 Japanese, is in [DESIGN.md](DESIGN.md).
 
+## Install
+
+dandori builds with a recent stable Rust: `cargo install --path .` in a clone (its one
+dependency is serde_json). It reads the rules through [rulec](https://github.com/i2y/rulec),
+found through `DANDORI_RULEC`, else on the PATH: `brew install i2y/tap/rulec`, or a binary from
+rulec's [releases](https://github.com/i2y/rulec/releases). dandori is tested with rulec 0.20.0
+and 0.21.1.
+
 ## Commands
 
 ```
@@ -437,6 +454,43 @@ on durable functions, its nodes on Argo.
   handler, every way a case can move, and lists that are empty, short, and longer than
   their loop takes; `run` plays one through the reference interpreter.
 
+## Checks
+
+Each diagnostic comes with a run that gets there, as in
+[What the checker says](#what-the-checker-says). `check` finds all but E040 and E050, which
+`build` finds for the platform it builds for.
+
+| Code | What it finds |
+|---|---|
+| E001 | a syntax error |
+| E002 | a name that is not there: a type, a variable, a field, a rule or a task (a unit of the wrong kind, too) |
+| E003 | types that do not match: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{…}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in |
+| E004 | too many or too few arguments or outputs, a field left out of a `{…}` record |
+| E005 | a rule rulec could not read |
+| E006 | a name declared twice |
+| E007 | a task's clauses that do not go together: two ways of calling, a `flow` task with another one or with an `image`, `form` on a call to an OpenAPI operation, a Connect error code that is not one, an HTTP error without its status or two errors of one status, a `key` or a `callback` the way of calling cannot have (an agent takes no `key`), an AWS service it does not know, `model` without an `agent`, an agent without the type of its answer or with declared errors, an answer its schema cannot say, a provider it does not know, enum values that differ only in case for Claude, an `event` task's parameters, calls, `retry` or `key`, or one that starts a case, a `url` on a task that is not an agent or on Claude's, a `url` that is not http or https |
+| E008 | a case declared wrong, or a task that does to a case what it cannot |
+| E009 | a statement where it cannot be: a `yield` that is not the last line of the body of `let <name> = for …`, or such a `for` without one; `break`, `succeed`, a case's call or an event's wait in a round of `for … in parallel`; `succeed` in `on failure` or `on cancel`; a variable given a value both inside a round and outside; a rule called without `let` |
+| E010 | a value that no arm of a `match` takes |
+| E011 | an arm that can never be taken |
+| E012 | a variable read where it may have no value yet |
+| E013 | a task called on a case that has not started, or a case started twice |
+| E014 | a value that can be outside the range where it goes: a rule's input, a task's parameter, a field of a record written out, an output |
+| E015 | a task that runs another `.flow` and does not fit it: its parameters and the child's inputs, its answer and the child's outputs, its errors and the child's `fail`s (a child that cannot be read or does not pass the checks, and a flow that runs itself, too) |
+| E016 | a task that does not fit the API description it calls: an operation that is not there, a parameter it does not take or one it needs left out, a type, range or enum that differs, a field the answer may leave out that is not `T?`, a status or an exception it does not answer with, a `key` that is not its idempotency token, a method that streams (and a description that cannot be read, or a `.proto` without `url`) |
+| E020 | the workflow can end with a case in a state that is not final (also when `on cancel` ends it as cancelled) |
+| E021 | an event sent that every state refuses |
+| E022 | an event sent that can be refused, with nothing to handle the refusal |
+| E030 | a call that changes the other side, retried without a `key` |
+| E031 | what an Express workflow cannot do: a wait longer than five minutes, a callback, a nested execution, a call that changes the other side without a `key` |
+| E040 | one run can grow too large for the platform: its history over the limit (25,000 events on Step Functions, 51,200 on Temporal, 3,000 operations on Lambda durable functions), or on Argo Workflows more than 10,000 nodes |
+| E050 | what the platform needs is missing, or the platform cannot do it: on Step Functions, a way of calling or a `connection` (an agent's too), a nested execution's declared errors, a `timeout` over 60 seconds on `http` and `agent`, a destination that is not HTTPS; off Temporal, `on cancel` and `event` tasks; on Step Functions and Lambda durable functions, a called rule's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task |
+| W030 | a call that may change the other side, retried without a `key` |
+| W101 | an error nothing handles can fail the run with a case in a state that is not final (while `on failure` or `on cancel` settles cases, too) |
+| W102 | an `on <refusal>` that can never happen |
+| W103 | a task that starts a case without a `key` |
+| W104 | a value whose range nothing says, where a range is |
+
 ## How the output is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios
@@ -453,6 +507,9 @@ scenario are alike, so a target that mixes up two answers or the rounds of a loo
 (a number with a range is picked inside it, where two may meet). The scenarios also give answers
 every target must refuse: of the wrong shape, with a state the machine does not lead to, and
 with a number outside its range.
+The examples are written in English, and most of the flows, rules and fixtures under `tests/`
+with Japanese names, on purpose: they see that names outside ASCII come through all five
+platforms as identifiers, keys and URL paths.
 On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so the comparison is with what Step
 Functions sends; the tasks the user writes, the rules and the child workflows are
@@ -564,11 +621,47 @@ kind 0.29.0 made them now and then under load), the Argo runner plays the run ag
 twice, and the test says so. `DANDORI_FLOW=<part of a path>`
 runs only the flows whose path has it.
 
+## Design in brief
+
+A `.flow` is parsed, its names and types are resolved (a rule's from what `rulec schema`,
+`rulec certificate` and `rulec api` print), and the typed tree it becomes is checked along the
+flow: the states of its cases, what is given a value where, every arm, every way out. The
+reference interpreter runs it, the scenarios play it, and five generators build it. Six
+principles hold it together:
+
+- **P1.** The decisions live in rulec. A `.flow`'s expressions build values (records, lists,
+  strings with values put in) but have no comparison, arithmetic or logic, and a flow branches
+  only by matching an enum, a bool, or a value that may be absent.
+- **P2.** dandori stays outside rulec. It reads only the JSON rulec's command line prints, and
+  rulec does not know dandori.
+- **P3.** One reference interpreter says what a `.flow` means, and what each platform runs is
+  held to it.
+- **P4.** A loop says how many times it may go round, and there is no recursion, so the length
+  of a run's history has a bound.
+- **P5.** What cannot be known before the run, such as what the other side answers, is checked
+  where it comes in, and a value that does not fit fails the run there.
+- **P6.** A feature whose meaning would differ between the platforms is built only where it can
+  mean the same, and refused elsewhere with E050: cleaning up after a cancellation (`on cancel`)
+  and events sent to a workflow by name (`event`) are Temporal's for now. A clause that only
+  changes how or at what cost something runs (`queue`, `image`, a rule's `local`) does nothing
+  where it does not apply.
+
+[DESIGN.md](DESIGN.md), in Japanese, gives the reasons for these and for every other decision,
+the designs that were dropped, what is left, and what was run to check it all.
+
 ## Status
 
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
 encoding and Connect's streams,
 cases the workflow holds itself, a rule's preconditions checked at the task that produced
-the value, runs on AWS and on a Temporal server, the caller image run against real
-Lambda, HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The design, the decisions and what is
-left are in [DESIGN.md](DESIGN.md).
+the value, runs on AWS and on a production Temporal cluster or Temporal Cloud (the tests run on
+the Temporal CLI's dev server), the caller image run against real Lambda, HTTP and AWS endpoints
+from Argo, and agents run against OpenAI and Anthropic themselves. The design, the decisions
+and what is left are in [DESIGN.md](DESIGN.md), in Japanese.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT), at your option. The cut-down copies of Stripe's OpenAPI document and
+of the Smithy models of Amazon SNS and SQS under `examples/` keep their own licenses
+([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).

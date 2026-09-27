@@ -1,0 +1,30 @@
+workflow api_calls v1
+description "A draft of the hotel booking's and the fulfillment's calls whose types do not match the API descriptions they call"
+
+use openapi stripe from "../../examples/hotel/specs/stripe.json"
+use proto warehouse from "apis/warehouse.proto"
+  url "https://warehouse.example.com"
+
+enum CaptureMethod = automatic | manual
+enum Status = requires_payment_method | requires_confirmation | requires_action | processing | requires_capture | canceled | succeeded
+enum Stock = secured | short
+
+record PaymentIntent
+  id      : string
+  status  : Status
+  created : timestamp
+
+record Reservation
+  sku   : string
+  stock : Stock
+  id    : string?
+  count : int
+
+task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
+  http POST stripe "/v1/payment_intents"
+
+task reserve_stock(sku: string, quantity: int) -> Reservation
+  connect warehouse "StockService/Reserve"
+
+flow
+  pass
