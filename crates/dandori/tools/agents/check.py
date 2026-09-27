@@ -169,6 +169,14 @@ async def claude(io: Any, c: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def settled(v: Any) -> Any:
+    """The model settings the SDK was given, without what nobody set: its dicts carry every
+    field, most of them None."""
+    if isinstance(v, dict):
+        return {k: settled(x) for k, x in v.items() if x is not None}
+    return v
+
+
 def load(path: str) -> Any:
     spec = importlib.util.spec_from_file_location("dandori_io", path)
     assert spec is not None and spec.loader is not None
@@ -215,7 +223,7 @@ async def main() -> None:
                 "instructions": call.system_instructions,
                 "input": call.input,
                 "outputType": None if schema is None else {"type": "json_schema", "name": schema.name(), "strict": schema.is_strict_json_schema(), "schema": schema.json_schema()},
-                "modelSettings": {k: v for k, v in call.model_settings.to_json_dict().items() if v is not None},
+                "modelSettings": settled(call.model_settings.to_json_dict()),
                 "tools": [t.name for t in call.tools],
             }
         results.append(out)

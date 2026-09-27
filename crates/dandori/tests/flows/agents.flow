@@ -30,6 +30,7 @@ outputs
 task 確かめる(写したち: list[string]) -> bool
   agent "文字起こしの束が、どれも領収書かどうかを答えてください。"
   model "gpt-5.4-mini"
+  effort low
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
   timeout 30 seconds
 
@@ -37,6 +38,7 @@ task 確かめる(写したち: list[string]) -> bool
 task 読み取る(写し: string) -> 領収書
   agent "領収書の文字起こしを読み、店の名前、税込の金額（円）、日時（UTC）、区分、品目、但し書きを取り出してください。但し書きが無ければ null にします。"
   model "gpt-oss:20b"
+  effort medium
   url "https://llm.example.com/v1"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/llm/7b8c9d0e"
   retry 1 times every 5 seconds
@@ -45,6 +47,7 @@ task 読み取る(写し: string) -> 領収書
 task 仕分ける(領収書たち: list[領収書]) -> 仕分け
   agent claude "領収書を見て、精算の急ぎ具合、急ぎ具合の印、支払いの期日（UTC）、いちばん多い区分、領収書の件数を答えてください。期日が分からなければ null にします。"
   model "claude-sonnet-5"
+  effort high
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/claude/6f7a8b9c"
   timeout 60 seconds
   retry 1 times every 5 seconds

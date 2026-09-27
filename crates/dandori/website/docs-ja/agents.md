@@ -8,6 +8,7 @@
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
   model "gpt-oss:20b"
+  effort low
   url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds
@@ -15,6 +16,7 @@ task read_inquiry(text: string) -> Reading
 task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
   agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. …"
   model "claude-sonnet-5"
+  effort medium
   timeout 60 seconds
 
 flow
@@ -27,7 +29,18 @@ flow
 
 応答の型は JSON Schema になります。OpenAI の Structured Outputs の strict モードが受け付ける形で、レコードのフィールドはすべて必須、`T?` は `T` と null のどちらか、列挙は値の一覧です。一番外はオブジェクトでなければならないので、`{"answer": …}` で包みます。Claude の構造化出力にも同じ Schema を渡します。返ってきた応答は、ほかのタスクの結果と同じく型で確かめ、合わなければ呼び出しの失敗にします。
 
-どのプラットフォームでも、モデルに送る中身は同じです。送るのは指示、JSON の文字列にした引数、Schema の三つだけで、温度などのモデルの設定は送りません。Agents SDK が既定の設定を足すことも止めています。
+どのプラットフォームでも、モデルに送る中身は同じです。送るのは指示、JSON の文字列にした引数、Schema の三つと、タスクに書いたときだけのエフォート（次の節）です。温度などのほかのモデルの設定は送らず、Agents SDK が既定の設定を足すことも止めています。
+
+## エフォート
+
+`effort <レベル>` を書くと、モデルが応答する前にどれだけ推論するかを指定できます。書かなければ、モデルの既定のままです。レベルはそれぞれの API が受け付ける場所に入れ、どのプラットフォームでも同じように送ります。
+
+| エージェント | レベルを入れる場所 | レベル |
+|---|---|---|
+| OpenAI と、Open Responses のエンドポイント（`url`） | Responses API の `reasoning.effort` | `none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max` |
+| Claude | Messages API の `output_config.effort` | `low`・`medium`・`high`・`xhigh`・`max` |
+
+プロバイダーが受け付けないレベルは、検査がエラーにします（E007）。そもそも推論するかどうかはモデル次第で、推論しないモデルにエフォートを送ると、その呼び出しは失敗します。たとえば Ollama は、そうしたモデルへのエフォートを「does not support thinking」として拒否します。その呼び出しは、ほかの失敗した呼び出しと同じく `failure` になります。
 
 ## どこへ送るか
 

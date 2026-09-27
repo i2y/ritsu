@@ -191,6 +191,8 @@ pub struct TaskDecl {
     pub model: Option<(String, Span)>,
     /// `url "<base>"`: the server an agent's Open Responses API is on, in place of OpenAI's
     pub url: Option<(String, Span)>,
+    /// `effort low`: how hard an agent's model reasons, as its provider names the levels
+    pub effort: Option<(String, Span)>,
     pub connection: Option<String>,
     /// Temporal: the task queue of the activity or the child workflow
     pub queue: Option<String>,
@@ -1348,6 +1350,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     result_range,
                     binding: None,
                     model: None,
+                    effort: None,
                     url: None,
                     connection: None,
                     queue: None,
@@ -1556,6 +1559,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         }
         "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
         "url" => t.url = Some((cc.string("where the agent's server is", "エージェントのサーバーの場所")?.0, sp)),
+        "effort" => t.effort = Some((cc.ident("an effort, such as low, medium or high", "low・medium・high のようなエフォート")?.0, sp)),
         "connection" => t.connection = Some(cc.string("the EventBridge connection", "EventBridge の接続")?.0),
         "errors" => loop {
             let name = cc.ident("an error name", "エラーの名前")?;
@@ -1648,8 +1652,8 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, aws, agent, model, connection, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・aws・agent・model・connection・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
+                format!("`{other}` is not a task clause; expected lambda, http, connect, aws, agent, model, effort, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
+                format!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・model・effort・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
             ))
         }
     }

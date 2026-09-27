@@ -34,3 +34,9 @@ error[E007]: tests/fixtures/agents.flow:133:3: `url` names a server of Open Resp
    133 |   url "http://ollama.internal:11434"
 error[E007]: tests/fixtures/agents.flow:138:3: `ollama.internal:11434/v1` is not an http:// or https:// URL
    138 |   url "ollama.internal:11434/v1"
+error[E007]: tests/fixtures/agents.flow:142:3: `effort` says how hard an agent's model reasons; this task has no `agent`
+   142 |   effort high
+error[E007]: tests/fixtures/agents.flow:147:3: `hard` is not an effort OpenAI takes; write one of none, minimal, low, medium, high, xhigh, max
+   147 |   effort hard
+error[E007]: tests/fixtures/agents.flow:152:3: `minimal` is not an effort Claude takes; write one of low, medium, high, xhigh, max
+   152 |   effort minimal

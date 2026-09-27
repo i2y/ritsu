@@ -170,6 +170,7 @@ errors and retries
 the rest
   callback                 queue "<task queue>"       image "<image>" (Argo, a task you write)
   connection "<EventBridge connection>"               model "<model>"     url "<base>" (agents)
+  effort none|minimal|low|medium|high|xhigh|max       how hard an agent's model reasons (Claude: low and up)
 ```
 
 A duration is `10 seconds`, `1 minute`, `2 hours`, `3 days`. The hotel booking's tasks, held to

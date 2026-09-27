@@ -1503,7 +1503,11 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
                     "instructions": call["instructions"],
                     "input": sent["body"]["input"],
                     "outputType": { "type": "json_schema", "name": "answer", "strict": true, "schema": call["schema"] },
-                    "modelSettings": {},
+                    // nothing but the effort the task asks for, as Step Functions sends it
+                    "modelSettings": match sent["body"].get("reasoning") {
+                        Some(r) => json!({ "reasoning": r }),
+                        None => json!({}),
+                    },
                     "tools": []
                 });
                 if let Some(ok) = answer.get("ok") {
@@ -1629,6 +1633,12 @@ fn open_responses_agents_answer_on_ollama() {
                 let mut live = call.clone();
                 live["url"] = json!(format!("{base}/v1"));
                 live["model"] = json!(model);
+                // the local model may not reason at all, and Ollama refuses an effort for such a model
+                // ("does not support thinking"); the request's effort is held to Step Functions' on the
+                // stand-in server instead
+                if let Some(o) = live.as_object_mut() {
+                    o.remove("effort");
+                }
                 cases.push(json!({ "call": live, "live": true }));
                 tasks.push(m.tasks.iter().find(|t| t.name == name).unwrap());
             }

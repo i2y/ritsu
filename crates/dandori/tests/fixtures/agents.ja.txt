@@ -34,3 +34,9 @@
    133 |   url "http://ollama.internal:11434"
 エラー[E007]: tests/fixtures/agents.flow:138:3: `ollama.internal:11434/v1` は http:// や https:// の URL ではありません
    138 |   url "ollama.internal:11434/v1"
+エラー[E007]: tests/fixtures/agents.flow:142:3: `effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです。このタスクには `agent` がありません
+   142 |   effort high
+エラー[E007]: tests/fixtures/agents.flow:147:3: `hard` は OpenAI が受け付けるエフォートではありません。none・minimal・low・medium・high・xhigh・max のどれかを書いてください
+   147 |   effort hard
+エラー[E007]: tests/fixtures/agents.flow:152:3: `minimal` は Claude が受け付けるエフォートではありません。low・medium・high・xhigh・max のどれかを書いてください
+   152 |   effort minimal

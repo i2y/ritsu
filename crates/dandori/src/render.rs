@@ -106,7 +106,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             };
             json!({ "aws": format!("{service}:{action}"), "args": a })
         }
-        Some(Via::Agent { provider, instructions, model, url }) => {
+        Some(Via::Agent { provider, instructions, model, url, effort }) => {
             let input = agent_input(task, args);
             let schema = agent_schema(m, task).unwrap_or(Value::Null);
             match view {
@@ -118,13 +118,16 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                     if let Some(h) = agent_headers(provider) {
                         w.insert("headers".into(), h);
                     }
-                    w.insert("body".into(), agent_request(provider, model, instructions, json!(Value::Object(input).to_string()), schema));
+                    w.insert("body".into(), agent_request(provider, model, instructions, json!(Value::Object(input).to_string()), schema, effort));
                     Value::Object(w)
                 }
                 _ => {
                     let mut c = json!({ "agent": task.name, "provider": provider.name(), "model": model, "instructions": instructions, "input": input, "schema": schema });
                     if let Some(u) = url {
                         c["url"] = json!(u);
+                    }
+                    if let Some(e) = effort {
+                        c["effort"] = json!(e);
                     }
                     c
                 }
@@ -187,22 +190,35 @@ pub fn agent_input(task: &TaskDef, args: &Map<String, Value>) -> Map<String, Val
 /// The request for an agent's call, as Step Functions sends it: the model, what it is to do,
 /// the input as text, and the JSON Schema its answer is held to. OpenAI's Responses API takes
 /// them as they are; Claude's Messages API wants the instructions as the system prompt, the
-/// input as the user's message, and a limit on the answer's length.
-pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value, schema: Value) -> Value {
+/// input as the user's message, and a limit on the answer's length. An `effort` goes where each
+/// API takes it: `reasoning.effort` on the Responses API, `output_config.effort` on Claude's.
+pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value, schema: Value, effort: Option<&str>) -> Value {
     match p {
-        Provider::OpenAi => json!({
-            "model": model,
-            "instructions": instructions,
-            "input": input,
-            "text": { "format": { "type": "json_schema", "name": "answer", "strict": true, "schema": schema } }
-        }),
-        Provider::Claude => json!({
-            "model": model,
-            "max_tokens": CLAUDE_MAX_TOKENS,
-            "system": instructions,
-            "messages": [{ "role": "user", "content": input }],
-            "output_config": { "format": { "type": "json_schema", "schema": schema } }
-        }),
+        Provider::OpenAi => {
+            let mut r = json!({
+                "model": model,
+                "instructions": instructions,
+                "input": input,
+                "text": { "format": { "type": "json_schema", "name": "answer", "strict": true, "schema": schema } }
+            });
+            if let Some(e) = effort {
+                r["reasoning"] = json!({ "effort": e });
+            }
+            r
+        }
+        Provider::Claude => {
+            let mut config = json!({ "format": { "type": "json_schema", "schema": schema } });
+            if let Some(e) = effort {
+                config["effort"] = json!(e);
+            }
+            json!({
+                "model": model,
+                "max_tokens": CLAUDE_MAX_TOKENS,
+                "system": instructions,
+                "messages": [{ "role": "user", "content": input }],
+                "output_config": config
+            })
+        }
     }
 }
 

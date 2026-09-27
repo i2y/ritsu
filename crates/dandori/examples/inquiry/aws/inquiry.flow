@@ -28,6 +28,7 @@ outputs
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, and sum up its point in one sentence. If no order number is written, give null."
   model "gpt-5.4-mini"
+  effort low
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
   timeout 60 seconds
   retry 2 times every 10 seconds
@@ -35,6 +36,7 @@ task read_inquiry(text: string) -> Reading
 task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
   agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. `within` is the number of hours before the reply is due. Promise nothing that cannot be kept."
   model "claude-sonnet-5"
+  effort medium
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/claude/6f7a8b9c"
   timeout 60 seconds
 

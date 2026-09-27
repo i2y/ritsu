@@ -498,6 +498,7 @@ impl<'a> Lowerer<'a> {
                     instructions: instructions.clone(),
                     model: t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default(),
                     url: t.url.as_ref().map(|x| x.0.clone()),
+                    effort: t.effort.as_ref().map(|x| x.0.clone()),
                 },
             });
             self.agent(t, result.as_ref(), result_range);
@@ -782,6 +783,14 @@ impl<'a> Lowerer<'a> {
                 "`url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書きます）",
             ));
         }
+        if let (Some((_, esp)), false) = (&t.effort, matches!(t.binding, Some((syntax::Binding::Agent { .. }, _)))) {
+            self.push(e(
+                "E007",
+                *esp,
+                "`effort` says how hard an agent's model reasons; this task has no `agent`",
+                "`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです。このタスクには `agent` がありません",
+            ));
+        }
         let (provider, bsp) = match (&t.binding, &t.model) {
             (Some((syntax::Binding::Agent { provider, .. }, bsp)), _) => (provider.clone(), *bsp),
             (_, Some((_, msp))) => {
@@ -814,6 +823,22 @@ impl<'a> Lowerer<'a> {
                 ));
             } else if !(u.starts_with("https://") || u.starts_with("http://")) {
                 self.push(e("E007", *usp, format!("`{u}` is not an http:// or https:// URL"), format!("`{u}` は http:// や https:// の URL ではありません")));
+            }
+        }
+        if let Some((level, esp)) = &t.effort {
+            // the levels each provider's API takes: OpenAI's `reasoning.effort` (which Open
+            // Responses has too) and Claude's `output_config.effort`
+            let (levels, whose): (&[&str], &str) = match provider {
+                Provider::OpenAi => (&["none", "minimal", "low", "medium", "high", "xhigh", "max"], if t.url.is_some() { "Open Responses" } else { "OpenAI" }),
+                Provider::Claude => (&["low", "medium", "high", "xhigh", "max"], "Claude"),
+            };
+            if !levels.contains(&level.as_str()) {
+                self.push(e(
+                    "E007",
+                    *esp,
+                    format!("`{level}` is not an effort {whose} takes; write one of {}", levels.join(", ")),
+                    format!("`{level}` は {whose} が受け付けるエフォートではありません。{} のどれかを書いてください", levels.join("・")),
+                ));
             }
         }
         let (outputs_en, outputs_ja) = match (provider, &t.url) {

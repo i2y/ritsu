@@ -11,6 +11,7 @@ the example), routes it with a rulec rule, and drafts the reply with Claude:
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
   model "gpt-oss:20b"
+  effort low
   url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds
@@ -18,6 +19,7 @@ task read_inquiry(text: string) -> Reading
 task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
   agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. …"
   model "claude-sonnet-5"
+  effort medium
   timeout 60 seconds
 
 flow
@@ -34,8 +36,24 @@ since the top must be an object. Claude's structured outputs take the same schem
 then checked against the type like any other answer, and one that does not fit fails the call.
 
 Every platform asks the model the same thing: the instructions, the arguments as the same JSON text,
-and the schema, and no model settings. dandori adds none, and keeps the Agents SDK from adding its
-defaults.
+the schema, and the effort when the task gives one (below). dandori adds no other model settings, and
+keeps the Agents SDK from adding its defaults.
+
+## How hard the model reasons
+
+`effort <level>` asks the model to reason less or more before it answers. Without it, the model does
+what it does by default. The level goes where each API takes it, and every platform sends it the same
+way:
+
+| Agent | Where the level goes | Levels |
+|---|---|---|
+| OpenAI, and an Open Responses endpoint (`url`) | `reasoning.effort` of the Responses API | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
+| Claude | `output_config.effort` of the Messages API | `low`, `medium`, `high`, `xhigh`, `max` |
+
+A level the provider does not take is refused by the checker (E007). Whether a model reasons at all
+is the model's to say, and a model that does not fails the call when it is sent an effort. Ollama, for
+one, refuses it for such a model ("does not support thinking"), and the call fails as any failed call
+does.
 
 ## Who is called
 

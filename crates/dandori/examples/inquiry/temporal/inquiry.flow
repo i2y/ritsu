@@ -29,6 +29,7 @@ outputs
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, and sum up its point in one sentence. If no order number is written, give null."
   model "gpt-oss:20b"
+  effort low
   url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds
@@ -36,6 +37,7 @@ task read_inquiry(text: string) -> Reading
 task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
   agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. `within` is the number of hours before the reply is due. Promise nothing that cannot be kept."
   model "claude-sonnet-5"
+  effort medium
   timeout 60 seconds
 
 # The ticket goes into the desk's system through its client library, in code you write.

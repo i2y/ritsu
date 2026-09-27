@@ -609,7 +609,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     a.push_str(&format!("    {name}: async (args) => io.value(await {call}, {}, fail) as {},\n", braces(&names), task_result(m, task)));
                 }
             }
-            Some(Via::Agent { provider, instructions, model, url }) => {
+            Some(Via::Agent { provider, instructions, model, url, effort }) => {
                 let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
                 // Claude may answer an enum's value in another case: it is taken as the value
                 let fold = provider == Provider::Claude && !render::enums_of(m, task.result.as_ref().unwrap_or(&Ty::Json)).is_empty();
@@ -625,6 +625,9 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 ];
                 if let Some(u) = url {
                     call.push(format!("  url: {},", q(u)));
+                }
+                if let Some(e) = effort {
+                    call.push(format!("  effort: {},", q(e)));
                 }
                 call.push("}),".into());
                 let call = call
@@ -855,6 +858,8 @@ export interface AgentCall {
   schema: Record<string, unknown>;
   /** an OpenAI agent's server of Open Responses, other than OpenAI's: its base URL, to which `/responses` is added */
   url?: string;
+  /** how hard the model reasons: `reasoning.effort` on the Responses API, `output_config.effort` on Claude's Messages API */
+  effort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 export interface Transport {
@@ -1013,6 +1018,7 @@ export function transport(options: Options = {}): Transport {
             instructions: call.instructions,
             input: JSON.stringify(call.input),
             text: { format: { type: "json_schema", name: "answer", strict: true, schema: call.schema } },
+            ...(call.effort !== undefined ? { reasoning: { effort: call.effort } } : {}),
           },
         });
         if (res.status < 200 || res.status >= 300) throw new AgentHttpError(res.status, res.body);
@@ -1034,18 +1040,19 @@ export function transport(options: Options = {}): Transport {
           max_tokens: CLAUDE_MAX_TOKENS,
           system: call.instructions,
           messages: [{ role: "user", content: JSON.stringify(call.input) }],
-          output_config: { format: { type: "json_schema", schema: call.schema } },
+          output_config: { format: { type: "json_schema", schema: call.schema }, ...(call.effort !== undefined ? { effort: call.effort } : {}) },
         });
         if (message.stop_reason !== "end_turn") throw new AgentStopped(String(message.stop_reason));
         return JSON.parse(message.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join(""));
       }
       const sdk: any = await import("@openai/agents");
-      // no model settings of the SDK's own, so that the model gets what Step Functions sends
+      // no model settings of the SDK's own, so that the model gets what Step Functions sends: the
+      // effort, when the task asks for one, and nothing else
       const agent = new sdk.Agent({
         name: call.agent,
         instructions: call.instructions,
         model: call.model,
-        modelSettings: {},
+        modelSettings: call.effort !== undefined ? { reasoning: { effort: call.effort } } : {},
         outputType: { type: "json_schema", name: "answer", strict: true, schema: call.schema },
       });
       const config: Record<string, unknown> = { ...(options.agents ?? {}) };

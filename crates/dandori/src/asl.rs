@@ -692,7 +692,7 @@ impl<'a> Gen<'a> {
                         };
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), result, task.timeout, retry)
                     }
-                    Via::Agent { provider, instructions, model, url } => {
+                    Via::Agent { provider, instructions, model, url, effort } => {
                         // the input is the arguments' JSON text, in the order of the parameters
                         let input: Vec<String> = task
                             .params
@@ -701,7 +701,7 @@ impl<'a> Gen<'a> {
                             .collect();
                         let ty = task.result.as_ref().expect("the checker gives an agent an answer");
                         let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
-                        let body = render::agent_request(provider, model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema);
+                        let body = render::agent_request(provider, model, instructions, json!(format!("{{% $string({{{}}}) %}}", input.join(", "))), schema, effort);
                         let mut w = Map::new();
                         w.insert("ApiEndpoint".into(), json!(render::agent_url(provider, url)));
                         w.insert("Method".into(), json!("POST"));

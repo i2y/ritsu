@@ -151,6 +151,7 @@ dandori writes sends the same requests on each. A build refuses what its platfor
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, …"
   model "gpt-oss:20b"
+  effort low
   url "http://ollama.internal:11434/v1"
   timeout 60 seconds
   retry 2 times every 10 seconds

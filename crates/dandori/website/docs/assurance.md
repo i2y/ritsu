@@ -98,8 +98,9 @@ run again, at most twice, and the test says so.
   and an error status must fail the call without a retry. An agent on another server of Open
   Responses goes to a stand-in of that server, which must get the very request Step Functions sends.
   Nothing goes to OpenAI or Anthropic. When Ollama runs on this machine, one call of each such agent
-  also goes to it for real, and each answer must fit the task's type (`DANDORI_OLLAMA` names where
-  it runs, `DANDORI_OLLAMA_MODEL` the model; else the smallest one it has).
+  also goes to it for real, without its effort (a model that does not reason is refused one), and each
+  answer must fit the task's type (`DANDORI_OLLAMA` names where it runs, `DANDORI_OLLAMA_MODEL` the
+  model; else the smallest one it has).
 - The rest of the default `Transport` (`fetch` and the AWS SDK in TypeScript, the standard library and
   boto3 in Python) sends every HTTP, Lambda and AWS call of the scenarios to stand-ins on this machine:
   a server that answers HTTP and Lambda's Invoke, and moto for SNS and SQS. What arrives must be the

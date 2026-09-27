@@ -352,7 +352,7 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 vec![format!("return {call}")]
             }
         }
-        Some(Via::Agent { provider, instructions, model, url }) => {
+        Some(Via::Agent { provider, instructions, model, url, effort }) => {
             let input: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
             let mut call = vec![
                 "await t.agent(".to_string(),
@@ -366,6 +366,9 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
             ];
             if let Some(u) = url {
                 call.push(format!("        \"url\": {},", q(u)));
+            }
+            if let Some(e) = effort {
+                call.push(format!("        \"effort\": {},", q(e)));
             }
             call.push("    }".into());
             call.push(")".into());
@@ -576,7 +579,8 @@ HttpRequest = dict
 # SDK). The model is told `instructions`, reads `input` as JSON text, and answers in `schema`,
 # the JSON Schema of {"answer": …} in the strict form of OpenAI's Structured Outputs, which
 # Claude's take too. An OpenAI agent's "url" is a server of Open Responses other than OpenAI's:
-# its base URL, to which /responses is added.
+# its base URL, to which /responses is added. "effort" says how hard the model reasons: the
+# Responses API's reasoning.effort, Claude's output_config.effort.
 AgentCall = dict
 
 # The most a Claude agent's answer may take, thinking included, as every target asks for.
@@ -769,8 +773,14 @@ class DefaultTransport:
                 except ValueError as e:
                     raise ModelBehaviorError(f"the agent's answer is not JSON: {e}") from e
 
-        # no model settings of the SDK's own, so that the model gets what Step Functions sends
-        agent = Agent(name=call["agent"], instructions=call["instructions"], model=call["model"], model_settings=ModelSettings(), output_type=Answer())
+        # no model settings of the SDK's own, so that the model gets what Step Functions sends: the
+        # effort, when the task asks for one, and nothing else
+        settings = ModelSettings()
+        if call.get("effort") is not None:
+            from openai.types.shared import Reasoning
+
+            settings = ModelSettings(reasoning=Reasoning(effort=call["effort"]))
+        agent = Agent(name=call["agent"], instructions=call["instructions"], model=call["model"], model_settings=settings, output_type=Answer())
         run_config = self._agents
         if run_config is None:
             # OpenAI's client retries twice by itself unless it is told not to
@@ -785,18 +795,15 @@ class DefaultTransport:
     async def _open_responses(self, call: AgentCall) -> Any:
         """An agent on a server of Open Responses: what Step Functions sends it, over HTTP, and
         no SDK, which may send what the specification does not have."""
-        res = await self.http(
-            {
-                "http": "POST",
-                "url": call["url"].rstrip("/") + "/responses",
-                "body": {
-                    "model": call["model"],
-                    "instructions": call["instructions"],
-                    "input": json_text(call["input"]),
-                    "text": {"format": {"type": "json_schema", "name": "answer", "strict": True, "schema": call["schema"]}},
-                },
-            }
-        )
+        body: dict[str, Any] = {
+            "model": call["model"],
+            "instructions": call["instructions"],
+            "input": json_text(call["input"]),
+            "text": {"format": {"type": "json_schema", "name": "answer", "strict": True, "schema": call["schema"]}},
+        }
+        if call.get("effort") is not None:
+            body["reasoning"] = {"effort": call["effort"]}
+        res = await self.http({"http": "POST", "url": call["url"].rstrip("/") + "/responses", "body": body})
         if not 200 <= res["status"] < 300:
             raise AgentHttpError(res["status"], res["body"])
         # the answer's text, as Step Functions reads it: the first output_text of the messages
@@ -813,12 +820,15 @@ class DefaultTransport:
 
             self._claude = AsyncAnthropic(**{"max_retries": 0, **self._claude_options})
         # what Step Functions sends: the instructions as the system prompt, the input as the user's message
+        config: dict[str, Any] = {"format": {"type": "json_schema", "schema": call["schema"]}}
+        if call.get("effort") is not None:
+            config["effort"] = call["effort"]
         message = await self._claude.messages.create(
             model=call["model"],
             max_tokens=CLAUDE_MAX_TOKENS,
             system=call["instructions"],
             messages=[{"role": "user", "content": text(call["input"])}],
-            output_config={"format": {"type": "json_schema", "schema": call["schema"]}},
+            output_config=config,
         )
         if message.stop_reason != "end_turn":
             raise AgentStopped(str(message.stop_reason))

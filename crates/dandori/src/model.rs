@@ -162,8 +162,9 @@ pub enum Binding {
     /// an AWS API, named as Step Functions' AWS SDK integrations name it: `sns` and `publish`
     Aws { service: String, action: String },
     /// an agent: the model, told what to do, reads the arguments and answers in the task's type;
-    /// `url` is the server of an Open Responses API other than OpenAI's
-    Agent { provider: Provider, instructions: String, model: String, url: Option<String> },
+    /// `url` is the server of an Open Responses API other than OpenAI's, and `effort` how hard the
+    /// model reasons, as the provider names the levels
+    Agent { provider: Provider, instructions: String, model: String, url: Option<String>, effort: Option<String> },
 }
 
 /// Whose models an agent runs on.
@@ -214,7 +215,7 @@ pub enum Via<'a> {
     Aws { service: &'a str, action: &'a str },
     /// an agent of OpenAI's or Claude's (see `Provider`), or on another server that speaks
     /// OpenAI's Responses API as Open Responses specifies it (`url`)
-    Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str> },
+    Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str>, effort: Option<&'a str> },
     /// Step Functions: a nested execution of another state machine
     StateMachine(&'a str),
     /// Temporal: a child workflow
@@ -311,7 +312,7 @@ impl TaskDef {
             Binding::Lambda(f) => Via::Lambda(f),
             Binding::Http { method, url, form } => Via::Http { method, url, form: *form },
             Binding::Aws { service, action } => Via::Aws { service, action },
-            Binding::Agent { provider, instructions, model, url } => Via::Agent { provider: *provider, instructions, model, url: url.as_deref() },
+            Binding::Agent { provider, instructions, model, url, effort } => Via::Agent { provider: *provider, instructions, model, url: url.as_deref(), effort: effort.as_deref() },
         });
         match p {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),
