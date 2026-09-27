@@ -1,12 +1,12 @@
 workflow fulfillment v1
-description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released"
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for AWS, for Step Functions and Lambda durable functions: the rule is a Lambda function, the warehouse is called by Connect through an EventBridge connection, the delivery is arrange_delivery.flow started by the ARN it is deployed as, the packing request goes to SQS with the task token in the message, the customer hears by SNS, and the audit log is a Lambda function. The other platforms run it too, with the calls dandori writes for each"
 
-use rule urgency from "../order/rules/urgency.rule"
+use rule urgency from "../../order/rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
-use proto warehouse from "specs/warehouse.proto"
+use proto warehouse from "../specs/warehouse.proto"
   url "https://warehouse.example.com"
-use smithy sns from "specs/sns.json"
-use smithy sqs from "specs/sqs.json"
+use smithy sns from "../specs/sns.json"
+use smithy sqs from "../specs/sqs.json"
 
 enum Stock = secured | short
 
@@ -69,7 +69,7 @@ task release_stock(id: string)
 # queue are arrange_delivery_v1) and a workflow of its WorkflowTemplate on Argo; Step Functions
 # and Lambda durable functions start it by the ARN it is deployed as.
 task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery
-  flow "arrange_delivery.flow"
+  flow "../arrange_delivery.flow"
   state machine "arn:aws:states:ap-northeast-1:123456789012:stateMachine:arrange-delivery"
   durable function "arn:aws:lambda:ap-northeast-1:123456789012:function:arrange-delivery:live"
 

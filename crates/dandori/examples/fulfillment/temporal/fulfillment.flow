@@ -1,5 +1,5 @@
 workflow fulfillment v1
-description "The fulfillment of examples/fulfillment, written for Temporal. The warehouse's calls are activities dandori writes; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow); and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends"
 
 use rule urgency from "../../order/rules/urgency.rule"
 use proto warehouse from "../specs/warehouse.proto"

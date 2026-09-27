@@ -1,8 +1,8 @@
 workflow ship_order v1
-description "For an order in the warehouse's system, ask for the payment, have it shipped, and wait for word of the delivery. The warehouse's system keeps the order's state, which moves as rulec's rule order_state says"
+description "For an order in the warehouse's system, ask for the payment, have it shipped, and wait for word of the delivery. The warehouse's system keeps the order's state, which moves as rulec's rule order_state says. Written for AWS, for Step Functions and Lambda durable functions: the urgency rule and the notice are Lambda functions, the warehouse's calls go through an EventBridge connection, and the word of the delivery comes back by the task token a Lambda function keeps. The other platforms run it too, with the calls dandori writes for each"
 
-use rule order_state from "rules/order_state.rule"
-use rule urgency from "rules/urgency.rule"
+use rule order_state from "../rules/order_state.rule"
+use rule urgency from "../rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
 
 record Order

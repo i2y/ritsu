@@ -1,5 +1,5 @@
 workflow review v1
-description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends"
+description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for AWS, where Lambda durable functions runs it: every task is code you write, which a step runs, and the approver's tool answers the callback by its id (SendDurableExecutionCallbackSuccess). Step Functions cannot run it, since none of its tasks is a call Step Functions makes"
 
 enum Verdict = approve | reject | hold
 
@@ -20,9 +20,7 @@ inputs
 outputs
   verdict : Verdict
 
-# Scoring runs on workers of its own, which may be written in another language.
 task score(application_id: string, amount: int) -> Score
-  queue "scoring"
   errors unscorable
   retry 2 times every 10 seconds
   idempotent
@@ -33,7 +31,6 @@ task ask_for_approval(application_id: string, points: int) -> Approval
   timeout 3 days
 
 task notify(application_id: string, text: string)
-  queue "notify"
   idempotent
 
 flow

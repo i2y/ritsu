@@ -1,5 +1,5 @@
 workflow inquiry v1
-description "The inquiry of examples/inquiry, written for pydantic-graph: the graph runs in the Python process that takes the inquiry, which is where agents usually live. The agents are functions dandori writes, on OpenAI's Agents SDK and Anthropic's SDK for Python; the rule runs in the process; and filing the ticket is a function you write"
+description "An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (OpenAI's reads, Claude writes); the rule decides. Written for pydantic-graph: the graph runs in the Python process that takes the inquiry, which is where agents usually live. The agents are functions dandori writes, on OpenAI's Agents SDK and Anthropic's SDK for Python; the rule runs in the process; and filing the ticket is a function you write"
 
 use rule routing from "../rules/inquiry_routing.rule"
 

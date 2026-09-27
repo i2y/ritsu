@@ -77,14 +77,19 @@ fn runnable() -> Vec<PathBuf> {
     out
 }
 
-/// The platform a version of an example is written for, from its directory: `temporal/` or
-/// `pydantic-graph/`, beside the example written for AWS, which every platform plays.
+/// The platform a version of an example is written for, from its directory: `temporal/`,
+/// `pydantic-graph/` or `argo/`, which only that platform's runners play. None for a version
+/// written for AWS (`aws/`), which every platform plays, since the code dandori writes for each
+/// makes its Lambda, HTTP and AWS calls; and for a flow beside the versions, which every
+/// platform runs as it is (and for the flows of tests/flows).
 fn written_for(f: &Path) -> Option<Platform> {
     let r = rel(f);
     if r.contains("/temporal/") {
         Some(Platform::Temporal)
     } else if r.contains("/pydantic-graph/") {
         Some(Platform::Graph)
+    } else if r.contains("/argo/") {
+        Some(Platform::Argo)
     } else {
         None
     }
@@ -709,9 +714,15 @@ fn temporal_runs_a_flow_as_its_child() {
 }
 
 /// The flows whose histories are kept in tests/histories: one run of each, the one with the most
-/// calls, recorded by the Temporal runners with DANDORI_BLESS=1. The run of examples/order goes
-/// on in new runs (Continue-As-New), and each of them is kept.
-const RECORDED: [&str; 5] = ["examples/hotel/hotel.flow", "examples/fulfillment/fulfillment.flow", "examples/review/review.flow", "tests/flows/cancel.flow", "examples/order/order.flow"];
+/// calls, recorded by the Temporal runners with DANDORI_BLESS=1. The examples' are their versions
+/// for Temporal. The run of the order goes on in new runs (Continue-As-New), and each of them is kept.
+const RECORDED: [&str; 5] = [
+    "examples/hotel/temporal/hotel.flow",
+    "examples/fulfillment/temporal/fulfillment.flow",
+    "examples/review/temporal/review.flow",
+    "tests/flows/cancel.flow",
+    "examples/order/temporal/order.flow",
+];
 
 fn recorded_dir(m: &Model, python: bool) -> PathBuf {
     root().join("tests/histories").join(if python { "python" } else { "typescript" }).join(dandori::render::ident(&m.name))

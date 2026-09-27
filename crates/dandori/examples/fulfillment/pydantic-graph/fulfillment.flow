@@ -1,5 +1,5 @@
 workflow fulfillment v1
-description "The fulfillment of examples/fulfillment, written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, which send with the standard library; the arrangement of the delivery, the packing request, the notice and the audit log are functions you write; and the packing crew's answer comes to the callback in the same process. The wait for the packing holds the process, and a run the process loses is lost"
+description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, by Connect, which send with the standard library; the arrangement of the delivery, the packing request, the notice and the audit log are functions you write; and the packing crew's answer comes to the callback in the same process. The wait for the packing holds the process, and a run the process loses is lost"
 
 use rule urgency from "../../order/rules/urgency.rule"
 use proto warehouse from "../specs/warehouse.proto"

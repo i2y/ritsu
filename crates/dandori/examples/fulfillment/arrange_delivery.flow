@@ -1,5 +1,5 @@
 workflow arrange_delivery v1
-description "Book the delivery of an order with the carrier the urgency rule chose, and answer with its tracking number. The workflow of fulfillment runs it as its child: a child workflow on Temporal, an invoked durable function on Lambda durable functions, a workflow of this WorkflowTemplate on Argo, a nested execution on Step Functions"
+description "Book the delivery of an order with the carrier the urgency rule chose, and answer with its tracking number. Written once for every platform, since its calls are HTTP ones that dandori writes for each (`connection` is what Step Functions needs of them): each version of fulfillment runs it as its child, a child workflow on Temporal, an invoked durable function on Lambda durable functions, a workflow of this WorkflowTemplate on Argo, a nested execution on Step Functions"
 
 enum carrier = standard | next_day
 

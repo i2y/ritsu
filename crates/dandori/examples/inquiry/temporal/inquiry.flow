@@ -1,5 +1,5 @@
 workflow inquiry v1
-description "The inquiry of examples/inquiry, written for Temporal. The agents are activities dandori writes, which run on OpenAI's and Anthropic's SDKs with the keys the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
+description "An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (OpenAI's reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, which run on OpenAI's and Anthropic's SDKs with the keys the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
 
 use rule routing from "../rules/inquiry_routing.rule"
   local

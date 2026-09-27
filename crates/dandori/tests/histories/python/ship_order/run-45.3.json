@@ -2,9 +2,9 @@
   "events": [
     {
       "eventId": "1",
-      "eventTime": "2026-09-26T11:19:31.569403Z",
+      "eventTime": "2026-09-27T04:36:12.570614Z",
       "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
-      "taskId": "1052143",
+      "taskId": "1053611",
       "workflowExecutionStartedEventAttributes": {
         "workflowType": {
           "name": "ship_order_v1"
@@ -31,12 +31,12 @@
         },
         "workflowRunTimeout": "0s",
         "workflowTaskTimeout": "10s",
-        "continuedExecutionRunId": "52d77fcd-d2e1-4b1c-9397-ece17470c550",
+        "continuedExecutionRunId": "cc988994-c8b9-40af-b9c3-ea23c8c4bb16",
         "initiator": "CONTINUE_AS_NEW_INITIATOR_WORKFLOW",
-        "originalExecutionRunId": "b3f72ff3-36ee-496f-90c8-cefb82be712f",
-        "firstExecutionRunId": "01a0dd71-1026-7ac5-a836-3bab5820f2a5",
+        "originalExecutionRunId": "a75de14c-6589-41b7-a7eb-94cdb1adb310",
+        "firstExecutionRunId": "01a0e126-2be9-7306-a8b9-360553fe5fc7",
         "attempt": 1,
-        "firstWorkflowTaskBackoff": "0.152215s",
+        "firstWorkflowTaskBackoff": "0.200971s",
         "memo": {
           "fields": {
             "dandori.cases": {
@@ -61,24 +61,24 @@
         "prevAutoResetPoints": {
           "points": [
             {
-              "runId": "01a0dd71-1026-7ac5-a836-3bab5820f2a5",
+              "runId": "01a0e126-2be9-7306-a8b9-360553fe5fc7",
               "firstWorkflowTaskCompletedId": "4",
-              "createTime": "2026-09-26T11:19:29.742383Z",
-              "expireTime": "2026-09-27T11:19:30.721638Z",
+              "createTime": "2026-09-27T04:36:10.610517Z",
+              "expireTime": "2026-09-28T04:36:11.771609Z",
               "resettable": true,
-              "buildId": "66c20693da0ede963473d7357199b2f2"
+              "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
             }
           ]
         },
-        "workflowId": "run-31",
+        "workflowId": "run-45",
         "priority": {}
       }
     },
     {
       "eventId": "2",
-      "eventTime": "2026-09-26T11:19:32.000447Z",
+      "eventTime": "2026-09-27T04:36:12.883305Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052285",
+      "taskId": "1053865",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
           "name": "ship_order_v1",
@@ -90,36 +90,36 @@
     },
     {
       "eventId": "3",
-      "eventTime": "2026-09-26T11:19:32.001708Z",
+      "eventTime": "2026-09-27T04:36:12.916675Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052315",
+      "taskId": "1053900",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "2",
-        "identity": "1910@localhost",
-        "requestId": "9dc0956d-d17d-46f8-ad70-92c402989cbe",
-        "historySizeBytes": "732",
+        "identity": "19912@localhost",
+        "requestId": "aae123ab-8ede-4877-bb8f-714bff534b23",
+        "historySizeBytes": "734",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "4",
-      "eventTime": "2026-09-26T11:19:32.007817Z",
+      "eventTime": "2026-09-27T04:36:12.927054Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052342",
+      "taskId": "1053947",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "2",
         "startedEventId": "3",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {
           "coreUsedFlags": [
-            1,
+            2,
             3,
-            2
+            1
           ],
           "sdkName": "temporal-python",
           "sdkVersion": "1.33.0"
@@ -129,9 +129,9 @@
     },
     {
       "eventId": "5",
-      "eventTime": "2026-09-26T11:19:32.007833Z",
+      "eventTime": "2026-09-27T04:36:12.927070Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
-      "taskId": "1052343",
+      "taskId": "1053948",
       "activityTaskScheduledEventAttributes": {
         "activityId": "1",
         "activityType": {
@@ -148,7 +148,7 @@
               "metadata": {
                 "encoding": "anNvbi9wbGFpbg=="
               },
-              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tMzEvNC8yIiwib3JkZXJfaWQiOiJpZC04IiwidGV4dCI6IldlIGFyZSB3YWl0aW5nIGZvciB5b3VyIHBheW1lbnQifQ=="
+              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tNDUvNC8yIiwib3JkZXJfaWQiOiJpZC04IiwidGV4dCI6IldlIGFyZSB3YWl0aW5nIGZvciB5b3VyIHBheW1lbnQifQ=="
             }
           ]
         },
@@ -169,47 +169,47 @@
     },
     {
       "eventId": "6",
-      "eventTime": "2026-09-26T11:19:32.007842Z",
+      "eventTime": "2026-09-27T04:36:12.927078Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
-      "taskId": "1052353",
+      "taskId": "1053978",
       "activityTaskStartedEventAttributes": {
         "scheduledEventId": "5",
-        "identity": "1910@localhost",
-        "requestId": "876c27d4-3a00-4987-986f-7a751ca198a0",
+        "identity": "19912@localhost",
+        "requestId": "82d5edf5-6736-44a4-93f7-2ad4c2e3cbdf",
         "attempt": 1,
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "7",
-      "eventTime": "2026-09-26T11:19:32.009788Z",
+      "eventTime": "2026-09-27T04:36:12.929876Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
-      "taskId": "1052354",
+      "taskId": "1053979",
       "activityTaskFailedEventAttributes": {
         "failure": {
           "message": "scripted",
-          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 53, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 86, in notify\n    return io.value(await t.lambda_(\"arn:aws:lambda:ap-northeast-1:123456789012:function:notify\", args), {\"no_recipient\": \"no_recipient\"}, fail)\n           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/io.py\", line 264, in value\n    raise fail(kind if kind is not None else f\"Dandori.Failure.{a['error']}\", a.get(\"message\", \"\"))\n",
+          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 56, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 89, in notify\n    return await own.notify(args)\n           ^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/run.py\", line 344, in call\n    return await answer(run, ans)\n           ^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/run.py\", line 277, in answer\n    raise scripted(ans[\"error\"])\n",
           "applicationFailureInfo": {
-            "type": "Dandori.Failure.Dandori.Test.Failure",
+            "type": "Dandori.Test.Failure",
             "nonRetryable": true
           }
         },
         "scheduledEventId": "5",
         "startedEventId": "6",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
       }
     },
     {
       "eventId": "8",
-      "eventTime": "2026-09-26T11:19:32.009793Z",
+      "eventTime": "2026-09-27T04:36:12.929881Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052355",
+      "taskId": "1053980",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -219,30 +219,30 @@
     },
     {
       "eventId": "9",
-      "eventTime": "2026-09-26T11:19:32.015919Z",
+      "eventTime": "2026-09-27T04:36:12.966685Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052374",
+      "taskId": "1053991",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "8",
-        "identity": "1910@localhost",
-        "requestId": "fb328666-d05c-4e50-9c12-dfb2da0a7a3b",
-        "historySizeBytes": "3238",
+        "identity": "19912@localhost",
+        "requestId": "ce049cde-cf31-4599-9458-003b707f1385",
+        "historySizeBytes": "3042",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "10",
-      "eventTime": "2026-09-26T11:19:32.019878Z",
+      "eventTime": "2026-09-27T04:36:12.970823Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052408",
+      "taskId": "1054012",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "8",
         "startedEventId": "9",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -250,9 +250,9 @@
     },
     {
       "eventId": "11",
-      "eventTime": "2026-09-26T11:19:32.019889Z",
+      "eventTime": "2026-09-27T04:36:12.970839Z",
       "eventType": "EVENT_TYPE_TIMER_STARTED",
-      "taskId": "1052409",
+      "taskId": "1054013",
       "timerStartedEventAttributes": {
         "timerId": "1",
         "startToFireTimeout": "0.010s",
@@ -261,9 +261,9 @@
     },
     {
       "eventId": "12",
-      "eventTime": "2026-09-26T11:19:32.301404Z",
+      "eventTime": "2026-09-27T04:36:13.185255Z",
       "eventType": "EVENT_TYPE_TIMER_FIRED",
-      "taskId": "1052473",
+      "taskId": "1054076",
       "timerFiredEventAttributes": {
         "timerId": "1",
         "startedEventId": "11"
@@ -271,12 +271,12 @@
     },
     {
       "eventId": "13",
-      "eventTime": "2026-09-26T11:19:32.301408Z",
+      "eventTime": "2026-09-27T04:36:13.185260Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052474",
+      "taskId": "1054077",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -286,30 +286,30 @@
     },
     {
       "eventId": "14",
-      "eventTime": "2026-09-26T11:19:32.302338Z",
+      "eventTime": "2026-09-27T04:36:13.216900Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052492",
+      "taskId": "1054110",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "13",
-        "identity": "1910@localhost",
-        "requestId": "33b0fee1-c517-490c-b81a-a546de919e8b",
-        "historySizeBytes": "3634",
+        "identity": "19912@localhost",
+        "requestId": "c89de481-ee34-422f-ae92-2357d20d3eb3",
+        "historySizeBytes": "3442",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "15",
-      "eventTime": "2026-09-26T11:19:32.305279Z",
+      "eventTime": "2026-09-27T04:36:13.222799Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052501",
+      "taskId": "1054135",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "13",
         "startedEventId": "14",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -317,9 +317,9 @@
     },
     {
       "eventId": "16",
-      "eventTime": "2026-09-26T11:19:32.305303Z",
+      "eventTime": "2026-09-27T04:36:13.222815Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
-      "taskId": "1052502",
+      "taskId": "1054136",
       "activityTaskScheduledEventAttributes": {
         "activityId": "2",
         "activityType": {
@@ -336,7 +336,7 @@
               "metadata": {
                 "encoding": "anNvbi9wbGFpbg=="
               },
-              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tMzEvNC8yIiwib3JkZXJfaWQiOiJpZC04IiwidGV4dCI6IldlIGFyZSB3YWl0aW5nIGZvciB5b3VyIHBheW1lbnQifQ=="
+              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tNDUvNC8yIiwib3JkZXJfaWQiOiJpZC04IiwidGV4dCI6IldlIGFyZSB3YWl0aW5nIGZvciB5b3VyIHBheW1lbnQifQ=="
             }
           ]
         },
@@ -357,24 +357,24 @@
     },
     {
       "eventId": "17",
-      "eventTime": "2026-09-26T11:19:32.305318Z",
+      "eventTime": "2026-09-27T04:36:13.222829Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
-      "taskId": "1052505",
+      "taskId": "1054156",
       "activityTaskStartedEventAttributes": {
         "scheduledEventId": "16",
-        "identity": "1910@localhost",
-        "requestId": "20f2e231-8f88-4dc3-bd56-950cf9f3ad8b",
+        "identity": "19912@localhost",
+        "requestId": "49e435cd-313b-45e4-86e9-007e53e9104e",
         "attempt": 1,
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "18",
-      "eventTime": "2026-09-26T11:19:32.306525Z",
+      "eventTime": "2026-09-27T04:36:13.225344Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
-      "taskId": "1052506",
+      "taskId": "1054157",
       "activityTaskCompletedEventAttributes": {
         "result": {
           "payloads": [
@@ -388,17 +388,17 @@
         },
         "scheduledEventId": "16",
         "startedEventId": "17",
-        "identity": "1910@localhost"
+        "identity": "19912@localhost"
       }
     },
     {
       "eventId": "19",
-      "eventTime": "2026-09-26T11:19:32.306531Z",
+      "eventTime": "2026-09-27T04:36:13.225350Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052507",
+      "taskId": "1054158",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -408,30 +408,30 @@
     },
     {
       "eventId": "20",
-      "eventTime": "2026-09-26T11:19:32.314929Z",
+      "eventTime": "2026-09-27T04:36:13.266812Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052513",
+      "taskId": "1054174",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "19",
-        "identity": "1910@localhost",
-        "requestId": "d223c89b-3ab5-47dd-b053-54f72d160a75",
-        "historySizeBytes": "4410",
+        "identity": "19912@localhost",
+        "requestId": "3a14de4d-017f-4f63-869b-f2c02d8d5b39",
+        "historySizeBytes": "4217",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "21",
-      "eventTime": "2026-09-26T11:19:32.318444Z",
+      "eventTime": "2026-09-27T04:36:13.275395Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052536",
+      "taskId": "1054190",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "19",
         "startedEventId": "20",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -439,9 +439,9 @@
     },
     {
       "eventId": "22",
-      "eventTime": "2026-09-26T11:19:32.318455Z",
+      "eventTime": "2026-09-27T04:36:13.275419Z",
       "eventType": "EVENT_TYPE_TIMER_STARTED",
-      "taskId": "1052537",
+      "taskId": "1054191",
       "timerStartedEventAttributes": {
         "timerId": "2",
         "startToFireTimeout": "0.010s",
@@ -450,9 +450,9 @@
     },
     {
       "eventId": "23",
-      "eventTime": "2026-09-26T11:19:32.501311Z",
+      "eventTime": "2026-09-27T04:36:13.484496Z",
       "eventType": "EVENT_TYPE_TIMER_FIRED",
-      "taskId": "1052672",
+      "taskId": "1054221",
       "timerFiredEventAttributes": {
         "timerId": "2",
         "startedEventId": "22"
@@ -460,12 +460,12 @@
     },
     {
       "eventId": "24",
-      "eventTime": "2026-09-26T11:19:32.501315Z",
+      "eventTime": "2026-09-27T04:36:13.484507Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052673",
+      "taskId": "1054222",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -475,30 +475,30 @@
     },
     {
       "eventId": "25",
-      "eventTime": "2026-09-26T11:19:32.514931Z",
+      "eventTime": "2026-09-27T04:36:13.485858Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052679",
+      "taskId": "1054231",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "24",
-        "identity": "1910@localhost",
-        "requestId": "9bf81e75-f9d5-4939-aa6b-5c4d31b11641",
-        "historySizeBytes": "4809",
+        "identity": "19912@localhost",
+        "requestId": "0ac4421c-f38a-4715-9d73-5e2233f159e0",
+        "historySizeBytes": "4618",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "26",
-      "eventTime": "2026-09-26T11:19:32.517242Z",
+      "eventTime": "2026-09-27T04:36:13.489052Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052688",
+      "taskId": "1054236",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "24",
         "startedEventId": "25",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -506,9 +506,9 @@
     },
     {
       "eventId": "27",
-      "eventTime": "2026-09-26T11:19:32.517264Z",
+      "eventTime": "2026-09-27T04:36:13.489087Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
-      "taskId": "1052689",
+      "taskId": "1054237",
       "activityTaskScheduledEventAttributes": {
         "activityId": "3",
         "activityType": {
@@ -546,28 +546,28 @@
     },
     {
       "eventId": "28",
-      "eventTime": "2026-09-26T11:19:32.517277Z",
+      "eventTime": "2026-09-27T04:36:13.489110Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
-      "taskId": "1052697",
+      "taskId": "1054240",
       "activityTaskStartedEventAttributes": {
         "scheduledEventId": "27",
-        "identity": "1910@localhost",
-        "requestId": "208c49fa-1267-47e0-9d97-8b1887078968",
+        "identity": "19912@localhost",
+        "requestId": "9c14329a-7def-4971-9d47-b64641e280a2",
         "attempt": 1,
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "29",
-      "eventTime": "2026-09-26T11:19:32.519328Z",
+      "eventTime": "2026-09-27T04:36:13.492044Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
-      "taskId": "1052698",
+      "taskId": "1054241",
       "activityTaskFailedEventAttributes": {
         "failure": {
           "message": "scripted",
-          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 53, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 68, in get_order\n    return io.status(await t.http({\"http\": \"GET\", \"url\": \"https://warehouse.example.com/v1/orders/\" + io.text(args.get(\"id\")), \"query\": {\"expand\": args.get(\"expand\")}}), {\"429\": \"busy\"}, fail)\n           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/io.py\", line 303, in status\n    raise fail(kind if kind is not None else f\"Dandori.HttpStatus.{r['status']}\", body if isinstance(body, str) else json.dumps(body))\n",
+          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 56, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 71, in get_order\n    return io.status(await t.http({\"http\": \"GET\", \"url\": \"https://warehouse.example.com/v1/orders/\" + io.text(args.get(\"id\")), \"query\": {\"expand\": args.get(\"expand\")}}), {\"429\": \"busy\"}, fail)\n           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/io.py\", line 321, in status\n    raise fail(kind if kind is not None else f\"Dandori.HttpStatus.{r['status']}\", body if isinstance(body, str) else json.dumps(body))\n",
           "applicationFailureInfo": {
             "type": "busy",
             "nonRetryable": true
@@ -575,18 +575,18 @@
         },
         "scheduledEventId": "27",
         "startedEventId": "28",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
       }
     },
     {
       "eventId": "30",
-      "eventTime": "2026-09-26T11:19:32.519335Z",
+      "eventTime": "2026-09-27T04:36:13.492053Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052699",
+      "taskId": "1054242",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -596,30 +596,30 @@
     },
     {
       "eventId": "31",
-      "eventTime": "2026-09-26T11:19:32.565966Z",
+      "eventTime": "2026-09-27T04:36:13.516748Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052709",
+      "taskId": "1054247",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "30",
-        "identity": "1910@localhost",
-        "requestId": "5c3bcb44-eaf7-46bf-a006-ba458a8c8a70",
-        "historySizeBytes": "7337",
+        "identity": "19912@localhost",
+        "requestId": "c07d6ac2-0278-4555-9a6a-6e9fa19d3007",
+        "historySizeBytes": "7151",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "32",
-      "eventTime": "2026-09-26T11:19:32.569190Z",
+      "eventTime": "2026-09-27T04:36:13.519235Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052717",
+      "taskId": "1054254",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "30",
         "startedEventId": "31",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -627,9 +627,9 @@
     },
     {
       "eventId": "33",
-      "eventTime": "2026-09-26T11:19:32.569211Z",
+      "eventTime": "2026-09-27T04:36:13.519255Z",
       "eventType": "EVENT_TYPE_TIMER_STARTED",
-      "taskId": "1052718",
+      "taskId": "1054255",
       "timerStartedEventAttributes": {
         "timerId": "3",
         "startToFireTimeout": "0.010s",
@@ -638,9 +638,9 @@
     },
     {
       "eventId": "34",
-      "eventTime": "2026-09-26T11:19:32.701022Z",
+      "eventTime": "2026-09-27T04:36:13.683568Z",
       "eventType": "EVENT_TYPE_TIMER_FIRED",
-      "taskId": "1052744",
+      "taskId": "1054296",
       "timerFiredEventAttributes": {
         "timerId": "3",
         "startedEventId": "33"
@@ -648,12 +648,12 @@
     },
     {
       "eventId": "35",
-      "eventTime": "2026-09-26T11:19:32.701030Z",
+      "eventTime": "2026-09-27T04:36:13.683575Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052745",
+      "taskId": "1054297",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -663,30 +663,30 @@
     },
     {
       "eventId": "36",
-      "eventTime": "2026-09-26T11:19:32.715697Z",
+      "eventTime": "2026-09-27T04:36:13.716696Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052749",
+      "taskId": "1054301",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "35",
-        "identity": "1910@localhost",
-        "requestId": "ca5719ef-be75-4ae8-8d0c-fbd1f587a209",
-        "historySizeBytes": "7736",
+        "identity": "19912@localhost",
+        "requestId": "523268fd-8ac5-43f4-8f45-4a7887b4b74c",
+        "historySizeBytes": "7553",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "37",
-      "eventTime": "2026-09-26T11:19:32.717795Z",
+      "eventTime": "2026-09-27T04:36:13.719403Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052754",
+      "taskId": "1054306",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "35",
         "startedEventId": "36",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -694,9 +694,9 @@
     },
     {
       "eventId": "38",
-      "eventTime": "2026-09-26T11:19:32.717818Z",
+      "eventTime": "2026-09-27T04:36:13.719431Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
-      "taskId": "1052755",
+      "taskId": "1054307",
       "activityTaskScheduledEventAttributes": {
         "activityId": "4",
         "activityType": {
@@ -734,24 +734,24 @@
     },
     {
       "eventId": "39",
-      "eventTime": "2026-09-26T11:19:32.717834Z",
+      "eventTime": "2026-09-27T04:36:13.719450Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
-      "taskId": "1052758",
+      "taskId": "1054310",
       "activityTaskStartedEventAttributes": {
         "scheduledEventId": "38",
-        "identity": "1910@localhost",
-        "requestId": "124e32c8-ad28-44bd-a899-a7cc9eb00ebd",
+        "identity": "19912@localhost",
+        "requestId": "0fbcb40b-d76e-401e-a91a-b421138913a0",
         "attempt": 1,
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "40",
-      "eventTime": "2026-09-26T11:19:32.719074Z",
+      "eventTime": "2026-09-27T04:36:13.720814Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
-      "taskId": "1052759",
+      "taskId": "1054311",
       "activityTaskCompletedEventAttributes": {
         "result": {
           "payloads": [
@@ -765,17 +765,17 @@
         },
         "scheduledEventId": "38",
         "startedEventId": "39",
-        "identity": "1910@localhost"
+        "identity": "19912@localhost"
       }
     },
     {
       "eventId": "41",
-      "eventTime": "2026-09-26T11:19:32.719081Z",
+      "eventTime": "2026-09-27T04:36:13.720824Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052760",
+      "taskId": "1054312",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -785,30 +785,30 @@
     },
     {
       "eventId": "42",
-      "eventTime": "2026-09-26T11:19:32.765772Z",
+      "eventTime": "2026-09-27T04:36:13.766806Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052764",
+      "taskId": "1054316",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "41",
-        "identity": "1910@localhost",
-        "requestId": "cdc7a949-85dc-4603-8a41-e370f7f1c9d7",
-        "historySizeBytes": "8502",
+        "identity": "19912@localhost",
+        "requestId": "77fb22ad-287f-4530-b727-12cedb362e2f",
+        "historySizeBytes": "8324",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "43",
-      "eventTime": "2026-09-26T11:19:32.768541Z",
+      "eventTime": "2026-09-27T04:36:13.770244Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052769",
+      "taskId": "1054321",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "41",
         "startedEventId": "42",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -816,9 +816,9 @@
     },
     {
       "eventId": "44",
-      "eventTime": "2026-09-26T11:19:32.768761Z",
+      "eventTime": "2026-09-27T04:36:13.770509Z",
       "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
-      "taskId": "1052770",
+      "taskId": "1054322",
       "upsertWorkflowSearchAttributesEventAttributes": {
         "workflowTaskCompletedEventId": "43",
         "searchAttributes": {
@@ -836,9 +836,9 @@
     },
     {
       "eventId": "45",
-      "eventTime": "2026-09-26T11:19:32.768782Z",
+      "eventTime": "2026-09-27T04:36:13.770537Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
-      "taskId": "1052771",
+      "taskId": "1054323",
       "activityTaskScheduledEventAttributes": {
         "activityId": "5",
         "activityType": {
@@ -855,7 +855,7 @@
               "metadata": {
                 "encoding": "anNvbi9wbGFpbg=="
               },
-              "data": "eyJpZCI6ImlkLTExIiwiaWRlbXBvdGVuY3lfa2V5IjoicnVuLTMxLzEwIn0="
+              "data": "eyJpZCI6ImlkLTExIiwiaWRlbXBvdGVuY3lfa2V5IjoicnVuLTQ1LzEwIn0="
             }
           ]
         },
@@ -876,28 +876,28 @@
     },
     {
       "eventId": "46",
-      "eventTime": "2026-09-26T11:19:32.768796Z",
+      "eventTime": "2026-09-27T04:36:13.770555Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
-      "taskId": "1052775",
+      "taskId": "1054327",
       "activityTaskStartedEventAttributes": {
         "scheduledEventId": "45",
-        "identity": "1910@localhost",
-        "requestId": "f4faba9e-73cc-49e4-b006-3dd5968d6118",
+        "identity": "19912@localhost",
+        "requestId": "90060f37-f3bd-4550-abe3-9275a5a9f365",
         "attempt": 1,
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "47",
-      "eventTime": "2026-09-26T11:19:32.770856Z",
+      "eventTime": "2026-09-27T04:36:13.773280Z",
       "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
-      "taskId": "1052776",
+      "taskId": "1054328",
       "activityTaskFailedEventAttributes": {
         "failure": {
           "message": "scripted",
-          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 53, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/activities.py\", line 80, in request_cancel\n    return io.status(await t.http({\"http\": \"POST\", \"url\": \"https://warehouse.example.com/v1/orders/\" + io.text(args.get(\"id\")) + \"/cancellations\", \"headers\": {\"Idempotency-Key\": args[\"idempotency_key\"]}}), {\"409\": \"conflict\"}, fail)\n           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/io.py\", line 303, in status\n    raise fail(kind if kind is not None else f\"Dandori.HttpStatus.{r['status']}\", body if isinstance(body, str) else json.dumps(body))\n",
+          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        start, running_activity, task_token, data_converter\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 56, in beats\n    return await run(args)\n           ^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/activities.py\", line 83, in request_cancel\n    return io.status(await t.http({\"http\": \"POST\", \"url\": \"https://warehouse.example.com/v1/orders/\" + io.text(args.get(\"id\")) + \"/cancellations\", \"headers\": {\"Idempotency-Key\": args[\"idempotency_key\"]}}), {\"409\": \"conflict\"}, fail)\n           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/io.py\", line 321, in status\n    raise fail(kind if kind is not None else f\"Dandori.HttpStatus.{r['status']}\", body if isinstance(body, str) else json.dumps(body))\n",
           "applicationFailureInfo": {
             "type": "Dandori.HttpStatus.500",
             "nonRetryable": true
@@ -905,18 +905,18 @@
         },
         "scheduledEventId": "45",
         "startedEventId": "46",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
       }
     },
     {
       "eventId": "48",
-      "eventTime": "2026-09-26T11:19:32.770863Z",
+      "eventTime": "2026-09-27T04:36:13.773290Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
-      "taskId": "1052777",
+      "taskId": "1054329",
       "workflowTaskScheduledEventAttributes": {
         "taskQueue": {
-          "name": "1910@localhost-6b1eef2a3d5d42c6a79117aef7433844",
+          "name": "19912@localhost-cba6518fccd648b89b068c26bcaeb8e6",
           "kind": "TASK_QUEUE_KIND_STICKY",
           "normalName": "ship_order_v1"
         },
@@ -926,30 +926,30 @@
     },
     {
       "eventId": "49",
-      "eventTime": "2026-09-26T11:19:32.815708Z",
+      "eventTime": "2026-09-27T04:36:13.816813Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
-      "taskId": "1052781",
+      "taskId": "1054333",
       "workflowTaskStartedEventAttributes": {
         "scheduledEventId": "48",
-        "identity": "1910@localhost",
-        "requestId": "1830c794-9153-4457-90fc-90ca34363db8",
-        "historySizeBytes": "11267",
+        "identity": "19912@localhost",
+        "requestId": "5a8f42c5-3d2a-4f98-979e-00273f60bc87",
+        "historySizeBytes": "11094",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         }
       }
     },
     {
       "eventId": "50",
-      "eventTime": "2026-09-26T11:19:32.818965Z",
+      "eventTime": "2026-09-27T04:36:13.821295Z",
       "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
-      "taskId": "1052785",
+      "taskId": "1054337",
       "workflowTaskCompletedEventAttributes": {
         "scheduledEventId": "48",
         "startedEventId": "49",
-        "identity": "1910@localhost",
+        "identity": "19912@localhost",
         "workerVersion": {
-          "buildId": "66c20693da0ede963473d7357199b2f2"
+          "buildId": "2c2f2ea16d2c66df0e0ecb7dcc499eb9"
         },
         "sdkMetadata": {},
         "meteringMetadata": {}
@@ -957,16 +957,16 @@
     },
     {
       "eventId": "51",
-      "eventTime": "2026-09-26T11:19:32.818986Z",
+      "eventTime": "2026-09-27T04:36:13.821327Z",
       "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_FAILED",
-      "taskId": "1052786",
+      "taskId": "1054338",
       "workflowExecutionFailedEventAttributes": {
         "failure": {
           "message": "Stopped on the way; the order stays in the warehouse's system as it is",
-          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 2750, in _run_top_level_workflow_function\n    await coro\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 1153, in run_workflow\n    result = await self._inbound.execute_workflow(input)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/testing/_workflow.py\", line 584, in execute_workflow\n    return await super().execute_workflow(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_interceptor.py\", line 401, in execute_workflow\n    return await self.next.execute_workflow(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 3144, in execute_workflow\n    return await input.run_fn(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/workflow.py\", line 82, in run\n    return await self.flow(input, resume)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/workflow.py\", line 249, in flow\n    raise dd.fail(\"Stopped\", \"Stopped on the way; the order stays in the warehouse's system as it is\")\n",
+          "stackTrace": "  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 2750, in _run_top_level_workflow_function\n    await coro\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 1153, in run_workflow\n    result = await self._inbound.execute_workflow(input)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/testing/_workflow.py\", line 584, in execute_workflow\n    return await super().execute_workflow(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_interceptor.py\", line 401, in execute_workflow\n    return await self.next.execute_workflow(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/work/dandori/tools/temporal-python/.venv/lib/python3.13/site-packages/temporalio/worker/_workflow_instance.py\", line 3144, in execute_workflow\n    return await input.run_fn(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/workflow.py\", line 71, in run\n    return await self.flow(input, resume)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/workflow.py\", line 231, in flow\n    raise dd.fail(\"Stopped\", \"Stopped on the way; the order stays in the warehouse's system as it is\")\n",
           "cause": {
             "message": "scripted",
-            "stackTrace": "  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/workflow.py\", line 159, in flow\n    dd_r = await dd.attempt(lambda: dd_task_request_cancel({\"id\": order[\"id\"], \"idempotency_key\": dd.key(10, [])}), [], [\"conflict\"])\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-i04nxm84/ship_order/runtime.py\", line 97, in attempt\n    raise TaskError(kind, message_of(e)) from None\n",
+            "stackTrace": "  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/workflow.py\", line 149, in flow\n    dd_r = await dd.attempt(lambda: dd_task_request_cancel({\"id\": order[\"id\"], \"idempotency_key\": dd.key(10, [])}), [], [\"conflict\"])\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/tmp/dandori-temporal-python-j2_k0xbw/ship_order/runtime.py\", line 97, in attempt\n    raise TaskError(kind, message_of(e)) from None\n",
             "applicationFailureInfo": {
               "type": "TaskError"
             }

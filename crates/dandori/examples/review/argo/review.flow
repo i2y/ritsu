@@ -1,5 +1,5 @@
 workflow review v1
-description "Send an application to be scored on workers of their own, and when the score says hold, wait for a person's approval. Every task is one the user writes, so it goes to the platforms that run the user's code: Temporal, Lambda durable functions, Argo Workflows (images) and pydantic-graph, not Step Functions"
+description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Argo Workflows: every task is a container of your image, and the approver's tool answers the callback with `argo node set` and `argo resume`"
 
 enum Verdict = approve | reject | hold
 
@@ -20,9 +20,8 @@ inputs
 outputs
   verdict : Verdict
 
-# Scoring runs on workers of its own, which may be written in another language.
+# Each task runs in a container of its image, which reads the call from DANDORI_CALL.
 task score(application_id: string, amount: int) -> Score
-  queue "scoring"
   image "registry.example.com/review/scoring:1"
   errors unscorable
   retry 2 times every 10 seconds
@@ -35,7 +34,6 @@ task ask_for_approval(application_id: string, points: int) -> Approval
   timeout 3 days
 
 task notify(application_id: string, text: string)
-  queue "notify"
   image "registry.example.com/review/notify:1"
   idempotent
 

@@ -1,5 +1,5 @@
 workflow ship_order v1
-description "The order of examples/order, written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, which send with the standard library; the notice is a function you write; and the word of the delivery is a callback that the shop's handler of the carrier's reports, in the same process, answers. The waits hold the process, and a run the process loses is lost"
+description "For an order in the warehouse's system, ask for the payment, have it shipped, and wait for word of the delivery. The warehouse's system keeps the order's state, which moves as rulec's rule order_state says. Written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, which send with the standard library; the notice is a function you write; and the word of the delivery is a callback that the shop's handler of the carrier's reports, in the same process, answers. The waits hold the process, and a run the process loses is lost"
 
 use rule order_state from "../rules/order_state.rule"
 use rule urgency from "../rules/urgency.rule"

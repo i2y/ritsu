@@ -43,6 +43,8 @@ until check-out, the authorization can expire, and then the capture is refused.
 
 ## A workflow
 
+From the hotel booking, as written for Temporal ([examples/hotel/temporal](examples/hotel/temporal/hotel.flow)):
+
 ```
 case pi : PaymentIntent follows payment_intent.payment
   held capture_method = manual
@@ -60,8 +62,8 @@ flow
   …
 ```
 
-Lists, values that may be absent, and anything a task can call
-([examples/fulfillment](examples/fulfillment/fulfillment.flow)):
+Lists, values that may be absent, and anything a task can call, from the fulfillment of an order
+as written for AWS ([examples/fulfillment/aws](examples/fulfillment/aws/fulfillment.flow)):
 
 ```
 task wait_for_packing(QueueUrl: string, MessageBody: PackingRequest) -> Packing
@@ -262,7 +264,7 @@ variable's parameter.
 ### Agents
 
 An `agent` task gives a model its arguments and takes back a value of the task's type. The
-model reads and writes; the rules decide. [examples/inquiry](examples/inquiry/inquiry.flow)
+model reads and writes; the rules decide. [examples/inquiry](examples/inquiry/temporal/inquiry.flow)
 reads a customer's message with an OpenAI agent, routes it with a rulec rule, and drafts the
 reply with a Claude one:
 
@@ -270,14 +272,12 @@ reply with a Claude one:
 task read_inquiry(text: string) -> Reading
   agent "Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, …"
   model "gpt-5.4-mini"
-  connection "arn:aws:events:…:connection/openai/…"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
 task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -> string
   agent claude "Draft the first reply to the inquiry, politely, in three sentences at most. …"
   model "claude-sonnet-5"
-  connection "arn:aws:events:…:connection/claude/…"
   timeout 60 seconds
 
 flow
@@ -293,7 +293,8 @@ flow
 - Every target asks the model the same thing: the instructions, the arguments as the same
   JSON text, and the schema, and no model settings — dandori adds none, and keeps the Agents
   SDK from adding its defaults. Step Functions sends it to the Responses API from an HTTP
-  Task, with the API key in the EventBridge connection. The code dandori writes for the other targets runs it with
+  Task, with the API key in the EventBridge connection the task names (`connection`, in the
+  version for AWS). The code dandori writes for the other targets runs it with
   OpenAI's Agents SDK through the `Transport`, which reads `OPENAI_API_KEY`, or takes a run
   configuration of your own (another model provider, for one).
 - A Claude agent gets the instructions as the system prompt, the arguments' JSON text as the
@@ -313,23 +314,18 @@ flow
 
 ## Examples
 
-Five examples, each written three ways: the same flow, with its tasks called and its news
-brought in the way the platform does.
+Five examples, each written for Temporal, for AWS and for pydantic-graph: the same flow, with its
+tasks called and its news brought in the way the platform does. Temporal is dandori's main
+platform, and its version is the one to read first.
 
-| Example | For AWS (Step Functions, and every platform) | For Temporal | For pydantic-graph |
+| Example | For Temporal | For AWS (Step Functions, Lambda durable functions) | For pydantic-graph |
 |---|---|---|---|
-| a hotel booking that holds a card and captures at check-out (held to Stripe's OpenAPI document) | [hotel](examples/hotel/hotel.flow) | [temporal](examples/hotel/temporal/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
-| an order in a warehouse's system, reminded, shipped, delivered | [order](examples/order/order.flow) | [temporal](examples/order/temporal/order.flow) | [pydantic-graph](examples/order/pydantic-graph/order.flow) |
-| reserving the lines of an order side by side, packing, delivery (a child flow, [arrange_delivery](examples/fulfillment/arrange_delivery.flow), which each version runs; the warehouse called by Connect, and SNS and SQS held to their Smithy models) | [fulfillment](examples/fulfillment/fulfillment.flow) | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
-| agents that read an inquiry and draft a reply, and a rule that routes it | [inquiry](examples/inquiry/inquiry.flow) | [temporal](examples/inquiry/temporal/inquiry.flow) | [pydantic-graph](examples/inquiry/pydantic-graph/inquiry.flow) |
-| an application scored by other workers, and a person's approval | [review](examples/review/review.flow) | [temporal](examples/review/temporal/review.flow) | [pydantic-graph](examples/review/pydantic-graph/review.flow) |
+| a hotel booking that holds a card and captures at check-out, held to Stripe's OpenAPI document | [temporal](examples/hotel/temporal/hotel.flow) | [aws](examples/hotel/aws/hotel.flow) | [pydantic-graph](examples/hotel/pydantic-graph/hotel.flow) |
+| an order in a warehouse's system, reminded, shipped, delivered | [temporal](examples/order/temporal/order.flow) | [aws](examples/order/aws/order.flow) | [pydantic-graph](examples/order/pydantic-graph/order.flow) |
+| reserving the lines of an order side by side, packing, delivery: the warehouse called by Connect, and the delivery a child flow, [arrange_delivery](examples/fulfillment/arrange_delivery.flow), written once for every platform | [temporal](examples/fulfillment/temporal/fulfillment.flow) | [aws](examples/fulfillment/aws/fulfillment.flow) | [pydantic-graph](examples/fulfillment/pydantic-graph/fulfillment.flow) |
+| agents that read an inquiry and draft a reply, and a rule that routes it | [temporal](examples/inquiry/temporal/inquiry.flow) | [aws](examples/inquiry/aws/inquiry.flow) | [pydantic-graph](examples/inquiry/pydantic-graph/inquiry.flow) |
+| an application scored by other workers, and a person's approval; also [for Argo Workflows](examples/review/argo/review.flow) | [temporal](examples/review/temporal/review.flow) | [aws](examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](examples/review/pydantic-graph/review.flow) |
 
-- **For AWS**, the tasks call Lambda functions, HTTP APIs through EventBridge connections, and
-  SNS and SQS, as Step Functions does; a callback hands on a task token. The code dandori writes
-  for the other platforms makes the same calls, so these build for all five — but review, whose
-  tasks are all the user's own, is not for Step Functions (the first column is its version for
-  the platforms that run the user's code: Temporal, durable functions, Argo with `image`, and
-  pydantic-graph).
 - **For Temporal**, a call to an HTTP API is an activity dandori writes (the `Transport` adds
   the credentials, so there is no `connection`), and the rest are activities you write. News
   from outside the workflow comes as an `event`, sent to the workflow by its id (Stripe's
@@ -337,16 +333,28 @@ brought in the way the platform does.
   answered by the Update the generated client sends. Hotel and order release what they hold
   when the workflow is cancelled (`on cancel`); fulfillment and review send work to other task
   queues, and fulfillment falls back to the standard carrier when its child flow finds no
-  next-day van (the child's `fail NoVan`, which the task declares); inquiry calls its rule as a local activity; order's reminder loop goes on in a new
-  run as its history grows.
+  next-day van (the child's `fail NoVan`, which the task declares); inquiry calls its rule as a
+  local activity; order's reminder loop goes on in a new run as its history grows.
+- **For AWS**, the tasks call Lambda functions, HTTP APIs through EventBridge connections, and
+  SNS and SQS, as Step Functions does; a callback hands on a task token. Lambda durable
+  functions runs the same versions, and the code dandori writes for the other platforms makes
+  the same calls, so these build for all five. Review's is the exception: every one of its
+  tasks is your own code, which Step Functions cannot run, so on AWS it is for Lambda durable
+  functions alone.
+- **For Argo Workflows**, review's tasks are containers of your images (`image`). The other
+  examples run on Argo as they are written for AWS, with their calls made by the caller image
+  dandori builds.
 - **For pydantic-graph**, the graph runs in the Python process that takes the input: a call to
   an HTTP API or an agent is a function dandori writes, the rules run in the process, the rest
   are functions you write, and a callback is answered in the same process (`Deps.callbacks`).
   Waits hold the process, and a run the process loses is lost, so this is the shape for a
   prototype, or a short flow inside an agent.
 
-Each version is played by the runners of the platform it is written for (the ones for AWS by
-all of them). The design, in Japanese, is in [DESIGN.md](DESIGN.md).
+Only a flow that runs as it is on every platform sits beside the versions: fulfillment's child,
+whose calls are HTTP ones dandori writes for each. The versions share the rules (`rules/`) and
+the API descriptions (`specs/`). Each version is played by the runners of the platform it is
+written for; the versions for AWS and the flows beside them by every platform. The design, in
+Japanese, is in [DESIGN.md](DESIGN.md).
 
 ## Commands
 

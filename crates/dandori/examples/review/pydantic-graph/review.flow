@@ -1,5 +1,5 @@
 workflow review v1
-description "The review of examples/review, written for pydantic-graph: the graph runs in the Python process that takes the application, and every task is a function you write; the approver's answer comes to the callback in the same process. The wait for the approval holds the process, and a run the process loses is lost"
+description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for pydantic-graph: the graph runs in the Python process that takes the application, and every task is a function you write; the approver's answer comes to the callback in the same process. The wait for the approval holds the process, and a run the process loses is lost"
 
 enum Verdict = approve | reject | hold
 

@@ -1,5 +1,5 @@
 workflow hotel_stay v1
-description "The hotel booking of examples/hotel, written for pydantic-graph: the graph runs in the Python process that takes the booking. The Stripe calls are functions dandori writes, which send with the standard library through the Transport; the rule runs in the process; and the customer's 3-D Secure step is a callback that the shop's webhook handler, in the same process, answers. The waits hold the process, and a run the process loses is lost"
+description "When a stay is booked, hold an amount on the card, and capture it on the day of check-out. A rule decides the amount and whether the front desk looks first; the payment is a Stripe PaymentIntent. Written for pydantic-graph: the graph runs in the Python process that takes the booking. The Stripe calls are functions dandori writes, which send with the standard library through the Transport; the rule runs in the process; and the customer's 3-D Secure step is a callback that the shop's webhook handler, in the same process, answers. The waits hold the process, and a run the process loses is lost"
 
 use rule hold from "../rules/hold_amount.rule"
 use rule payment_intent from "../rules/payment_intent.rule"
