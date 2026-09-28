@@ -127,7 +127,7 @@ impl P<'_> {
             b'{' | b'[' => {
                 if self.depth == MAX_DEPTH {
                     return Err(tr!(
-                        "{} 文字目: 入れ子が {MAX_DEPTH} 段を超えています",
+                        "{} 文字目: ネストが {MAX_DEPTH} 段を超えています",
                         "character {}: nested deeper than {MAX_DEPTH} levels",
                         self.i + 1
                     ));

@@ -1364,7 +1364,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("`empty -> <値>` がありません", "there is no `empty -> <value>`"))
                     .note(tr!(
-                        "空の並びは必ず来ます。来たときに何を返すかは業務の判断で、道具が決められることではありません。",
+                        "空の並びは必ず来ます。来たときに何を返すかは業務の判断で、ツールが決められることではありません。",
                         "An empty sequence will arrive. What to answer then is a business decision, and not one the tool can make."
                     )),
             );
@@ -3910,7 +3910,7 @@ impl Checked {
                         fmt_val(hi, ty)
                     ))
                     .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."))
-                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、道具が勝手に決めません（§7.1）。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own (§7.1).")),
+                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、ツールが勝手に決めません（§7.1）。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own (§7.1).")),
             );
         }
     }

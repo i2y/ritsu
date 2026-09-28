@@ -181,7 +181,7 @@ impl<'a> Gen<'a> {
     /// the same and is in the service's own docstring, for a build that has no buf.
     pub fn buf_gen_yaml(&self) -> String {
         let note = tr!(
-            "# 手元だけで作るなら `uv add --dev protoc-gen-py protoc-gen-connectrpc` を入れて、\n  \
+            "# ローカルだけで作るなら `uv add --dev protoc-gen-py protoc-gen-connectrpc` を入れて、\n  \
              # この二行を `local: protoc-gen-py` と `local: protoc-gen-connectrpc` にする。\n  \
              # そのときは py の側に `strategy: all` も足すこと。規則ごとにディレクトリが分かれるので、\n  \
              # 既定（directory）だとプラグインがディレクトリごとに呼ばれ、同じ __init__.py を何度も書く。",
@@ -948,7 +948,7 @@ impl<'a> Gen<'a> {
             .replace("@MHEAD@", &mhead)
             .replace("@MLINE@", &mline)
             .replace("@MTAIL@", &mtail)
-            .replace("@D_REQUEST@", &tr!("ベクタ一行を、要求のメッセージにする。", "One line of the vectors as the request message."))
+            .replace("@D_REQUEST@", &tr!("ベクタ一行を、リクエストのメッセージにする。", "One line of the vectors as the request message."))
             .replace("@D_SERVE@", &tr!("WSGI の側を、標準ライブラリのサーバで、この同じプロセスの空いている番号に立てる。", "The WSGI side, on a free port in this same process, served by the standard library."))
             .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known."))
     }
@@ -1144,7 +1144,7 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                  req = json.loads(line)\n        \
                  d = req[\"in\"]  # 入力は {}。値は宣言した単位の整数、日付は YYYY-MM-DD、列挙はその名前\n\n        \
                  try:\n            \
-                     # TODO: d から相手の要求を組み立てる\n            \
+                     # TODO: d から相手のリクエストを組み立てる\n            \
                      res = client.decide(TheirRequest())\n            \
                      # TODO: 相手の答えの中で {} に当たるところ\n            \
                      got = 0\n        \

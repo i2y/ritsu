@@ -43,7 +43,7 @@ pub fn read(src: &str, file: &str) -> Result<Json, String> {
         let yaml = file.ends_with(".yaml") || file.ends_with(".yml");
         return Err(if yaml {
             tr!(
-                "YAML は読めません。JSON にしたものを指してください（多くの道具が `openapi.json` を書き出せます）。",
+                "YAML は読めません。JSON にしたものを指してください（多くのツールが `openapi.json` を書き出せます）。",
                 "YAML is not read. Point at a JSON form of it — most toolchains can write `openapi.json`."
             )
         } else {

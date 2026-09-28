@@ -1571,7 +1571,7 @@ impl Contract {
 
 fn refused_note() -> String {
     tr!(
-        "契約の検証を通っても、この値では生成コードが入口で断ります。API なら要求が誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。",
+        "契約の検証を通っても、この値では生成コードが入口で断ります。API ならリクエストが誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。",
         "A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ."
     )
 }
@@ -1691,7 +1691,7 @@ fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, &Projection)], rul
                         .fix_kind(FixKind::None)
                         .mark(span, tr!("`{full}` は契約では {desc}", "the contract lets `{full}` be {desc}"))
                         .note(tr!(
-                            "`{full}` から来る値は契約の検証を通ったものだけなので、この行に当たる要求やメッセージは来ません。",
+                            "`{full}` から来る値は契約の検証を通ったものだけなので、この行に当たるリクエストやメッセージは来ません。",
                             "What comes from `{full}` has passed the contract's validation, so no request or message reaches this row."
                         ))
                         .note(tr!(
@@ -2393,7 +2393,7 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, ru
         match point {
             Some((a, b)) => {
                 d = d.win(&k.left, WVal::Int(a)).win(&k.right, WVal::Int(b)).note(tr!(
-                    "たとえば `{lw}` が {a}、`{rw}` が {b} の要求は、契約の検証を通り、`constraint` を満たしません。",
+                    "たとえば `{lw}` が {a}、`{rw}` が {b} のリクエストは、契約の検証を通り、`constraint` を満たしません。",
                     "A request with `{lw}` at {a} and `{rw}` at {b}, for one, passes the contract's validation and breaks the `constraint`."
                 ));
             }
@@ -2550,7 +2550,7 @@ fn unreachable_rows(f: &RuleFile, c: &Checked, ac: &Across, shape: &str, dead: &
             .fix_kind(FixKind::None)
             .mark(row.span.clone(), tr!("契約は {joined} をこの組み合わせでは通しません", "the contract never lets {joined} through in this combination"))
             .note(tr!(
-                "セルを一つずつ見れば契約の通す値ですが、契約はフィールドのあいだにも条件を置いていて、この行の求める組み合わせはそれを満たしません。この行に当たる要求やメッセージは来ません。",
+                "セルを一つずつ見れば契約の通す値ですが、契約はフィールドのあいだにも条件を置いていて、この行の求める組み合わせはそれを満たしません。この行に当たるリクエストやメッセージは来ません。",
                 "Each cell alone asks for values the contract lets through, but the contract also relates the fields, and the combination this row asks for does not satisfy it. No request or message reaches the row."
             ))
             .note(tr!(

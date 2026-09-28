@@ -775,7 +775,7 @@ impl HttpWire {
 
         let mut line = String::new();
         if self.inn.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
-            return Err(broken(tr!("HTTP の答えがありません", "there was no HTTP answer")));
+            return Err(broken(tr!("HTTP のレスポンスがありません", "there was no HTTP answer")));
         }
         let status: u16 = line
             .split_whitespace()

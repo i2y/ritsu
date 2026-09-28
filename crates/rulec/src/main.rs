@@ -416,7 +416,7 @@ fn commands() -> Vec<Cmd> {
             name: "certificate",
             args: "<file.rule>",
             purpose: tr!(
-                "検査の証拠を、別の道具が読める形で出す",
+                "検査の証拠を、別のツールが読める形で出す",
                 "the evidence behind the check, in a form another program can read"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],

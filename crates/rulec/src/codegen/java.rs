@@ -336,7 +336,7 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
         return get(d, k).equals("true");
     }
 
-    /** 1970-01-01 からの通算日。道具が使うのと同じ暦の計算。 */
+    /** 1970-01-01 からの通算日。rulec が使うのと同じ暦の計算。 */
     private static long ord(String v) {
         String[] p = v.split("-");
         long y = Long.parseLong(p[0]);
