@@ -51,7 +51,7 @@ pub fn load(kind: ApiKind, path: &Path) -> Result<ApiDoc, String> {
     match kind {
         ApiKind::Proto => crate::proto::load(path).map(ApiDoc::Proto),
         _ => {
-            let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            let text = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
             let v: Value = serde_json::from_str(&text).map_err(|e| format!("{} is not JSON ({e}); dandori reads an OpenAPI document or a Smithy model written as JSON", path.display()))?;
             if kind == ApiKind::OpenApi {
                 if !v["openapi"].as_str().is_some_and(|s| s.starts_with('3')) {

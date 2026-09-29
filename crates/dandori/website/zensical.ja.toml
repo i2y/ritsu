@@ -17,6 +17,7 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "ホーム" = "index.md" },
+  { "ブラウザで試す" = "playground.md" },
   { "インストール" = "install.md" },
   { "ワークフローを書く" = "tour.md" },
   { "タスクが呼ぶもの" = "tasks.md" },

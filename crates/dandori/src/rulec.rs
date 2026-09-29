@@ -9,7 +9,6 @@
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RType {
@@ -86,23 +85,10 @@ pub struct RuleInfo {
     pub api: Value,
 }
 
-/// The rulec to run: `DANDORI_RULEC`, else `rulec` on the PATH.
-pub fn binary() -> String {
-    std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".to_string())
-}
-
+/// What `rulec <cmd>` prints for the rule, from the disk and a rulec process, or from what the
+/// playground carries (crate::sources).
 fn run(cmd: &str, path: &Path) -> Result<Value, String> {
-    let bin = binary();
-    let out = Command::new(&bin).arg(cmd).arg(path).output().map_err(|e| format!("could not run `{bin}`: {e}"))?;
-    if !out.status.success() {
-        let mut msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        if msg.is_empty() {
-            msg = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        }
-        let first: Vec<&str> = msg.lines().take(6).collect();
-        return Err(format!("`rulec {cmd}` failed:\n{}", first.join("\n")));
-    }
-    serde_json::from_slice(&out.stdout).map_err(|e| format!("`rulec {cmd}` did not print JSON: {e}"))
+    crate::sources::rulec(cmd, path)
 }
 
 fn s(v: &Value) -> String {

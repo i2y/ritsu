@@ -32,7 +32,8 @@ against one reference interpreter, on every scenario the tests generate.
 </p>
 
 <div class="dd-hero__cta" markdown>
-[Install](install.md){ .md-button .md-button--primary }
+[Try it in the browser](playground.md){ .md-button .md-button--primary }
+[Install](install.md){ .md-button }
 [Write a workflow](tour.md){ .md-button }
 [Examples](examples.md){ .md-button }
 [GitHub](https://github.com/i2y/dandori){ .md-button }

@@ -79,6 +79,20 @@ A call marked `!` has an error it does not handle, which goes on to `on failure`
 workflow; the mark lights up in a run where that happens. The address keeps what is picked
 (`hotel.html#run=40&node=s23`), so a link can show one run.
 
+## The rules it calls
+
+A call of a rule is one box on the picture, and what the rule decides is in the rule. So `doc` shows
+each rule the workflow uses as rulec draws it: what `rulec doc` renders for whoever approves the
+rule, put in as it is, in the language of the page.
+
+- **The Markdown** ends with a section of the rules, each folded in a `<details>` that a pull request
+  opens.
+- **The page** lists the rules on the left, and the pane of a step that calls a rule has a button.
+  Either opens the page `rulec doc --format html` renders, over this one, and a case can be tried on
+  it. A link opens it too (`hotel.html#rule=hold`), and Esc closes it.
+
+What rulec renders names the version of rulec that rendered it.
+
 ## A workflow the checker finds errors in
 
 `doc` draws a workflow whose check finds errors too, as long as its names and types resolve, and

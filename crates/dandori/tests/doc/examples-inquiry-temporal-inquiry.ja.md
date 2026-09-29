@@ -65,3 +65,72 @@ flowchart TD
 | 64 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
 | 76 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
 
+## 規則
+
+このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+
+<details>
+<summary><code>routing</code> · inquiry_routing v1 · <code>../rules/inquiry_routing.rule</code></summary>
+
+<!-- rulec 0.21.2 が inquiry_routing.rule (sha256:77cf5ddb6256) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+# 規則 inquiry_routing v1
+
+Which desk takes an inquiry, and how soon it is first answered, from its kind and whether the customer is a member. Written for the example
+
+## 入力
+
+| 名前 | 型 | 範囲 | 注記 |
+|---|---|---|---|
+| kind | kind（4 値） |  |  |
+| member | bool |  |  |
+
+## 出力
+
+| 名前 | 型 | 丸め | 注記 |
+|---|---|---|---|
+| desk | desk（3 値） |  |  |
+| within | duration[h] | down(1h) |  |
+
+## 型
+
+列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+
+- **kind**（4 値）— returns、delivery、billing、other
+- **desk**（3 値）— logistics、accounting、general
+
+## 表 route（policy unique）
+
+| 列 | 出どころ |
+|---|---|
+| kind | 入力 |
+| member | 入力 |
+| → desk | この規則の出力 |
+| → within | この規則の出力 |
+
+| # | kind | member | → desk（desk） | → within（duration[h] / down(1h)） |
+|---|---|---|---|---|
+| 1 | returns | true | logistics | 24h |
+| 2 | returns | false | logistics | 48h |
+| 3 | delivery | - | logistics | 24h |
+| 4 | billing | - | accounting | 48h |
+| 5 | other | true | general | 48h |
+| 6 | other | false | general | 72h |
+
+**`rulec check` が確かめたこと**
+
+- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）
+- どの入力にも当てはまらない行はありません（E102）
+- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません
+
+## 例（検証済み）
+
+| kind | member | → desk | within |
+|---|---|---|---|
+| returns | true | logistics | 24h |
+| billing | false | accounting | 48h |
+| other | false | general | 72h |
+
+この 3 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。
+
+</details>
+

@@ -20,6 +20,10 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
 **Documentation: <https://i2y.github.io/dandori/>**, in English and Japanese. The pages are also
 readable here, in [website/docs](website/docs) and [website/docs-ja](website/docs-ja).
 
+**Try it in the browser: <https://i2y.github.io/dandori/playground/>**. The checker, the builds
+and `dandori doc`, compiled to wasm32 and run in the page, on the examples or on a flow you edit,
+with the rules each calls; nothing is sent anywhere.
+
 The name comes from 段取り (dandori), arranging the steps of a job beforehand.
 
 ## What the checker says
@@ -115,7 +119,8 @@ dandori doc <file.flow> [--format html] [--out <dir>]
 and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
 call and every way the workflow can end, or one HTML page on which each scenario lights up the way
-its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html)).
+its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html)). The rules
+it calls come with it, as `rulec doc` renders them for whoever approves them.
 
 | Target | What `build` writes |
 |---|---|
@@ -146,7 +151,8 @@ example and run each of them eight ways: in the reference interpreter, the ASL u
 and on LocalStack's Step Functions, the Temporal workflow in TypeScript and in Python on the
 Temporal CLI's dev server, the durable function in the SDK's local test runner, the
 WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydantic-graph. Each must
-make the same calls, with the same arguments and idempotency keys, and end the same way.
+make the same calls, with the same arguments and idempotency keys, and end the same way. The page
+on the site that runs dandori in the browser must answer every example as the command does.
 [How it is checked](https://i2y.github.io/dandori/assurance/) tells the rest, and how to run the
 tests.
 

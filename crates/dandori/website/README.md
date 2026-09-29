@@ -10,15 +10,17 @@ website/
 ├── zensical.toml       # the English site: docs/ -> build/
 ├── zensical.ja.toml    # the Japanese site: docs-ja/ -> build/ja/
 ├── build.sh            # both languages, in the one order that works
-├── sync.sh             # copies the pictures and the stylesheet into docs-ja/
+├── sync.sh             # copies the pictures, the stylesheet and the playground into docs-ja/
 ├── serve.sh            # previews build/ under /dandori/, with caching off
 ├── docs/               # the English pages, the pictures and the stylesheet
-│   └── doc/            # the examples as `dandori doc --format html` draws them
+│   ├── doc/            # the examples as `dandori doc --format html` draws them
+│   └── playground/     # the playground: dandori.wasm, presets.json, playground.js and .css
 ├── docs-ja/            # the Japanese pages
 │   └── doc/            # the Japanese versions of the examples, drawn with `--lang ja`
 └── tools/
     ├── flowlexer.py    # colours the ```flow blocks
-    └── make_overview.py  # draws the overview on the home page
+    ├── make_overview.py  # draws the overview on the home page
+    └── make_wasm.sh    # builds docs/playground/dandori.wasm
 ```
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
@@ -39,6 +41,11 @@ other by hand.
 - every ```` ```mermaid ```` block is word for word in a golden file of `tests/doc`, which
   `tests/doc.rs` holds to what `dandori doc` writes. Take a chart from a golden file.
 - `tools/flowlexer.py`'s `KEYWORDS` are `src/syntax.rs`'s, word for word.
+
+`tests/playground.rs` holds the playground to the tool: `presets.json` to what checking the examples
+reads now (with rulec), what the page answers from it to what the command prints and writes, the
+committed `dandori.wasm` to the library, through node, and the page to what it should show, in
+Chrome.
 
 `tests/doc.rs` (which needs rulec, and Chrome for two of its tests) holds `docs/doc` and
 `docs-ja/doc` to what `dandori doc --format html` writes for the examples now; after a change to
@@ -73,6 +80,26 @@ nothing but Zensical.
 ```console
 $ .venv/bin/python tools/make_overview.py
 ```
+
+## The playground
+
+`playground.md` in each language runs dandori in the page: `docs/playground/dandori.wasm` is the
+library compiled to wasm32 (`src/wasm.rs`), and `docs/playground/presets.json` holds what the
+examples read, their files and what rulec printed for their rules (`rulec doc` among it, and the
+rules' own text for the rules tab), since a page can neither read files nor run rulec. `sync.sh`
+copies the four files into `docs-ja/playground`.
+
+Both are committed, so building the site needs no Rust and no rulec, and both go stale:
+
+```console
+$ tools/make_wasm.sh                                   # after a change to what check, build or doc answers
+$ DANDORI_BLESS=1 cargo test --test playground         # after a change to an example or a rule (needs rulec)
+```
+
+`make_wasm.sh` adds the `wasm32-unknown-unknown` target to rustup when it is missing. The module is
+1.7 MB (559 KB gzipped), and `presets.json` 1.4 MB (299 KB gzipped). What `rulec doc` renders names
+the version of rulec, so a new rulec means recording `presets.json` anew, and `docs/doc` and
+`docs-ja/doc` too (`DANDORI_BLESS=1 cargo test --test doc`).
 
 ## Publishing
 

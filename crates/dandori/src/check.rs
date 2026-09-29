@@ -24,12 +24,12 @@ pub enum ChildTrouble {
 
 /// The checked model of a child `.flow`, checked as it would be on its own.
 pub fn child(path: &Path) -> Result<Model, ChildTrouble> {
-    let me = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let me = crate::sources::canonical(path);
     let chain = CHECKING.with(|c| c.borrow().clone());
     if let Some(at) = chain.iter().position(|p| *p == me) {
         return Err(ChildTrouble::Cycle(chain[at..].iter().cloned().chain(std::iter::once(me)).collect()));
     }
-    let src = std::fs::read_to_string(path).map_err(|e| ChildTrouble::Unreadable(e.to_string()))?;
+    let src = crate::sources::read(path).map_err(ChildTrouble::Unreadable)?;
     let checked = check_source(&src, path);
     match checked.model {
         Some(m) => Ok(m),
@@ -43,7 +43,7 @@ pub struct Checked {
 }
 
 pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
-    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let checked = check_source(&src, path);
     Ok((src, checked))
 }
@@ -64,13 +64,13 @@ pub struct Drawable {
 }
 
 pub fn drawable(path: &Path) -> Result<(String, Drawable), String> {
-    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let (model, facts, diags) = checked_parts(&src, path);
     Ok((src, Drawable { model, facts, diags }))
 }
 
 fn checked_parts(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<Diag>) {
-    CHECKING.with(|c| c.borrow_mut().push(path.canonicalize().unwrap_or_else(|_| path.to_path_buf())));
+    CHECKING.with(|c| c.borrow_mut().push(crate::sources::canonical(path)));
     let out = check_one(src, path);
     CHECKING.with(|c| c.borrow_mut().pop());
     out

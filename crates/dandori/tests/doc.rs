@@ -346,5 +346,19 @@ fn a_page_lights_up_what_its_data_says() {
     // a step picked shows what the checker knows there, and how many scenarios pass it
     let dom = dump_dom(&chrome, &format!("file://{}#node=s5", page.display()));
     assert!(dom.contains("confirm_intent") && dom.contains("scenarios pass here."), "picking a step does not show it in the detail pane");
-    eprintln!("compared: {looked} scenarios lit up in Chrome as the page's data says");
+    // a rule's page opens over the page: the page rulec doc renders, in a frame of its own
+    let rules = data["rules"].as_array().unwrap();
+    assert!(rules.len() >= 2, "the hotel booking's page has {} rules", rules.len());
+    for r in rules {
+        let name = r["name"].as_str().unwrap();
+        let dom = dump_dom(&chrome, &format!("file://{}#rule={name}", page.display()));
+        let sheet = dom.split("id=\"dd-sheet\"").nth(1).and_then(|x| x.split("</iframe>").next()).unwrap_or_else(|| panic!("the page has no sheet for the rules"));
+        let title = r["page"].as_str().unwrap().split("<title>").nth(1).and_then(|x| x.split("</title>").next()).unwrap();
+        assert!(!sheet.split('>').next().unwrap().contains("hidden"), "#rule={name} does not open the rule's page");
+        // an attribute's `<` is written as it is or as `&lt;`, by the version of Chrome
+        let shown = [format!("<title>{title}</title>"), format!("&lt;title&gt;{title}&lt;/title&gt;")];
+        assert!(shown.iter().any(|t| sheet.contains(t.as_str())), "#rule={name} opens another page than the one rulec doc renders for it");
+        looked += 1;
+    }
+    eprintln!("compared: {looked} scenarios and rules shown in Chrome as the page's data says");
 }

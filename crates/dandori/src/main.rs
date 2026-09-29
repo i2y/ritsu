@@ -1,4 +1,5 @@
 use dandori::check;
+use dandori::commands;
 use dandori::diag::{self, Lang};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -106,16 +107,9 @@ fn load(path: &Path, a: &Args, print_ok: bool) -> Result<Option<dandori::model::
         let v: Vec<_> = checked.diags.iter().map(|d| d.to_json(a.lang)).collect();
         println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "file": file, "diagnostics": v })).unwrap());
     } else {
-        for d in &checked.diags {
-            eprint!("{}", d.render(&file, &src, a.lang));
-        }
+        eprint!("{}", commands::render(&checked.diags, &file, &src, a.lang));
         if print_ok && checked.model.is_some() {
-            let warnings = checked.diags.len();
-            if a.lang == Lang::Ja {
-                eprintln!("{file}: 検査を通りました{}", if warnings > 0 { format!("（警告 {warnings} 件）") } else { String::new() });
-            } else {
-                eprintln!("{file}: ok{}", if warnings > 0 { format!(" ({warnings} warning(s))") } else { String::new() });
-            }
+            eprint!("{}", commands::passed(&file, checked.diags.len(), a.lang));
         }
     }
     if diag::has_errors(&checked.diags) {
@@ -152,25 +146,15 @@ fn cmd_build(a: &Args) -> u8 {
         Err(c) => return c,
     };
     let out = a.out.clone().unwrap_or_else(|| PathBuf::from("out"));
-    let files = match a.target.as_deref() {
-        Some("asl") => dandori::asl::build(&model),
-        Some("temporal") => dandori::temporal::build(&model),
-        Some("temporal-python") => dandori::temporal_py::build(&model),
-        Some("durable") => dandori::temporal::build_flavor(&model, dandori::temporal::Flavor::Durable),
-        Some("argo") => dandori::argo::build(&model),
-        Some("pydantic-graph") => dandori::pydantic_graph::build(&model),
-        _ => {
-            eprintln!("--target takes asl, temporal, temporal-python, durable, argo or pydantic-graph");
-            return 2;
-        }
+    let Some(files) = a.target.as_deref().and_then(|t| commands::build(&model, t)) else {
+        eprintln!("--target takes asl, temporal, temporal-python, durable, argo or pydantic-graph");
+        return 2;
     };
     let files = match files {
         Ok(f) => f,
         Err(diags) => {
             let src = std::fs::read_to_string(&file).unwrap_or_default();
-            for d in &diags {
-                eprint!("{}", d.render(&file.display().to_string(), &src, a.lang));
-            }
+            eprint!("{}", commands::render(&diags, &file.display().to_string(), &src, a.lang));
             return 1;
         }
     };
@@ -291,9 +275,7 @@ fn cmd_doc(a: &Args) -> u8 {
         }
     };
     let shown = file.display().to_string();
-    for d in &drawn.diags {
-        eprint!("{}", d.render(&shown, &src, a.lang));
-    }
+    eprint!("{}", commands::render(&drawn.diags, &shown, &src, a.lang));
     // a workflow whose names or types do not resolve has nothing to draw
     let Some(model) = &drawn.model else { return 1 };
     let input = dandori::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.lang };

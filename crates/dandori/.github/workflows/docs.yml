@@ -35,13 +35,14 @@ jobs:
         with:
           python-version: "3.13"
 
-      # build.sh copies the pictures and the stylesheet into docs-ja/, then
-      # builds both languages in the one order that works: English cleans
-      # build/, Japanese then writes build/ja. Nothing but Zensical is needed:
-      # the pictures are committed, and so are the pages `dandori doc` writes
-      # for the examples (docs/doc, docs-ja/doc); tools/flowlexer.py is plain
-      # Python. The pages are held to the tool by tests/docs.rs and
-      # tests/doc.rs, which `cargo test` runs.
+      # build.sh copies the pictures, the stylesheet and the playground into
+      # docs-ja/, then builds both languages in the one order that works:
+      # English cleans build/, Japanese then writes build/ja. Nothing but
+      # Zensical is needed: the pictures are committed, and so are the pages
+      # `dandori doc` writes for the examples (docs/doc, docs-ja/doc) and the
+      # playground's module and bundle (docs/playground); tools/flowlexer.py
+      # is plain Python. The pages are held to the tool by tests/docs.rs,
+      # tests/doc.rs and tests/playground.rs, which `cargo test` runs.
       - name: Build both languages
         run: |
           cd website
@@ -57,6 +58,9 @@ jobs:
           test -f website/build/ja/reference/codes/index.html
           test -f website/build/doc/hotel.html
           test -f website/build/ja/doc/hotel.html
+          test -f website/build/playground/index.html
+          test -f website/build/playground/dandori.wasm
+          test -f website/build/ja/playground/presets.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

@@ -98,3 +98,68 @@ flowchart TD
 | 110 | `fail PackingLate` "No word of the packing in two days" |
 | 113 | `succeed reservations = results, tracking_number = delivery.tracking_number` |
 
+## 規則
+
+このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+
+<details>
+<summary><code>urgency</code> · urgency v1 · <code>../../order/rules/urgency.rule</code></summary>
+
+<!-- rulec 0.21.2 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+# 規則 urgency v1
+
+Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example
+
+## 入力
+
+| 名前 | 型 | 範囲 | 注記 |
+|---|---|---|---|
+| member | bool |  |  |
+| amount | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+
+## 出力
+
+| 名前 | 型 | 丸め | 注記 |
+|---|---|---|---|
+| urgent | bool |  |  |
+| carrier | carrier（2 値） |  |  |
+
+## 型
+
+列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+
+- **carrier**（2 値）— standard、next_day
+
+## 表 decide（policy unique）
+
+| 列 | 出どころ |
+|---|---|
+| member | 入力 |
+| amount | 入力 |
+| → urgent | この規則の出力 |
+| → carrier | この規則の出力 |
+
+| # | member | amount | → urgent（bool） | → carrier（carrier） |
+|---|---|---|---|---|
+| 1 | true | - | true | next_day |
+| 2 | false | >=30000JPY | true | next_day |
+| 3 | false | <30000JPY | false | standard |
+
+**`rulec check` が確かめたこと**
+
+- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）
+- どの入力にも当てはまらない行はありません（E102）
+- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません
+
+## 例（検証済み）
+
+| member | amount | → urgent | carrier |
+|---|---|---|---|
+| true | 1000JPY | true | next_day |
+| false | 5000JPY | false | standard |
+| false | 30000JPY | true | next_day |
+
+この 3 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。
+
+</details>
+

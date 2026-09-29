@@ -414,6 +414,18 @@ fn rule_file(i: &Input, r: &RuleUse) -> String {
     quoted(src_line(i.src, r.line)).map(|p| file_name(p).to_string()).unwrap_or_else(|| r.name.clone())
 }
 
+/// A rule's file as `use rule` writes it.
+fn rule_path(i: &Input, r: &RuleUse) -> String {
+    quoted(src_line(i.src, r.line)).map(str::to_string).unwrap_or_else(|| r.name.clone())
+}
+
+/// Each rule the workflow uses, with what `rulec doc` renders for it in the page's language:
+/// Markdown, or the page on which whoever approves the rule tries a case. rulec draws its rules;
+/// the page shows them as it drew them.
+fn rule_docs<'a>(i: &Input<'a>, html: bool) -> Vec<(&'a RuleUse, Result<String, String>)> {
+    i.m.rules.iter().map(|r| (r, crate::sources::rulec_doc(&r.info.path, html, i.lang))).collect()
+}
+
 fn retry_text(r: &Retry) -> String {
     let mut s = format!("retry {} times every {}", r.times, crate::flow::show_dur(r.every));
     if r.backoff != 2.0 {
@@ -1078,6 +1090,23 @@ pub fn markdown(i: &Input) -> String {
         }
         o.push('\n');
     }
+    let docs = rule_docs(i, false);
+    if !docs.is_empty() {
+        let _ = writeln!(o, "## {}\n", tr(lang, "Rules", "規則"));
+        let _ = writeln!(o, "{}\n", tr(lang, "The rules this workflow calls, as `rulec doc` renders them for whoever approves them.", "このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。"));
+        for (r, text) in docs {
+            let _ = writeln!(o, "<details>\n<summary><code>{}</code> · {} v{} · <code>{}</code></summary>\n", esc(&r.name), esc(&r.info.rule), esc(&r.info.version), esc(&rule_path(i, r)));
+            match text {
+                Ok(t) => {
+                    let _ = writeln!(o, "{}\n", t.trim_end());
+                }
+                Err(e) => {
+                    let _ = writeln!(o, "{}\n\n```text\n{}\n```\n", tr(lang, "rulec could not render this rule:", "rulec はこの規則を描けませんでした。"), e.trim_end());
+                }
+            }
+            o.push_str("</details>\n\n");
+        }
+    }
     if !i.diags.is_empty() {
         let _ = writeln!(o, "## {}\n", tr(lang, "What check says", "検査の結果"));
         let _ = writeln!(o, "{}\n", tr(lang, "What `dandori check` says of this workflow, each with the run that gets there.", "`dandori check` の結果です。それぞれにそうなる例が付いています。"));
@@ -1541,6 +1570,9 @@ impl<'a> Page<'a> {
                     Callee::Rule(r) => (tr(lang, "The rule", "規則の宣言"), m.rules[*r].line),
                 };
                 let _ = write!(o, "<h3>{title}</h3>{}", decl_block(i.src, line));
+                if let Callee::Rule(r) = callee {
+                    let _ = write!(o, "<p><button class=\"rule\" type=\"button\" data-rule=\"{r}\">{}</button></p>", tr(lang, "Open the rule's page", "規則のページを開く"));
+                }
             }
             TK::Succeed { .. } | TK::Fail { .. } => o.push_str(&self.ends_of(Ending::Stmt(site))),
             _ => {}
@@ -1786,6 +1818,7 @@ pub fn html(i: &Input) -> String {
         }
     }
     let checks: Vec<Lit> = i.diags.iter().map(|d| lit_by_steps(g, &edges, d)).collect();
+    let docs = rule_docs(i, true);
 
     let mut o = String::new();
     let _ = write!(
@@ -1818,6 +1851,18 @@ pub fn html(i: &Input) -> String {
         for (k, d) in i.diags.iter().enumerate() {
             let sev = if d.severity == Severity::Error { "err" } else { "warn" };
             let _ = write!(o, "<li><button class=\"check\" data-check=\"{k}\" aria-pressed=\"false\"><span class=\"code {sev}\">{}</span> <span class=\"dl\">{}</span> {}</button></li>", d.code, d.line, esc(&short(d.message(lang), 120)));
+        }
+        o.push_str("</ul></section>");
+    }
+    if !docs.is_empty() {
+        let _ = write!(
+            o,
+            "<section><h2>{}</h2><p class=\"note\">{}</p><ul class=\"rules\">",
+            tr(lang, "Rules", "規則"),
+            tr(lang, "Each as <code>rulec doc</code> renders it for whoever approves it; a case can be tried on it.", "<code>rulec doc</code> が承認する人向けに描いたページです。ケースを打って試せます。")
+        );
+        for (k, (r, _)) in docs.iter().enumerate() {
+            let _ = write!(o, "<li><button class=\"rule\" type=\"button\" data-rule=\"{k}\"><code>{}</code> <span class=\"dl\">{} v{}</span></button></li>", esc(&r.name), esc(&r.info.rule), esc(&r.info.version));
         }
         o.push_str("</ul></section>");
     }
@@ -1877,6 +1922,15 @@ pub fn html(i: &Input) -> String {
         let _ = write!(o, "<figure class=\"panel\" data-panel=\"{}\"><figcaption><code>{cap}</code></figcaption>{}</figure>", p.key, d.svg);
     }
     o.push_str("</section>\n<aside class=\"detail\" id=\"dd-detail\" aria-live=\"polite\"></aside>\n</main>\n</div>\n");
+    if !docs.is_empty() {
+        // a rule's page wants the whole window, and runs its own script: it opens over this page, in a
+        // frame whose script cannot reach this one
+        let _ = writeln!(
+            o,
+            "<div class=\"sheet\" id=\"dd-sheet\" role=\"dialog\" aria-modal=\"true\" aria-label=\"rulec doc\" hidden><div class=\"bar\"><span class=\"what\"></span><button class=\"close\" type=\"button\" title=\"{c}\" aria-label=\"{c}\">×</button></div><iframe sandbox=\"allow-scripts\" title=\"rulec doc\"></iframe></div>",
+            c = tr(lang, "Close", "閉じる")
+        );
+    }
     // what does not need a script: the facts, as the Markdown has them
     let _ = write!(o, "<section class=\"tables\"><h2>{}</h2>{}", tr(lang, "Calls", "呼び出し"), calls_table(&page.rows, !m.cases.is_empty(), lang));
     if !ends.is_empty() {
@@ -1914,6 +1968,13 @@ pub fn html(i: &Input) -> String {
             Lang::En => "{k} of the {n} scenarios pass here.",
             Lang::Ja => "{n} 本のシナリオのうち {k} 本がここを通ります。",
         },
+        "rules": docs.iter().map(|(r, page)| serde_json::json!({
+            "name": r.name,
+            "title": format!("{} v{}", r.info.rule, r.info.version),
+            "file": rule_path(i, r),
+            "page": page.as_ref().ok(),
+            "error": page.as_ref().err().map(|e| format!("{}\n\n{e}", tr(lang, "rulec could not render this rule:", "rulec はこの規則を描けませんでした。"))),
+        })).collect::<Vec<_>>(),
     });
     let json = serde_json::to_string(&data).unwrap().replace("</", "<\\/");
     let _ = write!(o, "<script type=\"application/json\" id=\"dd-data\">{json}</script>\n<script>{JS}</script>\n</body>\n</html>\n");
@@ -1944,7 +2005,7 @@ header.top .desc.open { -webkit-line-clamp: unset; }
 .side h2 { font-size: 13px; margin: 4px 0 6px; text-transform: none; }
 .side section + section { margin-top: 16px; }
 .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
-ul.groups, ul.checks, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
+ul.groups, ul.checks, ul.rules, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
 .group { margin: 0 0 10px; }
 .gl { font-size: 12px; margin-bottom: 3px; }
 .gl code { background: none; padding: 0; }
@@ -1959,6 +2020,17 @@ button.run[aria-pressed="true"] { background: var(--lit); border-color: var(--li
 .picking button.run.through { opacity: 1; border-color: var(--lit); }
 button.check { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
 button.check[aria-pressed="true"] { border-color: var(--lit); box-shadow: 0 0 0 1px var(--lit); }
+button.rule { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.rule:hover { border-color: var(--lit); }
+button.rule code { background: none; padding: 0; }
+.detail button.rule { display: inline-block; width: auto; margin: 10px 0 0; }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--side); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--lit); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
 .code { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .code.err { color: var(--bad); } .code.warn { color: var(--sel); }
 .dl { color: var(--muted); font-size: 11px; }
@@ -2035,7 +2107,7 @@ ul.legend svg { flex: none; }
   .side, .detail { border: 0; border-bottom: 1px solid var(--border); }
   .canvas { max-height: 80vh; }
 }
-@media print { .side, .detail { display: none; } .grid { display: block; } }
+@media print { .side, .detail, .sheet { display: none; } .grid { display: block; } }
 "#;
 
 const JS: &str = r#"
@@ -2045,7 +2117,9 @@ const JS: &str = r#"
   var detail = document.getElementById('dd-detail');
   var side = document.querySelector('.side');
   var SVG = 'http://www.w3.org/2000/svg';
-  var state = { node: null, run: null, check: null };
+  var state = { node: null, run: null, check: null, rule: null };
+  var sheet = document.getElementById('dd-sheet');
+  var opener = null;
   function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
   function byId(id) { return all('[data-id="' + id + '"]'); }
   function show(id) {
@@ -2102,6 +2176,7 @@ const JS: &str = r#"
   function remember() {
     var h = state.run !== null ? 'run=' + (state.run + 1) : state.check !== null ? 'check=' + (state.check + 1) : '';
     if (state.node) h += (h ? '&' : '') + 'node=' + state.node;
+    if (state.rule !== null) h += (h ? '&' : '') + 'rule=' + encodeURIComponent(data.rules[state.rule].name);
     try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) {}
   }
   function run(k) {
@@ -2121,10 +2196,38 @@ const JS: &str = r#"
     if (!state.node) show('check-' + k);
   }
   function node(id) { state.node = id; pick(id); }
-  function reset() { state = { node: null, run: null, check: null }; unlight(); unpick(); show('default'); remember(); }
+  function reset() { state = { node: null, run: null, check: null, rule: null }; unlight(); unpick(); show('default'); remember(); }
+  // a rule's page, over this one: the page rulec doc renders, or why there is none
+  function code(text) { var c = document.createElement('code'); c.textContent = text; return c; }
+  function openRule(k) {
+    var r = data.rules[k];
+    if (!r || !sheet) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(r.name), ' · ' + r.title + ' · ', code(r.file), ' · rulec doc');
+    var err = document.createElement('pre');
+    err.textContent = r.error || '';
+    sheet.querySelector('iframe').srcdoc = r.page !== null ? r.page : '<!doctype html><meta charset="utf-8"><pre style="white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px">' + err.innerHTML + '</pre>';
+    sheet.hidden = false;
+    state.rule = k;
+    sheet.querySelector('.close').focus();
+  }
+  function closeRule() {
+    if (!sheet || sheet.hidden) return false;
+    sheet.hidden = true;
+    sheet.querySelector('iframe').srcdoc = '';
+    state.rule = null;
+    if (opener && opener.focus) opener.focus();
+    return true;
+  }
+  if (sheet) sheet.querySelector('.close').addEventListener('click', function () { closeRule(); remember(); });
+  detail.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-rule]');
+    if (b) { openRule(+b.dataset.rule); remember(); }
+  });
   side.addEventListener('click', function (ev) {
     var b = ev.target.closest('button');
     if (!b) return;
+    if (b.dataset.rule !== undefined) { openRule(+b.dataset.rule); remember(); return; }
     state.node = null; unpick();
     if (b.dataset.run !== undefined) { if (state.run === +b.dataset.run) { reset(); return; } run(+b.dataset.run); show('run-' + b.dataset.run); }
     if (b.dataset.check !== undefined) { if (state.check === +b.dataset.check) { reset(); return; } check(+b.dataset.check); show('check-' + b.dataset.check); }
@@ -2140,7 +2243,10 @@ const JS: &str = r#"
     var g = ev.target.closest && ev.target.closest('.n, .frame');
     if (g && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); node(g.dataset.id); remember(); }
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') reset(); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (closeRule()) remember(); else reset();
+  });
   var desc = document.querySelector('header.top .desc');
   if (desc) desc.addEventListener('click', function () { desc.classList.toggle('open'); });
   function fromHash() {
@@ -2150,6 +2256,7 @@ const JS: &str = r#"
     else if (h.check !== undefined && data.checks[+h.check - 1]) check(+h.check - 1);
     if (h.node && document.getElementById('t-' + h.node)) node(h.node);
     else if (h.run === undefined && h.check === undefined) show('default');
+    for (var k = 0; k < data.rules.length; k++) { if (data.rules[k].name === h.rule) openRule(k); }
   }
   fromHash();
 })();

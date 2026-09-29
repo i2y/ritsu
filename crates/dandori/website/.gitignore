@@ -2,9 +2,11 @@ build/
 .venv/
 .cache/
 
-# Copied in from docs/ by sync.sh: both languages show the same pictures and stylesheet.
+# Copied in from docs/ by sync.sh: both languages show the same pictures and stylesheet, and run
+# the same playground.
 docs-ja/images/
 docs-ja/stylesheets/
+docs-ja/playground/
 
 # Left behind by the scripts in tools/.
 tools/__pycache__/

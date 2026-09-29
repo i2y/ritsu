@@ -3,6 +3,9 @@
 dandori is one binary. It needs rulec only for a workflow that uses rules (`use rule`); a workflow
 without them is checked, built and played without rulec, and its output has nothing of rulec's.
 
+To try it before installing anything, open [Try it in the browser](playground.md): dandori runs in the
+page.
+
 ## dandori
 
 Build it from a clone with a recent stable Rust. Its one dependency is serde_json.

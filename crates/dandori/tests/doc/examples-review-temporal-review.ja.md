@@ -58,3 +58,70 @@ flowchart TD
 | 58 | `succeed verdict = approve` |
 | 60 | `succeed verdict = r.verdict` |
 
+## 規則
+
+このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+
+<details>
+<summary><code>policy</code> · review_policy v1 · <code>../rules/review_policy.rule</code></summary>
+
+<!-- rulec 0.21.2 が review_policy.rule (sha256:d71c8b54077c) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+# 規則 review_policy v1
+
+Whether the scoring's verdict on an application is acted on at once or goes to a person, by how sure the scoring is of it: approving at once asks more certainty than rejecting at once. Written for the example
+
+## 入力
+
+| 名前 | 型 | 範囲 | 注記 |
+|---|---|---|---|
+| verdict | verdict（3 値） |  |  |
+| sure | rate | 0 〜 1 |  |
+
+## 出力
+
+| 名前 | 型 | 丸め | 注記 |
+|---|---|---|---|
+| decision | decision（3 値） |  |  |
+
+## 型
+
+列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+
+- **verdict**（3 値）— reject、hold、approve
+- **decision**（3 値）— approve、reject、ask
+
+## 表 act（policy unique）
+
+| 列 | 出どころ |
+|---|---|
+| verdict | 入力 |
+| sure | 入力 |
+| → decision | この規則の出力 |
+
+| # | verdict | sure | → decision（decision） |
+|---|---|---|---|
+| 1 | approve | >=90% | approve |
+| 2 | approve | <90% | ask |
+| 3 | reject | >=80% | reject |
+| 4 | reject | <80% | ask |
+| 5 | hold | - | ask |
+
+**`rulec check` が確かめたこと**
+
+- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）
+- どの入力にも当てはまらない行はありません（E102）
+- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません
+
+## 例（検証済み）
+
+| verdict | sure | → decision |
+|---|---|---|
+| approve | 95% | approve |
+| approve | 89% | ask |
+| reject | 80% | reject |
+| hold | 99% | ask |
+
+この 4 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。
+
+</details>
+

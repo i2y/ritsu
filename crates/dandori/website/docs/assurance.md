@@ -123,10 +123,31 @@ run again, at most twice, and the test says so.
 
 What `dandori doc` writes for the examples, the flows of tests/flows and a first draft with errors
 is held word for word to golden files, and the pages of the examples on this site to what it writes
-now. On every scenario, the way a run lights up must hold together: every step it lit is reached by
-an edge it lit, and every arm and handler it took, and every way round and out of a loop, lights up
-an edge. Every Mermaid chart is drawn by Mermaid 11 and 12 in headless Chrome, and in Chrome a page
-lights up what its data says.
+now; the rules they call are in them as `rulec doc` renders them. On every scenario, the way a run
+lights up must hold together: every step it lit is reached by an edge it lit, and every arm and
+handler it took, and every way round and out of a loop, lights up an edge. Every Mermaid chart is
+drawn by Mermaid 11 and 12 in headless Chrome, rulec's charts of its state machines among them, and
+in Chrome a page lights up what its data says and opens the page `rulec doc` renders for each of its
+rules.
+
+## The playground
+
+[Try it in the browser](playground.md) runs dandori compiled to wasm32, and reads what the examples
+read from `presets.json`: their files, and what rulec printed for their rules, `rulec doc` among it.
+Both are committed, and both are held to the repository.
+
+- `presets.json` must be what checking the examples reads now, and what rulec prints for their rules
+  now.
+- For every flow the page opens, the command, reading the disk and running rulec, must print and
+  write what the page answers from `presets.json`: `check`, `build` for all six targets, and `doc` in
+  both formats.
+- The rules tab has no command to be held to: what it answers from `presets.json` must be what it
+  answers reading the disk and running rulec, and every rule must have its page.
+- The module must answer every request as the library does: the flows as they are, and edits that
+  reach what they do not (a flow that does not parse, a rule and a child flow the page does not have,
+  a flow that runs itself).
+- In Chrome, the page in each language must start, show what `check` prints for the draft, follow a
+  link to a flow, a tab and a platform, and show each rule's text with a link to its page.
 
 ## What is left out
 
@@ -167,4 +188,6 @@ LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `
 `cargo test` takes two to four minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
-has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories anew.
+has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories and the playground's `presets.json` anew.
+After a change to what `check`, `build` or `doc` answers, `website/tools/make_wasm.sh` builds the
+playground's module again (it needs the `wasm32-unknown-unknown` target of rustup).

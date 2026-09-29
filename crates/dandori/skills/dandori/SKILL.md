@@ -54,9 +54,10 @@ to read dandori's source.
    interpreter and prints each call with its answer, and how the run ended.
 5. **Show it to a person:** `dandori doc <file.flow> > <file>.md` draws the flow as Mermaid
    charts, with a table of every call (what it calls, its retries, where each of its errors goes)
-   and of every way the workflow can end, with the state each case is left in. Put it in the pull
-   request, where GitHub draws the charts, for the person who reviews the workflow.
-   `--format html` writes one page on which each scenario lights up the way its run goes.
+   and of every way the workflow can end, with the state each case is left in, and the rules it
+   calls as `rulec doc` renders them. Put it in the pull request, where GitHub draws the charts, for
+   the person who reviews the workflow. `--format html` writes one page on which each scenario
+   lights up the way its run goes, and each rule's page opens with a case to try on it.
    [diagrams.md](diagrams.md) says what is on the picture.
 6. **Build it:** `dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
    platform cannot do (E050) and a run that can outgrow the platform (E040).

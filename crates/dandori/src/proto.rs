@@ -308,12 +308,12 @@ pub fn load(path: &Path) -> Result<ProtoFile, String> {
 type RawServices = Vec<(String, Vec<(String, String, String, bool)>)>;
 
 fn read(path: &Path, f: &mut ProtoFile, raws: &mut BTreeMap<String, Raw>, services: &mut RawServices, seen: &mut Vec<std::path::PathBuf>, first: bool) -> Result<(), String> {
-    let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let canon = crate::sources::canonical(path);
     if seen.contains(&canon) {
         return Ok(());
     }
     seen.push(canon);
-    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let mut p = P { t: tokens(&src)?, i: 0 };
     let mut package = String::new();
     let mut imports = Vec::new();
