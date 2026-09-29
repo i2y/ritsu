@@ -224,8 +224,8 @@ way its run goes. [The hotel booking, drawn](doc/hotel.html) · [Draw a workflow
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
 encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
 the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
-Cloud, the caller image run against real Lambda, HTTP and AWS endpoints from Argo, and agents and
-Jev run against OpenAI, Anthropic and TypeSafe themselves. The design, the decisions and what is left are in
+Cloud, the caller image run against real Lambda, HTTP and AWS endpoints from Argo, and agents run
+against OpenAI and Anthropic themselves. The design, the decisions and what is left are in
 [DESIGN.md](https://github.com/i2y/dandori/blob/main/DESIGN.md), in Japanese; its principles are
 on [Design](design.md). dandori is licensed under either of the Apache License 2.0 or the MIT
 license, at your option.

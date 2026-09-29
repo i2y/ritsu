@@ -134,8 +134,9 @@ its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel
 [examples/](examples/) has five, each written for Temporal, for AWS and for pydantic-graph: a hotel
 booking held to Stripe's OpenAPI document, an order in a warehouse's system, the fulfillment of an
 order with a child flow, an inquiry sorted by Jev and read and answered by agents, and an
-application scored by Jev and, when a rule says so, approved by a person. Every version has a Japanese twin beside it
-(`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes them.
+application scored by Jev and, when a rule says so, approved by a person. Every version has a
+Japanese twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API
+description fixes them.
 [Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
 
 ## How it is checked
@@ -158,8 +159,7 @@ Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, pro
 encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
 the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
-HTTP and AWS endpoints from Argo, and agents and Jev run against OpenAI, Anthropic and TypeSafe
-themselves. The
+HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The
 design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
 are on [Design](https://i2y.github.io/dandori/design/).
 

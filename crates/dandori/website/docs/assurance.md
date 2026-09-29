@@ -113,8 +113,11 @@ run again, at most twice, and the test says so.
   answer and the edge of the confidence are compared with the reference's. A call whose answer is less
   sure than asked leaves the variable as it was, and the next call sends it, so a platform that kept the
   answer would show. The default `Transport`'s request to Jev goes to the stand-in server too, where
-  TypeSafe's key from `TYPESAFE_API_KEY` must arrive as `Authorization: Bearer <key>`. Nothing goes to
-  TypeSafe.
+  TypeSafe's key from `TYPESAFE_API_KEY` must arrive as `Authorization: Bearer <key>`.
+- When `TYPESAFE_API_KEY` is set, the first call of each Jev task of the examples and the test flows
+  also goes to TypeSafe for real, from the default `Transport` of TypeScript and of Python. The
+  response must answer every question, and each answer must read into the task's type, or fail the
+  call with the task's error when Jev is not sure enough. Without the key, nothing goes to TypeSafe.
 
 ## The pictures
 

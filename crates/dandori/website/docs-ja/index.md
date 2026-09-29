@@ -191,6 +191,6 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## いまの状況
 
-まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントや Jev の呼び出しを本物の OpenAI、Anthropic、TypeSafe に送ることもしていません。
+まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントの呼び出しを本物の OpenAI や Anthropic に送ることもしていません。
 
 設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/dandori/blob/main/DESIGN.md) にあり、原則は [設計](design.md) にまとめています。ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。

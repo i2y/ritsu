@@ -1716,6 +1716,110 @@ fn open_responses_agents_answer_on_ollama() {
     assert!(sent > 0, "no agent on a server of Open Responses was sent to Ollama");
 }
 
+/// Every Jev task of the examples and of tests/flows, asked of the real Jev when TYPESAFE_API_KEY is
+/// set: the first call of each that the scenarios make, sent to TypeSafe's API by the default
+/// Transport of TypeScript and of Python, which add the key, and read with their io.jev. The
+/// response must be the API's shape, with an answer to every question, and it must read into the
+/// task's type, or fail the call with the task's own error when Jev is less sure than the task
+/// asks. What Jev answered, and how sure it was, is printed. It costs next to nothing: the API
+/// charges $0.042 a million input tokens, and a call here takes a few hundred.
+#[test]
+fn jev_tasks_answer_on_typesafe() {
+    need_rulec!();
+    if std::env::var("TYPESAFE_API_KEY").map_or(true, |k| k.is_empty()) {
+        eprintln!("SKIP: TYPESAFE_API_KEY is not set; the Jev tasks are not sent to TypeSafe");
+        return;
+    }
+    let python = Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
+    let mut sent = 0;
+    for f in runnable() {
+        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        // the first call of each Jev task, as the scenarios make it
+        let mut cases = Vec::new();
+        let mut tasks: Vec<&dandori::model::TaskDef> = Vec::new();
+        for sc in dandori::scenarios::generate(&m) {
+            let r = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
+            for s in r["steps"].as_array().unwrap() {
+                let call = &s["call"];
+                if call["url"].as_str() != Some(dandori::model::JEV_URL) {
+                    continue;
+                }
+                let Some(task) = m.tasks.iter().find(|t| t.jev().is_some_and(|j| dandori::render::jev_questions(j) == call["body"]["questions"])) else { continue };
+                if tasks.iter().any(|t| t.name == task.name) {
+                    continue;
+                }
+                cases.push(json!({ "request": call, "spec": dandori::render::jev_spec(task, task.jev().unwrap()) }));
+                tasks.push(task);
+            }
+        }
+        if cases.is_empty() {
+            continue;
+        }
+        let dir = scratch(&format!("typesafe-{}", key(&f)));
+        let cases_file = dir.join("cases.json");
+        std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
+        let check = |lang: &str, results: &Path| {
+            let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(results).unwrap()).unwrap();
+            for (g, t) in got.iter().zip(&tasks) {
+                let j = t.jev().unwrap();
+                let at = || format!("{}: `{}` at TypeSafe, from the default Transport in {lang}", rel(&f), t.name);
+                assert_eq!(g["status"], json!(200), "{}: {}", at(), serde_json::to_string(&g["body"]).unwrap());
+                assert!(g["body"]["model"].is_string(), "{}: the response names no model: {}", at(), g["body"]);
+                for q in &j.questions {
+                    assert!(g["body"]["answers"][&q.id].is_object(), "{}: no answer to `{}`: {}", at(), q.id, g["body"]);
+                }
+                match (&g["error"], j.floor.as_ref()) {
+                    (Value::Null, _) => assert!(
+                        dandori::render::value_fits(&m, &g["value"], t.result.as_ref().unwrap(), t.result_range),
+                        "{}: Jev's answer does not read into the task's type: {}",
+                        at(),
+                        serde_json::to_string(g).unwrap()
+                    ),
+                    (e, Some((_, error))) if e["kind"] == json!(error) => {}
+                    (e, _) => panic!("{}: reading the answer failed with {e}: {}", at(), g["body"]),
+                }
+                // what Jev answered, for a person to look at
+                let sure: Vec<String> = j
+                    .questions
+                    .iter()
+                    .map(|q| {
+                        let a = &g["body"]["answers"][&q.id];
+                        let said = a.get("choice").or(a.get("score")).or(a.get("noul")).cloned().unwrap_or(Value::Null);
+                        match a.get("confidence") {
+                            Some(c) => format!("{} {said} (confidence {c})", q.id),
+                            None => format!("{} {said}", q.id),
+                        }
+                    })
+                    .collect();
+                let outcome = if g["error"].is_null() { format!("reads as {}", g["value"]) } else { format!("fails with {}", g["error"]["kind"]) };
+                eprintln!("{}: `{}` ({lang}, {} ms, {}): {}; {outcome}", rel(&f), t.name, g["ms"], g["body"]["model"].as_str().unwrap_or("?"), sure.join(", "));
+            }
+        };
+        let ts = dandori::temporal::build(&m).unwrap();
+        let io_ts = dir.join("io.ts");
+        std::fs::write(&io_ts, &ts.iter().find(|(n, _)| n.ends_with("/io.ts")).unwrap().1).unwrap();
+        let results = dir.join("results-ts.json");
+        let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/jev/check.mjs")).arg(&io_ts).arg(&cases_file).arg(&results).output().unwrap();
+        assert!(out.status.success(), "{}: tools/jev/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+        check("TypeScript", &results);
+        sent += cases.len();
+        if python {
+            let py = dandori::temporal_py::build(&m).unwrap();
+            let io_py = dir.join("io.py");
+            std::fs::write(&io_py, &py.iter().find(|(n, _)| n.ends_with("/io.py")).unwrap().1).unwrap();
+            let results = dir.join("results-py.json");
+            let out = Command::new("python3").arg(root().join("tools/jev/check.py")).arg(&io_py).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: tools/jev/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("Python", &results);
+            sent += cases.len();
+        } else {
+            eprintln!("SKIP: python3 is missing; the Jev tasks are sent from TypeScript alone");
+        }
+    }
+    assert!(sent > 0, "no Jev task was sent to TypeSafe");
+}
+
 /// rules.py of the Python builds — the activities for Temporal and the functions for
 /// pydantic-graph — answers every vector rulec generates for each rule the flow calls.
 #[test]

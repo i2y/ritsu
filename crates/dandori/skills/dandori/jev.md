@@ -137,9 +137,12 @@ a choice without its confidence, does not fit the type, and ends the run as any 
 
 - Jev is in early access (September 2026), and its API may still change.
 - TypeSafe says Jev is most accurate in English. Other languages, Japanese among them, are handled,
-  but less well; try it on your own text.
+  but less well; try it on your own text. In one try (jev-1.13.0, 29 September 2026), Jev put clear
+  inquiries in their kind at 0.99 or more in both languages. "The shoes don't fit, and I want my money
+  back" came back as `returns`, 0.96 sure, but its Japanese as `billing`, 0.36 sure (returns 0.48),
+  which `confidence 0.8` sends to the agent's reading.
 - Jev is weak at arithmetic, counting and comparing dates. Leave those to your code or to a rule, and
   ask Jev for the judgement.
-- The tests do not call Jev. The stand-in `Transport` answers with Jev's response as TypeSafe's API
-  reference shows it, and the default `Transport`'s requests are checked on this machine
-  ([How it is checked](https://i2y.github.io/dandori/assurance/)).
+- The tests answer Jev's calls with a stand-in, in the shape of TypeSafe's API reference, and check
+  the default `Transport`'s requests on this machine. With `TYPESAFE_API_KEY` set, they also send each
+  Jev task once to TypeSafe for real ([How it is checked](https://i2y.github.io/dandori/assurance/)).
