@@ -1,7 +1,7 @@
 workflow ranges v1
 description "範囲：規則の入力、タスクの引数、書き出したレコード、出力に渡す値が、その範囲に収まるか"
 
-use rule 与信 from "../rules/宿泊の与信額.rule"
+use rule 与信 from "../../examples/hotel/rules/宿泊の与信額.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
 
 record 予約

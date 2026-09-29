@@ -62,14 +62,16 @@ fn dump_dom(chrome: &str, url: &str) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-/// The flows `doc` is held to: each example as written for Temporal, the child flow beside them,
-/// the flows of tests/flows, and a first draft whose check finds errors.
+/// The flows `doc` is held to: each example as written for Temporal and the child flow beside them,
+/// in English and in Japanese, the flows of tests/flows, and a first draft whose check finds errors.
 fn flows() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
-        out.push(root().join(format!("examples/{ex}/temporal/{ex}.flow")));
+    for lang in ["", ".ja"] {
+        for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
+            out.push(root().join(format!("examples/{ex}/temporal/{ex}{lang}.flow")));
+        }
+        out.push(root().join(format!("examples/fulfillment/arrange_delivery{lang}.flow")));
     }
-    out.push(root().join("examples/fulfillment/arrange_delivery.flow"));
     let mut tf: Vec<PathBuf> = std::fs::read_dir(root().join("tests/flows")).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|x| x == "flow")).collect();
     tf.sort();
     out.extend(tf);
@@ -122,8 +124,9 @@ fn the_site_shows_the_pages_doc_writes_now() {
     let bless = std::env::var("DANDORI_BLESS").is_ok();
     let mut wrong = Vec::new();
     for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
-        let f = root().join(format!("examples/{ex}/temporal/{ex}.flow"));
-        for (lang, dir) in [(Lang::En, "website/docs/doc"), (Lang::Ja, "website/docs-ja/doc")] {
+        // the Japanese site draws the Japanese version of each example
+        for (lang, dir, version) in [(Lang::En, "website/docs/doc", ""), (Lang::Ja, "website/docs-ja/doc", ".ja")] {
+            let f = root().join(format!("examples/{ex}/temporal/{ex}{version}.flow"));
             let page = written(&f, lang, true);
             let at = root().join(format!("{dir}/{ex}.html"));
             if bless {

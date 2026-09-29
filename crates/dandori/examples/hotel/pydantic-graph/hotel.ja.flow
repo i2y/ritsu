@@ -1,0 +1,116 @@
+workflow 宿泊 v1
+description "宿泊の予約を受けたらカードに与信を取り、チェックアウトの日に売上を確定する。与信の額と、フロントが先に確認するかどうかは規則が決め、決済は Stripe の PaymentIntent で行う。pydantic-graph 向けの版：グラフは予約を受け取る Python のプロセスの中で動く。Stripe の呼び出しは dandori が生成する関数で、Transport を通して標準ライブラリで送る。規則はプロセスの中で動き、お客さまの 3-D セキュアの手続きは、同じプロセスにあるお店の Webhook のハンドラーが応答するコールバックにする。待っているあいだはプロセスがふさがり、プロセスが失われると実行も失われる"
+
+use rule 与信 from "../rules/宿泊の与信額.rule"
+use rule payment_intent from "../rules/payment_intent.rule"
+use openapi stripe from "../specs/stripe.json"
+
+record 予約
+  id             : string
+  客室           : 与信.客室
+  泊数           : int  range >=1 <=30
+  カード         : string
+  チェックアウト : timestamp
+
+record PaymentIntent
+  id     : string
+  status : payment_intent.status
+
+enum 結果 = 宿泊済 | 確認待ち
+
+inputs
+  予約 : 予約
+
+outputs
+  結果 : 結果
+
+task 決済を作る(amount: money[円, incl_tax] range >=50 <=99999999, currency: string, payment_method: string, capture_method: payment_intent.capture_method) -> PaymentIntent
+  http POST stripe "/v1/payment_intents"
+  starts payment_intent.payment then attach
+  key
+  retry 2 times every 2 seconds
+
+task 与信を取る(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/confirm"
+  sends confirm
+  errors カード拒否 = 402, 状態の不一致 = 400
+  refused as 状態の不一致
+  key
+
+task 売上を確定する(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/capture"
+  sends capture
+  errors 状態の不一致 = 400
+  refused as 状態の不一致
+  key
+  retry 2 times every 5 seconds
+
+task 与信を取り消す(intent: string) -> PaymentIntent
+  http POST stripe "/v1/payment_intents/{intent}/cancel"
+  sends cancel
+  errors 状態の不一致 = 400
+  refused as 状態の不一致
+  key
+
+task 決済を見る(intent: string) -> PaymentIntent
+  http GET stripe "/v1/payment_intents/{intent}"
+  observes
+  idempotent
+  retry 3 times every 2 seconds
+
+# お客さまの 3-D セキュアの手続き。関数はコールバックの ID を手続きのページに渡し、Stripe が
+# PaymentIntent の動いたことを知らせると、お店の Webhook のハンドラーがその PaymentIntent で応答する。
+task 本人認証を待つ(決済ID: string) -> PaymentIntent
+  callback
+  observes
+  timeout 1 hour
+
+case 決済 : PaymentIntent follows payment_intent.payment
+  held capture_method = manual
+  held confirmation_method = automatic
+  external authenticate, settle, expire
+  refused when refused = true
+
+flow
+  let 見積 = 与信(客室: 予約.客室, 泊数: 予約.泊数)
+  match 見積.扱い
+    確認 => succeed 結果 = 確認待ち
+    自動 => 決済 <- 決済を作る(amount: 見積.与信額, currency: "jpy", payment_method: 予約.カード, capture_method: manual)
+  決済 <- 与信を取る(intent: 決済.id)
+    on カード拒否 => 決済 <- 決済を見る(intent: 決済.id)
+  match 決済.status
+    requires_action =>
+      決済 <- 本人認証を待つ(決済ID: 決済.id)
+        on timeout => 決済 <- 決済を見る(intent: 決済.id)
+    requires_capture, requires_payment_method, requires_confirmation, canceled => pass
+  match 決済.status
+    requires_capture => wait until 予約.チェックアウト
+    requires_payment_method, requires_confirmation, requires_action =>
+      決済 <- 与信を取り消す(intent: 決済.id)
+        on 状態の不一致 => pass
+      fail 与信不可 "カードの与信が取れませんでした"
+    canceled => fail 決済の取消 "PaymentIntent が取り消されていました"
+  決済 <- 売上を確定する(intent: 決済.id)
+    on 状態の不一致 => fail 与信の有効期限切れ "チェックアウトまでに与信の有効期限が切れていました"
+  match 決済.status
+    succeeded => succeed 結果 = 宿泊済
+    processing =>
+      repeat at most 12 times
+        wait 1 hour
+        決済 <- 決済を見る(intent: 決済.id)
+        match 決済.status
+          processing => pass
+          succeeded, requires_payment_method => break
+      match 決済.status
+        succeeded => succeed 結果 = 宿泊済
+        processing, requires_payment_method => fail 確定の結果不明 "売上の確定の結果が分かりません。担当者に引き渡します" leaving 決済
+
+on failure
+  match 決済.status
+    none, succeeded, canceled => pass
+    requires_payment_method, requires_confirmation, requires_action, requires_capture =>
+      決済 <- 与信を取り消す(intent: 決済.id)
+        on 状態の不一致 => pass
+        on failure => fail 取消の失敗 "与信を取り消せませんでした。担当者に引き渡します" leaving 決済
+    processing => fail 確定の結果不明 "売上の確定の途中で失敗しました。担当者に引き渡します" leaving 決済
+

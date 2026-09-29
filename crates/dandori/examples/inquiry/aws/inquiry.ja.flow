@@ -1,0 +1,62 @@
+workflow 問い合わせ v1
+description "お客さまの問い合わせをエージェントが読んで、種類と注文番号と要点を取り出す。受け持つ窓口と最初の返事までの時間は規則が決め、返事の下書きは別のエージェントが書き、窓口のシステムに起票する。読むことと書くことはエージェント（読むのは OpenAI のモデル、書くのは Claude）が、決めることは規則が受け持つ。AWS 向けの版（Step Functions と Lambda durable functions）：規則は Lambda 関数で、Step Functions はエージェントと窓口の HTTP の API を、鍵を持つ EventBridge の接続を通して呼ぶ。ほかのプラットフォームでも、dandori がそれぞれ向けに生成する呼び出しで動く"
+
+use rule 振り分け from "../rules/問い合わせの振り分け.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:inquiry-routing"
+
+record 問い合わせ
+  id   : string
+  会員 : bool
+  本文 : string
+
+record 読み取り
+  種類   : 振り分け.種類
+  注文ID : string?
+  要点   : string
+
+record 起票
+  チケットID : string
+
+inputs
+  問い合わせ : 問い合わせ
+
+outputs
+  チケットID : string
+  窓口       : 振り分け.窓口
+
+# モデルが本文を読む。読み取りの Schema が、答えを規則の種類のどれかに縛る。
+task 読み取る(本文: string) -> 読み取り
+  agent "お客さまからの問い合わせの本文を読み、種類を一つ選び、注文番号が書かれていれば取り出し、要点を一文にまとめてください。注文番号が書かれていなければ null にします。"
+  model "gpt-5.4-mini"
+  effort low
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/5e6f7a8b"
+  timeout 60 seconds
+  retry 2 times every 10 seconds
+
+task 下書きする(種類: 振り分け.種類, 要点: string, 注文ID: string?, 期限: duration[h]) -> string
+  agent claude "問い合わせへの最初の返事を、丁寧な日本語で三文以内に下書きしてください。`期限` は返事をするまでの時間の数です。約束できないことは書きません。"
+  model "claude-sonnet-5"
+  effort medium
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/claude/6f7a8b9c"
+  timeout 60 seconds
+
+task 起票する(問い合わせID: string, 窓口: 振り分け.窓口, 期限: duration[h], 件名: string, 本文: string, 下書き: string?) -> 起票
+  http POST "https://helpdesk.example.com/v1/tickets"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/helpdesk/7a8b9c0d"
+  key
+  retry 2 times every 5 seconds
+
+flow
+  let 読み = 読み取る(本文: 問い合わせ.本文)
+    on failure =>
+      let 手作業 = 起票する(問い合わせID: 問い合わせ.id, 窓口: 総合, 期限: 24, 件名: "読み取れなかった問い合わせ", 本文: 問い合わせ.本文, 下書き: none)
+      succeed チケットID = 手作業.チケットID, 窓口 = 総合
+  let 判定 = 振り分け(種類: 読み.種類, 会員: 問い合わせ.会員)
+  let 件名 = "{読み.種類}の問い合わせ"
+  match 読み.注文ID
+    some 注文ID => let 件名 = "{読み.種類}の問い合わせ（注文 {注文ID}）"
+    none => pass
+  let 下書き = 下書きする(種類: 読み.種類, 要点: 読み.要点, 注文ID: 読み.注文ID, 期限: 判定.期限)
+    on failure => let 下書き: string? = none
+  let 票 = 起票する(問い合わせID: 問い合わせ.id, 窓口: 判定.窓口, 期限: 判定.期限, 件名: 件名, 本文: 問い合わせ.本文, 下書き: 下書き)
+  succeed チケットID = 票.チケットID, 窓口 = 判定.窓口

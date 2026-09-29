@@ -133,8 +133,9 @@ its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel
 [examples/](examples/) has five, each written for Temporal, for AWS and for pydantic-graph: a hotel
 booking held to Stripe's OpenAPI document, an order in a warehouse's system, the fulfillment of an
 order with a child flow, agents that read an inquiry and draft the reply, and an application
-scored by other workers and approved by a person. [Examples](https://i2y.github.io/dandori/examples/)
-says how the versions differ.
+scored by other workers and approved by a person. Every version has a Japanese twin beside it
+(`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes them.
+[Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
 
 ## How it is checked
 
@@ -147,7 +148,7 @@ make the same calls, with the same arguments and idempotency keys, and end the s
 [How it is checked](https://i2y.github.io/dandori/assurance/) tells the rest, and how to run the
 tests.
 
-Most of the flows, rules and fixtures under `tests/` have Japanese names, on purpose: they see that
+Most of the flows and fixtures under `tests/` have Japanese names, on purpose: they see that
 names outside ASCII come through all five platforms as identifiers, keys and URL paths.
 
 ## Status

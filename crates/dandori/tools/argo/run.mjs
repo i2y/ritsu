@@ -61,8 +61,8 @@ const ns = "argo";
 const PLAYER = "dandori-played";
 const PLAYED = JSON.stringify({ schedulerName: PLAYER });
 
-async function kubectl(args, input) {
-  if (input === undefined) return (await run("kubectl", ["--context", context, "-n", ns, ...args], { maxBuffer: 1 << 28 })).stdout;
+function kubectlOnce(args, input) {
+  if (input === undefined) return run("kubectl", ["--context", context, "-n", ns, ...args], { maxBuffer: 1 << 28 }).then((r) => r.stdout);
   return new Promise((resolve, reject) => {
     const p = spawn("kubectl", ["--context", context, "-n", ns, ...args]);
     let out = "";
@@ -72,6 +72,22 @@ async function kubectl(args, input) {
     p.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(err))));
     p.stdin.end(input);
   });
+}
+
+// An API server busy with many runs at once can time a request out; `apply`, `get` and `delete`
+// come out the same when they are sent again, so they are, a few times, a little later each time.
+const BUSY = /Timeout|timed out|unable to return a response|etcdserver|connection refused|i\/o timeout|EOF/i;
+async function kubectl(args, input) {
+  const again = ["apply", "get", "delete"].includes(args[0]);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await kubectlOnce(args, input);
+    } catch (e) {
+      const said = String(e?.stderr ?? e?.message ?? e);
+      if (!again || attempt >= 5 || !BUSY.test(said)) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+  }
 }
 
 async function argoCli(args) {
@@ -114,6 +130,18 @@ async function request(pathname, options = {}) {
       continue;
     }
     const text = await res.text();
+    // An API server busy with many runs at once answers 5xx or 429; every request here comes out
+    // the same when it is sent again (an object is created under its own name, a status set), so
+    // it is, a little later each time. A creation that went through the first time is taken from
+    // the server when sending it again finds it there.
+    if ((res.status >= 500 || res.status === 429) && attempt < 5) {
+      await sleep(1000 * attempt);
+      continue;
+    }
+    if (res.status === 409 && attempt > 1 && options.method === "POST") {
+      const made = JSON.parse(options.body)?.metadata?.name;
+      if (made) return request(`${pathname}/${made}`);
+    }
     if (!res.ok) throw new Error(`${options.method ?? "GET"} ${pathname}: ${res.status} ${text.slice(0, 400)}`);
     return text ? JSON.parse(text) : null;
   }

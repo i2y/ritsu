@@ -77,27 +77,31 @@ fn runnable() -> Vec<PathBuf> {
     out
 }
 
-/// The platform a version of an example is written for, from its directory: `temporal/`,
+/// The platforms a version of an example is written for, from its directory: `temporal/`,
 /// `pydantic-graph/` or `argo/`, which only that platform's runners play. None for a version
 /// written for AWS (`aws/`), which every platform plays, since the code dandori writes for each
 /// makes its Lambda, HTTP and AWS calls; and for a flow beside the versions, which every
-/// platform runs as it is (and for the flows of tests/flows).
-fn written_for(f: &Path) -> Option<Platform> {
+/// platform runs as it is (and for the flows of tests/flows). The Japanese twin of a version for
+/// AWS (`.ja.flow`) is played by the two AWS platforms alone: the English one already tries those
+/// calls everywhere, and every platform has its own Japanese version besides.
+fn written_for(f: &Path) -> Option<Vec<Platform>> {
     let r = rel(f);
     if r.contains("/temporal/") {
-        Some(Platform::Temporal)
+        Some(vec![Platform::Temporal])
     } else if r.contains("/pydantic-graph/") {
-        Some(Platform::Graph)
+        Some(vec![Platform::Graph])
     } else if r.contains("/argo/") {
-        Some(Platform::Argo)
+        Some(vec![Platform::Argo])
+    } else if r.contains("/aws/") && r.ends_with(".ja.flow") {
+        Some(vec![Platform::StepFunctions, Platform::Durable])
     } else {
         None
     }
 }
 
-/// The flows a platform's runner plays: every flow but the versions written for another platform.
+/// The flows a platform's runner plays: every flow but the versions written for other platforms.
 fn runnable_on(p: Platform) -> Vec<PathBuf> {
-    runnable().into_iter().filter(|f| written_for(f).is_none_or(|w| w == p)).collect()
+    runnable().into_iter().filter(|f| written_for(f).is_none_or(|w| w.contains(&p))).collect()
 }
 
 /// The tests that start a process for every flow at once — the Temporal runners with their dev
@@ -895,13 +899,18 @@ fn temporal_runs_a_flow_as_its_child() {
 
 /// The flows whose histories are kept in tests/histories: one run of each, the one with the most
 /// calls, recorded by the Temporal runners with DANDORI_BLESS=1. The examples' are their versions
-/// for Temporal. The run of the order goes on in new runs (Continue-As-New), and each of them is kept.
-const RECORDED: [&str; 5] = [
+/// for Temporal, in English and in Japanese. The run of the order goes on in new runs
+/// (Continue-As-New), and each of them is kept.
+const RECORDED: [&str; 9] = [
     "examples/hotel/temporal/hotel.flow",
     "examples/fulfillment/temporal/fulfillment.flow",
     "examples/review/temporal/review.flow",
     "tests/flows/cancel.flow",
     "examples/order/temporal/order.flow",
+    "examples/hotel/temporal/hotel.ja.flow",
+    "examples/fulfillment/temporal/fulfillment.ja.flow",
+    "examples/review/temporal/review.ja.flow",
+    "examples/order/temporal/order.ja.flow",
 ];
 
 fn recorded_dir(m: &Model, python: bool) -> PathBuf {
@@ -1842,11 +1851,30 @@ struct ArgoFlow {
     real: usize,
     bound: u64,
     results: PathBuf,
-    runner: std::process::Child,
+    /// what the runner said when it ended
+    runner: std::process::Output,
 }
 
-/// Make a flow ready for Argo (its scenarios, the reference's runs, the build) and start the
-/// runner on it; None for a flow that is not for Argo.
+/// How many flows' runners go at once on Argo. Every run of a flow goes at the same time, and the
+/// kind cluster's API server began to time requests out when the runners of more than twenty flows
+/// did; fourteen went through together.
+const ARGO_AT_ONCE: usize = 14;
+static ARGO_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) = (std::sync::Mutex::new(0), std::sync::Condvar::new());
+
+/// Wait for a slot among the flows going at once on Argo, and hold it while `f` runs.
+fn with_argo_slot<T>(f: impl FnOnce() -> T) -> T {
+    let (lock, freed) = &ARGO_SLOTS;
+    let mut going = freed.wait_while(lock.lock().unwrap_or_else(|e| e.into_inner()), |n| *n >= ARGO_AT_ONCE).unwrap_or_else(|e| e.into_inner());
+    *going += 1;
+    drop(going);
+    let out = f();
+    *lock.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+    freed.notify_one();
+    out
+}
+
+/// Make a flow ready for Argo (its scenarios, the reference's runs, the build) and run the runner
+/// on it, when a slot is free, to its end; None for a flow that is not for Argo.
 fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
     let (_, checked) = dandori::check::check_file(&f).unwrap();
     let m = checked.model.expect("the flows pass check");
@@ -1889,15 +1917,17 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
     let results = dir.join("results.json");
     let spec = json!({ "template": doc, "own": own, "children": children, "http": http, "aws": aws, "runs": runs, "real": [real] });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
-    let runner = Command::new("node")
-        .arg(root().join("tools/argo/run.mjs"))
-        .arg(&dir)
-        .arg(&runs_file)
-        .arg(&results)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
+    let runner = with_argo_slot(|| {
+        Command::new("node")
+            .arg(root().join("tools/argo/run.mjs"))
+            .arg(&dir)
+            .arg(&runs_file)
+            .arg(&results)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .unwrap()
+    });
     Some(ArgoFlow { f, references, left_out, real, bound: dandori::check::bound(&m, &dandori::check::ARGO_COST), results, runner })
 }
 
@@ -1909,14 +1939,16 @@ fn argo_runs_as_the_reference_says() {
         return;
     }
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and
-    // runs one of them again with real pods; each flow is made ready on a thread of its own
+    // runs one of them again with real pods; each flow is made ready and run on a thread of its own,
+    // ARGO_AT_ONCE of them at a time, and every runner ends, and takes its workflows away, before
+    // any is looked at
     let going: Vec<ArgoFlow> = std::thread::scope(|scope| {
         let ready: Vec<_> = runnable_on(Platform::Argo).into_iter().map(|f| scope.spawn(move || ready_on_argo(f))).collect();
         ready.into_iter().filter_map(|h| h.join().unwrap()).collect()
     });
     for flow in going {
         let f = &flow.f;
-        let out = flow.runner.wait_with_output().unwrap();
+        let out = &flow.runner;
         assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&flow.results).unwrap()).unwrap();
         // the nodes each run made, against what E040 reckons with

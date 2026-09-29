@@ -1,0 +1,92 @@
+workflow 出荷 v1
+description "倉庫のシステムにある注文について、入金を催促し、出荷させ、配達の知らせを待つ。注文の状態は倉庫のシステムが持ち、その移り方は rulec の規則「注文の状態」に従う。pydantic-graph 向けの版：グラフは注文を受け取る Python のプロセスの中で動く。倉庫の呼び出しは dandori が生成する関数で、標準ライブラリで送る。お知らせは自分で書く関数で、配達の知らせは、同じプロセスにある運送会社の報告のハンドラーが応答するコールバックにする。待っているあいだはプロセスがふさがり、プロセスが失われると実行も失われる"
+
+use rule 注文の状態 from "../rules/注文の状態.rule"
+use rule 急ぎ from "../rules/出荷の急ぎ.rule"
+
+record 注文
+  id   : string
+  状態 : 注文の状態.状態
+  金額 : money[円, incl_tax]  range >=0 <=1000000
+  会員 : bool
+
+record 受付
+  id : string
+
+inputs
+  注文ID : string
+
+outputs
+  便 : 急ぎ.便
+
+task 注文を見る(id: string, expand: string) -> 注文
+  http GET "https://warehouse.example.com/v1/orders/{id}"
+  observes
+  idempotent
+  errors 混雑 = 429
+  retry 3 times every 1 second on 混雑
+
+task 出荷を頼む(id: string, 便: 急ぎ.便) -> 注文
+  http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
+  sends 出荷
+  errors 断られた = 409
+  refused as 断られた
+  key
+
+task 取消を頼む(id: string) -> 注文
+  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  sends 取消依頼
+  errors 断られた = 409
+  refused as 断られた
+  key
+
+# お店の通知サービス。自分で書くコードから呼ぶ。
+task 知らせる(注文ID: string, 本文: string) -> 受付
+  errors 宛先なし
+  key
+  retry 2 times every 5 seconds
+
+# 関数はコールバックの ID を運送会社のサービスに渡す。運送会社の報告を受けるお店のハンドラーが、
+# 配達のあとの倉庫の注文で応答する。
+task 配達を待つ(注文ID: string) -> 注文
+  callback
+  observes
+  timeout 7 days
+
+case 受注 : 注文 follows 注文の状態.注文
+  external 入金, 配達, 取消依頼
+  refused when 受理 = false
+
+flow
+  受注 <- 注文を見る(id: 注文ID, expand: "items")
+  repeat at most 3 times
+    match 受注.状態
+      受付 =>
+        let 催促の控え = 知らせる(注文ID: 受注.id, 本文: "お支払いをお待ちしています")
+          on 宛先なし => fail 連絡先なし leaving 受注
+        wait 1 day
+        受注 <- 注文を見る(id: 受注.id, expand: "items")
+      入金済, 出荷済, 配達済, 取消 => break
+  match 受注.状態
+    受付 =>
+      受注 <- 取消を頼む(id: 受注.id)
+        on 断られた => pass
+      fail 未入金 "三日たっても入金がありませんでした"
+    取消 => fail 取消済み "取り消された注文です"
+    出荷済, 配達済 => fail 既に出荷 "もう出荷されています" leaving 受注
+    入金済 => pass
+  let 判定 = 急ぎ(会員: 受注.会員, 金額: 受注.金額)
+  受注 <- 出荷を頼む(id: 受注.id, 便: 判定.便)
+    on 断られた => fail 取消済み "出荷の前に取り消されました"
+  match 判定.急ぎ
+    true => let 出荷の控え = 知らせる(注文ID: 受注.id, 本文: "翌日便で出荷しました")
+    false => pass
+  受注 <- 配達を待つ(注文ID: 受注.id)
+    on timeout => fail 配達の遅れ "七日たっても配達の知らせがありません" leaving 受注
+  match 受注.状態
+    配達済 => succeed 便 = 判定.便
+    出荷済 => fail 配達の遅れ "配達の知らせのあとも出荷済のままです" leaving 受注
+
+on failure
+  fail 中断 "途中で止まりました。注文は倉庫のシステムにそのまま残ります" leaving 受注
+

@@ -11,28 +11,28 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## Markdown で、プルリクエストに
 
-Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。タスクがすべて自分で書くコードの、審査の例（[examples/review/temporal](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.flow)）です。
+Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。タスクがすべて自分で書くコードの、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow)）です。
 
 ```mermaid
 flowchart TD
-    start(["review v1"])
-    s1["r = score(…)<br>自分で書くタスク<br>retry 2 times every 10 seconds"]
-    s2(["fail Unscorable<br>#quot;Could not score application {application.id}#quot;"])
-    s3{{"match r.verdict"}}
-    s5[/"a = ask_for_approval(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 3 days"/]
-    s6(["fail NoAnswer<br>#quot;No approval in three days#quot;"])
-    s7["notify(…)<br>自分で書くタスク"]
-    s8(["succeed verdict = approve"])
-    s9["notify(…)<br>自分で書くタスク"]
-    s10(["succeed verdict = r.verdict"])
+    start(["審査 v1"])
+    s1["結果 = 採点する(…)<br>自分で書くタスク<br>retry 2 times every 10 seconds"]
+    s2(["fail 採点不能<br>#quot;申込 {申込.id} を採点できませんでした#quot;"])
+    s3{{"match 結果.判断"}}
+    s5[/"返事 = 承認を求める(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 3 days"/]
+    s6(["fail 承認なし<br>#quot;三日たっても承認がありません#quot;"])
+    s7["知らせる(…)<br>自分で書くタスク"]
+    s8(["succeed 判断 = 承認"])
+    s9["知らせる(…)<br>自分で書くタスク"]
+    s10(["succeed 判断 = 結果.判断"])
     start --> s1
-    s1 -.->|"on unscorable"| s2
+    s1 -.->|"on 採点できない"| s2
     s1 --> s3
-    s3 -->|"hold"| s5
+    s3 -->|"保留"| s5
     s5 -.->|"on timeout"| s6
     s5 --> s7
     s7 --> s8
-    s3 -->|"approve, reject"| s9
+    s3 -->|"承認, 却下"| s9
     s9 --> s10
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
@@ -44,7 +44,7 @@ flowchart TD
 
 ## 一枚のページで、実行を光らせる
 
-`--format html` は、ほかに何も要らないページを一枚書きます。図は dandori が自分で描くので、ネットワークがなくても見られます。例の Temporal 版のページは、[ホテルの予約](doc/hotel.html)、[注文](doc/order.html)、[引当と発送](doc/fulfillment.html)、[問い合わせ](doc/inquiry.html)、[審査](doc/review.html) です。
+`--format html` は、ほかに何も要らないページを一枚書きます。図は dandori が自分で描くので、ネットワークがなくても見られます。日本語で書いた例（Temporal 版）のページは、[ホテルの予約](doc/hotel.html)、[注文](doc/order.html)、[引当と発送](doc/fulfillment.html)、[問い合わせ](doc/inquiry.html)、[審査](doc/review.html) です。
 
 - **ステップを選ぶ。** 右側に、そのステップの `.flow` の行、そこに来たとき各案件がとりうる状態、呼ぶもの、リトライとタイムアウト、エラーがそれぞれどこへ行くか、呼び出しのあとの案件、タスクや規則の宣言が出ます。
 - **シナリオを選ぶ。** 左には `dandori scenarios` が作るシナリオが、終わり方ごとに並びます。すべての分岐、エラーを処理するすべての箇所、案件の状態の移り方のすべてを通るシナリオです。選ぶと、その実行が通るところが光り、ステップの横に通った回数が出て、右側に各呼び出しの結果が並びます。

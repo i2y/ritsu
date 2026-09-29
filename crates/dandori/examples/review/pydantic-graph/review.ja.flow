@@ -1,0 +1,47 @@
+workflow 審査 v1
+description "申し込みを採点にかけ、採点が保留なら人の承認を待つ。タスクはどれも自分で書くもの。pydantic-graph 向けの版：グラフは申し込みを受け取る Python のプロセスの中で動き、タスクはどれも自分で書く関数。承認する人の応答は、同じプロセスの中でコールバックに届く。承認を待っているあいだはプロセスがふさがり、プロセスが失われると実行も失われる"
+
+enum 判断 = 承認 | 却下 | 保留
+
+record 申込
+  id   : string
+  金額 : int
+
+record 採点
+  点数 : int
+  判断 : 判断
+
+record 承認
+  承認者 : string
+
+inputs
+  申込 : 申込
+
+outputs
+  判断 : 判断
+
+task 採点する(申込ID: string, 金額: int) -> 採点
+  errors 採点できない
+  retry 2 times every 10 seconds
+  idempotent
+
+# 承認する人が自分のツールで承認し、その答えがコールバックの ID と一緒に返ってくる。
+task 承認を求める(申込ID: string, 点数: int) -> 承認
+  callback
+  timeout 3 days
+
+task 知らせる(申込ID: string, 本文: string)
+  idempotent
+
+flow
+  let 結果 = 採点する(申込ID: 申込.id, 金額: 申込.金額)
+    on 採点できない => fail 採点不能 "申込 {申込.id} を採点できませんでした"
+  match 結果.判断
+    承認, 却下 => pass
+    保留 =>
+      let 返事 = 承認を求める(申込ID: 申込.id, 点数: 結果.点数)
+        on timeout => fail 承認なし "三日たっても承認がありません"
+      知らせる(申込ID: 申込.id, 本文: "{返事.承認者} さんが申込 {申込.id} を承認しました")
+      succeed 判断 = 承認
+  知らせる(申込ID: 申込.id, 本文: "申込 {申込.id} の審査が済みました: {結果.判断}")
+  succeed 判断 = 結果.判断

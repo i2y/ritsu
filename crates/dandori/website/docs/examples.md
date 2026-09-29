@@ -5,6 +5,11 @@ tasks called and its news brought in the way the platform does. Temporal is dand
 and its version is the one to read first. The version for Temporal is also drawn by `dandori doc`, on
 a page where each scenario lights up the way its run goes ([Draw a workflow](diagrams.md)).
 
+Every version has a Japanese twin beside it, `<name>.ja.flow` (fulfillment's child too,
+`arrange_delivery.ja.flow`), which names everything in Japanese but what an API description fixes:
+Stripe's fields and states, the warehouse's `.proto`, the SNS and SQS APIs. The Japanese rules sit
+beside the English ones in each `rules/`, and the Japanese site draws the Japanese versions.
+
 | Example | For Temporal | For AWS (Step Functions, Lambda durable functions) | For pydantic-graph | Drawn |
 |---|---|---|---|---|
 | a hotel booking that holds a card and captures at check-out, held to Stripe's OpenAPI document | [temporal](https://github.com/i2y/dandori/blob/main/examples/hotel/temporal/hotel.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/hotel/aws/hotel.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/hotel/pydantic-graph/hotel.flow) | [page](doc/hotel.html) |

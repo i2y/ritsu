@@ -1,0 +1,122 @@
+workflow 引当と発送 v1
+description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから、お客さまに知らせる。明細は並べて引き当て、足りない明細があれば、引き当てたぶんを戻す。AWS 向けの版（Step Functions と Lambda durable functions）：規則は Lambda 関数で、倉庫は EventBridge の接続を通して Connect で呼ぶ。配送の手配は、デプロイした ARN で始める arrange_delivery.ja.flow。梱包の依頼は、メッセージにタスクトークンを入れて SQS に送り、お客さまへは SNS で知らせ、記録は Lambda 関数に残す。ほかのプラットフォームでも、dandori がそれぞれ向けに生成する呼び出しで動く"
+
+use rule 急ぎ from "../../order/rules/出荷の急ぎ.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+use proto warehouse from "../specs/warehouse.proto"
+  url "https://warehouse.example.com"
+use smithy sns from "../specs/sns.json"
+use smithy sqs from "../specs/sqs.json"
+
+enum 在庫 = secured | short
+
+record 明細
+  sku : string
+  数  : int
+
+record 贈り物
+  宛名       : string
+  メッセージ : string?
+
+record 注文
+  id     : string
+  会員   : bool
+  金額   : money[円, incl_tax]  range >=0 <=1000000
+  明細   : list[明細]
+  贈り物 : 贈り物?
+  付帯   : json
+
+record 引当
+  sku   : string
+  stock : 在庫
+  id    : string?
+
+record 配送
+  追跡番号 : string
+
+record 梱包の依頼
+  注文ID : string
+  引当   : list[引当]
+
+record 梱包
+  箱の数 : int
+
+record 送信
+  MessageId : string
+
+inputs
+  注文 : 注文
+
+outputs
+  引当     : list[引当]
+  追跡番号 : string
+
+# 倉庫は、どの引当にも答える。在庫を押さえられたら secured とその ID、足りなければ short。
+task 在庫を引き当てる(sku: string, quantity: int) -> 引当
+  connect warehouse "StockService/Reserve"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
+  errors 混雑 = resource_exhausted
+  key
+  retry 2 times every 1 second on 混雑
+
+task 引当を戻す(id: string)
+  connect warehouse "StockService/Release"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
+  idempotent
+
+# 別のワークフローが配送を手配する。それ自身の .flow で書いてあり、検査はこのタスクを、その
+# 入力・出力・エラーと突き合わせる。Temporal では子ワークフロー（型とタスクキューは 配送の手配_v1）、
+# Argo ではその WorkflowTemplate のワークフローで、Step Functions と Lambda durable functions は、
+# デプロイした ARN で始める。
+task 配送を手配する(注文ID: string, 便: 急ぎ.便, 宛名: string?, 付帯: json) -> 配送
+  flow "../arrange_delivery.ja.flow"
+  state machine "arn:aws:states:ap-northeast-1:123456789012:stateMachine:arrange-delivery"
+  durable function "arn:aws:lambda:ap-northeast-1:123456789012:function:arrange-delivery:live"
+
+# 梱包の担当者はキューから依頼を読み、箱詰めが済むと応答する。
+task 梱包を待つ(QueueUrl: string, MessageBody: 梱包の依頼) -> 梱包
+  aws sqs:sendMessage
+  callback
+  timeout 2 days
+
+task 知らせる(TopicArn: string, Message: string) -> 送信
+  aws sns:publish
+  errors 宛先なし = NotFoundException
+
+task 記録する(注文ID: string, 付帯: json)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:audit-log"
+  idempotent
+
+flow
+  let 判定 = 急ぎ(会員: 注文.会員, 金額: 注文.金額)
+  let 結果 = for 明細 in 注文.明細 at most 50 in parallel, 10 at a time
+    let 答え = 在庫を引き当てる(sku: 明細.sku, quantity: 明細.数)
+    yield 答え
+  let 足りない = false
+  for 一つ in 結果 at most 50
+    match 一つ.stock
+      short => let 足りない = true
+      secured => pass
+  match 足りない
+    true =>
+      for 戻す in 結果 at most 50 in parallel
+        match 戻す.id
+          some id => 引当を戻す(id: id)
+          none => pass
+      fail 在庫不足 "注文 {注文.id} には在庫の足りない明細があります"
+    false => pass
+  let 宛名: string? = none
+  match 注文.贈り物
+    some 贈り物 =>
+      let 宛名 = 贈り物.宛名
+      match 贈り物.メッセージ
+        some 一言 => 記録する(注文ID: 注文.id, 付帯: {メッセージ: 一言, 宛名: 贈り物.宛名})
+        none => pass
+    none => pass
+  let 配送 = 配送を手配する(注文ID: 注文.id, 便: 判定.便, 宛名: 宛名, 付帯: 注文.付帯)
+    on failure => fail 配送の手配の失敗 "注文 {注文.id} の配送を手配できませんでした"
+  let 箱 = 梱包を待つ(QueueUrl: "https://sqs.ap-northeast-1.amazonaws.com/123456789012/packing", MessageBody: {注文ID: 注文.id, 引当: 結果})
+    on timeout => fail 梱包の遅れ "二日たっても梱包の知らせがありません"
+  知らせる(TopicArn: "arn:aws:sns:ap-northeast-1:123456789012:orders", Message: "注文 {注文.id} を{判定.便}で出しました（{箱.箱の数} 箱、追跡番号 {配送.追跡番号}）")
+    on 宛先なし => pass
+  succeed 引当 = 結果, 追跡番号 = 配送.追跡番号

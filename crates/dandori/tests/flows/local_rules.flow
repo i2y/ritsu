@@ -1,11 +1,11 @@
 workflow 便の判定 v1
 description "規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則の期限切れを受けてタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかの出力先では、ふつうの規則の呼び出しと同じ"
 
-use rule 急ぎ from "../rules/出荷の急ぎ.rule"
+use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
   local
 
-use rule 急ぎの見直し from "../rules/出荷の急ぎ.rule"
+use rule 急ぎの見直し from "../../examples/order/rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
 
 record 注文

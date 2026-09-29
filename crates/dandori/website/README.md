@@ -15,7 +15,7 @@ website/
 ├── docs/               # the English pages, the pictures and the stylesheet
 │   └── doc/            # the examples as `dandori doc --format html` draws them
 ├── docs-ja/            # the Japanese pages
-│   └── doc/            # the same, drawn with `--lang ja`
+│   └── doc/            # the Japanese versions of the examples, drawn with `--lang ja`
 └── tools/
     ├── flowlexer.py    # colours the ```flow blocks
     └── make_overview.py  # draws the overview on the home page
