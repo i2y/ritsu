@@ -40,7 +40,7 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 
 ### タイムアウト
 
-`timeout` を書かないタスクには、ほかのプラットフォームと同じだけの時間を与えます。`http` と `agent` は HTTP Task と同じ 60 秒、`lambda` は 900 秒で、それ以外には独自のタイムアウトを付けません。ワークフロー自身のワーカーが受け持つアクティビティ（`queue` の無いタスク）はどれもハートビートを送るので、ワーカーがいなくなっても 30 秒以内に気づきます。規則のアクティビティのタイムアウトは 10 秒で、タイムアウトしたらリトライします。
+`timeout` を書かないタスクには、ほかのプラットフォームと同じだけの時間を与えます。`http`・`agent`・`jev` は HTTP Task と同じ 60 秒、`lambda` は 900 秒で、それ以外には独自のタイムアウトを付けません。ワークフロー自身のワーカーが受け持つアクティビティ（`queue` の無いタスク）はどれもハートビートを送るので、ワーカーがいなくなっても 30 秒以内に気づきます。規則のアクティビティのタイムアウトは 10 秒で、タイムアウトしたらリトライします。
 
 ## Temporal（Python）
 
@@ -59,7 +59,7 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 `--target argo` は、`<workflow>.argo.yaml` と `caller/` を書き出します。
 
 - `<workflow>.argo.yaml` は WorkflowTemplate です。入力をパラメータ `input` で受け取り、出力をグローバルなパラメータ `dd_output` に残します。フローの変数もグローバルな出力パラメータに持ち、どの変数がどのパラメータかは、YAML の先頭のコメントに書いてあります。
-- `caller/` は、ワークフローのコンテナの中で `lambda`・`http`・`aws`・`agent` のタスクと規則を動かすプログラムで、`package.json` と `Dockerfile` が付きます。
+- `caller/` は、ワークフローのコンテナの中で `lambda`・`http`・`aws`・`agent`・`jev` のタスクと規則を動かすプログラムで、`package.json` と `Dockerfile` が付きます。
 
 自分で書くタスクは、自分のイメージ（`image`）のコンテナで動きます。
 

@@ -1,5 +1,5 @@
 workflow 承認の回 v1
-description "Worker Deployment Versioning の試し：回ごとに承認を待ってから知らせる。Temporal では二回目の回が新しい実行で始まる（Continue-As-New）"
+description "Worker Deployment Versioning の試し：イテレーションごとに承認を待ってから知らせる。Temporal では二回目のイテレーションが新しい実行で始まる（Continue-As-New）"
 
 record 申込
   id : string

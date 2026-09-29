@@ -299,7 +299,9 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E002", *sp, format!("there is no type `{u}`"), format!("型 `{u}` はありません")).note(TYPE_HINT_EN, TYPE_HINT_JA));
                     return None;
                 }
-                Some(Ty::Num(rulec::normalize_unit(u)))
+                // a rate by how many of its steps make the whole, as the rules' rates are spelled
+                let unit = rulec::normalize_unit(u);
+                Some(Ty::Num(rate_per(&unit).map(rate_unit).unwrap_or(unit)))
             }
             TypeExpr::Named(parts) => {
                 let text = parts.iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".");
@@ -480,6 +482,14 @@ impl<'a> Lowerer<'a> {
                 }
                 _ => {}
             }
+            // what a Jev task asks, from the type of its answer
+            let jev = match &t.binding {
+                Some((syntax::Binding::Jev(jd), bsp)) => Some(self.jev(t, jd, *bsp, result.as_ref())),
+                _ => None,
+            };
+            if let (Some((_, _, csp)), None) = (&t.confidence, &jev) {
+                self.push(e("E007", *csp, "`confidence` says how sure Jev must be of its answer; this task has no `jev`", "`confidence` は Jev の答えにどれだけの確信が要るかを書くところです。このタスクには `jev` がありません"));
+            }
             let binding = t.binding.as_ref().map(|(b, _)| match b {
                 syntax::Binding::Lambda(f) => Binding::Lambda(f.clone()),
                 syntax::Binding::Http { method, url, form, api: None } => Binding::Http { method: method.clone(), url: url.clone(), form: *form },
@@ -500,13 +510,14 @@ impl<'a> Lowerer<'a> {
                     url: t.url.as_ref().map(|x| x.0.clone()),
                     effort: t.effort.as_ref().map(|x| x.0.clone()),
                 },
+                syntax::Binding::Jev(_) => Binding::Jev(jev.clone().expect("lowered above")),
             });
             self.agent(t, result.as_ref(), result_range);
             // another `.flow` as the child: checked here, for its names and the contract it holds the task to
             let flow = t.flow.as_ref().and_then(|(path, fsp)| self.child_flow(path, *fsp));
             if t.flow.is_some() {
                 if let Some((_, bsp)) = &t.binding {
-                    self.push(e("E007", *bsp, "a task that runs another `.flow` calls nothing else; leave out `lambda`, `http`, `aws` and `agent`", "ほかの `.flow` を走らせるタスクは、ほかに何も呼びません。`lambda`・`http`・`aws`・`agent` は外してください"));
+                    self.push(e("E007", *bsp, "a task that runs another `.flow` calls nothing else; leave out `lambda`, `http`, `aws`, `agent` and `jev`", "ほかの `.flow` を走らせるタスクは、ほかに何も呼びません。`lambda`・`http`・`aws`・`agent`・`jev` は外してください"));
                 }
                 if let Some((_, isp)) = &t.image {
                     self.push(e("E007", *isp, "on Argo, a task that runs another `.flow` makes a workflow of the child's WorkflowTemplate; leave out `image`", "Argo では、ほかの `.flow` を走らせるタスクは、子の WorkflowTemplate からワークフローを作ります。`image` は外してください"));
@@ -568,6 +579,16 @@ impl<'a> Lowerer<'a> {
                     (Some(Binding::Http { .. }), None, _) => {
                         self.push(e("E007", *esp, format!("give `{en}` the HTTP status it comes back with, as `{en} = 402`"), format!("`{en}` が返ってくるときの HTTP ステータスを `{en} = 402` のように書きます")));
                     }
+                    // TypeSafe's API says an error by its status: 429 for the rate limit, 529 when it is overloaded
+                    (Some(Binding::Jev(_)), None, _) => {
+                        self.push(e(
+                            "E007",
+                            *esp,
+                            format!("Jev's API says an error by its HTTP status; give `{en}` the one it comes back with, as `{en} = 429` (the rate limit) or `{en} = 529` (overloaded)"),
+                            format!("Jev の API はエラーを HTTP ステータスで伝えます。`{en}` が返ってくるときのステータスを、`{en} = 429`（レート制限）や `{en} = 529`（過負荷）のように書きます"),
+                        ));
+                    }
+                    (Some(Binding::Jev(_)), Some(_), _) => {}
                     (Some(Binding::Http { .. }), Some(_), None) => {}
                     (Some(Binding::Aws { .. }), None, _) => {}
                     (Some(Binding::Aws { .. }), Some(_), _) => {
@@ -599,6 +620,16 @@ impl<'a> Lowerer<'a> {
                 }
                 errors.push(ErrDef { name: en.clone(), status, exception });
             }
+            // the error a less sure answer fails the call with is one of the task's own
+            if let (Some((_, (fe, fsp), _)), Some(_)) = (&t.confidence, &jev) {
+                if fe == "timeout" || fe == "failure" {
+                    self.push(e("E007", *fsp, format!("`{fe}` is always there; name an error of the task's own for an answer that is not sure enough"), format!("`{fe}` はいつもあるエラーです。確信度が足りない答えには、タスク自身のエラーの名前を付けてください")));
+                } else if errors.iter().any(|x| x.name == *fe) {
+                    self.push(e("E006", *fsp, format!("the error `{fe}` is written twice: `confidence … else {fe}` declares it"), format!("エラー `{fe}` が二度書かれています。`confidence … else {fe}` がそれを宣言します")));
+                } else {
+                    errors.push(ErrDef { name: fe.clone(), status: None, exception: None });
+                }
+            }
             if let Some((syntax::Binding::Http { url, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
                 for ph in placeholders(url) {
                     if !params.iter().any(|(n, _)| *n == ph) {
@@ -610,7 +641,7 @@ impl<'a> Lowerer<'a> {
                 let ok = match &binding {
                     None | Some(Binding::Lambda(_)) => true,
                     Some(Binding::Aws { service, action }) => service == "sqs" && action == "sendMessage",
-                    Some(Binding::Http { .. }) | Some(Binding::Agent { .. }) => false,
+                    Some(Binding::Http { .. }) | Some(Binding::Agent { .. }) | Some(Binding::Jev(_)) => false,
                 };
                 if !ok {
                     self.push(e(
@@ -665,6 +696,7 @@ impl<'a> Lowerer<'a> {
                 }
                 match (&binding, &t.key_param) {
                     (Some(Binding::Agent { .. }), _) => self.push(e("E007", ksp, "an agent changes nothing on the other side, so it takes no `key`", "エージェントは外部のデータを何も変えないので、`key` は要りません")),
+                    (Some(Binding::Jev(_)), _) => self.push(e("E007", ksp, "Jev only answers, and changes nothing on the other side, so it takes no `key`", "Jev は答えるだけで外部のデータを何も変えないので、`key` は要りません")),
                     (Some(Binding::Aws { .. }), None) => self.push(e(
                         "E007",
                         ksp,
@@ -684,6 +716,14 @@ impl<'a> Lowerer<'a> {
                 for (on, osp) in &r.on {
                     if on != "timeout" && on != "failure" && !errors.iter().any(|x| x.name == *on) {
                         self.diags.push(e("E002", *osp, format!("`{on}` is not an error of `{name}`"), format!("`{on}` は `{name}` のエラーではありません")));
+                    }
+                    if jev.as_ref().and_then(|j| j.floor.as_ref()).is_some_and(|(_, fe)| fe == on) {
+                        self.diags.push(e(
+                            "E007",
+                            *osp,
+                            format!("Jev answers the same input much the same way each time, so asking again is not surer; `{on}` is not retried"),
+                            format!("Jev は同じ入力にはほぼ同じように答えるので、尋ね直しても確信度は上がりません。`{on}` はリトライできません"),
+                        ));
                     }
                 }
                 Retry { times: r.times, every: r.every, backoff: r.backoff, on: r.on.iter().map(|x| x.0.clone()).collect() }
@@ -775,6 +815,23 @@ impl<'a> Lowerer<'a> {
     /// answer whose type the provider's structured outputs can hold the model to, and nothing that
     /// moves a case.
     fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>, rg: Option<Range>) {
+        let jev = matches!(t.binding, Some((syntax::Binding::Jev(_), _)));
+        if let (Some((_, usp)), true) = (&t.url, jev) {
+            self.push(e(
+                "E007",
+                *usp,
+                "Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on",
+                "Jev はいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです",
+            ));
+            return;
+        }
+        if let (Some((_, esp)), true) = (&t.effort, jev) {
+            self.push(e("E007", *esp, "Jev answers at once and does not reason at length; `effort` says how hard an agent's model reasons", "Jev はすぐに答え、長く推論しません。`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです"));
+            return;
+        }
+        if jev {
+            return;
+        }
         if let (Some((_, usp)), false) = (&t.url, matches!(t.binding, Some((syntax::Binding::Agent { .. }, _)))) {
             self.push(e(
                 "E007",
@@ -794,7 +851,7 @@ impl<'a> Lowerer<'a> {
         let (provider, bsp) = match (&t.binding, &t.model) {
             (Some((syntax::Binding::Agent { provider, .. }, bsp)), _) => (provider.clone(), *bsp),
             (_, Some((_, msp))) => {
-                self.push(e("E007", *msp, "`model` says which model an agent uses; this task has no `agent`", "`model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません"));
+                self.push(e("E007", *msp, "`model` says which model an agent or Jev uses; this task has neither `agent` nor `jev`", "`model` はエージェントや Jev が使うモデルを書くところです。このタスクには `agent` も `jev` もありません"));
                 return;
             }
             _ => return,
@@ -937,6 +994,228 @@ impl<'a> Lowerer<'a> {
                     }
                 }
             }
+        }
+    }
+
+    /// What a Jev task asks, from the type of its answer: an enum is a choice among its values
+    /// (`score`: a place on a scale of them), `bool` yes or no, and a record a question for each
+    /// field, or the field that takes how sure Jev is of another's answer. Jev writes no text, so
+    /// an answer that is not one of these is refused (E007).
+    fn jev(&mut self, t: &syntax::TaskDecl, jd: &syntax::JevDecl, bsp: Span, result: Option<&Ty>) -> Jev {
+        let model = t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default();
+        let floor = t.confidence.as_ref().map(|(v, e, _)| (*v, e.0.clone()));
+        let mut out = Jev { model, questions: vec![], confidences: vec![], floor };
+        if t.model.is_none() {
+            self.push(e(
+                "E007",
+                bsp,
+                "Jev needs the model it asks; write the version, as `model \"jev-1.13.0\"`",
+                "Jev には、尋ねるモデルを `model \"jev-1.13.0\"` のようにバージョンで書いてください",
+            ));
+        }
+        if let Some((_, msp)) = &t.machine {
+            self.push(e("E007", *msp, "Jev reads what it is given and answers; it has no case on the other side to start, move or look at", "Jev は渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません"));
+        }
+        const WHAT_EN: &str = "Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text";
+        const WHAT_JA: &str = "Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません";
+        let Some(r) = result else {
+            self.push(e("E007", bsp, format!("{WHAT_EN}; write the type of its answer as `-> <type>`"), format!("{WHAT_JA}。結果の型を `-> <型>` と書いてください")));
+            return out;
+        };
+        match (&jd.ask, r) {
+            (Some(ask), Ty::Enum(_) | Ty::Bool) => {
+                if let Some(q) = self.jev_question(ask, r, None) {
+                    out.questions.push(q);
+                }
+            }
+            (Some(ask), Ty::Record(_)) => {
+                self.push(e(
+                    "E007",
+                    ask.span,
+                    "the answer is a record, so Jev is asked a question for each of its fields: write `jev` alone, and under it `<field> \"<question>\"` for each",
+                    "結果はレコードなので、Jev にはフィールドごとに尋ねます。`jev` だけを書き、その下にフィールドごとに `<フィールド> \"<質問>\"` を書いてください",
+                ));
+            }
+            (None, Ty::Enum(_) | Ty::Bool) => {
+                self.push(e("E007", bsp, "write the question Jev answers after `jev`, in double quotes: `jev \"<question>\"`", "Jev に尋ねることを、`jev \"<質問>\"` のように `jev` のあとに二重引用符で書いてください"));
+            }
+            (None, Ty::Record(rid)) => {
+                let rid = *rid;
+                let rec = self.m.records[rid].clone();
+                let mut seen: BTreeMap<String, Span> = BTreeMap::new();
+                for (f, _) in &jd.fields {
+                    if let Some(first) = seen.get(&f.0) {
+                        self.push(e("E006", f.1, format!("`{}` is asked twice (line {})", f.0, first.line), format!("`{}` が二度尋ねられています（{} 行目）", f.0, first.line)));
+                        continue;
+                    }
+                    seen.insert(f.0.clone(), f.1);
+                    if !rec.fields.iter().any(|(n, _)| *n == f.0) {
+                        let fields = rec.fields.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
+                        self.push(e("E002", f.1, format!("`{}` is not a field of `{}`, whose fields are {}", f.0, rec.name, fields.join(", ")), format!("`{}` は `{}` のフィールドではありません（フィールドは {}）", f.0, rec.name, fields.join("・"))));
+                    }
+                }
+                // the questions first, in the order of the record's fields, then how sure of which
+                for (fname, fty) in &rec.fields {
+                    let Some((_, what)) = jd.fields.iter().find(|(n, _)| n.0 == *fname) else {
+                        self.push(e(
+                            "E007",
+                            bsp,
+                            format!("write under `jev` what Jev is asked for the field `{fname}` of `{}`: `{fname} \"<question>\"`, or `{fname} confidence of <field>`", rec.name),
+                            format!("`{}` のフィールド `{fname}` について Jev に尋ねることを、`jev` の下に書いてください（`{fname} \"<質問>\"` か `{fname} confidence of <フィールド>`）", rec.name),
+                        ));
+                        continue;
+                    };
+                    if let syntax::JevField::Ask(ask) = what {
+                        match fty {
+                            Ty::Enum(_) | Ty::Bool => {
+                                if let Some(q) = self.jev_question(ask, fty, Some(fname)) {
+                                    out.questions.push(q);
+                                }
+                            }
+                            other => {
+                                let tn = self.m.ty_name(other);
+                                self.push(e("E007", ask.span, format!("{WHAT_EN}; the field `{fname}` is `{tn}`"), format!("{WHAT_JA}。フィールド `{fname}` は `{tn}` です")));
+                            }
+                        }
+                    }
+                }
+                for (fname, fty) in &rec.fields {
+                    let Some((fsp, syntax::JevField::Confidence(of))) = jd.fields.iter().find(|(n, _)| n.0 == *fname).map(|(n, w)| (n.1, w)) else { continue };
+                    let per = match fty {
+                        Ty::Num(u) => rate_per(u),
+                        _ => None,
+                    };
+                    let Some(per) = per else {
+                        let tn = self.m.ty_name(fty);
+                        self.push(e(
+                            "E007",
+                            fsp,
+                            format!("how sure Jev is goes into a rate with a step that goes into 100% a whole number of times, such as `rate[step 1%]` or `rate[step 0.01%]`; `{fname}` is `{tn}`"),
+                            format!("Jev の確信度が入るのは、`rate[step 1%]` や `rate[step 0.01%]` のように、刻みで 100% を割り切れる率です。`{fname}` は `{tn}` です"),
+                        ));
+                        continue;
+                    };
+                    match out.questions.iter().position(|q| q.field.as_deref() == Some(of.0.as_str())) {
+                        Some(qi) => out.confidences.push((fname.clone(), qi, per)),
+                        None => self.push(e(
+                            "E007",
+                            of.1,
+                            format!("`{}` is not a field Jev is asked about, so there is no answer to be sure of", of.0),
+                            format!("`{}` については Jev に尋ねていないので、その答えの確信度はありません", of.0),
+                        )),
+                    }
+                }
+                if out.questions.is_empty() && !jd.fields.is_empty() {
+                    self.push(e("E007", bsp, format!("{WHAT_EN}; ask it about one field of `{}` at least", rec.name), format!("{WHAT_JA}。`{}` のフィールドの一つは尋ねてください", rec.name)));
+                }
+            }
+            (_, other) => {
+                let tn = self.m.ty_name(other);
+                self.push(e("E007", bsp, format!("{WHAT_EN}; the answer is `{tn}`"), format!("{WHAT_JA}。結果は `{tn}` です")));
+            }
+        }
+        if let Some((v, _, csp)) = &t.confidence {
+            // yes or no: sure of the answer it takes by the probability of that answer, one half at least
+            if !out.questions.is_empty() && out.questions.iter().all(|q| q.kind == QuestionKind::Noul) && *v <= 0.5 {
+                self.push(e(
+                    "E007",
+                    *csp,
+                    format!("Jev is at least half sure of the answer it takes to a yes or no, so `confidence {v}` never fails the call; give more than 0.5"),
+                    format!("はいかいいえの答えには、Jev はいつも半分以上確かなので、`confidence {v}` で呼び出しが失敗することはありません。0.5 より大きい値を書いてください"),
+                ));
+            }
+        }
+        // a floor, or how sure it is, means one version's answers; an alias moves to the next
+        if let (true, Some((m, msp))) = (out.uses_confidence(), &t.model) {
+            if m == "jev-latest" || m == "jev-preview" {
+                self.diags.push(Diag::warning(
+                    "W032",
+                    msp.line,
+                    msp.col,
+                    format!("`{m}` is an alias, which moves to a new version of Jev without a change here, and how sure one version is means something else to the next; name the version the confidence is set for, as `model \"jev-1.13.0\"`"),
+                    format!("`{m}` はエイリアスで、ここを変えなくても Jev の新しいバージョンに移ります。確信度の意味はバージョンごとに違うので、確信度を合わせたバージョンを `model \"jev-1.13.0\"` のように書いてください"),
+                ));
+            }
+        }
+        out
+    }
+
+    /// One question of a Jev task, whose answer is of type `ty` (an enum or `bool`).
+    fn jev_question(&mut self, ask: &syntax::JevAsk, ty: &Ty, field: Option<&str>) -> Option<Question> {
+        let id = field.unwrap_or("answer").to_string();
+        let mut seen: BTreeMap<String, Span> = BTreeMap::new();
+        for (v, vsp) in ask.criteria.iter().map(|(n, _)| n) {
+            if let Some(first) = seen.get(v) {
+                self.push(e("E006", *vsp, format!("what `{v}` means is written twice (line {})", first.line), format!("`{v}` の意味が二度書かれています（{} 行目）", first.line)));
+                return None;
+            }
+            seen.insert(v.clone(), *vsp);
+        }
+        let meaning = |v: &str| ask.criteria.iter().find(|((n, _), _)| n == v).map(|(_, m)| m.clone());
+        match ty {
+            Ty::Enum(en) => {
+                let def = self.m.enums[*en].clone();
+                for ((v, vsp), _) in &ask.criteria {
+                    if !def.values.contains(v) {
+                        self.push(e("E002", *vsp, format!("`{v}` is not a value of `{}`, whose values are {}", def.name, def.values.join(", ")), format!("`{v}` は `{}` の値ではありません（値は {}）", def.name, def.values.join("・"))));
+                        return None;
+                    }
+                }
+                if let Some(ssp) = ask.score {
+                    // the levels are the values, each with what it means, from the lowest
+                    if !(2..=10).contains(&def.values.len()) {
+                        self.push(e(
+                            "E007",
+                            ssp,
+                            format!("a score has from 2 to 10 levels, and `{}` has {} values", def.name, def.values.len()),
+                            format!("score の段階は 2 から 10 までで、`{}` の値は {} 個です", def.name, def.values.len()),
+                        ));
+                        return None;
+                    }
+                    let missing: Vec<&String> = def.values.iter().filter(|v| meaning(v).is_none()).collect();
+                    if !missing.is_empty() {
+                        let names = missing.iter().map(|v| v.as_str()).collect::<Vec<_>>();
+                        self.push(e(
+                            "E007",
+                            ask.span,
+                            format!("Jev sees a score's levels only by what each means, so write under it what every value of `{}` means, from the lowest level to the highest; {} is missing", def.name, names.join(", ")),
+                            format!("Jev は score の段階を、書いた意味だけで見分けます。`{}` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。{} がありません", def.name, names.join("・")),
+                        ));
+                        return None;
+                    }
+                    let options = ask.criteria.iter().map(|((v, _), m)| (v.clone(), Some(m.clone()))).collect();
+                    Some(Question { id, field: field.map(String::from), kind: QuestionKind::Score, instructions: ask.instructions.clone(), options })
+                } else {
+                    if def.values.len() > 255 {
+                        self.push(e("E007", ask.span, format!("Jev chooses among at most 255 options, and `{}` has {} values", def.name, def.values.len()), format!("Jev が選べるのは 255 個までで、`{}` の値は {} 個です", def.name, def.values.len())));
+                        return None;
+                    }
+                    let options = def.values.iter().map(|v| (v.clone(), meaning(v))).collect();
+                    Some(Question { id, field: field.map(String::from), kind: QuestionKind::Choice, instructions: ask.instructions.clone(), options })
+                }
+            }
+            Ty::Bool => {
+                if let Some(ssp) = ask.score {
+                    self.push(e("E007", ssp, "a score is a place on a scale of an enum's values; a `bool` is asked as yes or no", "score は、列挙の値を低いものから並べた段階のどこかを答えます。`bool` は、はいかいいえで尋ねます"));
+                    return None;
+                }
+                for ((v, vsp), _) in &ask.criteria {
+                    if v != "true" && v != "false" {
+                        self.push(e("E002", *vsp, format!("the answer is yes or no, so write what `true` and `false` mean, not `{v}`"), format!("答えははいかいいえなので、`{v}` ではなく `true` と `false` の意味を書きます")));
+                        return None;
+                    }
+                }
+                let options: Vec<(String, Option<String>)> = match (meaning("true"), meaning("false")) {
+                    (Some(y), Some(n)) => vec![("true".into(), Some(y)), ("false".into(), Some(n))],
+                    (None, None) => vec![],
+                    _ => {
+                        self.push(e("E007", ask.span, "write what both `true` and `false` mean, or neither", "`true` と `false` の意味は、両方書くか、どちらも書かないかです"));
+                        return None;
+                    }
+                };
+                Some(Question { id, field: field.map(String::from), kind: QuestionKind::Noul, instructions: ask.instructions.clone(), options })
+            }
+            _ => None,
         }
     }
 
@@ -1436,7 +1715,7 @@ impl<'a> Lowerer<'a> {
                         return None;
                     }
                     Some(true) => {
-                        self.push(e("E009", s.span, "the rounds of `for … in parallel` run at the same time, so there is no `break` from them", "`for … in parallel` の各回は同時に回るので、`break` で抜けられません"));
+                        self.push(e("E009", s.span, "the rounds of `for … in parallel` run at the same time, so there is no `break` from them", "`for … in parallel` のイテレーションは同時に走るので、`break` で抜けられません"));
                         return None;
                     }
                     Some(false) => {}
@@ -1995,7 +2274,7 @@ impl<'a> Lowerer<'a> {
                 line,
                 1,
                 format!("{list} is set both inside this `for … in parallel` and outside it; the rounds run at the same time and each keeps its own variables, so give them their own names"),
-                format!("{list} は、この `for … in parallel` の中と外の両方で値を入れられています。各回は同時に回り、自分の変数を持つので、別の名前にしてください"),
+                format!("{list} は、この `for … in parallel` の中と外の両方で値を入れられています。イテレーションは同時に走り、それぞれが自分の変数を持つので、別の名前にしてください"),
             ));
         }
         // each parallel loop's own names

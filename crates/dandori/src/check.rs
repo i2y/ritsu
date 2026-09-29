@@ -171,7 +171,7 @@ pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
             let (more_en, more_ja) = match p {
                 Platform::Temporal if m.flow.iter().any(continues_as_new) => (
                     "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop",
-                    "。フローの一番外のループは履歴が長くなると新しい実行で続ける（Continue-As-New）ので、長すぎるのはその外の部分か、ループの一回です",
+                    "。フローの一番外のループは履歴が長くなると新しい実行で続ける（Continue-As-New）ので、長すぎるのはその外の部分か、ループのイテレーション一つです",
                 ),
                 Platform::Temporal => (
                     "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows",
@@ -283,13 +283,17 @@ pub struct Cost {
     /// a call of a rule that says `local`, and a retry of it: on Temporal, a local activity
     pub local_call: u64,
     pub local_retry: u64,
+    /// what reading Jev's answer adds to a call: on Step Functions, the state that keeps the
+    /// answer and the one that raises the task's error for an answer less sure than it asks
+    pub jev: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
 /// failed try adds scheduled, started, failed (3); a Choice, Pass or Wait is entered and
 /// exited (2); a Map is entered, started, succeeds and is exited (4), and each round
-/// starts and succeeds (2); the execution starts and ends.
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3 };
+/// starts and succeeds (2); the execution starts and ends. Reading Jev's answer adds a Pass that
+/// keeps it and one that raises the task's error (4).
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
@@ -298,14 +302,14 @@ pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice:
 /// (accepted, completed), its workflow task, and the timer of its timeout (7); a call on a
 /// case, the search attribute's upsert (1). A local activity leaves a marker, and a workflow
 /// task may follow (4); its retry, a timer and another (9).
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9 };
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
 /// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
 /// wait until reads the clock in a step first (2); a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 /// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
@@ -321,7 +325,7 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
 /// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
 /// of it in the runs of examples/hotel.
-pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2 };
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0 };
 /// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
 /// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
 /// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
@@ -350,12 +354,16 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                 };
                 let after = (handlers.len() as u64 * c.arm + handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0)).max(c.check);
                 let shown = if matches!(target, Some(Target::Case(_))) { c.case_call } else { 0 };
+                let read = match callee {
+                    Callee::Task(t) if m.tasks[*t].jev().is_some() => c.jev,
+                    _ => 0,
+                };
                 let (call, retry) = match callee {
                     Callee::Rule(r) if m.rules[*r].local => (c.local_call, c.local_retry),
                     Callee::Task(t) if m.tasks[*t].event => (0, 0),
                     _ => (c.call, c.retry),
                 };
-                call + waits + retries * (retry + waits) + after + shown
+                call + waits + retries * (retry + waits) + after + shown + read
             }
             TK::Assign { .. } => c.assign,
             TK::For { max, parallel: None, body, .. } => 2 * c.choice + *max as u64 * (cost(m, body, c) + c.loop_iter),

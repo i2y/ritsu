@@ -21,6 +21,7 @@ nav = [
   { "ワークフローを書く" = "tour.md" },
   { "タスクが呼ぶもの" = "tasks.md" },
   { "エージェント" = "agents.md" },
+  { Jev = "jev.md" },
   { "何を検査するか" = "checks.md" },
   { "ワークフローを図にする" = "diagrams.md" },
   { "プラットフォーム別のビルド" = "platforms.md" },

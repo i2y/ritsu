@@ -39,7 +39,8 @@ KEYWORDS = ("workflow", "description", "kind", "use", "rule", "from", "enum", "r
 # The words the parser reads only where they belong, so they stay usable as names elsewhere.
 CONTEXTUAL = ("agent", "claude", "model", "every", "times", "backoff", "second", "seconds",
               "minute", "minutes", "hour", "hours", "day", "days", "event", "failure", "cancel",
-              "local", "express", "form", "when", "effort")
+              "local", "express", "form", "when", "effort", "jev", "score", "confidence", "of",
+              "else", "step")
 TYPES = ("int", "string", "bool", "timestamp", "money", "mass", "length", "area", "volume",
          "duration", "temperature", "sound", "rate", "incl_tax", "excl_tax")
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
@@ -70,10 +71,10 @@ class FlowLexer(RegexLexer):
             (r"\d+(?:\.\d+)?", Number),
             (r"->|=>|<-|>=|<=", Operator),
             (r"[=<>]", Operator),
-            (r"[(){}\[\]:,.?|]", Punctuation),
+            (r"[(){}\[\]:,.?|%]", Punctuation),
             (r"…", Punctuation),
             # Anything else is a name: the flow's own words, in any script.
-            (r"[^\s#\"(){}\[\]:,.?|=<>…-]+", Name),
+            (r"[^\s#\"(){}\[\]:,.?|%=<>…-]+", Name),
             (r"-", Operator),
         ],
     }

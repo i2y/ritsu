@@ -1,5 +1,5 @@
 workflow rounds v1
-description "for と並列の回の誤り：並列の回からの break と succeed、中と外で同じ変数、yield の場所"
+description "for と並列のイテレーションの誤り：並列のイテレーションからの break と succeed、中と外で同じ変数、yield の場所"
 
 record 明細
   sku : string

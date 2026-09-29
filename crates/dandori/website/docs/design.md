@@ -24,8 +24,8 @@ the workflow and the states of its cases.
   with values put in) but have no comparison, arithmetic or logic, and a flow branches only by matching
   an enum, a bool, or a value that may be absent, which a rule or a task answered. Putting a record
   together for a task, or an order number into a message, decides nothing, so it is allowed. What
-  compares or computes is a rule, where rulec proves it complete, or a task: an API, an agent, your
-  own code.
+  compares or computes is a rule, where rulec proves it complete, or a task: an API, an agent, Jev,
+  your own code.
 - **P2. dandori stays outside rulec.** It reads only the JSON rulec's command line prints, and rulec
   does not know dandori.
 - **P3. One reference interpreter says what a `.flow` means,** and what each platform runs is held to

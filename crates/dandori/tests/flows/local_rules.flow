@@ -1,5 +1,5 @@
 workflow 便の判定 v1
-description "規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則の期限切れを受けてタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかの出力先では、ふつうの規則の呼び出しと同じ"
+description "規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則のタイムアウトを処理してタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかのプラットフォームでは、ふつうの規則の呼び出しと同じ"
 
 use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
@@ -14,8 +14,8 @@ record 注文
   金額 : money[円, incl_tax]  range >=0 <=1000000
 
 inputs
-  注文たち : list[注文]
-  まとめ   : 注文
+  注文   : list[注文]
+  まとめ : 注文
 
 task 知らせる(注文ID: string, 便: 急ぎ.便)
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
@@ -26,13 +26,13 @@ task 記録する(注文ID: string, 急ぎ: bool)
   idempotent
 
 flow
-  for 注文 in 注文たち at most 3
+  for 一件 in 注文 at most 3
     # A local activity's timeout reaches the workflow wrapped the first time, and as it is on
     # replay; the handler calls a task, so that a replay that took it for a failure would show.
-    let 判定 = 急ぎ(会員: 注文.会員, 金額: 注文.金額)
+    let 判定 = 急ぎ(会員: 一件.会員, 金額: 一件.金額)
       on timeout =>
-        記録する(注文ID: 注文.id, 急ぎ: true)
-        fail RuleLate "注文 {注文.id} の便を決めるのが間に合いませんでした"
-    知らせる(注文ID: 注文.id, 便: 判定.便)
+        記録する(注文ID: 一件.id, 急ぎ: true)
+        fail RuleLate "注文 {一件.id} の便を決めるのが間に合いませんでした"
+    知らせる(注文ID: 一件.id, 便: 判定.便)
   let 見直し = 急ぎの見直し(会員: まとめ.会員, 金額: まとめ.金額)
   記録する(注文ID: まとめ.id, 急ぎ: 見直し.急ぎ)

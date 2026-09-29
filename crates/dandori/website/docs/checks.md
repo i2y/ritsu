@@ -58,7 +58,9 @@ case without a `key` is a warning (W103).
 a value whose range nothing says is a warning (W104). [Ranges](tour.md#ranges)
 
 **What a task calls.** A task that runs another `.flow` fits the child's inputs, outputs and failures
-(E015), and a task that calls a described API fits the description (E016).
+(E015), and a task that calls a described API fits the description (E016). A Jev task answers what
+Jev can answer (E007), and one that relies on how sure Jev is names the version it relies on (W032).
+[Jev](jev.md)
 [What a task calls](tasks.md)
 
 **The platform.** `dandori build` also checks what only the platform decides: a run whose history
@@ -78,4 +80,4 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Every code
 
-[Diagnostics](reference/codes.md) lists all 28, with what each one finds.
+[Diagnostics](reference/codes.md) lists all 29, with what each one finds.

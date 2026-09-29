@@ -39,15 +39,15 @@ flowchart TD
     s31(["succeed reservations = results, tracking_number = deliv…"])
     start --> s1
     s1 --> s3
-    L2 -->|"全部の回が終わったら"| s4
+    L2 -->|"すべてのイテレーションが終わったら"| s4
     s4 --> s6
     s6 -->|"short"| s7
-    s7 -->|"次の回"| s6
+    s7 -->|"次のイテレーション"| s6
     s6 -->|"secured"| s6
     L5 -->|"最後の項目のあと"| s9
     s9 -->|"true"| s11
     s11 -->|"some id"| s12
-    L10 -->|"全部の回が終わったら"| s14
+    L10 -->|"すべてのイテレーションが終わったら"| s14
     s9 -->|"false"| s16
     s16 --> s17
     s17 -->|"some gift"| s18
@@ -78,8 +78,8 @@ flowchart TD
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
 | 79 | `decision = urgency(…)` | 規則 `urgency.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 81 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`, `key` | 1 秒おきに 2 回（busy） | — | `busy`, `timeout`, `failure` → その回が失敗し、ワークフローも失敗する |
-| 92 | `release_stock(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → その回が失敗し、ワークフローも失敗する |
+| 81 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`, `key` | 1 秒おきに 2 回（busy） | — | `busy`, `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 92 | `release_stock(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 | 101 | `audit(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
 | 104 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → 105 行目<br>`timeout`, `failure` → 108 行目 |
 | 106 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`, `timeout`, `failure` → 107 行目 |

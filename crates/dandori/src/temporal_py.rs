@@ -388,6 +388,28 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
             out.push(")".into());
             out
         }
+        Some(Via::Jev(j)) => {
+            let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
+            let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
+            vec![
+                "return io.jev(".to_string(),
+                "    io.status(".into(),
+                "        await t.http(".into(),
+                "            {".into(),
+                "                \"http\": \"POST\",".into(),
+                "                \"url\": io.JEV_URL,".into(),
+                format!("                \"body\": {{\"state\": {{{}}}, \"model\": {}, \"questions\": JEV[{}][\"questions\"]}},", state.join(", "), q(&j.model), q(&task.name)),
+                "                \"typesafe\": True,".into(),
+                "            }".into(),
+                "        ),".into(),
+                format!("        {{{statuses}}},"),
+                "        fail,".into(),
+                "    ),".into(),
+                format!("    JEV[{}],", q(&task.name)),
+                "    fail,".into(),
+                ")".into(),
+            ]
+        }
         _ => vec!["raise NotImplementedError".into()],
     }
 }
@@ -407,6 +429,22 @@ pub(crate) fn schemas_block(m: &Model, tasks: &[&TaskDef], p: Platform) -> Strin
     out
 }
 
+/// What each Jev task asks, as a Python dict of how io.jev reads the answers: nothing when no task
+/// is a Jev task.
+pub(crate) fn jev_block(tasks: &[&TaskDef], p: Platform) -> String {
+    let jevs: Vec<&&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).collect();
+    if jevs.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("# What each Jev task asks, and how io.jev reads the answer.\nJEV: dict[str, Any] = {\n");
+    for task in jevs {
+        let spec = render::jev_spec(task, task.jev().expect("a Jev task"));
+        out.push_str(&format!("    {}: {},\n", q(&task.name), render::layout(&spec, 1, "    ", true)));
+    }
+    out.push_str("}\n\n\n");
+    out
+}
+
 /// activities.py: every task the workflow calls as an activity, the ones the user writes, and
 /// the code for the others.
 fn tasks_file(m: &Model, header: &str) -> String {
@@ -420,6 +458,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("#   A Claude agent's enum values are taken without regard to case (io.fold).\n");
+    a.push_str("# - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
+    a.push_str("#   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
     a.push_str("# - The others are yours to write (OwnTasks). A declared error is raised as\n");
     a.push_str("#   ApplicationError(\"...\", type=\"<error>\", non_retryable=True).\n");
     a.push_str("# - The workflow retries by itself, as the `retry` of each task says; the platform does not.\n");
@@ -432,7 +472,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("from __future__ import annotations\n\nimport asyncio\nimport functools\nfrom typing import Any, Awaitable, Callable, Protocol\n\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\n\n");
     a.push_str("from . import io\nfrom . import types as T\n\n\n");
     a.push_str(&schemas_block(m, &tasks, p));
-    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`.\"\"\"\n");
+    a.push_str(&jev_block(&tasks, p));
+    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws`, `agent` nor `jev`.\"\"\"\n");
     if own.is_empty() {
         a.push('\n');
     }
@@ -515,16 +556,19 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             }
         }
         let mut outs = Vec::new();
-        for o in py["outputs"].as_array().unwrap_or(&vec![]) {
+        let outputs = py["outputs"].as_array().cloned().unwrap_or_default();
+        for o in &outputs {
             let name = o["name"].as_str().unwrap_or("");
             let alias = o["alias"].as_str().unwrap_or("");
             let ty = o["type"].as_str().unwrap_or("");
+            // with one output, the rule's function answers that value itself, not a record of outputs
+            let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
             let v = if is_enum(ty) {
-                format!("out.{alias}.value")
+                format!("{x}.value")
             } else if ty == "bool" || ty == "str" {
-                format!("out.{alias}")
+                x
             } else {
-                format!("int(out.{alias})")
+                format!("int({x})")
             };
             outs.push(format!("        {}: {v},", q(name)));
         }
@@ -549,17 +593,20 @@ pub(crate) fn io_py() -> String {
     IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())
 }
 
-const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
+const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws`, `agent` or `jev` reach the other side. They go
 # through a Transport, so that the credentials, the clients and a test's stand-in are yours to
 # set; the default one uses the standard library for HTTP, boto3 (the AWS SDK for Python) for
 # Lambda and the AWS APIs, OpenAI's Agents SDK (openai-agents, which reads OPENAI_API_KEY) for
 # OpenAI's agents and Anthropic's SDK (anthropic, which reads ANTHROPIC_API_KEY) for Claude's,
-# each imported when first needed.
+# each imported when first needed. Jev is called over HTTP with the standard library, with
+# TypeSafe's API key (TYPESAFE_API_KEY).
 
 from __future__ import annotations
 
 import asyncio
 import json
+import math
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -571,8 +618,20 @@ from typing import Any, Callable, Protocol
 Answer = dict
 
 # An HTTP request as Step Functions' HTTP Task sends it: {"http": method, "url", "headers",
-# "body", "query", "form"}; `form` asks for a URL-encoded body.
+# "body", "query", "form", "typesafe"}; `form` asks for a URL-encoded body, and `typesafe` says it
+# is a call of Jev, to which the default transport adds TypeSafe's API key.
 HttpRequest = dict
+
+# Where every target sends a Jev task's request: TypeSafe's API.
+JEV_URL = "https://api.typesafe.ai/v1/systemone"
+
+# What a Jev task asks, and how its answer is read (jev): {"questions": the questions of the
+# request by their ids, "read": for each question {"id", "field" (none: the answer is its value),
+# "kind" ("choice", "score" or "noul"), "values" (a score's from the lowest level)}, "confidences":
+# the fields that take how sure Jev is of a question's answer, as a count of a rate's steps
+# [{"field", "question", "per"}], "floor": how sure every answer must be, with the error the call
+# fails with when one is not {"at", "error", "cause"}}.
+JevTask = dict
 
 # A call of an agent: {"agent": the task's name, "provider", "model", "instructions", "input",
 # "schema"}. The provider is "openai" (run with the Agents SDK) or "claude" (with Anthropic's
@@ -658,6 +717,7 @@ class DefaultTransport:
         aws: dict[str, Any] | None = None,
         agents: Any = None,
         claude: dict[str, Any] | None = None,
+        typesafe: dict[str, Any] | None = None,
     ) -> None:
         """`headers`: what to add to an HTTP request, such as the credentials the other side
         wants (a server of Open Responses too); `aws`: the keyword arguments of boto3's clients, such as `region_name`;
@@ -665,10 +725,12 @@ class DefaultTransport:
         other than OpenAI's (without one, OpenAI's agents run through a client that does not
         retry by itself); `claude`: the keyword arguments of Anthropic's client for the
         Claude agents, such as `api_key` or `base_url`. That client does not retry by itself
-        unless they say so: the workflow retries, as `retry` says."""
+        unless they say so: the workflow retries, as `retry` says. `typesafe`: {"api_key"},
+        TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY."""
         self._headers = headers
         self._aws = aws or {}
         self._agents = agents
+        self._typesafe = typesafe or {}
         self._claude_options = claude or {}
         self._claude: Any = None
         self._clients: dict[str, Any] = {}
@@ -701,6 +763,11 @@ class DefaultTransport:
             headers = dict(req.get("headers") or {})
             if self._headers is not None:
                 headers.update(self._headers(req["url"]))
+            if req.get("typesafe") and not any(h.lower() == "authorization" for h in headers):
+                key = self._typesafe.get("api_key") or os.environ.get("TYPESAFE_API_KEY")
+                if not key:
+                    raise RuntimeError("no API key for Jev: set TYPESAFE_API_KEY, or give the transport typesafe={\"api_key\": ...}")
+                headers["Authorization"] = f"Bearer {key}"
             data = None
             if req.get("body") is not None:
                 if req.get("form"):
@@ -840,8 +907,9 @@ def transport(
     aws: dict[str, Any] | None = None,
     agents: Any = None,
     claude: dict[str, Any] | None = None,
+    typesafe: dict[str, Any] | None = None,
 ) -> Transport:
-    return DefaultTransport(headers, aws, agents, claude)
+    return DefaultTransport(headers, aws, agents, claude, typesafe)
 
 
 def workflow_of(callback_id: str) -> str:
@@ -912,6 +980,61 @@ def status(r: dict[str, Any], names: dict[str, str], fail: Callable[[str, str], 
     kind = names.get(str(r["status"]))
     body = r["body"]
     raise fail(kind if kind is not None else f"Dandori.HttpStatus.{r['status']}", body if isinstance(body, str) else json.dumps(body))
+
+
+def _unit(x: Any) -> float | None:
+    """A number from 0 to 1, or None; a bool is not a number here, as in JSON."""
+    return x if isinstance(x, (int, float)) and not isinstance(x, bool) and 0 <= x <= 1 else None
+
+
+def _jev_one(q: dict[str, Any], a: dict[str, Any]) -> tuple[Any, float] | None:
+    """Jev's answer to one question: the value it takes and how sure Jev is of it, from 0 to 1, or
+    None when it is not there or not of its kind. A choice and a score say how sure
+    ("confidence"); a score's place goes to the nearest level, a half going up; a noul's answer is
+    yes when the probability of yes is over one half, and Jev is as sure as the probability of the
+    answer taken."""
+    if q["kind"] == "noul":
+        p = _unit(a.get("noul"))
+        return None if p is None else (p > 0.5, p if p > 0.5 else 1 - p)
+    c = _unit(a.get("confidence"))
+    if c is None:
+        return None
+    if q["kind"] == "choice":
+        v = a.get("choice")
+        return (v, c) if isinstance(v, str) and v in q["values"] else None
+    s = a.get("score")
+    if not isinstance(s, (int, float)) or isinstance(s, bool):
+        return None
+    level = math.floor(s + 0.5)
+    return (q["values"][level], c) if 0 <= level < len(q["values"]) else None
+
+
+def jev(body: Any, t: JevTask, fail: Callable[[str, str], Exception]) -> Any:
+    """A Jev task's answer, read from the body of Jev's response as every target reads it: the
+    value of the task's type, None where an answer is not there or not of its kind (the
+    workflow's check of the answer refuses it), and how sure Jev is as a count of a rate's steps,
+    rounded down after a billionth that takes up how a decimal falls between binary fractions.
+    When every answer is there and one is less sure than the task asks, the call fails with the
+    task's error."""
+    answers = body.get("answers") if isinstance(body, dict) else None
+    if not isinstance(answers, dict):
+        answers = {}
+    read = []
+    for q in t["read"]:
+        a = answers.get(q["id"])
+        read.append(_jev_one(q, a) if isinstance(a, dict) else None)
+    floor = t.get("floor")
+    if floor is not None and all(r is not None for r in read) and any(r[1] < floor["at"] for r in read if r is not None):
+        raise fail(floor["error"], floor["cause"])
+    if len(t["read"]) == 1 and t["read"][0].get("field") is None:
+        return read[0][0] if read[0] is not None else None
+    out: dict[str, Any] = {}
+    for q, r in zip(t["read"], read):
+        out[q.get("field") or q["id"]] = r[0] if r is not None else None
+    for c in t["confidences"]:
+        r = read[c["question"]]
+        out[c["field"]] = None if r is None else math.floor(r[1] * c["per"] + 1e-9)
+    return out
 "#;
 
 const RUNTIME: &str = r#"# What the generated workflow code shares. It runs inside the workflow, so it uses nothing

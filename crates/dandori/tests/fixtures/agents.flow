@@ -1,5 +1,5 @@
 workflow agents v1
-description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、答えの無いエージェント、json を含む答え、自分を含むレコード、深すぎる答え、案件を見るエージェント、知らない提供元、Claude で null との選択が多すぎる答え、Claude で大文字と小文字だけが違う列挙の値、送り先（url）の誤り：エージェントの無い url、Claude の url、http でも https でもない url。エフォートの誤り：エージェントの無い effort、知らない effort、Claude が受け付けない effort。Open Responses のほかのサーバーには、OpenAI の Schema の大きさの上限を当てない"
+description "エージェントの誤り：モデルが無い、エージェントの無い model、宣言したエラー、コールバック、key、応答の型の無いエージェント、json を含む応答、自分を含むレコード、深すぎる応答、案件を見るエージェント、知らないプロバイダー、Claude で T と null のどちらかになる値が多すぎる応答、Claude で大文字と小文字だけが違う列挙の値、送り先（url）の誤り：エージェントの無い url、Claude の url、http でも https でもない url。エフォートの誤り：エージェントの無い effort、知らない effort、Claude が受け付けない effort。Open Responses のほかのサーバーには、OpenAI の Schema の大きさの上限を当てない"
 
 enum 大小 = low | Low | high
 

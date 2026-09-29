@@ -165,6 +165,94 @@ pub enum Binding {
     /// `url` is the server of an Open Responses API other than OpenAI's, and `effort` how hard the
     /// model reasons, as the provider names the levels
     Agent { provider: Provider, instructions: String, model: String, url: Option<String>, effort: Option<String> },
+    /// Jev, TypeSafe's System One model: it reads the arguments (its state) and answers the
+    /// questions the task's type asks, all in one request
+    Jev(Jev),
+}
+
+/// Where every target sends a Jev task's request.
+pub const JEV_URL: &str = "https://api.typesafe.ai/v1/systemone";
+
+/// What a Jev task asks, and how its answer is read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Jev {
+    pub model: String,
+    /// in the order of the answer's fields; one, whose `field` is None, when the answer is the
+    /// question's own value
+    pub questions: Vec<Question>,
+    /// the fields that take how sure Jev is of a question's answer, as a rate: (field, the
+    /// question, how many of the rate's steps make the whole)
+    pub confidences: Vec<(String, usize, u64)>,
+    /// `confidence 0.8 else unsure`: an answer less sure than this fails the call with the error
+    pub floor: Option<(f64, String)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuestionKind {
+    /// one of the enum's values, with the probability of each
+    Choice,
+    /// a place on a scale of levels, the enum's values in the order the task lists them
+    Score,
+    /// the probability that the answer is yes
+    Noul,
+}
+
+/// One question of a Jev task, which fills a field of the answer, or is the answer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Question {
+    /// the question's id in the request and the answer: the field, or `answer`
+    pub id: String,
+    pub field: Option<String>,
+    pub kind: QuestionKind,
+    pub instructions: String,
+    /// for a choice, every value of the enum with what it means, when the task says; for a
+    /// score, the levels from the lowest, each with what it means; for a noul, what yes and no
+    /// mean (`true` and `false`), when the task says
+    pub options: Vec<(String, Option<String>)>,
+}
+
+impl Jev {
+    /// Whether the task says how sure an answer must be, or hands on how sure it is.
+    pub fn uses_confidence(&self) -> bool {
+        self.floor.is_some() || !self.confidences.is_empty()
+    }
+}
+
+/// A rate's type as dandori spells it, from how many of its steps make the whole: `rate[step 1%]`
+/// for 100, `rate[step 0.01%]` for 10000, so that a `.flow` and a rule spell one step alike.
+pub fn rate_unit(per: u64) -> String {
+    // 100 / per percent, written as a decimal: the fewest places that hold it exactly
+    let mut places = 0u32;
+    while places < 12 && (100 * 10u64.pow(places)) % per != 0 {
+        places += 1;
+    }
+    let n = 100 * 10u64.pow(places) / per;
+    let text = if places == 0 {
+        n.to_string()
+    } else {
+        let digits = format!("{n:0>width$}", width = places as usize + 1);
+        let (whole, frac) = digits.split_at(digits.len() - places as usize);
+        format!("{whole}.{frac}")
+    };
+    format!("rate[step {text}%]")
+}
+
+/// How many steps of `rate[step <n>%]` make the whole (100%): 100 for `rate[step 1%]`, 10000
+/// for `rate[step 0.01%]`. None for another unit, or a step that does not go into 100% a whole
+/// number of times.
+pub fn rate_per(unit: &str) -> Option<u64> {
+    let step = unit.strip_prefix("rate[")?.strip_suffix(']')?.trim().strip_prefix("step")?.trim().strip_suffix('%')?.trim();
+    let (whole, frac) = step.split_once('.').unwrap_or((step, ""));
+    if whole.is_empty() && frac.is_empty() || !whole.chars().chain(frac.chars()).all(|c| c.is_ascii_digit()) || frac.len() > 6 {
+        return None;
+    }
+    // step% = n / 10^d percent, and the whole is 100% = 100 * 10^d / n steps
+    let n: u64 = format!("{whole}{frac}").parse().ok()?;
+    let scale = 10u64.pow(frac.len() as u32);
+    if n == 0 || (100 * scale) % n != 0 {
+        return None;
+    }
+    Some(100 * scale / n)
 }
 
 /// Whose models an agent runs on.
@@ -216,6 +304,8 @@ pub enum Via<'a> {
     /// an agent of OpenAI's or Claude's (see `Provider`), or on another server that speaks
     /// OpenAI's Responses API as Open Responses specifies it (`url`)
     Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str>, effort: Option<&'a str> },
+    /// Jev, over HTTP: a POST to `JEV_URL`, the same on every platform
+    Jev(&'a Jev),
     /// Step Functions: a nested execution of another state machine
     StateMachine(&'a str),
     /// Temporal: a child workflow
@@ -300,7 +390,15 @@ impl TaskDef {
     /// same as doing it once, unless the task says it is. An agent only reads and answers;
     /// an event only comes.
     pub fn changes_things(&self) -> bool {
-        !self.idempotent && !self.event && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }))
+        !self.idempotent && !self.event && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }) | Some(Binding::Jev(_)))
+    }
+
+    /// What the task asks Jev, when it is a Jev task.
+    pub fn jev(&self) -> Option<&Jev> {
+        match &self.binding {
+            Some(Binding::Jev(j)) => Some(j),
+            _ => None,
+        }
     }
 
     /// How the platform calls this task; None when it cannot (Step Functions without a way to call it).
@@ -313,6 +411,7 @@ impl TaskDef {
             Binding::Http { method, url, form } => Via::Http { method, url, form: *form },
             Binding::Aws { service, action } => Via::Aws { service, action },
             Binding::Agent { provider, instructions, model, url, effort } => Via::Agent { provider: *provider, instructions, model, url: url.as_deref(), effort: effort.as_deref() },
+            Binding::Jev(j) => Via::Jev(j),
         });
         match p {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),

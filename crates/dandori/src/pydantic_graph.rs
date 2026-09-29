@@ -145,6 +145,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   would send, through a Transport (io.py), where the credentials and the clients are yours to set.\n");
     a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
+    a.push_str("# - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
+    a.push_str("#   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
     a.push_str("# - The others are yours to write (OwnTasks). A declared error is raised as\n");
     a.push_str("#   TaskFailure(\"<error>\", \"...\"); any other exception is a failure.\n");
     a.push_str("# - The graph retries by itself, as the `retry` of each task says.\n");
@@ -155,7 +157,8 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("from __future__ import annotations\n\nfrom typing import Any, Protocol\n\n");
     a.push_str("from . import io\nfrom . import types as T\nfrom .runtime import TaskFailure\n\n\n");
     a.push_str(&crate::temporal_py::schemas_block(m, &m.tasks.iter().collect::<Vec<_>>(), p));
-    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`.\"\"\"\n");
+    a.push_str(&crate::temporal_py::jev_block(&m.tasks.iter().collect::<Vec<_>>(), p));
+    a.push_str("class OwnTasks(Protocol):\n    \"\"\"The tasks you write: the ones that say neither `lambda`, `http`, `aws`, `agent` nor `jev`.\"\"\"\n");
     if own.is_empty() {
         a.push('\n');
     }

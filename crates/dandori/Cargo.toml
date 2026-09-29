@@ -7,7 +7,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/i2y/dandori"
 
 [dependencies]
-serde_json = { version = "1", features = ["preserve_order"] }
+# float_roundtrip: a number another language wrote reads back as the same double
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 
 [profile.release]
 strip = true

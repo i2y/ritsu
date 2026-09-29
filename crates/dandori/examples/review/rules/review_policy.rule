@@ -1,0 +1,28 @@
+rule review_policy v1
+description "Whether the scoring's verdict on an application is acted on at once or goes to a person, by how sure the scoring is of it: approving at once asks more certainty than rejecting at once. Written for the example"
+
+enum verdict = reject | hold | approve
+enum decision = approve | reject | ask
+
+inputs
+  verdict : verdict
+  sure    : rate[step 1%]  range >=0% <=100%
+
+outputs
+  decision : decision
+
+table act
+policy unique
+| verdict | sure  | -> decision |
+| approve | >=90% | approve     |
+| approve | <90%  | ask         |
+| reject  | >=80% | reject      |
+| reject  | <80%  | ask         |
+| hold    | -     | ask         |
+
+examples
+| verdict | sure | -> decision |
+| approve | 95%  | approve     |
+| approve | 89%  | ask         |
+| reject  | 80%  | reject      |
+| hold    | 99%  | ask         |

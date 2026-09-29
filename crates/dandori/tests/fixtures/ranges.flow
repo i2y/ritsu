@@ -13,9 +13,9 @@ record 明細
   単価 : money[円, incl_tax]  range >=10
 
 inputs
-  予約     : 予約
-  延長     : int
-  泊数たち : list[int]  range >=1 <=5
+  予約       : 予約
+  延長       : int
+  泊数の一覧 : list[int]  range >=1 <=5
 
 outputs
   合計 : money[円, incl_tax]  range <=1000000
@@ -46,7 +46,7 @@ flow
     確認 => let 泊 = 40
   let f = 与信(客室: standard, 泊数: 泊)
   # リストの範囲は、その要素の範囲。与信額（12000〜1200000 円）は請求の範囲に収まる
-  for x in 泊数たち at most 5
+  for x in 泊数の一覧 at most 5
     let g = 与信(客室: standard, 泊数: x)
   請求する(額: a.与信額, 明細: {数量: 100, 単価: 500})
   succeed 合計 = a.与信額

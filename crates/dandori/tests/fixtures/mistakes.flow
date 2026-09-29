@@ -1,5 +1,5 @@
 workflow mistakes v1
-description "変数の値の有無、match の漏れと通らない行き先、やり直しの誤り"
+description "変数の値の有無、match の漏れと通らない分岐、リトライの誤り"
 
 use rule 与信 from "../../examples/hotel/rules/宿泊の与信額.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"

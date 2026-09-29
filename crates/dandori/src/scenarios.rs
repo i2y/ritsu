@@ -121,10 +121,14 @@ pub fn generate(m: &Model) -> Vec<Value> {
             .map(|a| {
                 let filled = ex.fill(a);
                 // a Claude agent's answer with its enum values in another case, as Claude may give them
-                match a.get("recase").and_then(|t| t.as_u64()) {
-                    Some(t) => json!({ "ok": render::recase(m, &filled["ok"], m.tasks[t as usize].result.as_ref().unwrap_or(&Ty::Json)) }),
-                    None => filled,
+                if let Some(t) = a.get("recase").and_then(|t| t.as_u64()) {
+                    return json!({ "ok": render::recase(m, &filled["ok"], m.tasks[t as usize].result.as_ref().unwrap_or(&Ty::Json)) });
                 }
+                // Jev's response, whose answers read as the value chosen: as sure as the task asks, or less
+                if let Some(j) = a.get("jev").and_then(|t| t.as_u64()).and_then(|t| m.tasks[t as usize].jev()) {
+                    return json!({ "ok": render::jev_wire(j, &filled["ok"], a.get("low") == Some(&json!(true))) });
+                }
+                filled
             })
             .collect();
         out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ex.labels.iter().collect::<Vec<_>>() }));
@@ -231,6 +235,25 @@ impl<'a> Ex<'a> {
                 let mut o = Map::new();
                 for (f, ft) in fields {
                     let v = self.full(&ft, &f, self.m.field_range(*r, &f));
+                    o.insert(f, v);
+                }
+                Value::Object(o)
+            }
+            _ => self.template(t, name, rg),
+        }
+    }
+
+    /// A value of type `t` unlike the one a value left open reads as: each enum its last value, a
+    /// bool false, where an open one reads as the first value and true.
+    fn unlike(&mut self, t: &Ty, name: &str, rg: Option<Range>) -> Value {
+        match t {
+            Ty::Bool => json!(false),
+            Ty::Enum(e) => json!(self.m.enums[*e].values.last()),
+            Ty::Record(r) => {
+                let fields = self.m.records[*r].fields.clone();
+                let mut o = Map::new();
+                for (f, ft) in fields {
+                    let v = self.unlike(&ft, &f, self.m.field_range(*r, &f));
                     o.insert(f, v);
                 }
                 Value::Object(o)
@@ -694,6 +717,8 @@ impl<'a> Ex<'a> {
             Zeros,
             /// a cancellation that comes while the call is out
             Cancelled,
+            /// Jev's answer, less sure than the task asks: the task's error, from an answer
+            Low(String),
         }
         let mut ways: Vec<(String, Way)> = Vec::new();
         let case = match target {
@@ -763,6 +788,11 @@ impl<'a> Ex<'a> {
             _ => ways.push(("ok".into(), Way::Ok(None))),
         }
         let retriers = retriers(m, callee);
+        // a Jev task's error for an answer less sure than it asks
+        let floor = match callee {
+            Callee::Task(t) => m.tasks[*t].jev().and_then(|j| j.floor.as_ref()).map(|(_, e)| e.clone()),
+            Callee::Rule(_) => None,
+        };
         for h in handlers {
             let kind = match h.errors.first() {
                 Some(HErr::Declared(n)) => n.clone(),
@@ -771,7 +801,17 @@ impl<'a> Ex<'a> {
             };
             let label = format!("on:{kind}");
             if !ways.iter().any(|(l, _)| *l == label) {
-                ways.push((label, Way::Err(kind, None)));
+                if floor.as_deref() == Some(kind.as_str()) {
+                    ways.push((label, Way::Low(kind)));
+                } else {
+                    ways.push((label, Way::Err(kind, None)));
+                }
+            }
+        }
+        if let Some(e) = &floor {
+            // the error nothing at the call takes, or `on failure` takes
+            if !ways.iter().any(|(l, _)| *l == format!("on:{e}")) {
+                ways.push((format!("less sure:{e}"), Way::Low(e.clone())));
             }
         }
         let caught_all = handlers.iter().any(|h| h.errors.contains(&HErr::Failure));
@@ -804,7 +844,12 @@ impl<'a> Ex<'a> {
         if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) {
             ways.push(("malformed".into(), Way::Malformed));
         }
-        if let (Some(ty), Some(st), true) = (&result_ty, first_ok, target.is_some()) {
+        // a number out of its range; not in Jev's answer, whose numbers are how sure it is
+        let jev_task = match callee {
+            Callee::Task(t) => m.tasks[*t].jev().map(|_| *t),
+            Callee::Rule(_) => None,
+        };
+        if let (Some(ty), Some(st), true, None) = (&result_ty, first_ok, target.is_some(), jev_task) {
             if self.has_outside(ty, m.answer_range(callee)) {
                 ways.push(("out of range".into(), Way::OutOfRange(st)));
             }
@@ -834,12 +879,23 @@ impl<'a> Ex<'a> {
             }
             v
         };
+        // an answer, which for a Jev task becomes Jev's response once its value is chosen
+        let ok = |v: &Value| match jev_task {
+            Some(t) => json!({ "ok": v, "jev": t }),
+            None => json!({ "ok": v }),
+        };
         match way {
             Way::Ok(st) => {
                 let v = ok_answer(self, st);
-                self.answers.push(json!({ "ok": v }));
+                self.answers.push(ok(&v));
                 self.assign(target, v, st);
                 Ctl::Next
+            }
+            Way::Low(kind) => {
+                // not a value the variable may hold already, so that a target that keeps it shows
+                let v = self.unlike(result_ty.as_ref().unwrap_or(&Ty::Json), "value", m.answer_range(callee));
+                self.answers.push(json!({ "ok": v, "jev": jev_task, "low": true }));
+                self.take_error(callee, &kind, &kind, handlers)
             }
             Way::Recased(st) => {
                 // every part of the answer there, lists with items, so that every enum value in it is turned
@@ -898,7 +954,7 @@ impl<'a> Ex<'a> {
                 };
                 self.answers.push(json!({ "error": kind }));
                 let v = ok_answer(self, st);
-                self.answers.push(json!({ "ok": v }));
+                self.answers.push(ok(&v));
                 self.assign(target, v, st);
                 Ctl::Next
             }
@@ -912,22 +968,29 @@ impl<'a> Ex<'a> {
                 if let (Some(c), Some(r)) = (case, real) {
                     self.cases[c] = Some(r);
                 }
-                for h in handlers {
-                    let hit = h.errors.iter().any(|e| match e {
-                        HErr::Failure => true,
-                        HErr::Timeout => kind == "timeout",
-                        HErr::Declared(n) => *n == kind || render::asl_error(m, callee, &HErr::Declared(n.clone())).contains(&name),
-                    });
-                    if hit {
-                        return self.block(&h.body);
-                    }
-                }
-                if self.par_depth > 0 {
-                    return self.halt(true);
-                }
-                self.unhandled()
+                self.take_error(callee, &kind, &name, handlers)
             }
         }
+    }
+
+    /// A call's error, `kind` as the `.flow` names it and `name` as Step Functions does: the first
+    /// handler that takes it runs; else the round ends, or the run, after `on failure`.
+    fn take_error(&mut self, callee: &Callee, kind: &str, name: &str, handlers: &[THandler]) -> Ctl {
+        let m = self.m;
+        for h in handlers {
+            let hit = h.errors.iter().any(|e| match e {
+                HErr::Failure => true,
+                HErr::Timeout => kind == "timeout",
+                HErr::Declared(n) => n == kind || render::asl_error(m, callee, &HErr::Declared(n.clone())).iter().any(|x| x == name),
+            });
+            if hit {
+                return self.block(&h.body);
+            }
+        }
+        if self.par_depth > 0 {
+            return self.halt(true);
+        }
+        self.unhandled()
     }
 
     /// A task's error that nothing took: `on failure` runs, and the run ends.

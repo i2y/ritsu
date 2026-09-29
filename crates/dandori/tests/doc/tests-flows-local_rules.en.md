@@ -1,18 +1,18 @@
 # 便の判定 v1
 
-規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則の期限切れを受けてタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかの出力先では、ふつうの規則の呼び出しと同じ
+規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則のタイムアウトを処理してタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかのプラットフォームでは、ふつうの規則の呼び出しと同じ
 
-`tests/flows/local_rules.flow`, drawn by `dandori doc`. Inputs: `注文たち: list[注文]`, `まとめ: 注文`.
+`tests/flows/local_rules.flow`, drawn by `dandori doc`. Inputs: `注文: list[注文]`, `まとめ: 注文`.
 
 ## flow
 
 ```mermaid
 flowchart TD
     start(["便の判定 v1"])
-    subgraph L1 ["for 注文 in 注文たち at most 3"]
+    subgraph L1 ["for 一件 in 注文 at most 3"]
         s2[["判定 = 急ぎ(…)<br>rule 出荷の急ぎ.rule · local"]]
         s3["記録する(…)<br>lambda audit-log"]
-        s4(["fail RuleLate<br>#quot;注文 {注文.id} の便を決めるのが間に合いませんでした#quot;"])
+        s4(["fail RuleLate<br>#quot;注文 {一件.id} の便を決めるのが間に合いませんでした#quot;"])
         s5["知らせる(…)<br>lambda notify"]
     end
     s6[["見直し = 急ぎの見直し(…)<br>rule 出荷の急ぎ.rule"]]
@@ -49,6 +49,6 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 35 | `fail RuleLate` "注文 {注文.id} の便を決めるのが間に合いませんでした" |
+| 35 | `fail RuleLate` "注文 {一件.id} の便を決めるのが間に合いませんでした" |
 | 38 | the flow runs to its end, and the workflow succeeds |
 

@@ -238,7 +238,7 @@ impl<'a> Builder<'a> {
                         None => {}
                     }
                     self.loops.insert(s.site, title.clone());
-                    let exit = if parallel.is_some() { tr(lang, "every round done", "全部の回が終わったら") } else { tr(lang, "after the last item", "最後の項目のあと") };
+                    let exit = if parallel.is_some() { tr(lang, "every round done", "すべてのイテレーションが終わったら") } else { tr(lang, "after the last item", "最後の項目のあと") };
                     out.push(Piece::Loop { site: s.site, title, footer, body, parallel: parallel.is_some(), exit });
                 }
                 TK::Break => {
@@ -376,6 +376,16 @@ pub fn how_called(i: &Input, t: &TaskDef) -> (String, bool) {
             }
             if let Some(u) = url {
                 s.push_str(&format!(" · {u}"));
+            }
+            Some(s)
+        }
+        Some(Binding::Jev(j)) => {
+            let mut s = "jev".to_string();
+            if !j.model.is_empty() {
+                s.push_str(&format!(" · {}", j.model));
+            }
+            if let Some((f, e)) = &j.floor {
+                s.push_str(&format!(" · confidence {f} else {e}"));
             }
             Some(s)
         }
@@ -592,7 +602,7 @@ impl<'g> Mm<'g> {
                 let _ = writeln!(self.decl, "{}end", "    ".repeat(depth + 1));
                 let breaks = self.breaks.pop().unwrap_or_default();
                 if !parallel {
-                    let again = tr(self.lang, "next round", "次の回");
+                    let again = tr(self.lang, "next round", "次のイテレーション");
                     let back: Vec<Loose> = ends.into_iter().map(|l| Loose { label: Some(l.label.unwrap_or_else(|| again.clone())), ..l }).collect();
                     self.connect(&back, &first);
                 }
@@ -792,8 +802,8 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
                 match (in_round, on_failure) {
                     (false, true) => "`on failure`".to_string(),
                     (false, false) => tr(lang, "the workflow fails", "ワークフローが失敗する"),
-                    (true, true) => tr(lang, "the round fails, then `on failure`", "その回が失敗し、`on failure` へ"),
-                    (true, false) => tr(lang, "the round fails, and then the workflow", "その回が失敗し、ワークフローも失敗する"),
+                    (true, true) => tr(lang, "the round fails, then `on failure`", "そのイテレーションが失敗し、`on failure` へ"),
+                    (true, false) => tr(lang, "the round fails, and then the workflow", "そのイテレーションが失敗し、ワークフローも失敗する"),
                 }
             }
         };

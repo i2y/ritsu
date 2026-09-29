@@ -105,11 +105,14 @@ enum Pending {
     Fail { error: String, cause: Value },
 }
 
-/// An error a call ended with: the kind as the `.flow` names it, and the name the target uses.
+/// An error a call ended with: the kind as the `.flow` names it, the name the target uses, and
+/// its cause: the stand-in's for an error the other side gives, dandori's own for one the code it
+/// writes raises after the call (Jev's answer less sure than the task asks).
 #[derive(Clone)]
 struct CallError {
     kind: String,
     target_name: String,
+    cause: String,
 }
 
 pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
@@ -464,6 +467,18 @@ impl<'a> Run<'a> {
             self.callees.push(CallInfo { task, callback, kind: ans.get("error").and_then(|e| e.as_str()).map(String::from) });
             if let Some(v) = ans.get("ok") {
                 self.steps.push(json!({ "call": wire, "answer": { "ok": v } }));
+                // Jev's answer is read into the task's type; one less sure than the task asks fails
+                // the call with the task's error, which no retry takes
+                if let Some(j) = match callee {
+                    Callee::Task(t) => m.tasks[*t].jev(),
+                    Callee::Rule(_) => None,
+                } {
+                    let (read, low) = render::jev_read(j, v);
+                    if let (true, Some((_, error)), Callee::Task(t)) = (low, &j.floor, callee) {
+                        break Err(CallError { kind: error.clone(), target_name: error.clone(), cause: render::jev_low_cause(&m.tasks[*t]) });
+                    }
+                    break Ok(read);
+                }
                 // a Connect answer is read as protobuf reads it: the zero values its JSON leaves out are there
                 let zeros = match callee {
                     Callee::Task(t) => m.tasks[*t].connect.as_ref(),
@@ -574,7 +589,7 @@ impl<'a> Run<'a> {
         if !self.in_on_failure && !self.in_on_cancel {
             if let Some(block) = m.on_failure.clone() {
                 self.in_on_failure = true;
-                self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": SCRIPTED_CAUSE }));
+                self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": err.cause }));
                 self.visits.push(Visit::OnFailure);
                 match self.block(&block) {
                     Ctl::Stop => return Ctl::Stop,
@@ -582,7 +597,7 @@ impl<'a> Run<'a> {
                         if self.end.is_none() {
                             self.visits.push(Visit::OnFailureEnd);
                             let name = err.target_name.clone();
-                            self.fail(&name, SCRIPTED_CAUSE);
+                            self.fail(&name, &err.cause);
                         }
                         return Ctl::Stop;
                     }
@@ -590,7 +605,7 @@ impl<'a> Run<'a> {
             }
         }
         let name = err.target_name.clone();
-        self.fail(&name, SCRIPTED_CAUSE);
+        self.fail(&name, &err.cause);
         Ctl::Stop
     }
 
@@ -604,7 +619,7 @@ impl<'a> Run<'a> {
                 other => render::asl_error(self.m, callee, &HErr::Declared(other.to_string())).into_iter().next().unwrap_or_else(|| other.to_string()),
             },
         };
-        CallError { kind: kind.to_string(), target_name }
+        CallError { kind: kind.to_string(), target_name, cause: SCRIPTED_CAUSE.into() }
     }
 
     /// (errors, max attempts, interval, backoff) for each retrier, as the targets have them.

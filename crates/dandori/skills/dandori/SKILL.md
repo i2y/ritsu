@@ -1,6 +1,6 @@
 ---
 name: dandori
-description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents and code of your own, checked before they run and built for Temporal (TypeScript or Python), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
+description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev and code of your own, checked before they run and built for Temporal (TypeScript or Python), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
 compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`).
 license: MIT OR Apache-2.0
 ---
@@ -68,21 +68,23 @@ to read dandori's source.
 
 ## 2. The language on one page
 
-A whole workflow: the review example, whose tasks are all code of your own, so it needs no rulec.
+A whole workflow: the review example. Jev scores an application and says how sure it is, a rulec
+rule weighs the verdict and how sure it is, and a person approves what the rule sends on.
 
 ```flow
 workflow review v1
-description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule runs in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends"
 
-enum Verdict = approve | reject | hold
+use rule policy from "../rules/review_policy.rule"
 
 record Application
-  id     : string
-  amount : int
+  id      : string
+  amount  : int
+  purpose : string
 
 record Score
-  points  : int
-  verdict : Verdict
+  verdict : policy.verdict
+  sure    : rate[step 1%]  range >=0 <=100
 
 record Approval
   approver : string
@@ -91,15 +93,25 @@ inputs
   application : Application
 
 outputs
-  verdict : Verdict
+  verdict : policy.verdict
 
-task score(application_id: string, amount: int) -> Score
+# Jev places what the applicant wrote on the scale of verdicts, from the lowest level, and how
+# sure it is of the verdict comes as a rate, for the rule to weigh.
+task score(purpose: string) -> Score
+  jev
+    verdict score "How clearly is the money for running the business?"
+      reject "It is for something personal or speculative, or against the law"
+      hold "It is for the business, but the statement leaves unclear what it pays for"
+      approve "It pays for a named part of running the business, such as stock, equipment, staff or premises"
+    sure confidence of verdict
+  model "jev-1.13.0"
   queue "scoring"
-  errors unscorable
-  retry 2 times every 10 seconds
-  idempotent
+  errors busy = 429, overloaded = 529
+  retry 2 times every 10 seconds on busy, overloaded
+  timeout 10 seconds
 
-task ask_for_approval(application_id: string, points: int) -> Approval
+# Someone approves in a tool of their own, and the answer comes back with the callback's id.
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
   callback
   timeout 3 days
 
@@ -108,12 +120,13 @@ task notify(application_id: string, text: string)
   idempotent
 
 flow
-  let r = score(application_id: application.id, amount: application.amount)
-    on unscorable => fail Unscorable "Could not score application {application.id}"
-  match r.verdict
+  let r = score(purpose: application.purpose)
+    on failure => fail Unscorable "Could not score application {application.id}"
+  let d = policy(verdict: r.verdict, sure: r.sure)
+  match d.decision
     approve, reject => pass
-    hold =>
-      let a = ask_for_approval(application_id: application.id, points: r.points)
+    ask =>
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
         on timeout => fail NoAnswer "No approval in three days"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve
@@ -161,6 +174,7 @@ how it is called: one of these, or none for a task you write
   http GET|POST|PUT|PATCH|DELETE "<url>" [form]      http POST <api> "<path>"  (an OpenAPI operation)
   connect <api> "<Service>/<Method>"                 aws <service>:<action>
   lambda "<function>"                                agent "<instructions>"  |  agent claude "<instructions>"
+  jev "<question>"  |  jev score "<question>"  |  jev   (TypeSafe's Jev; see below)
   event                                              a value sent to the workflow by name (Temporal)
 a child workflow
   flow "<child.flow>"          a .flow of its own, held to this task (E015); Step Functions and
@@ -177,7 +191,16 @@ the rest
   callback                 queue "<task queue>"       image "<image>" (Argo, a task you write)
   connection "<EventBridge connection>"               model "<model>"     url "<base>" (agents)
   effort none|minimal|low|medium|high|xhigh|max       how hard an agent's model reasons (Claude: low and up)
+  confidence <0 to 1> else <error>                    a Jev answer less sure than this fails with <error>
 ```
+
+A `jev` task asks what its answer type asks, and writes the meanings under the `jev` line: an enum
+is a choice (`<value> "<what it means>"` for some or all values), `jev score` a scale of the enum's
+values from the lowest (every one with its meaning, 2 to 10), `bool` a yes or no (`true "…"` and
+`false "…"`, or neither), and a record `jev` alone with a line a field (`<field> "<question>"`,
+`<field> score "<question>"`, or `<field> confidence of <field>` for a `rate[step <n>%]` field that
+takes how sure Jev is). Pin the model's version (`model "jev-1.13.0"`) when a confidence is used
+(W032); a threshold that depends on the action belongs in a rule's table, fed the confidence.
 
 A duration is `10 seconds`, `1 minute`, `2 hours`, `3 days`. The hotel booking's tasks, held to
 Stripe's OpenAPI document:
@@ -206,8 +229,8 @@ task get_intent(intent: string) -> PaymentIntent
 `retry` repeats failures and timeouts, but not the errors the task declares; `retry … on <name>, …`
 repeats only what it names, which may be `failure` or `timeout` too. A task that changes something and is retried needs `key` (an idempotency key dandori makes from
 the run and the place of the call), or `idempotent` when doing it twice is the same as once.
-[tasks.md](tasks.md) has every way of calling and what each becomes on every platform, and
-[agents.md](agents.md) the agents.
+[tasks.md](tasks.md) has every way of calling and what each becomes on every platform,
+[agents.md](agents.md) the agents, and [jev.md](jev.md) Jev.
 
 ### Cases
 
@@ -282,9 +305,9 @@ Ask instead of guessing:
 - **The numbers**: timeouts, retry counts, loop bounds (which also bound the history, E040),
   ranges.
 - **A decision that must have no gaps.** A `.flow` branches on what a rule or a task answered: an
-  API, an agent, your own code, a person. When the decision is a policy (a fee, an eligibility, a
-  routing), write it as a rulec rule, where rulec proves it complete, rather than leaving it to an
-  agent.
+  API, an agent, Jev, your own code, a person. When the decision is a policy (a fee, an eligibility,
+  a routing, how sure is enough), write it as a rulec rule, where rulec proves it complete, rather
+  than leaving it to an agent.
 
 Ask with the run the checker gives, in the reader's terms: "If the card is declined, the workflow
 fails with the PaymentIntent still requires_payment_method. Should it cancel the PaymentIntent
@@ -348,7 +371,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 |---|---|---|
 | `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel` and `event` |
 | `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve the other |
-| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule | no code of your own (every task needs a way of calling); `http` and `agent` need `connection` |
+| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule | no code of your own (every task needs a way of calling); `http`, `agent` and `jev` need `connection` |
 | `durable` | a Lambda durable function in TypeScript | a task of your own is a step |
 | `argo` | a WorkflowTemplate and the caller image | a task of your own is a container of its `image` |
 | `pydantic-graph` | a graph in Python | runs in your own process, and keeps nothing when it stops |
@@ -363,6 +386,7 @@ written for Temporal, for AWS and for pydantic-graph.
 | [tour.md](tour.md) | the language, through the hotel booking from its first line to its last |
 | [tasks.md](tasks.md) | every way a task can call, what each becomes on each platform, API descriptions, child flows |
 | [agents.md](agents.md) | agent tasks: typed answers, OpenAI, Open Responses, Claude |
+| [jev.md](jev.md) | Jev tasks: the answer type as the question, confidence, rates for a rule |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |
 | [codes.md](codes.md) | every diagnostic code and what it finds |
 | [diagrams.md](diagrams.md) | `dandori doc`: the workflow drawn for the person who reviews it |

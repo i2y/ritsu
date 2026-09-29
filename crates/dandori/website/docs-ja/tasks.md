@@ -11,6 +11,7 @@
 | `connect <API> "<Service>/<Method>"` | HTTP Task（Connect の JSON） | 生成したアクティビティ（`fetch`） | 生成したステップ（`fetch`） | 同じく `fetch` | 同じく urllib |
 | `aws sns:publish` | AWS SDK の統合 | 生成したアクティビティ（AWS SDK） | 生成したステップ（AWS SDK） | 同じく AWS SDK | 同じく boto3 |
 | `agent …`（[エージェント](agents.md)） | モデルの API への HTTP Task | 生成したアクティビティ | 生成したステップ | 同じ | 同じ |
+| `jev …`（[Jev](jev.md)） | TypeSafe の API への HTTP Task | 生成したアクティビティ（`fetch`） | 生成したステップ（`fetch`） | 同じく `fetch` | 同じく urllib |
 | `state machine "<ARN>"` | ネストした実行（`startExecution.sync:2`） | | | | |
 | `flow "<パス>"`（[子の .flow](#子の-flow)） | ネストした実行（`state machine` も書く） | 子のタスクキューで子ワークフロー `<名前>_v<バージョン>` を始める | invoke（`durable function` も書く） | 子の WorkflowTemplate から Workflow を作る | 自分で書く関数 |
 | `workflow "<型>"` | | 子ワークフロー | | | |
@@ -20,7 +21,7 @@
 | `event` | ビルドできない（E050） | 何も呼ばず、名前を宛先にして送られてくる値を待つ | ビルドできない（E050） | ビルドできない（E050） | ビルドできない（E050） |
 | どれも書かない | ビルドできない（E050） | 自分で書くアクティビティ（`OwnTasks`） | 自分で書くコードを動かすステップ（`OwnTasks`） | ビルドできない（E050） | 自分で書く関数（`OwnTasks`） |
 
-生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キーといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
+生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キーといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
 
 `queue "<名前>"` を書くと、Temporal のアクティビティや子ワークフローを、そのタスクキューへ送ります。そのキューは、どちらの言語のワーカーでも受け持てます。
 

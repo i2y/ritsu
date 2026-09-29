@@ -79,10 +79,17 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `lambda`, `http`, `aws`, `agent` or `state machine` to run on Step Functions", t.name),
-                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`state machine` のどれかが要ります", t.name),
+                format!("`{}` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions", t.name),
+                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります", t.name),
             )),
             Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
+            Some(Via::Jev(_)) if t.connection.is_none() => errs.push(Diag::error(
+                "E050",
+                t.line,
+                1,
+                format!("Step Functions calls Jev for `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds TypeSafe's API key (as the header Authorization, `Bearer <key>`)", t.name),
+                format!("Step Functions は `{}` の Jev を HTTP Task で呼ぶので、TypeSafe の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
+            )),
             Some(Via::Agent { provider, url, .. }) if t.connection.is_none() => {
                 let (whose_en, whose_ja) = match (provider, url) {
                     (Provider::OpenAi, None) => ("the OpenAI API key", "OpenAI の API キー"),
@@ -122,7 +129,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送信先は `{u}` です", t.name),
             ));
         }
-        if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. })) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {
+        if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {
             errs.push(Diag::error(
                 "E050",
                 t.line,
@@ -716,6 +723,21 @@ impl<'a> Gen<'a> {
                         };
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), answer, task.timeout, retry)
                     }
+                    Via::Jev(j) => {
+                        // the state is the arguments, in the order of the parameters
+                        let mut state = Map::new();
+                        for (p, _) in &task.params {
+                            if let Some((_, e)) = args.iter().find(|(a, _)| a == p) {
+                                state.insert(p.clone(), arg_value(e));
+                            }
+                        }
+                        let mut w = Map::new();
+                        w.insert("ApiEndpoint".into(), json!(JEV_URL));
+                        w.insert("Method".into(), json!("POST"));
+                        w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
+                        w.insert("RequestBody".into(), render::jev_request(j, Value::Object(state)));
+                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), jev_answer(j), task.timeout, retry)
+                    }
                     Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) | Via::Event => unreachable!("not a way Step Functions calls"),
                 }
             }
@@ -726,7 +748,14 @@ impl<'a> Gen<'a> {
         st.insert("Comment".into(), json!(format!("line {}: {}", s.line, cname)));
         st.insert("Resource".into(), json!(resource));
         st.insert("Arguments".into(), arguments);
-        if !var.is_empty() {
+        let jev = match callee {
+            Callee::Task(t) => m.tasks[*t].jev(),
+            Callee::Rule(_) => None,
+        };
+        if jev.is_some() {
+            // Jev's answer, read, goes on to the check: the variable takes it only when it passes
+            st.insert("Output".into(), json!(format!("{{% {result} %}}")));
+        } else if !var.is_empty() {
             st.insert("Assign".into(), json!({ asl_var(&var): format!("{{% {result} %}}") }));
         } else if matches!(callee, Callee::Task(t) if matches!(m.tasks[*t].via(Platform::StepFunctions), Some(Via::Agent { .. }))) {
             // an agent's answer is read even when the flow does not keep it, so that a refusal fails the call
@@ -740,8 +769,11 @@ impl<'a> Gen<'a> {
         }
         let mut catches = Vec::new();
         let mut catches_all = false;
+        // each handler's first state, for an error that comes after the call (Jev's less sure answer)
+        let mut entries: Vec<(&[HErr], String)> = Vec::new();
         for h in handlers {
             let entry = self.block(&h.body, cont);
+            entries.push((&h.errors, entry.clone()));
             let mut errs: Vec<String> = Vec::new();
             if h.errors.contains(&HErr::Failure) {
                 errs.push("States.ALL".into());
@@ -774,6 +806,9 @@ impl<'a> Gen<'a> {
             st.insert("Catch".into(), Value::Array(catches));
         }
 
+        if let (Some(j), Callee::Task(t)) = (jev, callee) {
+            return self.jev_check(s, st, task_name, check, &cname, &var, &m.tasks[*t], j, &entries, cont);
+        }
         // the answer: its declared type, and for a case the states it may carry
         let ty = match callee {
             Callee::Task(t) => m.tasks[*t].result.clone(),
@@ -817,6 +852,136 @@ impl<'a> Gen<'a> {
         self.states.insert(check.clone(), json!({ "Type": "Choice", "Choices": choices, "Default": bad }));
         task_name
     }
+}
+
+impl<'a> Gen<'a> {
+    /// After a Jev task's Task, whose output is its answer read (`{"answer", "low"}`): a Choice
+    /// that lets an answer of the task's type through, into the variable when the flow keeps it;
+    /// takes one that is less sure than the task's `confidence` to what the task's error does
+    /// there (its handler, the round's end, `on failure`, or the end of the execution); and
+    /// ends the execution with Dandori.BadResponse for one that is not of the type.
+    #[allow(clippy::too_many_arguments)]
+    fn jev_check(&mut self, s: &TStmt, mut st: Map<String, Value>, task_name: String, check: String, cname: &str, var: &str, task: &TaskDef, j: &Jev, entries: &[(&[HErr], String)], cont: &str) -> String {
+        let m = self.m;
+        let low_to = match &j.floor {
+            None => None,
+            Some((_, error)) => {
+                let handled = entries.iter().find(|(errs, _)| errs.iter().any(|e| matches!(e, HErr::Failure) || matches!(e, HErr::Declared(n) if n == error)));
+                Some(match handled {
+                    Some((_, entry)) => entry.clone(),
+                    None => self.raising(&format!("{} {} less sure", s.line, cname), error, &render::jev_low_cause(task)),
+                })
+            }
+        };
+        let mut choices = Vec::new();
+        if var.is_empty() {
+            // the answer is not kept, and only how sure it is matters
+            if let Some(to) = &low_to {
+                choices.push(json!({ "Condition": "{% $states.input.low %}", "Next": to }));
+            }
+            st.insert("Next".into(), json!(if choices.is_empty() { cont.to_string() } else { check.clone() }));
+            self.states.insert(task_name.clone(), Value::Object(st));
+            if !choices.is_empty() {
+                self.states.insert(check, json!({ "Type": "Choice", "Choices": choices, "Default": cont }));
+            }
+            return task_name;
+        }
+        let ty = task.result.clone().expect("the checker gives Jev an answer");
+        let typed = jsonata_check(m, "$states.input.answer", &ty, task.result_range, 0);
+        let keep = self.name(&format!("{} keep {}", s.line, cname));
+        self.states.insert(keep.clone(), json!({ "Type": "Pass", "Comment": format!("line {}: {} answered", s.line, cname), "Assign": { asl_var(var): "{% $states.input.answer %}" }, "Next": cont }));
+        match &low_to {
+            Some(to) => {
+                choices.push(json!({ "Condition": format!("{{% {typed} and $not($states.input.low) %}}"), "Next": keep }));
+                choices.push(json!({ "Condition": format!("{{% {typed} %}}"), "Next": to }));
+            }
+            None => choices.push(json!({ "Condition": format!("{{% {typed} %}}"), "Next": keep })),
+        }
+        let bad = self.failing(
+            &format!("{} bad answer from {}", s.line, cname),
+            None,
+            json!("Dandori.BadResponse"),
+            Some(json!(format!("line {}: the answer from {} does not have the declared shape", s.line, cname))),
+            false,
+        );
+        st.insert("Next".into(), json!(check.clone()));
+        self.states.insert(task_name.clone(), Value::Object(st));
+        self.states.insert(check, json!({ "Type": "Choice", "Choices": choices, "Default": bad }));
+        task_name
+    }
+
+    /// A task's error that comes after its call, where no handler of the call takes it: in a
+    /// round of a parallel loop, the round ends with it; outside, `on failure` runs for it, as
+    /// for any task's error; else the execution ends with it.
+    fn raising(&mut self, base: &str, error: &str, cause: &str) -> String {
+        if self.round_failed.is_none() && !self.in_on_failure {
+            if let Some(f) = self.failure_entry.clone() {
+                let n = self.name(base);
+                self.states.insert(n.clone(), json!({ "Type": "Pass", "Assign": { "dd_error": { "Error": error, "Cause": cause } }, "Next": f }));
+                return n;
+            }
+        }
+        self.failing(base, None, json!(error), Some(json!(cause)), true)
+    }
+}
+
+/// A Jev task's answer, read from the body of Jev's response as `render::jev_read` reads it:
+/// `{"answer": <the value, null where an answer is not there or not of its kind>, "low": <whether
+/// every answer is there and one is less sure than the task's confidence>}`. JSONata errors on
+/// comparing values of different types, so a value is tested for its type before it is compared.
+fn jev_answer(j: &Jev) -> String {
+    let unit = |c: &str| format!("($type({c}) = \"number\" ? ({c} >= 0 and {c} <= 1) : false)");
+    let none = "{\"v\": null, \"c\": null, \"ok\": false}";
+    let mut lets = vec!["$dd_a := $states.result.ResponseBody.answers".to_string()];
+    for (i, q) in j.questions.iter().enumerate() {
+        let x = format!("($type($dd_a) = \"object\" ? $lookup($dd_a, {}) : null)", jsonata_string(&q.id));
+        let get = |k: &str| format!("($type($dd_x) = \"object\" ? $lookup($dd_x, {}) : null)", jsonata_string(k));
+        let one = match q.kind {
+            QuestionKind::Choice => {
+                let values: Vec<String> = q.options.iter().map(|(v, _)| v.clone()).collect();
+                format!(
+                    "($dd_x := {x}; $dd_v := {}; $dd_c := {}; ($type($dd_v) = \"string\" ? ($dd_v in {}) : false) and {} ? {{\"v\": $dd_v, \"c\": $dd_c, \"ok\": true}} : {none})",
+                    get("choice"),
+                    get("confidence"),
+                    jsonata_list(&values),
+                    unit("$dd_c")
+                )
+            }
+            QuestionKind::Score => {
+                let levels: Vec<String> = q.options.iter().map(|(v, _)| v.clone()).collect();
+                format!(
+                    "($dd_x := {x}; $dd_s := {}; $dd_c := {}; $dd_l := $type($dd_s) = \"number\" ? $floor($dd_s + 0.5) : -1; ($dd_l >= 0 and $dd_l < {}) and {} ? {{\"v\": {}[$dd_l], \"c\": $dd_c, \"ok\": true}} : {none})",
+                    get("score"),
+                    get("confidence"),
+                    levels.len(),
+                    unit("$dd_c"),
+                    jsonata_list(&levels)
+                )
+            }
+            QuestionKind::Noul => format!(
+                "($dd_x := {x}; $dd_p := {}; {} ? {{\"v\": $dd_p > 0.5, \"c\": $dd_p > 0.5 ? $dd_p : 1 - $dd_p, \"ok\": true}} : {none})",
+                get("noul"),
+                unit("$dd_p")
+            ),
+        };
+        lets.push(format!("$dd_q{i} := {one}"));
+    }
+    let all = (0..j.questions.len()).map(|i| format!("$dd_q{i}.ok")).collect::<Vec<_>>().join(" and ");
+    let low = match &j.floor {
+        Some((f, _)) => format!("({all}) ? ({}) : false", (0..j.questions.len()).map(|i| format!("$dd_q{i}.c < {f}")).collect::<Vec<_>>().join(" or ")),
+        None => "false".into(),
+    };
+    let answer = match j.questions.as_slice() {
+        [q] if q.field.is_none() => "$dd_q0.v".to_string(),
+        _ => {
+            let mut parts: Vec<String> = j.questions.iter().enumerate().map(|(i, q)| format!("{}: $dd_q{i}.v", jsonata_string(q.field.as_deref().unwrap_or_default()))).collect();
+            for (f, qi, per) in &j.confidences {
+                parts.push(format!("{}: $dd_q{qi}.ok ? $floor($dd_q{qi}.c * {per} + 0.000000001) : null", jsonata_string(f)));
+            }
+            format!("{{{}}}", parts.join(", "))
+        }
+    };
+    format!("({}; {{\"answer\": {answer}, \"low\": {low}}})", lets.join("; "))
 }
 
 fn m_is_case(m: &Model, name: &str) -> bool {
@@ -888,7 +1053,7 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
 
 /// The handler of the Lambda function that answers for a rule: JSON in, the call of the
 /// Python rulec generated, JSON out.
-pub(crate) fn lambda_handler(m: &Model, r: usize) -> (String, String) {
+pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
     let ru = &m.rules[r];
     let py = &ru.info.api["python"];
     let module = py["module"].as_str().unwrap_or("rule");
@@ -914,16 +1079,19 @@ pub(crate) fn lambda_handler(m: &Model, r: usize) -> (String, String) {
         }
     }
     let mut outs = Vec::new();
-    for o in py["outputs"].as_array().unwrap_or(&vec![]) {
+    let outputs = py["outputs"].as_array().cloned().unwrap_or_default();
+    for o in &outputs {
         let name = o["name"].as_str().unwrap_or("");
         let alias = o["alias"].as_str().unwrap_or("");
         let ty = o["type"].as_str().unwrap_or("");
+        // with one output, the rule's function answers that value itself, not a record of outputs
+        let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
         let v = if is_enum(ty) {
-            format!("out.{alias}.value")
+            format!("{x}.value")
         } else if ty == "bool" || ty == "str" {
-            format!("out.{alias}")
+            x
         } else {
-            format!("int(out.{alias})")
+            format!("int({x})")
         };
         outs.push(format!("        {}: {v},", py_str(name)));
     }

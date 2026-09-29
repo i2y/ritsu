@@ -66,7 +66,7 @@ flow
 
 ### 判断はワークフローの外に置く
 
-`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・オプショナルな値の `match` だけで、その値は規則の結果か、タスクの結果（API、エージェント、自分で書くコード、人の承認）です。抜けがあると困る判断は、[rulec](https://github.com/i2y/rulec) の表で書けます。表に抜けも重なりも無いことは rulec が証明し、表に書いたステートマシンは、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型になります。
+`.flow` 自身は比較も計算もしません。分岐は、列挙・bool・オプショナルな値の `match` だけで、その値は規則の結果か、タスクの結果（API、エージェント、Jev、自分で書くコード、人の承認）です。抜けがあると困る判断は、[rulec](https://github.com/i2y/rulec) の表で書けます。表に抜けも重なりも無いことは rulec が証明し、表に書いたステートマシンは、ワークフローが状態を追いかける対象（ここでは Stripe の PaymentIntent）の型になります。
 
 </div>
 </div>
@@ -151,6 +151,29 @@ task read_inquiry(text: string) -> Reading
 <div class="dd-row" markdown>
 <div markdown>
 
+```flow
+task 種類を選ぶ(本文: string) -> 振り分け.種類
+  jev "この問い合わせの種類はどれか"
+    返品 "商品を返したい、交換したい"
+    配送 "荷物が遅れている、届かない、壊れていた、どこにあるか知りたい"
+    …
+  model "jev-1.13.0"
+  confidence 0.8 else 迷い
+```
+
+</div>
+<div markdown>
+
+### Jev が判断し、確信度も返す
+
+TypeSafe の Jev に尋ねるタスクも書けます。Jev は文章を書かず、型の付いた質問に、どれだけ確かかを添えて答えます。タスクの結果の型がそのまま質問になり、列挙の値からの選択、その値を並べた段階の位置、はいかいいえのどれかを尋ねます。確信度が足りない答えは、フローが処理するエラーで呼び出しを失敗させます。何にどれだけの確信度が要るかは、規則の表で決められます。[Jev](jev.md)
+
+</div>
+</div>
+
+<div class="dd-row dd-row--flip" markdown>
+<div markdown>
+
 ```text
 dandori doc hotel.flow > hotel.md
 dandori doc hotel.flow --format html > hotel.html
@@ -168,6 +191,6 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## いまの状況
 
-まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントの呼び出しを本物の OpenAI や Anthropic に送ることもしていません。
+まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントや Jev の呼び出しを本物の OpenAI、Anthropic、TypeSafe に送ることもしていません。
 
 設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/dandori/blob/main/DESIGN.md) にあり、原則は [設計](design.md) にまとめています。ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。

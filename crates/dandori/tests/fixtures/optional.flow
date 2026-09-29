@@ -1,5 +1,5 @@
 workflow optional v1
-description "無いことがある値の match の漏れと、並列の回の変数をループの外で読むこと"
+description "オプショナルな値の match の漏れと、並列のイテレーションの変数をループの外で読むこと"
 
 record 贈り物
   宛名 : string?

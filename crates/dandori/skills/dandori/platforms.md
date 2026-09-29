@@ -31,7 +31,7 @@ workflow whose one run can outgrow it (E040). Temporal is dandori's main platfor
   has yielded. The workflow id stays, and so do the idempotency keys and the ids of callbacks and
   child workflows; under Worker Deployment Versioning the new run stays on its build.
 - **Timeouts.** A task without `timeout` gets as long as the other platforms would give it: 60 seconds
-  for `http` and `agent`, as an HTTP Task has, 900 for `lambda`, and no limit of its own for the rest.
+  for `http`, `agent` and `jev`, as an HTTP Task has, 900 for `lambda`, and no limit of its own for the rest.
   Every activity the workflow's worker serves heartbeats, so that a worker that went away is noticed
   within 30 seconds. A rule's activity gets 10 seconds, and is retried when it runs out.
 
@@ -62,7 +62,7 @@ durable function invokes. A task of your own is a step that runs your code.
 
 `--target argo` writes `<workflow>.argo.yaml`, a WorkflowTemplate that takes the input as the
 parameter `input` and leaves the outputs in the global parameter `dd_output`, and `caller/`: the
-program that runs the `lambda`, `http`, `aws` and `agent` tasks and the rules in the workflow's
+program that runs the `lambda`, `http`, `aws`, `agent` and `jev` tasks and the rules in the workflow's
 containers, with its `package.json` and `Dockerfile`. A task of your own is a container of your image
 (`image`). The WorkflowTemplate keeps the flow's variables in global output parameters, and the YAML
 starts with a comment that names each variable's parameter.

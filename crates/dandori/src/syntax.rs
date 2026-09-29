@@ -151,6 +151,34 @@ pub enum Binding {
     /// an agent that reads the arguments and answers in the task's type, told what to do by
     /// `instructions`; `agent claude "…"` names whose models it runs on (OpenAI's when it does not)
     Agent { provider: Option<Name>, instructions: String },
+    /// Jev, TypeSafe's System One model, asked what the answer's type asks: `jev "…"` one
+    /// question, whose answer is the task's; `jev` alone a question for each field of a record
+    Jev(JevDecl),
+}
+
+/// What a `jev` clause asks. A question whose answer is the task's own has `ask`; one for each
+/// field of a record answer is in `fields`.
+#[derive(Clone, Debug)]
+pub struct JevDecl {
+    pub ask: Option<JevAsk>,
+    pub fields: Vec<(Name, JevField)>,
+}
+
+/// One question: its instructions, whether it is a `score` (a place on a scale of levels) rather
+/// than a choice, and under it each value with what it means: `returns "…"`, `true "…"`.
+#[derive(Clone, Debug)]
+pub struct JevAsk {
+    pub instructions: String,
+    pub score: Option<Span>,
+    pub criteria: Vec<(Name, String)>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum JevField {
+    Ask(JevAsk),
+    /// `sure confidence of kind`: how sure Jev is of the answer to the field `kind`
+    Confidence(Name),
 }
 
 #[derive(Clone, Debug)]
@@ -193,6 +221,8 @@ pub struct TaskDecl {
     pub url: Option<(String, Span)>,
     /// `effort low`: how hard an agent's model reasons, as its provider names the levels
     pub effort: Option<(String, Span)>,
+    /// `confidence 0.8 else unsure`: a Jev answer less sure than this fails the call with the error
+    pub confidence: Option<(f64, Name, Span)>,
     pub connection: Option<String>,
     /// Temporal: the task queue of the activity or the child workflow
     pub queue: Option<String>,
@@ -464,6 +494,8 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 '{' => Some("{"),
                 '}' => Some("}"),
                 '?' => Some("?"),
+                // in a rate's step: rate[step 0.01%]
+                '%' => Some("%"),
                 _ => None,
             };
             if let Some(s) = sym1 {
@@ -696,9 +728,10 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
         _ => {}
     }
     if cur.is_sym("[") {
-        // a unit, spelled as rulec spells it: money[円, incl_tax]
+        // a unit, spelled as rulec spells it: money[円, incl_tax], rate[step 0.01%]
         cur.i += 1;
-        let mut parts = Vec::new();
+        let mut parts: Vec<String> = Vec::new();
+        let mut part = String::new();
         loop {
             match cur.peek() {
                 Some(Tok::Sym("]")) => {
@@ -706,14 +739,42 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
                     break;
                 }
                 Some(Tok::Ident(s)) => {
-                    parts.push(s.clone());
+                    let s = s.clone();
+                    if !part.is_empty() {
+                        part.push(' ');
+                    }
+                    part.push_str(&s);
+                    cur.i += 1;
+                }
+                Some(Tok::Int(n)) => {
+                    let n = *n;
+                    if !part.is_empty() {
+                        part.push(' ');
+                    }
+                    part.push_str(&n.to_string());
+                    cur.i += 1;
+                }
+                Some(Tok::Float(f)) => {
+                    let f = *f;
+                    if !part.is_empty() {
+                        part.push(' ');
+                    }
+                    part.push_str(&f.to_string());
+                    cur.i += 1;
+                }
+                Some(Tok::Sym("%")) => {
+                    part.push('%');
                     cur.i += 1;
                 }
                 Some(Tok::Sym(",")) => {
+                    parts.push(std::mem::take(&mut part));
                     cur.i += 1;
                 }
                 _ => return Err(err(cur.span(), "this unit is not closed with `]`", "単位が `]` で閉じていません")),
             }
+        }
+        if !part.is_empty() {
+            parts.push(part);
         }
         return Ok(TypeExpr::Unit(format!("{}[{}]", first.0, parts.join(", ")), sp));
     }
@@ -1351,6 +1412,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     binding: None,
                     model: None,
                     effort: None,
+                    confidence: None,
                     url: None,
                     connection: None,
                     queue: None,
@@ -1380,6 +1442,12 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     task_clause(&mut cc, &mut t)?;
                     cc.expect_end()?;
                     p.pos += 1;
+                    // what a `jev` asks is written under it
+                    if cc.toks.first().map(|x| &x.tok) == Some(&Tok::Ident("jev".into())) {
+                        if let Some((Binding::Jev(jd), _)) = &mut t.binding {
+                            jev_block(&mut p, cl.indent, jd)?;
+                        }
+                    }
                 }
                 prog.tasks.push(t);
             }
@@ -1482,14 +1550,14 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
 fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
     let sp = cc.span();
     let (kw, _) = cc.ident("a task clause", "タスクの項目")?;
-    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect") {
+    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect" | "jev") {
         if let Some((_, first)) = &t.binding {
             return Err(Diag::error(
                 "E007",
                 sp.line,
                 sp.col,
-                format!("the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws and agent", first.line),
-                format!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent のどれか一つです", first.line),
+                format!("the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws, agent and jev", first.line),
+                format!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent・jev のどれか一つです", first.line),
             ));
         }
     }
@@ -1556,6 +1624,40 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             };
             let instructions = cc.string("what the agent is to do", "エージェントへの指示")?.0;
             t.binding = Some((Binding::Agent { provider, instructions }, sp));
+        }
+        "jev" => {
+            // `jev score "…"` or `jev "…"`: one question; `jev` alone: a question for each field
+            let score = if cc.is_kw("score") && matches!(cc.peek_at(1), Some(Tok::Str(_))) {
+                let ssp = cc.span();
+                cc.i += 1;
+                Some(ssp)
+            } else {
+                None
+            };
+            let ask = match cc.peek() {
+                Some(Tok::Str(_)) => {
+                    let (instructions, isp) = cc.string("the question Jev answers", "Jev に尋ねること")?;
+                    Some(JevAsk { instructions, score, criteria: vec![], span: isp })
+                }
+                _ if score.is_some() => return Err(err(cc.span(), "write the question after `jev score`, in double quotes", "`jev score` のあとに、尋ねることを二重引用符で書きます")),
+                _ => None,
+            };
+            t.binding = Some((Binding::Jev(JevDecl { ask, fields: vec![] }), sp));
+        }
+        "confidence" => {
+            let vsp = cc.span();
+            let v = match cc.peek().cloned() {
+                Some(Tok::Float(f)) => f,
+                Some(Tok::Int(n)) => n as f64,
+                _ => return Err(err(vsp, "expected how sure Jev must be, a number from 0 to 1 such as 0.8", "ここには Jev がどれだけ確かでなければならないかを、0.8 のような 0 から 1 の数で書きます")),
+            };
+            cc.i += 1;
+            if !(v > 0.0 && v <= 1.0) {
+                return Err(err(vsp, "a confidence is more than 0 and at most 1", "確信度は 0 より大きく、1 以下です"));
+            }
+            cc.expect_kw("else")?;
+            let e = cc.ident("the error a less sure answer fails the call with", "確信度が足りない答えで呼び出しが失敗するときのエラー")?;
+            t.confidence = Some((v, e, sp));
         }
         "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
         "url" => t.url = Some((cc.string("where the agent's server is", "エージェントのサーバーの場所")?.0, sp)),
@@ -1652,10 +1754,86 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, connect, aws, agent, model, effort, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・model・effort・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
+                format!("`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
+                format!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
             ))
         }
     }
     Ok(())
+}
+
+/// The lines under a `jev` line, indented deeper than it (`indent`): under `jev "…"`, each value
+/// with what it means; under `jev` alone, a question for each field of the record, or the field
+/// that takes how sure Jev is of another's answer, each with its values' meanings under it.
+fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag> {
+    let mut level: Option<usize> = None;
+    while let Some(l) = p.cur_line() {
+        if l.indent <= indent {
+            break;
+        }
+        let l = l.clone();
+        let mut cc = Cur::new(&l);
+        let sp = cc.span();
+        match level {
+            None => level = Some(l.indent),
+            Some(lv) if l.indent < lv => return Err(err(sp, "this line is indented less than the lines before it under `jev`", "この行は、`jev` の下のそれより前の行より浅く字下げされています")),
+            Some(lv) if l.indent > lv => {
+                // a value's meaning, under a field's question
+                let criteria = match jd.fields.last_mut() {
+                    Some((_, JevField::Ask(a))) => &mut a.criteria,
+                    Some((_, JevField::Confidence(_))) => return Err(err(sp, "a field that takes how sure Jev is asks nothing, so nothing is written under it", "確信度を受け取るフィールドは何も尋ねないので、その下には何も書きません")),
+                    None => return Err(err(sp, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています")),
+                };
+                criteria.push(meaning(&mut cc)?);
+                cc.expect_end()?;
+                p.pos += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if let Some(ask) = &mut jd.ask {
+            let m = meaning(&mut cc)?;
+            cc.expect_end()?;
+            ask.criteria.push(m);
+            p.pos += 1;
+            continue;
+        }
+        let field = cc.ident("a field of the answer", "答えのフィールド")?;
+        let what = if cc.eat_kw("confidence") {
+            cc.expect_kw("of")?;
+            JevField::Confidence(cc.ident("the field whose answer it is how sure of", "どのフィールドの答えの確信度か")?)
+        } else {
+            let score = if cc.is_kw("score") && matches!(cc.peek_at(1), Some(Tok::Str(_))) {
+                let ssp = cc.span();
+                cc.i += 1;
+                Some(ssp)
+            } else {
+                None
+            };
+            match cc.peek() {
+                Some(Tok::Str(_)) => {
+                    let (instructions, isp) = cc.string("the question Jev answers for the field", "そのフィールドについて Jev に尋ねること")?;
+                    JevField::Ask(JevAsk { instructions, score, criteria: vec![], span: isp })
+                }
+                _ => {
+                    return Err(err(
+                        cc.span(),
+                        format!("under `jev`, write what Jev is asked for `{}`: `{} \"<question>\"`, `{} score \"<question>\"`, or `{} confidence of <field>`", field.0, field.0, field.0, field.0),
+                        format!("`jev` の下には、`{}` について尋ねることを書きます（`{} \"<質問>\"`、`{} score \"<質問>\"`、`{} confidence of <フィールド>` のどれか）", field.0, field.0, field.0, field.0),
+                    ))
+                }
+            }
+        };
+        cc.expect_end()?;
+        jd.fields.push((field, what));
+        p.pos += 1;
+    }
+    Ok(())
+}
+
+/// `returns "<what it means>"`: a value of the answer, and what it means to Jev.
+fn meaning(cc: &mut Cur) -> Result<(Name, String), Diag> {
+    let v = cc.ident("a value of the answer", "答えの値")?;
+    let (text, _) = cc.string("what the value means", "その値の意味")?;
+    Ok((v, text))
 }

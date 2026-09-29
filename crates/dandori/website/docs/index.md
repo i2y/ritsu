@@ -73,8 +73,8 @@ flow
 ### Decisions come from outside the workflow
 
 A `.flow` has no comparison and no arithmetic of its own. It branches only by matching an enum, a
-bool, or a value that may be absent, which a rule or a task answered: an API, an agent, your own
-code, a person's approval. A decision that must have no gaps can be written in
+bool, or a value that may be absent, which a rule or a task answered: an API, an agent, Jev, your
+own code, a person's approval. A decision that must have no gaps can be written in
 [rulec](https://github.com/i2y/rulec), as a table that rulec proves complete and free of overlaps,
 and a rule's state machine becomes the type of what the workflow drives, here Stripe's
 PaymentIntent.
@@ -174,6 +174,33 @@ OpenRouter, …) can be called.
 <div class="dd-row" markdown>
 <div markdown>
 
+```flow
+task pick_kind(text: string) -> routing.kind
+  jev "Which kind of inquiry is this?"
+    returns "The customer wants to send an item back or exchange it"
+    delivery "A parcel is late, lost or damaged, or the customer asks where it is"
+    …
+  model "jev-1.13.0"
+  confidence 0.8 else unsure
+```
+
+</div>
+<div markdown>
+
+### Jev decides, and says how sure
+
+A task can ask TypeSafe's Jev, which writes no text: it answers typed questions, each with how sure
+it is. The task's answer type is the question, a choice among an enum's values, a place on a scale
+of them, or yes or no, and an answer less sure than the task asks fails the call with an error the
+flow handles. How sure is enough for what can be a rule's table.
+[Jev](jev.md)
+
+</div>
+</div>
+
+<div class="dd-row dd-row--flip" markdown>
+<div markdown>
+
 ```text
 dandori doc hotel.flow > hotel.md
 dandori doc hotel.flow --format html > hotel.html
@@ -197,8 +224,8 @@ way its run goes. [The hotel booking, drawn](doc/hotel.html) · [Draw a workflow
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
 encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
 the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
-Cloud, the caller image run against real Lambda, HTTP and AWS endpoints from Argo, and agents run
-against OpenAI and Anthropic themselves. The design, the decisions and what is left are in
+Cloud, the caller image run against real Lambda, HTTP and AWS endpoints from Argo, and agents and
+Jev run against OpenAI, Anthropic and TypeSafe themselves. The design, the decisions and what is left are in
 [DESIGN.md](https://github.com/i2y/dandori/blob/main/DESIGN.md), in Japanese; its principles are
 on [Design](design.md). dandori is licensed under either of the Apache License 2.0 or the MIT
 license, at your option.

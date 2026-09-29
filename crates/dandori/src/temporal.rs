@@ -62,7 +62,7 @@ pub(crate) fn activity_timeout(t: &TaskDef) -> u64 {
         return 60;
     }
     match t.via(Platform::Temporal) {
-        Some(Via::Http { .. }) | Some(Via::Agent { .. }) => crate::asl::HTTP_TASK_SECONDS,
+        Some(Via::Http { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_)) => crate::asl::HTTP_TASK_SECONDS,
         Some(Via::Lambda(_)) => LAMBDA_SECONDS,
         _ => 365 * 86_400,
     }
@@ -450,7 +450,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         .tasks
         .iter()
         .filter(|t| !t.is_child(p) && !t.event)
-        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. })))
+        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))))
         .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let mut a = header.to_string();
@@ -465,6 +465,8 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     a.push_str("// - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("//   Functions, and answers { \"answer\": … } in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("//   A Claude agent's enum values are taken without regard to case (io.fold).\n");
+    a.push_str("// - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
+    a.push_str("//   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
     a.push_str("// - The others are yours to write (OwnTasks). ");
     match flavor {
         Flavor::Temporal => a.push_str("A declared error is thrown as\n//   ApplicationFailure.create({ type: \"<error>\", nonRetryable: true }).\n"),
@@ -498,7 +500,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
     }
     a.push_str("}\n\n");
-    a.push_str("/** The tasks you write: the ones that say neither `lambda`, `http`, `aws` nor `agent`. */\n");
+    a.push_str("/** The tasks you write: the ones that say neither `lambda`, `http`, `aws`, `agent` nor `jev`. */\n");
     a.push_str("export interface OwnTasks {\n");
     for task in &own {
         a.push_str(&format!("  {}(args: {{ {} }}): Promise<{}>;\n", ident(&task.name), task_params(m, task).join("; "), task_result(m, task)));
@@ -521,6 +523,16 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         for task in &agents {
             let schema = render::agent_schema(m, task).expect("the checker gives an agent an answer with a schema");
             a.push_str(&format!("  {}: {},\n", q(&task.name), render::layout(&schema, 1, "  ", false)));
+        }
+        a.push_str("};\n\n");
+    }
+    let jevs: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).cloned().collect();
+    if !jevs.is_empty() {
+        a.push_str("/** What each Jev task asks, and how io.jev reads the answer. */\n");
+        a.push_str("const JEV: Record<string, io.JevTask> = {\n");
+        for task in &jevs {
+            let spec = render::jev_spec(task, task.jev().expect("a Jev task"));
+            a.push_str(&format!("  {}: {},\n", q(&task.name), render::layout(&spec, 1, "  ", false)));
         }
         a.push_str("};\n\n");
     }
@@ -642,6 +654,15 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 }
                 a.push_str(&format!("      ) as {},\n", task_result(m, task)));
             }
+            Some(Via::Jev(j)) => {
+                let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
+                let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
+                a.push_str(&format!("    {name}: async (args) =>\n      io.jev(\n        io.status(\n          await transport.http({{\n"));
+                a.push_str("            http: \"POST\",\n            url: io.JEV_URL,\n");
+                a.push_str(&format!("            body: {{ state: {}, model: {}, questions: JEV[{}].questions }},\n", braces(&state.join(", ")), q(&j.model), q(&task.name)));
+                a.push_str("            typesafe: true,\n          }),\n");
+                a.push_str(&format!("          {},\n          fail,\n        ),\n        JEV[{}],\n        fail,\n      ) as {},\n", braces(&statuses), q(&task.name), task_result(m, task)));
+            }
             _ => {}
         }
     }
@@ -685,7 +706,7 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     }
     let mut declared = Vec::new();
     for t in &m.tasks {
-        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. })) {
+        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))) {
             declared.push(format!("  {}: [{}],", q(&ident(&t.name)), t.errors.iter().map(|e| q(&e.name)).collect::<Vec<_>>().join(", ")));
         }
     }
@@ -806,11 +827,14 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             }
         }
         let mut outs = Vec::new();
-        for o in ts["outputs"].as_array().unwrap_or(&vec![]) {
+        let outputs = ts["outputs"].as_array().cloned().unwrap_or_default();
+        for o in &outputs {
             let name = o["name"].as_str().unwrap_or("");
             let alias = o["alias"].as_str().unwrap_or("");
             let ty = o["type"].as_str().unwrap_or("");
-            let v = if enum_aliases.iter().any(|x| x == ty) || ty == "boolean" || ty == "string" { format!("out.{alias}") } else { format!("Number(out.{alias})") };
+            // with one output, the rule's function answers that value itself, not a record of outputs
+            let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
+            let v = if enum_aliases.iter().any(|e| e == ty) || ty == "boolean" || ty == "string" { x } else { format!("Number({x})") };
             outs.push(format!("{}: {v}", q(name)));
         }
         rules_ts.push_str(&format!(
@@ -826,16 +850,20 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     rules_ts
 }
 
-const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws` or `agent` reach the other side. They go
+const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws`, `agent` or `jev` reach the other side. They go
 // through a Transport, so that the credentials, the clients and a test's stand-in are yours to
 // set; the default one uses fetch, the AWS SDK for JavaScript v3, OpenAI's Agents SDK
 // (@openai/agents, which reads OPENAI_API_KEY) and Anthropic's SDK (@anthropic-ai/sdk, which
-// reads ANTHROPIC_API_KEY), each loaded when first needed.
+// reads ANTHROPIC_API_KEY), each loaded when first needed. Jev is called over HTTP with fetch,
+// with TypeSafe's API key (TYPESAFE_API_KEY).
 
 /** What Lambda or an AWS API answered: the value, or an error by the name the other side gives it. */
 export type Answer = { ok: unknown } | { error: string; message: string };
 
-/** An HTTP request as Step Functions' HTTP Task sends it; `form` asks for a URL-encoded body. */
+/**
+ * An HTTP request as Step Functions' HTTP Task sends it; `form` asks for a URL-encoded body, and
+ * `typesafe` says it is a call of Jev, to which the default transport adds TypeSafe's API key.
+ */
 export interface HttpRequest {
   http: string;
   url: string;
@@ -843,6 +871,24 @@ export interface HttpRequest {
   body?: Record<string, unknown>;
   query?: Record<string, unknown>;
   form?: boolean;
+  typesafe?: boolean;
+}
+
+/** Where every target sends a Jev task's request: TypeSafe's API. */
+export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
+
+/**
+ * What a Jev task asks, and how its answer is read (jev): the questions of the request by their
+ * ids; for each question, the field of the answer it fills (none: the answer is its value), its
+ * kind and the values it takes (a score's from the lowest level); the fields that take how sure
+ * Jev is of a question's answer, as a count of a rate's steps (`per` of them make the whole); and
+ * how sure every answer must be, with the error the call fails with when one is not.
+ */
+export interface JevTask {
+  questions: Record<string, unknown>;
+  read: { id: string; field?: string; kind: "choice" | "score" | "noul"; values: string[] }[];
+  confidences: { field: string; question: number; per: number }[];
+  floor?: { at: number; error: string; cause: string };
 }
 
 /** A call of an agent: the model is told `instructions`, reads `input` as JSON text, and answers in `schema`. */
@@ -912,6 +958,8 @@ export interface Options {
    * client does not retry by itself unless these say so: the workflow retries, as `retry` says.
    */
   claude?: Record<string, unknown>;
+  /** TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. */
+  typesafe?: { apiKey?: string };
 }
 
 /** The package and the client of the AWS SDK for each service the default transport knows. */
@@ -948,6 +996,11 @@ export function transport(options: Options = {}): Transport {
     let url = req.url;
     if (req.query) url += (url.includes("?") ? "&" : "?") + encode(req.query);
     const headers: Record<string, string> = { ...(req.headers ?? {}), ...(options.headers ? await options.headers(req.url) : {}) };
+    if (req.typesafe && !Object.keys(headers).some((h) => h.toLowerCase() === "authorization")) {
+      const key = options.typesafe?.apiKey ?? process.env.TYPESAFE_API_KEY;
+      if (!key) throw new Error("no API key for Jev: set TYPESAFE_API_KEY, or give the transport { typesafe: { apiKey } }");
+      headers["Authorization"] = `Bearer ${key}`;
+    }
     let body: string | undefined;
     if (req.body !== undefined) {
       if (req.form) body = encode(req.body);
@@ -1128,6 +1181,55 @@ export function status(r: { status: number; body: unknown }, names: Record<strin
   if (r.status >= 200 && r.status < 300) return r.body;
   const kind = names[String(r.status)];
   return fail(kind ?? `Dandori.HttpStatus.${r.status}`, typeof r.body === "string" ? r.body : JSON.stringify(r.body));
+}
+
+function isObject(x: unknown): x is Record<string, unknown> {
+  return x !== null && typeof x === "object" && !Array.isArray(x);
+}
+
+/**
+ * Jev's answer to one question: the value it takes and how sure Jev is of it, from 0 to 1, or
+ * undefined when it is not there or not of its kind. A choice and a score say how sure
+ * (`confidence`); a score's place goes to the nearest level, a half going up; a noul's answer is
+ * yes when the probability of yes is over one half, and Jev is as sure as the probability of the
+ * answer taken.
+ */
+function jevOne(q: JevTask["read"][number], a: Record<string, unknown>): [unknown, number] | undefined {
+  const unit = (x: unknown) => (typeof x === "number" && x >= 0 && x <= 1 ? x : undefined);
+  if (q.kind === "noul") {
+    const p = unit(a.noul);
+    return p === undefined ? undefined : [p > 0.5, p > 0.5 ? p : 1 - p];
+  }
+  const c = unit(a.confidence);
+  if (c === undefined) return undefined;
+  if (q.kind === "choice") return typeof a.choice === "string" && q.values.includes(a.choice) ? [a.choice, c] : undefined;
+  if (typeof a.score !== "number") return undefined;
+  const level = Math.floor(a.score + 0.5);
+  return level >= 0 && level < q.values.length ? [q.values[level], c] : undefined;
+}
+
+/**
+ * A Jev task's answer, read from the body of Jev's response as every target reads it: the value of
+ * the task's type, null where an answer is not there or not of its kind (the workflow's check of
+ * the answer refuses it), and how sure Jev is as a count of a rate's steps, rounded down after a
+ * billionth that takes up how a decimal falls between binary fractions. When every answer is
+ * there and one is less sure than the task asks, the call fails with the task's error.
+ */
+export function jev(body: unknown, t: JevTask, fail: (kind: string, message: string) => never): unknown {
+  const answers = isObject(body) && isObject(body.answers) ? body.answers : undefined;
+  const read = t.read.map((q) => {
+    const a = answers?.[q.id];
+    return isObject(a) ? jevOne(q, a) : undefined;
+  });
+  if (t.floor !== undefined && read.every((r) => r !== undefined) && read.some((r) => r![1] < t.floor!.at)) fail(t.floor.error, t.floor.cause);
+  if (t.read.length === 1 && t.read[0].field === undefined) return read[0]?.[0] ?? null;
+  const out: Record<string, unknown> = {};
+  t.read.forEach((q, i) => (out[q.field ?? q.id] = read[i]?.[0] ?? null));
+  for (const c of t.confidences) {
+    const r = read[c.question];
+    out[c.field] = r === undefined ? null : Math.floor(r[1] * c.per + 1e-9);
+  }
+  return out;
 }
 "#;
 

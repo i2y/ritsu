@@ -9,11 +9,11 @@ record 注文
   金額 : money[円, incl_tax]  range >=0 <=1000000
 
 inputs
-  注文たち : list[注文]
+  注文 : list[注文]
 
 # On Temporal, a call of a rule that says `local` leaves a marker in the history, not an
 # activity's six events, so two thousand rounds of it fit in one run, retries and all; without
 # `local`, they would not.
 flow
-  for 注文 in 注文たち at most 2000 in parallel
-    let 判定 = 急ぎ(会員: 注文.会員, 金額: 注文.金額)
+  for 一件 in 注文 at most 2000 in parallel
+    let 判定 = 急ぎ(会員: 一件.会員, 金額: 一件.金額)

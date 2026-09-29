@@ -40,7 +40,7 @@ flowchart TD
     s4 --> s6
     s6 --> s7
     s3 -->|"paid, shipped, delivered, cancelled"| s8
-    s7 -->|"次の回"| s3
+    s7 -->|"次のイテレーション"| s3
     L2 -->|"3 回終えたら"| s9
     s8 --> s9
     s9 -->|"received"| s10

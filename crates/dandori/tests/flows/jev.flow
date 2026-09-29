@@ -1,0 +1,90 @@
+workflow 仕分け v1
+description "Jev のエッジケース：一部の値にだけ意味を書いた choice、score、はいといいえの意味を書いた noul、一回のリクエストで四つに答えるレコード（choice・score・noul と、確信度の割合）、確信度が下限を切ったときのエラーを処理する呼び出しと、処理せずに on failure へ行く呼び出し、下限を切った答えのあとも前の値が残る変数、並列のイテレーションの中の Jev、結果を読まない呼び出し、ステータスで宣言したエラーのリトライ"
+
+enum 種類 = 返品 | 配送 | 請求 | その他
+enum 急ぎ = 低 | 中 | 高
+
+record 読み
+  種類   : 種類
+  急ぎ   : 急ぎ
+  人     : bool
+  確かさ : rate[step 0.01%]
+
+inputs
+  問い合わせ : list[string]
+  本文       : string
+  会員       : bool
+
+outputs
+  一通ごとの種類 : list[種類]
+  種類           : 種類
+  急ぎ           : 急ぎ
+  人             : bool
+  確かさ         : rate[step 0.01%]
+
+# values without a meaning go to Jev as options with none
+task 種類を選ぶ(本文: string) -> 種類
+  jev "この問い合わせの種類はどれか"
+    返品 "商品を返したい、交換したい"
+    配送 "荷物が届かない、遅れている、壊れていた"
+  model "jev-1.13.0"
+  confidence 0.8 else 迷い
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1a2b3c4d"
+  errors 混雑 = 429, 過負荷 = 529
+  retry 2 times every 1 second on 混雑, 過負荷
+  timeout 10 seconds
+
+task 急ぎを測る(本文: string, 種類: 種類) -> 急ぎ
+  jev score "お客さまはどれほど急いでいるか"
+    低 "急ぎを伝えていない"
+    中 "期日を挙げているが、差し迫ってはいない"
+    高 "今日中の対応を求めている"
+  model "jev-1.13.0"
+  confidence 0.7 else 測れない
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1a2b3c4d"
+
+task 人を求める(本文: string, 会員: bool) -> bool
+  jev "お客さまは人の担当者と話したいと言っているか"
+    true "担当者や人と話したいとはっきり書いている"
+    false "そうは書いていない"
+  model "jev-1.13.0"
+  confidence 0.9 else 分からない
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1a2b3c4d"
+
+# one request for four answers; how sure Jev is of the kind comes as a rate
+task 読む(本文: string) -> 読み
+  jev
+    種類 "この問い合わせの種類はどれか"
+      返品 "商品を返したい、交換したい"
+      請求 "請求や支払いのこと"
+    急ぎ score "お客さまはどれほど急いでいるか"
+      低 "急ぎを伝えていない"
+      中 "期日を挙げているが、差し迫ってはいない"
+      高 "今日中の対応を求めている"
+    人 "お客さまは人の担当者と話したいと言っているか"
+    確かさ confidence of 種類
+  model "jev-1.13.0"
+  confidence 0.6 else 自信なし
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1a2b3c4d"
+  timeout 10 seconds
+
+flow
+  # the answer is not read, but how sure it is still is
+  人を求める(本文: 本文, 会員: 会員)
+    on 分からない => pass
+  let 一通ごとの種類 = for 一通 in 問い合わせ at most 3 in parallel
+    let k = 種類を選ぶ(本文: 一通)
+      on 迷い => let k = その他
+    yield k
+  let 種類 = 種類を選ぶ(本文: 本文)
+    on 迷い => let 種類 = その他
+  # an answer less sure than the task asks leaves the kind as it was, which the next call sends
+  let 種類 = 種類を選ぶ(本文: 本文)
+    on 迷い => pass
+  let 急 = 急ぎを測る(本文: 本文, 種類: 種類)
+    on 測れない => let 急 = 高
+  let 読み = 読む(本文: 本文)
+  succeed 一通ごとの種類 = 一通ごとの種類, 種類 = 種類, 急ぎ = 急, 人 = 読み.人, 確かさ = 読み.確かさ
+
+on failure
+  fail 読めない "問い合わせを読み取れませんでした"

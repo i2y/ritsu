@@ -425,6 +425,11 @@ fn transport_spec(m: &Model, p: Platform) -> (Vec<Value>, Vec<Value>) {
                 let errors: serde_json::Map<String, Value> = t.errors.iter().filter_map(|e| e.status.map(|s| (e.name.clone(), json!(s)))).collect();
                 http.push(json!({ "method": method, "url": url, "errors": errors }));
             }
+            // every Jev task sends to one URL; an error's status is the task's that declares it
+            Some(Via::Jev(_)) => {
+                let errors: serde_json::Map<String, Value> = t.errors.iter().filter_map(|e| e.status.map(|s| (e.name.clone(), json!(s)))).collect();
+                http.push(json!({ "method": "POST", "url": dandori::model::JEV_URL, "errors": errors }));
+            }
             Some(Via::Aws { service, action }) => {
                 let errors: serde_json::Map<String, Value> = t.errors.iter().map(|e| (e.name.clone(), json!(e.exception.clone().unwrap_or_else(|| e.name.clone())))).collect();
                 aws.push(json!({ "api": format!("{service}:{action}"), "errors": errors, "keyParam": t.key_param }));
@@ -978,10 +983,20 @@ fn wire_cases(m: &Model) -> Vec<Value> {
             let kind = ans.get("error").and_then(|e| e.as_str());
             let case = if let Some(method) = call.get("http").and_then(|x| x.as_str()) {
                 let url = call["url"].as_str().unwrap();
-                let task = m.tasks.iter().find(|t| matches!(t.via(p), Some(Via::Http { method: tm, url: tu, .. }) if tm == method && url_matches(tu, url))).unwrap_or_else(|| panic!("no task sends {method} {url}"));
-                let Some(Via::Http { form, .. }) = task.via(p) else { unreachable!() };
+                // a Jev task's call: every one goes to TypeSafe's URL, and the one that declares the error names its status
+                let jev = url == dandori::model::JEV_URL;
+                let task = if jev {
+                    let jevs: Vec<&dandori::model::TaskDef> = m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).collect();
+                    jevs.iter().find(|t| kind.is_some_and(|k| t.errors.iter().any(|e| e.name == k))).or(jevs.first()).copied().unwrap()
+                } else {
+                    m.tasks.iter().find(|t| matches!(t.via(p), Some(Via::Http { method: tm, url: tu, .. }) if tm == method && url_matches(tu, url))).unwrap_or_else(|| panic!("no task sends {method} {url}"))
+                };
+                let form = matches!(task.via(p), Some(Via::Http { form: true, .. }));
                 let mut request = call.clone();
                 request["form"] = json!(form);
+                if jev {
+                    request["typesafe"] = json!(true);
+                }
                 let reply = match kind {
                     None => json!({ "status": 200, "body": ans["ok"] }),
                     Some(k) => json!({ "status": task.errors.iter().find(|e| e.name == k).and_then(|e| e.status).unwrap_or(500), "body": "scripted" }),
@@ -1087,8 +1102,8 @@ fn default_transports_send_what_the_calls_say() {
             std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
             let mut by_lang = Vec::new();
             for (lang, out) in [
-                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).output().unwrap()),
-                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).output().unwrap()),
+                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap()),
+                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap()),
             ] {
                 assert!(out.status.success(), "{}: the {lang} check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
                 let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join(if lang == "Python" { "py.json" } else { "ts.json" })).unwrap()).unwrap();
@@ -1123,6 +1138,10 @@ fn default_transports_send_what_the_calls_say() {
                                 assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
                             }
                             assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
+                            // Jev's call carries TypeSafe's key, from TYPESAFE_API_KEY
+                            if req["typesafe"] == json!(true) {
+                                assert_eq!(got["headers"]["authorization"], json!("Bearer wire-typesafe-key"), "{}: TypeSafe's key", at());
+                            }
                             let want_body = if req["body"].is_null() {
                                 Value::Null
                             } else if req["form"] == json!(true) {
@@ -1311,14 +1330,15 @@ fn rule_glue_answers_the_rulec_vectors() {
     for f in flows(&root().join("examples")) {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
-        let asl_files = dandori::asl::build(&m).unwrap_or_default();
         let ts_files = dandori::temporal::build(&m).unwrap();
-        for r in &m.rules {
-            let handler = asl_files.iter().find(|(n, _)| n.starts_with("lambda/") && n.contains(r.info.api["python"]["module"].as_str().unwrap_or("?")));
-            let (hname, htext) = match handler {
-                Some(h) => h,
-                None => continue, // the rule is only read for its machine
-            };
+        // every rule the flow calls, whether or not Step Functions can run the flow; a rule that is
+        // only read for its machine has no glue
+        let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+        for (ri, r) in m.rules.iter().enumerate() {
+            if !called.contains(&ri) {
+                continue;
+            }
+            let (hname, htext) = &dandori::asl::lambda_handler(&m, ri);
             let dir = scratch(&format!("glue-{}", dandori::render::ident(&r.name)));
             let gen = Command::new(rulec_bin()).arg("gen").arg(&r.info.path).arg("--out").arg(dir.join("rulec")).output().unwrap();
             assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));

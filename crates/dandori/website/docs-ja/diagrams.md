@@ -11,33 +11,35 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## Markdown で、プルリクエストに
 
-Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。タスクがすべて自分で書くコードの、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow)）です。
+Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。Jev が申込を採点し、人の承認に回すかを規則が決める、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow)）です。
 
 ```mermaid
 flowchart TD
     start(["審査 v1"])
-    s1["結果 = 採点する(…)<br>自分で書くタスク<br>retry 2 times every 10 seconds"]
+    s1["結果 = 採点する(…)<br>jev · jev-1.13.0<br>retry 2 times every 10 seconds on 混雑, 過負荷 · timeout 10 seconds"]
     s2(["fail 採点不能<br>#quot;申込 {申込.id} を採点できませんでした#quot;"])
-    s3{{"match 結果.判断"}}
-    s5[/"返事 = 承認を求める(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 3 days"/]
-    s6(["fail 承認なし<br>#quot;三日たっても承認がありません#quot;"])
-    s7["知らせる(…)<br>自分で書くタスク"]
-    s8(["succeed 判断 = 承認"])
-    s9["知らせる(…)<br>自分で書くタスク"]
-    s10(["succeed 判断 = 結果.判断"])
+    s3[["判定 = 方針(…)<br>rule 審査の方針.rule"]]
+    s4{{"match 判定.決定"}}
+    s6[/"返事 = 承認を求める(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 3 days"/]
+    s7(["fail 承認なし<br>#quot;三日たっても承認がありません#quot;"])
+    s8["知らせる(…)<br>自分で書くタスク"]
+    s9(["succeed 判断 = 承認"])
+    s10["知らせる(…)<br>自分で書くタスク"]
+    s11(["succeed 判断 = 結果.判断"])
     start --> s1
-    s1 -.->|"on 採点できない"| s2
+    s1 -.->|"on failure"| s2
     s1 --> s3
-    s3 -->|"保留"| s5
-    s5 -.->|"on timeout"| s6
-    s5 --> s7
-    s7 --> s8
-    s3 -->|"承認, 却下"| s9
-    s9 --> s10
+    s3 --> s4
+    s4 -->|"人に回す"| s6
+    s6 -.->|"on timeout"| s7
+    s6 --> s8
+    s8 --> s9
+    s4 -->|"承認, 却下"| s10
+    s10 --> s11
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s8,s10 ok
-    class s2,s6 bad
+    class s9,s11 ok
+    class s2,s7 bad
 ```
 
 四角はタスク、両脇に線のある四角は規則、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。呼び出しの二行目は呼び方で、三行目は、流れには書かれていない宣言の中身（案件に何をするか、リトライ、タイムアウト）です。
@@ -65,7 +67,7 @@ flowchart TD
 | 呼び出しの下の `on <エラー> =>` | 呼び出しの横から、処理するステップへの破線の矢印 |
 | `match` | 六角形と、分岐ごとの矢印。先へ進む最初の分岐が真下に来る |
 | `wait`、`wait until` | 角の丸い四角 |
-| `repeat`、`for` | 繰り返すステップを囲む枠。左に次の回へ戻る線、右に `break` で抜ける線。並列の `for` には戻る線がない |
+| `repeat`、`for` | 繰り返すステップを囲む枠。左に次のイテレーションへ戻る線、右に `break` で抜ける線。並列の `for` には戻る線がない |
 | `succeed`、`fail` | 緑と赤の終わり。`fail … leaving` は、どの案件を引き渡すかを書く |
 | `on failure`、`on cancel` | それぞれ別の図。始まりから、ワークフローの終わり方まで |
 | `let x = <値>` | 四角 |

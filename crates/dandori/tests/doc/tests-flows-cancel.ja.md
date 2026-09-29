@@ -1,8 +1,8 @@
 # 取消 v1
 
-キャンセルの端の振る舞い：案件を片付ける on cancel、やり直しと受けを素通りするキャンセル、並列の回の中のキャンセル、コールバックを待つあいだのキャンセル、on failure の最中のキャンセル。Temporal 向け
+キャンセルのエッジケース：案件を片付ける on cancel、リトライとエラーの処理を素通りするキャンセル、並列のイテレーションの中のキャンセル、コールバックを待つあいだのキャンセル、on failure の最中のキャンセル。Temporal 向け
 
-`tests/flows/cancel.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`, `品目たち: list[string]` です。
+`tests/flows/cancel.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`, `品目: list[string]` です。
 
 ## flow
 
@@ -10,9 +10,9 @@
 flowchart TD
     start(["取消 v1"])
     s1["受注 ← 注文を見る(…)<br>自分で書くタスク<br>observes"]
-    subgraph L2 ["let 引当 = for 品目 in 品目たち at most 3 in parallel · yield r.id"]
+    subgraph L2 ["let 引当 = for 一品 in 品目 at most 3 in parallel · yield r.id"]
         s3["r = 引き当てる(…)<br>自分で書くタスク<br>retry 1 times every 1 second"]
-        s4(["fail NotReserved<br>#quot;{品目} を引き当てられませんでした#quot;<br>leaving 受注"])
+        s4(["fail NotReserved<br>#quot;{一品} を引き当てられませんでした#quot;<br>leaving 受注"])
     end
     s5[/"受注 ← 配達を待つ(…)<br>自分で書くタスク（応答はコールバック）<br>observes · timeout 7 days"/]
     s6(["fail DeliveryLate<br>#quot;七日たっても配達の知らせがありません#quot;<br>leaving 受注"])
@@ -22,7 +22,7 @@ flowchart TD
     start --> s1
     s1 --> s3
     s3 -.->|"on failure"| s4
-    L2 -->|"全部の回が終わったら"| s5
+    L2 -->|"すべてのイテレーションが終わったら"| s5
     s5 -.->|"on timeout"| s6
     s5 --> s7
     s7 -->|"受付, 入金済, 出荷済"| s9
@@ -96,7 +96,7 @@ flowchart TD
 
 | 行 | 終わり方 | `受注` |
 |---:|---|---|
-| 49 | `fail NotReserved` "{品目} を引き当てられませんでした" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
+| 49 | `fail NotReserved` "{一品} を引き当てられませんでした" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 52 | `fail DeliveryLate` "七日たっても配達の知らせがありません" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 55 | `fail NotDelivered` "配達されていません" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 55 | flow が最後まで走り、ワークフローは成功する | `配達済`, `取消` |

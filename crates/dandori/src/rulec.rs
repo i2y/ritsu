@@ -129,7 +129,12 @@ pub fn load(path: &Path) -> Result<RuleInfo, String> {
         match sch["type"].as_str() {
             Some("boolean") => RType::Bool,
             Some("integer") | Some("number") => {
-                RType::Num { unit: normalize_unit(&text), min: sch["minimum"].as_i64(), max: sch["maximum"].as_i64() }
+                // a rate travels as a count of its steps, and the schema says how many make 100%
+                let unit = match (text.as_str(), rate_scale(sch["description"].as_str().unwrap_or(""))) {
+                    ("rate", Some(per)) => crate::model::rate_unit(per),
+                    _ => normalize_unit(&text),
+                };
+                RType::Num { unit, min: sch["minimum"].as_i64(), max: sch["maximum"].as_i64() }
             }
             _ => RType::Str,
         }
@@ -167,6 +172,13 @@ pub fn load(path: &Path) -> Result<RuleInfo, String> {
         preconditions: api["preconditions"].clone(),
         api,
     })
+}
+
+/// How many steps of a rate make 100%, from the description rulec gives the rate in its schema:
+/// "the rate as a count of 1% steps (100% is 100)", or in Japanese "（100% なら 100）".
+fn rate_scale(description: &str) -> Option<u64> {
+    let rest = description.split("100% is ").nth(1).or_else(|| description.split("100% なら ").nth(1))?;
+    rest.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok().filter(|n| *n > 0)
 }
 
 pub fn normalize_unit(t: &str) -> String {

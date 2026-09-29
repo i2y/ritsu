@@ -1,15 +1,16 @@
 workflow review v1
-description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule runs in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends"
 
-enum Verdict = approve | reject | hold
+use rule policy from "../rules/review_policy.rule"
 
 record Application
-  id     : string
-  amount : int
+  id      : string
+  amount  : int
+  purpose : string
 
 record Score
-  points  : int
-  verdict : Verdict
+  verdict : policy.verdict
+  sure    : rate[step 1%]  range >=0 <=100
 
 record Approval
   approver : string
@@ -18,17 +19,25 @@ inputs
   application : Application
 
 outputs
-  verdict : Verdict
+  verdict : policy.verdict
 
-# Scoring runs on workers of its own, which may be written in another language.
-task score(application_id: string, amount: int) -> Score
+# Jev places what the applicant wrote on the scale of verdicts, from the lowest level, and how
+# sure it is of the verdict comes as a rate, for the rule to weigh.
+task score(purpose: string) -> Score
+  jev
+    verdict score "How clearly is the money for running the business?"
+      reject "It is for something personal or speculative, or against the law"
+      hold "It is for the business, but the statement leaves unclear what it pays for"
+      approve "It pays for a named part of running the business, such as stock, equipment, staff or premises"
+    sure confidence of verdict
+  model "jev-1.13.0"
   queue "scoring"
-  errors unscorable
-  retry 2 times every 10 seconds
-  idempotent
+  errors busy = 429, overloaded = 529
+  retry 2 times every 10 seconds on busy, overloaded
+  timeout 10 seconds
 
 # Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task ask_for_approval(application_id: string, points: int) -> Approval
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
   callback
   timeout 3 days
 
@@ -37,12 +46,13 @@ task notify(application_id: string, text: string)
   idempotent
 
 flow
-  let r = score(application_id: application.id, amount: application.amount)
-    on unscorable => fail Unscorable "Could not score application {application.id}"
-  match r.verdict
+  let r = score(purpose: application.purpose)
+    on failure => fail Unscorable "Could not score application {application.id}"
+  let d = policy(verdict: r.verdict, sure: r.sure)
+  match d.decision
     approve, reject => pass
-    hold =>
-      let a = ask_for_approval(application_id: application.id, points: r.points)
+    ask =>
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
         on timeout => fail NoAnswer "No approval in three days"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve

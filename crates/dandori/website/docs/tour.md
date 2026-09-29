@@ -73,8 +73,8 @@ task get_intent(intent: string) -> PaymentIntent
   retry 3 times every 2 seconds
 ```
 
-- **How it is called**: `http`, `lambda`, `aws`, `connect`, an `agent`, another `.flow`, or code
-  you write. [What a task calls](tasks.md) has them all, and what each becomes on each platform.
+- **How it is called**: `http`, `lambda`, `aws`, `connect`, an `agent`, `jev`, another `.flow`, or
+  code you write. [What a task calls](tasks.md) has them all, and what each becomes on each platform.
 - **What it does to a case**: `starts` a case in a state machine (here followed at once by the event
   `attach`), `sends` an event to it, or `observes` it. The checker moves the case's states along the
   state machine's table.
@@ -143,7 +143,7 @@ flow
   must have an arm, and there is no default arm: a value no arm names is refused by the checker
   (E010), and at run time fails with `Dandori.UnexpectedValue` rather than slip into the last arm.
   A `.flow` has no comparison and no arithmetic: a condition is a rule's, or a task answers it (an
-  API, an agent, your own code).
+  API, an agent, Jev, your own code).
 - `on <error> =>` handles a declared error of the call above it; `on failure =>` handles any failure,
   and `on timeout =>` a timeout.
 - `wait 1 hour` and `wait until booking.check_out` wait. `succeed outcome = …` ends the run with its

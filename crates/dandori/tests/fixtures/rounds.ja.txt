@@ -1,6 +1,6 @@
-エラー[E009]: tests/fixtures/rounds.flow:22:1: `r` は、この `for … in parallel` の中と外の両方で値を入れられています。各回は同時に回り、自分の変数を持つので、別の名前にしてください
+エラー[E009]: tests/fixtures/rounds.flow:22:1: `r` は、この `for … in parallel` の中と外の両方で値を入れられています。イテレーションは同時に走り、それぞれが自分の変数を持つので、別の名前にしてください
     22 |   for x in 明細 at most 10 in parallel
-エラー[E009]: tests/fixtures/rounds.flow:24:5: `for … in parallel` の各回は同時に回るので、`break` で抜けられません
+エラー[E009]: tests/fixtures/rounds.flow:24:5: `for … in parallel` のイテレーションは同時に走るので、`break` で抜けられません
     24 |     break
 エラー[E009]: tests/fixtures/rounds.flow:26:5: ほかのイテレーションがまだ動いていることがあるので、`for … in parallel` の中からは `succeed` できません
     26 |     succeed n = 1

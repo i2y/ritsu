@@ -1,5 +1,5 @@
 workflow edges v1
-description "言語の端の振る舞い：配列の json をリストに入れる、yield した json を集める、並列の中の並列、理由の無い fail"
+description "言語のエッジケース：配列の json をリストに入れる、yield した json を集める、並列の中の並列、理由の無い fail"
 
 record 箱
   中身   : json
@@ -10,8 +10,8 @@ record 答え
   付帯 : json
 
 inputs
-  箱たち : list[箱]
-  一つ   : json
+  箱   : list[箱]
+  一つ : json
 
 outputs
   集め : list[json]
@@ -26,14 +26,14 @@ task 置く(中身: json)
 
 flow
   置く(中身: [一つ, 一つ])
-  let 集め = for 箱 in 箱たち at most 3 in parallel
-    let 答え = 見る(中身: 箱.中身)
-    for 小箱 in 箱たち at most 3 in parallel
+  let 集め = for 一箱 in 箱 at most 3 in parallel
+    let 答え = 見る(中身: 一箱.中身)
+    for 小箱 in 箱 at most 3 in parallel
       match 小箱.ラベル
         some ラベル => 置く(中身: {ラベル: ラベル})
         none => fail NoLabel
     yield 答え.付帯
-  let 順に = for 箱2 in 箱たち at most 3
+  let 順に = for 箱2 in 箱 at most 3
     yield 箱2.中身
   置く(中身: 順に)
   succeed 集め = 集め

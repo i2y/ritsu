@@ -1,0 +1,5 @@
+build --target asl:
+error[E050]: tests/fixtures/jev_targets.flow:12:1: Step Functions calls Jev for `選ぶ` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds TypeSafe's API key (as the header Authorization, `Bearer <key>`)
+    12 | task 選ぶ(本文: string) -> 種類
+error[E050]: tests/fixtures/jev_targets.flow:16:1: Step Functions ends an HTTP Task's request after 60 seconds, so the `timeout` of `待って選ぶ` can be at most that
+    16 | task 待って選ぶ(本文: string) -> 種類

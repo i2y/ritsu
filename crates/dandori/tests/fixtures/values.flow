@@ -1,5 +1,5 @@
 workflow values v1
-description "値と型の誤り：リストのリスト、単位の書き誤り、none、無いことがある値、書き出したレコード、答えの無いタスク、数でない値の範囲と数の入らない範囲"
+description "値と型の誤り：リストのリスト、単位の書き誤り、none、オプショナルな値、書き出したレコード、結果を返さないタスク、数でない値の範囲と数の入らない範囲"
 
 use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"

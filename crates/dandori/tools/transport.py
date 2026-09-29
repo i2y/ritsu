@@ -4,7 +4,8 @@
 # over), which writes it down and gives the scenario's answer. The Python twin of
 # transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
 #
-# spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders})
+# spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}; the
+#   Jev tasks all send to one URL, and an error takes its status from the task that declares it)
 # spec["aws"]:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 #
 # A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
@@ -13,7 +14,8 @@
 # the answer the scenario gives the callback.
 #
 # An agent answers {"answer": <the scenario's value>}, as the model would under the schema; its
-# failure is raised, as the Agents SDK raises a refusal.
+# failure is raised, as the Agents SDK raises a refusal. A Jev task's call is an HTTP request, whose
+# body is the scenario's answer (Jev's response); `typesafe`, which says it is one, is not written down.
 #
 # A call that the scenario times out, or cancels the workflow during, goes to `run.hold(answer)`
 # when the runner has one: the runner keeps the call from answering until the platform times it
@@ -57,12 +59,13 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
             return {"error": error_name(ans["error"]), "message": "scripted"}
 
         async def http(self, req: dict[str, Any]) -> dict[str, Any]:
-            ans = run.take({k: v for k, v in req.items() if k != "form"}, None)
+            ans = run.take({k: v for k, v in req.items() if k not in ("form", "typesafe")}, None)
             if held(ans):
                 return await run.hold(ans)
             if "ok" in ans:
                 return {"status": 200, "body": ans["ok"]}
-            task = next((t for t in http_tasks if t["method"] == req["http"] and t["re"].match(req["url"])), None)
+            sent = [t for t in http_tasks if t["method"] == req["http"] and t["re"].match(req["url"])]
+            task = next((t for t in sent if ans["error"] in t.get("errors", {})), sent[0] if sent else None)
             status = (task or {}).get("errors", {}).get(ans["error"], 500)
             return {"status": status, "body": "scripted"}
 

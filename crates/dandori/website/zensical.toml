@@ -22,6 +22,7 @@ nav = [
   { "Write a workflow" = "tour.md" },
   { "What a task calls" = "tasks.md" },
   { Agents = "agents.md" },
+  { Jev = "jev.md" },
   { "What it checks" = "checks.md" },
   { "Draw a workflow" = "diagrams.md" },
   { "Build for a platform" = "platforms.md" },

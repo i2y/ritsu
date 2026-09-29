@@ -1,0 +1,70 @@
+error[E007]: tests/fixtures/jev.flow:31:3: Jev needs the model it asks; write the version, as `model "jev-1.13.0"`
+    31 |   jev "種類はどれか"
+error[E007]: tests/fixtures/jev.flow:34:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; write the type of its answer as `-> <type>`
+    34 |   jev "種類はどれか"
+error[E007]: tests/fixtures/jev.flow:38:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the answer is `string`
+    38 |   jev "要点は何か"
+error[E007]: tests/fixtures/jev.flow:42:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the answer is `int`
+    42 |   jev "いくつか"
+error[E007]: tests/fixtures/jev.flow:46:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the answer is `種類?`
+    46 |   jev "種類はどれか"
+error[E007]: tests/fixtures/jev.flow:50:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the answer is `list[種類]`
+    50 |   jev "種類はどれか"
+error[E007]: tests/fixtures/jev.flow:54:7: the answer is a record, so Jev is asked a question for each of its fields: write `jev` alone, and under it `<field> "<question>"` for each
+    54 |   jev "種類はどれか"
+error[E007]: tests/fixtures/jev.flow:58:3: write the question Jev answers after `jev`, in double quotes: `jev "<question>"`
+    58 |   jev
+error[E007]: tests/fixtures/jev.flow:62:3: write under `jev` what Jev is asked for the field `人` of `読み`: `人 "<question>"`, or `人 confidence of <field>`
+    62 |   jev
+error[E007]: tests/fixtures/jev.flow:69:8: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the field `要点` is `string`
+    69 |     要点 "要点は何か"
+error[E002]: tests/fixtures/jev.flow:76:5: `急ぎ` is not a field of `読み`, whose fields are 種類, 人
+    76 |     急ぎ "急いでいるか"
+error[E006]: tests/fixtures/jev.flow:83:5: `種類` is asked twice (line 81)
+    83 |     種類 "種類はどれか"
+error[E002]: tests/fixtures/jev.flow:89:5: `請求` is not a value of `種類`, whose values are 返品, 配送, その他
+    89 |     請求 "請求のこと"
+error[E006]: tests/fixtures/jev.flow:95:5: what `返品` means is written twice (line 94)
+    95 |     返品 "交換したい"
+error[E007]: tests/fixtures/jev.flow:99:13: Jev sees a score's levels only by what each means, so write under it what every value of `種類` means, from the lowest level to the highest; その他 is missing
+    99 |   jev score "どの段階か"
+error[E007]: tests/fixtures/jev.flow:105:7: a score has from 2 to 10 levels, and `十一` has 11 values
+   105 |   jev score "どの段階か"
+error[E007]: tests/fixtures/jev.flow:110:7: a score is a place on a scale of an enum's values; a `bool` is asked as yes or no
+   110 |   jev score "どの段階か"
+error[E007]: tests/fixtures/jev.flow:116:7: write what both `true` and `false` mean, or neither
+   116 |   jev "人を求めているか"
+error[E002]: tests/fixtures/jev.flow:122:5: the answer is yes or no, so write what `true` and `false` mean, not `yes`
+   122 |     yes "はっきり書いている"
+error[E007]: tests/fixtures/jev.flow:128:3: `confidence` says how sure Jev must be of its answer; this task has no `jev`
+   128 |   confidence 0.8 else 迷い
+error[E007]: tests/fixtures/jev.flow:133:23: `件数` is not a field Jev is asked about, so there is no answer to be sure of
+   133 |     確かさ confidence of 件数
+error[E007]: tests/fixtures/jev.flow:134:5: how sure Jev is goes into a rate with a step that goes into 100% a whole number of times, such as `rate[step 1%]` or `rate[step 0.01%]`; `件数` is `int`
+   134 |     件数 confidence of 種類
+error[E007]: tests/fixtures/jev.flow:135:5: how sure Jev is goes into a rate with a step that goes into 100% a whole number of times, such as `rate[step 1%]` or `rate[step 0.01%]`; `荒い` is `rate[step 3%]`
+   135 |     荒い confidence of 種類
+error[E007]: tests/fixtures/jev.flow:141:23: `failure` is always there; name an error of the task's own for an answer that is not sure enough
+   141 |   confidence 0.8 else failure
+error[E006]: tests/fixtures/jev.flow:146:23: the error `迷い` is written twice: `confidence … else 迷い` declares it
+   146 |   confidence 0.8 else 迷い
+error[E007]: tests/fixtures/jev.flow:152:3: Jev is at least half sure of the answer it takes to a yes or no, so `confidence 0.5` never fails the call; give more than 0.5
+   152 |   confidence 0.5 else 迷い
+error[E007]: tests/fixtures/jev.flow:158:20: Jev answers the same input much the same way each time, so asking again is not surer; `迷い` is not retried
+   158 |   retry 2 times on 迷い
+error[E007]: tests/fixtures/jev.flow:163:10: Jev's API says an error by its HTTP status; give `混雑` the one it comes back with, as `混雑 = 429` (the rate limit) or `混雑 = 529` (overloaded)
+   163 |   errors 混雑
+error[E007]: tests/fixtures/jev.flow:168:3: Jev only answers, and changes nothing on the other side, so it takes no `key`
+   168 |   key
+error[E007]: tests/fixtures/jev.flow:173:3: a `callback` task hands its token over by `lambda` or by `aws sqs:sendMessage`
+   173 |   callback
+error[E007]: tests/fixtures/jev.flow:178:3: Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on
+   178 |   url "https://api.example.com/v1"
+error[E007]: tests/fixtures/jev.flow:183:3: Jev answers at once and does not reason at length; `effort` says how hard an agent's model reasons
+   183 |   effort high
+error[E007]: tests/fixtures/jev.flow:186:7: the answer is a record, so Jev is asked a question for each of its fields: write `jev` alone, and under it `<field> "<question>"` for each
+   186 |   jev "状態はどれか"
+error[E007]: tests/fixtures/jev.flow:188:3: Jev reads what it is given and answers; it has no case on the other side to start, move or look at
+   188 |   observes
+warning[W032]: tests/fixtures/jev.flow:192:3: `jev-latest` is an alias, which moves to a new version of Jev without a change here, and how sure one version is means something else to the next; name the version the confidence is set for, as `model "jev-1.13.0"`
+   192 |   model "jev-latest"

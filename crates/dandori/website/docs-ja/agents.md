@@ -2,7 +2,7 @@
 
 `agent` のタスクは、モデルにタスクの引数を渡し、タスクに書いた型の値を応答として受け取ります。この応答は、ほかのタスクの結果と同じく `match` で分岐に使うことも、規則に渡すこともできます。問い合わせの例は、読むことと書くことをモデルに、振り分けを規則に任せています。
 [examples/inquiry](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow)
-は、お客さんからの問い合わせを、社内の Open Responses のエンドポイント（この例では Ollama）で動くモデルに読ませ、rulec の規則で振り分けて、返事の下書きを Claude に書かせます。
+は、お客さんからの問い合わせを、社内の Open Responses のエンドポイント（この例では Ollama）で動くモデルに読ませ、rulec の規則で振り分けて、返事の下書きを Claude に書かせます。振り分けに使う種類は [Jev](jev.md) が選んだもので、Jev が確信を持てないときだけモデルが読んだ種類を使います。
 
 ```flow
 task read_inquiry(text: string) -> Reading
@@ -22,7 +22,9 @@ task draft_reply(kind: routing.kind, point: string, order_id: string?, within: d
 flow
   let reading = read_inquiry(text: inquiry.text)
     on failure => …
-  let decision = routing(kind: reading.kind, member: inquiry.member)
+  let kind = pick_kind(text: inquiry.text)
+    on unsure, failure => let kind = reading.kind
+  let decision = routing(kind: kind, member: inquiry.member)
 ```
 
 ## 応答には型がある

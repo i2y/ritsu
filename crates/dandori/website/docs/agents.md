@@ -5,7 +5,8 @@ flow can match like any other answer, or give to a rule. The inquiry example lea
 the writing to models and the routing to a rule:
 [examples/inquiry](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow)
 reads a customer's message with a model behind the company's own Open Responses endpoint (Ollama, in
-the example), routes it with a rulec rule, and drafts the reply with Claude:
+the example), routes it with a rulec rule, and drafts the reply with Claude. The kind it routes by is
+[Jev](jev.md)'s, and the model's only when Jev is not sure of its own:
 
 ```flow
 task read_inquiry(text: string) -> Reading
@@ -25,7 +26,9 @@ task draft_reply(kind: routing.kind, point: string, order_id: string?, within: d
 flow
   let reading = read_inquiry(text: inquiry.text)
     on failure => …
-  let decision = routing(kind: reading.kind, member: inquiry.member)
+  let kind = pick_kind(text: inquiry.text)
+    on unsure, failure => let kind = reading.kind
+  let decision = routing(kind: kind, member: inquiry.member)
 ```
 
 ## The answer is typed

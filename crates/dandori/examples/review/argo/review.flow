@@ -1,15 +1,16 @@
 workflow review v1
-description "Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Argo Workflows: every task is a container of your image, and the approver's tool answers the callback with `argo node set` and `argo resume`"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Argo Workflows: the scoring and the rule run in a container of the image dandori writes (`caller/`), which calls Jev with TypeSafe's key; asking for the approval and the notice are containers of your images, and the approver's tool answers the callback with `argo node set` and `argo resume`"
 
-enum Verdict = approve | reject | hold
+use rule policy from "../rules/review_policy.rule"
 
 record Application
-  id     : string
-  amount : int
+  id      : string
+  amount  : int
+  purpose : string
 
 record Score
-  points  : int
-  verdict : Verdict
+  verdict : policy.verdict
+  sure    : rate[step 1%]  range >=0 <=100
 
 record Approval
   approver : string
@@ -18,17 +19,25 @@ inputs
   application : Application
 
 outputs
-  verdict : Verdict
+  verdict : policy.verdict
 
-# Each task runs in a container of its image, which reads the call from DANDORI_CALL.
-task score(application_id: string, amount: int) -> Score
-  image "registry.example.com/review/scoring:1"
-  errors unscorable
-  retry 2 times every 10 seconds
-  idempotent
+# Jev places what the applicant wrote on the scale of verdicts, from the lowest level, and how
+# sure it is of the verdict comes as a rate, for the rule to weigh.
+task score(purpose: string) -> Score
+  jev
+    verdict score "How clearly is the money for running the business?"
+      reject "It is for something personal or speculative, or against the law"
+      hold "It is for the business, but the statement leaves unclear what it pays for"
+      approve "It pays for a named part of running the business, such as stock, equipment, staff or premises"
+    sure confidence of verdict
+  model "jev-1.13.0"
+  errors busy = 429, overloaded = 529
+  retry 2 times every 10 seconds on busy, overloaded
+  timeout 10 seconds
 
+# The other tasks run in a container of their image, which reads the call from DANDORI_CALL.
 # Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task ask_for_approval(application_id: string, points: int) -> Approval
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
   image "registry.example.com/review/approval:1"
   callback
   timeout 3 days
@@ -38,12 +47,13 @@ task notify(application_id: string, text: string)
   idempotent
 
 flow
-  let r = score(application_id: application.id, amount: application.amount)
-    on unscorable => fail Unscorable "Could not score application {application.id}"
-  match r.verdict
+  let r = score(purpose: application.purpose)
+    on failure => fail Unscorable "Could not score application {application.id}"
+  let d = policy(verdict: r.verdict, sure: r.sure)
+  match d.decision
     approve, reject => pass
-    hold =>
-      let a = ask_for_approval(application_id: application.id, points: r.points)
+    ask =>
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
         on timeout => fail NoAnswer "No approval in three days"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve

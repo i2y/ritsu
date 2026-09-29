@@ -81,8 +81,8 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `image`, `lambda`, `http`, `aws`, `agent` or `workflow template` to run on Argo Workflows", t.name),
-                format!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`workflow template` のどれかが要ります", t.name),
+                format!("`{}` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows", t.name),
+                format!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります", t.name),
             )),
             Some(Via::ArgoTemplate(_)) if !t.errors.is_empty() => errs.push(Diag::error(
                 "E050",

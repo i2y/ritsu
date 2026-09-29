@@ -12,7 +12,8 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   runs is played against one reference interpreter, on every scenario the tests generate.
 - **Decisions come from outside the workflow.** A `.flow` branches only on what a rule or a task
   answered: an API, an agent (OpenAI's models, Claude, or any Open Responses endpoint) whose
-  answer comes back in a declared type, your own code, a person's approval. A decision that must
+  answer comes back in a declared type, TypeSafe's Jev, which answers typed questions with how sure
+  it is, your own code, a person's approval. A decision that must
   have no gaps can be a table in [rulec](https://github.com/i2y/rulec), which proves it complete
   and free of overlaps, and a rule's state machine can be the type of the thing a workflow drives.
 
@@ -46,7 +47,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/dandori/reference/codes/) lists
-all 28 codes.
+all 29 codes.
 
 ## A workflow
 
@@ -132,8 +133,8 @@ its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel
 
 [examples/](examples/) has five, each written for Temporal, for AWS and for pydantic-graph: a hotel
 booking held to Stripe's OpenAPI document, an order in a warehouse's system, the fulfillment of an
-order with a child flow, agents that read an inquiry and draft the reply, and an application
-scored by other workers and approved by a person. Every version has a Japanese twin beside it
+order with a child flow, an inquiry sorted by Jev and read and answered by agents, and an
+application scored by Jev and, when a rule says so, approved by a person. Every version has a Japanese twin beside it
 (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes them.
 [Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
 
@@ -157,7 +158,8 @@ Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, pro
 encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
 the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
-HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The
+HTTP and AWS endpoints from Argo, and agents and Jev run against OpenAI, Anthropic and TypeSafe
+themselves. The
 design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
 are on [Design](https://i2y.github.io/dandori/design/).
 

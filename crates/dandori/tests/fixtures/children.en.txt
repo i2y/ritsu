@@ -2,7 +2,7 @@ error[E015]: tests/fixtures/children.flow:40:1: `査定` has no input `係` (its
     40 | task 名前の違う(申込: 申込, 係: string) -> 結果
 error[E015]: tests/fixtures/children.flow:43:1: `査定` needs the input `申込`, which `渡さない` does not pass
     43 | task 渡さない(担当: string?) -> 結果
-error[E015]: tests/fixtures/children.flow:46:1: the parameter `申込` is not what `査定` takes as its input `申込`: in the field `区分` of `申込`, `団体` of `区分たち` is not a value of `区分`
+error[E015]: tests/fixtures/children.flow:46:1: the parameter `申込` is not what `査定` takes as its input `申込`: in the field `区分` of `申込`, `団体` of `団体もある区分` is not a value of `区分`
     46 | task 値の多い(申込: 団体もある申込) -> 結果
 error[E015]: tests/fixtures/children.flow:49:1: the parameter `申込` is not what `査定` takes as its input `申込`: in the field `額` of `申込`, it has no range, and `>=1 <=1000000` is taken
     49 | task 範囲の無い(申込: 範囲の無い申込) -> 結果
@@ -14,7 +14,7 @@ error[E015]: tests/fixtures/children.flow:55:1: `査定` answers with its output
     55 | task 数を読む(申込: 申込) -> int
 error[E015]: tests/fixtures/children.flow:58:1: `査定` never fails with `却下`
     58 | task 無いエラー(申込: 申込) -> 結果
-error[E007]: tests/fixtures/children.flow:64:3: a task that runs another `.flow` calls nothing else; leave out `lambda`, `http`, `aws` and `agent`
+error[E007]: tests/fixtures/children.flow:64:3: a task that runs another `.flow` calls nothing else; leave out `lambda`, `http`, `aws`, `agent` and `jev`
     64 |   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:review"
 error[E015]: tests/fixtures/children.flow:67:3: could not read `children/無い.flow`
     67 |   flow "children/無い.flow"

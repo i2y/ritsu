@@ -1,0 +1,28 @@
+rule 審査の方針(review_policy) v1
+description "申込の採点の判断を、そのまま実行するか人に回すかを、採点の確信度で決める。そのまま承認するには、そのまま却下するより高い確信度が要る。書き下ろしの例"
+
+enum 判断(verdict) = 却下(reject) | 保留(hold) | 承認(approve)
+enum 決定(decision) = 承認(approve) | 却下(reject) | 人に回す(ask)
+
+inputs
+  判断(verdict) : 判断
+  確信度(sure)  : rate[step 1%]  range >=0% <=100%
+
+outputs
+  決定(decision) : 決定
+
+table 決め方(act)
+policy unique
+| 判断 | 確信度 | -> 決定  |
+| 承認 | >=90%  | 承認     |
+| 承認 | <90%   | 人に回す |
+| 却下 | >=80%  | 却下     |
+| 却下 | <80%   | 人に回す |
+| 保留 | -      | 人に回す |
+
+examples
+| 判断 | 確信度 | -> 決定  |
+| 承認 | 95%    | 承認     |
+| 承認 | 89%    | 人に回す |
+| 却下 | 80%    | 却下     |
+| 保留 | 99%    | 人に回す |

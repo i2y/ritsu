@@ -359,6 +359,38 @@ task reserve_stock(sku: string, quantity: int) -> Reservation
 
 **Connect の呼び出し。** POST で `<url>/<パッケージ>.<サービス>/<メソッド>` に、JSON の本文とヘッダ `Connect-Protocol-Version: 1` を送る。Step Functions の HTTP Task も、dandori が書く実装も同じものを送る（5 章で比べる）。`key` は、ほかの HTTP のタスクと同じく `Idempotency-Key` ヘッダで送る。
 
+### 1.11 Jev
+
+TypeSafe AI の Jev（2026 年 9 月 15 日に早期アクセス）は、判断のためのモデルで、文章を書かない。渡した入力（state）について型の付いた質問に答え、答えごとに確信度を返す。質問は三種類ある。choice は選択肢から一つを選び、選択肢ごとの確率と確信度を返す。score は順序のある段階（2〜10）のどこかを答え、段階の番号の期待値、段階ごとの確率、確信度を返す。noul は、はいの確率だけを返し、確信度は無い。一回のリクエストで複数の質問に並列に答える。送り先は `POST https://api.typesafe.ai/v1/systemone` で、キーは `Authorization: Bearer <キー>`。
+
+**決定**：Jev をタスクの呼び出し方（`jev`）として足す。プラットフォームではない。`.flow` の分岐は、規則かタスクが返した列挙・bool・オプショナルな値の `match` だけで（P1）、Jev が答えるのはちょうど列挙と bool なので、Jev の答えはそのまま分岐に使え、P1 は変わらない。例は、問い合わせの種類を選ぶところ（`examples/inquiry`）と、審査の採点（`examples/review`）。
+
+```
+task pick_kind(text: string) -> routing.kind
+  jev "Which kind of inquiry is this?"
+    returns "The customer wants to send an item back or exchange it"
+    …
+  model "jev-1.13.0"
+  confidence 0.8 else unsure
+
+task score(purpose: string) -> Score
+  jev
+    verdict score "How clearly is the money for running the business?"
+      reject "It is for something personal or speculative, or against the law"
+      …
+    sure confidence of verdict
+  model "jev-1.13.0"
+```
+
+- **結果の型が質問になる。** 列挙は choice（`jev "<質問>"`。下に値ごとの意味を書き、書かない値は意味なし（null）で送る）、`jev score "<質問>"` は score（列挙の値を低い段階から並べ、すべてに意味を書く）、bool は noul（`true` と `false` の意味を、両方書くか、どちらも書かない）。レコードの結果は `jev` だけを書き、フィールドごとに質問を書いて、一回のリクエストで全部を尋ねる。文字列・数・リスト・オプショナルな値は Jev が答えられないので E007。質問の ID は、フィールドの名前か、結果がその値そのものなら `answer`。引数は、引数の名前をキーにしたオブジェクトにして state に渡す（エージェントの入力と同じ順）。score の段階の意味を省けないのは、Jev が段階を意味だけで見分け、番号を見ないからである（TypeSafe の文書）。
+- **答えの読み方は、どのプラットフォームでも同じ式にした。** choice は選んだ値、score は `score`（段階の番号の期待値）にいちばん近い段階、noul は、はいの確率が 0.5 を超えれば true。TypeSafe の文書が「一つの結果が要るなら近い段階に丸める」と書いているので、確率の最大の段階ではなく `score` を丸めた。丸めは `floor(score + 0.5)` で、ちょうど真ん中は上の段階になる。JSONata の `$round` と Python の `round` は偶数に丸めるので使わない。答えが無い、選択肢に無い値、確信度が無いか 0〜1 でないときは、その質問の値を null にし、結果の型の検査で `Dandori.BadResponse` になる。
+- **確信度。** choice と score には、TypeSafe が確率の散らばりから計算した `confidence` がある。noul には無いので、選んだ答えの確率（はいなら p、いいえなら 1 − p）を確信度とする。TypeSafe の例も noul の値を 0.8 と 0.2 で三つに分けており、同じ意味になる。
+- **確信度の下限は、宣言したエラーにする。** `confidence 0.8 else 迷い` と書くと、答えがすべてそろっていて、どれかの確信度が 0.8 より小さいとき、呼び出しは `迷い` で失敗する。この行が `迷い` を宣言する。フローは `on 迷い` で処理し（`on failure` も受ける）、数を比べないまま、TypeSafe の勧める「確信度で行き先を変える」形が書ける。確信度が足りない答えは変数に入れない。Step Functions では、Task の出力を Choice で確かめてから Pass で変数に入れる。Task の Assign で入れると、`on 迷い => pass` のあとに、前の値ではなく足りない答えが残ってしまう。Temporal などでは、答えを読むアクティビティがエラーを投げるので、変数には何も入らない。尋ね直してもほぼ同じ答えが返るので、`retry … on 迷い` は E007。bool だけの結果は確信度がいつも 0.5 以上なので、0.5 以下の下限も E007。
+- **行動ごとのしきい値は規則に任せる。** 確信度はフィールドで受け取れる（`<フィールド> confidence of <フィールド>`、型は `rate[step <n>%]` で、刻みは 100% を割り切るもの）。値は刻みの個数で、切り捨てる（1% 刻みなら 0.87 は 87）。0.29 × 100 が 28.999… になる浮動小数の誤差を吸収するため、10 億分の 1 を足してから切り捨て、どのプラットフォームも同じ式にした。rulec の率も刻みの個数でやりとりするので、そのまま規則に渡せ、「そのまま承認するのは 90% 以上、却下は 80% 以上、あとは人」のような表に抜けが無いことを rulec が証明する（審査の例）。rulec の certificate は率の型を `rate` としか書かないので、刻みは schema の説明（「100% is 100」）から読み、`rate[step 1%]` の形にする。`.flow` に書いた `rate[step 0.01%]` も同じ形に直すので、型が合う。
+- **モデルはバージョンで書く。** TypeSafe の文書は、確信度のしきい値を合わせたらバージョンを固定するよう勧める。確信度を使うタスク（下限か、確信度を受け取るフィールドがある）がエイリアス（`jev-latest`、`jev-preview`）を書いたら W032。
+- **どのプラットフォームも同じ HTTP の呼び出しで、SDK は使わない。** Step Functions は HTTP Task で送り、キーは EventBridge の接続にヘッダ `Authorization` として置く（無ければ E050）。ほかのプラットフォームで dandori が書く実装は、`Transport` の `http` を通す（`HttpRequest` の `typesafe`）。既定の `Transport` は、`TYPESAFE_API_KEY` か `typesafe` のオプションからキーを足す。`Transport` に新しいメソッドを足さなかったのは、利用者が自分で書いた `Transport` がそのまま使えるようにするためである。答えを読むのは、Step Functions では Task の出力の JSONata、ほかでは `io.jev`。JSONata は型の違う値を大小で比べるとエラーになるので、数を比べる前に型を確かめる。エラーはステータスで宣言する（429 はレート制限、529 は過負荷）。ステータスの無いエラーは E007 で、宣言していないステータスは `failure`。`key`、`callback`、`url`、`effort`、案件に何かすることも E007。
+- **テストは Jev を呼ばない。** シナリオは、Jev の呼び出しに API リファレンスの形の答えを返す。確信度は、下限ちょうど（境目の `<` と `<=` の違いが出る）と、下限をわずかに下回るもの。型に合わない答えも返す。確信度が足りない答えには、変数にありそうな値（列挙の最初の値、true）と違う値（最後の値、false）を入れ、試験用のフローは、そのあとの呼び出しで変数を送る。こうして、足りない答えを変数に入れてしまう誤りが食い違いとして出る。比較の `<` を `<=` に変える誤りと、Step Functions で Task の Assign に入れる誤りを入れてみて、どちらも突き合わせで捕まることを確かめた（2026-09-29）。数は、Jev が返すような小数第 4 位までにして、どの言語でも同じ double に読めるようにし、dandori も serde_json の `float_roundtrip` で読む（それが無いと、ほかの言語が書いた 0.20500000000000002 を隣の double に読んでいた）。
+
 ## 2. 案件とステートマシン
 
 ### 2.1 案件の状態を追う
@@ -425,7 +457,7 @@ on cancel
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則を rulec で読めなかった |
 | E006 | 二度の宣言 |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`） |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー） |
 | E008 | 案件の宣言や、案件に何をするかの誤り |
 | E009 | 文の置き場所の誤り（`yield`、並列のイテレーションの中の `break`・`succeed`・案件の呼び出し・イベントの待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` のどの分岐にも当たらない値がある |
@@ -441,8 +473,9 @@ on cancel
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express でできないこと（五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し） |
 | E040 | プラットフォームで、一回の実行が大きくなりすぎうる（ビルドがプラットフォームごとに見る）。実行履歴が上限を超えうる（Step Functions は 25,000 件、Temporal は 51,200 件、Lambda durable functions は 3,000 操作）。Argo Workflows では、一回の実行のノードが目安の 10,000 個を超えうる |
-| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントにも要る）、ネストした実行の宣言したエラー、`http` と `agent` の 60 秒を超える `timeout`、HTTPS でない送り先。Temporal のほかでは `on cancel` と `event` のタスク。Step Functions と durable functions では呼ばれる規則の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`） |
+| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先。Temporal のほかでは `on cancel` と `event` のタスク。Step Functions と durable functions では呼ばれる規則の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを `key` なしでリトライする |
+| W032 | 確信度を使う Jev のタスクが、モデルをバージョンではなくエイリアスで書いている |
 | W101 | 処理されないエラーで、案件を終わりでない状態に残して失敗することがある（`on failure` や `on cancel` の片付けの最中も） |
 | W102 | 動くことのない `on <断り>` |
 | W103 | 案件を始めるタスクに `key` が無い |
@@ -541,7 +574,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 
 ### 4.4 Argo Workflows
 
-- `<ワークフロー>.argo.yaml`（WorkflowTemplate）と、`caller/`（`lambda`・`http`・`aws`・`agent` のタスクと規則をコンテナの中で動かすプログラム。`types.ts`・`tasks.ts`・`io.ts`・`transport.ts`・`rules.ts`・`call.ts`・`package.json`・`Dockerfile`）を出す。入力はパラメータ `input` に JSON で渡し、出力はグローバル出力パラメータ `dd_output` に残る。
+- `<ワークフロー>.argo.yaml`（WorkflowTemplate）と、`caller/`（`lambda`・`http`・`aws`・`agent`・`jev` のタスクと規則をコンテナの中で動かすプログラム。`types.ts`・`tasks.ts`・`io.ts`・`transport.ts`・`rules.ts`・`call.ts`・`package.json`・`Dockerfile`）を出す。入力はパラメータ `input` に JSON で渡し、出力はグローバル出力パラメータ `dd_output` に残る。
 - **タスクはどれもコンテナで動く。** `image` のタスクは利用者のイメージ、`lambda`・`http`・`aws`・`agent` のタスクと規則は `caller/` から作るイメージで動く（エージェントがあれば、`package.json` に `@openai/agents` か `@anthropic-ai/sdk` が入る）。中の実装は Temporal と durable functions 向けと同じもので、同じ `Transport` を通す。呼び出しは環境変数 `DANDORI_CALL` で渡る。結果は `/tmp/dandori/answer.json` に書き、宣言したエラーなら `/tmp/dandori/error.json` に `{"error", "message"}` を書いて終了コード 3 で終える。タイムアウトで止められた Pod（終了コード 143 か 137）は `timeout`、ほかの終わり方は `failure`。
 - **Argo には変数が無いので、ワークフローの状態をグローバル出力パラメータに置く。** 変数ごとに `v<番号>`（値は JSON）、流れがどう進むかを表す `dd_ctl`（`next`・`break`・`succeed`・`fail`・`task`）、失敗の `dd_error`、出力の `dd_output`。並列のイテレーションが持つ変数は、イテレーションごとに接尾辞を付けた別のパラメータにする。YAML の頭のコメントに、どの変数がどのパラメータかを書く。
 - **グローバル出力パラメータを読むのは、値を計算するテンプレートの出力の式だけにした。** Argo は、ステップの `when` と引数を、そのステップが動いているあいだ、ワークフローを見に来るたびに評価し直す。また、ステップを並べたテンプレートは、グローバル出力パラメータを、そのテンプレートに来たときの値で持っていて、自分のステップがそのあと入れた値は見えない。コントローラのソース（v4.1.4 の `executeSteps` と `executeStepGroup`）でこの二つを確かめ、kind の上でも起こした。そこで、ステップが一つで、それが決して走らないテンプレートを作り、値はその出力の式で計算する。Argo はこの式を、そのテンプレートに来たときに一度だけ、それまでに入った値をすべて見て評価する。ほかのステップはこの出力を読む。出力は一度入ると変わらない。
@@ -578,6 +611,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 | 冪等キー | `$states.context.Execution.Name` から | `workflowInfo().workflowId` から | `durableExecutionArn` から | `workflow.name` から | `Deps.run_id` から |
 | `lambda`・`http`・`aws` のタスク | Task（Lambda、HTTP、AWS SDK 統合） | dandori が書くアクティビティ（`Transport` を通す） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通す） |
 | `agent` のタスク | HTTP Task（Responses API か Messages API）、応答は `$parse` で読む | dandori が書くアクティビティ（`Transport` を通し、Agents SDK か Anthropic の SDK で） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通し、Agents SDK か Anthropic の SDK で） |
+| `jev` のタスク | HTTP Task（TypeSafe の API）、答えは Task の出力の JSONata で読み、Choice で確信度を確かめてから変数に入れる | dandori が書くアクティビティ（`Transport` の `http` を通し、`io.jev` で読む） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` の `http` を通し、`io.jev` で読む） |
 | それ以外のタスク | 作れない | 利用者のアクティビティ | 利用者の実装を step の中で | `image` のコンテナ（無ければ作れない） | 利用者の関数 |
 | 子ワークフロー | ネストした実行 | `executeChild` | `context.invoke` | WorkflowTemplate から Workflow を作る | 利用者の関数 |
 | コールバック | `.waitForTaskToken` | シグナル | `createCallback` | suspend と `argo node set` | `Deps.callbacks` |
@@ -636,10 +670,10 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - **既定の `Transport` のエージェント**：TypeScript の既定の実装（Temporal・durable functions・Argo の caller が同じ `io.ts` を使う）と Python の既定の実装（Temporal と pydantic-graph が同じ `io.py` を使う）を、OpenAI の Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせる（`tools/agents`）。モデルには、OpenAI の代わりに、応答を前もって決めた SDK のテスト用のモデル（`ScriptedModel`）を渡すので、OpenAI には何も送らない。シナリオのエージェントの呼び出しすべてについて、モデルが受け取ったもの（モデルの名前・指示・入力の文字列・応答の Schema）が Step Functions の同じ呼び出しで送るものと同じで、モデルの設定もツールも空であること、応答がそのまま返ること、拒否が `ModelRefusalError` になることを確かめる。また、`Transport` が作るクライアントをローカルの Responses API のモックに向け、500 が返ると一回だけ送って `InternalServerError` で失敗することを確かめる。Claude のエージェントは、Anthropic の SDK（TypeScript 0.128.0、Python 1.8.0）で、ローカル（127.0.0.1）に立てた Messages API のモックに送らせる。モックが受け取ったリクエスト（パス、`anthropic-version`、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、応答がそのまま返ること、拒否（`stop_reason: refusal`）で `AgentStopped` を投げること、500 が返るとリトライせずに `InternalServerError` で失敗することを確かめる。Anthropic には何も送らない。Open Responses のほかのサーバーのエージェント（`url`）は、送り先のパスはそのままに、ローカルに立てたそのサーバーのモックに送らせる。モックが受け取ったリクエスト（メソッド、パス、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、応答がそのまま返ること、拒否で `AgentStopped`、500 でリトライせずに `AgentHttpError` になることを確かめる。
 - **本物の Open Responses のサーバー**：このマシンで Ollama が動いていれば（`DANDORI_OLLAMA`、既定は `http://127.0.0.1:11434`）、`url` のあるエージェントごとに、シナリオで応答のある最初の呼び出しを、モデルを Ollama にあるもの（`DANDORI_OLLAMA_MODEL`、無ければいちばん小さいもの）に替え、エフォートを外して（小さなモデルは推論しないことがあり、Ollama はそうしたモデルへのエフォートを拒否する。エフォートの形はモックのサーバーで Step Functions と突き合わせている）、TypeScript と Python の既定の `Transport` から本当に送る。応答は、タスクの型に合わなければならない。Ollama が無ければ SKIP にする。テストの前に読み込まれていなかったモデルは、終わったら下ろす（Ollama は読み込んだモデルを 5 分置き、8B のモデルでは 8 GB を超える。テスト全体の途中でメモリが逼迫した）。
 - **既定の `Transport`**：シナリオの呼び出しのうち `Transport` を通るもの（HTTP、Lambda、AWS の API）を、TypeScript の既定の実装（`fetch` と AWS SDK for JavaScript v3）と Python の既定の実装（標準ライブラリと boto3）から、ローカルのモックに送る（`tools/wire`）。ローカルのサーバーは、HTTP と Lambda の Invoke に、ランナーの差し替えの `Transport` がそのシナリオで返すものと同じレスポンスを返す。HTTP のタスクの URL は、スキームとホストをこのサーバーに置き換える。AWS の API は、AWS の API をローカルでまねる moto（5.2.3）に渡す。届いたもの（HTTP ならメソッド・パス・クエリ・ヘッダ・本文、Lambda なら関数と payload、SNS と SQS なら moto のキューに届いたメッセージ）が呼び出しと同じで、`Transport` が返すものが差し替えの `Transport` と同じで、二つの言語が同じ文字列を送ることを確かめる。AWS のエラーは、moto に起こさせられるもの（無いトピックへの `sns:publish` の `NotFoundException`、無いキューへの `sqs:sendMessage` の `QueueDoesNotExist`）だけを試す。何もローカルの外には出ない。
-- **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
+- **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py` を、rulec が生成した Python と TypeScript と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。例が呼ぶ規則はすべて比べ、Step Functions に出せない例の規則も外さない（審査の規則は Step Functions に出せない例にしか無く、前は外れていた）。出力が一つの規則は、rulec の関数がその値をそのまま返す（二つ以上なら `Output` のレコード）。つなぐコードはこれを知らずにフィールドを読んでいて、審査の規則を足したときに `tsc` がそれを見つけた。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **診断**：`tests/fixtures` の各ファイルの診断を、英語と日本語の両方で固定する（`DANDORI_BLESS=1` で書き直す）。
 - **文書**：README とサイト（`website/docs`、`website/docs-ja`）に載せたものが実物と食い違わないことを、`tests/docs.rs` で確かめる。診断の抜粋は、どれも `tests/fixtures` の golden ファイルにそのまま含まれていること。` ```flow ` のブロックの行は、どれも `examples` か `tests` の `.flow` にある行であること（`…` で省いた行は、残りの部分がその順で一つの行に含まれていること）。二つの言語の診断コードの一覧が、ソースにあるコードとちょうど一致し、コードの数を書いたページがその数を書いていること。サイトのハイライトに使う `KEYWORDS` が、`src/syntax.rs` のものと一字一句同じであること。エージェント向けのスキル（`skills/dandori`）も同じテストで確かめる。スキルに入れるサイトの英語のページの写しは `skills/sync.sh` が作り、`tests/skill.rs` が、写しがページと食い違っていないこと、スキルの中のリンクがスキルの外を指していないこと、`SKILL.md` の frontmatter が Agent Skills の形に合うことを確かめる。
-- 突き合わせるのは `examples` の例と、言語の端の振る舞いを通すための `tests/flows` のフロー。例は、プラットフォームごとの版をディレクトリに分けて置く。主なプラットフォームである Temporal 向けの `temporal/`（HTTP は dandori が書くアクティビティ、ほかは利用者が書くアクティビティ、外からの通知は `event`、ほかのタスクキュー、`on cancel`、`local`）、Step Functions と Lambda durable functions に向けた `aws/`（Lambda、EventBridge の接続を通す HTTP、SNS と SQS を、Step Functions と同じに呼ぶ）、`pydantic-graph/`（プロセスの中の関数、規則もプロセスの中、コールバックも同じプロセスで返す）の三つで、審査には Argo Workflows 向けの `argo/`（タスクは利用者のイメージのコンテナ）もある。審査の `aws/` は、どのタスクも利用者が書くコードなので、Lambda durable functions だけが走らせる（Step Functions では E050）。例のディレクトリのすぐ下には、どのプラットフォームでもそのまま動くものだけを置く（引当と発送の三つの版が子として走らせる `arrange_delivery.flow`）。`rules/` と `specs/` は版が共に読む。
+- 突き合わせるのは `examples` の例と、言語のエッジケースを通すための `tests/flows` のフロー。例は、プラットフォームごとの版をディレクトリに分けて置く。主なプラットフォームである Temporal 向けの `temporal/`（HTTP は dandori が書くアクティビティ、ほかは利用者が書くアクティビティ、外からの通知は `event`、ほかのタスクキュー、`on cancel`、`local`）、Step Functions と Lambda durable functions に向けた `aws/`（Lambda、EventBridge の接続を通す HTTP、SNS と SQS を、Step Functions と同じに呼ぶ）、`pydantic-graph/`（プロセスの中の関数、規則もプロセスの中、コールバックも同じプロセスで返す）の三つで、審査には Argo Workflows 向けの `argo/`（タスクは利用者のイメージのコンテナ）もある。審査の `aws/` は、どのタスクも利用者が書くコードなので、Lambda durable functions だけが走らせる（Step Functions では E050）。例のディレクトリのすぐ下には、どのプラットフォームでもそのまま動くものだけを置く（引当と発送の三つの版が子として走らせる `arrange_delivery.flow`）。`rules/` と `specs/` は版が共に読む。
 - どの版にも、同じディレクトリに日本語の版（`<名前>.ja.flow`。引当と発送の子は `arrange_delivery.ja.flow`）がある。流れも呼び出しも英語の版と同じで、シナリオの数も図の形も一致する。ワークフロー、タスク、エラー、案件、変数、説明、コメントは日本語で書き、英語のまま残すのは、API の記述が決めている名前（Stripe のフィールドと状態と経路の変数、倉庫の `.proto` のフィールドと値、SNS と SQS の API の引数）、Stripe の文書の書き写しである規則 `payment_intent.rule` の名前、どこでもこの綴りで使う `id`、倉庫の API の `expand` だけである。日本語の規則（宿泊の与信額・注文の状態・出荷の急ぎ・問い合わせの振り分け）は、英語の規則と同じ `rules/` に置き、`tests/flows` もこれを読む。日本語のサイトの例のページは、日本語の版から描く。
 - `temporal/`・`pydantic-graph/`・`argo/` の版は、そのプラットフォームのランナーだけで走らせる。`aws/` の版とすぐ下のフローは、どのプラットフォームでも走らせる。`aws/` の版の Lambda・HTTP・AWS の呼び出しは、dandori がどのプラットフォームにも書くので、ほかのプラットフォームでの確かめはこれで足りる。ただし `aws/` の日本語の版は、AWS の二つ（Step Functions と Lambda durable functions）だけで走らせる。その呼び出しをどのプラットフォームでも確かめる役は英語の版が受け持ち、どのプラットフォームにもそれ向けの日本語の版がある。どのプラットフォームでも走らせると、突き合わせるフローが一度に倍近くになり、テスト全体の途中でタイムアウトが起きた（Temporal のアクティビティの 5 秒の期限、kind の API サーバー）。例の日本語の版と `tests/flows` のフローは日本語の名前で書いてあるので、日本語の名前が五つのプラットフォームでそのまま識別子や鍵になることも、ほかと同じ突き合わせで確かめる（`timeouts.flow` は、HTTP のパスにも日本語の値を入れる）。
 
@@ -647,7 +681,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 
 ### 5.1 走らせた（2026-09-26）
 
-- 例は五つで、それぞれ Temporal 向け・AWS 向け・pydantic-graph 向けの三通り（審査は Argo 向けも。5 章）。ホテルの予約（Stripe の PaymentIntent。Stripe の OpenAPI の記述に合わせる）、倉庫の注文の出荷（rulec の規則 `order_state`）、注文の引当と発送（リスト、並列のイテレーション、オプショナルな値、`json`、Connect で呼ぶ倉庫、Smithy のモデルに合わせた SNS と SQS、SQS のコールバック、子ワークフロー。子は dandori で書いた `arrange_delivery.flow` で、Temporal 版は、子が翌日便の車を取れなかったとき（子の `fail NoVan`）に通常便で頼み直す）、問い合わせの振り分け（エージェント二つと規則一つ。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（利用者が書くタスクだけで、利用者のコールバック。Temporal 向けは `queue`、Argo 向けは `image`、AWS 向けは durable functions だけが走らせる）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・オプショナルな値・範囲のある数を持つエージェントの応答、応答を読まないエージェントの呼び出し、並列のイテレーションの中のエージェントとそのリトライ、列挙の値を大文字と小文字を変えて返す Claude のエージェントを通り、`tests/flows/timeouts.flow` が、タイムアウトを処理する呼び出し、タイムアウトだけをリトライする呼び出し、`timeout` を書かないタスクのタイムアウトを通り、`tests/flows/local_rules.flow` が、`local` の規則（タイムアウトを処理してタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認のイベントとその拒否とタイムアウト、一番外のループのイテレーションごとに待つ、案件の状態を知らせる配達のイベント）を通る（Temporal だけ）。`tests/flows/connect.flow` は、Connect のレスポンスが省く既定値（空の文字列、0、false、列挙の最初の値、空のリストとマップ、文字列の 64 ビットの整数）を、レスポンスの中、中のメッセージ、メッセージのリストで埋めて読み、次の呼び出しに渡す。
+- 例は五つで、それぞれ Temporal 向け・AWS 向け・pydantic-graph 向けの三通り（審査は Argo 向けも。5 章）。ホテルの予約（Stripe の PaymentIntent。Stripe の OpenAPI の記述に合わせる）、倉庫の注文の出荷（rulec の規則 `order_state`）、注文の引当と発送（リスト、並列のイテレーション、オプショナルな値、`json`、Connect で呼ぶ倉庫、Smithy のモデルに合わせた SNS と SQS、SQS のコールバック、子ワークフロー。子は dandori で書いた `arrange_delivery.flow` で、Temporal 版は、子が翌日便の車を取れなかったとき（子の `fail NoVan`）に通常便で頼み直す）、問い合わせの振り分け（Jev、エージェント二つ、規則一つ。種類は Jev が選び、Jev が確信を持てないときや呼べないときは、エージェントが読み取った種類を使う。読み取るのは OpenAI、下書きするのは Claude のエージェントで、読み取りに失敗すれば総合の窓口に起票し、下書きに失敗すれば下書きなしで起票する）、申し込みの審査（Jev が採点して確信度を率で返し、規則 `review_policy` がそのまま承認・却下するか人に回すかを決め、人は利用者のコールバックで承認する。Temporal 向けは採点とお知らせに `queue`、Argo 向けは承認とお知らせに `image`、AWS 向けは durable functions だけが走らせる）。ほかに `tests/flows/edges.flow` が、配列の `json` をリストに入れること、並列の中の並列、理由の無い `fail` を通り、`tests/flows/agents.flow` が、リスト・単位・時刻・オプショナルな値・範囲のある数を持つエージェントの応答、応答を読まないエージェントの呼び出し、並列のイテレーションの中のエージェントとそのリトライ、列挙の値を大文字と小文字を変えて返す Claude のエージェントを通り、`tests/flows/timeouts.flow` が、タイムアウトを処理する呼び出し、タイムアウトだけをリトライする呼び出し、`timeout` を書かないタスクのタイムアウトを通り、`tests/flows/local_rules.flow` が、`local` の規則（タイムアウトを処理してタスクを呼ぶ）と、同じ規則をふつうのアクティビティで呼ぶことを通り、`tests/flows/events.flow` が、`event` のタスク（承認のイベントとその拒否とタイムアウト、一番外のループのイテレーションごとに待つ、案件の状態を知らせる配達のイベント）を通る（Temporal だけ）。`tests/flows/jev.flow` は、Jev のすべての種類の質問（一部の値にだけ意味を書いた choice、score、意味を書いた noul、一回で四つに答えるレコードと確信度の率）、下限を切った答えを処理する呼び出しと処理しない呼び出し（`on failure` へ）、下限を切った答えのあとも前の値が残る変数、並列のイテレーションの中の Jev、結果を読まない呼び出し、ステータスで宣言したエラーのリトライを通る。`tests/flows/connect.flow` は、Connect のレスポンスが省く既定値（空の文字列、0、false、列挙の最初の値、空のリストとマップ、文字列の 64 ビットの整数）を、レスポンスの中、中のメッセージ、メッセージのリストで埋めて読み、次の呼び出しに渡す。
 - シナリオは 50 本・38 本・20 本・13 本・10 本と、引当と発送の子の 9 本、connect の 7 本、edges の 12 本、agents の 17 本、timeouts の 7 本、local_rules の 12 本、events の 12 本。Step Functions では、審査と events を除く 185 本すべてが参照インタプリタと一致した（LocalStack の上でも同じ 185 本が一致した。下の項）。Temporal では、dev server の上で、`on cancel` を持つ cancel の 32 本、events の 12 本、例の Temporal 版の 161 本（ホテルの予約と倉庫の出荷は、`on cancel` のキャンセルのシナリオを加えて 62 本と 49 本、引当と発送は子の `NoVan` を処理するところを加えて 27 本）を加えた 400 本すべてが一致した（アクティビティのタイムアウトはサーバーがタイムアウトさせ、コールバックのタイムアウトは応答を送らないことで起こせるので、外したものは無い）。Temporal の Python 版でも、同じ 400 本すべてが一致した。どちらの言語でも、このうち 33 本（倉庫の出荷の 11 本と、その Temporal 版の 13 本、引当と発送とその Temporal 版の 1 本ずつ、edges と local_rules の 2 本ずつ、events の 3 本）が一番外のループのイテレーションで新しい実行に続き、続きの実行は合わせて 50 本だった（倉庫の出荷の 7 本と、その Temporal 版の 8 本と、events の 2 本は、三つの実行にまたがる）。Lambda durable functions では、タイムアウトを含む 17 本を除く 178 本すべてが一致した。pydantic-graph では、タスクのタイムアウトを含む 5 本を除く 321 本（例の pydantic-graph 版の 131 本を含む）すべてが一致した。agents の 17 本のうち 2 本は、Claude のエージェントが列挙の値の大文字と小文字を変えて返す（どちらも `Normal` と、`urgent` と `Low` のリスト）。どのプラットフォームも、それを宣言した値として読んだ。
 - Argo Workflows（v4.1.4、kind の上）では、タスクのタイムアウトを含む 5 本を除く 190 本すべてが参照インタプリタと一致し、フローごとに本物の Pod で走らせ直した一本（十一本）も一致した。コールバックのタイムアウトは、待ちの出力にタイムアウトのときの値を入れて起こした。一回の実行のノードの数は、多いもので、ホテルの予約が 567 個（E040 の見積もりは 939 個）、倉庫の出荷が 239 個（446 個）、edges が 295 個（593 個）、引当と発送が 229 個（4,746 個）、問い合わせが 94 個（153 個）、agents が 115 個（177 個）、審査が 74 個（136 個）、timeouts が 49 個（87 個）、local_rules が 117 個（272 個）、引当と発送の子が 44 個（76 個）で、どれも見積もりの中に収まった。テスト全体は 2 分前後で終わる（118〜142 秒。範囲を足したあとの二回は 126 秒と 136 秒、子の `.flow` を足したあとは 108〜138 秒、API の記述を足したあとは 175 秒、Open Responses を足したあとは 221 秒（ほかのプロセスで、マシンの負荷の平均が 20 を超えていた）、LocalStack を足したあと全部が通った回は 131 秒。例の版を足す前は 96〜128 秒だった。Argo だけで 76〜88 秒、Temporal の突き合わせは TypeScript が 24 秒、Python が 17 秒、言語をまたぐアクティビティが 15 秒、durable functions が 16 秒。kind のノードは、何も走らせていなくても CPU を 3 割ほど使っていて、Argo の時間はそれに左右される）。
 - 同じ日の昼、Argo の突き合わせがときどき食い違った。呼び出しは参照と同じで、終わり方だけが違い、その回の Pod が init の失敗（Error）や `Unknown (exit code 255)` で終わっていた。kind のノードの中の containerd（2.1.1）が SEGV で落ちては立ち上がり直していて、落ちた時刻が食い違いと重なった。落ちたときに動いていたコンテナは、どれもこう終わる。生成したワークフローは、その Pod の失敗を `failure` として正しく扱っていた。そこでランナーは、プラットフォームが動かせなかった Pod のあるイテレーションを、名前を変えて二度まで走らせ直し、そのことを出力するようにした。いまはこれが本物の Pod の回にだけかかわる（次の項）。クラスタを kind 0.33.0 のノード（Kubernetes 1.37.0、containerd 2.3.4）で作り直してからは、containerd は一度も落ちていない。テスト全体を通したときも、ホテルの予約の 49 本すべてを本物の Pod で同時に走らせたとき（375 秒）も SEGV は無く、本物の Pod の 49 本は演じた回と一本残らず一致した。
@@ -701,11 +735,11 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 
 このために、流れに沿った検査が、各文の入口で案件がとりうる状態と、各終わりでの状態を残すようにした（`flow::Facts`）。検査が見たものをそのまま出すので、図と診断が食い違うことはない。
 
-**Markdown**：Mermaid のフローチャートにする。GitHub がプルリクエストや issue の中でそのまま描くので、PR に貼る要約になる。rulec も、Markdown ではステートマシンを Mermaid で描いている。形は、タスクが四角、規則が両脇に線のある四角、外から値が届くタスク（`event`、`callback`）が斜めの四角、`match` が六角形、待ちが角の丸い四角、終わりが両端の丸い形で、ループは subgraph で囲み、次の回へ戻る辺と、`break` から外へ出る辺を描く。`match` をひし形にしないのは、文字を入れるとひし形が大きくなりすぎるからである。flow・`on failure`・`on cancel` は別々の図にする。
+**Markdown**：Mermaid のフローチャートにする。GitHub がプルリクエストや issue の中でそのまま描くので、PR に貼る要約になる。rulec も、Markdown ではステートマシンを Mermaid で描いている。形は、タスクが四角、規則が両脇に線のある四角、外から値が届くタスク（`event`、`callback`）が斜めの四角、`match` が六角形、待ちが角の丸い四角、終わりが両端の丸い形で、ループは subgraph で囲み、次のイテレーションへ戻る辺と、`break` から外へ出る辺を描く。`match` をひし形にしないのは、文字を入れるとひし形が大きくなりすぎるからである。flow・`on failure`・`on cancel` は別々の図にする。
 
-**HTML**：図は dandori が SVG で描き、レイアウトエンジン（dagre、Graphviz）は使わない。`.flow` には飛び越しが無く、分岐とループが入れ子になるだけなので、ブロックの入れ子どおりに並べられる。本線は真下に進み、`match` の分岐と呼び出しのハンドラは右に並んで、下で本線に戻る。`match` の真下には先へ進む最初の分岐を置き、そこで終わる分岐は右に出すので、ふだんの流れがまっすぐ下に読める。ループは本体を囲む枠で、左に次の回へ戻る線、右に `break` で抜ける線がある。文字は等幅なので、ブラウザが無くても幅を計算でき、同じ `.flow` からはいつも同じページができる（テストで全文を比べられる）。ページはネットワーク無しで開け、スクリプトが無くても図と表は見える。
+**HTML**：図は dandori が SVG で描き、レイアウトエンジン（dagre、Graphviz）は使わない。`.flow` には飛び越しが無く、分岐とループが入れ子になるだけなので、ブロックの入れ子どおりに並べられる。本線は真下に進み、`match` の分岐と呼び出しのハンドラは右に並んで、下で本線に戻る。`match` の真下には先へ進む最初の分岐を置き、そこで終わる分岐は右に出すので、ふだんの流れがまっすぐ下に読める。ループは本体を囲む枠で、左に次のイテレーションへ戻る線、右に `break` で抜ける線がある。文字は等幅なので、ブラウザが無くても幅を計算でき、同じ `.flow` からはいつも同じページができる（テストで全文を比べられる）。ページはネットワーク無しで開け、スクリプトが無くても図と表は見える。
 
-**実行を光らせる**：`dandori scenarios` と同じシナリオを参照インタプリタで走らせ、通った文、選んだ分岐、入ったハンドラ、ループの回、呼び出しの結果を記録する（`interp::Visit`）。辺にはそれぞれ、その辺を通るために起きていなければならないこと（その分岐、そのハンドラ、呼び出しの結果が返った、ループがもう一回回った、ループが回り切った）を持たせ、両端が光っていて、そのことが起きた辺を光らせる。診断のそうなる例は、各ステップが流れのどこで起きたか（`diag::At`）を持つようにして、同じように光らせる。ステップは呼び出しの返り方とループの回り方を言わないので、そこは、同じ例のほかのステップから読む。シナリオを走らせるときの見え方は Temporal にした。主なプラットフォームで、どの機能も持つからである。
+**実行を光らせる**：`dandori scenarios` と同じシナリオを参照インタプリタで走らせ、通った文、選んだ分岐、入ったハンドラ、ループのイテレーション、呼び出しの結果を記録する（`interp::Visit`）。辺にはそれぞれ、その辺を通るために起きていなければならないこと（その分岐、そのハンドラ、呼び出しの結果が返った、ループのイテレーションがもう一つ走った、ループが回り切った）を持たせ、両端が光っていて、そのことが起きた辺を光らせる。診断のそうなる例は、各ステップが流れのどこで起きたか（`diag::At`）を持つようにして、同じように光らせる。ステップは呼び出しの返り方とループの回り方を言わないので、そこは、同じ例のほかのステップから読む。シナリオを走らせるときの見え方は Temporal にした。主なプラットフォームで、どの機能も持つからである。
 
 **検査でエラーが見つかるワークフローも描く**：名前と型が解決していれば描き、終了コードは 1 にする。E020 のそうなる例を、図の上の一本の線として見せるためである。rulec の `doc` は検査を通らない規則を描かない。あちらは承認する人のためのページで、承認してはいけないものを見せないためである。こちらはレビューと直しのためのものなので、逆にした。
 
@@ -717,7 +751,7 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - Mermaid 11 と 12 で、golden の図がすべて描けること（headless Chrome の中で描かせる）。
 - Chrome でページを開くと、ページのデータどおりに光ること。
 
-わざと入れた誤り（呼び出しの結果が返ったことを見ない、ループの回を記録しない、ループが回り切ったことを見ない、分岐の辺の行き先を変える、ハンドラを結果と取り違える、Mermaid の引用符をそのまま出す、サイトの図を一語変える）は、どれも捕まる。
+わざと入れた誤り（呼び出しの結果が返ったことを見ない、ループのイテレーションを記録しない、ループが回り切ったことを見ない、分岐の辺の行き先を変える、ハンドラを結果と取り違える、Mermaid の引用符をそのまま出す、サイトの図を一語変える）は、どれも捕まる。
 
 ## 6. 捨てたもの
 
@@ -797,6 +831,8 @@ Temporal の列は、TypeScript 版と Python 版の両方のこと。
 - pydantic-graph の実行を、止まったあとに続けること。2.x が状態を外に置く手段を持たないので、今はプロセスの中の実行だけにしている。
 - エージェントを OpenAI と Anthropic の API に本当に向ける確認。構造化出力が生成した Schema を受け付けるか（Claude では、文法の大きさの上限に当たらないかも）、Step Functions の HTTP Task と EventBridge の接続で呼べるか、どちらも確かめていない。
 - エージェントの拒否や API のエラー（429 など）を、名前の付いたエラーとして処理すること。いまは `failure` にまとめている。
+- Jev を TypeSafe の API に本当に向ける確認。いまは API リファレンスの形の答えを返すスタブと、既定の `Transport` がローカルのモックに送るリクエストまで。日本語の入力での精度も、TypeSafe の文書が英語ほどではないと言うだけで、確かめていない。
+- rulec の率の刻みを、schema の説明の文（「100% is 100」）から読んでいること。rulec が刻みを機械で読める形で出すようになれば、そちらに替える。
 - Claude のエージェントを、Anthropic の API のほかの場所（ゲートウェイなど）に送ること。Open Responses の適合テスト（openresponses.org の acceptance tests）を、dandori が送るリクエストと読むレスポンスに当てること。
 - OpenAI が走らせる Agents API（長く動くエージェント）を、コールバックで待つ呼び出し方。
 - エージェントにツールを持たせること、指示をファイルから読むこと、エフォートのほかのモデルの設定（温度など）を `.flow` に書くこと。

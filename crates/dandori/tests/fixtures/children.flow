@@ -1,8 +1,8 @@
 workflow children v1
-description "子ワークフローの契約：ほかの .flow を走らせるタスクの引数・答え・エラーと、子の入力・出力・失敗"
+description "子ワークフローの契約：ほかの .flow を走らせるタスクの引数・結果・エラーと、子の入力・出力・失敗"
 
 enum 区分 = 個人 | 法人
-enum 区分たち = 個人 | 法人 | 団体
+enum 団体もある区分 = 個人 | 法人 | 団体
 enum 結論 = 可 | 保留
 
 record 申込
@@ -18,7 +18,7 @@ record 範囲の無い申込
 record 団体もある申込
   id   : string
   額   : int  range >=1 <=1000000
-  区分 : 区分たち
+  区分 : 団体もある区分
 
 record 結果
   結論 : 結論

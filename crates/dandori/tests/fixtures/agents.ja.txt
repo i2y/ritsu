@@ -1,6 +1,6 @@
 エラー[E007]: tests/fixtures/agents.flow:56:3: エージェントには、使うモデルを `model "gpt-5.4-mini"` のように書いてください
     56 |   agent "読んでください。"
-エラー[E007]: tests/fixtures/agents.flow:60:3: `model` はエージェントが使うモデルを書くところです。このタスクには `agent` がありません
+エラー[E007]: tests/fixtures/agents.flow:60:3: `model` はエージェントや Jev が使うモデルを書くところです。このタスクには `agent` も `jev` もありません
     60 |   model "gpt-5.4-mini"
 エラー[E007]: tests/fixtures/agents.flow:65:10: エージェントのタスクにはエラーを宣言できません。モデルが応答を拒否したときや呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になります
     65 |   errors 断った

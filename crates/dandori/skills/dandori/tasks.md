@@ -13,6 +13,7 @@ Step Functions sends, so the same `.flow` makes the same requests wherever it ru
 | `connect <api> "<Service>/<Method>"` | HTTP Task, Connect's JSON | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
 | `agent …` ([Agents](agents.md)) | HTTP Task to the model's API | an activity dandori writes | a step dandori writes | the same | the same |
+| `jev …` ([Jev](jev.md)) | HTTP Task to TypeSafe's API | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
 | `flow "<path>"` ([Child flows](#child-flows)) | nested execution, with `state machine` | child workflow `<name>_v<n>` on the child's task queue | invoke, with `durable function` | a Workflow from the child's WorkflowTemplate | a function you write |
 | `workflow "<type>"` | | child workflow | | | |
@@ -23,8 +24,8 @@ Step Functions sends, so the same `.flow` makes the same requests wherever it ru
 | none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) | a function you write (`OwnTasks`) |
 
 The calls dandori writes go through a `Transport` (`io.ts`, `io.py`), whose credentials and clients
-are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key. In tests it
-is where a stand-in goes.
+are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key, TypeSafe's
+key for Jev. In tests it is where a stand-in goes.
 
 - `queue "<name>"` sends a Temporal activity or child workflow to that task queue, where workers in
   either language can serve it.

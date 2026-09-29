@@ -10,7 +10,7 @@ E040 と E050 は `dandori build` がビルド先のプラットフォームに�
 | E004 | 引数や出力が多すぎる・足りない。`{…}` のレコードにフィールドが足りない |
 | E005 | rulec が読めなかった規則 |
 | E006 | 同じ名前を二度宣言している |
-| E007 | タスクの書き方が合わない。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、OpenAPI の操作を呼ぶタスクに `form` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、同じステータスのエラーが二つ、呼び出し方が持てない `key` や `callback`（エージェントは `key` を持たない）、知らない AWS のサービス、`agent` の無いタスクの `model`、応答の型の無いエージェントやエラーを宣言したエージェント、Schema で書けない応答の型、知らないプロバイダー、Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`、案件を始める `event` のタスク、エージェントでないタスクや Claude のエージェントの `url`、http でも https でもない `url`、エージェントでないタスクの `effort`、プロバイダーが受け付けないレベルの `effort` |
+| E007 | タスクの書き方が合わない。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、OpenAPI の操作を呼ぶタスクに `form` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、同じステータスのエラーが二つ、呼び出し方が持てない `key` や `callback`（エージェントは `key` を持たない）、知らない AWS のサービス、`agent` の無いタスクの `model`、応答の型の無いエージェントやエラーを宣言したエージェント、Schema で書けない応答の型、知らないプロバイダー、Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`、案件を始める `event` のタスク、エージェントでないタスクや Claude のエージェントの `url`、http でも https でもない `url`、エージェントでないタスクの `effort`、プロバイダーが受け付けないレベルの `effort`。Jev では、Jev が答えられない結果の型（列挙・`bool`・それらのレコードのどれでもない）、尋ねていないフィールドや二度尋ねたフィールド、列挙に無い値の意味、段階の意味が抜けているか 11 段階以上の `score`、`true` か `false` の片方だけの意味、刻みで割り切れない率でない確信度のフィールド、`jev` の無い `confidence`、`failure` や宣言済みのエラーを使う `confidence`、はいかいいえだけの答えに 0.5 以下の下限、`confidence` のエラーの `retry`、ステータスの無いエラー、`key`・`url`・`effort` |
 | E008 | 案件の宣言の誤り。あるいは、タスクが案件にできないことをしている |
 | E009 | 書けない場所にある文。`let <名前> = for …` の本体の最後の行でない `yield`、最後に `yield` の無いそうした `for`、`for … in parallel` のイテレーションの中の `break`・`succeed`・案件への呼び出し・イベントの待ち、`on failure` や `on cancel` の中の `succeed`、イテレーションの中と外の両方で値を入れる変数、`let` なしで呼ぶ規則 |
 | E010 | `match` のどの分岐にも当たらない値 |
@@ -26,8 +26,9 @@ E040 と E050 は `dandori build` がビルド先のプラットフォームに�
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express のワークフローにできないこと。五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し |
 | E040 | 一回の実行が、プラットフォームにとって大きくなりすぎうる。実行履歴の上限は Step Functions が 25,000 件、Temporal が 51,200 件、Lambda durable functions が 3,000 操作。Argo Workflows ではノードが 10,000 個を超えうるもの |
-| E050 | プラットフォームに要るものが無いか、プラットフォームにできないこと。Step Functions では、呼び出し方か `connection`（エージェントにも要る）、ネストした実行が宣言するエラー、`http` と `agent` の 60 秒を超える `timeout`、HTTPS でない送信先。Temporal 以外では、`on cancel` と `event` のタスク。Step Functions と Lambda durable functions では、呼ばれる規則の `lambda`。Lambda durable functions では、invoke する関数の `timeout`。Argo では、呼び出し方か `image`、`workflow template` が宣言するエラー、`callback` のタスクの `retry` |
+| E050 | プラットフォームに要るものが無いか、プラットフォームにできないこと。Step Functions では、呼び出し方か `connection`（エージェントと Jev にも要る）、ネストした実行が宣言するエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送信先。Temporal 以外では、`on cancel` と `event` のタスク。Step Functions と Lambda durable functions では、呼ばれる規則の `lambda`。Lambda durable functions では、invoke する関数の `timeout`。Argo では、呼び出し方か `image`、`workflow template` が宣言するエラー、`callback` のタスクの `retry` |
 | W030 | 外部のデータを変えるかもしれない呼び出しを、`key` なしでリトライする |
+| W032 | 確信度の下限を書くか確信度を受け取る Jev のタスクが、モデルをバージョンではなくエイリアス（`jev-latest`・`jev-preview`）で書いている |
 | W101 | どこでも処理しないエラーで、案件を終わりでない状態に残したまま失敗しうる（`on failure` や `on cancel` で片付けている最中も） |
 | W102 | 起きることのない `on <拒否のエラー>` |
 | W103 | 案件を始めるタスクに `key` が無い |

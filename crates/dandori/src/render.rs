@@ -133,6 +133,8 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                 }
             }
         }
+        // an HTTP request, which every target sends as Step Functions' HTTP Task does
+        Some(Via::Jev(j)) => json!({ "http": "POST", "url": JEV_URL, "body": jev_request(j, Value::Object(agent_input(task, args))) }),
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
         // nothing is called: the workflow waits for the event by its name
         Some(Via::Event) => json!({ "event": task.name }),
@@ -220,6 +222,204 @@ pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value,
             })
         }
     }
+}
+
+/// The body of a Jev task's request: its state (the arguments, as an agent's input), the model,
+/// and the questions by their ids, as TypeSafe's API takes them.
+pub fn jev_request(j: &Jev, state: Value) -> Value {
+    json!({ "state": state, "model": j.model, "questions": jev_questions(j) })
+}
+
+/// The questions of a Jev task: a choice's `criteria` are its options with what each means (null
+/// where the task says nothing), a score's the levels' meanings from the lowest, and a noul's what
+/// yes and no mean, when the task says.
+pub fn jev_questions(j: &Jev) -> Value {
+    let mut qs = Map::new();
+    for q in &j.questions {
+        let mut o = Map::new();
+        let kind = match q.kind {
+            QuestionKind::Choice => "choice",
+            QuestionKind::Score => "score",
+            QuestionKind::Noul => "noul",
+        };
+        o.insert("type".into(), json!(kind));
+        o.insert("instructions".into(), json!(q.instructions));
+        match q.kind {
+            QuestionKind::Choice => {
+                o.insert("criteria".into(), Value::Object(q.options.iter().map(|(v, m)| (v.clone(), json!(m))).collect()));
+            }
+            QuestionKind::Score => {
+                o.insert("criteria".into(), Value::Array(q.options.iter().map(|(_, m)| json!(m)).collect()));
+            }
+            QuestionKind::Noul if !q.options.is_empty() => {
+                o.insert("criteria".into(), Value::Object(q.options.iter().map(|(v, m)| (v.clone(), json!(m))).collect()));
+            }
+            QuestionKind::Noul => {}
+        }
+        qs.insert(q.id.clone(), Value::Object(o));
+    }
+    Value::Object(qs)
+}
+
+/// Jev's answer to one question, read: the value it takes and how sure Jev is of it, from 0 to 1.
+/// A choice and a score say how sure (`confidence`); a score's place is taken at the nearest
+/// level, a half going up; a noul's answer is yes when its probability is over one half, and Jev
+/// is as sure of it as its probability. None when the answer is not there or not of its kind.
+fn jev_one(q: &Question, a: &Value) -> Option<(Value, f64)> {
+    let unit = |x: Option<&Value>| x.and_then(|x| x.as_f64()).filter(|c| (0.0..=1.0).contains(c));
+    match q.kind {
+        QuestionKind::Choice => {
+            let v = a.get("choice")?.as_str()?;
+            if !q.options.iter().any(|(o, _)| o == v) {
+                return None;
+            }
+            Some((json!(v), unit(a.get("confidence"))?))
+        }
+        QuestionKind::Score => {
+            let level = (a.get("score")?.as_f64()? + 0.5).floor();
+            if level < 0.0 || level >= q.options.len() as f64 {
+                return None;
+            }
+            Some((json!(q.options[level as usize].0), unit(a.get("confidence"))?))
+        }
+        QuestionKind::Noul => {
+            let p = unit(a.get("noul"))?;
+            Some((json!(p > 0.5), if p > 0.5 { p } else { 1.0 - p }))
+        }
+    }
+}
+
+/// How sure Jev is, from 0 to 1, as a count of a rate's steps: rounded down, so that the rate is
+/// never surer than Jev, after a billionth that takes up how a decimal falls between binary
+/// fractions (0.29 × 100 is 28.999…). Every target counts the same way.
+pub fn rate_steps(c: f64, per: u64) -> i64 {
+    (c * per as f64 + 1e-9).floor() as i64
+}
+
+/// A Jev task's answer, read from the body of Jev's response as every target reads it: the value
+/// of the task's type, null where an answer is not there or not of its kind (which the answer's
+/// check then refuses), and whether every answer is there and one is less sure than the task's
+/// `confidence`, which fails the call with its error.
+pub fn jev_read(j: &Jev, body: &Value) -> (Value, bool) {
+    let answers = body.get("answers").filter(|a| a.is_object());
+    let read: Vec<Option<(Value, f64)>> = j.questions.iter().map(|q| answers.and_then(|a| a.get(&q.id)).filter(|a| a.is_object()).and_then(|a| jev_one(q, a))).collect();
+    let all = read.iter().all(|x| x.is_some());
+    let low = all && j.floor.as_ref().is_some_and(|(f, _)| read.iter().flatten().any(|(_, c)| c < f));
+    let value = match j.questions.as_slice() {
+        [q] if q.field.is_none() => read[0].as_ref().map(|(v, _)| v.clone()).unwrap_or(Value::Null),
+        _ => {
+            let mut o = Map::new();
+            for (q, r) in j.questions.iter().zip(&read) {
+                o.insert(q.field.clone().unwrap_or_default(), r.as_ref().map(|(v, _)| v.clone()).unwrap_or(Value::Null));
+            }
+            for (f, qi, per) in &j.confidences {
+                o.insert(f.clone(), read[*qi].as_ref().map(|(_, c)| json!(rate_steps(*c, *per))).unwrap_or(Value::Null));
+            }
+            Value::Object(o)
+        }
+    };
+    (value, low)
+}
+
+/// Jev's response to a task's questions, with `v` the value of the task's type it reads as: every
+/// answer as sure as the task's `confidence` asks and no more (wholly sure without one), or with
+/// `low`, less sure. The scenarios answer the calls with it.
+pub fn jev_wire(j: &Jev, v: &Value, low: bool) -> Value {
+    let floor = j.floor.as_ref().map(|(f, _)| *f);
+    // numbers of a few decimals, as Jev gives them, which every language reads back alike; a
+    // whole number is written as one (1, not 1.0), as JavaScript writes it
+    let short = |x: f64| (x * 10_000.0).round() / 10_000.0;
+    let num = |x: f64| if x.fract() == 0.0 && x.abs() < 1e15 { json!(x as i64) } else { json!(x) };
+    let sure = match (floor, low) {
+        (Some(f), true) => short((f - 0.01).max(0.0)),
+        (Some(f), false) => f,
+        (None, _) => 1.0,
+    };
+    let mut answers = Map::new();
+    for q in &j.questions {
+        let x = match &q.field {
+            Some(f) => v.get(f).cloned().unwrap_or(Value::Null),
+            None => v.clone(),
+        };
+        let at = |x: &Value| q.options.iter().position(|(o, _)| Some(o.as_str()) == x.as_str()).unwrap_or(0);
+        // the rest of the probability, shared by the other options
+        let rest = |n: usize| if n > 1 { short((1.0 - sure) / (n - 1) as f64) } else { 0.0 };
+        let a = match q.kind {
+            QuestionKind::Choice => {
+                let chosen = at(&x);
+                let probabilities: Map<String, Value> = q.options.iter().enumerate().map(|(i, (o, _))| (o.clone(), num(if i == chosen { sure } else { rest(q.options.len()) }))).collect();
+                json!({ "type": "choice", "choice": q.options[chosen].0, "probabilities": probabilities, "confidence": num(sure) })
+            }
+            QuestionKind::Score => {
+                let level = at(&x);
+                let legend: Map<String, Value> = q.options.iter().enumerate().map(|(i, (_, m))| (i.to_string(), json!(m))).collect();
+                let probabilities: Map<String, Value> = (0..q.options.len()).map(|i| (i.to_string(), num(if i == level { sure } else { rest(q.options.len()) }))).collect();
+                json!({ "type": "score", "score": level, "legend": legend, "probabilities": probabilities, "confidence": num(sure) })
+            }
+            QuestionKind::Noul => {
+                let yes = x.as_bool().unwrap_or(true);
+                let p = match (floor, low) {
+                    // as sure as the floor, of yes or of no; or not sure either way
+                    (Some(f), false) if f > 0.5 => {
+                        if yes {
+                            f
+                        } else {
+                            1.0 - f
+                        }
+                    }
+                    (Some(f), true) if f > 0.5 => 0.5,
+                    _ => {
+                        if yes {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                };
+                json!({ "type": "noul", "noul": num(p) })
+            }
+        };
+        answers.insert(q.id.clone(), a);
+    }
+    json!({ "model": j.model, "answers": answers, "usage": { "input_tokens": 120, "output_tokens": 20 } })
+}
+
+/// What the code dandori writes asks Jev for a task and reads its answer by (io's `jev`): the
+/// questions of the request; for each, its id, the field of the answer it fills (none when the
+/// answer is its value), its kind and the values it takes (a score's from the lowest level); the
+/// fields that take how sure Jev is, as a count of a rate's steps; and how sure every answer must
+/// be, with the error and its cause when one is not.
+pub fn jev_spec(task: &TaskDef, j: &Jev) -> Value {
+    let read: Vec<Value> = j
+        .questions
+        .iter()
+        .map(|q| {
+            let kind = match q.kind {
+                QuestionKind::Choice => "choice",
+                QuestionKind::Score => "score",
+                QuestionKind::Noul => "noul",
+            };
+            let values: Vec<&String> = if q.kind == QuestionKind::Noul { vec![] } else { q.options.iter().map(|(v, _)| v).collect() };
+            let mut o = json!({ "id": q.id, "kind": kind, "values": values });
+            if let Some(f) = &q.field {
+                o["field"] = json!(f);
+            }
+            o
+        })
+        .collect();
+    let confidences: Vec<Value> = j.confidences.iter().map(|(f, qi, per)| json!({ "field": f, "question": qi, "per": per })).collect();
+    let mut spec = json!({ "questions": jev_questions(j), "read": read, "confidences": confidences });
+    if let Some((at, error)) = &j.floor {
+        spec["floor"] = json!({ "at": at, "error": error, "cause": jev_low_cause(task) });
+    }
+    spec
+}
+
+/// What a Jev task's call fails with when Jev is less sure of an answer than the task asks: the
+/// cause beside the error `confidence … else <error>` names, the same on every target.
+pub fn jev_low_cause(task: &TaskDef) -> String {
+    let floor = task.jev().and_then(|j| j.floor.as_ref()).map(|(f, _)| *f).unwrap_or(0.0);
+    format!("Jev is less sure of an answer of {} than {floor}", task.name)
 }
 
 /// What an agent task answers in (`answer_schema`).

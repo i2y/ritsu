@@ -85,7 +85,7 @@ platform could not run one of a real run's pods (it ended in Error, or Unknown w
 containerd in the node image of kind 0.29.0 made them now and then under load), the runner plays the
 run again, at most twice, and the test says so.
 
-## Agents and the default Transport
+## Agents, Jev and the default Transport
 
 - An agent's call is recorded as the `Transport` gets it, and the stand-in answers `{"answer": …}` as
   the model would. The ASL runner answers an HTTP Task to the Responses API or the Messages API with a
@@ -106,6 +106,15 @@ run again, at most twice, and the test says so.
   a server that answers HTTP and Lambda's Invoke, and moto for SNS and SQS. What arrives must be the
   call, in the same text from both languages, and an AWS error must come back by the name the task
   declares (`NotFoundException`).
+- A Jev task's call is an HTTP request, and the stand-in answers it with Jev's response as TypeSafe's
+  API reference shows it: for each question the choice, the score or the probability of yes, with how
+  sure Jev is. The scenarios answer each Jev call exactly as sure as the task's `confidence` asks, then
+  just under it, and with an answer that does not fit the type, so every platform's reading of the
+  answer and the edge of the confidence are compared with the reference's. A call whose answer is less
+  sure than asked leaves the variable as it was, and the next call sends it, so a platform that kept the
+  answer would show. The default `Transport`'s request to Jev goes to the stand-in server too, where
+  TypeSafe's key from `TYPESAFE_API_KEY` must arrive as `Authorization: Bearer <key>`. Nothing goes to
+  TypeSafe.
 
 ## The pictures
 

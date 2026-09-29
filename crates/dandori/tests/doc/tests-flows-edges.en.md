@@ -1,8 +1,8 @@
 # edges v1
 
-言語の端の振る舞い：配列の json をリストに入れる、yield した json を集める、並列の中の並列、理由の無い fail
+言語のエッジケース：配列の json をリストに入れる、yield した json を集める、並列の中の並列、理由の無い fail
 
-`tests/flows/edges.flow`, drawn by `dandori doc`. Inputs: `箱たち: list[箱]`, `一つ: json`. Outputs: `集め: list[json]`.
+`tests/flows/edges.flow`, drawn by `dandori doc`. Inputs: `箱: list[箱]`, `一つ: json`. Outputs: `集め: list[json]`.
 
 ## flow
 
@@ -10,15 +10,15 @@
 flowchart TD
     start(["edges v1"])
     s1["置く(…)<br>lambda put"]
-    subgraph L2 ["let 集め = for 箱 in 箱たち at most 3 in parallel · yield 答え.付帯"]
+    subgraph L2 ["let 集め = for 一箱 in 箱 at most 3 in parallel · yield 答え.付帯"]
         s3["答え = 見る(…)<br>lambda look"]
-        subgraph L4 ["for 小箱 in 箱たち at most 3 in parallel"]
+        subgraph L4 ["for 小箱 in 箱 at most 3 in parallel"]
             s5{{"match 小箱.ラベル"}}
             s6["置く(…)<br>lambda put"]
             s7(["fail NoLabel"])
         end
     end
-    subgraph L8 ["let 順に = for 箱2 in 箱たち at most 3"]
+    subgraph L8 ["let 順に = for 箱2 in 箱 at most 3"]
         s8p["yield 箱2.中身"]
     end
     s9["置く(…)<br>lambda put"]

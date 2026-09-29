@@ -1,5 +1,5 @@
 workflow 取消 v1
-description "キャンセルの端の振る舞い：案件を片付ける on cancel、やり直しと受けを素通りするキャンセル、並列の回の中のキャンセル、コールバックを待つあいだのキャンセル、on failure の最中のキャンセル。Temporal 向け"
+description "キャンセルのエッジケース：案件を片付ける on cancel、リトライとエラーの処理を素通りするキャンセル、並列のイテレーションの中のキャンセル、コールバックを待つあいだのキャンセル、on failure の最中のキャンセル。Temporal 向け"
 
 use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
 
@@ -11,8 +11,8 @@ record 受付
   id : string
 
 inputs
-  注文ID   : string
-  品目たち : list[string]
+  注文ID : string
+  品目   : list[string]
 
 task 注文を見る(id: string) -> 注文
   observes
@@ -44,9 +44,9 @@ case 受注 : 注文 follows 注文の状態.注文
 
 flow
   受注 <- 注文を見る(id: 注文ID)
-  let 引当 = for 品目 in 品目たち at most 3 in parallel
-    let r = 引き当てる(品目: 品目)
-      on failure => fail NotReserved "{品目} を引き当てられませんでした" leaving 受注
+  let 引当 = for 一品 in 品目 at most 3 in parallel
+    let r = 引き当てる(品目: 一品)
+      on failure => fail NotReserved "{一品} を引き当てられませんでした" leaving 受注
     yield r.id
   受注 <- 配達を待つ(id: 受注.id)
     on timeout => fail DeliveryLate "七日たっても配達の知らせがありません" leaving 受注

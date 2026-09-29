@@ -1,5 +1,5 @@
 workflow inquiry v1
-description "An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (a model the company runs itself reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
+description "Jev picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when Jev is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Jev picks, agents read and write (a model the company runs itself reads, Claude writes), and the rule decides. Written for Temporal: Jev and the agents are activities dandori writes, Jev called with TypeSafe's key (TYPESAFE_API_KEY), the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
 
 use rule routing from "../rules/inquiry_routing.rule"
   local
@@ -23,6 +23,18 @@ inputs
 outputs
   ticket_id : string
   desk      : routing.desk
+
+# Jev picks one of the rule's kinds, knowing what each means, and says how sure it is.
+task pick_kind(text: string) -> routing.kind
+  jev "Which kind of inquiry is this?"
+    returns "The customer wants to send an item back or exchange it"
+    delivery "A parcel is late, lost or damaged, or the customer asks where it is"
+    billing "A charge, an invoice, a payment or a refund"
+    other "None of the above"
+  model "jev-1.13.0"
+  confidence 0.8 else unsure
+  timeout 10 seconds
+  retry 2 times every 1 second
 
 # A model on the company's own Ollama reads the text, through Open Responses; the schema of
 # Reading holds its answer to one of the rule's kinds.
@@ -50,12 +62,15 @@ flow
     on failure =>
       let by_hand = file_ticket(inquiry_id: inquiry.id, desk: general, within: 24, subject: "An inquiry that could not be read", text: inquiry.text, draft: none)
       succeed ticket_id = by_hand.ticket_id, desk = general
-  let decision = routing(kind: reading.kind, member: inquiry.member)
-  let subject = "An inquiry about {reading.kind}"
+  # Jev's kind, when it is sure of it; when it is not, or cannot be reached, the agent's
+  let kind = pick_kind(text: inquiry.text)
+    on unsure, failure => let kind = reading.kind
+  let decision = routing(kind: kind, member: inquiry.member)
+  let subject = "An inquiry about {kind}"
   match reading.order_id
-    some order_id => let subject = "An inquiry about {reading.kind} (order {order_id})"
+    some order_id => let subject = "An inquiry about {kind} (order {order_id})"
     none => pass
-  let draft = draft_reply(kind: reading.kind, point: reading.point, order_id: reading.order_id, within: decision.within)
+  let draft = draft_reply(kind: kind, point: reading.point, order_id: reading.order_id, within: decision.within)
     on failure => let draft: string? = none
   let t = file_ticket(inquiry_id: inquiry.id, desk: decision.desk, within: decision.within, subject: subject, text: inquiry.text, draft: draft)
   succeed ticket_id = t.ticket_id, desk = decision.desk
